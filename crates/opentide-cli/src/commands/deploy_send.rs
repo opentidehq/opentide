@@ -3928,12 +3928,14 @@ impl Sender<'_, '_> {
     }
 
     /// Graylog: the version is read once per tenant (a vulnerable one warned
-    /// about), then each rule's event definition is created, updated,
-    /// unscheduled or deleted (`GraylogDeploy`).
+    /// about), then each rule's event definition, compiled for it, is
+    /// created, updated, unscheduled or deleted through the platform's
+    /// `Deployer` (`GraylogDeploy`).
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         const PLATFORM: &str = PlatformId::Graylog.as_str();
-        use opentide_connectors::graylog::{Action, Client, RuleDeploy, StateChange, deploy_rule};
+        use opentide_compile::graylog::create_body;
+        use opentide_connectors::graylog::{Client, Graylog};
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen(PLATFORM, batch, log);
@@ -4006,141 +4008,146 @@ impl Sender<'_, '_> {
             }
             let setup = opentide_compile::deploy::setup(&batch.table, "setup");
             let root = self.workspace.root().to_path_buf();
+            // The version is read: the deployer reads it no more.
+            let graylog = Graylog::on_version(version);
             for (rule, action) in planned {
                 let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
-                let compiled = match &action {
-                    // A delete reads the definition back from the stored id
-                    // alone, so no rule compile is needed.
-                    Planned::Delete(_) => None,
-                    Planned::Create | Planned::Update(_) => {
-                        match opentide_compile::graylog::compile_definition(
-                            self.compile,
-                            rule,
-                            version,
-                            setup,
-                            Some(&tenant),
-                        ) {
-                            Ok(compiled) => {
-                                // The version's own warnings (a field it cannot
-                                // take, a priority it collapses).
-                                for (code, message) in &compiled.warnings {
-                                    self.warned = true;
-                                    tracing::warn!(
-                                        uuid = rule.uuid.as_str(),
-                                        tenant = tenant.as_str(),
-                                        detail = message.as_str(),
-                                        "{code}"
-                                    );
-                                }
-                                Some(compiled)
-                            }
-                            Err(error) => {
-                                // An alias the tenant does not define (or any
-                                // other compile failure) fails the rule with
-                                // its own code (`_deployment_error(exc.code)`).
-                                tracing::error!(
+                let disable = self.strategy_of(rule, PLATFORM)? == StatusStrategy::Disablement;
+                let (operation, stored) = match &action {
+                    Planned::Create => (Operation::Create, None),
+                    Planned::Update(id) if disable => (Operation::Disable, Some(id.as_str())),
+                    Planned::Update(id) => (Operation::Update, Some(id.as_str())),
+                    Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
+                };
+                let mut request = if let Planned::Delete(id) = &action {
+                    // A delete sends the recorded id alone: no rule compile.
+                    DeployRequest::delete(id.clone())
+                } else {
+                    match opentide_compile::graylog::compile_definition(
+                        self.compile,
+                        rule,
+                        version,
+                        setup,
+                        Some(&tenant),
+                    ) {
+                        Ok(compiled) => {
+                            // The version's own warnings (a field it cannot
+                            // take, a priority it collapses).
+                            for (code, message) in &compiled.warnings {
+                                self.warned = true;
+                                tracing::warn!(
                                     uuid = rule.uuid.as_str(),
                                     tenant = tenant.as_str(),
-                                    name = rule.name.as_str(),
-                                    code = error.code,
-                                    error = error.reason.as_str(),
-                                    "{}",
-                                    error.code
+                                    detail = message.as_str(),
+                                    "{code}"
                                 );
-                                self.rule_error(&mut result, &error.reason);
-                                log.finished(result);
-                                continue;
                             }
+                            match serde_json::to_vec(&create_body(&compiled)) {
+                                Ok(body) => DeployRequest::new(
+                                    stored.unwrap_or(&rule.uuid),
+                                    operation,
+                                    body,
+                                ),
+                                Err(error) => {
+                                    let reason =
+                                        format!("the compiled definition is not JSON: {error}");
+                                    self.rule_error(&mut result, &reason);
+                                    log.finished(result);
+                                    continue;
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            // An alias the tenant does not define (or any
+                            // other compile failure) fails the rule with its
+                            // own code (`_deployment_error(exc.code)`).
+                            tracing::error!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                name = rule.name.as_str(),
+                                code = error.code,
+                                error = error.reason.as_str(),
+                                "{}",
+                                error.code
+                            );
+                            self.rule_error(&mut result, &error.reason);
+                            log.finished(result);
+                            continue;
                         }
                     }
                 };
                 let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
-                    Some(ignore) => Some(deploy_state::ignored_message(&ignore)),
-                    None => self
-                        .unpersisted(&rule.uuid, PLATFORM, &tenant)
-                        .map(|refusal| refusal.message),
-                };
-                let request = RuleDeploy {
-                    action: match &action {
-                        Planned::Create => Action::Create,
-                        Planned::Update(id) => Action::Update(id.clone()),
-                        Planned::Delete(id) => Action::Delete(id.clone()),
-                    },
-                    compiled: compiled.unwrap_or_else(|| {
-                        // A delete carries the title only for the unconfirmed
-                        // message, which a delete never raises.
-                        opentide_compile::graylog::CompiledDefinition {
-                            uuid: rule.uuid.clone(),
-                            title: rule.name.clone(),
-                            version,
-                            definition: opentide_compile::json::Object::new(),
-                            warnings: Vec::new(),
-                            unresolved: Vec::new(),
-                        }
+                    Some(ignore) => Some(StateError {
+                        code: "deployment_state_ignored",
+                        message: deploy_state::ignored_message(&ignore),
                     }),
-                    disable: self.strategy_of(rule, PLATFORM)? == StatusStrategy::Disablement,
-                    recreate_refusal,
+                    None => self.unpersisted(&rule.uuid, PLATFORM, &tenant),
                 };
+                if let Some(refusal) = &recreate_refusal {
+                    request = request.refusing_recreate(DeployFailure::new(
+                        refusal.code,
+                        refusal.message.clone(),
+                    ));
+                }
                 let context = self.context(&connection);
-                match self.block(deploy_rule(context, &request)) {
-                    Ok(outcome) => {
-                        for warning in &outcome.warnings {
-                            self.warned = true;
-                            tracing::warn!(
-                                uuid = rule.uuid.as_str(),
-                                tenant = tenant.as_str(),
-                                detail = warning.detail.as_str(),
-                                "{}",
-                                warning.event
-                            );
-                        }
-                        if let Some((event, definition_id)) = &outcome.event {
-                            tracing::info!(
-                                uuid = rule.uuid.as_str(),
-                                definition_id = definition_id.as_str(),
-                                "{event}"
-                            );
-                        }
-                        match &outcome.state {
-                            StateChange::Record(id) => {
-                                self.record_created(
-                                    &mut result,
-                                    PLATFORM,
-                                    &tenant,
-                                    &ExternalId::Text(id.clone()),
-                                );
-                            }
-                            StateChange::Forget => {
-                                self.record_deleted(&mut result, PLATFORM, &tenant);
-                            }
-                            StateChange::Keep => {}
-                        }
-                        if let Some(failure) = &outcome.failure {
-                            match failure.status {
-                                Some(status) => tracing::error!(
-                                    uuid = rule.uuid.as_str(),
-                                    tenant = tenant.as_str(),
-                                    status_code = status,
-                                    code = failure.code,
-                                    error = failure.reason.as_str(),
-                                    "{}",
-                                    failure.code
-                                ),
-                                None => tracing::error!(
-                                    uuid = rule.uuid.as_str(),
-                                    tenant = tenant.as_str(),
-                                    code = failure.code,
-                                    error = failure.reason.as_str(),
-                                    detail = failure.detail.as_deref().unwrap_or_default(),
-                                    "{}",
-                                    failure.code
-                                ),
-                            }
-                            self.rule_error(&mut result, &failure.reason);
+                let deployed = self
+                    .block(async { Ok(graylog.deploy(context, &request).await) })
+                    .unwrap_or_else(|error| Err(DeployError::from(error)));
+                match deployed {
+                    Ok(done) => {
+                        self.graylog_done(&rule.uuid, &tenant, &done);
+                        match done.remote_id.as_deref() {
+                            None => self.record_deleted(&mut result, PLATFORM, &tenant),
+                            Some(id) if Some(id) != stored => self.record_created(
+                                &mut result,
+                                PLATFORM,
+                                &tenant,
+                                &ExternalId::Text(id.to_owned()),
+                            ),
+                            Some(_) => {}
                         }
                         log.finished(result);
                     }
+                    Err(error) if error.scope == DeployScope::Rule => {
+                        if let Some(done) = &error.partial {
+                            self.graylog_done(&rule.uuid, &tenant, done);
+                        }
+                        let failure = &error.failure;
+                        // The state's refusal is logged as the request it
+                        // stopped, as before.
+                        let code = if recreate_refusal
+                            .as_ref()
+                            .is_some_and(|refusal| refusal.code == failure.code)
+                        {
+                            "graylog_request_failed"
+                        } else {
+                            failure.code
+                        };
+                        match failure.status {
+                            Some(status) => tracing::error!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                status_code = status,
+                                code,
+                                error = failure.message.as_str(),
+                                "{}",
+                                code
+                            ),
+                            None => tracing::error!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                code,
+                                error = failure.message.as_str(),
+                                detail = failure.field("detail").unwrap_or_default(),
+                                "{}",
+                                code
+                            ),
+                        }
+                        self.rule_error(&mut result, &failure.message);
+                        log.finished(result);
+                    }
                     Err(error) => {
+                        let error = error.into_connector();
                         let text = error.text();
                         let code = match &error {
                             ConnectorError::Authentication { .. } => {
@@ -4164,6 +4171,32 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// What a Graylog deploy did, failed or not: its warnings, but the
+    /// version's, which the tenant warned of once; then what was done.
+    fn graylog_done(&mut self, uuid: &str, tenant: &str, done: &DeployOutcome) {
+        for warning in &done.warnings {
+            if warning.code == opentide_connectors::graylog::VERSION_VULNERABLE {
+                continue;
+            }
+            self.warned = true;
+            tracing::warn!(
+                uuid,
+                tenant,
+                detail = warning.message.as_str(),
+                "{}",
+                warning.code
+            );
+        }
+        for event in &done.events {
+            let definition_id = event
+                .fields
+                .iter()
+                .find(|(key, _)| key == "definition_id")
+                .map_or("", |(_, id)| id.as_str());
+            tracing::info!(uuid, definition_id, "{}", event.name);
+        }
     }
 }
 

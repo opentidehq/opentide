@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use opentide_compile::graylog::{self as compile, CompiledDefinition, Version};
 use opentide_compile::{Json, Owned, Rule};
-use opentide_connectors::connector::{DeployError, DeployRequest, Deployer, LiveValidator};
+use opentide_connectors::connector::{
+    DeployError, DeployRequest, DeployScope, Deployer, LiveValidator,
+};
 use opentide_connectors::connector::{
     Operation, QueryRequest, QueryRunner, TenantContext, TimeWindow,
 };
@@ -696,7 +698,7 @@ fn the_query_runner_searches_messages() {
     };
     let mut request = QueryRequest::new("EventID:1", "lucene", window());
     request.limit = 2;
-    let outcome = runtime.block_on(Graylog.run(cx, &request)).unwrap();
+    let outcome = runtime.block_on(Graylog::new().run(cx, &request)).unwrap();
     assert_eq!(outcome.rows.len(), 2);
     assert!(outcome.truncated);
     assert_eq!(outcome.language.as_deref(), Some("lucene"));
@@ -736,7 +738,7 @@ fn before_7_2_a_search_asks_for_the_fields_the_query_names() {
         cancel: &cancel,
     };
     let request = QueryRequest::new("EventID:1 AND winlog.channel:Security", "lucene", window());
-    let outcome = runtime.block_on(Graylog.run(cx, &request)).unwrap();
+    let outcome = runtime.block_on(Graylog::new().run(cx, &request)).unwrap();
     assert!(outcome.rows.is_empty());
     let requests = runtime.block_on(server.received_requests()).unwrap();
     let body: serde_json::Value = requests[1].body_json().unwrap();
@@ -764,7 +766,9 @@ fn an_unknown_stream_alias_refuses_the_query() {
     };
     let mut request = QueryRequest::new("EventID:1", "lucene", window());
     request.index = vec!["nowhere".to_owned()];
-    let error = runtime.block_on(Graylog.run(cx, &request)).unwrap_err();
+    let error = runtime
+        .block_on(Graylog::new().run(cx, &request))
+        .unwrap_err();
     assert!(error.text().contains("graylog_alias_unknown"), "{error:?}");
     // A 24-hex index is a stream id already.
     request.index = vec![STREAM_ID.to_owned()];
@@ -781,7 +785,7 @@ fn an_unknown_stream_alias_refuses_the_query() {
             .mount(&server)
             .await;
     });
-    assert!(runtime.block_on(Graylog.run(cx, &request)).is_ok());
+    assert!(runtime.block_on(Graylog::new().run(cx, &request)).is_ok());
 }
 
 #[test]
@@ -810,7 +814,9 @@ fn the_live_check_asks_for_a_verdict_and_runs_no_search() {
         cancel: &cancel,
     };
     let request = QueryRequest::new("EventID:1", "lucene", window());
-    let check = runtime.block_on(Graylog.validate(cx, &request)).unwrap();
+    let check = runtime
+        .block_on(Graylog::new().validate(cx, &request))
+        .unwrap();
     assert!(check.errors.is_empty() && check.result.is_none());
     assert_eq!(
         check.warnings,
@@ -851,7 +857,7 @@ fn the_live_check_fails_on_an_error_verdict() {
     };
     let request = QueryRequest::new("EventID:1", "lucene", window());
     let error = runtime
-        .block_on(Graylog.validate(cx, &request))
+        .block_on(Graylog::new().validate(cx, &request))
         .unwrap_err();
     assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
 }
@@ -865,7 +871,7 @@ fn deploy_through_platform(
     rule_id: &str,
     body: Vec<u8>,
 ) -> (
-    Result<opentide_connectors::connector::DeployOutcome, ConnectorError>,
+    Result<opentide_connectors::connector::DeployOutcome, DeployError>,
     Vec<wiremock::Request>,
 ) {
     let (runtime, server) = server();
@@ -897,9 +903,7 @@ fn deploy_through_platform(
         cancel: &cancel,
     };
     let request = DeployRequest::new(rule_id.to_owned(), operation, body);
-    let outcome = runtime
-        .block_on(Graylog.deploy(cx, &request))
-        .map_err(DeployError::into_connector);
+    let outcome = runtime.block_on(Graylog::new().deploy(cx, &request));
     (
         outcome,
         runtime.block_on(server.received_requests()).unwrap(),
@@ -916,7 +920,7 @@ fn create_on(
     compiled: &CompiledDefinition,
     server_version: &str,
 ) -> (
-    Result<opentide_connectors::connector::DeployOutcome, ConnectorError>,
+    Result<opentide_connectors::connector::DeployOutcome, DeployError>,
     Vec<wiremock::Request>,
 ) {
     deploy_through_platform(
@@ -982,9 +986,10 @@ fn the_platform_refuses_fields_the_tenants_version_does_not_take() {
         Json::Array(vec!["managed-by-opentide".into()]),
     );
     let (outcome, requests) = create_on(&compiled, "6.3.12");
-    let text = outcome.unwrap_err().text();
-    assert!(text.contains("graylog_field_unsupported_version"), "{text}");
-    assert!(text.contains("tags"), "{text}");
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, "graylog_field_unsupported_version");
+    assert!(error.failure.message.contains("tags"), "{error:?}");
     assert_eq!(requests.len(), 1, "only the version is read");
 }
 
@@ -993,9 +998,9 @@ fn the_platform_refuses_fields_the_tenants_version_does_not_take() {
 #[test]
 fn the_platform_refuses_a_body_compiled_for_7_2_below_7_2() {
     let (outcome, requests) = create_on(&definition(Version(7, 2, 0)), "7.1.3");
-    let text = outcome.unwrap_err().text();
-    assert!(text.contains("graylog_field_unsupported_version"), "{text}");
-    assert!(text.contains("Graylog 7.1.3"), "{text}");
+    let error = outcome.unwrap_err();
+    assert_eq!(error.failure.code, "graylog_field_unsupported_version");
+    assert!(error.failure.message.contains("Graylog 7.1.3"), "{error:?}");
     assert_eq!(requests.len(), 1, "only the version is read");
 }
 
@@ -1004,8 +1009,9 @@ fn the_platform_refuses_a_body_compiled_for_7_2_below_7_2() {
 fn the_platform_refuses_a_version_below_6_3_before_any_write() {
     let compiled = definition(Version(7, 2, 0));
     let (outcome, requests) = create_on(&compiled, "6.2.0");
-    let text = outcome.unwrap_err().text();
-    assert!(text.contains("graylog_version_unsupported"), "{text}");
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant);
+    assert_eq!(error.failure.code, "graylog_version_unsupported");
     assert_eq!(requests.len(), 1, "only the version is read");
 }
 
@@ -1019,8 +1025,11 @@ fn the_platform_stops_on_a_forbidden_token() {
         &compiled.uuid,
         serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
     );
-    let text = outcome.unwrap_err().text();
-    assert!(text.contains("graylog_forbidden"), "{text}");
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant);
+    assert_eq!(error.failure.code, "graylog_forbidden");
+    assert_eq!(error.failure.status, Some(403));
+    assert!(error.failure.field("detail").is_some(), "{error:?}");
     assert_eq!(requests.len(), 1, "only the version is read");
 }
 
@@ -1057,4 +1066,262 @@ fn basic(text: &str) -> String {
         }
     }
     out
+}
+
+/// `request` through [`Graylog::on_version`] 7.2.0, to a stand-in that
+/// `mount` sets up: the outcome and the requests sent.
+fn deploy_on_7_2(
+    mount: impl FnOnce(&MockServer, &tokio::runtime::Runtime),
+    request: &DeployRequest,
+) -> (
+    Result<opentide_connectors::connector::DeployOutcome, DeployError>,
+    Vec<wiremock::Request>,
+) {
+    let (runtime, server) = server();
+    mount(&server, &runtime);
+    let (tenant, http) = tenant(&server.uri());
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let outcome = runtime.block_on(Graylog::on_version(Version(7, 2, 0)).deploy(cx, request));
+    (
+        outcome,
+        runtime.block_on(server.received_requests()).unwrap(),
+    )
+}
+
+fn create_body_7_2() -> Vec<u8> {
+    serde_json::to_vec(&compile::create_body(&definition(Version(7, 2, 0)))).unwrap()
+}
+
+/// A platform made for a version it was told reads none, and names what it
+/// did: the created definition's id.
+#[test]
+fn the_platform_on_a_known_version_reads_none_and_names_the_definition_created() {
+    let request = DeployRequest::new("rule", Operation::Create, create_body_7_2());
+    let (outcome, requests) = deploy_on_7_2(
+        |server, runtime| {
+            runtime.block_on(async {
+                mount_validate(server, ok_verdict()).await;
+                Mock::given(method("POST"))
+                    .and(path("/api/events/definitions"))
+                    .respond_with(
+                        ResponseTemplate::new(201)
+                            .set_body_json(serde_json::json!({"id": DEFINITION_ID})),
+                    )
+                    .mount(server)
+                    .await;
+            });
+        },
+        &request,
+    );
+    let outcome = outcome.unwrap();
+    assert_eq!(outcome.remote_id.as_deref(), Some(DEFINITION_ID));
+    assert_eq!(outcome.events.len(), 1);
+    assert_eq!(outcome.events[0].name, "graylog_definition_created");
+    assert_eq!(
+        outcome.events[0].fields,
+        [("definition_id".to_owned(), DEFINITION_ID.to_owned())]
+    );
+    let paths: Vec<&str> = requests.iter().map(|r| r.url.path()).collect();
+    assert_eq!(paths, ["/api/search/validate", "/api/events/definitions"]);
+}
+
+/// A rule Graylog refuses fails alone, with Graylog's code, status and
+/// detail, and keeps the warnings raised before it.
+#[test]
+fn a_refused_update_keeps_its_code_status_and_the_warnings_before_it() {
+    let request = DeployRequest::new(DEFINITION_ID, Operation::Update, create_body_7_2());
+    let (outcome, _) = deploy_on_7_2(
+        |server, runtime| {
+            runtime.block_on(async {
+                mount_validate(
+                    server,
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "status": "WARNING",
+                        "explanations": [{"error_type": "UNKNOWN_FIELD", "error_message": "odd"}],
+                    })),
+                )
+                .await;
+                Mock::given(method("PUT"))
+                    .and(path(format!("/api/events/definitions/{DEFINITION_ID}")))
+                    .respond_with(
+                        ResponseTemplate::new(400)
+                            .set_body_json(serde_json::json!({"message": "bad config"})),
+                    )
+                    .mount(server)
+                    .await;
+            });
+        },
+        &request,
+    );
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, "graylog_request_failed");
+    assert_eq!(error.failure.status, Some(400));
+    assert_eq!(error.failure.field("tenant"), Some("graylog-prod"));
+    assert!(error.failure.message.contains("bad config"), "{error:?}");
+    let partial = error.partial.unwrap();
+    assert_eq!(partial.remote_id, None);
+    assert!(partial.events.is_empty());
+    let codes: Vec<&str> = partial.warnings.iter().map(|w| w.code.as_str()).collect();
+    assert_eq!(codes, ["graylog_unknown_field"]);
+}
+
+/// A definition the tenant lost is not created again under a recreate
+/// refusal: the rule fails with the refusal's code, after the warning.
+#[test]
+fn a_lost_definition_is_not_created_again_under_a_refusal() {
+    let request = DeployRequest::new(DEFINITION_ID, Operation::Update, create_body_7_2())
+        .refusing_recreate(opentide_connectors::connector::DeployFailure::new(
+            "deployment_state_ignored",
+            "git ignores .opentide/states/deployment/",
+        ));
+    let (outcome, requests) = deploy_on_7_2(
+        |server, runtime| {
+            runtime.block_on(async {
+                mount_validate(server, ok_verdict()).await;
+                Mock::given(method("PUT"))
+                    .respond_with(ResponseTemplate::new(404))
+                    .mount(server)
+                    .await;
+            });
+        },
+        &request,
+    );
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, "deployment_state_ignored");
+    let codes: Vec<String> = error
+        .partial
+        .unwrap()
+        .warnings
+        .into_iter()
+        .map(|w| w.code)
+        .collect();
+    assert_eq!(codes, ["graylog_definition_recreated"]);
+    assert!(
+        requests
+            .iter()
+            .all(|r| r.method.as_str() != "POST" || r.url.path() != "/api/events/definitions")
+    );
+}
+
+/// A token Graylog refuses on a rule's request fails the tenant, with its
+/// own code.
+#[test]
+fn a_refused_token_fails_the_tenant() {
+    let request = DeployRequest::new("rule", Operation::Create, create_body_7_2());
+    let (outcome, _) = deploy_on_7_2(
+        |server, runtime| {
+            runtime.block_on(mount_validate(server, ResponseTemplate::new(401)));
+        },
+        &request,
+    );
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant);
+    assert_eq!(error.failure.code, "graylog_tenant_unauthorized");
+    assert!(matches!(
+        error.into_connector(),
+        ConnectorError::Authentication { .. }
+    ));
+}
+
+/// What the platform sends is the compiled body itself, byte for byte: 6.3
+/// flat with `share_request`, 7.x wrapped in `entity`; an update the bare
+/// definition with its `id`.
+#[test]
+fn the_platform_sends_the_compiled_body_byte_for_byte() {
+    for (version, server_version) in [(Version(6, 3, 0), "6.3.12"), (Version(7, 2, 0), "7.2.1")] {
+        let compiled = definition(version);
+        let (outcome, requests) = create_on(&compiled, server_version);
+        outcome.unwrap();
+        assert_eq!(
+            requests[2].body,
+            serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+            "{server_version}"
+        );
+    }
+    let compiled = definition(Version(7, 2, 0));
+    let request = DeployRequest::new(
+        DEFINITION_ID,
+        Operation::Update,
+        serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+    );
+    let (outcome, requests) = deploy_on_7_2(
+        |server, runtime| {
+            runtime.block_on(async {
+                mount_validate(server, ok_verdict()).await;
+                Mock::given(method("PUT"))
+                    .respond_with(ResponseTemplate::new(200))
+                    .mount(server)
+                    .await;
+            });
+        },
+        &request,
+    );
+    outcome.unwrap();
+    assert_eq!(
+        requests[1].body,
+        serde_json::to_vec(&compile::update_body(&compiled, DEFINITION_ID)).unwrap()
+    );
+}
+
+/// A definition created again (the tenant lost it) whose create gets no
+/// answer names the rule's own tag, never a block tag naming another rule.
+#[test]
+fn an_unconfirmed_create_names_the_rules_own_tag() {
+    let (runtime, server) = server();
+    runtime.block_on(async {
+        mount_validate(&server, ok_verdict()).await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/events/definitions"))
+            .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(5)))
+            .mount(&server)
+            .await;
+    });
+    let settings = opentide_connectors::HttpSettings {
+        timeout: std::time::Duration::from_millis(300),
+        ..http_defaults()
+    };
+    let (tenant, http) = tenant_with(&server.uri(), &settings);
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let mut compiled = definition(Version(7, 2, 0));
+    let own = format!("opentide.{}", compiled.uuid);
+    let Some(Json::Array(tags)) = compiled.definition.get("tags").cloned() else {
+        panic!("no tags")
+    };
+    let decoy = "opentide.11111111-1111-4111-8111-111111111111";
+    let tags: Vec<Json> = std::iter::once(Json::from(decoy)).chain(tags).collect();
+    compiled.definition.insert("tags".into(), Json::Array(tags));
+    let request = DeployRequest::new(
+        DEFINITION_ID,
+        Operation::Update,
+        serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+    );
+    let error = runtime
+        .block_on(Graylog::on_version(Version(7, 2, 0)).deploy(cx, &request))
+        .unwrap_err();
+    assert_eq!(error.failure.code, "graylog_create_unconfirmed");
+    assert!(
+        error
+            .failure
+            .message
+            .contains(&format!("the tag \"{own}\"")),
+        "{error:?}"
+    );
+    assert!(!error.failure.message.contains(decoy), "{error:?}");
+    assert!(error.failure.field("detail").is_some(), "{error:?}");
 }
