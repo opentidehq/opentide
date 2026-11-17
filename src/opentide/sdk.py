@@ -120,6 +120,20 @@ class OpentideError(Exception):
         self.partial = partial
         self.more_failures: list[OpentideError] = list(more_failures)
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickles and copies with every field: the error is rebuilt from its
+        ``args`` and its attributes, without calling ``__init__``, so a subclass
+        with a constructor of its own round-trips too."""
+        return (_rebuilt_error, (type(self), self.args), self.__dict__)
+
+
+def _rebuilt_error(cls: type[OpentideError], args: tuple[Any, ...]) -> OpentideError:
+    """An :class:`OpentideError` (or *cls*) unpickled: its ``args``, then its
+    attributes from the pickle's state."""
+    error = cls.__new__(cls)
+    error.args = args
+    return error
+
 
 def _load() -> None:
     """Loads ``opentide._native`` through the one door to the engine, which
