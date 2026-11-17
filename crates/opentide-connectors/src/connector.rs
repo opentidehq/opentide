@@ -75,8 +75,8 @@ pub struct DeployRequest {
     /// `opentide deploy` sets it when deployment state cannot record the new
     /// id (`deployment_state_ignored`, `deployment_state_unpersisted`). A
     /// platform that finds a recorded rule gone then fails the rule with this
-    /// failure instead of creating it. Sysdig's failure keeps its
-    /// `sysdig_rule_recreated` warning, raised before the refusal, in
+    /// failure instead of creating it. Sysdig's and Exabeam's failure keeps
+    /// its `*_rule_recreated` warning, raised before the refusal, in
     /// [`DeployError::partial`], as `opentide deploy` logs it; the other
     /// platforms' carry no warning yet. `None` creates it again.
     pub recreate_refusal: Option<DeployFailure>,

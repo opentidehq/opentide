@@ -1258,6 +1258,169 @@ fn sysdig_records_a_rule_created_before_its_policies_failed() {
     assert!(state.contains("\"lab\": \"43\""), "{state}");
 }
 
+/// An Exabeam tenant on `server`, its token answered, and the environment
+/// with its credentials.
+fn exabeam_stand(server: &wiremock::MockServer, rt: &tokio::runtime::Runtime) -> (String, Env) {
+    use wiremock::matchers::{method, path};
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path("/auth/v1/token"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"{"access_token": "t1", "token_type": "Bearer", "expires_in": 14400}"#,
+            ))
+            // One token for the tenant, across its rules.
+            .expect(1)
+            .mount(server),
+    );
+    let setup = format!(
+        "region = \"eu\"\nclient_id = \"$EXABEAM_CLIENT_ID\"\nclient_secret = \
+         \"$EXABEAM_CLIENT_SECRET\"\napi_url = \"{}/\"\n",
+        server.uri()
+    );
+    let env = Env::from_pairs([
+        ("EXABEAM_CLIENT_ID".to_owned(), "id".to_owned()),
+        ("EXABEAM_CLIENT_SECRET".to_owned(), "secret".to_owned()),
+    ]);
+    (setup, env)
+}
+
+const EXABEAM_BLOCK: &str = "  exabeam:\n    schema: platform::exabeam::1.0\n    status: \
+                             STAGING\n    sequences:\n      - query: \
+                             activity_type:\"process-create\"\n";
+
+/// Exabeam through the command line: a created rule's id is recorded; a
+/// rule whose name another rule has fails with Exabeam's code and the
+/// other rule's id, and the next rule still deploys.
+#[test]
+fn exabeam_records_a_created_rule_and_fails_one_whose_name_is_taken() {
+    use wiremock::matchers::{method, path, query_param};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = exabeam_stand(&server, &rt);
+    let created = "016dbc1d-a727-43df-a143-9546dcc81a5a";
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/correlation-rules/v2/rules"))
+            .and(query_param("nameContains", "Taken rule"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string(r#"[{"id": "z", "name": "Taken rule"}]"#),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("[]"))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string(format!(r#"{{"id": "{created}", "name": "Fresh rule"}}"#)),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let taken = "00000000-0000-4000-8099-000000000091";
+    let fresh = "00000000-0000-4000-8099-000000000092";
+    let ws = workspace(
+        "exabeam",
+        "lab",
+        &setup,
+        &[
+            ("a.yaml", rule("Taken rule", taken, "Taken.", EXABEAM_BLOCK)),
+            ("b.yaml", rule("Fresh rule", fresh, "Fresh.", EXABEAM_BLOCK)),
+        ],
+    );
+    let (sent, _) = deploy(
+        ws.path(),
+        "exabeam",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let mut rows = rows(&sent);
+    rows.sort();
+    assert_eq!(rows[0].0, "deployed", "{rows:?}");
+    assert_eq!(rows[1].0, "failed", "{rows:?}");
+    let error = rows[1].1.as_deref().unwrap_or_default();
+    assert!(error.starts_with("exabeam_name_conflict: "), "{error}");
+    assert!(error.contains("(id z)"), "{error}");
+    let state = std::fs::read_to_string(
+        ws.path()
+            .join(format!(".opentide/states/deployment/{fresh}.json")),
+    )
+    .unwrap();
+    assert!(state.contains(created), "{state}");
+    assert!(
+        !ws.path()
+            .join(format!(".opentide/states/deployment/{taken}.json"))
+            .exists()
+    );
+}
+
+/// An Exabeam rule the tenant lost, while git ignores deployment state: it
+/// is not created again, the run warns that it was missing and fails the
+/// rule with the state's refusal.
+#[test]
+fn exabeam_does_not_create_again_a_lost_rule_git_would_not_keep() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, _) = exabeam_stand(&server, &rt);
+    let stored = "016dbc1d-a727-43df-a143-9546dcc81a5a";
+    rt.block_on(async {
+        wiremock::Mock::given(method("PUT"))
+            .and(path(format!("/correlation-rules/v2/rules/{stored}")))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+    });
+    let uuid = "00000000-0000-4000-8099-000000000093";
+    let ws = stated(
+        "exabeam",
+        &setup,
+        &[("a.yaml", uuid, EXABEAM_BLOCK.to_owned(), stored)],
+    );
+    std::fs::write(ws.path().join(".gitignore"), ".opentide/states/\n").unwrap();
+    let (code, _, err) = cli(
+        ws.path(),
+        &[
+            "deploy",
+            "--platform",
+            "exabeam",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        &[
+            ("EXABEAM_CLIENT_ID", "id".to_owned()),
+            ("EXABEAM_CLIENT_SECRET", "secret".to_owned()),
+        ],
+    );
+    rt.block_on(server.verify());
+    assert_eq!(code, 1, "{err}");
+    // The warning raised before the refusal, then the state's refusal
+    // itself (`report_failure`'s `detail`), never a rule error.
+    let warned = err.find("code: exabeam_rule_recreated").expect(&err);
+    let refused = err
+        .find("error: Deployment state ignored · detail: git ignores")
+        .expect(&err);
+    assert!(warned < refused, "{err}");
+    assert!(!err.contains("· error: git ignores"), "{err}");
+}
+
 /// Runs `opentide <argv>` on the command line, in `ws`, with `env`: the
 /// exit code, stdout and stderr.
 fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String) {
