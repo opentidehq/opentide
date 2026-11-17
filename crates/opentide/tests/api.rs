@@ -251,6 +251,30 @@ fn with_the_engines_the_queries_check_runs() {
     assert_ne!(lint.failure_code, Some("engine_unavailable"));
 }
 
+/// #1142: `validate` and `lint` take no process-wide lock, so a host may
+/// run them from a thread pool's jobs, several workspaces at once. Here
+/// another thread holds the lock they used to take: they must finish
+/// without it (the watchdog fails the test where they would wait).
+#[cfg(feature = "queries")]
+#[test]
+fn validate_and_lint_take_no_engine_lock() {
+    let _held = opentide_cli::queries::ENGINE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (_dir, ws) = corpus();
+        let validation = ws.validate(&ValidateOptions::default());
+        let lint = ws.lint(&LintOptions::default().check(LintCheck::Queries));
+        let _ = done.send((validation.summary.queries, lint.failure_code));
+    });
+    let (queries, failure) = finished
+        .recv_timeout(std::time::Duration::from_secs(120))
+        .expect("validate or lint waited for the engines' lock");
+    assert!(queries.is_some_and(|queries| queries > 0));
+    assert_ne!(failure, Some("engine_unavailable"));
+}
+
 #[test]
 fn lint_runs_the_checks_it_is_given() {
     let (_dir, ws) = corpus();

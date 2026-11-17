@@ -35,14 +35,12 @@ pub(crate) fn validate_check() -> &'static dyn QueryCheck {
     }
 }
 
-/// Runs `run` with lint's queries check for the workspace at `root`, holding
-/// the engines' lock while it runs, as the command line does.
+/// Runs `run` with lint's queries check for the workspace at `root`. The
+/// check carries the workspace's datasets to each of its jobs and takes no
+/// lock (#1142): lint may run from a thread pool's jobs.
 pub(crate) fn with_lint_check<T>(ws: &Workspace, run: impl FnOnce(&dyn LintQueryCheck) -> T) -> T {
     #[cfg(feature = "queries")]
     {
-        let _engine = opentide_cli::queries::ENGINE
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let check = opentide_cli::queries::EngineLintQueries::install(ws.fs().as_ref(), ws.root());
         run(&check)
     }
