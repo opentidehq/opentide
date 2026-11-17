@@ -1,2 +1,2 @@
 # prod:function_call invalid
-rdns (field=ipaddress,as=hostname)
+rdns(field=ipaddress,,as=hostname)

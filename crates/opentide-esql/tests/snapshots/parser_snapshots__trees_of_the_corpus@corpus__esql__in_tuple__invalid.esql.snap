@@ -3,57 +3,64 @@ source: crates/opentide-esql/tests/parser_snapshots.rs
 expression: "format!(\"{tree}--- errors\\n{errors}\")"
 input_file: crates/testdata/corpus/esql/in_tuple__invalid.esql
 ---
-SOURCE_FILE@0..138
-  COMMENT@0..67 "// prod:in_tuple invalid (a tuple compares only against a subquery)"
-  WHITESPACE@67..68 "\n"
-  QUERY@68..137
-    FROM_COMMAND@68..92
-      FROM_KW@68..72 "FROM"
-      WHITESPACE@72..73 " "
-      INDEX_PATTERN@73..79
-        INDEX_NAME@73..79
-          SOURCE_TEXT@73..79 "logs-*"
-      WHITESPACE@79..80 " "
-      METADATA@80..92
-        METADATA_KW@80..88 "METADATA"
-        WHITESPACE@88..89 " "
-        METADATA_FIELD@89..92
-          SOURCE_TEXT@89..92 "_id"
-    WHITESPACE@92..93 "\n"
-    PIPE@93..94 "|"
-    WHITESPACE@94..95 " "
-    WHERE_COMMAND@95..137
-      WHERE_KW@95..100 "WHERE"
-      WHITESPACE@100..101 " "
-      IN_EXPRESSION@101..137
-        IN_TUPLE@101..123
-          L_PAREN@101..102 "("
-          QUALIFIED_NAME@102..111
-            IDENTIFIER@102..106
-              IDENT@102..106 "host"
-            DOT@106..107 "."
-            IDENTIFIER@107..111
-              IDENT@107..111 "name"
-          COMMA@111..112 ","
-          WHITESPACE@112..113 " "
-          QUALIFIED_NAME@113..122
-            IDENTIFIER@113..117
-              IDENT@113..117 "user"
-            DOT@117..118 "."
-            IDENTIFIER@118..122
-              IDENT@118..122 "name"
-          R_PAREN@122..123 ")"
-        WHITESPACE@123..124 " "
-        IN_KW@124..126 "IN"
-        WHITESPACE@126..127 " "
-        L_PAREN@127..128 "("
-        STRING@128..131
-          STRING_LIT@128..131 "\"a\""
-        COMMA@131..132 ","
-        WHITESPACE@132..133 " "
-        STRING@133..136
-          STRING_LIT@133..136 "\"b\""
-        R_PAREN@136..137 ")"
-  WHITESPACE@137..138 "\n"
+SOURCE_FILE@0..135
+  COMMENT@0..53 "// prod:in_tuple invalid (a tuple element is missing)"
+  WHITESPACE@53..54 "\n"
+  QUERY@54..134
+    FROM_COMMAND@54..78
+      FROM_KW@54..58 "FROM"
+      WHITESPACE@58..59 " "
+      INDEX_PATTERN@59..65
+        INDEX_NAME@59..65
+          SOURCE_TEXT@59..65 "logs-*"
+      WHITESPACE@65..66 " "
+      METADATA@66..78
+        METADATA_KW@66..74 "METADATA"
+        WHITESPACE@74..75 " "
+        METADATA_FIELD@75..78
+          SOURCE_TEXT@75..78 "_id"
+    WHITESPACE@78..79 "\n"
+    PIPE@79..80 "|"
+    WHITESPACE@80..81 " "
+    WHERE_COMMAND@81..134
+      WHERE_KW@81..86 "WHERE"
+      WHITESPACE@86..87 " "
+      IN_EXPRESSION@87..134
+        IN_TUPLE@87..100
+          L_PAREN@87..88 "("
+          QUALIFIED_NAME@88..97
+            IDENTIFIER@88..92
+              IDENT@88..92 "host"
+            DOT@92..93 "."
+            IDENTIFIER@93..97
+              IDENT@93..97 "name"
+          COMMA@97..98 ","
+          WHITESPACE@98..99 " "
+          R_PAREN@99..100 ")"
+        WHITESPACE@100..101 " "
+        IN_KW@101..103 "IN"
+        WHITESPACE@103..104 " "
+        SOURCE_SUBQUERY@104..134
+          L_PAREN@104..105 "("
+          FROM_COMMAND@105..116
+            FROM_KW@105..109 "FROM"
+            WHITESPACE@109..110 " "
+            INDEX_PATTERN@110..116
+              INDEX_NAME@110..116
+                SOURCE_TEXT@110..116 "admins"
+          WHITESPACE@116..117 " "
+          PIPE@117..118 "|"
+          WHITESPACE@118..119 " "
+          KEEP_COMMAND@119..133
+            KEEP_KW@119..123 "KEEP"
+            WHITESPACE@123..124 " "
+            NAME_PATTERN@124..133
+              ID_PATTERN@124..128
+                ID_PATTERN_TEXT@124..128 "host"
+              DOT@128..129 "."
+              ID_PATTERN@129..133
+                ID_PATTERN_TEXT@129..133 "name"
+          R_PAREN@133..134 ")"
+  WHITESPACE@134..135 "\n"
 --- errors
-126..127: a tuple compares only against a subquery: `(a, b) in (from ...)`
+98..99: expected an expression (expected PLUS, MINUS)

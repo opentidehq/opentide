@@ -1,2 +1,2 @@
 ``` prod:search_command invalid
-search a | | stats count
+index=main | search a=

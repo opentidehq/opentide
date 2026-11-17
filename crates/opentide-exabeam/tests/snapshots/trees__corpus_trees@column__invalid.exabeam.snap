@@ -3,32 +3,35 @@ source: crates/opentide-exabeam/tests/trees.rs
 expression: "debug_parse(&body.join(\"\\n\"))"
 input_file: crates/testdata/corpus/exabeam/column__invalid.exabeam
 ---
-source_file@0..39
-  statement@0..20
-    select_clause@0..20
+source_file@0..43
+  statement@0..43
+    select_clause@0..18
       keyword@0..6
         letters@0..6 "SELECT"
       whitespace@6..7 " "
-      column@7..20
+      column@7..14
         field_name@7..11
           identifier@7..11
             letters@7..11 "user"
         whitespace@11..12 " "
         keyword@12..14
           letters@12..14 "AS"
-        whitespace@14..15 " "
-        alias@15..20
-          identifier@15..20
-            letters@15..20 "WHERE"
-  whitespace@20..21 " "
-  ERROR@21..27
-    letters@21..27 "vendor"
-  ERROR@27..28
-    :@27..28 ":"
-  statement@28..39
-    filter@28..39
-      free_text@28..39
-        string@28..39 "\"Microsoft\""
+      whitespace@14..15 " "
+      ,@15..16 ","
+      whitespace@16..17 " "
+      column@17..18
+        *@17..18 "*"
+    whitespace@18..19 " "
+    where_clause@19..43
+      keyword@19..24
+        letters@19..24 "WHERE"
+      whitespace@24..25 " "
+      filter@25..43
+        field_term@25..43
+          field_name@25..31
+            identifier@25..31
+              letters@25..31 "vendor"
+          :@31..32 ":"
+          string@32..43 "\"Microsoft\""
 errors:
-20..21: unexpected
-27..27: unexpected
+14..15: expected a name

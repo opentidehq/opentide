@@ -8,48 +8,53 @@
 //! argument or arithmetic operand of the wrong type, and an object used as a
 //! value. `==` and `!=` convert their constant, so they are never reported.
 
-use crate::semantics::{Want, function_name, named_children, parameters, strip_parens};
-use crate::tree::{Node, node_span};
-use crate::{parse_prepared, range, text};
+use crate::ast;
+use crate::nav::{span, text};
+use crate::semantics::{Run, Want, function_name, parameters, strip_parens};
+use crate::syntax::{SyntaxKind as K, SyntaxNode};
+use crate::{parsed, range};
 use opentide_core::{Diagnostic, codes};
 use opentide_ecs::ValueType;
+use opentide_parse::ast::AstNode;
 
-/// The dotted name a `field` node reads, and whether it is optional (`?x`).
-/// `None` for an array element (`process.args[0]`).
-fn field_name(node: Node, source: &str) -> Option<(String, bool)> {
-    let mut parts = Vec::new();
-    let mut optional = false;
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        match child.kind() {
-            "optional_marker" => optional = true,
-            "identifier" => parts.push(text(child, source).to_string()),
-            "quoted_identifier" => {
-                let t = text(child, source);
-                parts.push(t[1..t.len().saturating_sub(1)].replace("``", "`"));
-            }
-            "comment" => {}
-            _ => return None,
-        }
+/// The dotted name a field reads, and whether it is optional (`?x`). `None` for an array
+/// element (`process.args[0]`).
+fn field_name(field: &ast::Field, source: &str) -> Option<(String, bool)> {
+    if field.indexes().next().is_some() {
+        return None;
     }
-    (!parts.is_empty()).then(|| (parts.join("."), optional))
+    let parts: Vec<String> = field
+        .name_parts()
+        .map(|part| match part {
+            ast::NamePart::Identifier(id) => text(id.syntax(), source).to_string(),
+            ast::NamePart::QuotedIdentifier(q) => {
+                let t = text(q.syntax(), source);
+                t[1..t.len().saturating_sub(1)].replace("``", "`")
+            }
+        })
+        .collect();
+    (!parts.is_empty()).then(|| (parts.join("."), field.optional_marker().is_some()))
 }
 
 /// The field an expression is, when it is one (through parentheses).
-fn as_field(node: Node, source: &str) -> Option<String> {
-    let node = strip_parens(node);
-    (node.kind() == "field")
-        .then(|| field_name(node, source))
-        .flatten()
+fn as_field(node: &SyntaxNode, source: &str) -> Option<String> {
+    ast::Field::cast(strip_parens(node.clone()))
+        .and_then(|f| field_name(&f, source))
         .map(|(name, _)| name)
 }
 
-fn is_number(node: Node) -> bool {
-    let node = strip_parens(node);
-    match node.kind() {
-        "number" => true,
-        "unary_expression" => node.child_by_field_name("operand").is_some_and(is_number),
-        _ => false,
+/// A number, signed or not, through parentheses.
+fn is_number(node: &SyntaxNode) -> bool {
+    let mut node = strip_parens(node.clone());
+    loop {
+        match node.kind() {
+            K::NUMBER => return true,
+            K::UNARY_EXPRESSION => match node.first_child() {
+                Some(operand) => node = strip_parens(operand),
+                None => return false,
+            },
+            _ => return false,
+        }
     }
 }
 
@@ -75,23 +80,26 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
 }
 
 fn ecs_diagnostics_lines(source: &str) -> Vec<Diagnostic> {
-    let Some((tree, _prepared)) = parse_prepared(source) else {
-        return Vec::new();
-    };
-    let root = tree.root_node();
-    if root.has_error() {
+    let parsed = parsed::parse(source);
+    if parsed.broken(span(&parsed.syntax)) {
         return Vec::new();
     }
     let mut out = Vec::new();
-    crate::tree::walk(root, |node| check(node, source, &mut out));
+    for event in parsed.syntax.preorder() {
+        if let rowan::WalkEvent::Enter(node) = event {
+            check(&node, source, &mut out);
+        }
+    }
     out
 }
 
-fn check(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let at = |n: Node| range(source, node_span(n));
+fn check(node: &SyntaxNode, source: &str, out: &mut Vec<Diagnostic>) {
+    let at = |n: &SyntaxNode| range(source, span(n));
     match node.kind() {
-        "field" => {
-            let Some((name, optional)) = field_name(node, source) else {
+        K::FIELD => {
+            let Some((name, optional)) =
+                ast::Field::cast(node.clone()).and_then(|f| field_name(&f, source))
+            else {
                 return;
             };
             // `?x` is written for a field that may be missing: not a typo.
@@ -111,33 +119,40 @@ fn check(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
                 ));
             }
         }
-        "predicate_expression" => {
-            let operator = node
-                .child_by_field_name("operator")
-                .map(|o| text(o, source))
-                .unwrap_or("");
-            let Some(subject) = node.child_by_field_name("subject") else {
+        K::PREDICATE_EXPRESSION => {
+            let Some(predicate) = ast::PredicateExpression::cast(node.clone()) else {
                 return;
             };
-            let Some(name) = as_field(subject, source) else {
+            let operator = predicate
+                .operator()
+                .map(|o| o.text().to_owned())
+                .unwrap_or_default();
+            let mut exprs = predicate.exprs();
+            let Some(subject) = exprs.next() else {
                 return;
             };
-            match operator {
+            let Some(name) = as_field(subject.syntax(), source) else {
+                return;
+            };
+            match operator.as_str() {
                 ":" | "like" | "like~" | "regex" | "regex~" => {
                     if let Some(type_name) = mismatch(Want::Str, &name) {
                         out.push(opentide_ecs::type_mismatch(
                             &name,
                             type_name,
                             &format!("`{operator}`, which compares strings,"),
-                            at(subject),
+                            at(subject.syntax()),
                         ));
                     }
                 }
                 "in" => {
-                    let values = named_children(node, "values");
+                    let values: Vec<ast::Expr> = exprs.collect();
                     let is_string = opentide_ecs::field_type(&name)
                         .is_some_and(|(t, _)| t == ValueType::String);
-                    if is_string && !values.is_empty() && values.iter().all(|v| is_number(*v)) {
+                    if is_string
+                        && !values.is_empty()
+                        && values.iter().all(|v| is_number(v.syntax()))
+                    {
                         let type_name = opentide_ecs::field_type(&name).map_or("", |(_, t)| t);
                         out.push(opentide_ecs::type_mismatch(
                             &name,
@@ -150,22 +165,22 @@ fn check(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
                 _ => {}
             }
         }
-        "function_call" => {
-            let name = function_name(node, source);
+        K::FUNCTION_CALL => {
+            let Some(call) = ast::FunctionCall::cast(node.clone()) else {
+                return;
+            };
+            let name = function_name(&call, source);
             let Some((params, variadic)) = parameters(&name) else {
                 return;
             };
-            let display = node
-                .child_by_field_name("name")
-                .map(|n| text(n, source))
-                .unwrap_or("");
-            for (i, arg) in named_children(node, "arguments").into_iter().enumerate() {
+            let display = call.name().map_or("", |n| text(n.syntax(), source));
+            for (i, arg) in call.exprs().enumerate() {
                 let want = match params.get(i) {
                     Some(w) => *w,
                     None if variadic => params[params.len() - 1],
                     None => break,
                 };
-                let Some(field) = as_field(arg, source) else {
+                let Some(field) = as_field(arg.syntax(), source) else {
                     continue;
                 };
                 if let Some(type_name) = mismatch(want, &field) {
@@ -176,34 +191,57 @@ fn check(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
                             "it as an argument of `{display}`, which takes {}",
                             want_name(want)
                         ),
-                        at(arg),
+                        at(arg.syntax()),
                     ));
                 }
             }
         }
-        "binary_expression" | "unary_expression" => {
-            let operator = node
-                .child_by_field_name("operator")
-                .map(|o| text(o, source))
-                .unwrap_or("");
-            for side in ["left", "right", "operand"] {
-                let Some(operand) = node.child_by_field_name(side) else {
-                    continue;
-                };
-                let Some(field) = as_field(operand, source) else {
-                    continue;
-                };
-                if let Some(type_name) = mismatch(Want::Numeric, &field) {
-                    out.push(opentide_ecs::type_mismatch(
-                        &field,
-                        type_name,
-                        &format!("arithmetic (`{operator}`)"),
-                        at(operand),
-                    ));
+        // Each level of a run of arithmetic, the outermost first, as Elasticsearch's builder
+        // nests it.
+        K::BINARY_EXPRESSION => {
+            let run = Run::of(node);
+            for level in (0..run.len()).rev() {
+                let operator = run.operator(level).map_or("", |o| o.text());
+                for operand in run.operands(level).into_iter().flatten() {
+                    arithmetic_operand(operand, operator, source, out);
                 }
+            }
+        }
+        K::UNARY_EXPRESSION => {
+            let Some(unary) = ast::UnaryExpression::cast(node.clone()) else {
+                return;
+            };
+            let operator = unary.operator().map(|o| o.text().to_owned());
+            if let Some(operand) = unary.operand() {
+                arithmetic_operand(
+                    operand.syntax(),
+                    operator.as_deref().unwrap_or(""),
+                    source,
+                    out,
+                );
             }
         }
         _ => {}
+    }
+}
+
+/// An arithmetic operand that is a field ECS does not map as a number.
+fn arithmetic_operand(
+    operand: &SyntaxNode,
+    operator: &str,
+    source: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    let Some(field) = as_field(operand, source) else {
+        return;
+    };
+    if let Some(type_name) = mismatch(Want::Numeric, &field) {
+        out.push(opentide_ecs::type_mismatch(
+            &field,
+            type_name,
+            &format!("arithmetic (`{operator}`)"),
+            range(source, span(operand)),
+        ));
     }
 }
 

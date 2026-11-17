@@ -253,21 +253,26 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
     injection::extract_injections(opentide_core::strip_bom(source))
 }
 
+/// The host span of `inner`, a span of `query`'s text. An offset at or past
+/// the text's end is the host offset right after its last byte, where an
+/// engine's "missing `)`" points (#1431: a span starting there landed at
+/// the query's start, and its frame took the whole query). A decoded escape
+/// maps its character onto the escape's first bytes, so after a query that
+/// ends in `\u00e9` that offset is inside the escape.
 pub fn remap_span(query: &InjectedQuery, inner: ByteSpan) -> ByteSpan {
-    if query.host_map.is_empty() {
+    let Some(&last) = query.host_map.last() else {
         return query.host_span;
-    }
+    };
+    let after_last = last + 1;
     let start = query
         .host_map
         .get(inner.start)
         .copied()
-        .unwrap_or(query.host_span.start);
+        .unwrap_or(after_last);
     let end = query
         .host_map
         .get(inner.end.saturating_sub(1))
-        .copied()
-        .map(|b| b + 1)
-        .unwrap_or(query.host_span.end);
+        .map_or(after_last, |b| b + 1);
     ByteSpan::new(start, end.max(start))
 }
 

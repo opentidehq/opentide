@@ -581,3 +581,25 @@ fn a_loop_that_only_reads_ranges_stalls() {
     }
     assert!(p.stalled());
 }
+
+/// `SyntaxError::within` is the nodes open when the grammar recorded the error, in the
+/// order of its events: an error recorded inside a node is in it, one recorded after the
+/// node closed is not, though both sit at the node's end.
+#[test]
+fn an_error_records_the_nodes_it_was_recorded_in() {
+    let source = "a b";
+    let input = Input::new(source, toy_lex(source), grammar(8));
+    let mut p = Parser::new(&input);
+    let root = p.start();
+    let group = p.start();
+    p.bump();
+    p.error("inside");
+    group.complete(&mut p, GROUP);
+    p.error("after");
+    p.bump();
+    root.complete(&mut p, ROOT);
+    let parse = build(&input, p.finish());
+    let within: Vec<_> = parse.errors.iter().map(|e| e.within.clone()).collect();
+    assert_eq!(within, [vec![ROOT, GROUP], vec![ROOT]]);
+    assert_eq!(parse.errors[0].gap, parse.errors[1].gap, "the same gap");
+}
