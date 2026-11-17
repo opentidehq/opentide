@@ -2087,6 +2087,14 @@ mod tests {
             codes::ESQL_UNAVAILABLE,
         );
         assert!(inline[0].2.contains("`INLINE STATS`"), "{inline:?}");
+        assert_eq!((inline[0].0, inline[0].1), (12, 24), "both words");
+        // The advisory reads the query, not what recovery left after it,
+        // and INLINE STATS does not aggregate the rows away.
+        for q in ["FROM a | KEEP b )", "FROM a | INLINE STATS c = COUNT(*)"] {
+            assert_eq!(found(q, codes::ESQL_METADATA_ID).len(), 1, "{q}");
+        }
+        // A parameter names no function.
+        assert!(analyze("ROW a = 1 | EVAL x = ?p(a)").diagnostics.is_empty());
         // A chain of names: the innermost pair, `a AND a`.
         let chain = format!(
             "FROM a METADATA _id | WHERE {}",

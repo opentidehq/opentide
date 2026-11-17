@@ -845,6 +845,7 @@ impl<'t> Node<'t> {
             .find(|c| c.d().field == Some(field))
     }
 
+    /// The smallest node that spans `start..end`, as tree-sitter finds it.
     pub(crate) fn descendant_for_byte_range(&self, start: usize, end: usize) -> Option<Node<'t>> {
         let mut node = *self;
         'down: loop {
