@@ -24,6 +24,38 @@ wheels = [
 ]
 
 [[package]]
+name = "attrs"
+version = "26.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
+]
+
+[[package]]
+name = "backports-asyncio-runner"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/ff/70dca7d7cb1cbc0edb2c6cc0c38b65cba36cccc491eca64cabd5fe7f8670/backports_asyncio_runner-1.2.0.tar.gz", hash = "sha256:a5aa7b2b7d8f8bfcaa2b57313f70792df84e32a2a746f585213373f900b42162", size = 69893, upload-time = "2025-07-02T02:27:15.685Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/59/76ab57e3fe74484f48a53f8e337171b4a2349e506eabe136d7e01d059086/backports_asyncio_runner-1.2.0-py3-none-any.whl", hash = "sha256:0da0a936a8aeb554eccb426dc55af3ba63bcdc69fa1a600b5bb305413a4477b5", size = 12313, upload-time = "2025-07-02T02:27:14.263Z" },
+]
+
+[[package]]
+name = "cattrs"
+version = "26.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/75/e72b839c3dc869c990b4842f3dba730bdcdf5215f68fc7955edf849a1792/cattrs-26.2.1.tar.gz", hash = "sha256:679132bfdc225c5ee40c024fc42519954767c387f950dc6751946c586bccdc6d", size = 525617, upload-time = "2026-09-26T20:53:21.114Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/cf/22794a399d99480486120e26e879ef008e21f5e85274c2ed591d568bb326/cattrs-26.2.1-py3-none-any.whl", hash = "sha256:a12aaa3453dc8f633a815293179f08b7421ed18d2575c459c3c736f840beac24", size = 74843, upload-time = "2026-09-26T20:53:19.767Z" },
+]
+
+[[package]]
 name = "cfgv"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -255,6 +287,19 @@ wheels = [
 ]
 
 [[package]]
+name = "lsprotocol"
+version = "2025.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "cattrs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e9/26/67b84e6ec1402f0e6764ef3d2a0aaf9a79522cc1d37738f4e5bb0b21521a/lsprotocol-2025.0.0.tar.gz", hash = "sha256:e879da2b9301e82cfc3e60d805630487ac2f7ab17492f4f5ba5aaba94fe56c29", size = 74896, upload-time = "2025-06-17T21:30:18.156Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/f0/92f2d609d6642b5f30cb50a885d2bf1483301c69d5786286500d15651ef2/lsprotocol-2025.0.0-py3-none-any.whl", hash = "sha256:f9d78f25221f2a60eaa4a96d3b4ffae011b107537facee61d3da3313880995c7", size = 76250, upload-time = "2025-06-17T21:30:19.455Z" },
+]
+
+[[package]]
 name = "nodeenv"
 version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -273,6 +318,9 @@ plugins = [
 ]
 
 [package.dev-dependencies]
+clients = [
+    { name = "pytest-lsp" },
+]
 dev = [
     { name = "pre-commit", version = "4.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pre-commit", version = "4.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -293,6 +341,7 @@ requires-dist = [{ name = "pydantic", marker = "extra == 'plugins'", specifier =
 provides-extras = ["plugins"]
 
 [package.metadata.requires-dev]
+clients = [{ name = "pytest-lsp", specifier = "==1.0.1" }]
 dev = [
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -566,6 +615,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pygls"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "cattrs" },
+    { name = "lsprotocol" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/2e/7bbe061d175c0baddde8fc9edb908a4c31ba5d9165b8c68e3439c3a9f138/pygls-2.1.1.tar.gz", hash = "sha256:1da03ba9053201bb337dcdd8d121df70feb2a91e1a0dcc74de5da79755b1a201", size = 55091, upload-time = "2026-03-25T11:19:10.541Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/1a/208293b6c350f5abea6941d5606080d4a492644052504f5312e5de30a902/pygls-2.1.1-py3-none-any.whl", hash = "sha256:510a6dea2476177230c7d851125e5948efdf3fdb9ebfd8543fc434972f8faed4", size = 68975, upload-time = "2026-03-25T11:19:11.374Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -593,6 +656,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-asyncio"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backports-asyncio-runner", marker = "python_full_version < '3.11'" },
+    { name = "pytest" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2c/de/80724f9b5b9eca1a654179cae6edc51aaa0a355a9834a736e2a188b91780/pytest_asyncio-1.5.0.tar.gz", hash = "sha256:92c8fa83ca419fd0d4bd6a34df6520dae435841d3733c319343249492adf37f7", size = 146227, upload-time = "2026-11-12T16:35:49.845Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/2d/e600d8f47597a803641704aba367c7266cd621f86561ec36da9888f160ec/pytest_asyncio-1.5.0-py3-none-any.whl", hash = "sha256:557f255ee03cc84f84a8d5f438bc9c6e0f714bf86970ae743c7ecb5a38d7e07d", size = 17215, upload-time = "2026-11-12T16:35:48.446Z" },
+]
+
+[[package]]
 name = "pytest-console-scripts"
 version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -616,6 +693,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b1/51/a849f96e117386044471c8ec2bd6cfebacda285da9525c9106aeb28da671/pytest_cov-7.1.0.tar.gz", hash = "sha256:30674f2b5f6351aa09702a9c8c364f6a01c27aae0c1366ae8016160d1efc56b2", size = 55592, upload-time = "2026-03-21T20:11:16.284Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl", hash = "sha256:a0461110b7865f9a271aa1b51e516c9a95de9d696734a2f71e3e78f46e1d4678", size = 22876, upload-time = "2026-03-21T20:11:14.438Z" },
+]
+
+[[package]]
+name = "pytest-lsp"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pygls" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c3/b6/6cf89ad14813dd318d8a415e4d01809f89a6bf4649bf12df9934977329e7/pytest_lsp-1.0.1.tar.gz", hash = "sha256:cd9950fec2991e65364430dd419daeedf546928788f457e1106d5b751aea0be8", size = 29443, upload-time = "2026-06-17T22:36:04.952Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/0e/e7dfc7fc80921004ea5989ef8d8d44762323f46dfd9e1440184483387242/pytest_lsp-1.0.1-py3-none-any.whl", hash = "sha256:1a44390556253e384a1921cfc2eb9aad1c315e08576629e52942c71d35b95596", size = 26730, upload-time = "2026-06-17T22:36:03.562Z" },
 ]
 
 [[package]]
