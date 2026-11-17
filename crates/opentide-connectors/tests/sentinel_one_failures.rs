@@ -4,7 +4,8 @@
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use opentide_connectors::connector::{
-    DeployError, DeployRequest, Deployer, Operation, QueryRequest, TenantContext, TimeWindow,
+    DeployError, DeployRequest, DeployScope, Deployer, Operation, QueryRequest, TenantContext,
+    TimeWindow,
 };
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::runtime::block_on;
@@ -69,48 +70,57 @@ fn deploy(
     operation: Operation,
     rule_id: &str,
     body: &[u8],
-) -> Result<Option<String>, ConnectorError> {
+) -> Result<Option<String>, DeployError> {
     let request = DeployRequest::new(rule_id.to_owned(), operation, body.to_vec());
-    with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request)))
-        .map(|outcome| outcome.remote_id)
-        .map_err(DeployError::into_connector)
+    with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request))).map(|outcome| outcome.remote_id)
 }
 
-fn reason(error: ConnectorError) -> String {
-    let ConnectorError::Answer {
-        reason, address, ..
-    } = &error
-    else {
-        panic!("{error:?}")
-    };
-    assert!(!address.is_empty());
+/// The console's refusal: its message, which names no secret, after its
+/// code, scope and status are checked.
+fn reason(error: &DeployError, code: &str, scope: DeployScope, status: Option<u16>) -> String {
+    assert_eq!(error.failure.code, code, "{error:?}");
+    assert_eq!(error.scope, scope, "{error:?}");
+    assert_eq!(error.failure.status, status, "{error:?}");
+    assert_eq!(error.failure.field("platform"), Some("sentinel_one"));
     assert!(!format!("{error} {error:?}").contains(TOKEN));
-    reason.clone()
+    error.failure.message.clone()
 }
 
 #[test]
 fn the_deployer_reports_each_refusal_in_the_consoles_words() {
     let rule = br#"{"data": {"name": "r"}}"#;
-    for (status, body, expected) in [
+    for (status, body, expected, code, scope, kept) in [
         (
             400,
             json!({"errors": ["bad"]}),
             "SentinelOne refused the rule (HTTP 400)",
+            "sentinel_one_rule_invalid",
+            DeployScope::Rule,
+            Some(400),
         ),
         (
             401,
             json!({"errors": ["token"]}),
             "SentinelOne refused the API token (HTTP 401)",
+            "sentinel_one_unauthorized",
+            DeployScope::Tenant,
+            Some(401),
         ),
         (
             500,
             json!({"errors": [{"code": 5}]}),
             "Unforeseen error with code [500]: {\"errors\":[{\"code\":5}]}",
+            "sentinel_one_request_failed",
+            DeployScope::Rule,
+            Some(500),
         ),
         (
             200,
             json!({"data": {}}),
             "SentinelOne answered without the rule's id",
+            "tenant_answer_invalid",
+            DeployScope::Rule,
+            None,
         ),
     ] {
         let api = server(
@@ -119,7 +129,7 @@ fn the_deployer_reports_each_refusal_in_the_consoles_words() {
             ResponseTemplate::new(status).set_body_json(body),
         );
         let error = deploy(&api, Operation::Create, "", rule).unwrap_err();
-        let reason = reason(error);
+        let reason = reason(&error, code, scope, kept);
         assert!(reason.starts_with(expected), "{status}: {reason}");
     }
     // A rule that is gone says how to clear its deployment state.
@@ -129,7 +139,13 @@ fn the_deployer_reports_each_refusal_in_the_consoles_words() {
         ResponseTemplate::new(404),
     );
     let error = deploy(&api, Operation::Update, "77", rule).unwrap_err();
-    assert!(reason(error).contains("remove its sentinel_one entry"));
+    let gone = reason(
+        &error,
+        "sentinel_one_rule_not_found",
+        DeployScope::Rule,
+        Some(404),
+    );
+    assert!(gone.contains("remove its sentinel_one entry"));
 }
 
 #[test]
@@ -161,8 +177,13 @@ fn the_deployer_creates_replaces_and_deletes_by_the_recorded_id() {
     // Nothing is sent for an id that is not a number or a body that is not JSON.
     let api = server("DELETE", RULES_PATH, ResponseTemplate::new(200));
     let error = deploy(&api, Operation::Delete, "ru-1", b"").unwrap_err();
-    assert_eq!(reason(error), "deployment id \"ru-1\" is not a number");
-    let error = deploy(&api, Operation::Create, "", b"{not json").unwrap_err();
+    assert_eq!(
+        reason(&error, "deployment_id_invalid", DeployScope::Rule, None),
+        "deployment id \"ru-1\" is not a number"
+    );
+    let error = deploy(&api, Operation::Create, "", b"{not json")
+        .unwrap_err()
+        .into_connector();
     let ConnectorError::Setup { message, .. } = &error else {
         panic!("{error:?}")
     };
@@ -254,7 +275,7 @@ fn a_2xx_json_answer_an_error_quotes_never_shows_the_token() {
         api
     });
     let created = deploy(&api, Operation::Create, "r1", br#"{"data": {}}"#).unwrap_err();
-    let shown = format!("{created} {created:?} {}", created.text());
+    let shown = format!("{created} {created:?} {}", created.failure.message);
     assert!(shown.contains("ApiToken ***"), "{shown}");
     assert!(!shown.contains(TOKEN), "{shown}");
     let now = jiff::Timestamp::from_second(1_800_000_000).unwrap();

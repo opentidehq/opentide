@@ -15,9 +15,9 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, TimeWindow,
-    kql_code, utc_z,
+    BoxFuture, DeployError, DeployFailure, DeployOutcome, DeployRequest, Deployer, LiveCheck,
+    LiveValidator, Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row,
+    TenantContext, TimeWindow, kql_code, utc_z,
 };
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
@@ -90,6 +90,49 @@ pub enum SentinelOneError {
     /// The tenant could not be reached, or the run was cancelled.
     #[error(transparent)]
     Connector(#[from] ConnectorError),
+}
+
+impl SentinelOneError {
+    /// The error as a deploy's failure on *tenant*: each kind its code,
+    /// scope and the console's status and answer (`detail`), its message
+    /// this error's; a connector error as [`DeployError::from`] has it.
+    ///
+    /// | Kind | Code | Fails | Status |
+    /// |---|---|---|---|
+    /// | `Invalid` | `sentinel_one_rule_invalid` | the rule | 400 |
+    /// | `Unauthorized` | `sentinel_one_unauthorized` | the tenant | 401 |
+    /// | `NotFound` | `sentinel_one_rule_not_found` | the rule | 404 |
+    /// | `Unforeseen` | `sentinel_one_request_failed` | the rule | its status |
+    /// | `Unreadable` | `tenant_answer_invalid` | the rule | — |
+    /// | `BadId` | `deployment_id_invalid` | the rule | — |
+    pub fn into_deploy(self, tenant: &str) -> DeployError {
+        let message = self.to_string();
+        let (code, status, detail) = match self {
+            Self::Connector(error) => return DeployError::from(error),
+            Self::Unauthorized { detail } => {
+                return DeployError::tenant(
+                    DeployFailure::new("sentinel_one_unauthorized", message)
+                        .with_status(401)
+                        .with_field("platform", PLATFORM)
+                        .with_field("tenant", tenant)
+                        .with_field("detail", detail),
+                );
+            }
+            Self::Invalid { detail } => ("sentinel_one_rule_invalid", Some(400), detail),
+            Self::NotFound { detail } => ("sentinel_one_rule_not_found", Some(404), detail),
+            Self::Unforeseen { status, context } => {
+                ("sentinel_one_request_failed", Some(status), context)
+            }
+            Self::Unreadable { detail } => ("tenant_answer_invalid", None, detail),
+            Self::BadId(id) => ("deployment_id_invalid", None, id),
+        };
+        let mut failure = DeployFailure::new(code, message)
+            .with_field("platform", PLATFORM)
+            .with_field("tenant", tenant)
+            .with_field("detail", detail);
+        failure.status = status;
+        DeployError::rule(failure)
+    }
 }
 
 /// What `validate_query` concluded.
@@ -581,26 +624,15 @@ impl Deployer for SentinelOne {
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
-            let address = || {
-                cx.tenant
-                    .secret("url")
-                    .map(|url| url.expose().to_owned())
-                    .unwrap_or_default()
-            };
-            let answer = |error: SentinelOneError| match error {
-                SentinelOneError::Connector(error) => error,
-                other => ConnectorError::Answer {
-                    platform: PLATFORM.into(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    address: address(),
-                    reason: other.to_string(),
-                },
-            };
-            let body = || -> Result<Json, ConnectorError> {
-                serde_json::from_slice(&request.body).map_err(|error| ConnectorError::Setup {
-                    platform: PLATFORM.into(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: format!("the compiled rule is not JSON: {error}"),
+            // Each kind of the console's refusal keeps its code and status.
+            let answer = |error: SentinelOneError| error.into_deploy(&cx.tenant.label.tenant);
+            let body = || -> Result<Json, DeployError> {
+                serde_json::from_slice(&request.body).map_err(|error| {
+                    DeployError::from(ConnectorError::Setup {
+                        platform: PLATFORM.into(),
+                        tenant: cx.tenant.label.tenant.clone(),
+                        message: format!("the compiled rule is not JSON: {error}"),
+                    })
                 })
             };
             let remote_id = match request.operation {
