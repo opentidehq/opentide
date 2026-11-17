@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you build an `opentide_connectors::connector::DeployRequest` (or `opentide::connectors::DeployRequest`) with a struct literal, call `DeployRequest::new(rule_id, operation, body)` instead, `DeployRequest::delete(rule_id)` for a deletion, and `.with_policies(Some(..))` for a Sysdig rule's own policies: the struct is `#[non_exhaustive]`.
 - If you build an `opentide_connectors::connector::DeployOutcome` (or `opentide::connectors::DeployOutcome`) with a struct literal, in a `Deployer` of your own, call `DeployOutcome::new(remote_id, operation)` instead, and `.with_warnings(..)` for what the deploy raised. Read `warnings` where you want what `opentide deploy` would have warned of.
 - If you read `opentide_yara::catalog::Member::{libyara, yara_x, yara_x_kind}`, `Overload::{libyara, yara_x, yara_x_ret}` or call `Catalog::has_libyara_declarations`, drop them: every member is YARA-X's, and `kind` and `ret` are YARA-X's types.
 - If you called `opentide_cql::check::diagnostics`, call `opentide_cql::analyze_with` and keep the diagnostics after its `cql_parse_error`.
@@ -29,6 +30,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
 ### Breaking
+
+- **`DeployRequest` is `#[non_exhaustive]`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). A struct literal no longer builds one outside `opentide-connectors`, so fields can be added without breaking callers again; build it with the constructors (Added, below). See Upgrade.
 
 - **`DeployOutcome` carries the deploy's warnings, and is `#[non_exhaustive]`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). `opentide_connectors::connector::DeployOutcome` has a new `warnings: Vec<DeployWarning>` (`code`, `message`; `#[non_exhaustive]`, built with `DeployWarning::new`): what a deploy raised without failing, which `Deployer::deploy` dropped. Sysdig and Bitdefender report a rule created again because the tenant lost it, Graylog a definition created again or forgotten, its query validation's warnings and `graylog_version_vulnerable` (a version that does not revoke access tokens reliably), Google SecOps and Exabeam their deploy warnings, and Defender for Endpoint a rule created with the safer configuration (`opentide_connectors::defender::PARTIAL_DEPLOYMENT`). Each `code` is the event `opentide deploy` logs. A struct literal no longer builds one outside the crate: see Upgrade.
 
@@ -58,7 +61,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`DeployRequest::new`, `DeployRequest::delete` and `DeployRequest::with_policies`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). Build a request with `DeployRequest::new(rule_id, operation, body)`, a deletion, which takes no body, with `DeployRequest::delete(rule_id)`, and a Sysdig rule's own runtime policies with `.with_policies(Some(..))`. The struct will be `#[non_exhaustive]` in a later change, so build it with these rather than a struct literal.
+- **`DeployRequest::new`, `DeployRequest::delete` and `DeployRequest::with_policies`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). Build a request with `DeployRequest::new(rule_id, operation, body)`, a deletion, which takes no body, with `DeployRequest::delete(rule_id)`, and a Sysdig rule's own runtime policies with `.with_policies(Some(..))`. 
 
 - **`opentide_schema::platforms::PlatformId`**. An enum of the thirteen built-in platforms, in `PLATFORMS`' order: `ALL`, `spec()` (its row), `as_str()` (the identifier), `parse(id)` (`None` for a plugin's identifier or any other text) and `Display`. A row of `PLATFORMS` moved or added without the enum following fails the build. `deploy` chooses each platform's path by an exhaustive match on it, so a new built-in platform must be given one; its inner matches and other code still have fallbacks. `opentide_cli::tree::Platform`, the `--platform` choice, is now a struct wrapping it (`Platform(PlatformId)`) instead of an enum of its own.
 

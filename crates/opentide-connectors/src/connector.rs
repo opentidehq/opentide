@@ -48,7 +48,11 @@ pub enum Operation {
 }
 
 /// One compiled rule to deploy (the body `opentide-compile` built).
+///
+/// `#[non_exhaustive]`: build one with [`DeployRequest::new`],
+/// [`DeployRequest::delete`] and [`DeployRequest::with_policies`].
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct DeployRequest {
     /// The rule's identifier on the platform (its UUID or name).
     pub rule_id: String,

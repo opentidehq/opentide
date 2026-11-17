@@ -1894,21 +1894,15 @@ impl Sender<'_, '_> {
                         arg0 = rule.name.as_str(),
                         "the_rule_will_be_removed_from_the_sentinel_workspace"
                     );
-                    DeployRequest {
-                        rule_id: rule.uuid.clone(),
-                        operation: Operation::Delete,
-                        body: Vec::new(),
-                        policies: None,
-                    }
+                    DeployRequest::delete(rule.uuid.clone())
                 } else {
                     let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
                         .map_err(compile_error)?;
-                    DeployRequest {
-                        rule_id: rule.uuid.clone(),
-                        operation: Operation::Update,
-                        body: body.to_compact().into_bytes(),
-                        policies: None,
-                    }
+                    DeployRequest::new(
+                        rule.uuid.clone(),
+                        Operation::Update,
+                        body.to_compact().into_bytes(),
+                    )
                 };
                 let context = self.context(connection);
                 self.block(deployer.deploy(context, &request))
@@ -2010,20 +2004,19 @@ impl Sender<'_, '_> {
                     return Ok(());
                 };
                 let deployer = self.deployer(platform)?;
-                let request = DeployRequest {
-                    rule_id: rule.uuid.clone(),
-                    operation: if deletion {
+                let request = DeployRequest::new(
+                    rule.uuid.clone(),
+                    if deletion {
                         Operation::Delete
                     } else {
                         Operation::Update
                     },
-                    body: if write.body.is_null() {
+                    if write.body.is_null() {
                         Vec::new()
                     } else {
                         serde_json::to_vec(&write.body).unwrap_or_default()
                     },
-                    policies: None,
-                };
+                );
                 let context = self.context(connection);
                 self.block(deployer.deploy(context, &request))
                     .map_err(|error| raised(&error))?;
@@ -2373,14 +2366,13 @@ impl Sender<'_, '_> {
             Planned::Update(id) => (Operation::Update, Some(id.as_str())),
             Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
         };
-        let request = DeployRequest {
-            rule_id: rule.uuid.clone(),
+        let request = DeployRequest::new(
+            rule.uuid.clone(),
             operation,
-            body: plugin_body(rule, platform, stored)
+            plugin_body(rule, platform, stored)
                 .to_compact()
                 .into_bytes(),
-            policies: None,
-        };
+        );
         let context = self.context(connection);
         let done = self
             .block(deployer.deploy(context, &request))
