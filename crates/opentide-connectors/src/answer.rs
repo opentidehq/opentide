@@ -281,6 +281,19 @@ impl Answer {
         self.text().chars().take(chars).collect()
     }
 
+    /// Why a page that should be JSON is not, naming its `Content-Type`
+    /// (`the page is not JSON (Content-Type text/html): HTTP 200 with an HTML
+    /// page titled "Sign in"`), else `None`: a listing reads such a page as
+    /// an error, never as an empty page (#1142).
+    pub fn not_json_page(&self) -> Option<String> {
+        let detail = self.not_json_detail()?;
+        let kind = self.content_type.as_deref().map_or_else(
+            || "no Content-Type".to_owned(),
+            |kind| format!("Content-Type {kind}"),
+        );
+        Some(format!("the page is not JSON ({kind}): {detail}"))
+    }
+
     /// [`describe_answer`] for a body that is not JSON, else `None`
     /// (`not_json_detail`).
     pub fn not_json_detail(&self) -> Option<String> {

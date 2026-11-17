@@ -1,2 +1,0 @@
-✓ 2 notes in 1 file
-→ opentide lint --file objects/rules/suspicious-lsass-access.yaml --verbose · show 2 notes, such as a missing optional field

@@ -5,8 +5,8 @@ reports in a way that surprises: what the architecture review found, and what bu
 catalogue found. Each entry has a fault kind in [`faults.toml`](faults.toml) (its `gap` key names
 the entry) that pins what the oracle does today, so
 the Rust engine is compared with the same behaviour until a decision changes it. **UC-2.2 decides
-each entry**; an intended change then goes in `tests/golden/APPROVED_DIFFS.toml` with its reason,
-issue and changelog entry, and the kind's expectation changes with it.
+each entry**; an intended change then goes in `CHANGELOG.md` with its reason and issue (the
+approved-diffs ledger that also listed it was retired, #1142), and the kind's expectation changes with it.
 
 A kind with `codes = []` pins a silence: the oracle reports nothing for that fault.
 
@@ -46,7 +46,7 @@ keep it in the compile check and make that check independent of other findings.
 1h10m)", deploy's own words) on the field, from every run and from `lint`'s schema check, whatever
 else the workspace holds. The difference is `sentinel-durations` in
 `crates/opentide-schema/tests/oracle/platform_cases.toml`, listed in
-`tests/golden/APPROVED_DIFFS.toml` and announced in CHANGELOG.md ("**Sentinel durations are
+the approved-diffs ledger (retired, #1142) and announced in CHANGELOG.md ("**Sentinel durations are
 checked when the rule is validated**"); `compile-invalid-rule-frequency` keeps pinning the oracle
 until `validate` routes to Rust (UC-2.x), which adds `schema_validation` to its codes.
 
@@ -181,7 +181,7 @@ that reason. Options: treat a missing mapping as none (the documented shape allo
 (`opentide-compile`'s `elastic`, UC-3.1) sends no `severity_mapping` for a `severity` block without
 `mapping`, which the documented shape allows, so the rule compiles, and `validate`'s compile check,
 which runs that compiler, reports nothing. The difference is listed in
-`tests/golden/APPROVED_DIFFS.toml` for `validate/*/tide-corpus-compile-elastic-severity/*`
+the approved-diffs ledger (retired, #1142) for `validate/*/tide-corpus-compile-elastic-severity/*`
 ("**An Elastic rule whose `severity` has no `mapping` validates and deploys**");
 `compile-failed-elastic-severity` keeps pinning the oracle.
 

@@ -620,4 +620,29 @@ fn usage_errors_and_skips_answer_before_any_check() {
         value(&unreached, "_failure_code"),
         &Json::str("no_tenant_reached")
     );
+    // With --wide the rule goes to the lab tenant under PREVIEW, a strategy
+    // the run left out: a skip, not a failure.
+    let elsewhere = run(
+        &Args {
+            wide: true,
+            ..args(Some("splunk"), &["RELEASE"])
+        },
+        &cx(plain),
+    );
+    assert_eq!(value(&elsewhere, "status"), &Json::str("skipped"));
+    assert_eq!(
+        value(&elsewhere, "message"),
+        &Json::str(
+            "None of the 1 splunk rule(s) goes to a tenant accepting RELEASE; they are checked \
+             by a run with the strategy that deploys them, or without --strategy"
+        )
+    );
+    assert!(
+        !elsewhere
+            .result
+            .iter()
+            .any(|(key, _)| key == "_exit_code" || key == "_failure_code"),
+        "{:?}",
+        elsewhere.result
+    );
 }

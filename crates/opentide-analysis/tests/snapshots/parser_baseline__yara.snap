@@ -3,7 +3,7 @@ source: crates/opentide-analysis/tests/parser_baseline.rs
 expression: baseline(language)
 ---
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AgentRacoon.broken.yara
-yara_parse_error error 127:0-127:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 126:9-126:9 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AgentRacoon.yara
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AsyncRAT.broken.yara
 yara_undefined_string error 122:15-122:34 the rule defines no string `$opentide_undefined`
@@ -16,7 +16,7 @@ yara_parse_error error 90:1-90:1 YARA syntax error: expecting `condition`, found
 yara_undefined_identifier error 114:15-114:33 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.OrcusRAT.yara
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.ResolverRAT.broken.yara
-yara_parse_error error 93:0-93:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 92:9-92:9 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.ResolverRAT.yara
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Infostealer.GomorrahStealer.broken.yara
 yara_undefined_identifier error 93:15-93:33 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
@@ -25,7 +25,7 @@ yara_undefined_identifier error 93:15-93:33 `opentide_undefined` is neither a ru
 yara_undefined_identifier error 63:15-63:33 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Apis.yara
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.ChupaCabra.broken.yara
-yara_parse_error error 89:0-89:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 88:9-88:9 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.ChupaCabra.yara
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Cring.broken.yara
 yara_undefined_string error 57:15-57:34 the rule defines no string `$opentide_undefined`
@@ -38,7 +38,7 @@ yara_parse_error error 72:1-72:1 YARA syntax error: expecting `condition`, found
 yara_undefined_identifier error 77:15-77:33 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.EAF.yara
 == conformance/external/yara/reversinglabs/Linux.Rootkit.Pumakit.broken.yara
-yara_parse_error error 160:0-160:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 159:9-159:9 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/Linux.Rootkit.Pumakit.yara
 == conformance/external/yara/reversinglabs/Linux.Trojan.AcidRain.broken.yara
 yara_undefined_string error 55:15-55:34 the rule defines no string `$opentide_undefined`
@@ -58,7 +58,7 @@ yara_parse_error error 241:4-241:12 YARA syntax error: expecting pattern modifie
 yara_parse_error error 252:1-252:1 YARA syntax error: expecting `condition`, found end of file
 == conformance/external/yara/reversinglabs/Win32.Exploit.CVE20200601.yara
 == conformance/external/yara/reversinglabs/Win32.Infostealer.MultigrainPOS.broken.yara
-yara_parse_error error 87:0-87:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 86:120-86:120 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/Win32.Infostealer.MultigrainPOS.yara
 == conformance/external/yara/reversinglabs/Win32.Infostealer.ProjectHookPOS.broken.yara
 yara_undefined_string error 92:15-92:34 the rule defines no string `$opentide_undefined`
@@ -71,7 +71,7 @@ yara_parse_error error 168:1-168:1 YARA syntax error: expecting `condition`, fou
 yara_undefined_identifier error 93:15-93:33 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/reversinglabs/Win32.Trojan.BiBiWiper.yara
 == conformance/external/yara/reversinglabs/Win32.Trojan.CaddyWiper.broken.yara
-yara_parse_error error 94:0-94:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 93:9-93:9 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/Win32.Trojan.CaddyWiper.yara
 == conformance/external/yara/reversinglabs/Win32.Virus.Awfull.broken.yara
 yara_parse_error error 29:4-29:12 YARA syntax error: expecting pattern modifier, pattern identifier or `condition`, found `conditon`
@@ -81,10 +81,10 @@ yara_parse_error error 32:1-32:1 YARA syntax error: expecting `condition`, found
 yara_undefined_identifier error 68:19-68:37 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/reversinglabs/Win32.Virus.Cmay.yara
 == conformance/external/yara/reversinglabs/Win32.Virus.DeadCode.broken.yara
-yara_parse_error error 75:0-75:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 74:48-74:48 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/reversinglabs/Win32.Virus.DeadCode.yara
 == conformance/external/yara/signature-base/apt_aa19_024a.broken.yar
-yara_parse_error error 19:0-19:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 17:61-17:61 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/apt_aa19_024a.yar
 == conformance/external/yara/signature-base/apt_agent_btz.broken.yar
 yara_undefined_string error 24:14-24:33 the rule defines no string `$opentide_undefined`
@@ -96,7 +96,7 @@ yara_parse_error error 14:3-14:11 YARA syntax error: expecting pattern modifier,
 yara_undefined_identifier error 13:14-13:32 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/signature-base/crime_academic_data_centers_camp_may20.yar
 == conformance/external/yara/signature-base/crime_andromeda_jun17.broken.yar
-yara_parse_error error 38:0-38:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 36:79-36:79 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/crime_andromeda_jun17.yar
 == conformance/external/yara/signature-base/expl_adselfservice_cve_2021_40539.broken.yar
 yara_undefined_string error 11:14-11:33 the rule defines no string `$opentide_undefined`
@@ -108,20 +108,20 @@ yara_parse_error error 13:3-13:11 YARA syntax error: expecting pattern modifier,
 yara_undefined_identifier error 15:14-15:32 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/signature-base/exploit_cve_2014_4076.yar
 == conformance/external/yara/signature-base/gen_Excel4Macro_Sharpshooter.broken.yar
-yara_parse_error error 69:0-69:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 67:28-67:28 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/gen_Excel4Macro_Sharpshooter.yar
 == conformance/external/yara/signature-base/general_officemacros.broken.yar
 yara_undefined_string error 19:12-19:31 the rule defines no string `$opentide_undefined`
 == conformance/external/yara/signature-base/general_officemacros.yar
 == conformance/external/yara/signature-base/generic_cryptors.broken.yar
 yara_parse_error error 21:1-21:9 YARA syntax error: expecting pattern modifier, pattern identifier or `condition`, found `conditon`
-yara_parse_error error 24:0-24:0 YARA syntax error: expecting `condition`, found end of file
+yara_parse_error error 23:1-23:1 YARA syntax error: expecting `condition`, found end of file
 == conformance/external/yara/signature-base/generic_cryptors.yar
 == conformance/external/yara/signature-base/hktl_badsuccessor_helper_may25.broken.yar
 yara_undefined_identifier error 13:14-13:32 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/signature-base/hktl_badsuccessor_helper_may25.yar
 == conformance/external/yara/signature-base/htkl_blue_hammer_tool.broken.yar
-yara_parse_error error 35:0-35:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 33:18-33:18 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/htkl_blue_hammer_tool.yar
 == conformance/external/yara/signature-base/log_teamviewer_keyboard_layouts.broken.yar
 yara_undefined_string error 18:14-18:33 the rule defines no string `$opentide_undefined`
@@ -133,7 +133,7 @@ yara_parse_error error 12:3-12:11 YARA syntax error: expecting pattern modifier,
 yara_undefined_identifier error 13:14-13:32 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/signature-base/mal_avemaria_rat.yar
 == conformance/external/yara/signature-base/pua_cryptocoin_miner.broken.yar
-yara_parse_error error 88:0-88:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 86:37-86:37 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/pua_cryptocoin_miner.yar
 == conformance/external/yara/signature-base/pup_lightftp.broken.yar
 yara_undefined_string error 18:12-18:31 the rule defines no string `$opentide_undefined`
@@ -145,7 +145,7 @@ yara_parse_error error 16:3-16:11 YARA syntax error: expecting pattern modifier,
 yara_undefined_identifier error 17:14-17:32 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/signature-base/seaspy_backdoor_jan25.yar
 == conformance/external/yara/signature-base/susp_aur_packages.broken.yar
-yara_parse_error error 92:0-92:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 90:21-90:21 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/susp_aur_packages.yar
 == conformance/external/yara/signature-base/threat_compromised_daemon_tools_lite_may26.broken.yar
 yara_undefined_string error 18:14-18:33 the rule defines no string `$opentide_undefined`
@@ -157,7 +157,7 @@ yara_parse_error error 11:3-11:11 YARA syntax error: expecting pattern modifier,
 yara_undefined_identifier error 17:14-17:32 `opentide_undefined` is neither a rule defined earlier in the signature nor an imported module
 == conformance/external/yara/signature-base/vuln_erlang_otp_ssh_cve_2025_32433.yar
 == conformance/external/yara/signature-base/webshell_regeorg.broken.yar
-yara_parse_error error 19:0-19:0 YARA syntax error: expecting operator or `}`, found end of file
+yara_parse_error error 18:36-18:36 YARA syntax error: expecting operator or `}`, found end of file
 == conformance/external/yara/signature-base/webshell_regeorg.yar
 == corpus/yara/and_expression__invalid.yar
 yara_parse_error error 4:11-4:14 YARA syntax error: expecting expression or identifier, found `and`

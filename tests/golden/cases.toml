@@ -1,6 +1,6 @@
-# The golden cases: what `cargo xtask golden record` runs through the oracle
-# (tests/golden/README.md). Reviewed like code; the recordings under cases/
-# are generated from it and never edited.
+# The command line's snapshot cases (tests/golden/README.md): what
+# crates/opentide-cli/tests/cli_snapshots.rs runs and holds to its snapshots.
+# Reviewed like code; the snapshots are generated from it and never edited.
 #
 # Each [[case]] runs in every mode of `modes` against every fixture of
 # `fixtures` (the defaults below unless it sets its own). `args` follow
@@ -2332,8 +2332,7 @@ args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["tide-corpus"]
 
 # The skills catalogue, served from a recorded cassette (UC-4.1, #831):
-# tests/cassettes/skills/manifest.json, recorded from the oracle with `cargo
-# xtask cassettes record skills/manifest`. The cases above record the same
+# tests/cassettes/skills/manifest.json, recorded from the oracle. The cases above run the same
 # commands with the network refused.
 
 [[case]]

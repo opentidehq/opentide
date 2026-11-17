@@ -8,6 +8,7 @@
 //! never touch the file system; [`cli`] writes workspaces, runs the oracle
 //! and prints.
 
+pub mod approved;
 pub mod cli;
 pub mod configuration;
 pub mod coverage;

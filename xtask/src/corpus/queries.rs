@@ -5,7 +5,7 @@
 //! the queries check (`context.source` `engine`, in `issues` and `warnings`)
 //! compared with the oracle's, every key of it, with the number of queries
 //! checked. A difference fails the kind unless an approved rule explains it:
-//! `xtask validate diff`'s, or one of [`APPROVED`], which only the kinds reach.
+//! [`super::approved::APPROVED`]'s, or one of [`APPROVED`], which only the kinds reach.
 //!
 //! The kinds `opentide lint` reports from its queries check (`command =
 //! ["lint"]`, UC-3.5b): each workspace linted by `opentide-workspace` with
@@ -22,8 +22,8 @@ use opentide_workspace::validate::{Options, QueryCheck, QueryFindings, QueryObje
 use opentide_workspace::{OsFs, RootOptions, Workspace};
 use serde_json::{Value as Json, json};
 
+use super::approved::Approved;
 use super::faults::{Catalogue, Kind};
-use crate::validate::Approved;
 
 /// The queries check on the engines, counting the CrowdStrike queries and
 /// HarfangLab YARA rules it checked (the oracle checked neither). The counts are the last check's: a
@@ -206,7 +206,7 @@ pub fn engine_findings(report: &Json) -> (Vec<Json>, Json) {
 /// The command holds options `validate` on the Rust engine does not take, or
 /// the workspace does not open.
 pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize, usize)> {
-    let args = crate::validate::parse_args(command)
+    let args = super::approved::parse_args(command)
         .filter(|args| args.fix.is_none())
         .ok_or_else(|| anyhow!("`{}` is not a checking validate", command.join(" ")))?;
     let workspace = Workspace::open(
@@ -292,9 +292,8 @@ pub fn rust_lint(dir: &Path, command: &[String]) -> Result<Vec<Json>> {
     Ok(lint_findings(&document))
 }
 
-/// The approved differences only the fault kinds reach: no recorded
-/// `validate --json` case holds them, so `xtask validate diff` would find
-/// them stale. A complete `--only queries` run fails on one that explains
+/// The approved differences only the fault kinds reach (no recorded
+/// `validate --json` case held them). A complete `--only queries` run fails on one that explains
 /// nothing.
 pub const APPROVED: &[Approved] = &[Approved {
     id: "hunt-platform",
@@ -305,10 +304,10 @@ pub const APPROVED: &[Approved] = &[Approved {
     applies: hunt_platform,
 }];
 
-/// The rule, of `xtask validate diff`'s `APPROVED` or of [`APPROVED`], that
+/// The rule, of [`super::approved::APPROVED`] or of [`APPROVED`], that
 /// explains this pair of findings.
 pub fn approved(oracle: Option<&Json>, rust: Option<&Json>) -> Option<&'static str> {
-    crate::validate::APPROVED
+    super::approved::APPROVED
         .iter()
         .chain(APPROVED)
         .find(|rule| (rule.applies)(oracle, rust, &[]))
