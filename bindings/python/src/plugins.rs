@@ -13,10 +13,10 @@
 use std::sync::{Arc, OnceLock};
 
 use opentide::plugins::{
-    BoxFuture, ConfigurationCheck, ConfigurationFinding, ConnectorError, Credential, DeployOutcome,
-    DeployRequest, Deployer, ENTRY_POINT_GROUP, Json, LiveCheck, LiveValidator, Operation,
-    Platform, PluginError, PluginHost, QueryColumn, QueryOutcome, QueryRequest, QueryRunner,
-    Tenant, TenantContext, TimeWindow,
+    BoxFuture, ConfigurationCheck, ConfigurationFinding, ConnectorError, Credential, DeployError,
+    DeployOutcome, DeployRequest, Deployer, ENTRY_POINT_GROUP, Json, LiveCheck, LiveValidator,
+    Operation, Platform, PluginError, PluginHost, QueryColumn, QueryOutcome, QueryRequest,
+    QueryRunner, Tenant, TenantContext, TimeWindow, deploying,
 };
 use pyo3::prelude::*;
 use serde_json::{Value, json};
@@ -346,7 +346,7 @@ impl Deployer for PythonPlatform {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
         let tenant = cx.tenant.label.tenant.clone();
         let asked = request.operation;
         let work = invoke(
@@ -355,7 +355,7 @@ impl Deployer for PythonPlatform {
             vec![tenant_json(cx.tenant), deploy_json(request)],
             tenant,
         );
-        Box::pin(async move {
+        deploying(async move {
             let value = plain(&work.await?);
             Ok(DeployOutcome::new(
                 value

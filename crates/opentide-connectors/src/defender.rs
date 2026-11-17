@@ -758,7 +758,7 @@ impl Deployer for Defender {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
+    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
             let answer = |error: DefenderError| match error {
                 DefenderError::Connector(error) => error,

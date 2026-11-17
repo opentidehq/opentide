@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_connectors::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
+    BoxFuture, DeployError, DeployOutcome, DeployRequest, Deployer, Operation, Platform,
+    TenantContext, deploying,
 };
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::retry::RetryPolicy;
@@ -118,8 +119,8 @@ impl Deployer for MockPlatform {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
-        Box::pin(async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        deploying(async move {
             let remote = match request.operation {
                 Operation::Create => {
                     let mut lookup = url::Url::parse(&format!("{BASE}/api/v1/rules")).unwrap();
@@ -223,7 +224,8 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
                     serde_json::to_vec(rule).unwrap(),
                 ),
             )
-            .await?;
+            .await
+            .map_err(DeployError::into_connector)?;
         let remote = created.remote_id.unwrap_or_default();
         let tuned = Rule {
             description: Some("Tuned: 2 exclusions"),
@@ -238,7 +240,8 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
                     serde_json::to_vec(&tuned).unwrap(),
                 ),
             )
-            .await?;
+            .await
+            .map_err(DeployError::into_connector)?;
         deployer
             .deploy(
                 cx,
@@ -248,7 +251,8 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
                     serde_json::to_vec(&serde_json::json!({"enabled": false})).unwrap(),
                 ),
             )
-            .await?;
+            .await
+            .map_err(DeployError::into_connector)?;
         let missing = MockPlatform { as_compiled }
             .call(
                 cx,

@@ -599,7 +599,11 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             [
                 connector.validate(cx, &request).await.unwrap_err(),
                 connector.run(cx, &request).await.unwrap_err(),
-                connector.deploy(cx, &create).await.unwrap_err(),
+                connector
+                    .deploy(cx, &create)
+                    .await
+                    .unwrap_err()
+                    .into_connector(),
             ]
         })
         .await;

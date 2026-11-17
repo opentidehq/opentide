@@ -199,6 +199,25 @@ test('a deploy creates the rule', async () => {
   assert.deepEqual(updated, { remoteId: created.remoteId, operation: 'update', warnings: [] })
 })
 
+test('a failed deploy rejects with its scope, status and fields (#1142)', async () => {
+  const connection = connect()
+  const body = JSON.stringify({ data: { name: 'Example', queryType: 'events' } })
+  // A rule the tenant lacks: the rule fails, its tenant's other rules can deploy.
+  const missing = await rejects(connection.deploy('1999999999999999999', 'update', body), 'tenant_answer_invalid')
+  assert.equal(missing.scope, 'rule')
+  assert.equal(missing.status, null)
+  assert.deepEqual(Object.keys(missing.fields), ['platform', 'tenant', 'address'])
+  assert.equal(missing.fields.tenant, 'soc')
+  // Nothing listens there: the whole tenant fails.
+  const nowhere = Connection.open(soc('https://127.0.0.1:9'), ENVIRONMENT)
+  const unreachable = await rejects(nowhere.deploy('1', 'delete'), 'tenant_unreachable')
+  assert.equal(unreachable.scope, 'tenant')
+  assert.equal(unreachable.fields.address, 'https://127.0.0.1:9')
+  // Any other error has no scope or status, and no fields.
+  const usage = await rejects(connection.deploy('x', 'upsert', '{}'), 'usage_invalid_choice')
+  assert.deepEqual([usage.scope, usage.status, usage.fields], [null, null, {}])
+})
+
 test('a deploy takes the rule\'s policies, which only Sysdig sends', async () => {
   const connection = connect()
   const body = JSON.stringify({ data: { name: 'Example', queryType: 'events' } })

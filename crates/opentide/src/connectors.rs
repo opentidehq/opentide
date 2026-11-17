@@ -46,8 +46,9 @@ pub use jiff::Timestamp;
 /// sorts them), as the tenant returned it.
 pub use opentide_compile::Json;
 pub use opentide_connectors::connector::{
-    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployOutcome, DeployRequest, DeployWarning, LiveCheck,
-    Operation, QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow,
+    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployError, DeployFailure, DeployOutcome, DeployRequest,
+    DeployScope, DeployWarning, LiveCheck, Operation, QueryColumn, QueryOutcome, QueryRequest, Row,
+    TimeWindow,
 };
 
 /// The code of an operation the platform's connector does not have (a live
@@ -467,7 +468,7 @@ impl Connection {
             http,
             cancel: &self.cancel,
         };
-        Ok(deployer.deploy(cx, request).await?)
+        deployer.deploy(cx, request).await.map_err(Error::from)
     }
 }
 
@@ -517,6 +518,32 @@ fn unsupported(tenant: &TenantConfig, what: &str) -> Error {
         tenant: tenant.name.clone(),
         message: format!("{} {what}", tenant.platform),
         detail: None,
+    }
+}
+
+impl From<opentide_connectors::connector::DeployError> for Error {
+    /// A failed deploy as [`Error::Deploy`]; an interrupt stays the
+    /// connector's `interrupted`.
+    fn from(error: opentide_connectors::connector::DeployError) -> Self {
+        use opentide_connectors::connector::DeployScope;
+        if error.is_interrupted() {
+            return error.into_connector().into();
+        }
+        let failure = &error.failure;
+        let field = |key: &str| failure.field(key).unwrap_or_default().to_owned();
+        Self::Deploy(Box::new(crate::error::DeployFailed {
+            code: failure.code,
+            scope: match error.scope {
+                DeployScope::Rule => crate::error::FailureScope::Rule,
+                _ => crate::error::FailureScope::Tenant,
+            },
+            platform: field("platform"),
+            tenant: field("tenant"),
+            message: failure.message.clone(),
+            detail: failure.field("detail").map(str::to_owned),
+            status: failure.status,
+            fields: failure.fields.clone(),
+        }))
     }
 }
 

@@ -137,7 +137,7 @@ pub mod lsp;
 pub mod connectors;
 
 pub use document::Document;
-pub use error::Error;
+pub use error::{DeployFailed, Error, FailureScope};
 
 #[cfg(feature = "workspace")]
 pub use opentide_workspace::{Diagnostic, Fix, Severity, TextEdit};

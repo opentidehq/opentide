@@ -9,10 +9,13 @@
 //! text, keys in the command line's order, which the Python side parses.
 //! A tenant operation returns an awaitable instead, which resolves to that
 //! text ([`tenants`]).
-//! A failure raises [`SdkError`] with `(code, message, detail)`: the
-//! facade's stable [`opentide::Error::code`], or `usage_invalid_choice` for
-//! an option the command line would refuse; `detail` is the vendor's own
-//! words when a tenant gave a reason, else `None`.
+//! A failure raises [`SdkError`] with `(code, message, detail, scope,
+//! status, fields)`: the facade's stable [`opentide::Error::code`], or
+//! `usage_invalid_choice` for an option the command line would refuse;
+//! `detail` is the vendor's own words when a tenant gave a reason, else
+//! `None`. A failed deploy's `scope` (`"rule"` or `"tenant"`), HTTP `status`
+//! and `fields` (pairs, in order) say what it stops and locate it; any other
+//! failure's are `None`, `None` and empty.
 
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
@@ -29,7 +32,7 @@ create_exception!(
     opentide._native.sdk,
     SdkError,
     PyException,
-    "A call the SDK could not run: `args` is `(code, message, detail)`."
+    "A call the SDK could not run: `args` is `(code, message, detail, scope, status, fields)`."
 );
 
 /// [`SdkError`]'s class, as `opentide._native.sdk` exports it.
@@ -59,7 +62,14 @@ impl<'py> IntoPyObject<'py> for SdkErrorClass {
 
 /// A failure as [`SdkError`]: its stable code and message, without a detail.
 fn failure(code: &str, message: impl Into<String>) -> PyErr {
-    SdkError::new_err((code.to_owned(), message.into(), None::<String>))
+    SdkError::new_err((
+        code.to_owned(),
+        message.into(),
+        None::<String>,
+        None::<&str>,
+        None::<u16>,
+        Vec::<(String, String)>::new(),
+    ))
 }
 
 fn usage(message: String) -> PyErr {
@@ -67,13 +77,31 @@ fn usage(message: String) -> PyErr {
 }
 
 /// The facade's error as [`SdkError`]: its code, its message and, for a
-/// tenant's refusal, the vendor's words.
+/// tenant's refusal, the vendor's words. A failed deploy's also says what it stops
+/// (`"rule"` or `"tenant"`), the HTTP status, and its fields (pairs, in
+/// order); any other error's are `None`, `None` and empty.
 fn from_facade(error: &opentide::Error) -> PyErr {
-    let detail = match error {
-        opentide::Error::Connector { detail, .. } => detail.clone(),
-        _ => None,
+    let (detail, scope, status, fields) = match error {
+        opentide::Error::Connector { detail, .. } => (detail.clone(), None, None, Vec::new()),
+        opentide::Error::Deploy(failed) => (
+            failed.detail.clone(),
+            Some(match failed.scope {
+                opentide::FailureScope::Rule => "rule",
+                _ => "tenant",
+            }),
+            failed.status,
+            failed.fields.clone(),
+        ),
+        _ => (None, None, None, Vec::new()),
     };
-    SdkError::new_err((error.code().to_owned(), error.to_string(), detail))
+    SdkError::new_err((
+        error.code().to_owned(),
+        error.to_string(),
+        detail,
+        scope,
+        status,
+        fields,
+    ))
 }
 
 fn to_json<T: Serialize>(value: &T) -> PyResult<String> {
@@ -390,7 +418,8 @@ pub mod module {
     #[pymodule_export]
     use super::{Workspace, run_json};
 
-    /// The error every call raises: `args` is `(code, message, detail)`.
+    /// The error every call raises: `args` is `(code, message, detail, scope,
+    /// status, fields)`.
     #[pymodule_export]
     #[allow(
         non_upper_case_globals,

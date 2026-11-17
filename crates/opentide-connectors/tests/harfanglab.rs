@@ -15,7 +15,8 @@ use opentide_compile::Json;
 use opentide_connectors::ConnectorError;
 use opentide_connectors::Registry;
 use opentide_connectors::connector::{
-    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployRequest, Operation, QueryRequest, TenantContext,
+    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployError, DeployRequest, DeployScope, Operation,
+    QueryRequest, TenantContext,
 };
 use opentide_connectors::harfanglab::{self, HarfangLab};
 use opentide_connectors::runtime::block_on;
@@ -97,6 +98,17 @@ fn refusal(error: &ConnectorError) -> (String, Option<String>) {
     }
 }
 
+/// A refused deploy's message and detail: the tenant refused the rule, so
+/// it is the rule's failure, with the code `tenant_refused`.
+fn deploy_refusal(error: &DeployError) -> (String, Option<String>) {
+    assert_eq!(error.scope, DeployScope::Rule, "{error}");
+    assert_eq!(error.failure.code, "tenant_refused");
+    match error.connector.as_deref() {
+        Some(connector) => refusal(connector),
+        None => panic!("not a connector's refusal: {error}"),
+    }
+}
+
 #[test]
 fn harfanglab_deploys_as_the_python_client_does() {
     let replay = replay("harfanglab/deploy", &[TOKEN]);
@@ -139,7 +151,7 @@ fn harfanglab_deploys_as_the_python_client_does() {
         sigma("Rejected rule", true),
     )
     .unwrap_err();
-    let (message, detail) = refusal(&rejected);
+    let (message, detail) = deploy_refusal(&rejected);
     assert_eq!(
         message,
         "Could not create or update the Sigma rule on HarfangLab tenant hl (HTTP 400)"
@@ -153,13 +165,13 @@ fn harfanglab_deploys_as_the_python_client_does() {
     )
     .unwrap_err();
     assert!(
-        refusal(&forbidden)
+        deploy_refusal(&forbidden)
             .0
             .contains("(HTTP 403): check the API token's permissions")
     );
     let missing = run("Sigma", Operation::Delete, "sigma-missing", Vec::new()).unwrap_err();
     assert_eq!(
-        refusal(&missing).0,
+        deploy_refusal(&missing).0,
         "Could not delete rule sigma-missing on HarfangLab tenant hl (HTTP 404)"
     );
     // A YARA tenant takes YARA files: posted, then deleted by the rule's UUID.
@@ -173,7 +185,7 @@ fn harfanglab_deploys_as_the_python_client_does() {
     run("YARA", Operation::Delete, RULE_ID, Vec::new()).unwrap();
     let rejected = run("YARA", Operation::Update, RULE_ID, yara("Rejected YARA")).unwrap_err();
     assert_eq!(
-        refusal(&rejected).0,
+        deploy_refusal(&rejected).0,
         "Could not create or update the YARA file on HarfangLab tenant hl (HTTP 400)"
     );
     run("YARA", Operation::Delete, "yara-missing", Vec::new()).unwrap_err();

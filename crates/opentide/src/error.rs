@@ -17,6 +17,7 @@ use std::path::PathBuf;
 /// | [`Error::Usage`] | the command line's usage code (`usage_missing_option`, `usage_invalid_choice`, `usage_invalid_value`) |
 /// | [`Error::NoDocument`] | `no_json_document` |
 /// | [`Error::Lsp`] | `lsp_failed` |
+/// | [`Error::Deploy`] | the deploy's code: those of [`Error::Connector`], or the platform's own |
 /// | [`Error::Connector`] | `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported`, `runtime_unavailable`, `network_unavailable` (the WASI build) |
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
@@ -48,6 +49,11 @@ pub enum Error {
         /// What to pass instead.
         message: String,
     },
+    /// A deploy failed (feature `connectors`): the tenant refused the rule,
+    /// or the tenant could not take it. Every failed deploy is an error; none
+    /// is reported as a deployed rule.
+    #[error("{}", .0.message)]
+    Deploy(Box<DeployFailed>),
     /// A command run for its JSON document wrote none (it was interrupted, or
     /// its output is not JSON).
     #[error("the command wrote no JSON document (exit {exit_code}): {stderr}")]
@@ -85,6 +91,40 @@ pub enum Error {
     },
 }
 
+/// A failed deploy ([`Error::Deploy`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DeployFailed {
+    /// The stable code (`tenant_refused`, `tenant_unreachable`, or the
+    /// platform's own).
+    pub code: &'static str,
+    /// Whether the rule failed or the whole tenant did.
+    pub scope: FailureScope,
+    /// The platform's identifier.
+    pub platform: String,
+    /// The tenant's name.
+    pub tenant: String,
+    /// What failed.
+    pub message: String,
+    /// The vendor's own words, when the tenant gave a reason.
+    pub detail: Option<String>,
+    /// The HTTP status the tenant answered with, when it answered.
+    pub status: Option<u16>,
+    /// What locates the failure (`platform`, `tenant`, `address`,
+    /// `detail`), in order.
+    pub fields: Vec<(String, String)>,
+}
+
+/// What a failed deploy stops ([`Error::Deploy`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FailureScope {
+    /// The rule failed: the tenant's other rules can still deploy.
+    Rule,
+    /// The tenant cannot take any rule: its other rules would fail the same way.
+    Tenant,
+}
+
 impl Error {
     /// The code `configuration_invalid`: a configuration error without a code
     /// of its own (a retired proxy setting).
@@ -96,6 +136,7 @@ impl Error {
             Self::Configuration { code, .. }
             | Self::Usage { code, .. }
             | Self::Connector { code, .. } => code,
+            Self::Deploy(failed) => failed.code,
             Self::Io { .. } => "io_error",
             Self::NoDocument { .. } => "no_json_document",
             Self::Lsp { .. } => "lsp_failed",
