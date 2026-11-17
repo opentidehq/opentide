@@ -24,7 +24,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use opentide_compile::Json;
 use opentide_compile::google_secops::{default_endpoint, instance_resource};
-use opentide_schema::objects::platform::google_secops::assemble::AssembledRule;
+use opentide_schema::objects::platform::google_secops::assemble::{AssembledRule, SectionPlace};
+use opentide_schema::objects::platform::google_secops::yaral::SECTION_KEYS;
 
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
@@ -317,12 +318,14 @@ impl QueryRunner for GoogleSecops {
 }
 
 impl Deployer for GoogleSecops {
-    /// One rule from its `rules.create` body (`{"text": ...}`, the offline
-    /// compile): a create or an update runs it under RELEASE, a
-    /// [`Operation::Disable`] disables it, and a [`Operation::Delete`]
-    /// archives it. The CLI calls [`deploy::deploy_rule`] with the block's
-    /// own run state and the tenant's scope and deletion. A rule's failure is
-    /// an error here.
+    /// One rule from its plan payload: the `rules.create` body's `text`,
+    /// with the `name`, `sections`, `run_state` (`mask`, `body`) and
+    /// `run_frequency` that `opentide deploy`'s plan compiles beside it
+    /// (`opentide_compile::google_secops::compile_deployment`), so a PREVIEW
+    /// rule deploys without alerting. A body with the text alone runs a create
+    /// or an update under RELEASE and disables a [`Operation::Disable`]. A
+    /// [`Operation::Delete`] archives the rule, or deletes it under the
+    /// tenant's `deletion = "delete"`. A rule's failure is an error here.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -330,27 +333,19 @@ impl Deployer for GoogleSecops {
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         crate::connector::deploying_for(request, async move {
             let body: Json = serde_json::from_slice(&request.body).unwrap_or(Json::Null);
-            let text = body
-                .get("text")
-                .and_then(Json::as_str)
-                .unwrap_or_default()
-                .to_owned();
-            let name = text
-                .strip_prefix("rule ")
-                .and_then(|rest| rest.split_whitespace().next())
-                .unwrap_or_default()
-                .to_owned();
             let instance = Instance::of(cx.tenant)?;
             let authorizer = self.authorizer(cx.tenant)?;
             let disabling = request.operation == Operation::Disable;
-            let run_state = if disabling {
-                opentide_compile::google_secops::RunState::disabled()
-            } else {
-                opentide_compile::google_secops::run_state(
-                    &Json::Null,
-                    opentide_compile::strategy::StatusStrategy::Release,
-                )
-            };
+            let run_state = planned_run_state(&body).unwrap_or_else(|| {
+                if disabling {
+                    opentide_compile::google_secops::RunState::disabled()
+                } else {
+                    opentide_compile::google_secops::run_state(
+                        &Json::Null,
+                        opentide_compile::strategy::StatusStrategy::Release,
+                    )
+                }
+            });
             let rule = deploy::RuleDeploy {
                 action: match request.operation {
                     Operation::Create => deploy::Action::Create,
@@ -359,13 +354,12 @@ impl Deployer for GoogleSecops {
                     }
                     Operation::Delete => deploy::Action::Delete(request.rule_id.clone()),
                 },
-                assembled: AssembledRule {
-                    name,
-                    text,
-                    sections: Vec::new(),
-                },
+                assembled: planned_rule(&body),
                 run_state,
-                run_frequency: None,
+                run_frequency: body
+                    .get("run_frequency")
+                    .and_then(Json::as_str)
+                    .map(str::to_owned),
                 disabling,
                 retiring: matches!(request.operation, Operation::Disable | Operation::Delete),
                 scope: instance.scope(cx.tenant),
@@ -412,6 +406,67 @@ impl Deployer for GoogleSecops {
             })
         })
     }
+}
+
+/// The rule a plan payload carries: its `text`, its `name` (else the one
+/// the text declares) and the `sections` written, each key one of
+/// YARA-L's.
+fn planned_rule(body: &Json) -> AssembledRule {
+    let text = body
+        .get("text")
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let name = body
+        .get("name")
+        .and_then(Json::as_str)
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            text.strip_prefix("rule ")
+                .and_then(|rest| rest.split_whitespace().next())
+                .unwrap_or_default()
+                .to_owned()
+        });
+    let count = |section: &Json, key: &str| {
+        section
+            .get(key)
+            .and_then(|value| match value {
+                Json::Int(count) => usize::try_from(*count).ok(),
+                _ => None,
+            })
+            .unwrap_or_default()
+    };
+    let sections = match body.get("sections") {
+        Some(Json::Array(sections)) => sections
+            .iter()
+            .filter_map(|section| {
+                let key = section.get("key").and_then(Json::as_str)?;
+                let key = SECTION_KEYS.into_iter().find(|known| *known == key)?;
+                Some(SectionPlace {
+                    key,
+                    label_line: count(section, "label_line"),
+                    lines: count(section, "lines"),
+                    dropped: count(section, "dropped"),
+                })
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    AssembledRule {
+        name,
+        text,
+        sections,
+    }
+}
+
+/// The run state a plan payload carries (`run_state`: `mask`, `body`), or
+/// `None` for a body without one.
+fn planned_run_state(body: &Json) -> Option<opentide_compile::google_secops::RunState> {
+    let state = body.get("run_state")?;
+    Some(opentide_compile::google_secops::RunState {
+        mask: state.get("mask")?.as_str()?.to_owned(),
+        body: state.get("body")?.as_object()?.clone(),
+    })
 }
 
 impl Platform for GoogleSecops {

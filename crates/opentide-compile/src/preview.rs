@@ -125,8 +125,9 @@ pub fn compile_tenant(
             exabeam::compile_deployment(cx, rule, known)
                 .map(|compiled| exabeam::create_request(&compiled)),
         ),
-        // The text is the same on every tenant: the `rules.create` body.
-        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
+        // The text is the same on every tenant: the `rules.create` body,
+        // with what the deploy reads beside it (the run state).
+        "google_secops" => Some(google_secops::compile_deployment(cx, rule)),
         "graylog" => Some(graylog_request(cx, rule, known)),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);

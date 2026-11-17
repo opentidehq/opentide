@@ -60,6 +60,8 @@ const RULE_ID: &str = "ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1";
 struct Compiled {
     text: String,
     offline: Json,
+    deployment: Json,
+    sections: Vec<&'static str>,
     block: Json,
     status: String,
     writes_create: Vec<Json>,
@@ -103,6 +105,8 @@ fn compile_text(text: &str) -> Compiled {
     Compiled {
         text: assembled.text,
         offline: google_secops::compile_offline(&cx, &rule).unwrap(),
+        deployment: google_secops::compile_deployment(&cx, &rule).unwrap(),
+        sections: assembled.sections.iter().map(|place| place.key).collect(),
         block,
         status,
         writes_create: writes(None),
@@ -116,6 +120,47 @@ fn strategy(status: &str) -> opentide_compile::strategy::StatusStrategy {
         "STAGING" => StatusStrategy::Preview,
         _ => StatusStrategy::Release,
     }
+}
+
+/// #1142: the plan payload carries, beside the text, what the deploy reads:
+/// the name, the sections, and the run state of the block's status (a
+/// STAGING rule deploys without alerting) with its run frequency.
+#[test]
+fn the_deployment_payload_carries_the_run_state_of_the_blocks_status() {
+    for stem in ["process", "spray"] {
+        let compiled = compile(stem);
+        let payload = &compiled.deployment;
+        assert_eq!(payload.get("text"), compiled.offline.get("text"));
+        let state = google_secops::run_state(&compiled.block, strategy(&compiled.status));
+        let run = payload.get("run_state").unwrap();
+        assert_eq!(
+            run.get("mask").and_then(Json::as_str),
+            Some(state.mask.as_str())
+        );
+        assert_eq!(run.get("body"), Some(&Json::Object(state.body)));
+        assert_eq!(
+            payload.get("run_frequency"),
+            compiled.block.get("run_frequency")
+        );
+        let Some(Json::Array(sections)) = payload.get("sections") else {
+            panic!("{payload:?}")
+        };
+        let keys: Vec<&str> = sections
+            .iter()
+            .filter_map(|section| section.get("key").and_then(Json::as_str))
+            .collect();
+        assert_eq!(keys, compiled.sections, "{stem}");
+    }
+    // STAGING is PREVIEW: no alerting.
+    let staging = compile("process");
+    assert_eq!(staging.status, "STAGING");
+    let body = staging
+        .deployment
+        .get("run_state")
+        .unwrap()
+        .get("body")
+        .unwrap();
+    assert_eq!(body.get("alerting"), Some(&Json::Bool(false)));
 }
 
 /// A rule without `metadata.version` deploys without `opentide_version` in

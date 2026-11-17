@@ -641,6 +641,58 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
     });
 }
 
+/// #1142: a PREVIEW rule deployed through the SDK sets the run state its
+/// plan payload carries (alerting off, its run frequency), not RELEASE's; a
+/// body with the text alone keeps RELEASE's.
+#[test]
+fn the_deployer_trait_sets_the_run_state_the_plan_payload_carries() {
+    for (payload, expected) in [
+        (
+            json!({
+                "text": TEXT,
+                "name": "r",
+                "sections": [{"key": "events", "label_line": 2, "lines": 1, "dropped": 0}],
+                "run_state": {
+                    "mask": "enabled,alerting,runFrequency",
+                    "body": {"enabled": true, "alerting": false, "runFrequency": "HOURLY"}
+                },
+                "run_frequency": "HOURLY"
+            }),
+            json!({"enabled": true, "alerting": false, "runFrequency": "HOURLY"}),
+        ),
+        (
+            json!({"text": TEXT}),
+            json!({"enabled": true, "alerting": true}),
+        ),
+    ] {
+        let sent = runtime().block_on(async {
+            let api = server().await;
+            serve(&api, on("POST", VERIFY), verified(), 1).await;
+            let created = answer(200, json!({"name": format!("{RESOURCE}/rules/{ID}")}));
+            serve(&api, on("POST", "/rules"), created, 1).await;
+            serve(&api, on("PATCH", &deployment()), ok(), 1).await;
+            let request = DeployRequest::new(
+                String::new(),
+                Operation::Create,
+                serde_json::to_vec(&payload).unwrap(),
+            );
+            let settings = HttpSettings::default();
+            with_tenant(&api, "", &settings, async |cx, connector| {
+                connector.deploy(cx, &request).await.unwrap();
+            })
+            .await;
+            api.verify().await;
+            let received = api.received_requests().await.unwrap();
+            received
+                .iter()
+                .filter(|r| r.method.as_str() == "PATCH")
+                .map(|r| serde_json::from_slice::<Value>(&r.body).unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(sent, [expected]);
+    }
+}
+
 #[test]
 fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
     runtime().block_on(async {

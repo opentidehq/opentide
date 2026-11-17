@@ -123,6 +123,47 @@ pub fn compile_offline(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileErr
     Ok(Json::Object(body))
 }
 
+/// What a deploy of `rule` reads (`opentide deploy`'s plan payload): the
+/// `rules.create` body's `text`, and beside it the rule's `name`, the
+/// `sections` written (each `key`, `label_line`, `lines`, `dropped`: they
+/// place a verify diagnostic in its section), the `run_state` its status
+/// strategy deploys (`mask`, `body`: [`run_state`]) and the block's
+/// `run_frequency` when it names one.
+pub fn compile_deployment(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileError> {
+    let block = rule.block(PLATFORM).cloned().unwrap_or(Json::Null);
+    let status = block.get("status").map(deploy::text).unwrap_or_default();
+    let strategy = cx
+        .statuses
+        .strategy(&status)
+        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))?;
+    let assembled = assemble(cx, rule)?;
+    let state = run_state(&block, strategy);
+    let mut body = Object::new();
+    body.insert("text".into(), Json::Str(assembled.text));
+    body.insert("name".into(), Json::Str(assembled.name));
+    let sections = assembled
+        .sections
+        .iter()
+        .map(|place| {
+            let mut section = Object::new();
+            section.insert("key".into(), Json::Str(place.key.to_owned()));
+            section.insert("label_line".into(), Json::from(place.label_line));
+            section.insert("lines".into(), Json::from(place.lines));
+            section.insert("dropped".into(), Json::from(place.dropped));
+            Json::Object(section)
+        })
+        .collect();
+    body.insert("sections".into(), Json::Array(sections));
+    let mut run = Object::new();
+    run.insert("mask".into(), Json::Str(state.mask));
+    run.insert("body".into(), Json::Object(state.body));
+    body.insert("run_state".into(), Json::Object(run));
+    if let Some(frequency) = block.get("run_frequency").and_then(Json::as_str) {
+        body.insert("run_frequency".into(), Json::Str(frequency.to_owned()));
+    }
+    Ok(Json::Object(body))
+}
+
 // --- run state -------------------------------------------------------------
 
 /// `scheduleCustomizations` for the block's `schedule`, or `None`.
