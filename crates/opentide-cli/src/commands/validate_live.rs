@@ -95,13 +95,13 @@ impl std::fmt::Debug for Context<'_> {
 #[derive(Clone, Debug)]
 pub struct Live {
     /// The result, keys in the oracle's order, `_`-keys included.
-    pub result: Vec<(String, Json)>,
+    pub result: Fields,
     /// The checklist's step, when the run reached the tenants.
     pub step: Option<Step>,
 }
 
 impl Live {
-    fn of(result: Vec<(String, Json)>) -> Self {
+    fn of(result: Fields) -> Self {
         Self { result, step: None }
     }
 
@@ -184,7 +184,7 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
         failure.suggestion = text("_failure_suggestion");
         failure
     });
-    let data: Vec<(String, Json)> = result
+    let data: Fields = result
         .iter()
         .filter(|(key, _)| {
             !key.starts_with('_') && !matches!(key.as_str(), "message" | "status" | "warnings")
@@ -207,7 +207,7 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
 }
 
 /// The keys every live result starts with.
-fn head(platform: Option<&str>, status: &str) -> Vec<(String, Json)> {
+fn head(platform: Option<&str>, status: &str) -> Fields {
     vec![
         ("platform".into(), Json::opt_str(platform)),
         ("mode".into(), Json::str("live")),
@@ -217,7 +217,7 @@ fn head(platform: Option<&str>, status: &str) -> Vec<(String, Json)> {
 }
 
 /// A failed result (`{**failed, "message": ..., "_exit_code": ...}`).
-fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Vec<(String, Json)> {
+fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Fields {
     let mut result = head(platform, "failed");
     result.push(("message".into(), Json::str(message)));
     result.push(("_exit_code".into(), Json::Int(exit_code)));
@@ -225,7 +225,7 @@ fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Vec<(String,
 }
 
 /// `value` set on `result`, in place when the key is there, else last.
-fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
+fn set(result: &mut Fields, key: &str, value: Json) {
     match result.iter_mut().find(|(name, _)| name == key) {
         Some(entry) => entry.1 = value,
         None => result.push((key.to_owned(), value)),
@@ -336,7 +336,7 @@ fn rule_scope(
     platform: &str,
     workspace: &Workspace,
     cx: &Context<'_>,
-) -> Result<RuleScope, Vec<(String, Json)>> {
+) -> Result<RuleScope, Fields> {
     if !(args.changed || !args.files.is_empty() || !args.uuids.is_empty()) {
         return Ok((None, None));
     }
@@ -774,7 +774,8 @@ impl Reach<'_> {
     }
 }
 
-/// The result of a check that stopped before every tenant answered.
+/// The result of a check that did not finish: a setup that cannot be used,
+/// an unreachable tenant, or a crash.
 fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
     match early {
         Early::Failed(message) => failed(Some(platform), &message, 1),
@@ -1062,7 +1063,7 @@ struct Unreachable {
 
 impl Unreachable {
     /// `_unreachable_tenant_result`.
-    fn result(&self, platform: &str) -> Vec<(String, Json)> {
+    fn result(&self, platform: &str) -> Fields {
         let mut advice = format!(
             "check the '{}' tenant in {} and the network path to {}; behind a proxy, pass \
              opentide --proxy",
