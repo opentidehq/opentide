@@ -28,8 +28,9 @@ use opentide_schema::objects::platform::google_secops::assemble::{AssembledRule,
 use opentide_schema::objects::platform::google_secops::yaral::SECTION_KEYS;
 
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
-    Operation, Platform, QueryOutcome, QueryRequest, QueryRunner, TenantContext,
+    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryOutcome,
+    QueryRequest, QueryRunner, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -332,11 +333,12 @@ impl Deployer for GoogleSecops {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying_for(request, async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        Box::pin(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
             let body: Json = serde_json::from_slice(&request.body).unwrap_or(Json::Null);
-            let instance = Instance::of(cx.tenant)?;
-            let authorizer = self.authorizer(cx.tenant)?;
+            let instance = Instance::of(cx.tenant).map_err(tenant_failure)?;
+            let authorizer = self.authorizer(cx.tenant).map_err(tenant_failure)?;
             let disabling = request.operation == Operation::Disable;
             // A disable disables, whatever state the payload was planned with.
             let run_state = if disabling {
@@ -350,7 +352,7 @@ impl Deployer for GoogleSecops {
                     Some(state) => {
                         planned_run_state(state).ok_or_else(|| ConnectorError::Setup {
                             platform: PLATFORM.to_owned(),
-                            tenant: cx.tenant.label.tenant.clone(),
+                            tenant: tenant.to_owned(),
                             message: "the payload's run_state is not {\"mask\": text, \"body\": \
                                       object}"
                                 .to_owned(),
@@ -384,7 +386,8 @@ impl Deployer for GoogleSecops {
                 recreate_refusal: request
                     .recreate_refusal
                     .as_ref()
-                    .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
+                    .filter(|refusal| !refusal.message.is_empty())
+                    .map(|refusal| (refusal.code, refusal.message.clone())),
             };
             let outcome = deploy::deploy_rule(
                 cx,
@@ -393,31 +396,82 @@ impl Deployer for GoogleSecops {
                 &instance.resource,
                 &rule,
             )
-            .await?;
-            if let Some(failure) = outcome.failures.first() {
-                return Err(ConnectorError::refused(
-                    PLATFORM,
-                    &cx.tenant.label.tenant,
-                    format!("{}: {}", failure.code, failure.message),
-                    None,
-                ));
-            }
-            Ok(DeployOutcome {
-                events: Vec::new(),
-                remote_id: match outcome.state {
-                    deploy::StateChange::Record(id) => Some(id),
-                    deploy::StateChange::Keep => Some(request.rule_id.clone()),
-                    deploy::StateChange::Forget => None,
-                },
-                operation: request.operation,
-                warnings: outcome
-                    .warnings
-                    .into_iter()
-                    .map(|warning| DeployWarning::new(warning.code, warning.detail))
-                    .collect(),
-            })
+            .await
+            .map_err(tenant_failure)?;
+            outcome_of(outcome, request, tenant)
         })
     }
+}
+
+/// What the CLI's [`deploy::RuleOutcome`] is to a [`Deployer`]: the
+/// outcome, or the rule's failures (the first, then [`DeployError::more`])
+/// with what was done before them in [`DeployError::partial`].
+fn outcome_of(
+    outcome: deploy::RuleOutcome,
+    request: &DeployRequest,
+    tenant: &str,
+) -> Result<DeployOutcome, DeployError> {
+    let recorded = match &outcome.state {
+        deploy::StateChange::Record(id) => Some(id.clone()),
+        deploy::StateChange::Keep | deploy::StateChange::Forget => None,
+    };
+    let mut done = DeployOutcome::new(
+        match &outcome.state {
+            deploy::StateChange::Record(id) => Some(id.clone()),
+            deploy::StateChange::Keep => Some(request.rule_id.clone()),
+            deploy::StateChange::Forget => None,
+        },
+        request.operation,
+    )
+    .with_warnings(
+        outcome
+            .warnings
+            .into_iter()
+            .map(|warning| DeployWarning::new(warning.code, warning.detail))
+            .collect(),
+    )
+    .with_events(
+        recorded
+            .iter()
+            .map(|id| DeployEvent::new(RULE_CREATED).with_field("rule_id", id.as_str()))
+            .collect(),
+    );
+    let mut failures = outcome.failures.into_iter().map(|failure| {
+        DeployFailure::new(failure.code, failure.message)
+            .with_field("platform", PLATFORM)
+            .with_field("tenant", tenant)
+    });
+    let Some(first) = failures.next() else {
+        return Ok(done);
+    };
+    // A failure keeps what was done before it: the id a create
+    // recorded (its run state then refused), the warnings, the event.
+    done.remote_id = recorded;
+    Err(DeployError::rule(first)
+        .with_more(failures)
+        .with_partial(done))
+}
+
+/// The event a created rule's id is logged with.
+pub const RULE_CREATED: &str = "google_secops_rule_created";
+
+/// A tenant's failure (its instance, its credentials, an answer it did not
+/// give), with Google SecOps's code: `google_secops_credentials_missing` or
+/// `google_secops_tenant_unauthorized` when the error names it, else
+/// `google_secops_tenant_unreachable`; an interrupt stays `interrupted`.
+fn tenant_failure(error: ConnectorError) -> DeployError {
+    let text = error.text();
+    let named = text.split_once(": ").map(|(code, _)| code);
+    let mut failed = DeployError::from(error);
+    failed.scope = crate::connector::DeployScope::Tenant;
+    if !failed.is_interrupted() {
+        failed.failure.code = match named {
+            Some("google_secops_credentials_missing") => "google_secops_credentials_missing",
+            Some("google_secops_tenant_unauthorized") => "google_secops_tenant_unauthorized",
+            _ => "google_secops_tenant_unreachable",
+        };
+    }
+    failed
 }
 
 /// The rule a plan payload carries: its `text`, its `name` (else the one

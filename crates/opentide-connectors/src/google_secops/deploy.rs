@@ -58,7 +58,7 @@ pub struct RuleDeploy {
     /// Why deployment state cannot take a rule created again, when it
     /// cannot (`deployment_state_ignore`, `unpersisted_error`): its code and
     /// message.
-    pub recreate_refusal: Option<(String, String)>,
+    pub recreate_refusal: Option<(&'static str, String)>,
 }
 
 /// What deployment state makes of a deploy.
@@ -86,7 +86,7 @@ pub struct Warning {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuleFailure {
     /// The code (`google_secops_verify_failed`, `google_secops_request_failed`, …).
-    pub code: String,
+    pub code: &'static str,
     /// What failed.
     pub message: String,
 }
@@ -105,9 +105,9 @@ pub struct RuleOutcome {
 }
 
 impl RuleOutcome {
-    fn fail(&mut self, code: &str, message: impl Into<String>) {
+    fn fail(&mut self, code: &'static str, message: impl Into<String>) {
         self.failures.push(RuleFailure {
-            code: code.to_owned(),
+            code,
             message: message.into(),
         });
     }
