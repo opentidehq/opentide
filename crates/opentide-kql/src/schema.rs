@@ -277,7 +277,11 @@ pub struct Analysis {
 impl Analysis {
     /// The pipeline of the `tabular_expression` at `span`.
     pub fn pipeline(&self, span: ByteSpan) -> Option<&Pipeline> {
-        self.pipelines.iter().find(|p| p.span == span)
+        self.pipelines.iter().find(|p| {
+            #[cfg(test)]
+            tests::PIPELINES_SCANNED.with(|n| n.set(n.get() + 1));
+            p.span == span
+        })
     }
 
     /// The column references inside `span` (a predicate, an operator): which
@@ -831,8 +835,14 @@ pub(crate) fn unknown_column(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::glob_matches;
+
+    thread_local! {
+        /// The pipelines [`super::Analysis::pipeline`] scanned on this thread.
+        pub(crate) static PIPELINES_SCANNED: std::cell::Cell<usize> =
+            const { std::cell::Cell::new(0) };
+    }
 
     #[test]
     fn column_patterns_glob_over_names() {

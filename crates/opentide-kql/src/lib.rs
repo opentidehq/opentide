@@ -976,13 +976,13 @@ fn check_table_named(
     table: &str,
     range: Range,
     catalog: &Catalog,
-    lets: &BTreeSet<String>,
+    binds: impl Fn(&str) -> bool,
     out: &mut Vec<Diagnostic>,
 ) {
     // `let` bindings, tabular parameters, functions the engine knows
     // (`_GetWatchlist`) and ASIM parsers are not tables.
     if table.starts_with('$')
-        || lets.contains(table)
+        || binds(table)
         || catalog.asim_parser(table).is_some()
         || (catalog.profile == Profile::Sentinel && asim_shaped(table))
         || catalog.operator(table).is_some()

@@ -45,7 +45,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let lets = let_names(&root);
     functions(&root, &lines, catalog, &lets, &mut diagnostics);
     scalar_operators(&root, &lines, catalog, &mut diagnostics);
-    tables(&root, &lines, catalog, &lets, &mut diagnostics);
+    let _ = tables(&root, &lines, catalog, &lets, &mut diagnostics);
     let columns = schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty());
     diagnostics.extend(columns.diagnostics.iter().cloned());
     perf::check(
@@ -533,18 +533,33 @@ fn is_fuzzy_union(node: &SyntaxNode) -> bool {
 
 /// The tables a query reads: a source, a join or lookup side, a union leg.
 /// Walks the tree with a stack of scopes: a function definition with tabular
-/// parameters adds their names to its body's `let` names.
+/// parameters adds their names to its body's `let` names, as a layer over
+/// the scope it is in. Each layer holds its own parameters only: copying the
+/// scope's names for each function made `n` functions with tabular
+/// parameters quadratic (#1424). Returns how many names the layers hold, the
+/// work count a test bounds.
 fn tables(
     root: &SyntaxNode,
     lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
-) {
+) -> usize {
     if catalog.tables.is_empty() {
-        return;
+        return 0;
     }
-    let mut scopes: Vec<BTreeSet<String>> = vec![lets.clone()];
+    // (the layer it is over, its parameters). Layer 0 holds no names: the
+    // walk ends there, at the query's `lets`.
+    let mut scopes: Vec<(usize, BTreeSet<String>)> = vec![(0, BTreeSet::new())];
+    let binds = |scopes: &[(usize, BTreeSet<String>)], mut at: usize, name: &str| loop {
+        if scopes[at].1.contains(name) {
+            return true;
+        }
+        if at == 0 {
+            return lets.contains(name);
+        }
+        at = scopes[at].0;
+    };
     // Children go on the stack reversed, so they come off in document order.
     let mut stack: Vec<(SyntaxNode, usize)> = vec![(root.clone(), 0)];
     while let Some((node, scope)) = stack.pop() {
@@ -553,9 +568,7 @@ fn tables(
             K::FUNCTION_DEFINITION => {
                 let params = tabular_parameters(&node);
                 if !params.is_empty() {
-                    let mut inner = scopes[scope].clone();
-                    inner.extend(params);
-                    scopes.push(inner);
+                    scopes.push((scope, params.into_iter().collect()));
                     scope = scopes.len() - 1;
                 }
             }
@@ -567,7 +580,7 @@ fn tables(
                         name.text(),
                         range_of(lines, node.text_range()),
                         catalog,
-                        &scopes[scope],
+                        |name| binds(&scopes, scope, name),
                         out,
                     );
                 }
@@ -577,12 +590,77 @@ fn tables(
         let children: Vec<SyntaxNode> = node.children().collect();
         stack.extend(children.into_iter().rev().map(|c| (c, scope)));
     }
+    scopes.iter().map(|(_, names)| names.len()).sum()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Profile;
+
+    /// The scopes of `tables` hold each tabular parameter once, however many
+    /// `let` names are in scope (#1424): copying them per function was
+    /// quadratic, 4.7 s for 4,000 functions in a debug build.
+    #[test]
+    fn table_scopes_hold_each_parameter_once() {
+        let n = 300;
+        let mut source = String::new();
+        for i in 0..n {
+            source.push_str(&format!(
+                "let f{i} = (x:long, T:(*)) {{ SigninLogs | extend c = x }};\n"
+            ));
+        }
+        source.push_str("let g = (T:(*), U:(*)) { T | union U };\nNopeTable | take 1");
+        let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+        let parsed = parse_once(&source);
+        let root = SyntaxNode::new_root(parsed.green.clone());
+        let lets = let_names(&root);
+        let mut out = Vec::new();
+        let held = tables(&root, &LineIndex::new(&source), &catalog, &lets, &mut out);
+        assert_eq!(held, n + 2);
+        // A parameter is not a table; an unknown name still is reported.
+        assert!(out.iter().all(|d| !d.message.contains("'T'")), "{out:?}");
+        assert!(
+            out.iter().any(|d| d.message.contains("NopeTable")),
+            "{out:?}"
+        );
+    }
+
+    /// The tables `analyze` reports unknown in `source` (Sentinel).
+    fn unknown_tables(source: &str) -> Vec<String> {
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        analyze(source, &catalog)
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .filter_map(|d| d.message.split('\'').nth(1).map(str::to_string))
+            .collect()
+    }
+
+    /// A tabular parameter is bound in its function's body and in every
+    /// function nested in it, through each layer out to the query's `let`
+    /// names, and nowhere after its function ends (#1424's layers).
+    #[test]
+    fn tabular_parameters_bind_through_the_layers() {
+        assert_eq!(
+            unknown_tables(
+                "let f = (T:(*)) { let g = (U:(*)) { T | union U }; g(T) };\nf(SigninLogs)"
+            ),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            unknown_tables("let f = (T:(*)) { T };\nT | take 1"),
+            vec!["T".to_string()]
+        );
+        assert_eq!(
+            unknown_tables(
+                "let L = SigninLogs;\n\
+                 let f = (A:(*)) { let g = (B:(*)) { let h = (C:(*)) { A | union B, C, D, L }; h(B) }; g(A) };\n\
+                 f(SigninLogs)"
+            ),
+            vec!["D".to_string()]
+        );
+    }
 
     fn parse_error(source: &str) -> Diagnostic {
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
