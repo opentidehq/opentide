@@ -225,6 +225,7 @@ exit: 0
           }
         },
         "name": "Elastic KQL Rule",
+        "tenant": "staging",
         "uuid": "00000000-0000-4000-8003-000000000009"
       }
     ],

@@ -238,12 +238,14 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 /// The preview of `rule` on `platform` for a run that sends it to the
 /// tenants named `tenants` (`preview_rule_deployment`): a platform whose
 /// request depends on the tenant (Bitdefender, Graylog, Exabeam) compiles it
-/// for each, and shows the first; every other platform is [`preview`]'s.
+/// for each, and shows the first; Elastic compiles it for the first; every
+/// other platform is [`preview`]'s.
 pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[String]) -> Json {
     match platform {
         "bitdefender" => bitdefender_preview(cx, rule, tenants),
         "graylog" => graylog_preview(cx, rule, tenants),
         "exabeam" => exabeam_preview(cx, rule, tenants),
+        "elastic" => elastic_preview(cx, rule, tenants),
         _ => preview(cx, platform, rule),
     }
 }
@@ -369,11 +371,33 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
-        "elastic" => match elastic::compile(cx, rule, &elastic::Setup::none()) {
-            Ok(body) => compiled(rule, elastic_request(rule, body)),
-            Err(_) => dump_entry(platform, rule),
-        },
+        "elastic" => elastic_preview(cx, rule, &[]),
         _ => dump_entry(platform, rule),
+    }
+}
+
+/// The deploy body an Elastic deploy would send (`elastic_request`),
+/// compiled for the first tenant the run sends the rule to, as `opentide
+/// deploy` compiles it: the tenant's `tags`, `index` and `suppression` are
+/// in it, and the entry names the tenant. With no tenant, the rule is
+/// compiled without one. A rule that does not compile is shown as its
+/// block's dump.
+fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let first = tenants
+        .iter()
+        .find_map(|name| deploy::tenant(cx, "elastic", name).map(|table| (name.as_str(), table)));
+    let setup = first.map_or_else(elastic::Setup::none, |(_, table)| {
+        elastic::Setup::from_tenant(table)
+    });
+    match elastic::compile(cx, rule, &setup) {
+        Ok(body) => {
+            let mut entry = compiled(rule, elastic_request(rule, body));
+            if let (Json::Object(fields), Some((name, _))) = (&mut entry, first) {
+                fields.insert("tenant".into(), name.into());
+            }
+            entry
+        }
+        Err(_) => dump_entry("elastic", rule),
     }
 }
 
