@@ -33,7 +33,8 @@ fn edge(node: &SyntaxNode, first: bool) -> usize {
             let r = own_token_range(&node);
             return usize::from(if first { r.start() } else { r.end() });
         }
-        // The last child is found from the end: a run's node can hold thousands of children.
+        // The last child is found from the end: a run's node, or the error node a query too
+        // deep leaves, can hold thousands of children.
         let child = if first {
             node.children_with_tokens().find(visible)
         } else {

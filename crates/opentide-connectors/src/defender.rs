@@ -18,9 +18,9 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, kql_code,
-    kql_with_limit, utc_z,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    kql_code, kql_with_limit, utc_z,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
@@ -111,6 +111,11 @@ impl DefenderError {
         }
     }
 }
+
+/// The warning of a rule created with the safer configuration
+/// ([`Created::partial`]): the event `opentide deploy` logs for it.
+pub const PARTIAL_DEPLOYMENT: &str =
+    "this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa";
 
 /// A rule Graph created.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -749,14 +754,20 @@ impl Deployer for Defender {
                     message: format!("the compiled rule is not JSON: {error}"),
                 })
             };
+            let mut warnings = Vec::new();
             let remote_id = match request.operation {
-                Operation::Create => Some(
-                    self.create_rule(cx, &body()?)
-                        .await
-                        .map_err(answer)?
-                        .id
-                        .to_string(),
-                ),
+                Operation::Create => {
+                    let created = self.create_rule(cx, &body()?).await.map_err(answer)?;
+                    if created.partial {
+                        warnings.push(DeployWarning::new(
+                            PARTIAL_DEPLOYMENT,
+                            "the rule was created with a safer configuration after Defender \
+                             refused the full one: check the impacted assets in the Defender \
+                             portal",
+                        ));
+                    }
+                    Some(created.id.to_string())
+                }
                 // A disabled rule is the rule with `isEnabled` false.
                 Operation::Update | Operation::Disable => {
                     self.update_rule(cx, &body()?, &request.rule_id)
@@ -774,6 +785,7 @@ impl Deployer for Defender {
             Ok(DeployOutcome {
                 remote_id,
                 operation: request.operation,
+                warnings,
             })
         })
     }

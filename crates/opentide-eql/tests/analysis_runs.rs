@@ -301,3 +301,30 @@ fn unclosed_nesting_around_a_long_run_is_linear() {
         );
     }
 }
+
+/// Past the parser's depth limit, a ladder of `or`, `and`, `not (` leaves one error node that
+/// holds the rest of the query; every expression above it spans down to it, so a span's end is
+/// found from the end of a node's children, not by reading them all: the work stops growing
+/// with the input at the limit (it grew by the error node's width for each of about 1,000
+/// expressions, and 5,000 levels took a minute in deep_queries).
+#[test]
+fn a_ladder_past_the_depth_limit_stops_growing() {
+    let ladder = |n: usize| {
+        format!(
+            "process where {}c == 3{}",
+            "a == 1 or b == 2 and not (".repeat(n),
+            ")".repeat(n)
+        )
+    };
+    let steps = |n: usize| {
+        let source = ladder(n);
+        let before = opentide_eql::steps();
+        let _ = analyze(&source);
+        opentide_eql::steps() - before
+    };
+    let (past, far) = (steps(1_000), steps(4_000));
+    assert!(
+        far < past * 2,
+        "{past} steps for 1,000 levels, {far} for 4,000: growing past the limit"
+    );
+}

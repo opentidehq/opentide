@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you build an `opentide_connectors::connector::DeployOutcome` (or `opentide::connectors::DeployOutcome`) with a struct literal, in a `Deployer` of your own, call `DeployOutcome::new(remote_id, operation)` instead, and `.with_warnings(..)` for what the deploy raised. Read `warnings` where you want what `opentide deploy` would have warned of.
 - If you read `opentide_yara::catalog::Member::{libyara, yara_x, yara_x_kind}`, `Overload::{libyara, yara_x, yara_x_ret}` or call `Catalog::has_libyara_declarations`, drop them: every member is YARA-X's, and `kind` and `ret` are YARA-X's types.
 - If you called `opentide_cql::check::diagnostics`, call `opentide_cql::analyze_with` and keep the diagnostics after its `cql_parse_error`.
 - If you build an `opentide_workspace::validate::Options` with a struct literal, set its new `compile_check` field: `Some(&opentide_compile::validate::Compilers)` to compile rules as `opentide validate` does, or `None`.
@@ -28,6 +29,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
 ### Breaking
+
+- **`DeployOutcome` carries the deploy's warnings, and is `#[non_exhaustive]`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). `opentide_connectors::connector::DeployOutcome` has a new `warnings: Vec<DeployWarning>` (`code`, `message`; `#[non_exhaustive]`, built with `DeployWarning::new`): what a deploy raised without failing, which `Deployer::deploy` dropped. Sysdig and Bitdefender report a rule created again because the tenant lost it, Graylog a definition created again or forgotten, its query validation's warnings and `graylog_version_vulnerable` (a version that does not revoke access tokens reliably), Google SecOps and Exabeam their deploy warnings, and Defender for Endpoint a rule created with the safer configuration (`opentide_connectors::defender::PARTIAL_DEPLOYMENT`). Each `code` is the event `opentide deploy` logs. A struct literal no longer builds one outside the crate: see Upgrade.
 
 - **tree-sitter is gone: `opentide-syntax`, the grammars and the C build** ([opentide#1231](https://github.com/opentidehq/opentide/issues/1231)). Every query language parses in Rust (ADR 0012), so the `opentide-syntax` crate (its last version is 0.11.0), `grammars/` and every `highlights/queries/<lang>/highlights.scm` (Tide's too, which `cargo xtask codegen` no longer writes) are deleted, and with them the engine's C compiler (`cc`) and its `unsafe`. `opentide_highlight::highlights_scm` and the `KQL_`, `SPL_`, `ESQL_`, `EQL_`, `KUERY_`, `LUCENE_`, `FALCO_`, `CQL_`, `YARA_`, `EXABEAM_`, `YARAL_` and `TIDE_HIGHLIGHTS_SCM` constants, `scm_captures` and `assert_scm_subset_of_spec` are removed, and the release's `highlights-vX.Y.Z.zip` has no `queries/` folder any more; the TextMate, Monaco and Helix grammars are generated from the `KEYWORDS` tables, byte for byte as before.
 
@@ -136,6 +139,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`opentide_connectors::transport::BuildError` shows its whole text** ([opentide#1180](https://github.com/opentidehq/opentide/issues/1180)). Its `Display` was reqwest's bare `builder error`; it is now `builder error: <reason>` (for example `builder error: relative URL without a base`), as `describe()` already gave. `RequestBuilder` parses with `url` and `http` on every target and refuses a URL with no host (`mailto:`, `file:`, `data:`) as before.
 
 ### Fixed
+
+- **`opentide-kql`'s column pass reads each `let` function's body once** ([opentide#1424](https://github.com/opentidehq/opentide/issues/1424)). `analyze`, `columns`, `hover` and `completions` re-read a function's body at every call: quadratic on a chain of functions, exponential when each calls the one before more than once. Nested function definitions were exponential as well. The body is read where the function is defined, with that scope (Kusto's lexical binding), and a function body's scope is a layer over its outer scope rather than a copy. A chain longer than about 20 functions, where the re-reads ran out of the pass's depth budget and left the schema open, now carries its columns to the last call, so `kql_unknown_column` can report there.
 
 - **The CQL lexer reads a character above U+FFFF as a field character, in linear time** ([opentide#1231](https://github.com/opentidehq/opentide/issues/1231)). Appendix C's `FieldChar` ("other Unicode up to U+FFFF", UTF-16 units) stopped a word at U+FFFF, while the scanner read on: at each such character the scanner re-read the whole run (quadratic), and `#tag=😀` was a `cql_parse_error`. A word and the scanner agree now; `opentide_cql::analyze` reports nothing on such a word. The scanner also stops at a second colon when it reads for an assignment or a call (after `:=`), where it read on to the end of the run and re-read it at each colon.
 

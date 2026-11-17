@@ -18,10 +18,11 @@ use opentide_parse::{CompletedMarker, Grammar, Input, Parse, Parser, TokenSet, b
 /// Nesting deeper than this is one error. tree-sitter took 10,000 levels; the floor every
 /// language keeps is `deep_queries`' `NESTING_CEILING` (1,000), and no more: a call with a
 /// negated call in its argument (`f(!`) opens four tree nodes per level, so 1,000 such levels
-/// stay under the toolkit's `MAX_TREE_DEPTH` (4,096 nodes). Binary operators are not levels
+/// stay under the toolkit's `TREE_BUDGET` (4,032 nodes). Binary operators are not levels
 /// (a chain is one flat node), so a call in an operand of each precedence in turn
-/// (`f(a == b + c * !`) is up to seven nodes a level and reaches `MAX_TREE_DEPTH` first, at
-/// about 580 levels: one `TreeTooDeep` error, never an overflow (`parser_depth`).
+/// (`f(a == b + c * !`) is up to seven nodes a level: the toolkit charges a level the nodes
+/// it opens, so that shape stops at about 570 levels with one `TooDeep` naming its budget
+/// (`TREE_BUDGET`), never `TreeTooDeep` or an overflow (`parser_depth`, #1427).
 pub(crate) const MAX_DEPTH: u32 = 1_000;
 
 pub(crate) const UNEXPECTED: &str = "unexpected";

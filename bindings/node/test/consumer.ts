@@ -8,6 +8,7 @@ import type {
   DeployOptions,
   DeployOutcome,
   DeployPlanOptions,
+  DeployWarning,
   LintOptions,
   LiveCheck,
   QueryOptions,
@@ -59,6 +60,7 @@ const queryOptions: QueryOptions = { language: 's1ql', start: new Date(0).toISOS
 const found: Promise<QueryResult> = connection.query('x', queryOptions)
 const checked: Promise<LiveCheck> = connection.validateQuery('x')
 const deployed: Promise<DeployOutcome> = connection.deploy('id', 'create', new Uint8Array())
+const raised: Promise<DeployWarning[]> = deployed.then((outcome) => outcome.warnings)
 // Dates and RFC 3339 strings for the window; an AbortSignal for one operation.
 const controller = new AbortController()
 const dated: QueryOptions = { start: new Date(0), end: '2026-11-12T10:00:00Z', signal: controller.signal }
