@@ -946,7 +946,7 @@ fn for_each_parallel(cases: &[Case], work: impl Fn(&Case) -> bool + Sync) -> Vec
     failed.into_iter().map(|(_, id)| id).collect()
 }
 
-/// The UUIDs in the package's data (`src/opentide`), which no run mints:
+/// The UUIDs in the package's data (`src/opentide`), which no run mints.
 pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
     static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
         std::sync::OnceLock::new();

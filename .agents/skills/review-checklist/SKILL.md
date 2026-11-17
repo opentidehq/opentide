@@ -153,6 +153,7 @@ The Python CLI at the frozen tag is the oracle; the rules: [`golden`](../golden/
       oracle in a PR of its own.
 - [ ] **The comparison is not loosened.** A normalisation rule hides only a value that differs
       between two runs of the same case, and is code in `crates/opentide-cli/tests/common/normalise.rs`
+      (and, while xtask's recorder lives, its copy in `crates/opentide-compare/src/normalise.rs`)
       with a unit test; no widened rule; no ledger entry broader than the difference; no stale
       entry; no skipped, deleted or `#[ignore]`d case beyond the byte-level oracle replays #1121
       marked `#[ignore = "byte-level replay against the Python oracle: ..."]`.

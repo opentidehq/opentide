@@ -195,9 +195,7 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     assert!(dumped.is_empty(), "{dumped:?}");
 
     // The rule files: named as the oracle named them without its padding,
-    // and holding the oracle's bytes but for the approved differences, and
-    // the oracle's data. They are compared under the oracle's names, which
-    // the ledger's entries name.
+    // and loading to the oracle's data.
     let oracle_files = files(&here().join("oracle"), "Imported");
     let written = files(&ws, "Imported");
     assert_eq!(
@@ -230,9 +228,11 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     // command's own output (#1139): the oracle's bytes, and the ledger that
     // listed how Rust's differ from them (YAML quoting, `true` for `True`),
     // are retired. The data check above still ties them to the oracle's.
+    // insta compares text with `\r\n` as `\n` and trailing whitespace
+    // trimmed, so a carriage return is shown and the end of a file marked.
     let mut written_text = String::new();
     for (path, bytes) in &written {
-        let text = std::str::from_utf8(bytes).unwrap();
+        let text = std::str::from_utf8(bytes).unwrap().replace('\r', "<CR>");
         write!(written_text, "── {path} ──\n{text}").unwrap();
         if !text.ends_with('\n') {
             written_text.push_str("\n<no final newline>\n");
