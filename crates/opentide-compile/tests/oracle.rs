@@ -134,12 +134,36 @@ fn without_nulls(value: Json) -> Json {
 }
 
 /// The class a model-dump preview that differs falls in: `nulls` (the
-/// oracle's `null` members left out, it is the candidate) or `order` (the
-/// same value, keys in another order); `None` for any other difference.
+/// oracle's `null` members left out, it is the candidate), `order` (the
+/// same value, keys in another order) or `wrapped` (the oracle's request
+/// as the candidate's `payload`, beside the block the candidate adds);
+/// `None` for any other difference.
 fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
     let oracle: Json = serde_json::from_str(oracle).ok()?;
     if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
         return None;
+    }
+    // `wrapped`: the oracle's entry, byte for byte (key order kept), once
+    // the candidate's `api_request` is replaced by its `payload`.
+    let candidate: Json = serde_json::from_str(mine).ok()?;
+    if let Json::Object(entry) = &candidate
+        && let Some(Json::Object(request)) = entry.get("api_request")
+        && request.len() == 2
+        && matches!(request.get("block"), Some(Json::Object(_)))
+        && let Some(payload) = request.get("payload")
+    {
+        let unwrapped: Json = Json::Object(
+            entry
+                .iter()
+                .map(|(key, value)| {
+                    let value = if key == "api_request" { payload } else { value };
+                    (key.clone(), value.clone())
+                })
+                .collect(),
+        );
+        if unwrapped.to_compact() == oracle.to_compact() {
+            return Some("wrapped");
+        }
     }
     let trimmed = without_nulls(oracle).to_compact();
     if trimmed == mine {

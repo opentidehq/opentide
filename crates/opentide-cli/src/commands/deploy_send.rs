@@ -3157,15 +3157,14 @@ impl Sender<'_, '_> {
                 let request = match strategy {
                     StatusStrategy::Deletion => DeployRequest::delete(rule.uuid.clone()),
                     _ => {
-                        let mut body = opentide_compile::json::Object::new();
-                        body.insert("payload".into(), payload);
-                        body.insert("block".into(), block);
+                        // The body `deploy_plan` shows for it.
+                        let body = opentide_compile::preview::elastic_request(rule, payload);
                         let operation = if strategy == StatusStrategy::Disablement {
                             Operation::Disable
                         } else {
                             Operation::Update
                         };
-                        match serde_json::to_vec(&CJson::Object(body)) {
+                        match serde_json::to_vec(&body) {
                             Ok(body) => DeployRequest::new(rule.uuid.clone(), operation, body),
                             Err(error) => {
                                 let text = format!("the compiled rule is not JSON: {error}");

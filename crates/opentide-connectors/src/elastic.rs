@@ -1302,9 +1302,9 @@ pub const CHECKS_SKIPPED: &str = "elastic_checks_skipped";
 pub const CHECK_WARNING: &str = "elasticsearch_check_warning";
 
 /// A deploy request's body: the Kibana rule (`payload`) and the rule's
-/// `elastic` block (`block`), as `opentide deploy` writes it; or the Kibana
-/// rule alone, with no block. The rule's `rule_id` must be `rule_id`, the
-/// one the deploy looks the rule up by.
+/// `elastic` block (`block`), as `deploy_plan` and `opentide deploy` write
+/// it; or the Kibana rule alone, with no block. The rule's `rule_id` must be
+/// `rule_id`, the one the deploy looks the rule up by.
 fn deploy_body(body: &[u8], rule_id: &str) -> Result<(Json, Option<Json>), String> {
     let body: Json = serde_json::from_slice(body)
         .map_err(|error| format!("the compiled body is not JSON: {error}"))?;
@@ -1339,7 +1339,8 @@ impl Deployer for Elastic {
     /// its type changes, deleted and created again. [`Operation::Create`]
     /// and [`Operation::Update`] do the same; a [`Operation::Disable`]
     /// writes the rule disabled. The body is `{"payload": <Kibana rule>,
-    /// "block": <elastic block>}`, as `opentide deploy` sends it, the rule's
+    /// "block": <elastic block>}`, as `deploy_plan` holds it and `opentide
+    /// deploy` sends it, the rule's
     /// `rule_id` the request's (else the rule fails, nothing sent); a bare
     /// Kibana rule
     /// deploys without the checks, which read the block, and says so with
