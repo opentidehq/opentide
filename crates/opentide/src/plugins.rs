@@ -17,10 +17,10 @@
 pub use crate::connectors::Json;
 pub use opentide_cli::plugins::{configurations, set_host};
 pub use opentide_connectors::connector::{
-    BoxFuture, ConfigurationCheck, ConfigurationFinding, DeployError, DeployFailure, DeployOutcome,
-    DeployRequest, DeployScope, DeployWarning, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, TimeWindow,
-    columns_of, deploying,
+    BoxFuture, ConfigurationCheck, ConfigurationFinding, DeployError, DeployEvent, DeployFailure,
+    DeployOutcome, DeployRequest, DeployScope, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    TimeWindow, columns_of, deploying,
 };
 pub use opentide_connectors::credentials::Credential;
 pub use opentide_connectors::plugin::{ENTRY_POINT_GROUP, PluginError, PluginHost};

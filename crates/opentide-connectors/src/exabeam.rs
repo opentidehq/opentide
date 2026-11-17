@@ -1455,7 +1455,7 @@ impl Deployer for Exabeam {
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying(async move {
+        crate::connector::deploying_for(request, async move {
             let body: Json = serde_json::from_slice(&request.body).map_err(|error| {
                 ConnectorError::refused(
                     PLATFORM,
@@ -1479,7 +1479,10 @@ impl Deployer for Exabeam {
                 body,
                 name,
                 disable: request.operation == Operation::Disable,
-                recreate_refusal: None,
+                recreate_refusal: request
+                    .recreate_refusal
+                    .as_ref()
+                    .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
             };
             let token = self.tokens.lock().await.get(&cx.tenant.label).cloned();
             let session = Session::with_token(cx, Arc::clone(&self.pacer), token)?;
@@ -1500,6 +1503,7 @@ impl Deployer for Exabeam {
                 ));
             }
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: match outcome.state {
                     StateChange::Record(id) => Some(id),
                     StateChange::Keep => Some(request.rule_id.clone()),

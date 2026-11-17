@@ -760,10 +760,11 @@ impl Deployer for CarbonBlack {
                 watchlist: text("watchlist"),
                 report,
                 name,
-                now: jiff::Timestamp::now().as_second(),
+                now: request.time().as_second(),
             };
             let change = self.deploy_report(cx, &plan).await?;
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: matches!(change, ReportChange::Created | ReportChange::Updated)
                     .then(|| request.rule_id.clone()),
                 operation: request.operation,

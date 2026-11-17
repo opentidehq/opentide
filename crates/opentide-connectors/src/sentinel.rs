@@ -608,6 +608,7 @@ impl Deployer for Sentinel {
             if request.operation == Operation::Delete {
                 self.delete(cx, &request.rule_id).await?.map_err(refused)?;
                 return Ok(DeployOutcome {
+                    events: Vec::new(),
                     remote_id: None,
                     operation: request.operation,
                     warnings: Vec::new(),
@@ -623,6 +624,7 @@ impl Deployer for Sentinel {
                 .await?
                 .map_err(refused)?;
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: Some(request.rule_id.clone()),
                 operation: request.operation,
                 warnings: Vec::new(),

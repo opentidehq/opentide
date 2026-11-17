@@ -190,13 +190,14 @@ test('a deploy creates the rule', async () => {
   const connection = connect()
   const body = JSON.stringify({ data: { name: 'Example', queryType: 'events' } })
   const created = await connection.deploy('11111111-1111-4111-8111-111111111111', 'create', Buffer.from(body))
-  assert.deepEqual(Object.keys(created), ['remoteId', 'operation', 'warnings'])
+  assert.deepEqual(Object.keys(created), ['remoteId', 'operation', 'warnings', 'events'])
   assert.deepEqual(created.warnings, [])
+  assert.deepEqual(created.events, [])
   assert.equal(created.operation, 'create')
   assert.match(created.remoteId, /^19000000000000000/)
   // A string body is sent as its UTF-8 bytes; an update of that rule.
   const updated = await connection.deploy(created.remoteId, 'update', body)
-  assert.deepEqual(updated, { remoteId: created.remoteId, operation: 'update', warnings: [] })
+  assert.deepEqual(updated, { remoteId: created.remoteId, operation: 'update', warnings: [], events: [] })
 })
 
 test('a failed deploy rejects with its scope, status and fields (#1142)', async () => {

@@ -19,6 +19,7 @@ SDK = {
     "Canceller",
     "Capabilities",
     "Connection",
+    "DeployEvent",
     "DeployOutcome",
     "DeployPlan",
     "DeployWarning",

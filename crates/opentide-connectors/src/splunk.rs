@@ -944,10 +944,11 @@ impl Deployer for Splunk {
                 let mut warnings = Vec::new();
                 if self.saved_search(cx, &request.rule_id).await?.is_some() {
                     self.delete_saved_search(cx, &request.rule_id).await?;
-                    warnings.push(DeployWarning::new(
-                        "splunk_alert_deleted",
-                        request.rule_id.clone(),
-                    ));
+                    // Said, not raised: the run's warnings are for what to check.
+                    warnings.push(
+                        DeployWarning::new("splunk_alert_deleted", request.rule_id.clone())
+                            .unraised(),
+                    );
                 }
                 return Ok(DeployOutcome::new(None, request.operation).with_warnings(warnings));
             }

@@ -658,7 +658,7 @@ impl Deployer for Sysdig {
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying(async move {
+        crate::connector::deploying_for(request, async move {
             let refused = |message: String| ConnectorError::Refused {
                 platform: PLATFORM.to_owned(),
                 tenant: cx.tenant.label.tenant.clone(),
@@ -696,13 +696,17 @@ impl Deployer for Sysdig {
                 tuning,
                 disable: request.operation == Operation::Disable,
                 policies,
-                recreate_refusal: None,
+                recreate_refusal: request
+                    .recreate_refusal
+                    .as_ref()
+                    .map(|refusal| refusal.message.clone()),
             };
             let outcome = deploy_rule(cx, &rule).await?;
             if let Some(failure) = outcome.failure {
                 return Err(refused(failure.message));
             }
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: match outcome.state {
                     StateChange::Record(id) => Some(id),
                     StateChange::Keep => Some(request.rule_id.clone()),

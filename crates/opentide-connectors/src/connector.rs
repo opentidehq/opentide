@@ -50,7 +50,8 @@ pub enum Operation {
 /// One compiled rule to deploy (the body `opentide-compile` built).
 ///
 /// `#[non_exhaustive]`: build one with [`DeployRequest::new`],
-/// [`DeployRequest::delete`] and [`DeployRequest::with_policies`].
+/// [`DeployRequest::delete`], [`DeployRequest::with_policies`],
+/// [`DeployRequest::at`] and [`DeployRequest::refusing_recreate`].
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct DeployRequest {
@@ -66,6 +67,17 @@ pub struct DeployRequest {
     /// takes a block's own `policies` first (a deploy plan's Sysdig entry
     /// carries them). Other platforms read none.
     pub policies: Option<Vec<String>>,
+    /// The time the deploy runs at, which a platform stamps on what it
+    /// writes (Carbon Black Cloud's report `timestamp`): `None` is now. A run
+    /// reads one clock for every rule, and a test fixes it.
+    pub now: Option<jiff::Timestamp>,
+    /// Why the rule must not be created again when the tenant lost it:
+    /// `opentide deploy` sets it when deployment state cannot record the new
+    /// id (`deployment_state_ignored`, `deployment_state_unpersisted`). A
+    /// platform that finds a recorded rule gone then fails the rule with this
+    /// failure, after its `*_rule_recreated` warning, instead of creating
+    /// it. `None` creates it again.
+    pub recreate_refusal: Option<DeployFailure>,
 }
 
 impl DeployRequest {
@@ -78,6 +90,8 @@ impl DeployRequest {
             operation,
             body: body.into(),
             policies: None,
+            now: None,
+            recreate_refusal: None,
         }
     }
 
@@ -94,6 +108,48 @@ impl DeployRequest {
     pub fn with_policies(mut self, policies: Option<Vec<String>>) -> Self {
         self.policies = policies;
         self
+    }
+
+    /// The same request, run at `now` ([`DeployRequest::now`]).
+    #[must_use]
+    pub fn at(mut self, now: jiff::Timestamp) -> Self {
+        self.now = Some(now);
+        self
+    }
+
+    /// The same request, failing with `refusal` rather than creating again a
+    /// rule the tenant lost ([`DeployRequest::recreate_refusal`]).
+    #[must_use]
+    pub fn refusing_recreate(mut self, refusal: DeployFailure) -> Self {
+        self.recreate_refusal = Some(refusal);
+        self
+    }
+
+    /// *error* as this request's recreate refusal when the platform failed
+    /// the rule with it (its message), so the failure keeps the refusal's
+    /// code; any other error as it is.
+    pub fn refused_recreate(&self, error: DeployError) -> DeployError {
+        match &self.recreate_refusal {
+            Some(refusal) if error.failure.message.contains(&refusal.message) => {
+                let mut failure = refusal.clone();
+                for (key, value) in &error.failure.fields {
+                    if failure.field(key).is_none() {
+                        failure.fields.push((key.clone(), value.clone()));
+                    }
+                }
+                DeployError {
+                    scope: DeployScope::Rule,
+                    failure,
+                    connector: error.connector,
+                }
+            }
+            _ => error,
+        }
+    }
+
+    /// The time the deploy runs at: [`DeployRequest::now`], or now.
+    pub fn time(&self) -> jiff::Timestamp {
+        self.now.unwrap_or_else(jiff::Timestamp::now)
     }
 }
 
@@ -115,6 +171,10 @@ pub struct DeployOutcome {
     /// [`DeployError`], never an outcome: a failed deployment never looks
     /// like a deployed one.
     pub warnings: Vec<DeployWarning>,
+    /// What the deploy did, as the events `opentide deploy` logs at info
+    /// level (`sysdig_rule_created` with the rule's id): not warnings, and
+    /// nothing to act on.
+    pub events: Vec<DeployEvent>,
 }
 
 impl DeployOutcome {
@@ -125,6 +185,7 @@ impl DeployOutcome {
             remote_id,
             operation,
             warnings: Vec::new(),
+            events: Vec::new(),
         }
     }
 
@@ -132,6 +193,42 @@ impl DeployOutcome {
     #[must_use]
     pub fn with_warnings(mut self, warnings: Vec<DeployWarning>) -> Self {
         self.warnings = warnings;
+        self
+    }
+
+    /// The same outcome with `events`.
+    #[must_use]
+    pub fn with_events(mut self, events: Vec<DeployEvent>) -> Self {
+        self.events = events;
+        self
+    }
+}
+
+/// Something a deploy did, as an event: its name (`sysdig_rule_created`)
+/// and the fields it is logged with, in order (`rule_id`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DeployEvent {
+    /// The event's name, as `opentide deploy` logs it.
+    pub name: String,
+    /// Its fields, in order.
+    pub fields: Vec<(String, String)>,
+}
+
+impl DeployEvent {
+    /// The event `name`, with no fields.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            fields: Vec::new(),
+        }
+    }
+
+    /// The same event with the field `key` set to `value` (after the fields
+    /// it has).
+    #[must_use]
+    pub fn with_field(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.fields.push((key.into(), value.into()));
         self
     }
 }
@@ -145,15 +242,28 @@ pub struct DeployWarning {
     pub code: String,
     /// What happened.
     pub message: String,
+    /// Whether it raises the run's warnings (`DEPLOYMENT_WARNING_RAISED`:
+    /// `opentide deploy` ends with its warnings exit code). A warning that
+    /// only says what was done (`splunk_alert_deleted`) is logged as one
+    /// without raising them.
+    pub raised: bool,
 }
 
 impl DeployWarning {
-    /// The warning `code`, saying `message`.
+    /// The warning `code`, saying `message`, which raises the run's warnings.
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
+            raised: true,
         }
+    }
+
+    /// The same warning, logged without raising the run's warnings.
+    #[must_use]
+    pub fn unraised(mut self) -> Self {
+        self.raised = false;
+        self
     }
 }
 
@@ -283,6 +393,19 @@ pub fn deploying<'a>(
     future: impl Future<Output = Result<DeployOutcome, ConnectorError>> + Send + 'a,
 ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
     Box::pin(async move { future.await.map_err(DeployError::from) })
+}
+
+/// [`deploying`] for `request`: a failure that is the request's recreate
+/// refusal keeps the refusal's code ([`DeployRequest::refused_recreate`]).
+pub fn deploying_for<'a>(
+    request: &'a DeployRequest,
+    future: impl Future<Output = Result<DeployOutcome, ConnectorError>> + Send + 'a,
+) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+    Box::pin(async move {
+        future
+            .await
+            .map_err(|error| request.refused_recreate(DeployError::from(error)))
+    })
 }
 
 impl From<ConnectorError> for DeployError {
@@ -840,7 +963,8 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::{
-        ConnectorError, DeployError, DeployFailure, DeployScope, kql_code, kql_with_limit,
+        ConnectorError, DeployError, DeployFailure, DeployRequest, DeployScope, kql_code,
+        kql_with_limit,
     };
 
     #[test]
@@ -884,6 +1008,30 @@ mod tests {
             interrupted.into_connector(),
             ConnectorError::Cancelled
         ));
+    }
+
+    #[test]
+    fn a_request_runs_at_its_clock_or_now() {
+        let fixed = jiff::Timestamp::from_second(1_700_000_000).unwrap();
+        assert_eq!(DeployRequest::delete("r").at(fixed).time(), fixed);
+        let before = jiff::Timestamp::now();
+        assert!(DeployRequest::delete("r").time() >= before);
+    }
+
+    #[test]
+    fn a_recreate_refusal_keeps_its_code_and_only_its_own() {
+        let refusal =
+            DeployFailure::new("deployment_state_unpersisted", "the new id would be lost");
+        let request = DeployRequest::delete("r").refusing_recreate(refusal.clone());
+        let refused = request.refused_recreate(
+            ConnectorError::refused("sysdig", "soc", "the new id would be lost", None).into(),
+        );
+        assert_eq!(refused.scope, DeployScope::Rule);
+        assert_eq!(refused.failure.code, "deployment_state_unpersisted");
+        assert_eq!(refused.failure.field("tenant"), Some("soc"));
+        let other = request
+            .refused_recreate(ConnectorError::refused("sysdig", "soc", "HTTP 400", None).into());
+        assert_eq!(other.failure.code, "tenant_refused");
     }
 
     #[test]

@@ -24,6 +24,7 @@ import opentide
 from opentide import (
     Capabilities,
     Connection,
+    DeployEvent,
     DeployOutcome,
     DeployWarning,
     LiveCheck,
@@ -253,6 +254,32 @@ class _WarningDeployer:
                 "warnings": [{"code": "sysdig_rule_recreated", "message": "creating it again"}],
             }
         )
+
+
+class _EventDeployer:
+    """A native connection whose deploy said what it did, and a warning it did not raise."""
+
+    async def deploy(self, *_args: object, **_kwargs: object) -> str:
+        return json.dumps(
+            {
+                "remote_id": None,
+                "operation": "delete",
+                "warnings": [
+                    {"code": "splunk_alert_deleted", "message": "Rule", "raised": False}
+                ],
+                "events": [
+                    {"name": "sysdig_rule_created", "fields": [["uuid", "u1"], ["rule_id", "43"]]}
+                ],
+            }
+        )
+
+
+def test_a_deploy_returns_its_events_and_the_warnings_it_did_not_raise() -> None:
+    connection = Connection(_EventDeployer())  # ty: ignore[invalid-argument-type]  # a stand-in for the native connection
+    outcome = run(connection.deploy("42", "delete"))
+    assert outcome.warnings == [DeployWarning("splunk_alert_deleted", "Rule", raised=False)]
+    assert outcome.events == [DeployEvent("sysdig_rule_created", {"uuid": "u1", "rule_id": "43"})]
+    assert list(outcome.events[0].fields) == ["uuid", "rule_id"]
 
 
 def test_a_deploy_returns_the_warnings_it_raised() -> None:
