@@ -20,7 +20,9 @@ use opentide_connectors::bitdefender::{
     self, Action, Failure, PACE_WINDOW, PACED_CALLS, RuleDeploy, RuleOutcome, StateChange,
     deploy_rule_with,
 };
-use opentide_connectors::connector::{BoxFuture, TenantContext};
+use opentide_connectors::connector::{
+    BoxFuture, DeployEvent, DeployScope, Deployer as _, TenantContext,
+};
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::pace::{Clock, Pacer};
 use opentide_connectors::runtime::block_on;
@@ -955,13 +957,81 @@ fn the_platform_deploys_from_create_params() {
     let outcome = block_on(deployer.deploy(cx, &request)).unwrap().unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(FIRST_ID));
     assert_eq!(without_id(&run.state().calls[0]), body);
+    assert_eq!(
+        outcome.events,
+        [DeployEvent::new(bitdefender::RULE_CREATED).with_field("rule_id", FIRST_ID)]
+    );
+    // A rule failure keeps its own code.
     let refused = block_on(deployer.deploy(cx, &request))
         .unwrap()
         .unwrap_err();
-    assert!(
-        refused
-            .to_string()
-            .starts_with("bitdefender_name_conflict: "),
-        "{refused}"
+    assert_eq!(refused.scope, DeployScope::Rule);
+    assert_eq!(refused.failure.code, bitdefender::NAME_CONFLICT);
+    assert_eq!(refused.failure.field("tenant"), Some("gravityzone-eu"));
+    // A delete takes no body.
+    let deleted = block_on(deployer.deploy(cx, &DeployRequest::delete(FIRST_ID)))
+        .unwrap()
+        .unwrap();
+    assert_eq!(deleted.remote_id, None);
+    assert_eq!(
+        deleted.events,
+        [DeployEvent::new(bitdefender::RULE_DELETED)]
     );
+}
+
+/// A rule the tenant lost, while deployment state cannot take a new id:
+/// the refusal's code, and the warnings raised before it (the actions the
+/// tenant cannot take, the rule to create again); a refused key fails the
+/// tenant with its own code.
+#[test]
+fn the_platform_keeps_the_warnings_before_a_refusal_and_scopes_a_refused_key() {
+    use opentide_connectors::connector::{DeployFailure, DeployRequest, Operation};
+    let run = Run::new();
+    let params = golden("rule-bitdefender-detection-1.0.create.api.json")["params"].clone();
+    let body = serde_json::to_vec(&json!({"params": params, "actions_unsupported": true})).unwrap();
+    let (tenant, http) = run.tenant("", Duration::from_secs(5));
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let refusal = DeployFailure::new("deployment_state_ignored", "deployment state is ignored");
+    let request =
+        DeployRequest::new(GONE, Operation::Update, body.clone()).refusing_recreate(refusal);
+    let error = block_on(bitdefender::Bitdefender.deploy(cx, &request))
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(run.methods(), ["updateCustomRule"]);
+    assert_eq!(error.failure.code, "deployment_state_ignored");
+    let partial = error.partial.as_deref().unwrap();
+    assert_eq!(partial.remote_id, None);
+    assert_eq!(
+        partial
+            .warnings
+            .iter()
+            .map(|warning| warning.code.as_str())
+            .collect::<Vec<_>>(),
+        [
+            bitdefender::ACTIONS_UNSUPPORTED,
+            "bitdefender_rule_recreated"
+        ]
+    );
+    let refusing = Run::new();
+    refusing
+        .state()
+        .script
+        .push_back(Box::new(|_: &Value| ResponseTemplate::new(401)));
+    let (tenant, http) = refusing.tenant("", Duration::from_secs(5));
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let request = DeployRequest::new("", Operation::Create, body);
+    let error = block_on(bitdefender::Bitdefender.deploy(cx, &request))
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant);
+    assert_eq!(error.failure.code, bitdefender::TENANT_UNAUTHORIZED);
 }
