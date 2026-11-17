@@ -14,9 +14,9 @@ use std::sync::{Arc, OnceLock};
 
 use opentide::plugins::{
     BoxFuture, ConfigurationCheck, ConfigurationFinding, ConnectorError, Credential, DeployError,
-    DeployOutcome, DeployRequest, Deployer, ENTRY_POINT_GROUP, Json, LiveCheck, LiveValidator,
-    Operation, Platform, PluginError, PluginHost, QueryColumn, QueryOutcome, QueryRequest,
-    QueryRunner, Tenant, TenantContext, TimeWindow, deploying,
+    DeployOutcome, DeployRequest, DeployScope, Deployer, ENTRY_POINT_GROUP, Json, LiveCheck,
+    LiveValidator, Operation, Platform, PluginError, PluginHost, QueryColumn, QueryOutcome,
+    QueryRequest, QueryRunner, Tenant, TenantContext, TimeWindow,
 };
 use pyo3::prelude::*;
 use serde_json::{Value, json};
@@ -355,8 +355,8 @@ impl Deployer for PythonPlatform {
             vec![tenant_json(cx.tenant), deploy_json(request)],
             tenant,
         );
-        deploying(async move {
-            let value = plain(&work.await?);
+        Box::pin(async move {
+            let value = plain(&work.await.map_err(plugin_failure)?);
             Ok(DeployOutcome::new(
                 value
                     .get("remote_id")
@@ -366,6 +366,18 @@ impl Deployer for PythonPlatform {
             ))
         })
     }
+}
+
+/// A plugin's failed deploy: an exception the plugin raised is that rule's
+/// failure, as `opentide deploy` treats it (its other rules still deploy);
+/// refused credentials or an unreachable tenant fail the tenant.
+fn plugin_failure(error: ConnectorError) -> DeployError {
+    let crashed = matches!(error, ConnectorError::Crashed { .. });
+    let mut failure = DeployError::from(error);
+    if crashed {
+        failure.scope = DeployScope::Rule;
+    }
+    failure
 }
 
 impl QueryRunner for PythonPlatform {
@@ -473,6 +485,28 @@ mod tests {
     /// A value whose key order does not matter to the test, as `Json`.
     fn ordered(value: &Value) -> Json {
         Json::from_serialize(value).expect("json")
+    }
+
+    #[test]
+    fn a_plugins_exception_fails_the_rule_and_refused_credentials_the_tenant() {
+        let crashed = answer(r#"{"error": {"message": "KeyError: x"}}"#, "acme", "t")
+            .map_err(plugin_failure)
+            .unwrap_err();
+        assert_eq!(
+            (crashed.scope, crashed.failure.code),
+            (DeployScope::Rule, "connector_crashed")
+        );
+        let refused = answer(
+            r#"{"error": {"kind": "authentication", "message": "bad token"}}"#,
+            "acme",
+            "t",
+        )
+        .map_err(plugin_failure)
+        .unwrap_err();
+        assert_eq!(
+            (refused.scope, refused.failure.code),
+            (DeployScope::Tenant, "authentication_failed")
+        );
     }
 
     #[test]

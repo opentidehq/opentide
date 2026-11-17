@@ -453,8 +453,11 @@ impl Connection {
     ///
     /// # Errors
     ///
-    /// [`Error::Connector`]: `tenant_refused` when the tenant refuses the
-    /// rule, and the other codes of [`Connection::query`];
+    /// [`Error::Deploy`] when the deploy failed: `tenant_refused` when the
+    /// tenant refuses the rule, and the other codes of [`Connection::query`],
+    /// with its scope (the rule, or the whole tenant), the HTTP status when
+    /// the tenant gave one, and its fields. [`Error::Connector`]:
+    /// `interrupted`, and
     /// `operation_unsupported` on a platform whose rules deploy only through
     /// `opentide deploy` (Elastic).
     pub async fn deploy(&self, request: &DeployRequest) -> Result<DeployOutcome, Error> {
