@@ -247,9 +247,8 @@ pub(crate) fn path_key(path: &str) -> String {
 }
 
 /// The key a root is compared under: its [`path_key`] without trailing
-/// separators, so `/w/` (a client that sends its folder with a slash, as
-/// Emacs eglot does) and `/w` are one root. A bare `/` and a drive root
-/// (`c:/`) keep theirs.
+/// separators, so `/w/` (a client that sends its folder with a slash) and
+/// `/w` are one root. A bare `/` and a drive root (`c:/`) keep theirs.
 pub(crate) fn root_key(path: &str) -> String {
     let key = path_key(path);
     let trimmed = key.trim_end_matches('/');
