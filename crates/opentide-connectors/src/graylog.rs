@@ -1070,6 +1070,8 @@ impl Graylog {
 pub const DEFINITION_CREATED: &str = "graylog_definition_created";
 /// A version opentide cannot deploy to, or no version (a tenant's failure).
 pub const VERSION_UNSUPPORTED: &str = "graylog_version_unsupported";
+/// A version that does not revoke access tokens reliably (a warning).
+pub const VERSION_VULNERABLE: &str = "graylog_version_vulnerable";
 /// A token Graylog refuses (a tenant's failure).
 pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
 /// A body that carries fields the tenant's version does not take.
@@ -1139,7 +1141,8 @@ impl Deployer for Graylog {
                 .as_ref()
                 .filter(|refusal| !refusal.message.is_empty());
             let compiled = CompiledDefinition {
-                uuid: rule_uuid(&definition).unwrap_or_else(|| request.rule_id.clone()),
+                uuid: rule_uuid(&definition, &request.rule_id)
+                    .unwrap_or_else(|| request.rule_id.clone()),
                 title: definition
                     .get("title")
                     .and_then(Json::as_str)
@@ -1181,7 +1184,14 @@ impl Deployer for Graylog {
                 return Ok(done);
             };
             let failed = match refusal {
-                Some(refusal) if refusal.message == failure.reason => located(refusal.clone()),
+                // `recreate` refuses with the message alone, and no status.
+                Some(refusal)
+                    if failure.code == "graylog_request_failed"
+                        && failure.status.is_none()
+                        && refusal.message == failure.reason =>
+                {
+                    located(refusal.clone())
+                }
                 _ => {
                     let mut failed = located(DeployFailure::new(failure.code, failure.reason));
                     if let Some(status) = failure.status {
@@ -1219,15 +1229,22 @@ fn definition_of(request: &DeployRequest) -> Result<opentide_compile::json::Obje
 }
 
 /// The rule's UUID, from its `opentide.<uuid>` tag (7.2 and later), which a
-/// create that got no answer names the definition by.
-fn rule_uuid(definition: &opentide_compile::json::Object) -> Option<String> {
+/// create that got no answer names the definition by: `rule_id` when its tag
+/// is there (a create's), else the tag `derive_tags` puts right after the
+/// bare `opentide` one, never a block's own tag naming another rule.
+fn rule_uuid(definition: &opentide_compile::json::Object, rule_id: &str) -> Option<String> {
     let Some(Json::Array(tags)) = definition.get("tags") else {
         return None;
     };
-    tags.iter()
-        .filter_map(Json::as_str)
-        .filter_map(|tag| tag.strip_prefix("opentide."))
-        .find(|rest| uuid::Uuid::parse_str(rest).is_ok())
+    let tags: Vec<&str> = tags.iter().filter_map(Json::as_str).collect();
+    let own = format!("opentide.{rule_id}").to_lowercase();
+    if tags.contains(&own.as_str()) {
+        return Some(rule_id.to_owned());
+    }
+    let after = tags.iter().position(|tag| *tag == "opentide")? + 1;
+    tags.get(after)
+        .and_then(|tag| tag.strip_prefix("opentide."))
+        .filter(|rest| uuid::Uuid::parse_str(rest).is_ok())
         .map(str::to_owned)
 }
 
@@ -1276,7 +1293,7 @@ fn tenant_failure(error: ConnectorError) -> DeployError {
 fn deploy_warnings(version: Version, raised: Vec<Warning>) -> Vec<DeployWarning> {
     let vulnerable = opentide_compile::graylog::is_vulnerable(version).then(|| {
         DeployWarning::new(
-            "graylog_version_vulnerable",
+            VERSION_VULNERABLE,
             format!(
                 "Graylog {version} does not revoke access tokens reliably ({}); upgrade to \
                  6.3.12, 7.0.16, 7.1.12 or later",

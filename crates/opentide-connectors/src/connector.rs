@@ -75,8 +75,8 @@ pub struct DeployRequest {
     /// `opentide deploy` sets it when deployment state cannot record the new
     /// id (`deployment_state_ignored`, `deployment_state_unpersisted`). A
     /// platform that finds a recorded rule gone then fails the rule with this
-    /// failure instead of creating it. Sysdig's, Exabeam's, Bitdefender's and
-    /// Google SecOps's failure keeps its `*_rule_recreated` warning, raised
+    /// failure instead of creating it. Sysdig's, Exabeam's, Bitdefender's,
+    /// Graylog's and Google SecOps's failure keeps its `*_recreated` warning, raised
     /// before the refusal, in [`DeployError::partial`], as `opentide deploy`
     /// logs it; the other platforms' carry no warning yet. `None` creates it
     /// again.
@@ -1128,7 +1128,7 @@ mod tests {
         let other = request
             .refused_recreate(ConnectorError::refused("sysdig", "soc", "HTTP 400", None).into());
         assert_eq!(other.failure.code, "tenant_refused");
-        // After its code, as Exabeam, Google SecOps and Graylog refuse it.
+        // After its code, as Exabeam and Google SecOps refuse it.
         let coded = request.refused_recreate(
             ConnectorError::refused(
                 "exabeam",

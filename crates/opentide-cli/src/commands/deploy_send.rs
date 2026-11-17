@@ -4018,11 +4018,20 @@ impl Sender<'_, '_> {
                                     "{code}"
                                 );
                             }
-                            DeployRequest::new(
-                                stored.unwrap_or(&rule.uuid),
-                                operation,
-                                serde_json::to_vec(&create_body(&compiled)).unwrap_or_default(),
-                            )
+                            match serde_json::to_vec(&create_body(&compiled)) {
+                                Ok(body) => DeployRequest::new(
+                                    stored.unwrap_or(&rule.uuid),
+                                    operation,
+                                    body,
+                                ),
+                                Err(error) => {
+                                    let reason =
+                                        format!("the compiled definition is not JSON: {error}");
+                                    self.rule_error(&mut result, &reason);
+                                    log.finished(result);
+                                    continue;
+                                }
+                            }
                         }
                         Err(error) => {
                             // An alias the tenant does not define (or any
@@ -4144,7 +4153,7 @@ impl Sender<'_, '_> {
     /// version's, which the tenant warned of once; then what was done.
     fn graylog_done(&mut self, uuid: &str, tenant: &str, done: &DeployOutcome) {
         for warning in &done.warnings {
-            if warning.code == "graylog_version_vulnerable" {
+            if warning.code == opentide_connectors::graylog::VERSION_VULNERABLE {
                 continue;
             }
             self.warned = true;

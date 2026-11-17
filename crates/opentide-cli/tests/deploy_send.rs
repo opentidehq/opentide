@@ -2032,6 +2032,15 @@ fn graylog_stand(rt: &tokio::runtime::Runtime, version: &str) -> wiremock::MockS
             .mount(&server)
             .await;
         wiremock::Mock::given(method("PUT"))
+            .and(path(format!("/api/events/definitions/{GRAYLOG_BROKEN}")))
+            .respond_with(
+                wiremock::ResponseTemplate::new(500).set_body_json(
+                    serde_json::json!({"type": "ApiError", "message": "storage down"}),
+                ),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
             .and(path(format!("/api/events/definitions/{GRAYLOG_LOST}")))
             .respond_with(
                 wiremock::ResponseTemplate::new(404)
@@ -2058,6 +2067,7 @@ fn graylog_stand(rt: &tokio::runtime::Runtime, version: &str) -> wiremock::MockS
 const GRAYLOG_CREATED: &str = "65f1c0de2a3b4c5d6e7f8091";
 const GRAYLOG_LOST: &str = "65f1c0de2a3b4c5d6e7f0000";
 const GRAYLOG_KEPT: &str = "65f1c0de2a3b4c5d6e7f1111";
+const GRAYLOG_BROKEN: &str = "65f1c0de2a3b4c5d6e7f5000";
 
 /// `opentide deploy --platform graylog` in `ws`, both strategies, every rule.
 fn graylog_deploy(ws: &Path) -> (i32, String) {
@@ -2096,12 +2106,13 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = graylog_stand(&rt, "7.1.0");
     let setup = format!("url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\n", server.uri());
-    let (created, warned, lost, refused, removed) = (
+    let (created, warned, lost, refused, removed, broken) = (
         "00000000-0000-4000-8099-000000000121",
         "00000000-0000-4000-8099-000000000122",
         "00000000-0000-4000-8099-000000000123",
         "00000000-0000-4000-8099-000000000124",
         "00000000-0000-4000-8099-000000000125",
+        "00000000-0000-4000-8099-000000000126",
     );
     let ws = stated(
         "graylog",
@@ -2130,6 +2141,12 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
                 removed,
                 graylog_block("REMOVED", "EventID:1"),
                 GRAYLOG_KEPT,
+            ),
+            (
+                "f.yaml",
+                broken,
+                graylog_block("STAGING", "EventID:1"),
+                GRAYLOG_BROKEN,
             ),
         ],
     );
@@ -2163,6 +2180,7 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
         "code: graylog_query_invalid · error: Graylog refuses the query, so nothing is saved: \
          QUERY_PARSING_ERROR: cannot parse",
         "✓ deleted   Recorded rule",
+        "status_code: 500 · code: graylog_request_failed",
     ];
     let at: Vec<usize> = ordered
         .iter()
@@ -2214,6 +2232,11 @@ fn graylog_does_not_create_again_a_lost_definition_and_stops_on_a_refused_token(
         .find("✗ failed    Recorded rule  git ignores")
         .expect(&err);
     assert!(warned < refused, "{err}");
+    // Logged as the request it stopped.
+    assert!(
+        err.contains("code: graylog_request_failed · error: git ignores"),
+        "{err}"
+    );
     assert!(!err.contains("External id recorded"), "{err}");
     assert!(!err.contains("Graylog version vulnerable"), "{err}");
     assert!(shard_of(ws.path(), lost).contains(GRAYLOG_LOST));

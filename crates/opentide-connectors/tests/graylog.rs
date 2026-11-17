@@ -1229,3 +1229,99 @@ fn a_refused_token_fails_the_tenant() {
         ConnectorError::Authentication { .. }
     ));
 }
+
+/// What the platform sends is the compiled body itself, byte for byte: 6.3
+/// flat with `share_request`, 7.x wrapped in `entity`; an update the bare
+/// definition with its `id`.
+#[test]
+fn the_platform_sends_the_compiled_body_byte_for_byte() {
+    for (version, server_version) in [(Version(6, 3, 0), "6.3.12"), (Version(7, 2, 0), "7.2.1")] {
+        let compiled = definition(version);
+        let (outcome, requests) = create_on(&compiled, server_version);
+        outcome.unwrap();
+        assert_eq!(
+            requests[2].body,
+            serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+            "{server_version}"
+        );
+    }
+    let compiled = definition(Version(7, 2, 0));
+    let request = DeployRequest::new(
+        DEFINITION_ID,
+        Operation::Update,
+        serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+    );
+    let (outcome, requests) = deploy_on_7_2(
+        |server, runtime| {
+            runtime.block_on(async {
+                mount_validate(server, ok_verdict()).await;
+                Mock::given(method("PUT"))
+                    .respond_with(ResponseTemplate::new(200))
+                    .mount(server)
+                    .await;
+            });
+        },
+        &request,
+    );
+    outcome.unwrap();
+    assert_eq!(
+        requests[1].body,
+        serde_json::to_vec(&compile::update_body(&compiled, DEFINITION_ID)).unwrap()
+    );
+}
+
+/// A definition created again (the tenant lost it) whose create gets no
+/// answer names the rule's own tag, never a block tag naming another rule.
+#[test]
+fn an_unconfirmed_create_names_the_rules_own_tag() {
+    let (runtime, server) = server();
+    runtime.block_on(async {
+        mount_validate(&server, ok_verdict()).await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/events/definitions"))
+            .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(5)))
+            .mount(&server)
+            .await;
+    });
+    let settings = opentide_connectors::HttpSettings {
+        timeout: std::time::Duration::from_millis(300),
+        ..http_defaults()
+    };
+    let (tenant, http) = tenant_with(&server.uri(), &settings);
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let mut compiled = definition(Version(7, 2, 0));
+    let own = format!("opentide.{}", compiled.uuid);
+    let Some(Json::Array(tags)) = compiled.definition.get("tags").cloned() else {
+        panic!("no tags")
+    };
+    let decoy = "opentide.11111111-1111-4111-8111-111111111111";
+    let tags: Vec<Json> = std::iter::once(Json::from(decoy)).chain(tags).collect();
+    compiled.definition.insert("tags".into(), Json::Array(tags));
+    let request = DeployRequest::new(
+        DEFINITION_ID,
+        Operation::Update,
+        serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+    );
+    let error = runtime
+        .block_on(Graylog::on_version(Version(7, 2, 0)).deploy(cx, &request))
+        .unwrap_err();
+    assert_eq!(error.failure.code, "graylog_create_unconfirmed");
+    assert!(
+        error
+            .failure
+            .message
+            .contains(&format!("the tag \"{own}\"")),
+        "{error:?}"
+    );
+    assert!(!error.failure.message.contains(decoy), "{error:?}");
+    assert!(error.failure.field("detail").is_some(), "{error:?}");
+}
