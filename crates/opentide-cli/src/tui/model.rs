@@ -799,10 +799,11 @@ fn check_files(
     root: &Path,
     catalog: &opentide_analysis::Catalog,
 ) -> LanguageServer {
-    // opentide's own catalog for the workspace, as the Python host installs
-    // it, for this thread's checks only (#1142): nothing is installed for
-    // the process, so no lock is needed and nothing is left behind. When it
-    // does not parse, the engine's bundled one is used.
+    // The catalog the models generate for this workspace (its Tide fields
+    // and declared datasets), entered on this thread for these checks only
+    // (#1142): nothing is installed for the process, so no lock is needed
+    // and nothing is left behind when the scope drops. A catalog that does
+    // not parse leaves the process's in use.
     let _catalog = opentide_analysis::enter_catalog(catalog).ok();
     // The workspace's declared datasets and Elastic tenants, as the editor
     // reads them.
