@@ -64,8 +64,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
   install. `--engine rust` builds the `opentide` binary (`-p opentide --features cli
   --release`, what `cargo install opentide --features cli` installs) for every command-line
-  scenario, or runs `--opentide PATH` instead (to compare two builds, pass each one's binary;
-  without it, the binary is this checkout's, whichever binary you meant), `opentide-lsp --release` for the language server and opentide-workspace's `load`
+  scenario, or runs `--opentide PATH` instead, which the report records as its `oracle`
+  (a different binary is not compared with this checkout's results). To compare two builds,
+  pass each one's binary, with `--lsp` and `--launcher` for those scenarios; `load` is always
+  this checkout's, and `--opentide` refuses a selection it would not cover, `opentide-lsp --release` for the language server and opentide-workspace's `load`
   example (`--release`) for `load`. `load` is the workspace's load and index: the oracle runs `Opentide.initialise()`
   with its interpreter (`ORACLE_LOAD`), the Rust engine the example, each timed spawn to exit.
 - `startup` (`opentide --version`, 20 ms) and, under `--engine rust`, `explain` (30 ms) run the
