@@ -896,12 +896,7 @@ fn deploy_through_platform(
         http: &http,
         cancel: &cancel,
     };
-    let request = DeployRequest {
-        rule_id: rule_id.to_owned(),
-        operation,
-        body,
-        policies: None,
-    };
+    let request = DeployRequest::new(rule_id.to_owned(), operation, body);
     let outcome = runtime.block_on(Graylog.deploy(cx, &request));
     (
         outcome,

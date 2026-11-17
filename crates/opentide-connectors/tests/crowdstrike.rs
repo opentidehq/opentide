@@ -130,12 +130,7 @@ fn crowdstrike_deploys_as_the_python_client_does() {
         cancel: &cancel,
     };
     let deploy = |operation, rule_id: &str, body: Vec<u8>| {
-        let request = DeployRequest {
-            rule_id: rule_id.to_owned(),
-            operation,
-            body,
-            policies: None,
-        };
+        let request = DeployRequest::new(rule_id.to_owned(), operation, body);
         block_on(async { deployer.deploy(cx, &request).await }).unwrap()
     };
     // One token for the run: the rules after the first reuse it.
@@ -204,12 +199,11 @@ fn crowdstrike_a_body_one_byte_off_fails_the_replay() {
         http: &http,
         cancel: &cancel,
     };
-    let request = DeployRequest {
-        rule_id: String::new(),
-        operation: Operation::Create,
-        body: create("Encoded PowerShelL"),
-        policies: None,
-    };
+    let request = DeployRequest::new(
+        String::new(),
+        Operation::Create,
+        create("Encoded PowerShelL"),
+    );
     let platform = Crowdstrike::new();
     let _ = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
     let mismatches = replay.proxy.verify();
