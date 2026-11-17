@@ -100,7 +100,7 @@ The same in the three runners; a difference anywhere else is a difference betwee
   changed.
 - **Written** with two-space indentation, keys in their order, UTF-8 as is and a final newline:
   `json.dumps(indent=2, ensure_ascii=False)`, `JSON.stringify(document, null, 2)`, and
-  `opentide_compare::json::write(Indented)`, which agree byte for byte on these documents.
+  `opentide_cli::json::document_text(document, true)`, which agree byte for byte on these documents.
 
 The runners run in one environment: xtask clears the CI providers' variables, the coding agents'
 and every `OPENTIDE_*` variable, which change what a command writes; the Python runner runs

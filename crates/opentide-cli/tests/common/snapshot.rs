@@ -19,10 +19,10 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::normalise::{Normaliser, Rule, Volatile};
 use opentide_cli::env::Env;
 use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
-use opentide_compare::normalise::{Normaliser, Rule, Volatile};
 
 use crate::replay::{self, Buffer};
 
@@ -474,7 +474,7 @@ fn normaliser(
     cassette: Option<&str>,
 ) -> Normaliser {
     let day = |at: std::time::SystemTime, days: u64| {
-        opentide_compare::normalise::utc_date(at - std::time::Duration::from_secs(days * 86_400))
+        crate::normalise::utc_date(at - std::time::Duration::from_secs(days * 86_400))
     };
     let fixture_text: Vec<String> = before
         .iter()
@@ -497,9 +497,9 @@ fn normaliser(
     let mut known_uuids = std::collections::BTreeSet::new();
     if case.normalise.contains(&Rule::FreshUuids) {
         for arg in &case.args {
-            known_uuids.extend(opentide_compare::normalise::uuids_in(arg));
+            known_uuids.extend(crate::normalise::uuids_in(arg));
         }
-        known_uuids.extend(replay::package_uuids().iter().cloned());
+        known_uuids.extend(package_uuids().iter().cloned());
     }
     Normaliser::new(
         &Volatile {
@@ -786,7 +786,14 @@ fn shrink(value: &mut serde_json::Value, limit: usize) {
 
 /// `(N bytes, sha256 HEX)`.
 fn digest_line(bytes: &[u8]) -> String {
-    let hex = opentide_compare::ledger::sha256_hex(bytes);
+    use sha2::Digest as _;
+    let hex =
+        sha2::Sha256::digest(bytes)
+            .iter()
+            .fold(String::with_capacity(64), |mut hex, byte| {
+                let _ = write!(hex, "{byte:02x}");
+                hex
+            });
     format!("({} bytes, sha256 {hex})\n", bytes.len())
 }
 
@@ -937,4 +944,28 @@ fn for_each_parallel(cases: &[Case], work: impl Fn(&Case) -> bool + Sync) -> Vec
     });
     failed.sort();
     failed.into_iter().map(|(_, id)| id).collect()
+}
+
+/// The UUIDs in the package's data (`src/opentide`), which no run mints:
+pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
+    static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        fn walk(dir: &Path, out: &mut std::collections::BTreeSet<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if let Ok(text) = std::fs::read_to_string(&path) {
+                    out.extend(crate::normalise::uuids_in(&text));
+                }
+            }
+        }
+        let mut out = std::collections::BTreeSet::new();
+        walk(&replay::repo().join("src/opentide"), &mut out);
+        out
+    })
 }

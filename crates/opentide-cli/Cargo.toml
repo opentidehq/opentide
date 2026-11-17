@@ -204,8 +204,6 @@ opentide-cassette.workspace = true
 # deployed and checked through the CLI flow against wiremock, no recording
 # of a real instance being shareable.
 wiremock.workspace = true
-# The goldens' normalisation and comparator (tests/common/snapshot.rs, tests/extract_sentinel.rs).
-opentide-compare.workspace = true
 tempfile = "3"
 # A scratch folder's canonical path without Windows' `\\?\` prefix, which
 # git and the binary print otherwise (tests/workspace_e2e.rs).

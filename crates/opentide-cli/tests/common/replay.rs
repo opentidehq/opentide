@@ -462,28 +462,3 @@ pub fn files(root: &Path) -> BTreeMap<String, Vec<u8>> {
     }
     out
 }
-
-/// The UUIDs in the package's data (`src/opentide`), which no run mints:
-/// `cargo xtask compare`'s `package_uuids`.
-pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
-    static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
-        std::sync::OnceLock::new();
-    CELL.get_or_init(|| {
-        fn walk(dir: &Path, out: &mut std::collections::BTreeSet<String>) {
-            let Ok(entries) = std::fs::read_dir(dir) else {
-                return;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    walk(&path, out);
-                } else if let Ok(text) = std::fs::read_to_string(&path) {
-                    out.extend(opentide_compare::normalise::uuids_in(&text));
-                }
-            }
-        }
-        let mut out = std::collections::BTreeSet::new();
-        walk(&repo().join("src/opentide"), &mut out);
-        out
-    })
-}
