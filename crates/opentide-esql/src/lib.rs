@@ -496,24 +496,6 @@ fn expression_depth(root: Node) -> (usize, Option<ByteSpan>) {
 fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     let problem = tree.problems.first()?;
     let at = problem.at.min(source.len());
-    if source.get(at..).is_none_or(|rest| rest.trim().is_empty()) {
-        // At the end of the query: on its last character. An empty span past
-        // it has no place in a host document (a Tide `query: |` block maps it
-        // to the start of the query), nor does the line after a block's newline.
-        let end = source.trim_end().len();
-        let start = source[..end]
-            .char_indices()
-            .next_back()
-            .map_or(end, |(i, _)| i);
-        return Some(Diagnostic::error(
-            codes::ESQL_PARSE_ERROR,
-            format!(
-                "ES|QL syntax error at the end of the query: {}",
-                problem.message
-            ),
-            range(source, ByteSpan::new(start, end)),
-        ));
-    }
     let rest = source.get(at..).unwrap_or("");
     // A bracket, pipe or operator is quoted alone; a word with its dots
     // (`host.name`) up to the next one: a whitespace-delimited chunk ran on
@@ -1935,7 +1917,7 @@ mod tests {
     }
 
     #[test]
-    fn an_error_at_the_end_sits_after_the_last_token() {
+    fn an_error_at_the_end_is_an_empty_span_where_the_text_stops() {
         let d = analyze("FROM logs-* | WHERE (\n")
             .diagnostics
             .into_iter()
@@ -1946,8 +1928,10 @@ mod tests {
             "{}",
             d.message
         );
-        // The last character, `(`: a span a host document can place.
-        assert_eq!((d.range.start.line, d.range.start.character), (0, 20));
-        assert_eq!((d.range.end.line, d.range.end.character), (0, 21));
+        // Where the text stops, after its final newline, as every engine
+        // reports it: a host document places it right after the query's last
+        // character (`opentide_tide::remap_span`, #1431).
+        assert_eq!((d.range.start.line, d.range.start.character), (1, 0));
+        assert_eq!((d.range.end.line, d.range.end.character), (1, 0));
     }
 }
