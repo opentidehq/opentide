@@ -12,7 +12,7 @@ use opentide_schema::configuration::checks::file_key;
 use opentide_schema::configuration::merge::to_json;
 use serde_json::Value;
 
-/// One document validated against both schemas.
+/// One document a schema validates.
 #[derive(Debug, Clone)]
 pub struct Instance {
     /// Where it comes from, for messages: `<source>:<path>`.
@@ -79,14 +79,11 @@ pub fn toml_instance(text: &str) -> Option<Value> {
     Some(to_json(&node))
 }
 
-/// Documents written for the comparison itself, each with the verdict both
-/// schemas must give it (`true`: accepted). They keep every compared
-/// document non-vacuous (a minimal `rule::1.0` object, which a workspace
-/// whose rules reference its own objectives still accepts; a file of a
-/// platform opentide has no model for) and sit on either side of each
-/// hand-written constraint (`exclusiveMinimum`, `minLength`, `pattern`), so
-/// a schema that moves a boundary gets a different verdict from the
-/// oracle's.
+/// Probe documents, each with the verdict the generated schema must give it
+/// (`true`: accepted). They keep the check non-vacuous (a minimal
+/// `rule::1.0` object; a file of a platform opentide has no model for) and
+/// sit on either side of each hand-written constraint (`exclusiveMinimum`,
+/// `minLength`, `pattern`), so a schema that moves a boundary fails.
 pub const PROBES: [(&str, &str, bool); 12] = [
     (
         "rule-1.0-minimal.yaml",

@@ -1,7 +1,7 @@
 //! The `opentide` command line of a recorded golden case, read by the
-//! product's own clap tree (`opentide_cli::tree`): the `validate diff`,
-//! `lint diff` and `payloads plan` commands run the options a case recorded,
-//! so a flag the product takes is a flag they take, with its value checks.
+//! product's own clap tree (`opentide_cli::tree`), so a flag the product
+//! takes is a flag its callers take, with its value checks. (Its first users,
+//! `validate diff`, `lint diff` and `payloads plan`, were retired, #1142.)
 
 use clap::Parser as _;
 use opentide_cli::tree::{Cli, RootCommand};

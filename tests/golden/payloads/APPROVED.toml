@@ -1,7 +1,8 @@
 # Approved differences between opentide-compile and the oracle's recorded
-# compile (UC-3.1, #823): the request bodies of the compile corpus (`[[diff]]`),
-# the oracle's own faults (`[[fault]]`) and the dump classes (`[[dump]]`),
-# which opentide-compile's tests/oracle.rs reads. Every field is required.
+# compile (UC-3.1, #823): the compile corpus's request bodies and previews
+# (`[[diff]]`), the oracle's own faults (`[[fault]]`) and the dump classes
+# (`[[dump]]`), which opentide-compile's tests/oracle.rs reads; `reason`,
+# `issue` and `changelog` are for the reader.
 # The `cargo xtask payloads` tool that wrote and checked this file, and the
 # dry-run plan entries it compared, were retired with the oracle (#1142).
 
