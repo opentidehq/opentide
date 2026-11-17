@@ -117,9 +117,9 @@ target_s = 0.7
 target_rss_mib = 95.4
 # Missed. The peak was the KQL catalogs parsed through a whole toml_edit document
 # (massif; 140.3 MiB on the EPYC 7763, run 43450448595, PR #1055). #1071 parses the
-# Azure Monitor and ASIM catalogs one array item at a time: release, heavy workspace,
-# one 4-vCPU Xeon @ 2.10 GHz, medians of 5 in two alternating rounds, 139.2/139.7 to
-# 112.5/112.9 MiB. What is left is no transient: massif's heap peak is 58 MiB, of which
+# Azure Monitor and ASIM catalogs one array item at a time: `cargo xtask bench`, one
+# 4-vCPU Xeon @ 2.30 GHz, two alternating rounds, 143.8/144.7 to 111.3/109.9 MiB
+# (lint 149.5/147.5 to 116.7/115.7). What is left is no transient: massif's heap peak is 58 MiB, of which
 # the workspace's parsed objects (about 20 MiB) and the KQL catalogs (about 14 MiB, the
 # reference's column descriptions held by the reference and by each profile) live to
 # the end; the binary's touched pages are about 30 MiB and the allocator's six thread
