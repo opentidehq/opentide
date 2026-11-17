@@ -962,8 +962,9 @@ fn tenant_failure(error: ConnectorError) -> DeployError {
 }
 
 /// A compiled rule read back from `createCustomRule` params (a
-/// [`DeployRequest`]'s body); `None` when the body is not such params, or is
-/// a whole JSON-RPC request carrying them.
+/// [`DeployRequest`]'s body), bare or as the `params` of a JSON-RPC request
+/// or of `{"params": ..., "actions_unsupported": true}`; `None` when the
+/// body is not such params.
 pub fn compiled_from_create(body: &[u8]) -> Option<GravityZoneRule> {
     let body: Json = serde_json::from_slice(body).ok()?;
     let params = body.get("params").unwrap_or(&body);
