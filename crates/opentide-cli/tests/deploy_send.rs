@@ -421,12 +421,7 @@ impl Deployer for Scripted {
             .unwrap()
             .push((request.rule_id.clone(), request.operation));
         let next = self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()));
-        Box::pin(async move {
-            next.map(|()| DeployOutcome {
-                remote_id: None,
-                operation: request.operation,
-            })
-        })
+        Box::pin(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
     }
 }
 

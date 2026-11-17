@@ -21,6 +21,7 @@ SDK = {
     "Connection",
     "DeployOutcome",
     "DeployPlan",
+    "DeployWarning",
     "LintReport",
     "LiveCheck",
     "OpentideError",

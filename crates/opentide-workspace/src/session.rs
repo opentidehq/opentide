@@ -8,9 +8,8 @@
 //! - every folder the workspace reads (its object folders, recursively, and
 //!   its configuration folders) is listed again and each entry's [`Stamp`]
 //!   compared with the one taken before the last load, so an edit, a new
-//!   file or a deleted one is read without being announced, as the Python
-//!   `serve` reads it ([`crate::Workspace::invalidate`] re-reads only those
-//!   files);
+//!   file or a deleted one is read without being announced
+//!   ([`crate::Workspace::invalidate`] re-reads only those files);
 //! - the paths [`Session::invalidate`] was told about since (`serve`'s
 //!   `invalidate`, a file the configuration points at) are invalidated too;
 //! - a workspace whose root moved (a marker created or deleted) is opened
@@ -27,7 +26,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::fs::{EntryKind, FileSystem, Stamp};
@@ -239,8 +238,10 @@ fn differences(before: &Fingerprint, after: &Fingerprint) -> Vec<Change> {
 
 /// The process-wide session.
 static GLOBAL: Mutex<Option<Session>> = Mutex::new(None);
-/// Whether [`Workspace::open`] goes through [`GLOBAL`] now.
-static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// How many [`Active`] guards live: [`Workspace::open`] goes through
+/// [`GLOBAL`] while any does. A count, not a flag, so activations nest and
+/// overlap across threads: the first guard to drop does not end another's.
+static ACTIVE: AtomicUsize = AtomicUsize::new(0);
 
 fn global() -> MutexGuard<'static, Option<Session>> {
     GLOBAL.lock().unwrap_or_else(PoisonError::into_inner)
@@ -248,11 +249,17 @@ fn global() -> MutexGuard<'static, Option<Session>> {
 
 /// While the returned guard lives, [`Workspace::open`] on a shared
 /// filesystem (the disk) goes through the process-wide session: the host
-/// (`serve`) activates it around a read-only run. Activations do not nest.
+/// (`serve`) activates it around a read-only run. Activations nest: the
+/// session stays active until the last guard drops.
 #[must_use = "the session is active only while the guard lives"]
 pub fn activate() -> Active {
-    ACTIVE.store(true, Ordering::SeqCst);
+    ACTIVE.fetch_add(1, Ordering::SeqCst);
     Active(())
+}
+
+/// Whether an [`activate`] guard lives now.
+pub fn is_active() -> bool {
+    ACTIVE.load(Ordering::SeqCst) > 0
 }
 
 /// The process-wide session's activation ([`activate`]).
@@ -261,7 +268,7 @@ pub struct Active(());
 
 impl Drop for Active {
     fn drop(&mut self) {
-        ACTIVE.store(false, Ordering::SeqCst);
+        ACTIVE.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -271,7 +278,7 @@ pub(crate) fn open_global(
     fs: &Arc<dyn FileSystem>,
     options: &Options,
 ) -> Option<Result<Workspace, OpenError>> {
-    if !ACTIVE.load(Ordering::SeqCst) || !fs.shared() {
+    if !is_active() || !fs.shared() {
         return None;
     }
     let mut guard = global();
@@ -301,6 +308,26 @@ pub fn stats() -> SessionStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Nested guards stack: dropping the inner one leaves the session
+    /// active for the outer one. (The only test in this binary that
+    /// activates the session, so the count is this test's.)
+    #[test]
+    fn nested_activations_stay_active_until_the_last_guard_drops() {
+        assert!(!is_active());
+        let outer = activate();
+        {
+            let _inner = activate();
+            assert!(is_active());
+        }
+        assert!(is_active(), "the inner guard's drop ended the outer one");
+        // Overlapping guards: the first one made is dropped first.
+        let second = activate();
+        drop(outer);
+        assert!(is_active());
+        drop(second);
+        assert!(!is_active());
+    }
 
     #[test]
     fn differences_name_each_created_changed_and_deleted_path() {

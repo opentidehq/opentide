@@ -344,7 +344,8 @@ platform_block! {
 // The named check `graylog_constraints`.
 // ---------------------------------------------------------------------------
 
-/// A value as Python's `str()` writes it: a string as itself.
+/// A value as text: a string as itself, any other value as YAML writes it
+/// (`true`, `1`, `null`).
 fn py_str(node: &Node) -> String {
     match &node.value {
         Value::Str(text) => text.clone(),
@@ -640,7 +641,7 @@ pub fn block_findings(raw: &Node) -> Vec<Finding> {
     }
     let aggregation = get(raw, "aggregation");
     if let Some(limit) = get(raw, "event_limit") {
-        // A boolean is a Python `int` but not an event limit.
+        // A boolean is no integer, so not an event limit.
         let integer = match limit.value {
             Value::Int(integer) => Some(integer),
             _ => None,

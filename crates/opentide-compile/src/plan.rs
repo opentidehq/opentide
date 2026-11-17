@@ -41,8 +41,8 @@ pub struct Scope {
     pub nested: Vec<String>,
 }
 
-/// Every `.yaml` and `.yml` file under `rules`, sorted as Python sorts paths
-/// (component by component), split by depth (`local_rule_scope`). `folder`
+/// Every `.yaml` and `.yml` file under `rules`, sorted component by
+/// component, split by depth (`local_rule_scope`). `folder`
 /// is the rules folder as the workspace spells it (`objects/rules`).
 pub fn local_scope(fs: &dyn FileSystem, rules: &Path, folder: &str) -> Scope {
     let mut found: Vec<(Vec<String>, PathBuf)> = Vec::new();

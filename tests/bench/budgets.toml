@@ -148,6 +148,13 @@ baseline_rss_mib = 133.6
 # profile, shared, load about 6): 1.13-1.40 s to 1.21-1.62 s, peak RSS 148-150 to
 # 156-158 MiB. Accepted at #1173's merge (#1217); the recorded reference
 # (policy.reference_unix), measured after it, now holds it.
+# #1233 removed the advisories' second parse: the queries check reads the tree lint
+# parsed (in chunks of 64 files, freed after each). Callgrind on the heavy workspace,
+# one thread, 08433c9b to the fix: 8.14 to 7.57 G instructions (-7.0%). `cargo xtask
+# bench`, two alternating rounds on one 4-vCPU machine (release, load under 1): median
+# 0.604/0.599 s to 0.598/0.601 s (the parse ran on idle cores), peak RSS 149.3/147.9 to
+# 151.0/150.8 MiB. lint has no plan target, so no absolute Rust budget to tighten: the
+# last result of the base branch holds the gain.
 
 [commands.lint_file]
 label = "lint --file"

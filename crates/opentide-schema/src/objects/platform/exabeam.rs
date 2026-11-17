@@ -636,7 +636,7 @@ fn number(node: &Node) -> bool {
     matches!(node.value, Value::Int(_) | Value::Float(_))
 }
 
-/// Whether `value` is one of `allowed` (Python's `value in allowed`).
+/// Whether `value` is a string and one of `allowed`.
 fn one_of(node: Option<&Node>, allowed: &[&str]) -> bool {
     text(node).is_some_and(|value| allowed.contains(&value))
 }

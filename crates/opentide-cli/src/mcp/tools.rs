@@ -1,6 +1,5 @@
-//! The tools ([`super::TOOLS`]): each returns the payload the Python tool of
-//! the same name returns (`src/opentide/mcp_server/tools.py`), wrapped as
-//! MCPServer wraps a dict: one text block holding the JSON, and `isError`
+//! The tools ([`super::TOOLS`]): each returns its payload as an MCP tool
+//! result: an object is one text block holding the JSON, and `isError`
 //! false; a list is one text block per item and its `structuredContent`; a
 //! refusal is one text block and `isError` true.
 
@@ -248,7 +247,7 @@ pub fn validation_report(
     queries: &str,
     context: &Context<'_>,
 ) -> Result<Json, String> {
-    // The Python tool asks for the workspace before it reads an argument.
+    // The workspace is required before any argument is read.
     if let Some(problem) = &context.workspace_problem {
         return Err(problem.clone());
     }

@@ -188,8 +188,8 @@ impl Server {
         I: tokio::io::AsyncRead + Send + Unpin + 'static,
         O: tokio::io::AsyncWrite + Send + Unpin + 'static,
     {
-        // A last message without its newline is read at end of input, as the
-        // Python server reads it: the transport only takes whole lines.
+        // A last message without its newline is still read at end of input:
+        // the transport only takes whole lines.
         let stdin = tokio::io::AsyncReadExt::chain(input, &b"\n"[..]);
         let service = match self.serve((stdin, rpc)).await {
             Ok(service) => service,
@@ -203,12 +203,12 @@ impl Server {
         Ok(())
     }
 
-    /// The answer to `tools/call`, as the Python server gives it.
+    /// The answer to `tools/call`.
     pub fn call(&self, name: &str, arguments: &serde_json::Map<String, Value>) -> Answer {
         Answer::Result(tools::call(name, arguments, &self.state.context(None)))
     }
 
-    /// The answer to `resources/read`, as the Python server gives it.
+    /// The answer to `resources/read`.
     pub fn read(&self, uri: &str) -> Answer {
         resources::read(uri, &self.state.context(None))
     }
@@ -304,8 +304,8 @@ impl ServerHandler for Server {
         }
     }
 
-    /// A method the server has no handler for: the Python server's answer,
-    /// `Method not found` with the method as its data.
+    /// A method the server has no handler for: `Method not found`, with the
+    /// method as its data.
     fn on_custom_request(
         &self,
         request: CustomRequest,

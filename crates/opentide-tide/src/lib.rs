@@ -509,18 +509,37 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         source: opentide_core::strip_bom(input.source),
         ..input
     };
-    opentide_core::with_line_index(input.source, || analyze_lines(input))
+    opentide_core::with_line_index(input.source, || {
+        let root = yaml::parse(input.source);
+        analyze_lines(input, root)
+    })
+}
+
+/// [`analyze`] on `document`, the host's parse of `input.source` after its
+/// byte-order mark ([`opentide_core::node::load`]): the object's tree is
+/// read from it, not parsed again (#1233).
+pub fn analyze_parsed(
+    input: AnalyzeInput<'_>,
+    document: &opentide_core::node::Document,
+) -> TideAnalyzeResult {
+    let input = AnalyzeInput {
+        source: opentide_core::strip_bom(input.source),
+        ..input
+    };
+    opentide_core::with_line_index(input.source, || {
+        analyze_lines(input, Some(yaml::root_of(document)))
+    })
 }
 
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-fn analyze_lines(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
+fn analyze_lines(input: AnalyzeInput<'_>, root: Option<Arc<Node>>) -> TideAnalyzeResult {
     let spec = HighlightSpec::load().expect("spec");
     let mut diagnostics = Vec::new();
-    // A file that is not YAML is `validate`'s `yaml_parse`: no finding here.
-    let root = yaml::parse(input.source);
+    // A file that is not YAML (`root` is `None`) is `validate`'s
+    // `yaml_parse`: no finding here.
     let Some(object) = root
         .as_deref()
         .and_then(|root| TideObject::from_node(input.source, root))
@@ -584,11 +603,28 @@ fn analyze_lines(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 /// ([`opentide_core::strip_bom`]).
 pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
     let source = opentide_core::strip_bom(source);
+    match yaml::parse(source) {
+        Some(root) => blocks_of(source, &root, workspace),
+        None => Vec::new(),
+    }
+}
+
+/// [`block_diagnostics`] on `document`, the host's parse of `source` after
+/// its byte-order mark: the object's tree is read from it, not parsed again
+/// (#1233).
+pub fn block_diagnostics_parsed(
+    source: &str,
+    document: &opentide_core::node::Document,
+    workspace: &[IndexedObject],
+) -> Vec<Diagnostic> {
+    let source = opentide_core::strip_bom(source);
+    blocks_of(source, &yaml::root_of(document), workspace)
+}
+
+/// [`block_diagnostics`] on the object whose tree is `root`.
+fn blocks_of(source: &str, root: &Arc<Node>, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
     let mut out = Vec::new();
-    let Some(root) = yaml::parse(source) else {
-        return out;
-    };
-    let Some(object) = TideObject::from_node(source, &root) else {
+    let Some(object) = TideObject::from_node(source, root) else {
         return out;
     };
     let object_type = object_schema_id(&object);
@@ -599,7 +635,7 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
             out.extend(elastic::dataset_declarations(source, block));
         }
         if object_type == "rule" {
-            out.extend(elastic::block_advisories(source, &root, workspace));
+            out.extend(elastic::block_advisories(source, root, workspace));
         }
     }
     if let Some(block) = configurations.and_then(|c| c.get("sysdig")) {

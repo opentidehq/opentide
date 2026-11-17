@@ -156,3 +156,49 @@ fn a_broken_run_highlights_each_token_once() {
         assert_eq!(spans.len(), all, "{source}: {tokens:?}");
     }
 }
+
+/// A pipe whose name or arguments the parser could not read is its syntax error alone: no
+/// `unrecognized pipe` naming the error region, no argument count over it.
+#[test]
+fn a_broken_pipe_is_only_its_syntax_error() {
+    for source in [
+        "process where true | in head 5",
+        "process where process.pid =| = \"4624\"",
+        "\"dns\" where (false) | tail 10\n\"dns\" where (false) | tail 10",
+        // A sample's pipe with no name is not also a pipe on a sample.
+        "sample by a [a where true] [b where true] | (",
+        // An argument that is an error region is not counted.
+        "process where true | head 1 x",
+    ] {
+        let codes: Vec<String> = analyze(source)
+            .diagnostics
+            .into_iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(codes, ["eql_parse_error"], "{source}");
+    }
+}
+
+/// A run with a trailing or doubled operator reports each finding once: the tree-sitter-shaped
+/// view nested such a run so that its last operand stood under two levels, and checked it
+/// twice.
+#[test]
+fn a_broken_run_reports_each_finding_once() {
+    for source in [
+        "process where a == 1 or b == c or",
+        "process where a == b or c == d or e == f or",
+        "process where a == b and c == d and",
+        "process where (c == d or or e == f) or",
+    ] {
+        let diagnostics = analyze(source).diagnostics;
+        let mut seen: Vec<String> = diagnostics.iter().map(|d| format!("{d:?}")).collect();
+        let all = seen.len();
+        seen.sort();
+        seen.dedup();
+        assert_eq!(seen.len(), all, "{source}: {diagnostics:#?}");
+        assert!(
+            diagnostics.iter().any(|d| d.code == "eql_field_comparison"),
+            "{source}: {diagnostics:#?}"
+        );
+    }
+}

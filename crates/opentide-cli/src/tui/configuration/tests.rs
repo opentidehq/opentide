@@ -234,8 +234,8 @@ fn yaml(text: &str) -> Node {
 }
 
 /// A platform card is enabled only by the boolean `true`, as `deploy` reads
-/// `enabled`: the string "false" (or "0") is not on, as it was under the
-/// Python CLI's truth value. Only `[platform] enabled` counts, the one place
+/// `enabled`: the string "false" (or "0") is not on, though it is a
+/// non-empty string. Only `[platform] enabled` counts, the one place
 /// `deploy` reads: a `flat` platform's `enabled: true` outside that table
 /// does not deploy, so the card is off. A tenant's name and a block's status
 /// are read as the strings they are.

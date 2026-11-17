@@ -45,6 +45,15 @@ mod lexer;
 mod parser;
 mod syntax;
 mod tree;
+
+// What the generated typed AST names from the crate root (`use crate::{..}`).
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+
+/// The typed AST `cargo xtask codegen` writes from `esql.ungram`.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
 pub mod version;
 
 pub use catalog::{Catalog, CommandRow, FunctionRow, Lifecycle, StackVersion, TypeRow};
@@ -102,6 +111,13 @@ pub fn parses() -> usize {
     tree::parses()
 }
 
+/// The lossless tree of `source`, for the typed AST's tests
+/// (`tests/ast_accessors.rs`). Not API.
+#[doc(hidden)]
+pub fn syntax_tree(source: &str) -> SyntaxNode {
+    SyntaxNode::new_root(parser::parse(source).green)
+}
+
 /// Analyze against every supported stack (8.19 and 9.x). Same as
 /// `analyze_for(source, None)`.
 pub fn analyze(source: &str) -> AnalyzeResult {
@@ -144,8 +160,10 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
     let to_range = |span: ByteSpan| range(source, span);
     walk(root, |node| {
-        for gate in gates::syntax_gates(node, source) {
-            diagnostics.extend(gate.diagnostic(target, to_range));
+        if let Some(syntax) = node.syntax() {
+            for gate in gates::syntax_gates(syntax, source) {
+                diagnostics.extend(gate.diagnostic(target, to_range));
+            }
         }
         if let Some((spacing, span)) = gates::command_spacing(node, source) {
             let word = node.child(0).map(|k| text(k, source)).unwrap_or_default();
@@ -633,6 +651,18 @@ pub(crate) fn command_name(node: Node, source: &str) -> Option<String> {
 
 fn display_name(name: &str) -> String {
     name.to_ascii_uppercase()
+}
+
+/// The command's keyword on a rowan node (`LIMIT`), for the version gates:
+/// [`keyword_span`] of a one-keyword command.
+pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
+    let start = usize::from(node.text_range().start());
+    let end = node
+        .children_with_tokens()
+        .next()
+        .filter(|first| first.as_token().is_some())
+        .map_or(start, |first| usize::from(first.text_range().end()));
+    ByteSpan::new(start, end.max(start + 1))
 }
 
 /// The command's leading keywords (`LOOKUP JOIN`, `INLINE STATS`).

@@ -423,7 +423,7 @@ impl Client {
     }
 }
 
-// ---- small readers of a block, with Python's semantics ----
+// ---- small readers of a block ----
 
 /// `block.get(key, default)`: the default only when the key is missing.
 fn get_or<'j>(block: &'j Json, key: &str, default: &'j Json) -> &'j Json {
@@ -2147,7 +2147,7 @@ pub fn legacy_event(code: &str) -> &'static str {
 /// (`_emit_rule_advisories`). *severity* is the compiled rule's Kibana
 /// `severity`; *suppression* the tenant's `setup.suppression`;
 /// *non_enterprise* whether the rule names a technique outside ATT&CK
-/// Enterprise. An unreadable duration is an error, as in Python.
+/// Enterprise. An unreadable duration is an error, never a skipped advisory.
 pub fn advisories(
     block: &Json,
     severity: &str,

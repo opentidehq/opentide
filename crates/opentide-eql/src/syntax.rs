@@ -17,6 +17,10 @@ macro_rules! kinds {
         #[repr(u16)]
         #[expect(
             non_camel_case_types,
+            reason = "the kinds are written as rust-analyzer's are, and named by the ungram"
+        )]
+        // Exported, clippy leaves the acronyms alone; included by path in a test, it does not.
+        #[allow(
             clippy::upper_case_acronyms,
             reason = "the kinds are written as rust-analyzer's are, and named by the ungram"
         )]

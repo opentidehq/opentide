@@ -12,6 +12,10 @@ depend on it.
 
 domain, tier 1: depends on opentide-core, -highlight, -ecs, -tide and every query engine. Used
 by opentide-lsp, opentide-wasm and opentide-native. The plan folds it into `opentide-workspace`.
+Its optional `queries` feature adds `queries` (the queries checks of `validate` and `lint`, on a
+`opentide_workspace::Workspace`) and with it opentide-schema and opentide-workspace; the module
+reads only through the workspace's `FileSystem`. opentide-cli and the facade's `queries` turn it
+on; the language server and the browser build leave it off.
 
 ## Invariants
 
