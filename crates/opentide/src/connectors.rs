@@ -547,6 +547,7 @@ impl From<opentide_connectors::connector::DeployError> for Error {
             status: failure.status,
             fields: failure.fields.clone(),
             partial: error.partial,
+            more_failures: error.more,
         }))
     }
 }
@@ -781,6 +782,20 @@ mod tests {
             panic!("{error:?}")
         };
         assert_eq!(failed.partial.as_deref(), Some(&created));
+        let twice = Error::from(
+            DeployError::rule(DeployFailure::new("google_secops_text_failed", "HTTP 400"))
+                .with_more(vec![DeployFailure::new(
+                    "google_secops_deployment_failed",
+                    "HTTP 500",
+                )]),
+        );
+        let Error::Deploy(twice) = twice else {
+            panic!("{twice:?}")
+        };
+        assert_eq!(
+            twice.more_failures[0].code,
+            "google_secops_deployment_failed"
+        );
     }
 
     #[test]

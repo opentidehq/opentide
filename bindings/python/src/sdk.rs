@@ -10,7 +10,7 @@
 //! A tenant operation returns an awaitable instead, which resolves to that
 //! text ([`tenants`]).
 //! A failure raises [`SdkError`] with `(code, message, detail, scope,
-//! status, fields, partial)`: the facade's stable [`opentide::Error::code`], or
+//! status, fields, partial, more)`: the facade's stable [`opentide::Error::code`], or
 //! `usage_invalid_choice` for an option the command line would refuse;
 //! `detail` is the vendor's own words when a tenant gave a reason, else
 //! `None`. A failed deploy's `scope` (`"rule"` or `"tenant"`), HTTP `status`
@@ -32,7 +32,7 @@ create_exception!(
     opentide._native.sdk,
     SdkError,
     PyException,
-    "A call the SDK could not run: `args` is `(code, message, detail, scope, status, fields, partial)`."
+    "A call the SDK could not run: `args` is `(code, message, detail, scope, status, fields, partial, more)`."
 );
 
 /// [`SdkError`]'s class, as `opentide._native.sdk` exports it.
@@ -70,7 +70,28 @@ fn failure(code: &str, message: impl Into<String>) -> PyErr {
         None::<u16>,
         Vec::<(String, String)>::new(),
         None::<String>,
+        Vec::<Further>::new(),
     ))
+}
+
+/// A further failure of the same deploy, as `SdkError`'s eighth item reads
+/// it: its code, message, HTTP status and fields.
+type Further = (String, String, Option<u16>, Vec<(String, String)>);
+
+/// A failed deploy's further failures, in order, as [`Further`] items.
+fn further(failed: &opentide::DeployFailed) -> Vec<Further> {
+    failed
+        .more_failures
+        .iter()
+        .map(|further| {
+            (
+                further.code.to_owned(),
+                further.message.clone(),
+                further.status,
+                further.fields.clone(),
+            )
+        })
+        .collect()
 }
 
 fn usage(message: String) -> PyErr {
@@ -80,11 +101,14 @@ fn usage(message: String) -> PyErr {
 /// The facade's error as [`SdkError`]: its code, its message and, for a
 /// tenant's refusal, the vendor's words. A failed deploy's also says what it stops
 /// (`"rule"` or `"tenant"`), the HTTP status, its fields (pairs, in
-/// order), and what it did before failing, as the document a deploy returns;
-/// any other error's are `None`, `None`, empty and `None`.
+/// order), what it did before failing, as the document a deploy returns, and
+/// its further failures, in order; any other error's are `None`, `None`,
+/// empty, `None` and empty.
 fn from_facade(error: &opentide::Error) -> PyErr {
-    let (detail, scope, status, fields, partial) = match error {
-        opentide::Error::Connector { detail, .. } => (detail.clone(), None, None, Vec::new(), None),
+    let (detail, scope, status, fields, partial, more) = match error {
+        opentide::Error::Connector { detail, .. } => {
+            (detail.clone(), None, None, Vec::new(), None, Vec::new())
+        }
         opentide::Error::Deploy(failed) => (
             failed.detail.clone(),
             Some(match failed.scope {
@@ -97,8 +121,9 @@ fn from_facade(error: &opentide::Error) -> PyErr {
                 .partial
                 .as_deref()
                 .and_then(|done| serde_json::to_string(&tenants::DeployJson::from(done)).ok()),
+            further(failed),
         ),
-        _ => (None, None, None, Vec::new(), None),
+        _ => (None, None, None, Vec::new(), None, Vec::new()),
     };
     SdkError::new_err((
         error.code().to_owned(),
@@ -108,6 +133,7 @@ fn from_facade(error: &opentide::Error) -> PyErr {
         status,
         fields,
         partial,
+        more,
     ))
 }
 
@@ -426,7 +452,7 @@ pub mod module {
     use super::{Workspace, run_json};
 
     /// The error every call raises: `args` is `(code, message, detail, scope,
-    /// status, fields, partial)`.
+    /// status, fields, partial, more)`.
     #[pymodule_export]
     #[allow(
         non_upper_case_globals,
@@ -438,6 +464,31 @@ pub mod module {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_deploys_further_failures_are_sdk_errors_eighth_item() {
+        use opentide::connectors::{DeployError, DeployFailure};
+        let error = opentide::Error::from(
+            DeployError::rule(DeployFailure::new("google_secops_text_failed", "HTTP 400"))
+                .with_more(vec![
+                    DeployFailure::new("google_secops_deployment_failed", "HTTP 500")
+                        .with_status(500)
+                        .with_field("detail", "down"),
+                ]),
+        );
+        let opentide::Error::Deploy(failed) = &error else {
+            panic!("{error:?}")
+        };
+        assert_eq!(
+            super::further(failed),
+            [(
+                "google_secops_deployment_failed".to_owned(),
+                "HTTP 500".to_owned(),
+                Some(500),
+                vec![("detail".to_owned(), "down".to_owned())],
+            )]
+        );
+    }
 
     #[test]
     fn queries_modes_are_the_command_lines() {

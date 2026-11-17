@@ -158,6 +158,7 @@ impl DeployRequest {
                     failure,
                     connector: error.connector,
                     partial: error.partial,
+                    more: error.more,
                 }
             }
             _ => error,
@@ -371,6 +372,11 @@ pub struct DeployError {
     /// it; the other platforms do as their deploy moves onto their
     /// `Deployer`.
     pub partial: Option<Box<DeployOutcome>>,
+    /// The rule's further failures, in order, when one deploy failed more
+    /// than once (a Google SecOps rule under a DISABLEMENT whose text could
+    /// not be written, then `google_secops_deployment_failed`); `failure` is
+    /// the first. Empty for most failures.
+    pub more: Vec<DeployFailure>,
 }
 
 impl DeployError {
@@ -381,6 +387,7 @@ impl DeployError {
             failure,
             connector: None,
             partial: None,
+            more: Vec::new(),
         }
     }
 
@@ -391,7 +398,16 @@ impl DeployError {
             failure,
             connector: None,
             partial: None,
+            more: Vec::new(),
         }
+    }
+
+    /// The same failure, followed by *more* failures of the same rule, after
+    /// any it already has ([`DeployError::more`]).
+    #[must_use]
+    pub fn with_more(mut self, more: impl IntoIterator<Item = DeployFailure>) -> Self {
+        self.more.extend(more);
+        self
     }
 
     /// The same failure, after the deploy did *partial*
@@ -468,6 +484,7 @@ impl From<ConnectorError> for DeployError {
             },
             connector: Some(Box::new(error)),
             partial: None,
+            more: Vec::new(),
         }
     }
 }
@@ -1084,6 +1101,16 @@ mod tests {
         );
         assert_eq!(refused.failure.code, "deployment_state_ignored");
         assert_eq!(refused.partial.as_deref(), Some(&recreated));
+        // The rule's further failures follow the first, through a refusal too.
+        let more = vec![DeployFailure::new(
+            "google_secops_deployment_failed",
+            "HTTP 500",
+        )];
+        let twice = request.refused_recreate(
+            DeployError::from(ConnectorError::refused("sysdig", "soc", "kept out", None))
+                .with_more(more.clone()),
+        );
+        assert_eq!(twice.more, more);
     }
 
     #[test]
