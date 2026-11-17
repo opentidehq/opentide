@@ -686,7 +686,8 @@ impl Run<'_> {
                 command: Some(crate::tree::LspCommand::Start(_)),
             })) => {
                 // The server blocks on stdin and polls no interrupt: Ctrl-C
-                // ends it at once, with 130, as it ends the Python host.
+                // ends it at once, with exit 130 (interrupted), as for every
+                // other command.
                 self.host.interrupt.stop_at_once();
                 // stdout is the protocol's: nothing is emitted around the server.
                 return crate::commands::lsp::start_stdio(&self.host.version, err);
