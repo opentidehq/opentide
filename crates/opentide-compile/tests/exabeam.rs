@@ -464,7 +464,7 @@ fn the_deployment_follows_the_status() {
 }
 
 /// A status that is not a string is named in its JSON form, `true` or
-/// `null` when missing, never Python's `True` or `None` (#1068).
+/// `null` when missing, never `True` or `None` (#1068).
 #[test]
 fn a_status_is_named_in_its_json_form() {
     for (status, named) in [("    status: true\n", "true"), ("", "null")] {

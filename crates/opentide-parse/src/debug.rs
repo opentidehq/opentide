@@ -21,6 +21,27 @@ where
     (!parse.errors.is_empty(), kinds)
 }
 
+/// For each syntax error of `parse`, the `Debug` names of the nodes it was
+/// recorded in ([`SyntaxError::within`](crate::SyntaxError::within)), root
+/// first: what the corpus gate of `opentide-analysis` reads to check that an
+/// invalid fixture fails inside the production it names.
+#[must_use]
+pub fn debug_error_kinds<L: rowan::Language>(parse: &crate::Parse) -> Vec<Vec<String>>
+where
+    L::Kind: std::fmt::Debug,
+{
+    parse
+        .errors
+        .iter()
+        .map(|e| {
+            e.within
+                .iter()
+                .map(|&k| format!("{:?}", L::kind_from_raw(k)))
+                .collect()
+        })
+        .collect()
+}
+
 /// A tree as indented text, one element per line (`KIND@start..end`, and a
 /// token's text), for insta snapshots. `name` spells a kind. Iterative, so
 /// any depth renders.

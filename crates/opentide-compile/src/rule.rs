@@ -80,8 +80,9 @@ impl Rule {
     }
 }
 
-/// A UUID as Python's `uuid.UUID` writes it: lowercase, hyphenated. Text that
-/// is not a UUID stays as written.
+/// A UUID in its canonical form: lowercase, hyphenated (surrounding blanks,
+/// braces and a `urn:uuid:` prefix dropped). Text that is not a UUID stays as
+/// written.
 pub fn canonical_uuid(text: &str) -> String {
     let trimmed = text.trim();
     let bare = trimmed

@@ -623,3 +623,20 @@ fn a_rule_without_a_block_is_a_compile_failure() {
     assert_eq!(error.code, "compile_failed");
     assert!(error.reason.contains("has no bitdefender block"));
 }
+
+/// `is_yara` reads the block's kind: the YARA fixture is one, the custom
+/// detection fixture (whose block reads) is not, so the deploy's count of
+/// YARA rules leaves detection rules out by their kind, not by a failed read.
+#[test]
+fn is_yara_reads_the_kind_of_a_block_that_reads() {
+    for (file, yara) in [
+        ("rule-bitdefender-yara-1.0.yaml", true),
+        ("rule-bitdefender-detection-1.0.yaml", false),
+    ] {
+        let (text, uuid) = fixture_rule(file);
+        with_rule(text, &uuid, |_, rule| {
+            assert!(bitdefender::block_of(rule).is_ok(), "{file}");
+            assert_eq!(bitdefender::is_yara(rule), yara, "{file}");
+        });
+    }
+}

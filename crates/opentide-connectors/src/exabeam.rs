@@ -38,8 +38,9 @@ use tokio::sync::Mutex;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
+    flatten,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -1505,6 +1506,11 @@ impl Deployer for Exabeam {
                     StateChange::Forget => None,
                 },
                 operation: request.operation,
+                warnings: outcome
+                    .warnings
+                    .into_iter()
+                    .map(|warning| DeployWarning::new(warning.code, warning.message))
+                    .collect(),
             })
         })
     }

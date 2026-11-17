@@ -27,7 +27,7 @@ Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
   PEP 695 generics). The package supports `>=3.10`.
 - **Only on Windows** — `\` paths, CRLF (`write_text` without `newline=`), case-insensitive
   names (`Objects` vs `objects`), console encoding.
-- **Only in one E2E shard** — run that shard; then `PYTEST_WORKERS=0` on the single test. A
+- **Only under xdist** (the `python` job runs the E2E suite with workers) — run the file; then `PYTEST_WORKERS=0` on the single test. A
   test that passes serially and fails under xdist leaks global state (registry caches,
   `os.environ` flags such as `DEPLOYMENT_ERROR_RAISED`, cwd) — fix the leak, don't pin order.
 - **Coverage gate** — the gate reads the 3.14 cell. Cover the new lines; do not add

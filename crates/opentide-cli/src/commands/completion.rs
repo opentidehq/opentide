@@ -2,10 +2,10 @@
 //! shell's completion script for `opentide`, written by `clap_complete` from
 //! the command tree.
 //!
-//! The options are the Python CLI's: each takes the shell as the word after
-//! it (`opentide --show-completion zsh`), or completes for the shell it runs
-//! in. `--install-completion` writes the script where Typer wrote it and adds
-//! the line that loads it to the shell's start-up file, once:
+//! Each option takes the shell as the word after it (`opentide
+//! --show-completion zsh`), or completes for the shell it runs in.
+//! `--install-completion` writes the script and adds the line that loads it
+//! to the shell's start-up file, once:
 //!
 //! | Shell | Script | Loaded by |
 //! |-------|--------|-----------|

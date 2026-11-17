@@ -5,31 +5,27 @@ input_file: crates/testdata/corpus/cql/function_call__invalid.cql
 ---
 SOURCE_FILE@0..35
   PIPELINE@0..34
-    AND_FILTER@0..21
-      FREE_TEXT@0..4
-        UNQUOTED_PATTERN@0..4
-          WORD@0..4 "rdns"
-      WHITESPACE@4..5 " "
-      PARENTHESIZED_FILTER@5..21
-        L_PAREN@5..6 "("
-        FIELD_FILTER@6..21
-          FIELD_NAME@6..11
-            WORD@6..11 "field"
-          EQ@11..12 "="
-          UNQUOTED_PATTERN@12..21
-            WORD@12..21 "ipaddress"
-    ERROR@21..22
-      COMMA@21..22 ","
-    FIELD_FILTER@22..33
-      FIELD_NAME@22..24
-        WORD@22..24 "as"
-      EQ@24..25 "="
-      UNQUOTED_PATTERN@25..33
-        WORD@25..33 "hostname"
-    ERROR@33..34
+    FUNCTION_CALL@0..34
+      FUNCTION_NAME@0..4
+        FUNCTION_NAME_TOKEN@0..4 "rdns"
+      L_PAREN@4..5 "("
+      ARGUMENT_LIST@5..33
+        NAMED_ARGUMENT@5..20
+          ARGUMENT_NAME@5..10
+            WORD@5..10 "field"
+          EQ@10..11 "="
+          FIELD_NAME@11..20
+            WORD@11..20 "ipaddress"
+        COMMA@20..21 ","
+        ARGUMENT@21..21
+        COMMA@21..22 ","
+        NAMED_ARGUMENT@22..33
+          ARGUMENT_NAME@22..24
+            WORD@22..24 "as"
+          EQ@24..25 "="
+          FIELD_NAME@25..33
+            WORD@25..33 "hostname"
       R_PAREN@33..34 ")"
   WHITESPACE@34..35 "\n"
 
-21..21: unexpected (expected R_PAREN)
-21..21: unexpected (expected R_PAREN)
-33..33: unexpected
+21..21: expected an argument

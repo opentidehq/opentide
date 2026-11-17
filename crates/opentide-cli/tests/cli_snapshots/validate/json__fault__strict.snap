@@ -2364,19 +2364,19 @@ exit: 1
       },
       {
         "code": "lucene_parse_error",
-        "column": 7,
+        "column": 19,
         "context": {
           "language": "lucene",
           "platform": "elastic",
           "position": {
-            "column": 7,
-            "end_column": 19,
+            "column": 19,
+            "end_column": 20,
             "end_line": 59,
             "line": 59
           },
           "source": "engine"
         },
-        "end_column": 19,
+        "end_column": 20,
         "end_line": 59,
         "explain": "opentide explain lucene_parse_error",
         "field_path": [

@@ -8,8 +8,8 @@
 //! plain character, and a `<` that does not start `<n-m>` fails to compile.
 //! There are no inline flags: `(?i)` matches the text `?i`.
 
-use crate::tree::Node;
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{Diagnostic, codes, span_to_range};
+use opentide_parse::ast::AstNode;
 
 /// The value of an EQL string literal, or `None` for forms the lexer
 /// rejects (those are reported elsewhere).
@@ -101,25 +101,27 @@ pub(crate) fn scan(pattern: &str) -> Findings {
 }
 
 /// `eql_regex` warnings for each pattern of a `regex` / `regex~` predicate.
-pub(crate) fn check_regex(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let operator = node
-        .child_by_field_name("operator")
-        .map(|o| &source[o.start_byte()..o.end_byte()])
-        .unwrap_or("");
-    if !operator.starts_with("regex") {
+pub(crate) fn check_regex(
+    node: &crate::ast::PredicateExpression,
+    source: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    if !node
+        .operator()
+        .is_some_and(|o| o.text().starts_with("regex"))
+    {
         return;
     }
-    let mut cursor = node.walk();
-    for value in node.children_by_field_name("values", &mut cursor) {
-        if value.kind() != "string" {
+    for value in node.exprs().skip(1) {
+        let crate::ast::Expr::String(value) = value else {
             continue;
-        }
-        let raw = &source[value.start_byte()..value.end_byte()];
-        let Some(pattern) = string_value(raw) else {
+        };
+        let at = crate::nav::span(value.syntax());
+        let Some(pattern) = string_value(&source[at.start..at.end]) else {
             continue;
         };
         let f = scan(&pattern);
-        let range = span_to_range(source, ByteSpan::new(value.start_byte(), value.end_byte()));
+        let range = span_to_range(source, at);
         if !f.anchors.is_empty() {
             let (list, is) = quote_list(&f.anchors);
             out.push(Diagnostic::warning(

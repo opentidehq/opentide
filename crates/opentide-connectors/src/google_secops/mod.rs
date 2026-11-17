@@ -27,8 +27,8 @@ use opentide_compile::google_secops::{default_endpoint, instance_resource};
 use opentide_schema::objects::platform::google_secops::assemble::AssembledRule;
 
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryOutcome, QueryRequest, QueryRunner, TenantContext,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryOutcome, QueryRequest, QueryRunner, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -400,6 +400,11 @@ impl Deployer for GoogleSecops {
                     deploy::StateChange::Forget => None,
                 },
                 operation: request.operation,
+                warnings: outcome
+                    .warnings
+                    .into_iter()
+                    .map(|warning| DeployWarning::new(warning.code, warning.detail))
+                    .collect(),
             })
         })
     }

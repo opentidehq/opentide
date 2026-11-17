@@ -14,8 +14,8 @@ use crate::fs::{EntryKind, FileSystem};
 pub const OBJECT_SUFFIXES: [&str; 2] = [".yaml", ".yml"];
 /// Scratch output some tools write next to objects; never an object.
 pub const DEBUG_SUFFIXES: [&str; 2] = [".debug.yaml", ".debug.yml"];
-/// How deep a walk under an object folder goes. Python's `rglob` has no
-/// bound; this one only keeps a pathological tree from exhausting memory.
+/// How deep a walk under an object folder goes: a bound that only keeps a
+/// pathological tree from exhausting memory.
 pub const MAX_DEPTH: usize = 64;
 
 /// Whether `name` is an object file name: `*.yaml` or `*.yml`, not
@@ -26,7 +26,7 @@ pub fn is_object_file_name(name: &str) -> bool {
 }
 
 /// The object files directly in a folder, and those in its subfolders, each
-/// sorted as Python sorts paths.
+/// sorted component by component.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Scan {
     /// Objects.

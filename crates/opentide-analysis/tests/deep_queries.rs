@@ -170,15 +170,7 @@ fn analyzes_cleanly_on(
     analyze: fn(&str) -> Vec<Diagnostic>,
 ) {
     let diagnostics = on_stack(name, size, move || analyze(&query));
-    let failures: Vec<_> = diagnostics
-        .iter()
-        .map(|d| d.code.as_str())
-        .filter(|code| {
-            code.ends_with("_parse_error")
-                || ((code.contains("depth") || code.contains("deep"))
-                    && !VENDOR_DEPTH_CODES.contains(code))
-        })
-        .collect();
+    let failures = stopped(&diagnostics);
     assert!(failures.is_empty(), "{name}: {failures:?}");
 }
 
@@ -431,4 +423,179 @@ fn lucene_nest_floor() {
     analyzes_cleanly("lucene nest", q, |q| {
         opentide_lucene::analyze(q).diagnostics
     });
+}
+
+/// `n` levels of `prefix`, each opening a parenthesis after the language's precedence chain
+/// (`a or b and not (`), closed on `atom`.
+fn ladder(prefix: &str, atom: &str, n: usize) -> String {
+    format!("{}{atom}{}", prefix.repeat(n), ")".repeat(n))
+}
+
+/// One language's precedence chain inside every level of nesting (#1427).
+struct Ladder {
+    name: &'static str,
+    /// The query around the expression.
+    wrap: fn(&str) -> String,
+    /// A level: `or`, `and`, `not` and an opening parenthesis.
+    prefix: &'static str,
+    atom: &'static str,
+    /// The deepest ladder that must analyse cleanly: the nesting floor, or, where the
+    /// language's grammar spends more than one of its `max_depth` levels on a step of
+    /// the chain (a recursive `not`, a precedence level), its limit for this shape.
+    clean: usize,
+    analyze: fn(&str) -> Vec<Diagnostic>,
+}
+
+/// The diagnostics that say the engine stopped: a parse error, or a depth limit of its own.
+fn stopped(diagnostics: &[Diagnostic]) -> Vec<&str> {
+    diagnostics
+        .iter()
+        .map(|d| d.code.as_str())
+        .filter(|code| {
+            code.ends_with("_parse_error")
+                || ((code.contains("depth") || code.contains("deep"))
+                    && !VENDOR_DEPTH_CODES.contains(code))
+        })
+        .collect()
+}
+
+/// The contract of ADR 0012's depth section, on each pure-Rust parser: the floor is
+/// defined for parenthesised nesting (the `*_nest_floor` tests), and the toolkit charges a
+/// level the tree nodes it opens. With the language's precedence chain inside every level,
+/// a ladder analyses cleanly at the floor, or at the limit its own grammar sets for the
+/// shape; far past it, the engine stops with one error: never an abort, never more.
+#[test]
+fn a_precedence_chain_in_each_level_stops_with_one_error() {
+    let ladders = [
+        Ladder {
+            name: "kql",
+            wrap: kql,
+            prefix: "a == 1 or b == 2 and not(",
+            atom: "c == 3",
+            clean: KQL_NEST_FLOOR,
+            analyze: kql_diagnostics,
+        },
+        Ladder {
+            name: "spl",
+            wrap: |e| format!("index=x {e}"),
+            prefix: "a=1 OR b=2 AND NOT (",
+            atom: "c=3",
+            clean: SPL_NEST_FLOOR,
+            analyze: |q| opentide_spl::analyze(q).diagnostics,
+        },
+        // `not` is a level of CQL's `max_depth` (1,000): two a step.
+        Ladder {
+            name: "cql",
+            wrap: str::to_string,
+            prefix: "a=1 or b=2 and not (",
+            atom: "c=3",
+            clean: 500,
+            analyze: |q| opentide_cql::analyze(q).diagnostics,
+        },
+        // `not` is a level of YARA-L's `max_depth` (1,100): two a step.
+        Ladder {
+            name: "yaral",
+            wrap: yaral,
+            prefix: "$e.principal.ip = \"y\" or $e.target.ip = \"z\" and not (",
+            atom: YARAL_TERM,
+            clean: 549,
+            analyze: |q| opentide_yaral::analyze(q).diagnostics,
+        },
+        // `NOT` is a level of Exabeam's `max_depth` (200): two a step.
+        Ladder {
+            name: "exabeam",
+            wrap: str::to_string,
+            prefix: "vendor:\"x\" OR vendor:\"y\" AND NOT (",
+            atom: "vendor:\"z\"",
+            clean: 99,
+            analyze: |q| opentide_exabeam::analyze(q).diagnostics,
+        },
+        Ladder {
+            name: "falco",
+            wrap: str::to_string,
+            prefix: "proc.name = a or proc.name = b and not (",
+            atom: "proc.name = c",
+            clean: FALCO_NEST_FLOOR,
+            analyze: |q| opentide_falco::analyze(q).diagnostics,
+        },
+        // ES|QL's descent enters a level for `OR`, `AND`, `NOT` and the parenthesis:
+        // four of its 1,100 a step.
+        Ladder {
+            name: "esql",
+            wrap: esql,
+            prefix: "a == 1 OR b == 2 AND NOT (",
+            atom: "c == 3",
+            clean: 274,
+            analyze: |q| opentide_esql::analyze(q).diagnostics,
+        },
+        // EQL's likewise: four of its 1,024 a step.
+        Ladder {
+            name: "eql",
+            wrap: eql,
+            prefix: "a == 1 or b == 2 and not (",
+            atom: "c == 3",
+            clean: 255,
+            analyze: |q| opentide_eql::analyze(q).diagnostics,
+        },
+        Ladder {
+            name: "kuery",
+            wrap: str::to_string,
+            prefix: "a:1 or b:2 and not (",
+            atom: "c:3",
+            clean: KUERY_NEST_FLOOR,
+            analyze: |q| opentide_kuery::analyze(q, opentide_lucene::parses).diagnostics,
+        },
+        Ladder {
+            name: "lucene",
+            wrap: str::to_string,
+            prefix: "a:1 OR b:2 AND NOT (",
+            atom: "c:3",
+            clean: LUCENE_NEST_FLOOR,
+            analyze: |q| opentide_lucene::analyze(q).diagnostics,
+        },
+    ];
+    for l in ladders {
+        let stack = if l.name == "kql" {
+            KQL_STACK
+        } else {
+            SMALL_STACK
+        };
+        let query = (l.wrap)(&ladder(l.prefix, l.atom, l.clean));
+        analyzes_cleanly_on(l.name, stack, query, l.analyze);
+        let far = (l.wrap)(&ladder(l.prefix, l.atom, 5_000));
+        let analyze = l.analyze;
+        let diagnostics = on_stack(l.name, stack, move || analyze(&far));
+        let stopped = stopped(&diagnostics);
+        assert_eq!(stopped.len(), 1, "{}: {stopped:?}", l.name);
+    }
+}
+
+/// SPL's eval chain through every precedence inside each call, closed by two parentheses a
+/// level: `f(a OR b AND NOT c == d + e * -(`. It aborted a 1 MB stack at 450 levels, the
+/// operands recursing unchecked (#1473); each step is now six of SPL's 1,024 levels.
+fn spl_eval_ladder(n: usize) -> String {
+    format!(
+        "index=x | eval z={}1{}",
+        "f(a OR b AND NOT c == d + e * -(".repeat(n),
+        "))".repeat(n)
+    )
+}
+
+/// The eval ladder analyses cleanly at the limit its six levels a step leave (170, which
+/// take 1,020 of 1,024), and past it, up to a million characters of it, is one parse error:
+/// never an abort, and linear.
+#[test]
+fn spl_eval_ladder_stops_with_one_error() {
+    analyzes_cleanly("spl eval ladder", spl_eval_ladder(170), |q| {
+        opentide_spl::analyze(q).diagnostics
+    });
+    let step = "f(a OR b AND NOT c == d + e * -(".len() + "))".len();
+    for n in [171, 450, 1_000_000 / step] {
+        let q = spl_eval_ladder(n);
+        let diagnostics = on_small_stack("spl eval ladder past", move || {
+            opentide_spl::analyze(&q).diagnostics
+        });
+        let stopped = stopped(&diagnostics);
+        assert_eq!(stopped.len(), 1, "{n}: {stopped:?}");
+    }
 }
