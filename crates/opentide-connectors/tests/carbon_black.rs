@@ -272,6 +272,9 @@ fn carbon_black_the_deployer_sends_what_the_python_deployer_sent() {
         .collect();
     let deleted = warnings[4].first().unwrap();
     assert_eq!(deleted.code, "report_deleted_with_rule");
+    // It names the report, as the command line logs it.
+    let fifth = &items(inputs.get("deploy").unwrap())[4];
+    assert_eq!(deleted.message, plan(fifth, 0).report);
     assert!(!deleted.raised);
     assert!(warnings[..4].iter().all(Vec::is_empty), "{warnings:?}");
     // The watchlist that does not exist fails the rule.
