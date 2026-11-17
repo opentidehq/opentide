@@ -155,7 +155,10 @@ pub fn run(
     }
     if options.mcp {
         match files::write_mcp_config(stage, root, "vscode") {
-            Ok(relative) => written.push(relative),
+            Ok((relative, kept)) => {
+                written.push(relative);
+                warnings.extend(kept);
+            }
             Err(problem) => warnings.push(files::mcp_config_warning(".vscode/mcp.json", &problem)),
         }
     }

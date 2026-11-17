@@ -17,14 +17,14 @@ function run(argv, options = {}) {
   return spawnSync(process.execPath, [CLI, ...argv], { encoding: 'utf8', ...options })
 }
 
-test('--json commands prints the command tree runJson returns', () => {
+test('--json commands prints the command tree runJson returns', async () => {
   const printed = run(['--json', 'commands'])
   assert.equal(printed.status, 0, printed.stderr)
   assert.equal(printed.stderr, '')
   assert.ok(printed.stdout.endsWith('\n'))
   // The same document but for the time each run took.
   const tree = JSON.parse(printed.stdout)
-  const returned = opentide.runJson(['commands'])
+  const returned = await opentide.runJson(['commands'])
   delete tree.duration_ms
   delete returned.duration_ms
   assert.equal(JSON.stringify(tree), JSON.stringify(returned))

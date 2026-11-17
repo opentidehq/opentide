@@ -44,7 +44,8 @@ use opentide_compile::bitdefender::{
 use opentide_compile::json::Object;
 
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, Operation, Platform,
+    TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -859,6 +860,12 @@ impl Deployer for Bitdefender {
                         StateChange::Forget => None,
                     },
                     operation: request.operation,
+                    warnings: outcome
+                        .warnings
+                        .into_iter()
+                        .filter(|warning| warning.raised)
+                        .map(|warning| DeployWarning::new(warning.event, warning.detail))
+                        .collect(),
                 }),
             }
         })

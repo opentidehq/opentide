@@ -389,6 +389,136 @@ pub const IDS: [&str; COUNT] = {
     out
 };
 
+/// A built-in platform, by name: what code matches on in place of its
+/// identifier's text. Its variants are [`PLATFORMS`]'s rows, in their order.
+/// A platform plugin's identifier is none of them (`PlatformId::parse` gives
+/// `None`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PlatformId {
+    /// `sentinel`: Microsoft Sentinel.
+    Sentinel,
+    /// `defender_for_endpoint`: Microsoft Defender for Endpoint.
+    DefenderForEndpoint,
+    /// `splunk`: Splunk Enterprise Security.
+    Splunk,
+    /// `sentinel_one`: SentinelOne.
+    SentinelOne,
+    /// `crowdstrike`: CrowdStrike Falcon.
+    Crowdstrike,
+    /// `harfanglab`: HarfangLab.
+    Harfanglab,
+    /// `carbon_black_cloud`: Carbon Black Cloud.
+    CarbonBlackCloud,
+    /// `elastic`: Elastic Security.
+    Elastic,
+    /// `sysdig`: Sysdig Secure.
+    Sysdig,
+    /// `bitdefender`: Bitdefender GravityZone.
+    Bitdefender,
+    /// `graylog`: Graylog.
+    Graylog,
+    /// `exabeam`: Exabeam New-Scale SIEM.
+    Exabeam,
+    /// `google_secops`: Google Security Operations.
+    GoogleSecops,
+}
+
+impl PlatformId {
+    /// Every built-in platform, in [`PLATFORMS`]'s order.
+    pub const ALL: [Self; COUNT] = [
+        Self::Sentinel,
+        Self::DefenderForEndpoint,
+        Self::Splunk,
+        Self::SentinelOne,
+        Self::Crowdstrike,
+        Self::Harfanglab,
+        Self::CarbonBlackCloud,
+        Self::Elastic,
+        Self::Sysdig,
+        Self::Bitdefender,
+        Self::Graylog,
+        Self::Exabeam,
+        Self::GoogleSecops,
+    ];
+
+    /// Its row of [`PLATFORMS`].
+    pub const fn spec(self) -> &'static Platform {
+        &PLATFORMS[self as usize]
+    }
+
+    /// The identifier: the key under a rule's `configurations`, the
+    /// configuration's `platforms` and the `--platform` value.
+    pub const fn as_str(self) -> &'static str {
+        self.spec().id
+    }
+
+    /// The identifier the variant is written for; [`PLATFORMS`]' row must
+    /// hold it, which a compile-time check below makes sure of.
+    const fn written(self) -> &'static str {
+        match self {
+            Self::Sentinel => "sentinel",
+            Self::DefenderForEndpoint => "defender_for_endpoint",
+            Self::Splunk => "splunk",
+            Self::SentinelOne => "sentinel_one",
+            Self::Crowdstrike => "crowdstrike",
+            Self::Harfanglab => "harfanglab",
+            Self::CarbonBlackCloud => "carbon_black_cloud",
+            Self::Elastic => "elastic",
+            Self::Sysdig => "sysdig",
+            Self::Bitdefender => "bitdefender",
+            Self::Graylog => "graylog",
+            Self::Exabeam => "exabeam",
+            Self::GoogleSecops => "google_secops",
+        }
+    }
+
+    /// The built-in platform `id` names; `None` for any other text, a
+    /// plugin's identifier included.
+    pub fn parse(id: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|platform| platform.as_str() == id)
+    }
+}
+
+/// [`PlatformId::spec`] indexes [`PLATFORMS`] by the variant: a row moved,
+/// added or removed without the enum following fails the build here.
+const _: () = {
+    const fn same(a: &str, b: &str) -> bool {
+        let (a, b) = (a.as_bytes(), b.as_bytes());
+        if a.len() != b.len() {
+            return false;
+        }
+        let mut i = 0;
+        while i < a.len() {
+            if a[i] != b[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+    let mut index = 0;
+    while index < COUNT {
+        let platform = PlatformId::ALL[index];
+        assert!(
+            platform as usize == index,
+            "PlatformId::ALL is out of the enum's order"
+        );
+        assert!(
+            same(PLATFORMS[index].id, platform.written()),
+            "PLATFORMS and PlatformId disagree on a row"
+        );
+        index += 1;
+    }
+};
+
+impl std::fmt::Display for PlatformId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// The platform `id` names, if it is built in.
 pub fn get(id: &str) -> Option<&'static Platform> {
     PLATFORMS.iter().find(|platform| platform.id == id)
@@ -460,6 +590,22 @@ pub fn query_file_suffixes() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
+    /// Each variant names its own row, in the table's order, and only the
+    /// table's identifiers parse.
+    #[test]
+    fn platform_ids_are_the_tables_rows() {
+        for (index, platform) in super::PlatformId::ALL.into_iter().enumerate() {
+            assert_eq!(platform.as_str(), super::PLATFORMS[index].id);
+            assert_eq!(
+                super::PlatformId::parse(super::PLATFORMS[index].id),
+                Some(platform)
+            );
+            assert_eq!(platform.to_string(), super::IDS[index]);
+        }
+        assert_eq!(super::PlatformId::parse("my_plugin"), None);
+        assert_eq!(super::PlatformId::parse("Sentinel"), None);
+    }
+
     use super::{
         COUNT, ExternalId, IDS, PLATFORMS, ids, ids_where, query_file_suffixes, state_platforms,
     };

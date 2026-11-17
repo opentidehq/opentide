@@ -29,8 +29,8 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::sync::Mutex;
 
+use crate::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
 use indexmap::IndexMap;
-use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
 use opentide_schema::objects::platform::graylog::{self, ConfiguredTenant};
 use opentide_workspace::diagnostic::ContextValue;
 use opentide_workspace::validate::annotate::relative_path;
@@ -238,7 +238,7 @@ impl CheckedQuery {
 pub struct Profiles {
     host: MemoryWorkspace,
     /// The declared datasets every check of these profiles uses.
-    datasets: opentide_analysis::Datasets,
+    datasets: crate::Datasets,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
     /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
@@ -264,12 +264,12 @@ impl Profiles {
             decode(&bytes).map(Some)
         };
         let (datasets, visibility_problem) = match read(VISIBILITY_CONFIGURATION)
-            .and_then(|text| opentide_analysis::Datasets::of_workspace(text.as_deref()))
+            .and_then(|text| crate::Datasets::of_workspace(text.as_deref()))
         {
             Ok(datasets) => (datasets, None),
             Err(problem) => (
                 // The host's; the configuration check reports the file.
-                opentide_analysis::Datasets::of_workspace(None).unwrap_or_default(),
+                crate::Datasets::of_workspace(None).unwrap_or_default(),
                 Some(format!(
                     "the declared datasets could not be read: {problem}"
                 )),
@@ -300,7 +300,7 @@ impl Profiles {
         let lines = LineStarts::new(&text);
         let reports = self
             .datasets
-            .scope(|| opentide_analysis::analyze_queries(&self.host, &text));
+            .scope(|| crate::analyze_queries(&self.host, &text));
         let mut checked: Vec<CheckedQuery> = reports
             .into_iter()
             .map(|report| {
@@ -328,7 +328,7 @@ impl Profiles {
     pub fn check_query(
         &self,
         text: &str,
-        language: opentide_analysis::LanguageId,
+        language: crate::LanguageId,
         platform: Option<&str>,
         stack: Option<&str>,
     ) -> Vec<Finding> {
@@ -338,7 +338,7 @@ impl Profiles {
 
     /// These profiles' declared datasets in use on this thread until the
     /// guard drops: for engine calls outside the checks above.
-    pub fn enter(&self) -> opentide_analysis::DatasetsScope {
+    pub fn enter(&self) -> crate::DatasetsScope {
         self.datasets.enter()
     }
 
@@ -389,15 +389,15 @@ impl Profiles {
         let lines = LineStarts::new(&text);
         let (response, blocks) = self.datasets.scope(|| {
             (
-                opentide_analysis::analyze(
+                crate::analyze(
                     &self.host,
-                    opentide_analysis::AnalyzeRequest {
+                    crate::AnalyzeRequest {
                         uri: path.to_string_lossy().into_owned(),
-                        language: opentide_analysis::LanguageId::TideYaml,
+                        language: crate::LanguageId::TideYaml,
                         text: text.clone().into_owned(),
                     },
                 ),
-                opentide_analysis::analyze_blocks(&self.host, &text),
+                crate::analyze_blocks(&self.host, &text),
             )
         });
         response
@@ -405,6 +405,26 @@ impl Profiles {
             .into_iter()
             .chain(blocks)
             .map(|diagnostic| finding(&text, &lines, diagnostic))
+            .collect()
+    }
+
+    /// [`Profiles::check_file`] on `text` (its line endings `\n`), whose
+    /// parse after its byte-order mark is `document`: the queries and the
+    /// blocks are read from that one tree (#1233).
+    fn check_parsed(
+        &self,
+        path: &Path,
+        text: &str,
+        document: &opentide_core::node::Document,
+    ) -> Vec<Finding> {
+        let lines = LineStarts::new(text);
+        let response =
+            crate::analyze_tide_parsed(&self.host, &path.to_string_lossy(), text, document);
+        response
+            .diagnostics
+            .into_iter()
+            .chain(crate::analyze_blocks_parsed(&self.host, text, document))
+            .map(|diagnostic| finding(text, &lines, diagnostic))
             .collect()
     }
 }
@@ -415,7 +435,7 @@ impl Profiles {
 /// a workspace's.
 pub fn check_query_text(
     text: &str,
-    language: opentide_analysis::LanguageId,
+    language: crate::LanguageId,
     platform: Option<&str>,
 ) -> Vec<Finding> {
     check_query_on_stack(text, language, platform, None)
@@ -425,13 +445,13 @@ pub fn check_query_text(
 /// checks read.
 pub fn check_query_on_stack(
     text: &str,
-    language: opentide_analysis::LanguageId,
+    language: crate::LanguageId,
     platform: Option<&str>,
     stack: Option<&str>,
 ) -> Vec<Finding> {
     let text = universal_newlines(text);
     let lines = LineStarts::new(&text);
-    opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+    crate::analyze_query(&crate::QueryRequest {
         language,
         platform: platform.map(str::to_owned),
         stack: stack.map(str::to_owned),
@@ -505,7 +525,44 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
         uuid: Option<&str>,
         text: &str,
     ) -> Result<Vec<opentide_workspace::lint::LintFinding>, String> {
+        Ok(self.findings(file, relative, uuid, text, None))
+    }
+
+    fn check_parsed(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+        text: &str,
+        document: &opentide_schema::node::Document,
+    ) -> Result<Vec<opentide_workspace::lint::LintFinding>, String> {
+        Ok(self.findings(file, relative, uuid, text, Some(document)))
+    }
+}
+
+impl EngineLintQueries {
+    /// The queries check's findings on `text`, reading its YAML tree from
+    /// `parsed` when lint already parsed it (#1233).
+    fn findings(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+        text: &str,
+        parsed: Option<&opentide_schema::node::Document>,
+    ) -> Vec<opentide_workspace::lint::LintFinding> {
         let text = universal_newlines(text);
+        // The tree is `text`'s as the checks read it only when no line ending
+        // was rewritten; otherwise they parse the rewritten text, as before.
+        let parsed = parsed.filter(|_| matches!(text, Cow::Borrowed(_)));
+        let loaded;
+        let document = match parsed {
+            Some(document) => Some(document),
+            None => {
+                loaded = opentide_schema::node::load(&text).ok();
+                loaded.as_ref()
+            }
+        };
         let lines: Vec<&str> = text.lines().collect();
         let marked: Vec<usize> = lines
             .iter()
@@ -514,8 +571,14 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             .map(|(number, _)| number + 1)
             .collect();
         let mut out = Vec::new();
-        let harfanglab = HarfangLabAdvisories::of(&text);
-        for item in self.profiles.check_file(file, &text) {
+        let harfanglab = HarfangLabAdvisories::of(&text, document);
+        // Lint's parse is of the text after its byte-order mark, as the
+        // engine reads it; the check's own parse above is the advisories'.
+        let checked = match parsed {
+            Some(document) => self.profiles.check_parsed(file, &text, document),
+            None => self.profiles.check_file(file, &text),
+        };
+        for item in checked {
             if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
                 continue;
             }
@@ -536,15 +599,17 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
                 relative, uuid, diagnostic,
             ));
         }
-        out.extend(block_advisories(
-            file,
-            relative,
-            uuid,
-            &text,
-            &self.profiles.graylog_tenants,
-        ));
+        out.extend(document.map_or_else(Vec::new, |document| {
+            block_advisories(
+                file,
+                relative,
+                uuid,
+                document,
+                &self.profiles.graylog_tenants,
+            )
+        }));
         out.extend(harfanglab.findings(file, relative, uuid));
-        Ok(out)
+        out
     }
 }
 
@@ -566,7 +631,9 @@ struct HarfangLabAdvisories {
 }
 
 impl HarfangLabAdvisories {
-    fn of(text: &str) -> Self {
+    /// The advisories on `text`, whose parse is `document` (`None`: it does
+    /// not parse).
+    fn of(text: &str, document: Option<&opentide_schema::node::Document>) -> Self {
         let none = Self {
             found: Vec::new(),
             rules: None,
@@ -574,7 +641,7 @@ impl HarfangLabAdvisories {
         if !text.contains("harfanglab") {
             return none;
         }
-        let Ok(document) = opentide_schema::node::load(text) else {
+        let Some(document) = document else {
             return none;
         };
         let Some(root) = document.root() else {
@@ -722,12 +789,9 @@ fn block_advisories(
     file: &Path,
     relative: &str,
     uuid: Option<&str>,
-    text: &str,
+    document: &opentide_schema::node::Document,
     graylog_tenants: &[ConfiguredTenant],
 ) -> Vec<opentide_workspace::lint::LintFinding> {
-    let Ok(document) = opentide_schema::node::load(text) else {
-        return Vec::new();
-    };
     let Some(root) = document.root() else {
         return Vec::new();
     };
@@ -750,8 +814,8 @@ fn block_advisories(
         .collect()
 }
 
-/// `bytes` as Python's `read_text(encoding="utf-8-sig")` reads them: without
-/// a byte-order mark, every line ending a `\n`.
+/// `bytes` as UTF-8 text: without a leading byte-order mark, every line
+/// ending a `\n`.
 ///
 /// # Errors
 ///
@@ -774,11 +838,7 @@ pub fn universal_newlines(text: &str) -> Cow<'_, str> {
 
 /// An engine finding in the CLI's coordinates: lines and columns from 1,
 /// columns in code points (`opentide tui` places the language server's so).
-pub fn finding(
-    text: &str,
-    lines: &LineStarts,
-    diagnostic: opentide_analysis::Diagnostic,
-) -> Finding {
+pub fn finding(text: &str, lines: &LineStarts, diagnostic: crate::Diagnostic) -> Finding {
     let (line, column, end_line, end_column) = lines.convert(text, diagnostic.range);
     let (end_line, end_column) = span_end(line, column, end_line, end_column, text);
     Finding {
@@ -1026,7 +1086,7 @@ mod tests {
                     SecurityEvent\n";
         let profiles = Profiles {
             host: MemoryWorkspace { files: Vec::new() },
-            datasets: opentide_analysis::Datasets::of_workspace(None).unwrap(),
+            datasets: crate::Datasets::of_workspace(None).unwrap(),
             visibility_problem: None,
             graylog_tenants: Vec::new(),
         };

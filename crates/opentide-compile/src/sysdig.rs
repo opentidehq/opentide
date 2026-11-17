@@ -408,7 +408,7 @@ fn definitions(block: &Json, list: &str, key: &str) -> Vec<(String, Json)> {
     out
 }
 
-/// The text of a field that is set, as Python's `if value:` reads it.
+/// The text of a field that is set: a non-empty string.
 fn text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
     block
         .get(key)

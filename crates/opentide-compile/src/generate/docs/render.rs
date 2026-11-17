@@ -29,7 +29,9 @@ use super::mermaid::NodeKind;
 use super::page::{Callout, Page, Section, callout, code_block, key_value_table, paragraph, table};
 use super::platforms::{self, TEXT, platform_label};
 use super::settings::{Settings as BlockSettings, flatten};
-use super::text::{first_sentence, inline_code, join, join_lines, plural, table_cell, title_case};
+use super::text::{
+    first_sentence, inline_code, join, join_lines, markdown_text, plural, table_cell, title_case,
+};
 use super::vocab::{Enriched, Vocab};
 use crate::json::Json;
 use crate::strategy::StatusStrategy;
@@ -209,22 +211,26 @@ impl Pages<'_, '_> {
         };
         if let Some(signal) = self.catalog.signal(uuid) {
             let Some(parent) = self.catalog.record(&signal.owner) else {
-                return format!("{}{suffix}", signal.name);
+                return format!("{}{suffix}", markdown_text(&signal.name));
             };
             let anchor = self.flavor().heading_anchor(&signal.name);
             let href = Self::href(from, "objectives", &self.filename(parent), Some(&anchor));
-            let link = self.flavor().render_link(&signal.name, &href, self.wiki());
+            let link = self
+                .flavor()
+                .render_link(&markdown_text(&signal.name), &href, self.wiki());
             return format!("{link}{suffix}");
         }
         let Some(record) = self.catalog.record(uuid) else {
             let name = self.catalog.name(uuid);
             if name != uuid {
-                return format!("{name}{suffix}");
+                return format!("{}{suffix}", markdown_text(&name));
             }
             return format!("`{uuid}`");
         };
         let href = Self::href(from, record.scope.folder(), &self.filename(record), None);
-        let link = self.flavor().render_link(&record.name, &href, self.wiki());
+        let link = self
+            .flavor()
+            .render_link(&markdown_text(&record.name), &href, self.wiki());
         format!("{link}{suffix}")
     }
 
@@ -855,7 +861,7 @@ impl Pages<'_, '_> {
         let missing: Vec<String> = signals
             .iter()
             .filter(|signal| self.catalog.rules_for_signal(&signal.uuid).is_empty())
-            .map(|signal| format!("*{}*", table_cell(&signal.name)))
+            .map(|signal| format!("*{}*", table_cell(&markdown_text(&signal.name))))
             .collect();
         if missing.is_empty() {
             return String::new();
@@ -998,7 +1004,10 @@ impl Pages<'_, '_> {
                 .cloned()
                 .unwrap_or_else(|| self.flavor().heading_anchor(&signal.name));
             rows.push([
-                Flavor::link(&table_cell(&signal.name), &format!("#{anchor}")),
+                Flavor::link(
+                    &table_cell(&markdown_text(&signal.name)),
+                    &format!("#{anchor}"),
+                ),
                 self.vocab.enrich("alert_severity", &signal.severity).label,
                 self.vocab
                     .enrich("detection.methodology", &signal.methodology)
@@ -1200,7 +1209,7 @@ impl Pages<'_, '_> {
             .actors
             .iter()
             .flatten()
-            .map(|actor| self.vocab.enrich("actors", &actor.name).label)
+            .map(|actor| self.vocab.enrich("actors", &actor.name).text_label())
             .collect();
         let rows = [
             (
@@ -1462,7 +1471,7 @@ impl Pages<'_, '_> {
             return String::new();
         }
         let links = &self.settings.cve;
-        let link = |id: &str| Flavor::link(id, &links.page_url(id));
+        let link = |id: &str| Flavor::link(&markdown_text(id), &links.page_url(id));
         let note = paragraph(
             "Identifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
              which aggregates CVE, GHSA, CSAF, NVD, and related feeds.",
@@ -1551,7 +1560,7 @@ impl Pages<'_, '_> {
         let mut label = if record.page_url.is_empty() {
             link(ident)
         } else {
-            Flavor::link(ident, &record.page_url)
+            Flavor::link(&markdown_text(ident), &record.page_url)
         };
         let aliases: Vec<String> = record
             .aliases
@@ -1565,16 +1574,16 @@ impl Pages<'_, '_> {
         let severity = match &record.cvss {
             Some(cvss) => format!(
                 "{}<br>CVSS {}",
-                format!("**{:.1}** {}", cvss.score, cvss.severity).trim(),
-                cvss.version
+                format!("**{:.1}** {}", cvss.score, markdown_text(&cvss.severity)).trim(),
+                markdown_text(&cvss.version)
             ),
-            None => table_cell(
+            None => table_cell(&markdown_text(
                 record
                     .severity
                     .as_deref()
                     .or(record.state.as_deref())
                     .unwrap_or("-"),
-            ),
+            )),
         };
         let likelihood = match &record.epss {
             cve::EpssDetail::Score(epss) => format!(
@@ -1586,13 +1595,14 @@ impl Pages<'_, '_> {
         };
         let weakness = join_lines(record.weaknesses.iter().map(|weakness| {
             let url = weakness.url();
+            let identifier = table_cell(&markdown_text(&weakness.identifier));
             let mut cell = if url.is_empty() {
-                weakness.identifier.clone()
+                identifier
             } else {
-                Flavor::link(&weakness.identifier, &url)
+                Flavor::link(&identifier, &url)
             };
             if !weakness.name.is_empty() {
-                cell = format!("{cell} {}", table_cell(&weakness.name));
+                cell = format!("{cell} {}", table_cell(&markdown_text(&weakness.name)));
             }
             cell
         }));
@@ -1606,7 +1616,10 @@ impl Pages<'_, '_> {
             } else {
                 weakness
             },
-            record.published.clone().unwrap_or_else(|| "-".to_owned()),
+            record
+                .published
+                .as_deref()
+                .map_or_else(|| "-".to_owned(), |date| table_cell(&markdown_text(date))),
         ]
     }
 
@@ -1767,9 +1780,9 @@ impl Pages<'_, '_> {
             &filename,
             None,
         );
-        let mut name = record.name.clone();
+        let mut name = markdown_text(&record.name);
         if self.settings.icons {
-            format!("{} {}", icon(record.scope), record.name)
+            format!("{} {name}", icon(record.scope))
                 .trim()
                 .clone_into(&mut name);
         }
@@ -2491,11 +2504,17 @@ fn reference_value(value: &str) -> String {
 fn entry_link(entry: &Enriched, fallback: &str, label: Option<&str>) -> String {
     let text = label.map_or_else(
         || {
-            table_cell(if entry.label.is_empty() {
+            let label = if entry.label.is_empty() {
                 fallback
             } else {
                 &entry.label
-            })
+            };
+            // A value the vocabulary lacks is the object's own text.
+            if entry.found {
+                table_cell(label)
+            } else {
+                table_cell(&markdown_text(label))
+            }
         },
         str::to_owned,
     );

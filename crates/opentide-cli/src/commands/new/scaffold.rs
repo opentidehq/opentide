@@ -247,8 +247,8 @@ impl<'s> Model<'s> {
             };
         }
         let choices = if referred {
-            // A Rust enum is a Python `Enum`: the template's schema offers
-            // its values, not the model.
+            // A named enum: the template's schema offers its values, not the
+            // model.
             Vec::new()
         } else {
             target

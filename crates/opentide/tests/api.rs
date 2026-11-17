@@ -258,7 +258,7 @@ fn with_the_engines_the_queries_check_runs() {
 #[cfg(feature = "queries")]
 #[test]
 fn validate_and_lint_take_no_engine_lock() {
-    let _held = opentide_cli::queries::ENGINE
+    let _held = opentide_analysis::queries::ENGINE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (done, finished) = std::sync::mpsc::channel();

@@ -3,8 +3,8 @@
 //! editors, from the Rust model instead of Pydantic, byte for byte as the
 //! oracle writes them.
 //!
-//! - [`json`]: documents with their keys in insertion order, written as
-//!   Python's `json.dumps(indent=4)` writes them;
+//! - [`json`]: documents with their keys in insertion order, indented by
+//!   four spaces, every character as UTF-8;
 //! - [`annotate`]: the editor annotations of every generated schema
 //!   (`schema_annotations.py`);
 //! - [`router`]: `opentide.schema.json` (`router_schema.py`);

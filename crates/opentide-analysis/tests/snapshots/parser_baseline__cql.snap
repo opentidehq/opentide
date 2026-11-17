@@ -16133,16 +16133,11 @@ cql_parse_error error 0:51-0:52 CQL syntax error near `)`: expected an expressio
 170..173 number
 173..174 punctuation.bracket
 == corpus/cql/binary_expression__invalid.cql
-cql_parse_error error 0:11-0:14 CQL syntax error near `and`
-0..4 function.builtin
-4..5 punctuation.bracket
+cql_parse_error error 0:9-0:9 CQL syntax error at the end of the query: expected an expression
+0..1 property
+2..4 operator
 5..6 property
 7..8 operator
-9..10 number
-15..16 property
-17..18 operator
-19..20 number
-20..21 punctuation.bracket
 == corpus/cql/binary_expression__valid.cql
 0..9 property
 10..12 operator
@@ -16316,7 +16311,7 @@ cql_parse_error error 0:22-0:23 CQL syntax error near `b`: a filter cannot follo
 210..211 punctuation.delimiter
 212..213 punctuation.bracket
 == corpus/cql/expression_attribute__invalid.cql
-cql_parse_error error 0:37-0:44 CQL syntax error near `include`
+cql_parse_error error 0:46-0:47 CQL syntax error near `)`: expected an expression
 0..9 function.builtin
 9..10 punctuation.bracket
 10..15 variable
@@ -16326,11 +16321,9 @@ cql_parse_error error 0:37-0:44 CQL syntax error near `include`
 26..27 operator
 27..34 string
 35..36 punctuation.bracket
-37..44 string
-45..46 punctuation.bracket
-46..52 property
-52..53 punctuation.bracket
-53..54 punctuation.bracket
+37..44 variable
+44..45 punctuation.delimiter
+46..47 punctuation.bracket
 == corpus/cql/expression_attribute__valid.cql
 0..9 function.builtin
 9..10 punctuation.bracket
@@ -16520,16 +16513,17 @@ cql_parse_error error 0:0-0:8 CQL syntax error near `https://`
 93..96 string
 96..97 punctuation.bracket
 == corpus/cql/function_call__invalid.cql
-cql_parse_error error 0:21-0:22 CQL syntax error near `,`
-0..4 string
-5..6 punctuation.bracket
-6..11 property
-11..12 operator
-12..21 string
+cql_parse_error error 0:21-0:22 CQL syntax error near `,`: expected an argument
+0..4 function
+4..5 punctuation.bracket
+5..10 variable
+10..11 operator
+11..20 property
+20..21 punctuation.delimiter
 21..22 punctuation.delimiter
-22..24 property
+22..24 variable
 24..25 operator
-25..33 string
+25..33 property
 33..34 punctuation.bracket
 == corpus/cql/function_call__valid.cql
 0..7 function.builtin
@@ -16737,17 +16731,16 @@ cql_parse_error error 0:14-0:25 CQL syntax error near `"accesslog"`: expected `{
 155..156 punctuation.delimiter
 157..158 punctuation.bracket
 == corpus/cql/named_argument__invalid.cql
-cql_parse_error error 0:32-0:32 CQL syntax error: missing `)`
-cql_removed_function error 0:0-0:4 `rdns` was removed from CQL in 1.249
+cql_parse_error error 0:11-0:12 CQL syntax error near `,`: expected an expression
 0..4 function
 4..5 punctuation.bracket
 5..10 variable
 10..11 operator
-11..20 property
-20..21 punctuation.delimiter
-21..23 variable
-23..24 operator
-24..32 property
+11..12 punctuation.delimiter
+13..15 variable
+15..16 operator
+16..24 property
+24..25 punctuation.bracket
 == corpus/cql/named_argument__valid.cql
 0..8 function.builtin
 8..9 punctuation.bracket
@@ -16794,15 +16787,15 @@ cql_removed_function error 0:0-0:4 `rdns` was removed from CQL in 1.249
 121..126 string
 126..127 punctuation.bracket
 == corpus/cql/named_subquery__invalid.cql
-cql_parse_error error 0:13-0:14 CQL syntax error near `{`
+cql_parse_error error 0:24-0:24 CQL syntax error: missing `}`
 0..9 function.builtin
 9..10 punctuation.bracket
-10..12 property
-13..14 punctuation.bracket
-15..20 type
-20..21 operator
-21..22 string
-23..24 punctuation.bracket
+10..12 variable
+12..13 punctuation.delimiter
+14..15 punctuation.bracket
+16..21 type
+21..22 operator
+22..23 string
 24..25 punctuation.bracket
 == corpus/cql/named_subquery__valid.cql
 0..9 function.builtin
@@ -16830,19 +16823,17 @@ cql_parse_error error 0:13-0:14 CQL syntax error near `{`
 60..61 punctuation.bracket
 61..62 punctuation.bracket
 == corpus/cql/negated_function_call__invalid.cql
-cql_parse_error error 0:4-0:5 CQL syntax error near `!`: expected a filter
-0..3 string
-4..5 operator
-5..7 function.builtin
-7..8 punctuation.bracket
-8..16 property
-16..17 punctuation.delimiter
-18..24 variable
-24..25 operator
-25..26 punctuation.bracket
-26..33 string
-33..34 punctuation.bracket
-34..35 punctuation.bracket
+cql_parse_error error 0:30-0:30 CQL syntax error: missing `)`
+0..1 operator
+1..3 function.builtin
+3..4 punctuation.bracket
+4..12 property
+12..13 punctuation.delimiter
+14..20 variable
+20..21 operator
+21..22 punctuation.bracket
+22..29 string
+29..30 punctuation.bracket
 == corpus/cql/negated_function_call__valid.cql
 0..1 operator
 1..3 function.builtin

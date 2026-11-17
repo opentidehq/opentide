@@ -24,6 +24,10 @@ mod search_operators;
 #[doc(hidden)]
 pub mod syntax;
 
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub use scan::nested_scans;
+
 // What the generated typed AST names from the crate root (`use crate::{..}`).
 #[doc(hidden)]
 pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
@@ -366,6 +370,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     syntax::analyze(source)
 }
 
+#[cfg(debug_assertions)]
 thread_local! {
     /// The unknown-command findings made on this thread: [`unknown_command_findings`].
     static UNKNOWN_COMMAND_FINDINGS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -373,13 +378,15 @@ thread_local! {
 
 /// How many unknown-command findings this thread has built, each with a scan
 /// of the command catalog: one per distinct name in an analysis
-/// (`tests/many_findings.rs`). Not API.
+/// (`tests/many_findings.rs`). Debug builds only; not API.
+#[cfg(debug_assertions)]
 #[doc(hidden)]
 pub fn unknown_command_findings() -> usize {
     UNKNOWN_COMMAND_FINDINGS.get()
 }
 
 pub(crate) fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
+    #[cfg(debug_assertions)]
     UNKNOWN_COMMAND_FINDINGS.set(UNKNOWN_COMMAND_FINDINGS.get() + 1);
     let message = format!(
         "'{name}' is not a command opentide knows; if an app on the search head provides it, declare it"
@@ -1079,6 +1086,15 @@ fn push_param(out: &mut Vec<ParameterInformation>, raw: &str) {
 #[must_use]
 pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     opentide_parse::debug_kinds::<Lang>(&syntax::parse(source).1)
+}
+
+/// For each syntax error of `source`, the `Debug` names of the nodes it was recorded in: what
+/// the corpus gate of `opentide-analysis` reads to check that an invalid fixture fails in
+/// the production it names. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
+    opentide_parse::debug_error_kinds::<Lang>(&syntax::parse(source).1)
 }
 
 /// The `Debug` names of the node kinds the grammar declares, the error node

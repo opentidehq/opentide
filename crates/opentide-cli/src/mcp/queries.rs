@@ -173,8 +173,8 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
             ],
             context,
         )?;
-        // The service's exit code stays in the payload, as the Python tool
-        // leaves it (`_exit_code`); its failure code does not.
+        // The service's exit code stays in the payload (`_exit_code`); its
+        // failure code does not.
         let Json::Object(mut members) = result else {
             return Ok(result);
         };

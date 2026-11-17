@@ -3,4 +3,10 @@
 // this process. Ctrl-C stops the run, which exits 130.
 'use strict'
 const { main } = require('./index.js')
-process.exit(main(process.argv.slice(2)))
+main(process.argv.slice(2)).then(
+  (code) => process.exit(code),
+  (error) => {
+    process.stderr.write(`opentide: ${error.message}\n`)
+    process.exit(1)
+  },
+)

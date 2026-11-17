@@ -3842,9 +3842,9 @@ impl BinExpr {
     pub fn eq_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![=])
     }
-    /// The token child.
-    pub fn like_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![LIKE])
+    /// The token children, in order.
+    pub fn like_token(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![LIKE], T![like]])
     }
     /// The token child.
     pub fn in_token(&self) -> Option<SyntaxToken> {

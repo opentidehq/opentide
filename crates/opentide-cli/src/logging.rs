@@ -66,7 +66,7 @@ impl LogLayer {
     }
 }
 
-/// The field marking an ERROR event that Python logs as `critical`: a JSON
+/// The field marking an ERROR event as critical: a JSON
 /// line's `level` reads `critical`, a text line `error:` as for any error.
 pub const CRITICAL_FIELD: &str = "critical";
 

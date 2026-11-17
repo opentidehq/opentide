@@ -17,8 +17,8 @@
 
 use super::Catalog;
 use super::scan::{
-    Order, base_search, command_word, end_of_macro, end_quoted, read_word, skip_comment,
-    skip_hidden, skip_ws_and_comments, walk_pipelines,
+    Order, base_search, closing_bracket, command_word, count_nested_scan, end_of_macro, end_quoted,
+    read_word, skip_comment, skip_hidden, skip_ws_and_comments, walk_pipelines,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes};
 use std::collections::HashSet;
@@ -228,6 +228,14 @@ fn search_terms(source: &str, start: usize, end: usize) -> Vec<Term> {
             continue;
         }
         if bytes[i] == b'[' {
+            // A subsearch is its own query, walked on its own: jump over it.
+            if brackets == 0
+                && let Some(close) = closing_bracket(source, i).filter(|&c| c < end)
+            {
+                i = close + 1;
+                continue;
+            }
+            count_nested_scan();
             brackets += 1;
             i += 1;
             continue;

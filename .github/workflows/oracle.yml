@@ -5,8 +5,8 @@ name: Oracle
 # `falco --validate`, YARA-X (the yara-x wheel), and the Elastic and Lucene parsers (@elastic/esql,
 # EqlBase.g4, Kibana's kuery grammar, Lucene's QueryParser). A disagreement not
 # listed in crates/testdata/oracles/exceptions.toml is a red build, and so is a
-# listed one that is gone. The references never ship: ci.yml's
-# `engine-package` job runs scripts/engine/license-scan.sh on the packaged
+# listed one that is gone. The references never ship: release-build.yml's
+# `crate-packages` job runs scripts/engine/license-scan.sh on the packaged
 # crates, as the engine's release (engine-release-build.yml) does on every
 # asset.
 #

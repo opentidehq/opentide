@@ -98,7 +98,7 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Parser, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). The engine's CI jobs (`ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-lint` job, when `wasm` runs) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` and the command line on wasm32-wasip1 (wasi-sdk only for the command line's `ring`). Code under `cfg(windows)` is built and tested by `ci.yml`'s `engine-test` on Windows (nextest, as on Linux and macOS) but not linted with clippy.
+Parser, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). The engine's CI jobs (`ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-lint` job, when `wasm` runs) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` and the command line on wasm32-wasip1 (wasi-sdk only for the command line's `ring`). Code under `cfg(windows)` is built and tested by `nightly.yml`'s `engine-test-os` on Windows (nextest, as on Linux and macOS; the nightly only, never on a pull request) but not linted with clippy.
 
 ## Upstream docs, not downloaded skills
 

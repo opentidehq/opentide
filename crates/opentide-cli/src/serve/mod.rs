@@ -10,10 +10,8 @@
 //! answers 130 and the `interrupted` document); `shutdown` and `exit` end
 //! the session. Requests are handled one at a time, in order
 //! ([`server::Server`]). Every command runs on Rust in this process, its
-//! workspace kept warm between read-only runs ([`runner::HostRunner`]); no
-//! Python runs any request (UC-6.0d, #841). This is the host the Python
-//! package's `opentide.cli.services.serve` was until UC-3.8: the payloads
-//! are its.
+//! workspace kept warm between read-only runs ([`runner::HostRunner`])
+//! (UC-6.0d, #841).
 
 pub mod fetch;
 pub mod runner;
