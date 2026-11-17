@@ -1199,6 +1199,52 @@ fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String
     (code, String::from_utf8(out).unwrap(), stderr.text())
 }
 
+/// In a GitHub Actions job, a deploy that failed writes each failure to the
+/// job's summary: what failed, where, and why, without the log.
+#[test]
+fn a_failed_deploy_lists_its_failures_in_the_job_summary() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING),
+    );
+    let summary = ws.path().join("step-summary.md");
+    let refusing = "http://127.0.0.1:9".to_owned();
+    let (code, _, _) = cli(
+        ws.path(),
+        &[
+            "deploy",
+            "--platform",
+            "sentinel",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[
+            ("GITHUB_ACTIONS", "true".to_owned()),
+            ("GITHUB_STEP_SUMMARY", summary.display().to_string()),
+            ("AZURE_CLIENT_SECRET", SECRET.to_owned()),
+            ("HTTPS_PROXY", refusing.clone()),
+            ("HTTP_PROXY", refusing.clone()),
+            ("ALL_PROXY", refusing),
+        ],
+    );
+    assert_eq!(code, 1);
+    let text = std::fs::read_to_string(&summary).unwrap();
+    assert!(text.contains("| `sentinel` | not deployed | 3 |"), "{text}");
+    assert!(
+        text.contains(
+            "**1 failure**\n\n| Platform | Tenant | Rule | Error |\n|---|---|---|---|\n\
+             | `sentinel` | soc | First (`00000000-0000-4000-8099-000000000001`) | Cannot reach"
+        ),
+        "{text}"
+    );
+}
+
 /// `ws` as a git checkout of two commits, the second changing `file`.
 fn pushed(ws: &Path, file: &str) {
     let git = |args: &[&str]| {
