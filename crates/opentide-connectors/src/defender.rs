@@ -761,8 +761,15 @@ impl Deployer for Defender {
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
             // Graph's refusal keeps its answer as the detail; a token Entra
-            // ID did not issue fails the tenant.
+            // ID did not issue fails the tenant, whatever its answer, as
+            // `opentide deploy` stops it: the tenant signs in first (on its
+            // kept token, if any).
             let answer = |error: DefenderError| error.into_connector(&cx.tenant.label.tenant);
+            self.token(cx).await.map_err(|error| {
+                let mut failed = crate::connector::DeployError::from(answer(error));
+                failed.scope = crate::connector::DeployScope::Tenant;
+                failed
+            })?;
             let body = || -> Result<Json, ConnectorError> {
                 serde_json::from_slice(&request.body).map_err(|error| ConnectorError::Setup {
                     platform: PLATFORM.into(),

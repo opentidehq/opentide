@@ -1818,9 +1818,26 @@ fn raised(error: &ConnectorError) -> Raised {
         | ConnectorError::Authentication { .. }
         | ConnectorError::Gateway { .. }
         | ConnectorError::NetworkUnavailable { .. } => Stops::Tenant,
-        _ => Stops::Rule,
+        // Exhaustive: a new kind must say what it stops, as
+        // `DeployError::from` must say what it fails.
+        ConnectorError::Answer { .. }
+        | ConnectorError::Refused { .. }
+        | ConnectorError::QueryTimedOut { .. } => Stops::Rule,
     };
     described(error).stopping(stops)
+}
+
+/// A `Deployer`'s failure, raised by `raise` from its connector error: the
+/// tenant stopped whenever the `Deployer` says the tenant failed, as the SDKs
+/// report it (`DeployError::scope`), whatever the error's kind.
+fn scoped(failed: DeployError, raise: impl FnOnce(ConnectorError) -> Raised) -> Raised {
+    let tenant = failed.scope == DeployScope::Tenant;
+    let raised = raise(failed.into_connector());
+    if tenant && raised.stops == Stops::Rule {
+        raised.stopping(Stops::Tenant)
+    } else {
+        raised
+    }
 }
 
 /// A connector error's words: its own message, the tenant's reason after a
@@ -2238,13 +2255,9 @@ impl Sender<'_, '_> {
                     )
                 };
                 let context = self.context(connection);
-                self.block(async {
-                    deployer
-                        .deploy(context, &request)
-                        .await
-                        .map_err(DeployError::into_connector)
-                })
-                .map_err(|error| raised(&error))?;
+                self.block(async { Ok(deployer.deploy(context, &request).await) })
+                    .map_err(|error| raised(&error))?
+                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
             }
             Some(PlatformId::Splunk) => {
                 let splunk_cx = self.compile;
@@ -2296,13 +2309,9 @@ impl Sender<'_, '_> {
                 let deployer = self.deployer(platform)?;
                 let context = self.context(connection);
                 let outcome = self
-                    .block(async {
-                        deployer
-                            .deploy(context, &request)
-                            .await
-                            .map_err(DeployError::into_connector)
-                    })
-                    .map_err(|error| raised(&error))?;
+                    .block(async { Ok(deployer.deploy(context, &request).await) })
+                    .map_err(|error| raised(&error))?
+                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
                 // `splunk_alert_deleted`: the saved search the tenant had.
                 for warning in &outcome.warnings {
                     tracing::warn!(name = warning.message.as_str(), "{}", warning.code);
@@ -2341,13 +2350,9 @@ impl Sender<'_, '_> {
                 let deployer = self.deployer(platform)?;
                 let context = self.context(connection);
                 let outcome = self
-                    .block(async {
-                        deployer
-                            .deploy(context, &request)
-                            .await
-                            .map_err(DeployError::into_connector)
-                    })
-                    .map_err(|error| raised(&error))?;
+                    .block(async { Ok(deployer.deploy(context, &request).await) })
+                    .map_err(|error| raised(&error))?
+                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
                 // `report_deleted_with_rule`, `report_auto_deleted`: said, not raised.
                 for warning in &outcome.warnings {
                     tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
@@ -2375,13 +2380,9 @@ impl Sender<'_, '_> {
                     },
                 );
                 let context = self.context(connection);
-                self.block(async {
-                    deployer
-                        .deploy(context, &request)
-                        .await
-                        .map_err(DeployError::into_connector)
-                })
-                .map_err(|error| raised(&error))?;
+                self.block(async { Ok(deployer.deploy(context, &request).await) })
+                    .map_err(|error| raised(&error))?
+                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
             }
         }
         let _ = result;
@@ -2762,13 +2763,9 @@ impl Sender<'_, '_> {
         );
         let context = self.context(connection);
         let done = self
-            .block(async {
-                deployer
-                    .deploy(context, &request)
-                    .await
-                    .map_err(DeployError::into_connector)
-            })
-            .map_err(|error| plugin_raised(&error))?;
+            .block(async { Ok(deployer.deploy(context, &request).await) })
+            .map_err(|error| plugin_raised(&error))?
+            .map_err(|failed| scoped(failed, |error| plugin_raised(&error)))?;
         match (operation, done.remote_id) {
             (Operation::Delete, _) => self.record_deleted(result, platform, &tenant),
             (Operation::Create, Some(id)) if !id.trim().is_empty() => {
@@ -2880,13 +2877,9 @@ impl Sender<'_, '_> {
                     }
                 };
                 let outcome = self
-                    .block(async {
-                        defender
-                            .deploy(context, &request)
-                            .await
-                            .map_err(DeployError::into_connector)
-                    })
-                    .map_err(|error| refused(error, action))?;
+                    .block(async { Ok(defender.deploy(context, &request).await) })
+                    .map_err(|error| refused(error, action))?
+                    .map_err(|failed| scoped(failed, |error| refused(error, action)))?;
                 // The partial deployment: raised, as the warnings exit.
                 for warning in &outcome.warnings {
                     self.warned |= warning.raised;
@@ -2952,11 +2945,19 @@ impl Sender<'_, '_> {
                         ),
                         _ => {}
                     }
+                    // A refused key (`sentinel_one_unauthorized`) fails the
+                    // tenant: its other rules are not attempted.
+                    let stops = if error.scope == DeployScope::Tenant {
+                        Stops::Tenant
+                    } else {
+                        Stops::Rule
+                    };
                     Raised::new(format!(
                         "could not {} the rule on tenant '{tenant}': {}",
                         action_verb(action),
                         failure.message
                     ))
+                    .stopping(stops)
                 };
                 // The Deployer's request: the stored id addresses an update
                 // or a delete; the body is the compiled rule.
@@ -3044,13 +3045,9 @@ impl Sender<'_, '_> {
                     ),
                 };
                 let outcome = self
-                    .block(async {
-                        session
-                            .deploy(context, &request)
-                            .await
-                            .map_err(DeployError::into_connector)
-                    })
-                    .map_err(|error| refused(error, action))?;
+                    .block(async { Ok(session.deploy(context, &request).await) })
+                    .map_err(|error| refused(error, action))?
+                    .map_err(|failed| scoped(failed, |error| refused(error, action)))?;
                 match (action, outcome.remote_id) {
                     (Planned::Delete(_), _) => self.record_deleted(result, platform, tenant),
                     (Planned::Create, Some(id)) => {
@@ -4457,6 +4454,99 @@ pub fn shard_path(workspace: &Path, uuid: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A failure a `Deployer` builds itself has no connector error: its
+    /// scope still says what stops (a Rust plugin's own tenant failure),
+    /// whatever the connector error the arm reads its words from.
+    #[test]
+    fn a_deployers_own_tenant_failure_stops_the_tenant() {
+        let tenant = DeployError::tenant(DeployFailure::new("acme_key_refused", "no"));
+        assert_eq!(scoped(tenant, |error| raised(&error)).stops, Stops::Tenant);
+        let rule = DeployError::rule(DeployFailure::new("acme_rule_refused", "no"));
+        assert_eq!(scoped(rule, |error| raised(&error)).stops, Stops::Rule);
+        // An interrupt stays the run's.
+        let cancelled = DeployError::from(ConnectorError::Cancelled);
+        assert_eq!(scoped(cancelled, |error| raised(&error)).stops, Stops::Run);
+    }
+
+    /// A connector error stops what the SDK's `DeployError` says it fails:
+    /// the platforms whose arm reads a connector error (`raised`) stop the
+    /// tenant exactly when the SDK reports the tenant's failure.
+    #[test]
+    fn a_connector_error_stops_what_the_sdk_says_it_fails() {
+        let (p, t) = (String::from("p"), String::from("t"));
+        let every = [
+            ConnectorError::Unreachable {
+                platform: p.clone(),
+                tenant: t.clone(),
+                address: String::new(),
+                reason: String::new(),
+            },
+            ConnectorError::Timeout {
+                platform: p.clone(),
+                tenant: t.clone(),
+                address: String::new(),
+                seconds: 1,
+            },
+            ConnectorError::Answer {
+                platform: p.clone(),
+                tenant: t.clone(),
+                address: String::new(),
+                reason: String::new(),
+            },
+            ConnectorError::Setup {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+            },
+            ConnectorError::MissingCredential {
+                platform: p.clone(),
+                tenant: t.clone(),
+                key: String::new(),
+                variable: String::new(),
+            },
+            ConnectorError::Crashed {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+            },
+            ConnectorError::refused(&p, &t, "no", None),
+            ConnectorError::Authentication {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+                detail: None,
+            },
+            ConnectorError::QueryTimedOut {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+                detail: None,
+                timeout: std::time::Duration::from_secs(1),
+            },
+            ConnectorError::Gateway {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+                status: 502,
+            },
+            ConnectorError::Cancelled,
+            ConnectorError::NetworkUnavailable {
+                platform: p.clone(),
+                tenant: t.clone(),
+            },
+        ];
+        for error in every {
+            let stops = raised(&error).stops;
+            let shown = format!("{error:?}");
+            let scope = DeployError::from(error).scope;
+            assert_eq!(
+                stops == Stops::Rule,
+                scope == DeployScope::Rule,
+                "{shown}: the CLI stops {stops:?}, the SDK fails the {scope:?}"
+            );
+        }
+    }
 
     fn result(status: &'static str, action: &str, tenant: Option<&str>, id: &str) -> RuleResult {
         let mut result = RuleResult::new("elastic", tenant, id, "Rule");

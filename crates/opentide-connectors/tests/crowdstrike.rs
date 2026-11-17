@@ -465,3 +465,43 @@ fn crowdstrike_a_redirect_answer_is_a_refusal() {
     assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
     assert!(error.to_string().contains("(HTTP 307)"), "{error}");
 }
+
+/// A sign-in CrowdStrike refuses (a wrong secret's 401) fails the tenant,
+/// as `opentide deploy` stops it: no rule can deploy without a token, and
+/// nothing but the sign-in is sent.
+#[test]
+fn crowdstrike_a_refused_sign_in_fails_the_tenant() {
+    let full = cassette_support::cassette("crowdstrike/deploy");
+    let mut signed = full.interactions[0].clone();
+    signed.response.status = 401;
+    let replay = cassette_support::replay_cassette(
+        opentide_cassette::Cassette::new(&full.scenario, full.recorded_from, vec![signed]),
+        &[SECRET],
+    );
+    let (tenant, http) = tenant(
+        &replay,
+        "crowdstrike",
+        "falcon",
+        SETUP,
+        &crowdstrike::http_defaults(),
+    );
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let request = DeployRequest::new("rule", Operation::Create, create("Refused sign-in"));
+    let error = block_on(async {
+        opentide_connectors::connector::Deployer::deploy(&Crowdstrike::new(), cx, &request).await
+    })
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(
+        error.scope,
+        opentide_connectors::connector::DeployScope::Tenant,
+        "{error:?}"
+    );
+    assert!(error.failure.message.contains("HTTP 401"), "{error:?}");
+    assert_eq!(replay.proxy.verify(), Vec::new());
+}

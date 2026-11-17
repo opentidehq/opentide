@@ -2531,3 +2531,64 @@ fn elastic_stops_a_tenant_refusing_the_key() {
         "{err}"
     );
 }
+
+/// A SentinelOne tenant that refuses the key (401) fails at its first rule,
+/// as the SDK's `sentinel_one_unauthorized` (tenant scope) says: its other
+/// rules are not attempted, and nothing more is sent to it.
+#[test]
+fn sentinel_one_stops_a_tenant_refusing_the_key() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(wiremock::matchers::any())
+            .respond_with(
+                wiremock::ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"errors": [{"title": "Unauthorized"}]})),
+            )
+            .expect(1)
+            .mount(&server),
+    );
+    let setup = format!(
+        "url = \"{}\"\naccount_id = 1001\napi_token = \"$S1_API_TOKEN\"\n",
+        server.uri()
+    );
+    let ws = workspace(
+        "sentinel_one",
+        "lab",
+        &setup,
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "First rule",
+                    "00000000-0000-4000-8099-000000000171",
+                    "A.",
+                    &s1_block("STAGING"),
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Second rule",
+                    "00000000-0000-4000-8099-000000000172",
+                    "B.",
+                    &s1_block("STAGING"),
+                ),
+            ),
+        ],
+    );
+    let env = Env::from_pairs([("S1_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "sentinel_one",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let rows = rows(&sent);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].0, "failed", "{rows:?}");
+    assert_eq!(rows[1], ("not_attempted".to_owned(), None), "{rows:?}");
+    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+}
