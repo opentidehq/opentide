@@ -34,8 +34,8 @@ struct Data {
     field: Option<&'static str>,
     /// The rowan node of a node the version gates read
     /// ([`crate::gates::GATED`]): the checks being moved to the typed AST read
-    /// it (#1415). No other node keeps one, so the lossless tree is freed as
-    /// the arena is built.
+    /// it (#1415). The lossless tree itself stays alive through
+    /// [`Tree::syntax`].
     syntax: Option<SyntaxNode<Lang>>,
 }
 

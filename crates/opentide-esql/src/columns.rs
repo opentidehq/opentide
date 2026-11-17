@@ -810,6 +810,11 @@ mod tests {
         // A comment inside a name: its parts are not one name.
         assert_eq!(cols("ROW a = 1 | EVAL b /* c */ .d = 1"), None);
         assert_eq!(cols("ROW a = 1 | EVAL b.d = 1"), v(&["a", "b.d"]));
+        // A quoted name is unquoted; `EVAL x` by its quoted text is no name.
+        assert_eq!(cols("ROW a = 1 | EVAL `x y` = 1"), v(&["a", "x y"]));
+        assert_eq!(cols("ROW a = 1, `b` = 2 | EVAL `b`"), None);
+        // A `STATS … BY` group is named by its unquoted name.
+        assert_eq!(cols("TS m | STATS BY `x``y`"), v(&["x`y"]));
         assert_eq!(
             cols("ROW ip = \"1.1.1.1\" | ENRICH p ON ip WITH city = name, country"),
             v(&["ip", "city", "country"])
