@@ -120,6 +120,48 @@ class OpentideError(Exception):
         self.partial = partial
         self.more_failures: list[OpentideError] = list(more_failures)
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickles and copies with every field: ``args`` holds the message alone."""
+        return (
+            _rebuilt_error,
+            (
+                type(self),
+                self.code,
+                self.message,
+                self.detail,
+                self.scope,
+                self.status,
+                dict(self.fields),
+                self.partial,
+                list(self.more_failures),
+            ),
+            self.__dict__,
+        )
+
+
+def _rebuilt_error(
+    cls: type[OpentideError],
+    code: str,
+    message: str,
+    detail: str | None,
+    scope: str | None,
+    status: int | None,
+    fields: dict[str, str],
+    partial: DeployOutcome | None,
+    more_failures: list[OpentideError],
+) -> OpentideError:
+    """An :class:`OpentideError` (or *cls*) unpickled from its fields."""
+    return cls(
+        code,
+        message,
+        detail,
+        scope=scope,
+        status=status,
+        fields=fields,
+        partial=partial,
+        more_failures=more_failures,
+    )
+
 
 def _load() -> None:
     """Loads ``opentide._native`` through the one door to the engine, which
