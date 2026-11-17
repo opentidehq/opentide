@@ -994,33 +994,25 @@ pub(crate) fn production_names() -> Vec<&'static str> {
         .collect()
 }
 
-/// Whether the parser reported a problem in `source`, and the names of the
-/// named nodes of its tree in preorder.
-/// For each problem of `source`, the production names of the named nodes that touch it.
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
+/// root first (`opentide_parse::SyntaxError::within`).
 pub(crate) fn error_kinds(source: &str) -> Vec<Vec<&'static str>> {
-    let tree = parse(source);
-    tree.problems
+    parser::parse(source)
+        .errors
         .iter()
-        .map(|problem| {
-            let mut kinds = Vec::new();
-            walk(tree.root_node(), |node| {
-                // A problem sits at the start of the token after it: white space between a
-                // node's end and the problem still touches the node.
-                let after = source
-                    .get(node.end_byte()..problem.at)
-                    .is_some_and(|gap| gap.trim().is_empty());
-                if node.is_named()
-                    && node.start_byte() <= problem.at
-                    && (problem.at <= node.end_byte() || after)
-                {
-                    kinds.push(node.kind());
-                }
-            });
-            kinds
+        .map(|e| {
+            e.within
+                .iter()
+                .map(|&raw| <Lang as rowan::Language>::kind_from_raw(raw))
+                .filter(|kind| !matches!(kind, K::NAMED_PARAMETERS | K::ERROR))
+                .map(node_name)
+                .collect()
         })
         .collect()
 }
 
+/// Whether the parser reported a problem in `source`, and the names of the
+/// named nodes of its tree in preorder.
 pub(crate) fn named_kinds(source: &str) -> (bool, Vec<&'static str>) {
     let tree = parse(source);
     let mut kinds = Vec::new();

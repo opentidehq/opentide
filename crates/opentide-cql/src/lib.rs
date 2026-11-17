@@ -68,23 +68,20 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     (!parse.errors.is_empty(), kinds)
 }
 
-/// For each syntax error of `source`, the `snake_case` names of the nodes that touch it: what
+/// For each syntax error of `source`, the `snake_case` names of the nodes it was recorded in: what
 /// the corpus gate of `opentide-analysis` reads to check that an invalid fixture fails in the
 /// production it names. Not part of the API.
 #[doc(hidden)]
 #[must_use]
 pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
-    let (root, parse) = parser::parse(source);
+    let (_, parse) = parser::parse(source);
     parse
         .errors
         .iter()
         .map(|e| {
-            root.descendants_with_tokens()
-                .filter(|n| {
-                    let r = n.text_range();
-                    r.start() <= e.gap.end() && e.gap.start() <= r.end()
-                })
-                .map(|n| syntax::snake_case(n.kind()))
+            e.within
+                .iter()
+                .map(|&k| syntax::snake_case(syntax::SyntaxKind::from_raw(k)))
                 .collect()
         })
         .collect()

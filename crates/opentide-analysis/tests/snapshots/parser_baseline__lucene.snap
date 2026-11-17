@@ -8025,11 +8025,11 @@ lucene_parse_error error 0:127-1:0 Lucene syntax error: missing `)`
 119..120 operator
 120..126 string
 == corpus/lucene/boolean_query__invalid.lucene
-lucene_parse_error error 0:26-0:26 Lucene syntax error: a clause is missing after `AND`
-0..14 property
-14..15 operator
-15..22 string
-23..26 keyword
+lucene_parse_error error 0:11-0:11 Lucene syntax error: a clause is missing after `AND`
+0..1 string
+2..5 keyword
+6..7 string
+8..11 keyword
 == corpus/lucene/boolean_query__valid.lucene
 0..14 property
 14..15 operator
@@ -8155,11 +8155,9 @@ lucene_parse_error error 0:13-0:22 `/` starts a Lucene regular expression that i
 12..13 operator
 13..23 string
 == corpus/lucene/star__invalid.lucene
-lucene_parse_error error 0:3-0:4 Lucene syntax error near `:`
+lucene_parse_error error 0:2-0:2 Lucene syntax error: a clause is missing after `*:`
 0..1 property
 1..2 operator
-2..3 operator
-3..4 operator
 == corpus/lucene/star__valid.lucene
 0..1 operator
 == corpus/lucene/term_query__invalid.lucene

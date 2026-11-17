@@ -3,35 +3,29 @@ source: crates/opentide-cql/tests/parser_trees.rs
 expression: debug_parse(query(&file))
 input_file: crates/testdata/corpus/cql/negated_function_call__invalid.cql
 ---
-SOURCE_FILE@0..36
-  PIPELINE@0..35
-    AND_FILTER@0..3
-      FREE_TEXT@0..3
-        UNQUOTED_PATTERN@0..3
-          WORD@0..3 "foo"
-    WHITESPACE@3..4 " "
-    NEGATED_FUNCTION_CALL@4..35
-      BANG@4..5 "!"
-      FUNCTION_CALL@5..35
-        FUNCTION_NAME@5..7
-          FUNCTION_NAME_TOKEN@5..7 "in"
-        L_PAREN@7..8 "("
-        ARGUMENT_LIST@8..34
-          ARGUMENT@8..16
-            FIELD_NAME@8..16
-              WORD@8..16 "loglevel"
-          COMMA@16..17 ","
-          WHITESPACE@17..18 " "
-          NAMED_ARGUMENT@18..34
-            ARGUMENT_NAME@18..24
-              WORD@18..24 "values"
-            EQ@24..25 "="
-            ARRAY@25..34
-              L_BRACK@25..26 "["
-              STRING@26..33
-                STRING_TOKEN@26..33 "\"DEBUG\""
-              R_BRACK@33..34 "]"
-        R_PAREN@34..35 ")"
-  WHITESPACE@35..36 "\n"
+SOURCE_FILE@0..31
+  PIPELINE@0..30
+    NEGATED_FUNCTION_CALL@0..30
+      BANG@0..1 "!"
+      FUNCTION_CALL@1..30
+        FUNCTION_NAME@1..3
+          FUNCTION_NAME_TOKEN@1..3 "in"
+        L_PAREN@3..4 "("
+        ARGUMENT_LIST@4..30
+          ARGUMENT@4..12
+            FIELD_NAME@4..12
+              WORD@4..12 "loglevel"
+          COMMA@12..13 ","
+          WHITESPACE@13..14 " "
+          NAMED_ARGUMENT@14..30
+            ARGUMENT_NAME@14..20
+              WORD@14..20 "values"
+            EQ@20..21 "="
+            ARRAY@21..30
+              L_BRACK@21..22 "["
+              STRING@22..29
+                STRING_TOKEN@22..29 "\"DEBUG\""
+              R_BRACK@29..30 "]"
+  WHITESPACE@30..31 "\n"
 
-3..4: expected a filter
+30..31: missing `)` (expected R_PAREN, COMMA)

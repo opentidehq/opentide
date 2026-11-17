@@ -21,27 +21,22 @@ where
     (!parse.errors.is_empty(), kinds)
 }
 
-/// For each syntax error of `parse`, the `Debug` names of the nodes and
-/// tokens whose range touches it: every one that holds the gap the error sits
-/// in, or ends or starts at it (a closer missing at a node's end, the token after it). What
-/// the corpus gate of `opentide-analysis` reads to check that an invalid
-/// fixture fails inside the production it names. Iterative.
+/// For each syntax error of `parse`, the `Debug` names of the nodes it was
+/// recorded in ([`SyntaxError::within`](crate::SyntaxError::within)), root
+/// first: what the corpus gate of `opentide-analysis` reads to check that an
+/// invalid fixture fails inside the production it names.
 #[must_use]
 pub fn debug_error_kinds<L: rowan::Language>(parse: &crate::Parse) -> Vec<Vec<String>>
 where
     L::Kind: std::fmt::Debug,
 {
-    let root = rowan::SyntaxNode::<L>::new_root(parse.green.clone());
     parse
         .errors
         .iter()
         .map(|e| {
-            root.descendants_with_tokens()
-                .filter(|n| {
-                    let r = n.text_range();
-                    r.start() <= e.gap.end() && e.gap.start() <= r.end()
-                })
-                .map(|n| format!("{:?}", n.kind()))
+            e.within
+                .iter()
+                .map(|&k| format!("{:?}", L::kind_from_raw(k)))
                 .collect()
         })
         .collect()

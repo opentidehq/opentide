@@ -104,9 +104,10 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
     tree::named_kinds(source)
 }
 
-/// For each problem of `source`, the production names of the named nodes that touch it,
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
 /// for the corpus gate in `opentide-analysis`. Not API.
 #[doc(hidden)]
+#[must_use]
 pub fn debug_error_kinds(source: &str) -> Vec<Vec<&'static str>> {
     tree::error_kinds(source)
 }
