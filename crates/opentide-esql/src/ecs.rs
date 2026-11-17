@@ -573,6 +573,28 @@ mod tests {
             at("FROM logs-* | WHERE process.nmae == \"a\" AND user.nmae == \"b\""),
             [44, 20]
         );
+        // SORT's keys and MV_EXPAND's field are read.
+        assert_eq!(at("FROM logs-* | SORT process.nmae DESC"), [19]);
+        assert_eq!(at("FROM logs-* | MV_EXPAND process.nmae"), [24]);
+        // A DISSECT option is no pattern: the walk goes on.
+        assert_eq!(
+            at(
+                "FROM logs-* | DISSECT process.nmae \"%{a}\" append_separator = \",\" | WHERE user.nmae == \"y\""
+            ),
+            [22, 73]
+        );
+        // ENRICH defines its clauses' names, not its policy or match field.
+        assert_eq!(
+            at("FROM logs-* | ENRICH p ON host.nmae WITH c = x | WHERE process.nmae == \"a\""),
+            [55]
+        );
+        // INLINE STATS defines its groups' names.
+        assert_eq!(
+            at(
+                "FROM logs-* | INLINE STATS c = COUNT(*) BY host.nmae = host.name | WHERE host.nmae == \"a\""
+            ),
+            [0; 0]
+        );
         let d = ecs_diagnostics("FROM logs-* | WHERE source.ip RLIKE \"a\"");
         assert!(d[0].message.contains("`RLIKE`"), "{}", d[0].message);
     }
