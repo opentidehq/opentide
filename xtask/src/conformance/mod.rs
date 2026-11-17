@@ -11,9 +11,10 @@
 //! prints.
 
 pub mod cli;
+pub mod json;
 
 use anyhow::{Context, Result, bail};
-use opentide_compare::json::{self, JsonDifference};
+use json::JsonDifference;
 use serde::Deserialize;
 
 /// The runners, in the order a run lists them by default.
