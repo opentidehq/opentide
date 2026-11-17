@@ -25,7 +25,9 @@ use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
-use opentide_connectors::connector::{DeployError, DeployRequest, Operation, TenantContext};
+use opentide_connectors::connector::{
+    DeployError, DeployRequest, Deployer as _, Operation, TenantContext,
+};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
 use opentide_schema::vocab::Vocabularies;
@@ -2804,7 +2806,6 @@ impl Sender<'_, '_> {
         action: &Planned,
         result: &mut RuleResult,
     ) -> Result<(), Raised> {
-        use opentide_connectors::defender::DefenderError;
         use opentide_connectors::sentinel_one::{SentinelOne, SentinelOneError};
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
@@ -2822,9 +2823,12 @@ impl Sender<'_, '_> {
         match PlatformId::parse(platform) {
             Some(PlatformId::DefenderForEndpoint) => {
                 let advice = opentide_connectors::text::json_text(&body);
-                let refused = |error: DefenderError, action: &Planned| match error {
-                    DefenderError::Refused { message, context } => {
-                        let context = context.unwrap_or_default();
+                // Graph's refusal of a rule call, its answer the detail.
+                let refused = |error: ConnectorError, action: &Planned| match error {
+                    ConnectorError::Refused {
+                        message, detail, ..
+                    } => {
+                        let context = detail.unwrap_or_default();
                         match action {
                             Planned::Create => tracing::error!(
                                 detail = message.as_str(),
@@ -2856,33 +2860,53 @@ impl Sender<'_, '_> {
                             action_verb(action)
                         ))
                     }
-                    other => raised(&other.into_connector(tenant)),
+                    other => raised(&other),
                 };
-                match action {
-                    Planned::Delete(id) => {
-                        self.block(async { Ok(defender.delete_rule(context, id).await) })
-                            .map_err(|error| raised(&error))?
-                            .map_err(|error| refused(error, action))?;
-                        self.record_deleted(result, platform, tenant);
-                    }
+                // The Deployer's request: the stored id addresses an update
+                // or a delete; the body is the compiled rule.
+                let compiled = || body.to_compact().into_bytes();
+                let request = match action {
+                    Planned::Delete(id) => DeployRequest::delete(id.clone()),
                     Planned::Update(id) => {
-                        self.block(async { Ok(defender.update_rule(context, &body, id).await) })
-                            .map_err(|error| raised(&error))?
-                            .map_err(|error| refused(error, action))?;
+                        DeployRequest::new(id.clone(), Operation::Update, compiled())
                     }
                     Planned::Create => {
-                        let created = self
-                            .block(async { Ok(defender.create_rule(context, &body).await) })
-                            .map_err(|error| raised(&error))?
-                            .map_err(|error| refused(error, action))?;
-                        if created.partial {
-                            self.warned = true;
-                            tracing::warn!(
-                                "this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa"
-                            );
-                        }
-                        self.record_created(result, platform, tenant, &ExternalId::Int(created.id));
+                        DeployRequest::new(rule.uuid.clone(), Operation::Create, compiled())
                     }
+                };
+                let outcome = self
+                    .block(async {
+                        defender
+                            .deploy(context, &request)
+                            .await
+                            .map_err(DeployError::into_connector)
+                    })
+                    .map_err(|error| refused(error, action))?;
+                // The partial deployment: raised, as the warnings exit.
+                for warning in &outcome.warnings {
+                    self.warned |= warning.raised;
+                    tracing::warn!("{}", warning.code);
+                }
+                match (action, outcome.remote_id) {
+                    (Planned::Delete(_), _) => self.record_deleted(result, platform, tenant),
+                    (Planned::Create, Some(id)) => match id.parse::<i64>() {
+                        Ok(id) => {
+                            self.record_created(result, platform, tenant, &ExternalId::Int(id));
+                        }
+                        Err(_) => self.rule_error(
+                            result,
+                            &format!(
+                                "Defender created the rule with an id that is not a number: {id}"
+                            ),
+                        ),
+                    },
+                    (Planned::Create, None) => {
+                        self.rule_error(
+                            result,
+                            "Defender created the rule without an id to record",
+                        );
+                    }
+                    (Planned::Update(_), _) => {}
                 }
             }
             Some(PlatformId::SentinelOne) => {

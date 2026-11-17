@@ -760,15 +760,9 @@ impl Deployer for Defender {
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
-            let answer = |error: DefenderError| match error {
-                DefenderError::Connector(error) => error,
-                other => ConnectorError::Answer {
-                    platform: PLATFORM.into(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    address: "https://graph.microsoft.com".into(),
-                    reason: other.to_string(),
-                },
-            };
+            // Graph's refusal keeps its answer as the detail; a token Entra
+            // ID did not issue fails the tenant.
+            let answer = |error: DefenderError| error.into_connector(&cx.tenant.label.tenant);
             let body = || -> Result<Json, ConnectorError> {
                 serde_json::from_slice(&request.body).map_err(|error| ConnectorError::Setup {
                     platform: PLATFORM.into(),

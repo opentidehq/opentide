@@ -82,6 +82,65 @@ fn defender_deploy_sends_what_the_python_client_sent() {
     );
 }
 
+/// The same steps through the `Deployer`, as `opentide deploy` sends them:
+/// the compiled rule as the body, the stored id addressing an update or a
+/// delete. The requests are the recording's; the safer configuration is a
+/// raised warning; Graph's refusal keeps its answer as the detail and fails
+/// the rule, never the tenant.
+#[test]
+fn defender_the_deployer_sends_what_the_python_client_sent() {
+    use opentide_connectors::connector::{DeployRequest, DeployScope, Deployer, Operation};
+    let inputs = fixture("defender");
+    let rule = inputs.get("deploy").unwrap().get("rule").unwrap();
+    let body = rule.to_compact().into_bytes();
+    let tenant = replay("defender/deploy");
+    let connector = Defender::new();
+    let cx = tenant.cx();
+    let (created, updated, refused, deleted) = block_on(async {
+        let created = connector
+            .deploy(
+                cx,
+                &DeployRequest::new("u1", Operation::Create, body.clone()),
+            )
+            .await
+            .unwrap();
+        let id = created.remote_id.clone().unwrap();
+        let updated = connector
+            .deploy(
+                cx,
+                &DeployRequest::new(id.clone(), Operation::Update, body.clone()),
+            )
+            .await
+            .unwrap();
+        let refused = connector
+            .deploy(
+                cx,
+                &DeployRequest::new("99", Operation::Update, body.clone()),
+            )
+            .await
+            .unwrap_err();
+        let deleted = connector
+            .deploy(cx, &DeployRequest::delete(id))
+            .await
+            .unwrap();
+        (created, updated, refused, deleted)
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert_eq!(created.remote_id.as_deref(), Some("42"));
+    assert_eq!(created.warnings.len(), 1);
+    assert_eq!(created.warnings[0].code, defender::PARTIAL_DEPLOYMENT);
+    assert!(created.warnings[0].raised);
+    assert_eq!(updated.remote_id.as_deref(), Some("42"));
+    assert_eq!(deleted.remote_id, None);
+    assert_eq!(refused.scope, DeployScope::Rule);
+    assert_eq!(refused.failure.code, "tenant_refused");
+    assert_eq!(
+        refused.failure.field("detail"),
+        Some("(empty body, HTTP 404)")
+    );
+}
+
 #[test]
 fn defender_a_single_byte_off_fails() {
     // The same rule, its title one character longer: the create's body differs.
@@ -344,4 +403,22 @@ fn defender_a_list_page_that_is_not_json_is_an_error() {
         "{error}"
     );
     assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// The error the Deployer now returns for a token Entra ID does not issue
+/// fails the tenant (its other rules would fail the same way), with Entra
+/// ID's answer as the detail.
+#[test]
+fn defender_a_refused_sign_in_fails_the_tenant() {
+    use opentide_connectors::connector::{DeployError, DeployScope};
+    let refused = DefenderError::Authentication {
+        detail: "AADSTS7000215: Invalid client secret".into(),
+    };
+    let failure = DeployError::from(refused.into_connector("soc"));
+    assert_eq!(failure.scope, DeployScope::Tenant);
+    assert_eq!(failure.failure.code, "authentication_failed");
+    assert_eq!(
+        failure.failure.field("detail"),
+        Some("AADSTS7000215: Invalid client secret")
+    );
 }
