@@ -107,7 +107,7 @@ impl From<connectors::Capabilities> for Capabilities {
 }
 
 /// The platforms with a connector, in the order opentide lists them.
-#[napi]
+#[napi(catch_unwind)]
 pub fn platforms() -> Vec<String> {
     connectors::platforms()
         .into_iter()
@@ -117,7 +117,7 @@ pub fn platforms() -> Vec<String> {
 
 /// What the connector of `platform` can do; `null` for a platform without
 /// one.
-#[napi]
+#[napi(catch_unwind)]
 pub fn capabilities(platform: String) -> Option<Capabilities> {
     connectors::capabilities(&platform).map(Capabilities::from)
 }
@@ -207,7 +207,7 @@ pub struct Canceller {
 #[napi]
 impl Canceller {
     /// Cancels.
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn cancel(&self) {
         self.inner.cancel();
     }
@@ -265,7 +265,7 @@ impl Connection {
 
     /// A handle that cancels this connection's operations from elsewhere (a
     /// signal handler, a timer).
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn canceller(&self) -> Canceller {
         Canceller {
             inner: self.inner.canceller(),

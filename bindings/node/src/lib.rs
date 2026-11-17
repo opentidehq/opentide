@@ -200,9 +200,13 @@ impl Workspace {
     /// workspace.
     #[napi(catch_unwind, ts_return_type = "Promise<Workspace>")]
     pub fn open(env: &Env, path: String, options: Option<OpenOptions>) -> napi::Result<Object<'_>> {
+        // The working directory is the caller's at the call, not whenever
+        // the work starts: `process.chdir` after `open` changes nothing.
+        let path = at_call(path);
+        let cwd = options.and_then(|options| options.cwd).map(at_call);
         blocking(
             env,
-            move || open_workspace(path, options),
+            move || open_workspace(path, cwd),
             |_env, workspace| Ok(workspace),
         )
     }
@@ -340,7 +344,7 @@ impl Workspace {
     /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
     /// in file order; empty when it configures none. Open one with
     /// `Connection.open`.
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn tenants(&self, platform: String) -> Vec<TenantConfig> {
         self.inner
             .tenants(&platform)
@@ -378,14 +382,23 @@ impl Workspace {
 }
 
 /// `Workspace.open`'s workspace.
-fn open_workspace(path: String, options: Option<OpenOptions>) -> Result<Workspace, Failure> {
+fn open_workspace(
+    path: std::path::PathBuf,
+    cwd: Option<std::path::PathBuf>,
+) -> Result<Workspace, Failure> {
     let mut open = opentide::Options::default();
-    if let Some(cwd) = options.and_then(|options| options.cwd) {
+    if let Some(cwd) = cwd {
         open = open.cwd(cwd);
     }
     Ok(Workspace {
         inner: std::sync::Arc::new(opentide::Workspace::open(path, &open)?),
     })
+}
+
+/// *path* made absolute against the process's working directory now; as
+/// given when it cannot be (the open then reports why).
+fn at_call(path: String) -> std::path::PathBuf {
+    std::path::absolute(&path).unwrap_or_else(|_| path.into())
 }
 
 /// `Workspace.fromFiles`'s workspace.
@@ -935,7 +948,7 @@ mod tests {
                 &dir.path().join("objects").join(family),
             );
         }
-        let ws = open_workspace(dir.path().to_string_lossy().into_owned(), None).unwrap();
+        let ws = open_workspace(dir.path().to_path_buf(), None).unwrap();
         let plan = ws.plan(None).unwrap();
         assert!(plan.ok, "{}", plan.document);
         let summary: serde_json::Value =
@@ -950,14 +963,9 @@ mod tests {
         std::fs::create_dir_all(&configurations).unwrap();
         std::fs::create_dir_all(dir.path().join("objects/rules")).unwrap();
         std::fs::write(configurations.join("paths.toml"), "this is = = not toml").unwrap();
-        let failure = open_workspace(
-            dir.path().to_string_lossy().into_owned(),
-            Some(OpenOptions {
-                cwd: Some(dir.path().to_string_lossy().into_owned()),
-            }),
-        )
-        .err()
-        .unwrap();
+        let failure = open_workspace(dir.path().to_path_buf(), Some(dir.path().to_path_buf()))
+            .err()
+            .unwrap();
         assert_eq!(failure.code, "config_parse", "{failure:?}");
         assert!(!failure.message.is_empty());
     }

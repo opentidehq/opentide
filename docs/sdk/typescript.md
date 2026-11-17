@@ -222,7 +222,7 @@ The other codes are `tenant_unreachable`, `tenant_timeout`, `query_timed_out`, `
 
 ## Run a command
 
-`runJson(argv)` runs one command in the process, off Node's event loop, and resolves to its `--json` document, parsed, with the command line's keys in its order: the envelope (`ok`, `command`, `result`, `failure`, ...) or, for `commands`, the command tree. A command that fails still returns its document, with `ok: false` and `failure.code`. `main(argv)` is the whole program, on the process's streams; it resolves to the exit code.
+`runJson(argv)` runs one command in the process, off Node's event loop, and resolves to its `--json` document, parsed, with the command line's keys in its order: the envelope (`ok`, `command`, `result`, `failure`, ...) or, for `commands`, the command tree. A command that fails still returns its document, with `ok: false` and `failure.code`. `main(argv)` is the whole program, on the process's streams; it resolves to the exit code. Both read the process's working directory and environment when the command starts, on the Rust core's thread: pass `--repo` rather than `process.chdir` between runs, and leave `process.env` unchanged while one is pending (Node and the core would write and read it at once).
 
 ```js
 const { runJson } = require('@opentide/opentide')
@@ -239,7 +239,7 @@ main()
 
 ## Errors
 
-A call that cannot run throws an `Error`, or rejects its promise with one, whose `code` is a stable code: `configuration_invalid` or the configuration check's own code (`config_parse`, ...), `io_error`, `usage_invalid_choice` for an option the command line would refuse, `no_json_document` when `runJson`'s command writes no document (`--version`), and the [tenant operations](#tenant-operations)' codes, with which their promises reject. Match on the code, not the message; `detail` holds the vendor's own words when a tenant gave a reason, and is `null` otherwise. Findings about the workspace are not errors: they are in the report.
+A call that cannot run throws an `Error`, or rejects its promise with one, whose `code` is a stable code: `configuration_invalid` or the configuration check's own code (`config_parse`, ...), `io_error`, `usage_invalid_choice` for an option the command line would refuse, `no_json_document` when `runJson`'s command writes no document (`--version`), and the [tenant operations](#tenant-operations)' codes, with which their promises reject. A failure inside the Rust core itself is `internal_error` (or `GenericFailure` from a synchronous method), never a crash of Node. Match on the code, not the message; `detail` holds the vendor's own words when a tenant gave a reason, and is `null` otherwise. Findings about the workspace are not errors: they are in the report.
 
 ```js
 const { runJson } = require('@opentide/opentide')
