@@ -66,8 +66,9 @@ impl Reply {
         !(200..300).contains(&self.answer.status)
     }
 
-    /// Logs an error status as a warning: deploy reads the answer on (a
-    /// `404` for a saved search that is not there is not a failure).
+    /// Logs an error status as a warning: deploy reads the answer on. A
+    /// `404` for a saved search that is not there is no failure, and its
+    /// caller logs it at debug instead.
     fn log_failure(&self) {
         if self.failed() {
             tracing::warn!(status = self.answer.status, "{}", self.http_error());
@@ -514,10 +515,12 @@ impl Splunk {
             entity_name(name)
         );
         let reply = Self::send(cx, crate::transport::Method::GET, &path, None).await?;
-        reply.log_failure();
+        // Not there yet: the normal path to creating it, no failure.
         if reply.answer.status == 404 {
+            tracing::debug!(status = reply.answer.status, "{}", reply.http_error());
             return Ok(None);
         }
+        reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
         }
