@@ -846,10 +846,7 @@ fn deploy(
         warned: false,
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
-        runtime: tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .ok(),
+        runtime: opentide_connectors::runtime::start(),
     };
     let total = deployment.len();
     let mut deployed: Vec<String> = Vec::new();
@@ -1646,7 +1643,9 @@ struct Sender<'s, 'c> {
     warned: bool,
     environment: Environment,
     cancel: CancellationToken,
-    runtime: Option<tokio::runtime::Runtime>,
+    /// The run's network runtime, or why it could not start (on WASI inside
+    /// the MCP server's: blocking on another there would panic).
+    runtime: Result<tokio::runtime::Runtime, String>,
 }
 
 /// A tenant's connection.
@@ -1668,12 +1667,15 @@ impl Sender<'_, '_> {
         &self,
         work: impl std::future::Future<Output = Result<T, ConnectorError>>,
     ) -> Result<T, ConnectorError> {
-        let Some(runtime) = &self.runtime else {
-            return Err(ConnectorError::Crashed {
-                platform: String::new(),
-                tenant: String::new(),
-                message: "cannot start the network runtime".into(),
-            });
+        let runtime = match &self.runtime {
+            Ok(runtime) => runtime,
+            Err(message) => {
+                return Err(ConnectorError::Crashed {
+                    platform: String::new(),
+                    tenant: String::new(),
+                    message: message.clone(),
+                });
+            }
         };
         let cancel = &self.cancel;
         let interrupted = self.cx.interrupted;

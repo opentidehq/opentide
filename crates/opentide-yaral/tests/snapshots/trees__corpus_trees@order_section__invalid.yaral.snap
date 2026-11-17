@@ -3,7 +3,7 @@ source: crates/opentide-yaral/tests/trees.rs
 expression: debug_parse(&source)
 input_file: crates/testdata/corpus/yaral/order_section__invalid.yaral
 ---
-SOURCE_FILE@0..84
+SOURCE_FILE@0..83
   COMMENT@0..29 "// prod:order_section invalid"
   WHITESPACE@29..30 "\n"
   SEARCH_QUERY@30..83
@@ -20,16 +20,17 @@ SOURCE_FILE@0..84
         LITERAL@52..64
           STRING@52..64 "\"USER_LOGIN\""
     WHITESPACE@64..65 "\n"
-    ORDER_SECTION@65..71
+    ORDER_SECTION@65..83
       ORDER_KW@65..70 "order"
       COLON@70..71 ":"
-    WHITESPACE@71..74 "\n  "
-    ERROR@74..83
-      COMMA@74..75 ","
-      WHITESPACE@75..76 " "
-      VAR_TOKEN@76..78 "$n"
-      WHITESPACE@78..79 " "
-      DESC_KW@79..83 "desc"
-  WHITESPACE@83..84 "\n"
+      WHITESPACE@71..74 "\n  "
+      ORDER_ITEM@74..81
+        VARIABLE@74..76
+          VAR_TOKEN@74..76 "$n"
+        WHITESPACE@76..77 " "
+        DESC_KW@77..81 "desc"
+      COMMA@81..82 ","
+      WHITESPACE@82..83 "\n"
+      ORDER_ITEM@83..83
 errors:
-71..74: expected a section such as `events:`
+82..83: expected an expression

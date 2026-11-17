@@ -1,2 +1,2 @@
 // prod:distinct_operator invalid
-SecurityEvent | distinct ,
+SecurityEvent | distinct Computer,

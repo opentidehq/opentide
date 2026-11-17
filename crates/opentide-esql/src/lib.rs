@@ -104,6 +104,14 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
     tree::named_kinds(source)
 }
 
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
+/// for the corpus gate in `opentide-analysis`. Not API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<&'static str>> {
+    tree::error_kinds(source)
+}
+
 /// How many times this thread has parsed an ES|QL query: one per call of an
 /// entry point (`tests/entry_points.rs`). Not API.
 #[doc(hidden)]
@@ -160,8 +168,10 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
     let to_range = |span: ByteSpan| range(source, span);
     walk(root, |node| {
-        for gate in gates::syntax_gates(node, source) {
-            diagnostics.extend(gate.diagnostic(target, to_range));
+        if let Some(syntax) = node.syntax() {
+            for gate in gates::syntax_gates(syntax, source) {
+                diagnostics.extend(gate.diagnostic(target, to_range));
+            }
         }
         if let Some((spacing, span)) = gates::command_spacing(node, source) {
             let word = node.child(0).map(|k| text(k, source)).unwrap_or_default();
@@ -649,6 +659,18 @@ pub(crate) fn command_name(node: Node, source: &str) -> Option<String> {
 
 fn display_name(name: &str) -> String {
     name.to_ascii_uppercase()
+}
+
+/// The command's keyword on a rowan node (`LIMIT`), for the version gates:
+/// [`keyword_span`] of a one-keyword command.
+pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
+    let start = usize::from(node.text_range().start());
+    let end = node
+        .children_with_tokens()
+        .next()
+        .filter(|first| first.as_token().is_some())
+        .map_or(start, |first| usize::from(first.text_range().end()));
+    ByteSpan::new(start, end.max(start + 1))
 }
 
 /// The command's leading keywords (`LOOKUP JOIN`, `INLINE STATS`).

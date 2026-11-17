@@ -45,6 +45,7 @@ pub mod harfanglab;
 pub mod http;
 pub mod misp;
 pub mod pace;
+pub mod paging;
 pub mod plugin;
 pub mod progress;
 pub mod proxy;
