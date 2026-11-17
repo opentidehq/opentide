@@ -569,6 +569,32 @@ pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
     Ok(())
 }
 
+/// [`install_catalog`] on this thread only, until the returned scope drops
+/// (#1142): the catalog's Tide fields and declared datasets are the ones
+/// this thread's checks use, whatever is installed, and the process's stay
+/// as they are. A part that does not parse is an error and changes nothing.
+///
+/// # Errors
+///
+/// A part of the catalog does not parse.
+pub fn enter_catalog(catalog: &Catalog) -> Result<CatalogScope, String> {
+    check_deprecations(catalog)?;
+    let datasets = Datasets::of_workspace(catalog.visibility.as_deref())?;
+    let fields = opentide_highlight::scope_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    Ok(CatalogScope {
+        _datasets: datasets.enter(),
+        _fields: fields,
+    })
+}
+
+/// The catalog of [`enter_catalog`] in use on its thread while it lives.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct CatalogScope {
+    _datasets: DatasetsScope,
+    _fields: opentide_highlight::TideFieldsScope,
+}
+
 /// Use `catalog` instead of the bundled catalogs whenever no workspace catalog
 /// is installed ([`install_catalog`]), for the whole process: a host that
 /// generates the catalogs from its own models (opentide, with

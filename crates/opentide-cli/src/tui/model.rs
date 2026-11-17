@@ -799,14 +799,11 @@ fn check_files(
     root: &Path,
     catalog: &opentide_analysis::Catalog,
 ) -> LanguageServer {
-    let _engine = crate::queries::ENGINE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // The declared datasets in use before the catalog's go back at the end.
-    let _restore = opentide_analysis::save_visibility();
     // opentide's own catalog for the workspace, as the Python host installs
-    // it; when it cannot be installed, the engine's bundled one stays.
-    let _ = opentide_analysis::install_catalog(catalog);
+    // it, for this thread's checks only (#1142): nothing is installed for
+    // the process, so no lock is needed and nothing is left behind. When it
+    // does not parse, the engine's bundled one is used.
+    let _catalog = opentide_analysis::enter_catalog(catalog).ok();
     // The workspace's declared datasets and Elastic tenants, as the editor
     // reads them.
     let profiles = crate::queries::Profiles::install(&opentide_workspace::OsFs, Some(root));
