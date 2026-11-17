@@ -255,7 +255,8 @@ impl Connection {
 
     /// Applies *operation* (`create`, `update`, `disable` or `delete`) to the
     /// rule *rule_id* on the tenant, sending *body* (a deploy plan's
-    /// payload) as its bytes: an awaitable of `{remote_id, operation}`, as
+    /// payload) as its bytes: an awaitable of `{remote_id, operation,
+    /// warnings}`, as
     /// JSON. *policies* are Sysdig's runtime policies for the rule (a plan
     /// entry's `policies`); `None` takes the tenant's.
     #[pyo3(signature = (rule_id, operation, body, *, policies=None))]
@@ -465,6 +466,14 @@ impl<'a> From<&'a LiveCheck> for LiveCheckJson<'a> {
 struct DeployJson<'a> {
     remote_id: Option<&'a str>,
     operation: &'static str,
+    warnings: Vec<DeployWarningJson<'a>>,
+}
+
+/// A deploy's warning as `DeployWarning` reads it.
+#[derive(Serialize)]
+struct DeployWarningJson<'a> {
+    code: &'a str,
+    message: &'a str,
 }
 
 impl<'a> From<&'a DeployOutcome> for DeployJson<'a> {
@@ -477,6 +486,14 @@ impl<'a> From<&'a DeployOutcome> for DeployJson<'a> {
                 Operation::Disable => "disable",
                 Operation::Delete => "delete",
             },
+            warnings: outcome
+                .warnings
+                .iter()
+                .map(|warning| DeployWarningJson {
+                    code: &warning.code,
+                    message: &warning.message,
+                })
+                .collect(),
         }
     }
 }
@@ -484,6 +501,7 @@ impl<'a> From<&'a DeployOutcome> for DeployJson<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentide::connectors::DeployWarning;
 
     #[test]
     fn a_window_defaults_to_the_minute_before_its_end() {
@@ -569,13 +587,18 @@ mod tests {
             serde_json::to_string(&LiveCheckJson::from(&check)).unwrap(),
             r#"{"result":null,"errors":["missing Timestamp"],"warnings":[]}"#
         );
-        let deployed = DeployOutcome {
-            remote_id: Some("42".into()),
-            operation: Operation::Disable,
-        };
+        let deployed = DeployOutcome::new(Some("42".into()), Operation::Disable);
         assert_eq!(
             serde_json::to_string(&DeployJson::from(&deployed)).unwrap(),
-            r#"{"remote_id":"42","operation":"disable"}"#
+            r#"{"remote_id":"42","operation":"disable","warnings":[]}"#
+        );
+        let recreated =
+            DeployOutcome::new(Some("43".into()), Operation::Update).with_warnings(vec![
+                DeployWarning::new("sysdig_rule_recreated", "creating it again"),
+            ]);
+        assert_eq!(
+            serde_json::to_string(&DeployJson::from(&recreated)).unwrap(),
+            r#"{"remote_id":"43","operation":"update","warnings":[{"code":"sysdig_rule_recreated","message":"creating it again"}]}"#
         );
     }
 }

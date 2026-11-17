@@ -357,13 +357,13 @@ impl Deployer for PythonPlatform {
         );
         Box::pin(async move {
             let value = plain(&work.await?);
-            Ok(DeployOutcome {
-                remote_id: value
+            Ok(DeployOutcome::new(
+                value
                     .get("remote_id")
                     .and_then(Value::as_str)
                     .map(str::to_owned),
-                operation: operation_of(value.get("operation").and_then(Value::as_str), asked),
-            })
+                operation_of(value.get("operation").and_then(Value::as_str), asked),
+            ))
         })
     }
 }

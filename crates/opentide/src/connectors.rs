@@ -46,8 +46,8 @@ pub use jiff::Timestamp;
 /// sorts them), as the tenant returned it.
 pub use opentide_compile::Json;
 pub use opentide_connectors::connector::{
-    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployOutcome, DeployRequest, LiveCheck, Operation,
-    QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow,
+    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployOutcome, DeployRequest, DeployWarning, LiveCheck,
+    Operation, QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow,
 };
 
 /// The code of an operation the platform's connector does not have (a live

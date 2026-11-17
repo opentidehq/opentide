@@ -32,11 +32,11 @@ mod highlight;
 mod lexer;
 mod lexical;
 mod nav;
+mod parsed;
 mod parser;
 mod regex;
 mod semantics;
 mod syntax;
-mod tree;
 
 pub use ecs::ecs_diagnostics;
 
@@ -48,9 +48,9 @@ use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::ast::AstNode;
 use serde::Deserialize;
 use std::sync::OnceLock;
+use syntax::SyntaxKind as K;
 #[doc(hidden)]
 pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
-use tree::{Node, node_span, walk};
 
 const FUNCTIONS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -262,9 +262,28 @@ pub struct AnalyzeResult {
 
 /// Parses `source` as Elasticsearch reads it (the lexer ends a block comment where its lexer
 /// does, nested ones too), with what `lexical` finds about its comments.
-fn parse_prepared(source: &str) -> Option<(tree::Tree, lexical::Prepared)> {
+fn parse_prepared(source: &str) -> Option<(parsed::Parsed, lexical::Prepared)> {
     let prepared = lexical::prepare(source);
-    Some((tree::parse(source), prepared))
+    Some((parsed::parse(source), prepared))
+}
+
+thread_local! {
+    /// The steps of the analysis's inner loops on this thread: [`steps`].
+    static STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one step of an inner loop: a child looked at for a span or hover, an operand typed,
+/// a run level folded, a parent climbed.
+pub(crate) fn step() {
+    STEPS.set(STEPS.get().wrapping_add(1));
+}
+
+/// How many steps of its inner loops the analysis has taken on this thread. For the tests that
+/// hold the work to linear in the query (`tests/analysis_runs.rs`): counted, not timed, so the
+/// checks are deterministic. Not API.
+#[doc(hidden)]
+pub fn steps() -> usize {
+    STEPS.get()
 }
 
 /// Analyze an EQL query: its diagnostics and highlight tokens. The findings'
@@ -280,7 +299,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 fn analyze_lines(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
-    let Some((tree, prepared)) = parse_prepared(source) else {
+    let Some((parsed, prepared)) = parse_prepared(source) else {
         return AnalyzeResult {
             diagnostics: vec![Diagnostic::error(
                 codes::EQL_PARSE_ERROR,
@@ -291,7 +310,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         };
     };
     let mut out = Vec::new();
-    if let Some(problem) = tree.problems.first() {
+    if let Some(problem) = parsed.problems.first() {
         out.push(Diagnostic::error(
             codes::EQL_PARSE_ERROR,
             parse_error_message(problem, source),
@@ -299,7 +318,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     check_comments(&prepared.comments, source, &mut out);
-    if let Some(span) = highlight::expression_depth_exceeded(&tree.syntax) {
+    if let Some(span) = highlight::expression_depth_exceeded(&parsed.syntax) {
         out.push(Diagnostic::warning(
             codes::EQL_EXPRESSION_DEPTH,
             format!(
@@ -309,31 +328,18 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
             range(source, span),
         ));
     }
-    let mut translated = std::collections::HashMap::new();
-    // The parser's tree in document order; a run of `or`, `and` or arithmetic is first checked
-    // at each level the view nests it in, the outermost first, as the view's own walk did. (That
-    // walk visited a broken run's last operand twice, under two levels; this one visits it once.)
-    for event in tree.syntax.preorder() {
-        let rowan::WalkEvent::Enter(syntax) = event else {
-            continue;
-        };
-        let Some(node) = tree.view(&syntax) else {
-            continue;
-        };
-        check_node(node, &mut translated, source, catalog, &mut out);
-        let mut level = node;
-        while let Some(inner) = level
-            .child(0)
-            .filter(|c| c.kind() == level.kind() && c.syntax().is_none())
-        {
-            check_node(inner, &mut translated, source, catalog, &mut out);
-            level = inner;
+    let mut translated = semantics::Translated::default();
+    semantics::forget_types();
+    for event in parsed.syntax.preorder() {
+        if let rowan::WalkEvent::Enter(node) = event {
+            check_node(&node, &parsed, &mut translated, source, catalog, &mut out);
         }
     }
-    if let Some(root) = ast::SourceFile::cast(tree.syntax.clone()) {
+    semantics::forget_types();
+    if let Some(root) = ast::SourceFile::cast(parsed.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
-    let tokens = highlight(&spec, source, &tree.syntax);
+    let tokens = highlight(&spec, source, &parsed.syntax);
     AnalyzeResult {
         diagnostics: out,
         tokens,
@@ -359,7 +365,7 @@ fn check_comments(found: &[lexical::CommentFinding], source: &str, out: &mut Vec
 
 /// The parser's first error, worded for a reader: the token it stopped at and what it
 /// expected there.
-fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
+fn parse_error_message(problem: &parsed::Problem, source: &str) -> String {
     if problem.too_deep {
         return format!("EQL syntax error: {}", problem.message);
     }
@@ -399,109 +405,92 @@ fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
     }
 }
 
-/// Runs `check` on the typed node of a view node, when it stands for one of that type.
-fn with_ast<N: AstNode<Language = Lang>>(syntax: Option<&SyntaxNode>, check: impl FnOnce(N)) {
-    if let Some(n) = syntax.cloned().and_then(N::cast) {
+/// Runs `check` on `node` as the typed node `N`.
+fn with_ast<N: AstNode<Language = Lang>>(node: &SyntaxNode, check: impl FnOnce(N)) {
+    if let Some(n) = N::cast(node.clone()) {
         check(n);
     }
 }
 
 fn check_node(
-    node: Node,
-    translated: &mut std::collections::HashMap<usize, bool>,
+    node: &SyntaxNode,
+    parsed: &parsed::Parsed,
+    translated: &mut semantics::Translated,
     source: &str,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    // Keyword tokens share their kind with the node (`sequence`, `join`).
-    if !node.is_named() {
-        return;
-    }
+    let kind = node.kind();
+    let expression = matches!(
+        kind,
+        K::COMPARISON
+            | K::PREDICATE_EXPRESSION
+            | K::UNARY_EXPRESSION
+            | K::NOT_EXPRESSION
+            | K::FUNCTION_CALL
+    );
     // An expression the parser could not finish (`startsWith(a, `) is not checked further: its
     // arity and types are those of a fragment, and the syntax error already says what is wrong.
-    let expression = matches!(
-        node.kind(),
-        "comparison"
-            | "predicate_expression"
-            | "binary_expression"
-            | "unary_expression"
-            | "and_expression"
-            | "or_expression"
-            | "not_expression"
-            | "function_call"
-    );
-    if expression && node.has_error() {
+    // (A span is a walk down the node's edges: worth it only when the parser found a problem.)
+    if expression && parsed.has_problems() && parsed.broken(nav::span(node)) {
         return;
     }
-    // The checks ported to the typed AST take the parser's node; a level of a re-nested run
-    // has none, and needs none of them.
-    let syntax = node.syntax();
-    match node.kind() {
-        "string" => with_ast(syntax.as_ref(), |n| builder::check_string(&n, source, out)),
-        "index" | "join" | "relationship" => {
-            if let Some(n) = &syntax {
-                builder::check_shape(n, source, out);
+    match kind {
+        K::STRING => with_ast(node, |n| builder::check_string(&n, source, out)),
+        K::INDEX | K::JOIN | K::RELATIONSHIP => builder::check_shape(node, source, out),
+        K::FIELD => with_ast(node, |n| builder::check_field_case(&n, source, out)),
+        K::EVENT_CATEGORY => with_ast(node, |n| builder::check_category_case(&n, source, out)),
+        K::COMPARISON => with_ast(node, |n: ast::Comparison| {
+            builder::check_comparison_wildcard(&n, source, out);
+            semantics::check_comparison_fields(&n, translated, source, out);
+        }),
+        K::PREDICATE_EXPRESSION => with_ast(node, |n: ast::PredicateExpression| {
+            builder::check_predicate_wildcard(&n, source, out);
+            regex::check_regex(&n, source, out);
+            semantics::check_predicate_types(&n, source, out);
+            semantics::check_predicate_fields(&n, translated, source, out);
+        }),
+        // A run is checked at each level Elasticsearch's builder nests it in, the outermost
+        // first; a level that holds a syntax error is not.
+        K::BINARY_EXPRESSION | K::AND_EXPRESSION | K::OR_EXPRESSION => {
+            let run = semantics::Run::of(node);
+            for level in (0..run.len()).rev() {
+                if parsed.broken(run.span(level)) {
+                    continue;
+                }
+                if kind == K::BINARY_EXPRESSION {
+                    semantics::check_level_types(&run, level, source, out);
+                } else {
+                    semantics::check_level_conditions(&run, level, source, out);
+                }
             }
         }
-        "field" => with_ast(syntax.as_ref(), |n| {
-            builder::check_field_case(&n, source, out);
+        K::UNARY_EXPRESSION => with_ast(node, |n| semantics::check_unary_types(&n, source, out)),
+        K::NOT_EXPRESSION => with_ast(node, |n: ast::NotExpression| {
+            semantics::check_condition(n.operand(), source, out);
         }),
-        "event_category" => with_ast(syntax.as_ref(), |n| {
-            builder::check_category_case(&n, source, out);
+        K::EVENT_QUERY => with_ast(node, |n: ast::EventQuery| {
+            semantics::check_condition(n.condition(), source, out);
         }),
-        "comparison" => {
-            with_ast(syntax.as_ref(), |n| {
-                builder::check_comparison_wildcard(&n, source, out);
+        K::FUNCTION_CALL => with_ast(node, |n| {
+            if builder::check_function(&n, source, catalog, out) {
+                semantics::check_call_types(&n, source, out);
+            }
+        }),
+        K::SEQUENCE => with_ast(node, |n| builder::check_sequence(&n, source, out)),
+        K::SAMPLE => with_ast(node, |n| builder::check_sample(&n, source, out)),
+        K::SUBQUERY => {
+            with_ast(node, |n: ast::Subquery| {
+                semantics::check_condition(n.condition(), source, out);
             });
-            semantics::check_field_comparisons(node, translated, source, out);
-        }
-        "predicate_expression" => {
-            with_ast(syntax.as_ref(), |n| {
-                builder::check_predicate_wildcard(&n, source, out);
-            });
-            regex::check_regex(node, source, out);
-            semantics::check_types(node, source, out);
-            semantics::check_field_comparisons(node, translated, source, out);
-        }
-        "binary_expression" | "unary_expression" => semantics::check_types(node, source, out),
-        "and_expression" | "or_expression" | "not_expression" | "event_query" => {
-            semantics::check_conditions(node, source, out);
-        }
-        "function_call" => {
-            let resolves = syntax
-                .clone()
-                .and_then(ast::FunctionCall::cast)
-                .is_some_and(|n| builder::check_function(&n, source, catalog, out));
-            if resolves {
-                semantics::check_types(node, source, out);
-            }
-        }
-        "sequence" => with_ast(syntax.as_ref(), |n| {
-            builder::check_sequence(&n, source, out);
-        }),
-        "sample" => with_ast(syntax.as_ref(), |n| builder::check_sample(&n, source, out)),
-        "subquery" => {
-            semantics::check_conditions(node, source, out);
-            if let Some(n) = &syntax {
-                builder::check_shape(n, source, out);
-            }
+            builder::check_shape(node, source, out);
         }
         _ => {}
     }
 }
 
-/// The span of a node's first child (its keyword).
-fn keyword_span(node: Node) -> ByteSpan {
-    let first = node.child(0).unwrap_or(node);
-    node_span(first)
-}
-
 fn range(source: &str, span: ByteSpan) -> Range {
     span_to_range(source, span)
-}
-
-fn text<'a>(node: Node, source: &'a str) -> &'a str {
-    source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
 
 /// Each token's capture (`highlight::captures`), a known function's as `function.builtin`.
@@ -539,36 +528,36 @@ pub struct Maxspan {
 
 /// Every `sequence` in the query, with its `maxspan` in milliseconds.
 pub fn sequences(source: &str) -> Vec<SequenceInfo> {
-    let Some((tree, _)) = parse_prepared(source) else {
+    let Some((parsed, _)) = parse_prepared(source) else {
         return Vec::new();
     };
-    let mut out = Vec::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() != "sequence" || !node.is_named() {
-            return;
-        }
-        let maxspan = node
-            .named_children(&mut node.walk())
-            .find(|c| c.kind() == "sequence_params")
-            .and_then(|p| p.child_by_field_name("maxspan"))
-            .map(|unit| Maxspan {
-                span: node_span(unit),
-                millis: maxspan_millis(unit, source),
-            });
-        out.push(SequenceInfo {
-            span: keyword_span(node),
-            maxspan,
-        });
-    });
-    out
+    parsed
+        .syntax
+        .descendants()
+        .filter_map(ast::Sequence::cast)
+        .map(|sequence| {
+            let maxspan = sequence
+                .params()
+                .next()
+                .and_then(|p| p.maxspan())
+                .map(|unit| Maxspan {
+                    span: nav::span(unit.syntax()),
+                    millis: maxspan_millis(&unit, source),
+                });
+            SequenceInfo {
+                span: nav::first_child_span(sequence.syntax()),
+                maxspan,
+            }
+        })
+        .collect()
 }
 
-fn maxspan_millis(unit: Node, source: &str) -> Option<u64> {
+fn maxspan_millis(unit: &ast::TimeUnit, source: &str) -> Option<u64> {
     let value = unit
-        .child_by_field_name("value")
-        .and_then(|v| text(v, source).parse::<u64>().ok())
+        .value()
+        .and_then(|v| nav::text(v.syntax(), source).parse::<u64>().ok())
         .filter(|v| *v > 0)?;
-    let suffix = text(unit.child_by_field_name("unit")?, source);
+    let suffix = nav::text(unit.unit()?.syntax(), source);
     let factor = MAXSPAN_UNITS.iter().find(|(n, _)| *n == suffix)?.1;
     Some(value.saturating_mul(factor))
 }
@@ -594,18 +583,17 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     if !source.is_char_boundary(offset) {
         return None;
     }
-    let (tree, _) = parse_prepared(source)?;
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
+    let (parsed, _) = parse_prepared(source)?;
+    let (word, parent) = nav::element_at(&parsed.syntax, offset, source);
     let catalog = Catalog::cached();
-    let parent = node.parent();
-    if parent.is_some_and(|p| p.kind() == "function_call") {
-        let name = text(node, source).trim_end_matches('~');
+    if parent == Some(K::FUNCTION_CALL) {
+        let name = word.trim_end_matches('~');
         if let Some(row) = catalog.function(name) {
             return Some(function_hover(row));
         }
     }
-    if parent.is_some_and(|p| p.kind() == "pipe")
-        && let Some(row) = catalog.pipe(text(node, source))
+    if parent == Some(K::PIPE_STAGE)
+        && let Some(row) = catalog.pipe(word)
     {
         let mut md = format!(
             "**{}** (pipe)\n\n```eql\n{}\n```\n\n{}",
@@ -616,11 +604,6 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         }
         return Some(md);
     }
-    let word = match node.kind() {
-        "missing_event_open" => "![",
-        "optional_marker" => "?",
-        _ => text(node, source),
-    };
     KEYWORDS
         .iter()
         .find(|(k, _, _)| *k == word)
@@ -769,15 +752,15 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
 }
 
 fn fields_in(source: &str) -> Vec<String> {
-    let Some((tree, _)) = parse_prepared(source) else {
+    let Some((parsed, _)) = parse_prepared(source) else {
         return Vec::new();
     };
-    let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() == "field" && !node.has_error() {
-            names.insert(text(node, source).trim_start_matches('?').to_string());
-        }
-    });
+    let names: std::collections::BTreeSet<String> = parsed
+        .syntax
+        .descendants()
+        .filter(|node| node.kind() == K::FIELD && !parsed.broken(nav::span(node)))
+        .map(|node| nav::text(&node, source).trim_start_matches('?').to_string())
+        .collect();
     names.into_iter().collect()
 }
 

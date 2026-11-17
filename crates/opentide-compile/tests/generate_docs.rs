@@ -158,7 +158,73 @@ fn check(flavor: &str) {
         "{flavor}: the files written"
     );
     for (path, text) in &written {
-        assert_eq!(text, &expected[path], "{flavor}: {path}");
+        assert_eq!(text, &quote_title(&expected[path]), "{flavor}: {path}");
+    }
+}
+
+/// The one deliberate difference from 0.28's pages: GitLab wiki front
+/// matter quotes the title (a YAML double-quoted scalar), which 0.28 wrote
+/// bare, so a name with `: ` or ` #` broke the front matter or lost its end.
+fn quote_title(page: &str) -> String {
+    let Some(rest) = page.strip_prefix("---\ntitle: ") else {
+        return page.to_owned();
+    };
+    let (title, rest) = rest.split_once('\n').unwrap();
+    format!(
+        "---\ntitle: {}\n{rest}",
+        opentide_schema::node::double_quoted(title)
+    )
+}
+
+/// GitLab wiki front matter is YAML that reads back as the object's name,
+/// whatever the name holds: `: `, `#`, `[`, words YAML reads as other
+/// types, quotes, a leading `-`.
+#[test]
+fn gitlab_front_matter_reads_back_as_the_name() {
+    let names = [
+        "Mimikatz: dump [x] #1",
+        "yes",
+        "null",
+        "it's \"quoted\"",
+        "- leading dash",
+        "{a: b} & *alias",
+    ];
+    for name in names {
+        let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+            let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+            let text = std::fs::read_to_string(&rule).unwrap();
+            let mut lines = text.lines().map(str::to_owned).collect::<Vec<_>>();
+            let at = lines
+                .iter()
+                .position(|line| line.starts_with("name:"))
+                .unwrap();
+            lines[at] = format!("name: {}", opentide_schema::node::double_quoted(name));
+            std::fs::write(&rule, lines.join("\n") + "\n").unwrap();
+        });
+        let written = render_with(
+            &workspace,
+            None,
+            &FlavorHints {
+                gitlab: true,
+                ..FlavorHints::default()
+            },
+        )
+        .unwrap();
+        let page = &written["docs/rules/00000000-0000-4000-8003-000000000001.md"];
+        let yaml = page
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---\n"))
+            .unwrap()
+            .0;
+        let document = opentide_schema::node::load(yaml).unwrap();
+        let title = document
+            .root()
+            .unwrap()
+            .get("title")
+            .unwrap()
+            .value
+            .as_str();
+        assert_eq!(title, Some(name), "{yaml}");
     }
 }
 
@@ -408,6 +474,148 @@ fn gitlab_pages_are_ordered_and_named_by_uuid() {
         written["docs/objectives/credential-access-objective.md"]
             .contains("| Rule | [Sentinel KQL Rule](../rules/sentinel-kql-rule) | Downstream |\n")
     );
+}
+
+/// `page`'s Markdown: without its Mermaid blocks (fenced, or Azure DevOps'
+/// `::: mermaid`) and its wiki front matter, which are not Markdown.
+fn without_mermaid(page: &str) -> String {
+    let page = page
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split_once("\n---\n"))
+        .map_or(page, |(_, rest)| rest);
+    let mut out = String::new();
+    let mut inside = false;
+    for line in page.lines() {
+        if !inside && (line == "```mermaid" || line == "::: mermaid") {
+            inside = true;
+        } else if inside && (line == "```" || line == ":::") {
+            inside = false;
+        } else if !inside {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// Whether `text` holds `raw` with its first character not escaped: not
+/// after an odd run of backslashes.
+fn unescaped(text: &str, raw: &str) -> bool {
+    // Code spans (single backticks here) are not Markdown.
+    let text: String = text.split('`').step_by(2).collect::<Vec<_>>().join(" ");
+    text.match_indices(raw).any(|(at, _)| {
+        let before = &text[..at];
+        let run = before.len() - before.trim_end_matches('\\').len();
+        run.is_multiple_of(2)
+    })
+}
+
+/// An object's or a signal's name, a value the vocabulary lacks and a CVE
+/// record's text are text on every page: they cannot open a link
+/// (`[x](javascript:…)`) or raw HTML (`<b>`), in a heading, a link's text, a
+/// table or an index. A `\|` in a name stays in its cell, and a code span
+/// in a name renders as it did.
+#[test]
+fn names_are_escaped_where_they_become_markdown() {
+    const RULE: &str = "Evil [x](javascript:alert(1)) <b>bold</b>";
+    const SIGNAL: &str = "Signal [y](javascript:alert(2)) <i>it</i>";
+    const OBJECTIVE: &str = "Pipe a\\|b [o](javascript:6) `<code>` and `C:\\x`";
+    const THREAT: &str = "Threat [t](javascript:7) <u>u</u>";
+    const ACTOR: &str = "Actor [a](javascript:5) <s>a</s>";
+    let rename = |file: &Path, from: &str, to: &str| {
+        let text = std::fs::read_to_string(file).unwrap();
+        assert!(text.contains(from), "{}", file.display());
+        std::fs::write(file, text.replacen(from, to, 1)).unwrap();
+    };
+    let quoted = opentide_schema::node::double_quoted;
+    let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+        let objects = ws.join("Objects");
+        rename(
+            &objects.join("Detection Rules/rule-0001-sentinel-kql.yaml"),
+            "Sentinel KQL Rule",
+            &quoted(RULE),
+        );
+        let objective = objects.join("Detection Objectives/objective-0001-credential-access.yaml");
+        rename(&objective, "Suspicious logon signal", &quoted(SIGNAL));
+        rename(
+            &objective,
+            "Credential Access Objective",
+            &quoted(OBJECTIVE),
+        );
+        let threat = objects.join("Threat Vectors/threat-0001-simulated-actor.yaml");
+        rename(&threat, "Simulated Actor", &quoted(THREAT));
+        rename(
+            &threat,
+            "    - name: att&ck::G0006\n",
+            &format!("    - name: att&ck::G0006\n    - name: {}\n", quoted(ACTOR)),
+        );
+        append(
+            ws,
+            "Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+            "  cve:\n    - CVE-2023-0001\n",
+        );
+    });
+    let source = || {
+        CveSource::new(|id: &str| {
+            CveDetail::Found(Box::new(CveRecord {
+                identifier: id.into(),
+                title: Some("Title [c](javascript:8) <em>e</em>".into()),
+                severity: Some("HIGH [sev](javascript:2) <i>s</i>".into()),
+                aliases: vec!["GHSA-[al](javascript:3)".into()],
+                weaknesses: vec![Weakness {
+                    identifier: "CWE-79".into(),
+                    name: "Weak [w](javascript:4) <u>w</u>".into(),
+                }],
+                affected: vec!["<b>ADC</b>".into()],
+                ..CveRecord::default()
+            }))
+        })
+    };
+    let names = [RULE, SIGNAL, THREAT, ACTOR];
+    for flavor in ["generic", "github", "gitlab", "azure-devops"] {
+        let written = render_cves(
+            &workspace,
+            Some(flavor),
+            &FlavorHints::default(),
+            Some(source()),
+        )
+        .unwrap();
+        let mut seen = [0; 4];
+        let mut code_spans = 0;
+        for (path, text) in &written {
+            // Mermaid labels are not Markdown: their own escaping is tested
+            // with the diagrams.
+            let text = &without_mermaid(text);
+            for raw in [
+                "[x](", "[y](", "[o](", "[t](", "[a](", "[c](", "[sev](", "[al](", "[w](", "<b>",
+                "<i>", "<u>", "<s>", "<em>",
+            ] {
+                assert!(
+                    !unescaped(text, raw),
+                    "{flavor}: {path} holds an unescaped {raw:?}:\n{text}"
+                );
+            }
+            // `a\|b`: the backslash escaped and the pipe too, so the cell
+            // does not end there.
+            for row in text.lines().filter(|line| line.starts_with('|')) {
+                assert!(!row.contains("a\\\\|b"), "{flavor}: {path}: {row}");
+            }
+            for (count, name) in seen.iter_mut().zip(names) {
+                let escaped = name
+                    .replace('[', "\\[")
+                    .replace(']', "\\]")
+                    .replace('<', "\\<")
+                    .replace('>', "\\>");
+                *count += text.matches(&escaped).count();
+            }
+            code_spans += text.matches("`<code>` and `C:\\x`").count();
+        }
+        assert!(seen.iter().all(|count| *count > 0), "{flavor}: {seen:?}");
+        assert!(
+            code_spans > 1,
+            "{flavor}: the code spans, kept, {code_spans} times"
+        );
+    }
 }
 
 /// Azure DevOps: wiki links from the wiki's root, a table of contents on

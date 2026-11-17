@@ -3182,6 +3182,7 @@ dependencies = [
 name = "opentide-analysis"
 version = "0.12.0"
 dependencies = [
+ "indexmap",
  "insta",
  "opentide-core",
  "opentide-cql",
@@ -3194,10 +3195,13 @@ dependencies = [
  "opentide-kql",
  "opentide-kuery",
  "opentide-lucene",
+ "opentide-schema",
  "opentide-spl",
  "opentide-tide",
+ "opentide-workspace",
  "opentide-yara",
  "opentide-yaral",
+ "rayon",
  "regex",
  "serde_json",
  "toml 0.8.23",
