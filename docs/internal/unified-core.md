@@ -324,7 +324,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 2. The default flips per command with a changelog entry; `OPENTIDE_ENGINE=python` remains for one more release as an escape hatch.
 3. The Python implementation of a command is deleted one release after its flip.
 4. SDK names that change keep a deprecated alias for one minor release.
-5. The extension moves when the WASI build passes every golden case that needs no network (`cargo xtask golden check --runner wasi`).
+5. The extension moves when the WASI build passes the command line's snapshot cases that need no network (the oracle's `golden check --runner wasi` was retired with the recordings, #1142).
 
 ## 8. Distribution
 

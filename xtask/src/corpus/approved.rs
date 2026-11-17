@@ -457,6 +457,23 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn quoting_only_ignores_quote_characters_and_nothing_else() {
+        let oracle = json!({"message": "Value 'clearr' is not valid", "line": 3});
+        let rust = json!({"message": "Value \"clearr\" is not valid", "line": 3});
+        assert!(quoting_only(Some(&oracle), Some(&rust), &[]));
+        // The same finding is no quoting difference.
+        assert!(!quoting_only(Some(&oracle), Some(&oracle), &[]));
+        // Another word, or another field, is.
+        let other = json!({"message": "Value \"clear\" is not valid", "line": 3});
+        assert!(!quoting_only(Some(&oracle), Some(&other), &[]));
+        let moved = json!({"message": "Value \"clearr\" is not valid", "line": 4});
+        assert!(!quoting_only(Some(&oracle), Some(&moved), &[]));
+        // A finding on one side only.
+        assert!(!quoting_only(Some(&oracle), None, &[]));
+        assert!(!quoting_only(None, Some(&rust), &[]));
+    }
+
     fn argv(args: &[&str]) -> Vec<String> {
         ["opentide", "--json", "validate"]
             .iter()

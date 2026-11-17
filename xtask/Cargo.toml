@@ -8,7 +8,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "The repository's Rust tooling: cargo xtask check-layers, compare, golden and bench, and the codegen command to come"
+description = "The repository's Rust tooling: cargo xtask check-layers, codegen, corpus, conformance, bench and the rest (cargo xtask help)"
 
 [lints]
 workspace = true

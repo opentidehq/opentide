@@ -1,6 +1,6 @@
 ---
 name: mcp-server
-description: Change opentide's MCP server (`opentide mcp start`, crates/opentide-cli/src/mcp/) — add or modify a tool or resource, keep the stdio JSON-RPC stream clean, return errors as data, keep docs/mcp/ in sync, and test it against the recorded sessions and over stdio. Use for any work on MCP tools, resources or the server manifest.
+description: Change opentide's MCP server (`opentide mcp start`, crates/opentide-cli/src/mcp/) — add or modify a tool or resource, keep the stdio JSON-RPC stream clean, return errors as data, keep docs/mcp/ in sync, and test it in-process and over stdio. Use for any work on MCP tools, resources or the server manifest.
 ---
 
 # MCP server — opentide
