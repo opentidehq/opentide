@@ -841,14 +841,13 @@ eql_parse_error error 0:14-0:15 EQL syntax error: this `/*` comment is never clo
 25..37 comment
 38..42 boolean
 == corpus/eql/comparison__invalid.eql
-eql_parse_error error 0:26-0:27 EQL syntax error: use `==` for equality; `=` is not a comparison
+eql_parse_error error 0:28-0:28 EQL syntax error: the query ends too early; expected a name, a function, a number, a string, a quoted name, `false`, `null`, `true`, `+`, `-`, `(`, or `?`
 0..7 type
 8..13 keyword
 14..21 property
 21..22 punctuation.delimiter
 22..25 property
-26..27 operator
-28..29 number
+26..28 operator
 == corpus/eql/comparison__valid.eql
 0..7 type
 8..13 keyword

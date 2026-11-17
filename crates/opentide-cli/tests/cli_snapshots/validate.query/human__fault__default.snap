@@ -338,11 +338,11 @@ exit: 1
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
 ␛[1m␛[31merror[lucene_parse_error]␛[0m␛[1m: Lucene syntax error: missing `)`␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/scheduled-harvest-rule-0099.yaml␛\objects/rules/scheduled-harvest-rule-0099.yaml:59:7␛]8;;␛\
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/scheduled-harvest-rule-0099.yaml␛\objects/rules/scheduled-harvest-rule-0099.yaml:59:19␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m58 │␛[0m     query: |
 ␛[34m59 │␛[0m       name␛[35m:␛[0m(␛[32ma␛[0m ␛[1m␛[35mOR␛[0m ␛[32mb␛[0m
-␛[34m   │␛[0m       ␛[1m␛[31m━━━━━━━━━━━━␛[0m
+␛[34m   │␛[0m                   ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
    ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query

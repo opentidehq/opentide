@@ -7,11 +7,13 @@ is on PyPI: both run the same Rust core, in process.
 ```js
 const { Workspace, runJson } = require('@opentide/opentide')
 
-const ws = Workspace.open('.')
-const validation = ws.validate()
-for (const issue of validation.report.issues) console.log(issue.code, issue.message)
+async function main() {
+  const ws = await Workspace.open('.')
+  const validation = ws.validate()
+  for (const issue of validation.report.issues) console.log(issue.code, issue.message)
 
-const tree = runJson(['commands'])
+  const tree = await runJson(['commands'])
+}
 ```
 
 ```bash

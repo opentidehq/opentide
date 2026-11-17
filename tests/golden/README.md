@@ -40,8 +40,8 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   catalogue), replaced by their size and SHA-256 until it fits in 16 KiB; any other is its size
   and SHA-256. Only the case's paths are replaced in such a file (the full normaliser takes
   seconds on megabytes), so it must hold nothing else that changes between runs.
-- **Normalised, and only because it differs between two runs or two hosts** (`opentide-compare`'s
-  normaliser, the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of
+- **Normalised, and only because it differs between two runs or two hosts** (the snapshots'
+  normaliser, `crates/opentide-cli/tests/common/normalise.rs`, the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of
   fixed length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`;
   the week back only for `query`'s default window), the spinner's glyph and a live frame's
   content where the case opts in, crash-log names, catalog fingerprints, UUIDs a run mints where
@@ -153,7 +153,7 @@ record --oracle FILE` take the same file. Run the record and the check by hand (
    `cargo xtask golden record --check-determinism`, and review every difference: each one is a
    behaviour change between the two releases.
 4. **Normalisation hides only what differs between two runs of the same case** (below). A rule
-   is code in `crates/opentide-compare/src/normalise.rs` (moved there by UC-0.7 so the CLI's compare mode shares it) with a unit test; widening one to make a difference
+   is code in `crates/opentide-cli/tests/common/normalise.rs` (for the snapshots; xtask's recorder still reads its copy in `crates/opentide-compare`) with a unit test; widening one to make a difference
    go away is a review failure.
 5. **Recording is deterministic**: a pull request that re-records runs
    `cargo xtask golden record --check-determinism` before it is opened, and says so in its
@@ -246,7 +246,7 @@ twice: once per implementation). Cassettes are recorded from the oracle with `ca
 record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
-A command no golden case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is compared by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`); its approved differences name the case `cassette:<scenario>`, and that test, not `golden check`, applies them and finds them stale.
+A command no golden case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is run by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`): the files it writes load to the oracle's data, and their bytes are held to a snapshot of the Rust command's own output (`tests/extract_sentinel/snapshots/`, #1139).
 
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
 of `docs/internal/cli-experience.md` ("Errors people and agents make": a typo in a command, an

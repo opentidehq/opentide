@@ -654,3 +654,107 @@ for (const server of SERVERS) {
     },
   );
 }
+
+// `opentide mcp start` in the WASI module (#1180, #1142). A live `deploy_rule`
+// runs the command line's deploy inside the server's runtime, and WASI has
+// no other thread to hand it to. The deploy built a runtime of its own there
+// and dropped it inside the server's, which tokio refuses with a panic, a
+// trap in the module: the server died and answered nothing more. Through
+// opentide_connectors::runtime the deploy builds none there; it fails as
+// any deploy without the network does in this build, and the server goes on.
+test(
+  "mcp (wasi): a live deploy_rule fails without taking the server down",
+  {
+    skip: wasiModule === undefined ? "wasi: no WASI module (OPENTIDE_WASI_CLI)" : false,
+    timeout: 120_000,
+  },
+  async () => {
+    const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-host-")));
+    const ws = join(scratch, "ws");
+    cpSync(join(root, "tests/golden/fixtures/deploy-tenants"), ws, { recursive: true });
+    const server = spawn(
+      process.execPath,
+      ["--no-turbo-fast-api-calls", join(root, "scripts/engine/wasi-run.mjs"), wasiModule as string, "mcp", "start"],
+      {
+        cwd: ws,
+        env: {
+          PATH: process.env.PATH ?? "",
+          HOME: ws,
+          PWD: ws,
+          NO_COLOR: "1",
+          TZ: "UTC",
+          LANG: "C.UTF-8",
+          CROWDSTRIKE_CLIENT_SECRET: SECRET,
+        },
+      },
+    );
+    let buffer = "";
+    let stderr = "";
+    const waiting = new Map<number, { resolve: (message: Record<string, unknown>) => void; reject: (error: Error) => void }>();
+    server.stderr.setEncoding("utf8");
+    server.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    // A server that dies (a panic is a trap in the module) answers nothing
+    // more. `close`, not `exit`: its last lines may still be in the pipe.
+    const exited = new Promise<void>((resolve) => server.once("close", () => resolve()));
+    void exited.then(() => {
+      for (const { reject } of waiting.values()) {
+        reject(new Error(`the server exited before answering:\n${stderr.slice(-2000)}`));
+      }
+      waiting.clear();
+    });
+    server.stdout.setEncoding("utf8");
+    server.stdout.on("data", (chunk: string) => {
+      buffer += chunk;
+      for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+        const line = buffer.slice(0, end).trim();
+        buffer = buffer.slice(end + 1);
+        if (line === "") continue;
+        const message = JSON.parse(line) as Record<string, unknown>;
+        if (typeof message.id === "number") {
+          waiting.get(message.id)?.resolve(message);
+          waiting.delete(message.id);
+        }
+      }
+    });
+    let next = 0;
+    const request = (method: string, params: object): Promise<Record<string, unknown>> => {
+      next += 1;
+      const id = next;
+      const answered = new Promise<Record<string, unknown>>((resolve, reject) => waiting.set(id, { resolve, reject }));
+      server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+      return answered;
+    };
+    try {
+      // WASI's server reads the client with blocking reads on its one thread,
+      // so it answers once the input ends: every request is sent first.
+      const initialized = request("initialize", {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "wasi-host-test", version: "0" },
+      });
+      server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+      const deployed = request("tools/call", {
+        name: "deploy_rule",
+        arguments: { uuid: "00000000-0000-4000-8047-000000000021", platform: "crowdstrike", dry_run: false },
+      });
+      const listed = request("tools/list", {});
+      // Awaited below; a crash rejects them all at once.
+      for (const pending of [deployed, listed]) pending.catch(() => {});
+      server.stdin.end();
+      await initialized;
+      const result = (await deployed).result as { content: { text: string }[] };
+      const text = result.content.map((part) => part.text).join("\n");
+      assert.match(text, /"status": ?"failed"/, text);
+      assert.match(text, /needs the network, which the WASI build of opentide does not have/, text);
+      assert.doesNotMatch(text, /stopped unexpectedly/, text);
+      // The server still serves after the deploy.
+      assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
+    } finally {
+      server.stdin.end();
+      await exited;
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  },
+);

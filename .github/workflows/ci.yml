@@ -1125,7 +1125,7 @@ jobs:
           OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
         run: |
           (cd packages/wasi-host && npm ci)
-          node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
+          node --experimental-strip-types --test --test-name-pattern='^(serve|mcp) \(wasi\)' packages/wasi-host/src/index.test.ts
 
       - name: npm packages build and pack
         run: |

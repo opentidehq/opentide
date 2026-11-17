@@ -323,14 +323,16 @@ assert.equal(typeof opentide.Workspace.open, 'function', 'Workspace.open')
 assert.equal(typeof opentide.Workspace.fromFiles, 'function', 'Workspace.fromFiles')
 assert.equal(opentide.__napiBindingTarget, 'native', 'the native addon, not a fallback')
 assert.equal(opentide.VERSION, ${JSON.stringify(version)}, 'VERSION')
-const tree = opentide.runJson(['commands'])
-assert.equal(typeof tree, 'object')
-assert.equal(tree.program, 'opentide')
-assert.equal(tree.version, ${JSON.stringify(version)})
-assert.ok(Array.isArray(tree.commands) && tree.commands.length > 0, 'commands')
-const ws = opentide.Workspace.fromFiles(process.cwd(), {})
-assert.equal(typeof ws.root, 'string')
-console.log(JSON.stringify({ program: tree.program, version: tree.version, commands: tree.commands.length, root: typeof ws.root }))
+// runJson resolves to the document (a rejection exits non-zero).
+opentide.runJson(['commands']).then((tree) => {
+  assert.equal(typeof tree, 'object')
+  assert.equal(tree.program, 'opentide')
+  assert.equal(tree.version, ${JSON.stringify(version)})
+  assert.ok(Array.isArray(tree.commands) && tree.commands.length > 0, 'commands')
+  const ws = opentide.Workspace.fromFiles(process.cwd(), {})
+  assert.equal(typeof ws.root, 'string')
+  console.log(JSON.stringify({ program: tree.program, version: tree.version, commands: tree.commands.length, root: typeof ws.root }))
+})
 `,
   )
   writeFileSync(
@@ -339,7 +341,7 @@ console.log(JSON.stringify({ program: tree.program, version: tree.version, comma
 import { Workspace, runJson, VERSION } from ${JSON.stringify(specifier)}
 assert.equal(typeof Workspace, 'function')
 assert.equal(VERSION, ${JSON.stringify(version)})
-assert.equal(runJson(['commands']).program, 'opentide')
+assert.equal((await runJson(['commands'])).program, 'opentide')
 console.log('esm import ok')
 `,
   )
@@ -380,9 +382,9 @@ const lintOptions: LintOptions = { strict: false }
 const ws: Workspace = Workspace.fromFiles('/ws', { 'objects/rules/a.yaml': 'name: A\\n' })
 const failed: boolean = ws.validate(options).failed
 const status: 'completed' | 'issues' | 'failed' = ws.lint(lintOptions).status
-const code: number = main(['--version'])
+const code: Promise<number> = main(['--version'])
 const version: string = VERSION
-const tree = runJson(['commands'])
+const tree: Promise<any> = runJson(['commands'])
 // The declarations, not \`any\`: this line must be an error.
 // @ts-expect-error Workspace.open takes a path
 Workspace.open(42)

@@ -3,10 +3,10 @@ source: crates/opentide-yaral/tests/trees.rs
 expression: debug_parse(&source)
 input_file: crates/testdata/corpus/yaral/unselect_section__invalid.yaral
 ---
-SOURCE_FILE@0..82
+SOURCE_FILE@0..93
   COMMENT@0..32 "// prod:unselect_section invalid"
   WHITESPACE@32..33 "\n"
-  SEARCH_QUERY@33..81
+  SEARCH_QUERY@33..92
     SEARCH_EVENTS@33..67
       COMPARISON@33..67
         BARE_FIELD@33..52
@@ -20,12 +20,16 @@ SOURCE_FILE@0..82
         LITERAL@55..67
           STRING@55..67 "\"USER_LOGIN\""
     WHITESPACE@67..68 "\n"
-    UNSELECT_SECTION@68..77
+    UNSELECT_SECTION@68..92
       UNSELECT_KW@68..76 "unselect"
       COLON@76..77 ":"
-    WHITESPACE@77..80 "\n  "
-    ERROR@80..81
-      COMMA@80..81 ","
-  WHITESPACE@81..82 "\n"
+      WHITESPACE@77..80 "\n  "
+      BARE_FIELD@80..91
+        IDENT@80..88 "metadata"
+        MEMBER@88..91
+          ACCESS_DOT@88..89 "."
+          FIELD_NAME@89..91 "id"
+      COMMA@91..92 ","
+  WHITESPACE@92..93 "\n"
 errors:
-77..80: expected a section such as `events:`
+92..93: expected an expression
