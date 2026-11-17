@@ -73,7 +73,6 @@ use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use rowan::NodeOrToken;
 use std::collections::HashMap;
 use syntax::SyntaxKind as K;
-use tree::{Node, node_span, walk};
 
 pub struct AnalyzeResult {
     pub diagnostics: Vec<Diagnostic>,
@@ -638,10 +637,6 @@ fn with_lines<T>(source: &str, run: impl FnOnce() -> T) -> T {
     run()
 }
 
-pub(crate) fn text<'a>(node: Node, source: &'a str) -> &'a str {
-    source.get(node.start_byte()..node.end_byte()).unwrap_or("")
-}
-
 /// The text of a node or token.
 fn element_text<'s>(element: &SyntaxElement, source: &'s str) -> &'s str {
     let span = element_span(element);
@@ -1040,14 +1035,23 @@ pub(crate) fn highlight(
     catalog: &Catalog,
 ) -> Vec<HighlightToken> {
     let mut spans: Vec<(ByteSpan, String)> = Vec::new();
-    walk(tree.root_node(), |node| {
-        if node.child_count() > 0 || node.end_byte() <= node.start_byte() {
-            return;
+    // The arena's leaves in document order: tokens, comments, one-token nodes.
+    let mut stack = vec![NodeOrToken::Node(tree.syntax.clone())];
+    while let Some(element) = stack.pop() {
+        if let NodeOrToken::Node(node) = &element {
+            let kids = children_of(node);
+            if !kids.is_empty() {
+                stack.extend(kids.into_iter().rev());
+                continue;
+            }
         }
-        let Some(capture) = tree::capture(node) else {
-            return;
+        let span = element_span(&element);
+        if span.end <= span.start {
+            continue;
+        }
+        let Some(capture) = tree::capture(&element) else {
+            continue;
         };
-        let span = node_span(node);
         let capture = if capture == "function"
             && catalog
                 .function(source.get(span.start..span.end).unwrap_or(""))
@@ -1058,67 +1062,34 @@ pub(crate) fn highlight(
             capture
         };
         spans.push((span, capture.to_string()));
-    });
+    }
     let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
     tokens_from_spans(spec, source, &refs).unwrap_or_default()
 }
 
 // ---- Hover ----------------------------------------------------------------
 
-/// [`command_name`] of an arena node, for hover until it reads the typed
-/// AST (#1415).
-fn arena_command_name(node: Node, source: &str) -> Option<String> {
-    let kind = node.kind();
-    let base = kind.strip_suffix("_command")?;
-    Some(match base {
-        "unknown" => return None,
-        "inline_stats" => {
-            let first = node.child(0).map(|c| text(c, source).to_ascii_lowercase());
-            if first.as_deref() == Some("inlinestats") {
-                "inlinestats".into()
-            } else {
-                "inline stats".into()
+/// The smallest element of the arena (a node, a token, a comment) that holds
+/// `offset`, as tree-sitter finds it.
+fn element_at(root: &SyntaxNode, offset: usize) -> SyntaxElement {
+    let mut element = NodeOrToken::Node(root.clone());
+    'down: loop {
+        let NodeOrToken::Node(node) = &element else {
+            return element;
+        };
+        for child in children_of(node) {
+            let span = element_span(&child);
+            if span.end <= offset {
+                continue;
             }
+            if offset < span.start {
+                break;
+            }
+            element = child;
+            continue 'down;
         }
-        "join" => {
-            let join_kind = node
-                .child_by_field_name("kind")
-                .map(|k| text(k, source).to_ascii_lowercase())
-                .unwrap_or_else(|| "lookup".into());
-            format!("{join_kind} join")
-        }
-        "fill_null" => "fillnull".into(),
-        other => other.to_string(),
-    })
-}
-
-/// [`keyword_span`] of an arena node, for hover until it reads the typed AST
-/// (#1415).
-fn arena_keyword_span(node: Node) -> ByteSpan {
-    let start = node.start_byte();
-    let mut end = start;
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if child.is_named() {
-            break;
-        }
-        if child.kind() == "|" || child.kind() == "(" {
-            break;
-        }
-        end = child.end_byte();
-        if node.kind() != "inline_stats_command" && node.kind() != "join_command" {
-            break;
-        }
+        return element;
     }
-    if node.kind() == "join_command"
-        && let Some(kind) = node.child_by_field_name("kind")
-    {
-        end = end.max(kind.end_byte());
-        if let Some(join) = kind.next_sibling() {
-            end = end.max(join.end_byte());
-        }
-    }
-    ByteSpan::new(start, end.max(start + 1))
 }
 
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
@@ -1131,44 +1102,48 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     }
     let tree = tree::parse_tree(source)?;
     let catalog = Catalog::cached();
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
+    let element = element_at(&tree.syntax, offset);
+    let text = element_text(&element, source);
+    let node = element.as_node();
     // Function name.
-    if let Some(parent) = node.parent() {
-        if parent.kind() == "function_call"
-            && parent.child_by_field_name("name").map(|n| n.id()) == Some(node.id())
+    if let Some(parent) = tree::arena_parent(&element) {
+        if parent.kind() == K::FUNCTION_CALL
+            && node.is_some()
+            && parent.children().next().as_ref() == node
         {
-            return catalog.function(text(node, source)).map(function_hover);
+            return catalog.function(text).map(function_hover);
         }
-        if parent.kind() == "metadata_field" || node.kind() == "metadata_field" {
-            let name = text(node, source);
+        if parent.kind() == K::METADATA_FIELD || element.kind() == K::METADATA_FIELD {
             return METADATA_FIELDS
                 .iter()
-                .find(|(n, _)| *n == name)
+                .find(|(n, _)| *n == text)
                 .map(|(n, d)| format!("**`{n}`** (METADATA field)\n\n{d}"));
         }
     }
     // Command keyword.
-    let mut cur = Some(node);
+    let mut cur = match &element {
+        NodeOrToken::Node(n) => Some(n.clone()),
+        NodeOrToken::Token(_) => tree::arena_parent(&element),
+    };
     while let Some(n) = cur {
-        if n.kind().ends_with("_command") {
-            let span = arena_keyword_span(n);
+        if gates::is_command(n.kind()) {
+            let span = keyword_span(&n);
             if offset >= span.start && offset < span.end {
-                if n.kind() == "unknown_command" {
+                if n.kind() == K::UNKNOWN_COMMAND {
                     return None;
                 }
-                let name = arena_command_name(n, source)?;
+                let name = command_name(&n, source)?;
                 return catalog.command(&name).map(command_hover);
             }
             break;
         }
-        cur = n.parent();
+        cur = tree::arena_parent(&NodeOrToken::Node(n));
     }
     // Operator.
-    if !node.is_named() {
-        let symbol = text(node, source);
-        if let Some(op) = catalog.operator(symbol) {
-            return Some(operator_hover(op));
-        }
+    if !is_named(&element)
+        && let Some(op) = catalog.operator(text)
+    {
+        return Some(operator_hover(op));
     }
     None
 }
@@ -1358,14 +1333,16 @@ fn columns_in(source: &str) -> Vec<String> {
         return Vec::new();
     };
     let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), |node| {
-        if matches!(node.kind(), "qualified_name" | "name_pattern") && !node.has_error() {
-            let name = text(node, source);
+    for node in named_nodes(&tree.syntax) {
+        if matches!(node.kind(), K::QUALIFIED_NAME | K::NAME_PATTERN)
+            && !tree.problem_in(span_of(&node))
+        {
+            let name = text_of(&node, source);
             if !name.contains('*') && !name.is_empty() {
                 names.insert(name.to_string());
             }
         }
-    });
+    }
     names.into_iter().collect()
 }
 
@@ -2089,5 +2066,25 @@ mod tests {
         );
         let deep = found(&chain, codes::ESQL_EXPRESSION_DEPTH);
         assert_eq!((deep[0].0, deep[0].1), (28, 35), "{deep:?}");
+    }
+
+    /// Highlight, hover and the debug kinds read the tree as the arena did:
+    /// only a call's first node is its name, an element ends before the
+    /// offset at its end, and a comment is a named node.
+    #[test]
+    fn highlight_hover_and_kinds_read_the_tree() {
+        let tokens = analyze("ROW x = f(?p)").tokens;
+        let at = |start: usize| {
+            tokens
+                .iter()
+                .find(|t| t.span.start == start)
+                .map(|t| t.capture.as_str())
+        };
+        assert_eq!((at(8), at(10)), (Some("function"), Some("constant")));
+        assert!(debug_kinds("ROW a = 1 // c").1.contains(&"comment"));
+        let q = "ROW a = 1 | WHERE a == 1";
+        let eq = q.find("==").unwrap_or_default();
+        assert!(hover(q, eq + 1).is_some_and(|h| h.contains("`==`")));
+        assert_eq!(hover(q, eq + 2), None, "the space after `==`");
     }
 }
