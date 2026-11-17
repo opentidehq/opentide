@@ -45,15 +45,29 @@ exit: 1
   "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to sentinel_one failed on SentinelOne create rule: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "error": "Deployment to sentinel_one failed on SentinelOne create rule: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>) (and 1 more failure)",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment to sentinel_one failed on SentinelOne create rule: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "message": "Deployment to sentinel_one failed on SentinelOne create rule: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>) (and 1 more failure)",
     "suggestion": null
   },
+  "failures": [
+    {
+      "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "id": "00000000-0000-4000-8047-000000000011",
+      "name": "SentinelOne create rule",
+      "platform": "sentinel_one",
+      "tenant": "lab"
+    },
+    {
+      "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "platform": "sentinel_one",
+      "tenant": "lab"
+    }
+  ],
   "message": "Deployment failed · 1 skipped, 1 failed, 2 not attempted · <SECONDS>",
   "next_actions": [],
   "ok": false,
@@ -94,7 +108,7 @@ exit: 1
       "id": "00000000-0000-4000-8047-000000000012",
       "name": "SentinelOne retire rule",
       "platform": "sentinel_one",
-      "reason": "not attempted after a failure",
+      "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
       "tenant": "lab"
@@ -105,7 +119,7 @@ exit: 1
       "id": "00000000-0000-4000-8047-000000000014",
       "name": "SentinelOne update rule",
       "platform": "sentinel_one",
-      "reason": "not attempted after a failure",
+      "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
       "tenant": "lab"
@@ -129,17 +143,12 @@ exit: 1
     "tenants": 1,
     "update": 0,
     "upsert": 0
-  }
+  },
+  "warnings": [
+    "Some rules reported deployment warnings"
+  ]
 }
 
-━━━ stderr · json, 1 lines
-{
-  "code": "external_id_missing",
-  "detail": "rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"***\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.",
-  "event": "external_id_missing",
-  "level": "warning",
-  "platform": "sentinel_one",
-  "tenant": "***",
-  "timestamp": "0000-00-00 00:00:00",
-  "uuid": "00000000-0000-4000-8047-000000000013"
-}
+━━━ stderr
+{"detail":"rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"***\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.","code":"external_id_missing","uuid":"00000000-0000-4000-8047-000000000013","platform":"sentinel_one","tenant":"***","event":"external_id_missing","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"platform":"sentinel_one","tenant":"***","error":"Cannot reach sentinel_one tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"tenant_deployment_failed","level":"critical","timestamp":"0000-00-00 00:00:00"}

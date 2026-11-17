@@ -26,7 +26,9 @@ exit: 1
     }
   ],
   "command": "deploy",
-  "deployed": [],
+  "deployed": [
+    "carbon_black_cloud"
+  ],
   "dry_run": false,
   "duration_ms": 0,
   "error": "Deployment to carbon_black_cloud failed on Carbon Black rule in a missing watchlist: The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
@@ -38,6 +40,15 @@ exit: 1
     "message": "Deployment to carbon_black_cloud failed on Carbon Black rule in a missing watchlist: The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
     "suggestion": null
   },
+  "failures": [
+    {
+      "error": "The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
+      "id": "00000000-0000-4000-8047-000000000062",
+      "name": "Carbon Black rule in a missing watchlist",
+      "platform": "carbon_black_cloud",
+      "tenant": "lab"
+    }
+  ],
   "message": "Deployment failed · 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
   "next_actions": [],
   "ok": false,

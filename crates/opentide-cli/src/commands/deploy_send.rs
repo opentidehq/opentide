@@ -843,6 +843,7 @@ fn deploy(
                 .get(PERSIST_EXTERNALLY_ENV)
                 .is_some_and(|v| !v.is_empty()),
         failed: false,
+        failures: Vec::new(),
         warned: false,
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
@@ -859,14 +860,37 @@ fn deploy(
         step.count = Some(uuids.len());
         let step_started = Instant::now();
         let failed_before = sender.failed;
+        let mut sent = false;
         match sender.platform(system, uuids, &mut log) {
-            Err(raised) => {
+            // An interrupt: nothing more is sent.
+            Err(raised) if raised.stops == Stops::Run => {
                 step.status = StepStatus::Failed;
                 log.unreached(None, "not_attempted", NOT_ATTEMPTED);
                 step.outcome = Some(counts_text(&log.platform_results(system)));
                 failure = Some((system.clone(), raised));
             }
+            // The platform could not deploy (its tenants, its plugin): the
+            // run fails, its rules not sent are not attempted, and the other
+            // platforms go on.
+            Err(raised) => {
+                let error = raised.error();
+                tracing::error!(
+                    system = system.as_str(),
+                    detail = error.as_str(),
+                    critical = true,
+                    "platform_deployment_failed"
+                );
+                sender.unusable(system, None, &error);
+                log.unreached(
+                    Some(system),
+                    "not_attempted",
+                    &format!("not attempted: {system} failed"),
+                );
+                step.status = StepStatus::Failed;
+                step.outcome = Some(counts_text(&log.platform_results(system)));
+            }
             Ok(()) => {
+                sent = true;
                 log.settle(system);
                 let mine = log.platform_results(system);
                 step.outcome = Some(counts_text(&mine));
@@ -886,7 +910,22 @@ fn deploy(
         if failure.is_some() {
             break;
         }
-        deployed.push(system.clone());
+        // A platform none of whose tenants could be used deployed nothing.
+        let planned_on: Vec<Option<&str>> = log
+            .planned
+            .keys()
+            .filter(|(name, _)| name == system)
+            .map(|(_, tenant)| tenant.as_deref())
+            .collect();
+        let unusable = !planned_on.is_empty()
+            && planned_on.iter().all(|tenant| {
+                sender.failures.iter().any(|failure| {
+                    failure.platform == *system && failure.tenant.as_deref() == *tenant
+                })
+            });
+        if sent && !unusable {
+            deployed.push(system.clone());
+        }
     }
     if let Some((system, _)) = &failure {
         let after = deployment
@@ -974,8 +1013,14 @@ fn deploy(
     }
     let outcome_failed = sender.failed || refused;
     let any_failed = results.iter().any(|result| result.status == "failed");
+    let failures = failures(&results, &sender.failures);
+    // No rule failed: the first tenant or platform that could not deploy
+    // says why the run failed.
     let message = if outcome_failed && !any_failed {
-        "Deployment finished with errors".to_owned()
+        failures.first().map_or_else(
+            || "Deployment finished with errors".to_owned(),
+            |(line, _)| format!("{line}{}", more_failures(failures.len())),
+        )
     } else {
         outcome_message(&results, seconds, outcome_failed)
     };
@@ -1000,6 +1045,16 @@ fn deploy(
     result.push(("results".into(), results_json));
     if outcome_failed && any_failed {
         result.push(("_failure_code".into(), Json::str(super::ISSUES_FOUND)));
+    }
+    if let Some((first, _)) = failures.first() {
+        // The run's error names its first failure, as the Python deployer's
+        // did when that failure stopped it.
+        let more = more_failures(failures.len());
+        result.push(("error".into(), Json::str(format!("{first}{more}"))));
+        result.push((
+            "failures".into(),
+            Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
+        ));
     }
     if sender.warned {
         result.push((
@@ -1369,6 +1424,23 @@ impl<'l> DeployLog<'l> {
 
     /// Reports each planned rule that has no result (`unreached`).
     fn unreached(&mut self, platform: Option<&str>, status: &'static str, reason: &str) {
+        self.unreached_where(platform, None, status, reason);
+    }
+
+    /// Reports each rule planned on one tenant that has no result.
+    fn unreached_on(&mut self, platform: &str, tenant: &str, status: &'static str, reason: &str) {
+        self.unreached_where(Some(platform), Some(tenant), status, reason);
+    }
+
+    /// Reports each planned rule of `platform` (every one when `None`) and of
+    /// `tenant` (every tenant when `None`) that has no result.
+    fn unreached_where(
+        &mut self,
+        platform: Option<&str>,
+        tenant: Option<&str>,
+        status: &'static str,
+        reason: &str,
+    ) {
         let done: Vec<(String, String)> = self
             .results
             .iter()
@@ -1386,10 +1458,13 @@ impl<'l> DeployLog<'l> {
             })
             .collect();
         let mut missing = Vec::new();
-        for ((name, tenant), changes) in &self.planned {
-            if platform.is_some_and(|platform| platform != name) {
+        for ((name, planned_on), changes) in &self.planned {
+            if platform.is_some_and(|platform| platform != name)
+                || tenant.is_some_and(|tenant| planned_on.as_deref() != Some(tenant))
+            {
                 continue;
             }
+            let tenant = planned_on;
             for change in changes {
                 if tenanted.contains(&(name.clone(), tenant.clone(), change.uuid.clone()))
                     || (tenant.is_none() && done.contains(&(name.clone(), change.uuid.clone())))
@@ -1572,31 +1647,141 @@ fn result_line(
 
 // ---------------------------------------------------------------- sending
 
-/// What stopped a platform's deploy, in words: the failed rule's line and
-/// the run's message say it (`failure`).
+/// A tenant (or a whole platform, with no tenant) that could not deploy.
 #[derive(Debug, Clone)]
-struct Raised(String);
+struct Unusable {
+    platform: String,
+    tenant: Option<String>,
+    error: String,
+}
+
+impl Unusable {
+    fn to_json(&self) -> Json {
+        let mut fields = vec![("platform".to_owned(), Json::str(&self.platform))];
+        if let Some(tenant) = &self.tenant {
+            fields.push(("tenant".into(), Json::str(tenant)));
+        }
+        fields.push(("error".into(), Json::str(&self.error)));
+        Json::Object(fields.into_iter().collect())
+    }
+}
+
+/// What a failure stops: one rule, the rest of its tenant, or the run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stops {
+    /// The rule fails; the run goes on with the next one.
+    Rule,
+    /// The tenant cannot be used (its credentials, its connection): its
+    /// remaining rules are not attempted, the other tenants go on.
+    Tenant,
+    /// An interrupt: nothing more is sent.
+    Run,
+}
+
+/// A failure, in words: the failed rule's line and the run's message say it
+/// (`failure`), and what it stops.
+#[derive(Debug, Clone)]
+struct Raised {
+    problem: String,
+    stops: Stops,
+}
 
 impl Raised {
+    /// A failure of the rule being sent.
     fn new(problem: impl Into<String>) -> Self {
-        Self(problem.into())
+        Self {
+            problem: problem.into(),
+            stops: Stops::Rule,
+        }
+    }
+
+    /// The same failure, stopping `stops`.
+    fn stopping(self, stops: Stops) -> Self {
+        Self { stops, ..self }
     }
 
     /// The problem, for the run's message.
     fn error(&self) -> String {
-        self.0.trim().to_owned()
+        self.problem.trim().to_owned()
     }
 
     /// The problem on one bounded line, for the rule being sent.
     fn describe(&self) -> String {
-        bounded(&self.0)
+        bounded(&self.problem)
     }
 }
 
-/// A connector error as the problem that stops the run: its own message,
-/// the tenant's reason after a refusal, and the tenant that refused the
-/// credentials.
+/// What follows the first of `count` failures in the run's error.
+fn more_failures(count: usize) -> String {
+    match count.saturating_sub(1) {
+        0 => String::new(),
+        1 => " (and 1 more failure)".to_owned(),
+        more => format!(" (and {more} more failures)"),
+    }
+}
+
+/// Every failure of a run, each with its line for the run's `error`: the
+/// failed rules (platform, tenant, id, name, error), then the tenants and
+/// platforms that could not deploy.
+fn failures(results: &[RuleResult], unusable: &[Unusable]) -> Vec<(String, Json)> {
+    let rules = results
+        .iter()
+        .filter(|result| result.status == "failed")
+        .map(|result| {
+            let error = result.error.clone().unwrap_or_default();
+            let mut fields = vec![("platform".to_owned(), Json::str(&result.platform))];
+            if let Some(tenant) = &result.tenant {
+                fields.push(("tenant".into(), Json::str(tenant)));
+            }
+            fields.push(("id".into(), Json::str(&result.id)));
+            fields.push(("name".into(), Json::str(&result.name)));
+            fields.push(("error".into(), Json::str(&error)));
+            (
+                format!(
+                    "Deployment to {} failed on {}: {error}",
+                    result.platform, result.name
+                ),
+                Json::Object(fields.into_iter().collect()),
+            )
+        });
+    let tenants = unusable.iter().map(|failure| {
+        let line = match &failure.tenant {
+            Some(tenant) => format!(
+                "Deployment to {} failed on tenant {tenant}: {}",
+                failure.platform, failure.error
+            ),
+            None => format!(
+                "Deployment to {} failed: {}",
+                failure.platform, failure.error
+            ),
+        };
+        (line, failure.to_json())
+    });
+    rules.chain(tenants).collect()
+}
+
+/// A connector error as a failure: of the rule for an answer the tenant
+/// refused, of the tenant for its connection or credentials, of the run for
+/// an interrupt.
 fn raised(error: &ConnectorError) -> Raised {
+    let stops = match error {
+        ConnectorError::Cancelled => Stops::Run,
+        ConnectorError::Unreachable { .. }
+        | ConnectorError::Timeout { .. }
+        | ConnectorError::Setup { .. }
+        | ConnectorError::MissingCredential { .. }
+        | ConnectorError::Crashed { .. }
+        | ConnectorError::Authentication { .. }
+        | ConnectorError::Gateway { .. }
+        | ConnectorError::NetworkUnavailable { .. } => Stops::Tenant,
+        _ => Stops::Rule,
+    };
+    described(error).stopping(stops)
+}
+
+/// A connector error's words: its own message, the tenant's reason after a
+/// refusal, and the tenant that refused the credentials.
+fn described(error: &ConnectorError) -> Raised {
     match error {
         ConnectorError::Cancelled => Raised::new("interrupted"),
         ConnectorError::Authentication {
@@ -1639,6 +1824,9 @@ struct Sender<'s, 'c> {
     persist: bool,
     /// `DEPLOYMENT_ERROR_RAISED`.
     failed: bool,
+    /// The tenants and platforms that could not deploy, in order: each
+    /// failed rule is in the log's results.
+    failures: Vec<Unusable>,
     /// `DEPLOYMENT_WARNING_RAISED`.
     warned: bool,
     environment: Environment,
@@ -1766,18 +1954,95 @@ impl Sender<'_, '_> {
         }
     }
 
-    /// Ends a rule's block: a raised exception fails the rule and goes on.
+    /// Ends a rule's block. A failure fails the rule and the run, and the
+    /// run goes on with the next rule; a failure of the tenant or the run
+    /// is returned, to stop them.
     fn close(
         &mut self,
         log: &mut DeployLog<'_>,
         mut result: RuleResult,
         outcome: Result<(), Raised>,
     ) -> Result<(), Raised> {
-        if let Err(raised) = &outcome {
-            result.fail(&raised.describe());
-        }
+        let Err(raised) = outcome else {
+            log.finished(result);
+            return Ok(());
+        };
+        result.fail(&raised.describe());
         log.finished(result);
-        outcome
+        self.failed = true;
+        match raised.stops {
+            Stops::Rule => Ok(()),
+            Stops::Tenant | Stops::Run => Err(raised),
+        }
+    }
+
+    /// A tenant that cannot be used: the run fails, its rules not sent yet
+    /// are not attempted, and the other tenants go on. An interrupt is
+    /// returned, to stop the run.
+    fn tenant_failed(
+        &mut self,
+        platform: &str,
+        tenant: &str,
+        log: &mut DeployLog<'_>,
+        raised: Raised,
+    ) -> Result<(), Raised> {
+        if raised.stops == Stops::Run {
+            return Err(raised);
+        }
+        let error = raised.error();
+        tracing::error!(
+            platform,
+            tenant,
+            error = error.as_str(),
+            critical = true,
+            "tenant_deployment_failed"
+        );
+        self.unusable(platform, Some(tenant), &error);
+        log.unreached_on(
+            platform,
+            tenant,
+            "not_attempted",
+            &format!("not attempted: tenant {tenant} failed"),
+        );
+        Ok(())
+    }
+
+    /// Records a tenant (or a platform) that could not deploy: the run fails.
+    fn unusable(&mut self, platform: &str, tenant: Option<&str>, error: &str) {
+        self.failed = true;
+        self.failures.push(Unusable {
+            platform: platform.to_owned(),
+            tenant: tenant.map(str::to_owned),
+            error: bounded(error),
+        });
+    }
+
+    /// The tenant's connection, or `None` when it cannot be made: the tenant
+    /// failed, and the run goes on.
+    fn connect_or_fail(
+        &mut self,
+        platform: &str,
+        batch: &Batch,
+        log: &mut DeployLog<'_>,
+    ) -> Option<Connection> {
+        let connected = if crate::plugins::is_plugin(platform) {
+            self.connect_plugin(platform, batch)
+        } else {
+            self.connect(platform, batch)
+        };
+        match connected {
+            Ok(connection) => Some(connection),
+            Err(raised) => {
+                // A connection's failure is the tenant's, never the run's.
+                let _ = self.tenant_failed(
+                    platform,
+                    &batch.tenant.name,
+                    log,
+                    raised.stopping(Stops::Tenant),
+                );
+                None
+            }
+        }
     }
 
     /// `_deployment_error`: the run fails, the rule says why.
@@ -1796,7 +2061,9 @@ impl Sender<'_, '_> {
     ) -> Result<(), Raised> {
         for batch in batches {
             let tenant = batch.tenant.name.clone();
-            let connection = self.connect(platform, batch)?;
+            let Some(connection) = self.connect_or_fail(platform, batch, log) else {
+                continue;
+            };
             for sent in &batch.rules {
                 let rule = &sent.rule;
                 if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
@@ -1838,7 +2105,10 @@ impl Sender<'_, '_> {
                 }
                 let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
                 let outcome = self.by_uuid_rule(platform, &connection, batch, rule, &mut result);
-                self.close(log, result, outcome)?;
+                if let Err(raised) = self.close(log, result, outcome) {
+                    self.tenant_failed(platform, &tenant, log, raised)?;
+                    break;
+                }
             }
         }
         Ok(())
@@ -2255,7 +2525,9 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect(platform, batch)?;
+            let Some(connection) = self.connect_or_fail(platform, batch, log) else {
+                continue;
+            };
             let cancel = self.cancel.clone();
             let context = TenantContext {
                 tenant: &connection.tenant,
@@ -2264,21 +2536,32 @@ impl Sender<'_, '_> {
             };
             let defender = opentide_connectors::defender::Defender::new();
             let session = match PlatformId::parse(platform) {
-                Some(PlatformId::DefenderForEndpoint) => {
-                    self.block(async {
+                Some(PlatformId::DefenderForEndpoint) => self
+                    .block(async {
                         defender
                             .token(context)
                             .await
                             .map_err(|error| error.into_connector(&batch.tenant.name))
                     })
-                    .map_err(|error| raised(&error))?;
-                    None
+                    .map(|_| None),
+                Some(PlatformId::Crowdstrike) => self
+                    .block(opentide_connectors::crowdstrike::Session::connect(context))
+                    .map(Some),
+                _ => Ok(None),
+            };
+            // No token or session: no rule on the tenant can deploy.
+            let session = match session {
+                Ok(session) => session,
+                Err(error) => {
+                    let stops = if matches!(error, ConnectorError::Cancelled) {
+                        Stops::Run
+                    } else {
+                        Stops::Tenant
+                    };
+                    let failure = raised(&error).stopping(stops);
+                    self.tenant_failed(platform, &batch.tenant.name, log, failure)?;
+                    continue;
                 }
-                Some(PlatformId::Crowdstrike) => Some(
-                    self.block(opentide_connectors::crowdstrike::Session::connect(context))
-                        .map_err(|error| raised(&error))?,
-                ),
-                _ => None,
             };
             for (rule, action) in planned {
                 let tenant = batch.tenant.name.as_str();
@@ -2294,7 +2577,10 @@ impl Sender<'_, '_> {
                     &action,
                     &mut result,
                 );
-                self.close(log, result, outcome)?;
+                if let Err(raised) = self.close(log, result, outcome) {
+                    self.tenant_failed(platform, tenant, log, raised)?;
+                    break;
+                }
             }
         }
         Ok(())
@@ -2321,13 +2607,18 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect_plugin(platform, batch)?;
+            let Some(connection) = self.connect_or_fail(platform, batch, log) else {
+                continue;
+            };
             for (rule, action) in planned {
                 let tenant = batch.tenant.name.as_str();
                 let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
                 let outcome =
                     self.plugin_rule(deployer, platform, &connection, rule, &action, &mut result);
-                self.close(log, result, outcome)?;
+                if let Err(raised) = self.close(log, result, outcome) {
+                    self.tenant_failed(platform, tenant, log, raised)?;
+                    break;
+                }
             }
         }
         Ok(())
@@ -2654,7 +2945,9 @@ impl Sender<'_, '_> {
         };
         for batch in batches {
             let tenant = batch.tenant.name.clone();
-            let connection = self.connect(PLATFORM, batch)?;
+            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log) else {
+                continue;
+            };
             let setup = opentide_compile::elastic::Setup::from_tenant(&batch.table);
             let suppression_off = matches!(
                 opentide_compile::deploy::setup(&batch.table, "suppression"),
@@ -2847,7 +3140,9 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect(PLATFORM, batch)?;
+            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log) else {
+                continue;
+            };
             let tenant_policies: Vec<String> =
                 match opentide_compile::deploy::setup(&batch.table, "policies") {
                     Some(CJson::Array(items)) => {
@@ -2994,7 +3289,9 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect(PLATFORM, batch)?;
+            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log) else {
+                continue;
+            };
             // A value that is not a boolean fails each rule `compile_rule` compiles,
             // naming the key; a deletion compiles nothing and sends no actions.
             let automatic =
@@ -3219,7 +3516,9 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect(platform, batch)?;
+            let Some(connection) = self.connect_or_fail(platform, batch, log) else {
+                continue;
+            };
             let ready = Instance::of(&connection.tenant).and_then(|instance| {
                 connector
                     .authorizer(&connection.tenant)
@@ -3387,7 +3686,7 @@ impl Sender<'_, '_> {
             critical = true,
             "google_secops_tenant_deployment_failed"
         );
-        self.failed = true;
+        self.unusable(PlatformId::GoogleSecops.as_str(), Some(tenant), text);
     }
 
     /// Graylog: the version is read once per tenant (a vulnerable one warned
@@ -3403,7 +3702,9 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect(PLATFORM, batch)?;
+            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log) else {
+                continue;
+            };
             // The version is read once, before any write. A refused token, an
             // unsupported version or an unreachable tenant stops the tenant.
             let version = match self.block(Client::new(self.context(&connection)).version()) {
@@ -3414,7 +3715,7 @@ impl Sender<'_, '_> {
                     } else {
                         "graylog_request_failed"
                     };
-                    self.failed = true;
+                    self.unusable(PLATFORM, Some(&tenant), &error.reason());
                     tracing::error!(
                         tenant = tenant.as_str(),
                         code,
@@ -3430,7 +3731,7 @@ impl Sender<'_, '_> {
                         ConnectorError::Authentication { .. } => "graylog_tenant_unauthenticated",
                         _ => "graylog_tenant_unreachable",
                     };
-                    self.failed = true;
+                    self.unusable(PLATFORM, Some(&tenant), &error.text());
                     tracing::error!(
                         tenant = tenant.as_str(),
                         code,
@@ -3632,7 +3933,9 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect(platform, batch)?;
+            let Some(connection) = self.connect_or_fail(platform, batch, log) else {
+                continue;
+            };
             let cancel = self.cancel.clone();
             let context = TenantContext {
                 tenant: &connection.tenant,
@@ -3650,7 +3953,7 @@ impl Sender<'_, '_> {
                         critical = true,
                         "exabeam_tenant_deployment_failed"
                     );
-                    self.failed = true;
+                    self.unusable(platform, Some(&tenant), &text);
                     continue;
                 }
             };
