@@ -738,16 +738,18 @@ mod tests {
             ("lpt9 ", "_lpt9 "),
             (" con", "_ con"),
             ("con<", "_con "),
+            ("COM0", "_COM0"),
+            ("LPT0", "_LPT0"),
+            ("COM\u{b9}", "_COM\u{b9}"),
+            ("CONIN$", "_CONIN$"),
         ] {
             assert_eq!(sanitize_filename(name), expected, "{name:?}");
         }
         for name in [
             "CONSOLE",
             "COM",
-            "COM0",
             "COM10",
             "LPT",
-            "LPT0",
             "ACON",
             "con ect",
             "NULL",

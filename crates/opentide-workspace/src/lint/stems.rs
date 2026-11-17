@@ -32,16 +32,27 @@ pub fn slugify(name: &str) -> String {
 
 /// Whether Windows takes `stem` for a device, not a file: its base (up to
 /// the first `.`, trimmed of spaces) is `CON`, `PRN`, `AUX`, `NUL`,
-/// `COM1`-`COM9` or `LPT1`-`LPT9`, in any case. `con.yaml` or `con.md`
-/// cannot be made there, nor checked out.
+/// `CONIN$`, `CONOUT$`, or `COM` or `LPT` and one digit (`0`-`9`, or the
+/// superscripts `¹` `²` `³` Windows also reserves), in any case. `con.yaml`
+/// or `con.md` cannot be made there, nor checked out. `COM0` and `LPT0` are
+/// on Microsoft's list though older Windows accepts them: a `_` costs
+/// nothing.
 pub fn is_windows_device(stem: &str) -> bool {
     let base = stem.split('.').next().unwrap_or_default().trim();
     let upper = base.to_ascii_uppercase();
-    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || upper
-            .strip_prefix("COM")
-            .or_else(|| upper.strip_prefix("LPT"))
-            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
+    matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) || upper
+        .strip_prefix("COM")
+        .or_else(|| upper.strip_prefix("LPT"))
+        .is_some_and(|digit| {
+            let mut chars = digit.chars();
+            matches!(
+                (chars.next(), chars.next()),
+                (Some('0'..='9' | '\u{b9}' | '\u{b2}' | '\u{b3}'), None)
+            )
+        })
 }
 
 /// `stem`, or `_` and `stem` when it names a Windows device
@@ -185,7 +196,15 @@ mod tests {
         assert_eq!(expected_stem("NUL .x", "name").as_deref(), Some("_NUL .x"));
         // Not devices: a slug joins the parts, and these are other names.
         assert_eq!(slugify("con.txt"), "con-txt");
-        for name in ["COM0", "COM10", "CONSOLE", "LPT", "conn", "a con"] {
+        for name in ["COM¹", "lpt³", "CONIN$", "conout$", "COM0", "LPT0"] {
+            assert_eq!(
+                expected_stem(name, "name").as_deref(),
+                Some(format!("_{name}").as_str()),
+                "{name}"
+            );
+        }
+        assert_eq!(expected_stem("lpt².x", "name").as_deref(), Some("_lpt².x"));
+        for name in ["COM10", "COM⁴", "CONSOLE", "CONIN", "LPT", "conn", "a con"] {
             assert!(!is_windows_device(&slugify(name)), "{name}");
             assert_eq!(expected_stem(name, "name").as_deref(), Some(name), "{name}");
         }
