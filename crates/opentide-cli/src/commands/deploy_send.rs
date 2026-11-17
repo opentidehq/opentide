@@ -3022,7 +3022,13 @@ impl Sender<'_, '_> {
                     (Planned::Create, Some(id)) => {
                         self.record_created(result, platform, tenant, &ExternalId::Text(id));
                     }
-                    _ => {}
+                    // A create must give its id: without it the rule cannot
+                    // be updated or deleted later.
+                    (Planned::Create, None) => self.rule_error(
+                        result,
+                        "CrowdStrike created the rule without an id to record",
+                    ),
+                    (Planned::Update(_), _) => {}
                 }
             }
         }
