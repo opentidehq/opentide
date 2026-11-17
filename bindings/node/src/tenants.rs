@@ -317,30 +317,29 @@ impl Connection {
     /// bytes, and resolves to the platform's identifier of the rule. Rejects
     /// with `tenant_refused`, the other codes of `query`, and
     /// `operation_unsupported` on a platform whose rules deploy only through
-    /// `opentide deploy` (Elastic). `options.signal` aborts it.
+    /// `opentide deploy` (Elastic). A `delete` takes no body (`null`); the
+    /// other operations reject without one (`usage_invalid_value`).
+    /// `options.signal` aborts it.
     #[napi(ts_return_type = "Promise<DeployOutcome>")]
     pub fn deploy<'env>(
         &self,
         env: &'env Env,
         rule_id: String,
         #[napi(ts_arg_type = "'create' | 'update' | 'disable' | 'delete'")] operation: String,
-        body: Either<String, Uint8Array>,
+        body: Option<Either<String, Uint8Array>>,
         options: Option<DeployOptions<'env>>,
     ) -> napi::Result<Object<'env>> {
-        let body = match body {
+        let body = body.map(|body| match body {
             Either::A(text) => text.into_bytes(),
             Either::B(bytes) => bytes.to_vec(),
-        };
+        });
         let (signal, policies) =
             options.map_or((None, None), |options| (options.signal, options.policies));
         let abort = listen(*env, signal);
         let work = deploy_request(rule_id, &operation, body).map(|request| {
             run_deploy(
                 Arc::clone(&self.inner),
-                DeployRequest {
-                    policies,
-                    ..request
-                },
+                request.with_policies(policies),
             )
         });
         promise(env, work, abort)
@@ -863,10 +862,12 @@ fn request(text: String, options: Settings, since: Since) -> Result<QueryRequest
     Ok(request)
 }
 
+/// The request of `deploy`: a delete without a body is
+/// [`DeployRequest::delete`]; another operation needs one.
 fn deploy_request(
     rule_id: String,
     operation: &str,
-    body: Vec<u8>,
+    body: Option<Vec<u8>>,
 ) -> Result<DeployRequest, Failure> {
     let operation = match operation {
         "create" => Operation::Create,
@@ -879,12 +880,14 @@ fn deploy_request(
             )));
         }
     };
-    Ok(DeployRequest {
-        rule_id,
-        operation,
-        body,
-        policies: None,
-    })
+    match body {
+        Some(body) => Ok(DeployRequest::new(rule_id, operation, body)),
+        None if operation == Operation::Delete => Ok(DeployRequest::delete(rule_id)),
+        None => Err(Failure::invalid(format!(
+            "body: a {} needs the compiled rule; only a delete takes none",
+            operation_name(operation)
+        ))),
+    }
 }
 
 fn operation_name(operation: Operation) -> &'static str {
@@ -1165,16 +1168,29 @@ mod tests {
     #[test]
     fn a_deploy_takes_the_four_operations() {
         for name in ["create", "update", "disable", "delete"] {
-            let request = deploy_request("r".into(), name, b"{}".to_vec()).unwrap();
+            let request = deploy_request("r".into(), name, Some(b"{}".to_vec())).unwrap();
             assert_eq!(operation_name(request.operation), name);
             assert_eq!(
                 (request.rule_id.as_str(), request.body.as_slice()),
                 ("r", &b"{}"[..])
             );
         }
-        let failure = deploy_request("r".into(), "upsert", Vec::new()).unwrap_err();
+        let failure = deploy_request("r".into(), "upsert", Some(Vec::new())).unwrap_err();
         assert_eq!(failure.code, "usage_invalid_choice");
         assert!(failure.message.contains("upsert"), "{failure:?}");
+    }
+
+    /// #1142: a delete takes no body; the other operations need one.
+    #[test]
+    fn a_delete_takes_no_body() {
+        let delete = deploy_request("r".into(), "delete", None).unwrap();
+        assert_eq!(delete.operation, Operation::Delete);
+        assert!(delete.body.is_empty());
+        for name in ["create", "update", "disable"] {
+            let failure = deploy_request("r".into(), name, None).unwrap_err();
+            assert_eq!(failure.code, "usage_invalid_value", "{name}");
+            assert!(failure.message.starts_with("body: a "), "{failure:?}");
+        }
     }
 
     #[test]
@@ -1367,7 +1383,7 @@ mod tests {
         assert!(!failure.message.contains("s3cret"), "{failure:?}");
         let failure = run(run_check(Arc::clone(&connection.inner), query.clone())).unwrap_err();
         assert_eq!(failure.code, "tenant_unreachable");
-        let deploy = deploy_request("r".into(), "create", b"{}".to_vec()).unwrap();
+        let deploy = deploy_request("r".into(), "create", Some(b"{}".to_vec())).unwrap();
         let failure = run(run_deploy(Arc::clone(&connection.inner), deploy)).unwrap_err();
         assert_eq!(failure.code, "tenant_unreachable");
 
