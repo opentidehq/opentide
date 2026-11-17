@@ -422,3 +422,34 @@ fn defender_a_refused_sign_in_fails_the_tenant() {
         Some("AADSTS7000215: Invalid client secret")
     );
 }
+
+/// A sign-in Entra ID answers without a token, and without refusing the
+/// credentials (a proxy's 403 page), still fails the tenant through the
+/// Deployer, as `opentide deploy` stops it: no rule can deploy without a
+/// token, and nothing but the sign-in is sent.
+#[test]
+fn defender_a_sign_in_without_a_token_fails_the_tenant() {
+    use opentide_connectors::connector::{DeployRequest, DeployScope, Deployer};
+    let mut cassette = support::cassette("defender/deploy");
+    let mut signed = cassette.interactions[0].clone();
+    signed.response.status = 403;
+    signed.response.body = Body::Text("<html><title>Forbidden</title></html>".into());
+    cassette.interactions = vec![signed];
+    let tenant = Replayed::start_with(
+        cassette,
+        defender::PLATFORM,
+        SETUP,
+        "DEFENDER_CLIENT_SECRET",
+        &defender::http_settings(),
+    );
+    let request = DeployRequest::delete("42");
+    let error = block_on(async { Defender::new().deploy(tenant.cx(), &request).await })
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant, "{error:?}");
+    assert!(
+        error.failure.message.contains("Entra ID answered HTTP 403"),
+        "{error:?}"
+    );
+    assert_eq!(tenant.verify(), Vec::new());
+}

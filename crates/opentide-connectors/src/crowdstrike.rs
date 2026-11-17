@@ -559,13 +559,21 @@ impl Crowdstrike {
 impl Deployer for Crowdstrike {
     /// Creates (`POST`), updates or disables (`PATCH` of the compiled
     /// one-rule list) or deletes (`DELETE ?ids=`) one rule; the remote id
-    /// is the created rule's, or *request*'s for an update.
+    /// is the created rule's, or *request*'s for an update. The tenant is
+    /// signed in first (on its kept token, if any): a sign-in that fails,
+    /// whatever the answer, fails the tenant, as `opentide deploy` stops it,
+    /// since no rule can deploy without a token.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
+            self.sign_in(cx).await.map_err(|error| {
+                let mut failed = crate::connector::DeployError::from(error);
+                failed.scope = crate::connector::DeployScope::Tenant;
+                failed
+            })?;
             let session = self.session(cx)?;
             let remote_id = match request.operation {
                 Operation::Create => Some(session.create_detection_rule(&request.body).await?),
