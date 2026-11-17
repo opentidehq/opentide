@@ -135,9 +135,6 @@ thiserror.workspace = true
 [dev-dependencies]
 # The tests lay a workspace out under a temporary folder, never in the checkout.
 tempfile = "3"
-# The goldens' comparator and ledger: the binary's `--json commands` against
-# the PyPI CLI's recording (tests/cli.rs).
-opentide-compare.workspace = true
 # `connectors`: a stand-in tenant (tests/connectors.rs), and the runtime the
 # tests await a connection's operations on.
 wiremock.workspace = true

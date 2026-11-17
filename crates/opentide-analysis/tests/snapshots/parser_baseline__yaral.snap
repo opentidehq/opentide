@@ -49188,7 +49188,7 @@ yaral_parse_error error 0:41-0:43 the YARA-L text does not parse at `or`: expect
 64..65 operator
 66..79 string
 == corpus/yaral/order_section__invalid.yaral
-yaral_parse_error error 2:2-2:11 the YARA-L text does not parse at `, $n desc`: expected a section such as `events:`
+yaral_parse_error error 2:10-2:10 the YARA-L text ends here: expected an expression
 0..8 property
 8..9 punctuation.delimiter
 9..19 property
@@ -49196,9 +49196,9 @@ yaral_parse_error error 2:2-2:11 the YARA-L text does not parse at `, $n desc`: 
 22..34 string
 35..40 keyword
 40..41 punctuation.delimiter
-44..45 punctuation.delimiter
-46..48 variable
-49..53 keyword
+44..46 variable
+47..51 keyword
+51..52 punctuation.delimiter
 == corpus/yaral/order_section__valid.yaral
 0..8 property
 8..9 punctuation.delimiter
@@ -49463,15 +49463,15 @@ yaral_parse_error error 0:37-0:37 the YARA-L text ends here: expected an express
 63..64 operator
 65..78 string
 == corpus/yaral/search_query__invalid.yaral
-yaral_parse_error error 1:24-1:25 the YARA-L text does not parse at `=`: expected an expression
+yaral_parse_error error 2:2-2:3 the YARA-L text does not parse at `)`: expected `nocase`
 0..6 keyword
 6..7 punctuation.delimiter
 10..18 property
 18..19 punctuation.delimiter
 19..29 property
 30..31 operator
-32..33 operator
-34..47 string
+32..45 string
+48..49 punctuation.bracket
 == corpus/yaral/search_query__valid.yaral
 0..6 keyword
 6..7 punctuation.delimiter
@@ -49733,7 +49733,7 @@ yaral_parse_error error 0:1-0:1 the YARA-L text ends here: expected an expressio
 11..12 operator
 12..14 variable
 == corpus/yaral/unselect_section__invalid.yaral
-yaral_parse_error error 2:2-2:3 the YARA-L text does not parse at `,`: expected a section such as `events:`
+yaral_parse_error error 2:14-2:14 the YARA-L text ends here: expected an expression
 0..8 property
 8..9 punctuation.delimiter
 9..19 property
@@ -49741,7 +49741,10 @@ yaral_parse_error error 2:2-2:3 the YARA-L text does not parse at `,`: expected 
 22..34 string
 35..43 keyword
 43..44 punctuation.delimiter
-47..48 punctuation.delimiter
+47..55 property
+55..56 punctuation.delimiter
+56..58 property
+58..59 punctuation.delimiter
 == corpus/yaral/unselect_section__valid.yaral
 0..8 property
 8..9 punctuation.delimiter
