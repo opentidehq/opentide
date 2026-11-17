@@ -654,3 +654,69 @@ for (const server of SERVERS) {
     },
   );
 }
+
+// `opentide mcp start` answers each message as soon as it reads it: an
+// interactive client sends the next request only once the last one is
+// answered. The WASI build reads its client with blocking reads on one
+// thread, so it must not wait for more input before answering.
+for (const server of SERVERS) {
+  const name = typeof server === "string" ? server.split(":")[0] : server.name;
+  test(
+    `mcp start (${name}): each request is answered before the client sends the next`,
+    { skip: typeof server === "string" ? server : false },
+    async () => {
+      const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-")));
+      const ws = join(scratch, "ws");
+      cpSync(join(root, "tests/golden/fixtures/tenants"), ws, { recursive: true });
+      const { command, args } = server as Server;
+      const child = spawn(command, [...args, "mcp", "start"], {
+        cwd: ws,
+        env: { PATH: process.env.PATH ?? "", HOME: ws, PWD: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" },
+      });
+      let buffer = "";
+      const answers = new Map<number, (message: Record<string, unknown>) => void>();
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        buffer += chunk;
+        for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+          const message = JSON.parse(buffer.slice(0, end)) as Record<string, unknown>;
+          buffer = buffer.slice(end + 1);
+          answers.get(message.id as number)?.(message);
+        }
+      });
+      const send = (message: object): void => {
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+      };
+      // The answer to request *id*, sent alone: stdin stays open and quiet.
+      const call = (id: number, method: string, params: object): Promise<Record<string, unknown>> => {
+        const answered = new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error(`no answer to ${method} while the client waits`)), 60_000);
+          answers.set(id, (message) => {
+            clearTimeout(timer);
+            resolve(message);
+          });
+        });
+        send({ jsonrpc: "2.0", id, method, params });
+        return answered;
+      };
+      try {
+        const initialized = await call(1, "initialize", {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "wasi-host-test", version: "0" },
+        });
+        assert.ok(initialized.result, JSON.stringify(initialized));
+        send({ jsonrpc: "2.0", method: "notifications/initialized" });
+        const tools = await call(2, "tools/list", {});
+        const listed = (tools.result as { tools: { name: string }[] }).tools.map((tool) => tool.name);
+        assert.ok(listed.length > 0, JSON.stringify(tools));
+        const again = await call(3, "tools/list", {});
+        assert.deepEqual(again.result, tools.result);
+      } finally {
+        child.stdin.end();
+        if (child.exitCode === null) await new Promise((resolve) => child.once("exit", resolve));
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    },
+  );
+}

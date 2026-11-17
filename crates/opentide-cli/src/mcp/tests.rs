@@ -254,3 +254,122 @@ fn deployment_status_reads_platforms_past_a_configurations_that_is_not_a_table()
         "{status}"
     );
 }
+
+/// A client that sends its next message only once every request it sent is
+/// answered: reading on before that is the hang an interactive client sees
+/// under WASI, where a read blocks the one thread.
+struct PatientClient {
+    lines: std::collections::VecDeque<Vec<u8>>,
+    current: Vec<u8>,
+    at: usize,
+    unanswered: Vec<Value>,
+    out: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+}
+
+impl PatientClient {
+    fn answered(&self, id: &Value) -> bool {
+        String::from_utf8_lossy(&self.out.lock().unwrap())
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .any(|message| message.get("method").is_none() && message.get("id") == Some(id))
+    }
+}
+
+impl std::io::Read for PatientClient {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let available = std::io::BufRead::fill_buf(self)?;
+        let n = available.len().min(buf.len());
+        buf[..n].copy_from_slice(&available[..n]);
+        std::io::BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl std::io::BufRead for PatientClient {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.at == self.current.len() {
+            if let Some(waiting) = self.unanswered.iter().find(|id| !self.answered(id)) {
+                return Err(std::io::Error::other(format!(
+                    "the server reads on with request {waiting} unanswered"
+                )));
+            }
+            let Some(next) = self.lines.pop_front() else {
+                return Ok(&[]);
+            };
+            if let Ok(message) = serde_json::from_slice::<Value>(&next)
+                && message.get("method").is_some()
+                && let Some(id) = message.get("id")
+            {
+                self.unanswered.push(id.clone());
+            }
+            self.current = next;
+            self.at = 0;
+        }
+        Ok(&self.current[self.at..])
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.at += amount;
+    }
+}
+
+/// The output the server writes, shared with the client that reads it.
+struct Shared(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Shared {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn a_blocking_client_gets_each_answer_before_its_next_read() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let messages = [
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"}}}),
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}),
+        json!({"jsonrpc": "2.0", "id": "three", "method": "ping"}),
+        json!({"jsonrpc": "2.0", "id": 4, "method": "no/such/method"}),
+    ];
+    let client = PatientClient {
+        lines: messages
+            .iter()
+            .map(|message| format!("{message}\n").into_bytes())
+            .collect(),
+        current: Vec::new(),
+        at: 0,
+        unanswered: Vec::new(),
+        out: std::sync::Arc::clone(&out),
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(super::interactive::serve(
+            server(&ws),
+            client,
+            Shared(std::sync::Arc::clone(&out)),
+        ))
+        .unwrap();
+    let written = String::from_utf8(out.lock().unwrap().clone()).unwrap();
+    let answers: Vec<Value> = written
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap()["id"].clone())
+        .collect();
+    assert_eq!(
+        answers,
+        [json!(1), json!(2), json!("three"), json!(4)],
+        "{written}"
+    );
+}
