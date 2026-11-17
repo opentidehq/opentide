@@ -1013,6 +1013,23 @@ pub(crate) fn production_names() -> Vec<&'static str> {
         .collect()
 }
 
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
+/// root first (`opentide_parse::SyntaxError::within`).
+pub(crate) fn error_kinds(source: &str) -> Vec<Vec<&'static str>> {
+    parser::parse(source)
+        .errors
+        .iter()
+        .map(|e| {
+            e.within
+                .iter()
+                .map(|&raw| <Lang as rowan::Language>::kind_from_raw(raw))
+                .filter(|kind| !matches!(kind, K::NAMED_PARAMETERS | K::ERROR))
+                .map(node_name)
+                .collect()
+        })
+        .collect()
+}
+
 /// Whether the parser reported a problem in `source`, and the names of the
 /// named nodes of its tree in preorder.
 pub(crate) fn named_kinds(source: &str) -> (bool, Vec<&'static str>) {

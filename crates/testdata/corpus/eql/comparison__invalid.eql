@@ -1,2 +1,2 @@
 // prod:comparison invalid
-process where process.pid = 4
+process where process.pid ==
