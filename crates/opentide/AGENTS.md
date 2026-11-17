@@ -6,8 +6,8 @@ UC-5.1, #836). Every binding is to wrap it and nothing else (UC-5.2, UC-5.3).
 
 ## Place
 
-facade (`xtask/layers.toml`), above the applications: its features reach opentide-cli (`queries`,
-`cli`), opentide-lsp (`lsp`) and opentide-connectors (`connectors`). Published with the crates it wraps by the release train
+facade (`xtask/layers.toml`), above the applications: its features reach opentide-cli (`cli`,
+`plugins`), opentide-lsp (`lsp`) and opentide-connectors (`connectors`). Published with the crates it wraps by the release train
 (`.github/workflows/publish.yml`, UC-5.5), at the product version: `cargo install opentide
 --features cli` is the command line. `cargo package` builds it from its package (`release-build.yml`
 `crate-packages`, on release pull requests, the nightly and the release; `scripts/ci-local.sh`). crates.io's `opentide`
@@ -21,7 +21,7 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 | `src/error.rs` | `Error`: `#[non_exhaustive]`, each variant with a stable code (`Error::code`) |
 | `src/document.rs` | `Document`: a JSON document's text (key order kept: `serde_json` sorts keys, and the workspace never turns on `preserve_order`) and its value |
 | `src/workspace.rs` | `Workspace` (a newtype over `opentide_workspace::Workspace`): `open`, `from_files`, `validate`, `lint`, `info`, `catalog`, `coverage`; `Options`, `ValidateOptions`, `LintOptions`, `Info` |
-| `src/queries.rs` | The queries checks: the engines (`queries` feature, from opentide-cli's `queries`), else a stand-in that reports `engine_unavailable` |
+| `src/queries.rs` | The queries checks: the engines (`queries` feature, from opentide-analysis's `queries`), else a stand-in that reports `engine_unavailable` |
 | `src/deploy.rs` | `Workspace::deploy_plan` over `opentide_compile::dry_run`; `Strategy`, `DeployPlanOptions`, `DeployPlan` |
 | `src/models.rs`, `catalog.rs`, `validate.rs`, `lint.rs` | Curated re-exports of the internal crates' types |
 | `src/cli.rs` | `cli` feature: `main`, `main_with_version` (a host whose version is its package's: the Python binding), `exit`, `run_json`, `VERSION` |

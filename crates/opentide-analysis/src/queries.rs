@@ -29,8 +29,8 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 
+use crate::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
 use indexmap::IndexMap;
-use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
 use opentide_schema::objects::platform::graylog::{self, ConfiguredTenant};
 use opentide_workspace::diagnostic::ContextValue;
 use opentide_workspace::validate::annotate::relative_path;
@@ -233,7 +233,7 @@ impl CheckedQuery {
 pub struct Profiles {
     host: MemoryWorkspace,
     /// Puts the datasets in use before [`Profiles::install`] back on drop.
-    _restore: Option<opentide_analysis::RestoreVisibility>,
+    _restore: Option<crate::RestoreVisibility>,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
     /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
@@ -259,14 +259,14 @@ impl Profiles {
             let bytes = fs.read(&path).map_err(|error| error.to_string())?;
             decode(&bytes).map(Some)
         };
-        let restore = opentide_analysis::save_visibility();
+        let restore = crate::save_visibility();
         let visibility_problem = match read(VISIBILITY_CONFIGURATION)
-            .and_then(|text| opentide_analysis::install_visibility(text.as_deref()))
+            .and_then(|text| crate::install_visibility(text.as_deref()))
         {
             Ok(()) => None,
             Err(problem) => {
                 // Declares nothing; the configuration check reports the file.
-                let _ = opentide_analysis::install_visibility(None);
+                let _ = crate::install_visibility(None);
                 Some(format!(
                     "the declared datasets could not be read: {problem}"
                 ))
@@ -295,7 +295,7 @@ impl Profiles {
     pub fn check_object(&self, text: &str) -> Vec<CheckedQuery> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
-        let mut checked: Vec<CheckedQuery> = opentide_analysis::analyze_queries(&self.host, &text)
+        let mut checked: Vec<CheckedQuery> = crate::analyze_queries(&self.host, &text)
             .into_iter()
             .map(|report| {
                 let (line, column, _, _) = lines.convert(&text, report.range);
@@ -363,18 +363,18 @@ impl Profiles {
     pub fn check_file(&self, path: &Path, text: &str) -> Vec<Finding> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
-        let response = opentide_analysis::analyze(
+        let response = crate::analyze(
             &self.host,
-            opentide_analysis::AnalyzeRequest {
+            crate::AnalyzeRequest {
                 uri: path.to_string_lossy().into_owned(),
-                language: opentide_analysis::LanguageId::TideYaml,
+                language: crate::LanguageId::TideYaml,
                 text: text.clone().into_owned(),
             },
         );
         response
             .diagnostics
             .into_iter()
-            .chain(opentide_analysis::analyze_blocks(&self.host, &text))
+            .chain(crate::analyze_blocks(&self.host, &text))
             .map(|diagnostic| finding(&text, &lines, diagnostic))
             .collect()
     }
@@ -389,18 +389,12 @@ impl Profiles {
         document: &opentide_core::node::Document,
     ) -> Vec<Finding> {
         let lines = LineStarts::new(text);
-        let response = opentide_analysis::analyze_tide_parsed(
-            &self.host,
-            &path.to_string_lossy(),
-            text,
-            document,
-        );
+        let response =
+            crate::analyze_tide_parsed(&self.host, &path.to_string_lossy(), text, document);
         response
             .diagnostics
             .into_iter()
-            .chain(opentide_analysis::analyze_blocks_parsed(
-                &self.host, text, document,
-            ))
+            .chain(crate::analyze_blocks_parsed(&self.host, text, document))
             .map(|diagnostic| finding(text, &lines, diagnostic))
             .collect()
     }
@@ -411,7 +405,7 @@ impl Profiles {
 /// with the workspace's [`Profiles`] installed: the declared datasets apply.
 pub fn check_query_text(
     text: &str,
-    language: opentide_analysis::LanguageId,
+    language: crate::LanguageId,
     platform: Option<&str>,
 ) -> Vec<Finding> {
     check_query_on_stack(text, language, platform, None)
@@ -421,13 +415,13 @@ pub fn check_query_text(
 /// checks read.
 pub fn check_query_on_stack(
     text: &str,
-    language: opentide_analysis::LanguageId,
+    language: crate::LanguageId,
     platform: Option<&str>,
     stack: Option<&str>,
 ) -> Vec<Finding> {
     let text = universal_newlines(text);
     let lines = LineStarts::new(&text);
-    opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+    crate::analyze_query(&crate::QueryRequest {
         language,
         platform: platform.map(str::to_owned),
         stack: stack.map(str::to_owned),
@@ -815,11 +809,7 @@ pub fn universal_newlines(text: &str) -> Cow<'_, str> {
 
 /// An engine finding in the CLI's coordinates: lines and columns from 1,
 /// columns in code points (`opentide tui` places the language server's so).
-pub fn finding(
-    text: &str,
-    lines: &LineStarts,
-    diagnostic: opentide_analysis::Diagnostic,
-) -> Finding {
+pub fn finding(text: &str, lines: &LineStarts, diagnostic: crate::Diagnostic) -> Finding {
     let (line, column, end_line, end_column) = lines.convert(text, diagnostic.range);
     let (end_line, end_column) = span_end(line, column, end_line, end_column, text);
     Finding {

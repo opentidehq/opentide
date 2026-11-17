@@ -34,7 +34,7 @@ opentide-schema = { workspace = true }
 # The `load` benchmark (UC-2.1, #816) and `lsp parity`.
 opentide-workspace.workspace = true
 # `corpus faults --only queries` (UC-2.5): the queries check on the query
-# engines, `opentide_cli::queries`.
+# engines, `opentide_analysis::queries` (as `opentide_cli::queries`).
 opentide-cli.workspace = true
 # `lsp parity` (UC-2.6): the language server in this process, and the
 # engine's own analysis it adds to validate's findings.
