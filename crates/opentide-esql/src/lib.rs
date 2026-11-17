@@ -268,7 +268,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
     // The indices `FROM` reads: undeclared ones, and ECS field checks when
     // every one holds ECS documents.
-    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(root, source));
+    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(&tree, source));
     // The tree the checks read: a second parse doubled the cost of a long query.
     let tokens = highlight(&spec, &tree, source, catalog);
     AnalyzeResult {

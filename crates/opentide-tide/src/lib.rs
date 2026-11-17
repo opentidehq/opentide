@@ -116,26 +116,6 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
     }
 }
 
-pub fn slugify(name: &str) -> String {
-    let mut slug = String::new();
-    let mut prev_dash = false;
-    for ch in name.trim().chars() {
-        if ch.is_ascii_alphanumeric() {
-            slug.push(ch.to_ascii_lowercase());
-            prev_dash = false;
-        } else if !prev_dash {
-            slug.push('-');
-            prev_dash = true;
-        }
-    }
-    let slug = slug.trim_matches('-').to_string();
-    if slug.is_empty() {
-        "object".into()
-    } else {
-        slug
-    }
-}
-
 /// A query block extracted from a YAML document, with indent-stripped text and
 /// a mapper back onto host coordinates.
 #[derive(Debug, Clone)]
@@ -1796,12 +1776,6 @@ threat:
             language_for_field_path(&["configurations", "sysdig", "condition"]),
             Some(LanguageId::Falco)
         );
-    }
-
-    #[test]
-    fn slugify_matches_python() {
-        assert_eq!(slugify("Sentinel KQL Rule"), "sentinel-kql-rule");
-        assert_eq!(slugify("  Hi---There  "), "hi-there");
     }
 
     #[test]

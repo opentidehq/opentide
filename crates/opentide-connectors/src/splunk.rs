@@ -18,8 +18,9 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::{Answer, describe_answer, gateway_answer, page_title};
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    columns_of,
 };
 use crate::error::ConnectorError;
 use crate::text::json_text;
@@ -65,8 +66,9 @@ impl Reply {
         !(200..300).contains(&self.answer.status)
     }
 
-    /// Logs an error status as a warning: deploy reads the answer on (a
-    /// `404` for a saved search that is not there is not a failure).
+    /// Logs an error status as a warning: deploy reads the answer on. A
+    /// `404` for a saved search that is not there is no failure, and its
+    /// caller logs it at debug instead.
     fn log_failure(&self) {
         if self.failed() {
             tracing::warn!(status = self.answer.status, "{}", self.http_error());
@@ -513,10 +515,12 @@ impl Splunk {
             entity_name(name)
         );
         let reply = Self::send(cx, crate::transport::Method::GET, &path, None).await?;
-        reply.log_failure();
+        // Not there yet: the normal path to creating it, no failure.
         if reply.answer.status == 404 {
+            tracing::debug!(status = reply.answer.status, "{}", reply.http_error());
             return Ok(None);
         }
+        reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
         }
@@ -916,7 +920,9 @@ fn html_answer(cx: TenantContext<'_>, url: &str, answer: &Answer) -> ConnectorEr
 impl Deployer for Splunk {
     /// The saved search `rule_id` with the compiled settings in `body` (a
     /// JSON object: the rule's settings, its actions and `search`), through
-    /// [`Splunk::apply_saved_search`]; a delete removes it.
+    /// [`Splunk::apply_saved_search`]. A delete removes it when the tenant
+    /// has it, with the warning `splunk_alert_deleted` (its message the
+    /// name), and does nothing when it is already gone.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -934,14 +940,23 @@ impl Deployer for Splunk {
                     });
                 }
             };
-            let deletion = request.operation == Operation::Delete;
-            self.apply_saved_search(cx, &request.rule_id, &settings, deletion)
+            if request.operation == Operation::Delete {
+                let mut warnings = Vec::new();
+                if self.saved_search(cx, &request.rule_id).await?.is_some() {
+                    self.delete_saved_search(cx, &request.rule_id).await?;
+                    warnings.push(DeployWarning::new(
+                        "splunk_alert_deleted",
+                        request.rule_id.clone(),
+                    ));
+                }
+                return Ok(DeployOutcome::new(None, request.operation).with_warnings(warnings));
+            }
+            self.apply_saved_search(cx, &request.rule_id, &settings, false)
                 .await?;
-            Ok(DeployOutcome {
-                remote_id: (!deletion).then(|| request.rule_id.clone()),
-                operation: request.operation,
-                warnings: Vec::new(),
-            })
+            Ok(DeployOutcome::new(
+                Some(request.rule_id.clone()),
+                request.operation,
+            ))
         })
     }
 }
