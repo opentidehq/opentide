@@ -63,7 +63,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`DeployRequest::new`, `DeployRequest::delete` and `DeployRequest::with_policies`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). Build a request with `DeployRequest::new(rule_id, operation, body)`, a deletion, which takes no body, with `DeployRequest::delete(rule_id)`, and a Sysdig rule's own runtime policies with `.with_policies(Some(..))`. 
+- **`DeployRequest::new`, `DeployRequest::delete` and `DeployRequest::with_policies`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). Build a request with `DeployRequest::new(rule_id, operation, body)`, a deletion, which takes no body, with `DeployRequest::delete(rule_id)`, and a Sysdig rule's own runtime policies with `.with_policies(Some(..))`.
 
 - **`opentide_schema::platforms::PlatformId`**. An enum of the thirteen built-in platforms, in `PLATFORMS`' order: `ALL`, `spec()` (its row), `as_str()` (the identifier), `parse(id)` (`None` for a plugin's identifier or any other text) and `Display`. A row of `PLATFORMS` moved or added without the enum following fails the build. `deploy` chooses each platform's path by an exhaustive match on it, so a new built-in platform must be given one; its inner matches and other code still have fallbacks. `opentide_cli::tree::Platform`, the `--platform` choice, is now a struct wrapping it (`Platform(PlatformId)`) instead of an enum of its own.
 
