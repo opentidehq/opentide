@@ -136,8 +136,17 @@ impl KindNames for RustNames {
     /// lists, so a token spelt like a production (EQL's `|` and its `pipe`
     /// stage) does not stand in for the node.
     fn parse(&self, body: &str) -> Parsed {
+        let nodes: BTreeSet<String> = (self.node_kinds)().iter().map(|k| snake_case(k)).collect();
         let (has_error, kinds) = (self.kinds)(body);
-        let kinds = self.tag_kinds(&kinds);
+        let kinds: Vec<String> = kinds
+            .iter()
+            .flat_map(|k| {
+                let node = nodes.contains(&snake_case(k));
+                self.tags_of(k)
+                    .into_iter()
+                    .filter(move |t| node || self.tokens.contains(&t.as_str()))
+            })
+            .collect();
         Parsed {
             has_error,
             dump: kinds.join(" "),
@@ -153,23 +162,6 @@ impl KindNames for RustNames {
                 .map(|nodes| nodes.iter().map(|k| self.tags_of(k)).collect())
                 .collect(),
         )
-    }
-}
-
-impl RustNames {
-    /// The tags of a parse's kinds: a node gives its tags, a token only the
-    /// ones [`RustNames::tokens`] lists.
-    fn tag_kinds(&self, kinds: &[String]) -> Vec<String> {
-        let nodes: BTreeSet<String> = (self.node_kinds)().iter().map(|k| snake_case(k)).collect();
-        kinds
-            .iter()
-            .flat_map(|k| {
-                let node = nodes.contains(&snake_case(k));
-                self.tags_of(k)
-                    .into_iter()
-                    .filter(move |t| node || self.tokens.contains(&t.as_str()))
-            })
-            .collect()
     }
 }
 
@@ -201,18 +193,19 @@ impl KindNames for EsqlNames {
     }
 
     fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
-        Some({
-            let body = body.to_string();
-            std::thread::Builder::new()
-                .stack_size(1 << 20)
-                .spawn(move || opentide_esql::debug_error_kinds(&body))
-                .unwrap()
-                .join()
-                .expect("the ES|QL parser overflowed a 1 MB stack or panicked")
+        let body = body.to_string();
+        let errors = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || opentide_esql::debug_error_kinds(&body))
+            .unwrap()
+            .join()
+            .expect("the ES|QL parser overflowed a 1 MB stack or panicked");
+        Some(
+            errors
                 .into_iter()
-                .map(|nodes| nodes.into_iter().map(|k| vec![k.to_string()]).collect())
-                .collect()
-        })
+                .map(|e| e.into_iter().map(|k| vec![k.to_string()]).collect())
+                .collect(),
+        )
     }
 }
 
@@ -265,12 +258,13 @@ impl KindNames for KqlNames {
     }
 
     fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
-        Some({
-            opentide_kql::inspect::error_kinds(body)
+        let errors = opentide_kql::inspect::error_kinds(body);
+        Some(
+            errors
                 .into_iter()
-                .map(|nodes| nodes.into_iter().map(|k| vec![kql_tag(k)]).collect())
-                .collect()
-        })
+                .map(|e| e.into_iter().map(|k| vec![kql_tag(k)]).collect())
+                .collect(),
+        )
     }
 }
 
@@ -294,12 +288,13 @@ impl KindNames for CqlNames {
     }
 
     fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
-        Some({
-            opentide_cql::debug_error_kinds(body)
+        let errors = opentide_cql::debug_error_kinds(body);
+        Some(
+            errors
                 .into_iter()
-                .map(|nodes| nodes.into_iter().map(|k| vec![k]).collect())
-                .collect()
-        })
+                .map(|e| e.into_iter().map(|k| vec![k]).collect())
+                .collect(),
+        )
     }
 }
 
