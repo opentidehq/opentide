@@ -374,3 +374,46 @@ fn list_from(cassette: opentide_cassette::Cassette) -> (Result<usize, ConnectorE
         .map(|rules| rules.unwrap().len());
     (listed, tenant)
 }
+
+/// #1142: a rule write ARM answers with a redirect the client cannot follow
+/// (a 307 without `Location`) is a failure, not a rule written.
+#[test]
+fn sentinel_a_redirect_answer_is_not_a_rule_written() {
+    let inputs = fixture("sentinel");
+    let deploy = inputs.get("deploy").unwrap();
+    let rule_id = text(deploy.get("rule_id").unwrap());
+    let rule = deploy.get("rule").unwrap();
+    let full = support::cassette("sentinel/deploy");
+    let mut created = full.interactions[2].clone();
+    created.response.status = 307;
+    created
+        .response
+        .headers
+        .retain(|(name, _)| name != "location");
+    let cassette = opentide_cassette::Cassette::new(
+        &full.scenario,
+        full.recorded_from,
+        vec![
+            full.interactions[0].clone(),
+            full.interactions[1].clone(),
+            created,
+        ],
+    );
+    let tenant = Replayed::start_with(
+        cassette,
+        sentinel::PLATFORM,
+        SETUP,
+        "AZURE_CLIENT_SECRET",
+        &sentinel::http_settings(Duration::from_secs(60)),
+    );
+    let answer = block_on(async {
+        connector()
+            .create_or_update(tenant.cx(), rule_id, rule)
+            .await
+    })
+    .unwrap()
+    .unwrap();
+    let error = answer.unwrap_err();
+    assert_eq!(error.status, 307, "{error}");
+    assert_eq!(tenant.verify(), Vec::new());
+}

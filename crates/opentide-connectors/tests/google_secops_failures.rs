@@ -589,12 +589,11 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
         serve(&api, on("GET", ":udmSearch"), refused, 1).await;
         let window = TimeWindow::check(jiff::Timestamp::from_second(1_800_000_000).unwrap());
         let request = QueryRequest::new(TEXT, "yaral", window);
-        let create = DeployRequest {
-            rule_id: String::new(),
-            operation: Operation::Create,
-            body: serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
-            policies: None,
-        };
+        let create = DeployRequest::new(
+            String::new(),
+            Operation::Create,
+            serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
+        );
         let settings = HttpSettings::default();
         let [check, search, deploy] = with_tenant(&api, "", &settings, async |cx, connector| {
             [
@@ -653,11 +652,12 @@ fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
         )
         .await;
         serve(&api, on("PATCH", &deployment()), ok(), 1).await;
-        let request = |operation, rule_id: &str| DeployRequest {
-            rule_id: rule_id.to_owned(),
-            operation,
-            body: serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
-            policies: None,
+        let request = |operation, rule_id: &str| {
+            DeployRequest::new(
+                rule_id.to_owned(),
+                operation,
+                serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
+            )
         };
         let settings = HttpSettings::default();
         let scoped = "data_access_scope = \"soc\"";

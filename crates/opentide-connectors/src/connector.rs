@@ -48,7 +48,11 @@ pub enum Operation {
 }
 
 /// One compiled rule to deploy (the body `opentide-compile` built).
+///
+/// `#[non_exhaustive]`: build one with [`DeployRequest::new`],
+/// [`DeployRequest::delete`] and [`DeployRequest::with_policies`].
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct DeployRequest {
     /// The rule's identifier on the platform (its UUID or name).
     pub rule_id: String,
@@ -62,6 +66,35 @@ pub struct DeployRequest {
     /// takes a block's own `policies` first (a deploy plan's Sysdig entry
     /// carries them). Other platforms read none.
     pub policies: Option<Vec<String>>,
+}
+
+impl DeployRequest {
+    /// `operation` on the rule `rule_id`, with the compiled `body`, and the
+    /// tenant's Sysdig policies ([`DeployRequest::with_policies`] names
+    /// others).
+    pub fn new(rule_id: impl Into<String>, operation: Operation, body: impl Into<Vec<u8>>) -> Self {
+        Self {
+            rule_id: rule_id.into(),
+            operation,
+            body: body.into(),
+            policies: None,
+        }
+    }
+
+    /// The deletion of the rule `rule_id`: no body, which no platform reads
+    /// for a delete (Sysdig reads the rule's name from the tenant to take it
+    /// out of its policies).
+    pub fn delete(rule_id: impl Into<String>) -> Self {
+        Self::new(rule_id, Operation::Delete, Vec::new())
+    }
+
+    /// The same request with Sysdig's runtime `policies`: `None` takes the
+    /// tenant's, `Some` exactly these.
+    #[must_use]
+    pub fn with_policies(mut self, policies: Option<Vec<String>>) -> Self {
+        self.policies = policies;
+        self
+    }
 }
 
 /// What a deploy did.

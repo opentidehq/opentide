@@ -9,7 +9,6 @@
 //! noted, its Java builder.
 
 use crate::syntax::SyntaxKind as K;
-use crate::tree::Node;
 use crate::version::{Availability, StackTarget};
 use crate::{SyntaxNode, ast};
 use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
@@ -153,6 +152,40 @@ pub(crate) fn parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
     out
 }
 
+/// A node's children as the arena listed them: its nodes, tokens and
+/// comments in order, without whitespace, with `WITH {…}` read in place;
+/// none for a one-token node (`Identifier`).
+pub(crate) fn children_of(node: &SyntaxNode) -> Vec<SyntaxElement> {
+    if crate::tree::is_leaf(node.kind()) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for child in node.children_with_tokens() {
+        match &child {
+            NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS => {
+                out.extend(
+                    n.children_with_tokens()
+                        .filter(|c| c.kind() != K::WHITESPACE),
+                );
+            }
+            _ if child.kind() == K::WHITESPACE => {}
+            _ => out.push(child),
+        }
+    }
+    out
+}
+
+/// Whether the arena named `element`: a node or a comment.
+pub(crate) fn is_named(element: &SyntaxElement) -> bool {
+    element.as_node().is_some() || element.kind() == K::COMMENT
+}
+
+/// The span of a node or token.
+pub(crate) fn element_span(element: &SyntaxElement) -> ByteSpan {
+    let range = element.text_range();
+    ByteSpan::new(usize::from(range.start()), usize::from(range.end()))
+}
+
 fn trivia(kind: K) -> bool {
     matches!(kind, K::WHITESPACE | K::COMMENT)
 }
@@ -170,13 +203,13 @@ pub(crate) fn nodes_after(parts: &[SyntaxElement], at: usize) -> impl Iterator<I
 }
 
 /// The command nodes: what a subquery's enclosing check stops at.
-fn is_command(kind: K) -> bool {
+pub(crate) fn is_command(kind: K) -> bool {
     ast::Command::can_cast(kind) || kind == K::SET_COMMAND
 }
 
-/// The kinds [`syntax_gates`] reads: the arena keeps the rowan node of these
-/// only, so the rest of the lossless tree is freed as it is built (a test
-/// checks that no other kind has a gate).
+/// The kinds that have a gate: [`syntax_gates`] reads no other node, so the
+/// analysis walk builds no parts for the rest (a test checks that no other
+/// kind has a gate).
 pub(crate) const GATED: &[K] = &[
     K::RENAME_CLAUSE,
     K::LIKE_EXPRESSION,
@@ -196,6 +229,15 @@ pub(crate) const GATED: &[K] = &[
 
 /// Version gates for one node (not names: those come from the catalog).
 pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
+    if GATED.contains(&node.kind()) {
+        gates_of(node, source)
+    } else {
+        Vec::new()
+    }
+}
+
+/// The gates of one node, of any kind.
+fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
     let mut out = Vec::new();
     let span = span_of(node);
     let parts = parts(node);
@@ -474,16 +516,19 @@ pub(crate) enum Spacing {
     Never(char),
 }
 
-pub(crate) fn command_spacing(node: Node, source: &str) -> Option<(Spacing, ByteSpan)> {
-    if !node.kind().ends_with("_command") || node.kind() == "unknown_command" {
+/// The command's first word, when Elasticsearch's lexer may read it with
+/// the character after it as one unknown command; that word's span.
+pub(crate) fn command_spacing(node: &SyntaxNode, source: &str) -> Option<(Spacing, ByteSpan)> {
+    if !is_command(node.kind()) || node.kind() == K::UNKNOWN_COMMAND {
         return None;
     }
-    let keyword = node.child(0)?;
-    if keyword.is_named() {
+    let keyword = children_of(node).into_iter().next()?;
+    if is_named(&keyword) {
         return None;
     }
-    let next = source.get(keyword.end_byte()..)?.chars().next()?;
-    let span = ByteSpan::new(keyword.start_byte(), keyword.end_byte() + next.len_utf8());
+    let span = element_span(&keyword);
+    let next = source.get(span.end..)?.chars().next()?;
+    let span = ByteSpan::new(span.start, span.end + next.len_utf8());
     match next {
         '(' | ')' => Some((Spacing::Paren, span)),
         '|' | '"' => Some((Spacing::Never(next), span)),
@@ -543,7 +588,7 @@ mod tests {
         crate::syntax_tree(query)
             .descendants()
             .flat_map(|n| {
-                let gates = syntax_gates(&n, query);
+                let gates = gates_of(&n, query);
                 assert!(
                     gates.is_empty() || GATED.contains(&n.kind()),
                     "{:?} has a gate but is not in GATED",
@@ -634,7 +679,7 @@ mod tests {
             "FROM a | LOOKUP JOIN t ON x, y | COMPLETION p WITH ep | FUSE linear WITH {}",
         ] {
             for node in crate::syntax_tree(query).descendants() {
-                if !syntax_gates(&node, query).is_empty() {
+                if !gates_of(&node, query).is_empty() {
                     fired.insert(node.kind());
                 }
             }

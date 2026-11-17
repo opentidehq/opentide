@@ -60,3 +60,34 @@ fn many_inlay_hints_are_placed_through_one_table() {
     assert_eq!(hints.len(), n);
     assert_eq!(hints[n - 1].position.line, u32::try_from(n + 1).unwrap());
 }
+
+/// An Elastic EQL rule whose query is a long `in` list, on ECS indices: a finding per element
+/// from the engine (`eql_field_comparison`) and from ECS (an unknown field), each placed back
+/// in the YAML through the query's line table (#1497: 20,000 elements took 37 s, and 87 s on ECS
+/// indices, when each was placed by a scan of the query from its start).
+#[test]
+fn a_long_in_list_in_a_rule_is_placed_through_one_table() {
+    let n = 1_000;
+    let list: Vec<String> = (0..n).map(|i| format!("process.nmae{i}")).collect();
+    let source = format!(
+        "name: In list\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\nconfigurations:\n  elastic:\n    type: eql\n    index: [logs-endpoint.events.*]\n    query: |\n      process where process.name in ({})\n",
+        list.join(" , ")
+    );
+    let before = scans_from_the_start();
+    let result = analyze(AnalyzeInput {
+        path: "objects/rules/rule.yaml",
+        source: &source,
+        elastic_tenants: &[],
+    });
+    assert_eq!(
+        scans_from_the_start(),
+        before,
+        "a query's finding was placed by a scan"
+    );
+    let comparisons = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == "eql_field_comparison")
+        .count();
+    assert_eq!(comparisons, n, "{:?}", result.diagnostics.first());
+}
