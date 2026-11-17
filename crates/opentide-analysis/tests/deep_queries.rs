@@ -569,3 +569,33 @@ fn a_precedence_chain_in_each_level_stops_with_one_error() {
         assert_eq!(stopped.len(), 1, "{}: {stopped:?}", l.name);
     }
 }
+
+/// SPL's eval chain through every precedence inside each call, closed by two parentheses a
+/// level: `f(a OR b AND NOT c == d + e * -(`. It aborted a 1 MB stack at 450 levels, the
+/// operands recursing unchecked (#1473); each step is now six of SPL's 1,024 levels.
+fn spl_eval_ladder(n: usize) -> String {
+    format!(
+        "index=x | eval z={}1{}",
+        "f(a OR b AND NOT c == d + e * -(".repeat(n),
+        "))".repeat(n)
+    )
+}
+
+/// The eval ladder analyses cleanly at the limit its six levels a step leave (1,024 / 6,
+/// less the root), and past it, up to a million characters of it, is one parse error:
+/// never an abort, and linear.
+#[test]
+fn spl_eval_ladder_stops_with_one_error() {
+    analyzes_cleanly("spl eval ladder", spl_eval_ladder(169), |q| {
+        opentide_spl::analyze(q).diagnostics
+    });
+    let step = "f(a OR b AND NOT c == d + e * -(".len() + "))".len();
+    for n in [171, 450, 1_000_000 / step] {
+        let q = spl_eval_ladder(n);
+        let diagnostics = on_small_stack("spl eval ladder past", move || {
+            opentide_spl::analyze(&q).diagnostics
+        });
+        let stopped = stopped(&diagnostics);
+        assert_eq!(stopped.len(), 1, "{n}: {stopped:?}");
+    }
+}

@@ -127,3 +127,32 @@ fn nesting_past_the_limit_is_one_diagnostic_on_a_small_stack() {
         }
     }
 }
+
+/// A call whose argument runs through every precedence of an eval expression and a sign
+/// before the next level: `f(a OR b AND NOT c == d + e * -(`. Found by review (#1473):
+/// each operator's operand recursed without a level, so 450 of these aborted a 1 MB stack.
+/// Each nesting step of the chain is now a level of `max_depth`: the call, the four operands
+/// that have operators of their own (`b AND`, `NOT c ==`, `d +`, `e *`) and the parenthesis,
+/// so the shape stops with one `TooDeep`.
+fn eval_ladder(n: usize) -> String {
+    format!(
+        "| eval z={}1{}",
+        "f(a OR b AND NOT c == d + e * -(".repeat(n),
+        "))".repeat(n)
+    )
+}
+
+/// The levels one step of [`eval_ladder`] takes.
+const LADDER_LEVELS: usize = 6;
+
+#[test]
+fn an_eval_precedence_chain_in_every_level_stops_with_one_diagnostic() {
+    let clean = MAX_DEPTH as usize / LADDER_LEVELS - 1;
+    let (errors, too_deep) = on_small_stack(eval_ladder(clean));
+    assert_eq!((errors, too_deep), (0, false), "{clean} levels");
+    for n in [clean + 2, 450, 20_000] {
+        let (errors, too_deep) = on_small_stack(eval_ladder(n));
+        assert!(too_deep, "{n} levels: no TooDeep ({errors} errors)");
+        assert_eq!(errors, 1, "{n} levels");
+    }
+}
