@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Plan a deploy
 
-`deploy_plan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. The plan is a `Document`: its text keeps the command line's key order, and its value is a `serde_json::Value` to read fields from. `crates/opentide/examples/deploy_plan.rs`:
+`deploy_plan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. The plan is a `Document`: its text keeps the command line's key order, and its value is a `serde_json::Value` to read fields from. `DeployPlanOptions::environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `ConnectOptions::environment` names the one a connection reads, and `Workspace::info_in` reports each variable in it; without one, the process's. `crates/opentide/examples/deploy_plan.rs`:
 
 ```bash
 cargo run -p opentide --example deploy_plan -- path/to/workspace PREVIEW
@@ -150,7 +150,7 @@ fn main() -> Result<(), opentide::Error> {
 
 ## Query, check and deploy on tenants
 
-With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment, `ConnectOptions::environment` when it names one, Google SecOps's Application Default Credentials too (an unset `$NAME` is an error naming the variable, never sent). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`); `TenantConfig::new` describes one in code.
+With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment, `ConnectOptions::environment` when it names one, Google SecOps's Application Default Credentials too (an unset `$NAME` is an error naming the variable, never sent). TLS roots are the system's store, which the process's `SSL_CERT_FILE` and `SSL_CERT_DIR` replace (read once per process, whatever the options say), plus the CA bundles the options' environment names (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`); `TenantConfig::new` describes one in code.
 
 | Operation | Command line | Returns |
 |-----------|--------------|---------|

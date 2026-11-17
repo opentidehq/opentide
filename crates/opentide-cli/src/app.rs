@@ -1360,7 +1360,9 @@ impl Run<'_> {
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
         // The built-in platforms, then the platform plugins (UC-4.5b).
-        let registry = crate::plugins::registry();
+        let registry = crate::plugins::registry(&opentide_connectors::Environment::from_pairs(
+            self.env.iter(),
+        ));
         let lines = Lines {
             sink: self.host.log_sink.clone(),
             console: self.console(self.host.stderr_tty),

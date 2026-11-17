@@ -431,3 +431,76 @@ fn an_in_memory_workspace_reads_nothing_from_the_disk() {
     assert_eq!(duplicate.path.as_deref(), Some("objects/rules/b.yaml"));
     assert_eq!((duplicate.line, duplicate.column), (Some(3), Some(9)));
 }
+
+/// #1142: a credential the caller hands over as an environment is not
+/// reported unset: `info_in` and a plan's `environment` look the tenants'
+/// `$NAME` up there, as `ConnectOptions::environment` names the one a
+/// connection reads; `info()` and a plan without one read the process.
+#[test]
+fn info_and_a_plan_look_credentials_up_in_the_callers_environment() {
+    let variable = "OPENTIDE_SWEEP_TEST_TOKEN";
+    assert!(std::env::var_os(variable).is_none());
+    let platform = format!(
+        "[platform]\nenabled = true\n\n[[tenants]]\nname = \"lab\"\nstrategies = \
+         [\"PREVIEW\", \"RELEASE\"]\n[tenants.setup]\nurl = \"https://s1.invalid\"\n\
+         account_id = 1001\napi_token = \"${variable}\"\n"
+    );
+    let rule = "name: S1 rule\nmetadata:\n  uuid: 00000000-0000-4000-8099-000000000201\n  \
+                schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  \
+                tlp: clear\ndescription: S1.\nresponse:\n  alert_severity: High\nconfigurations:\n  \
+                sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      \
+                single_event:\n        query: src.process.name = 'cmd.exe'\n    response:\n      \
+                treat_as_threat: Malicious\n      network_quarantine: false\n";
+    let ws = Workspace::from_files(
+        "/ws",
+        [
+            (
+                ".opentide/configurations/platforms/sentinel_one.toml",
+                platform,
+            ),
+            ("objects/rules/s1.yaml", rule.to_owned()),
+        ],
+    )
+    .unwrap();
+    let set = |info: &opentide::Info| {
+        let json = serde_json::to_value(info).unwrap();
+        json["platforms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|platform| platform["tenants"].as_array())
+            .flatten()
+            .filter_map(|tenant| tenant["variables"].as_array())
+            .flatten()
+            .find(|v| v["name"] == variable)
+            .map(|v| v["set"].clone())
+    };
+    assert_eq!(set(&ws.info()), Some(serde_json::json!(false)));
+    assert_eq!(
+        set(&ws.info_in([(variable, "token")])),
+        Some(serde_json::json!(true))
+    );
+    let unset = |options: &DeployPlanOptions| {
+        ws.deploy_plan(options)
+            .unwrap()
+            .document()
+            .as_str()
+            .contains(&format!("${variable}"))
+    };
+    let plan = DeployPlanOptions::new(Strategy::Preview).platform("sentinel_one");
+    assert!(unset(&plan), "the process does not set it");
+    let given = plan.environment([(variable, "token-never-printed")]);
+    assert!(!unset(&given));
+    // A blank value is unset, as a connection reads it.
+    assert!(unset(
+        &DeployPlanOptions::new(Strategy::Preview)
+            .platform("sentinel_one")
+            .environment([(variable, "  ")])
+    ));
+    // Its `Debug` names the variable, never its value.
+    let shown = format!("{given:?}");
+    assert!(
+        shown.contains(variable) && !shown.contains("token-never-printed"),
+        "{shown}"
+    );
+}

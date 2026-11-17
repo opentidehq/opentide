@@ -47,11 +47,15 @@ pub trait PluginHost: Send + Sync {
     fn platforms(&self) -> Vec<Result<Box<dyn Platform>, PluginError>>;
 }
 
-/// The built-in platforms, then *host*'s plugins, with the plugins that could
-/// not be loaded or registered (a plugin cannot replace a built-in platform,
-/// nor another plugin).
-pub fn with_plugins(host: Option<&dyn PluginHost>) -> (Registry, Vec<PluginError>) {
-    let mut registry = crate::builtin();
+/// The built-in platforms reading `environment` ([`crate::builtin_with`]),
+/// then *host*'s plugins, with the plugins that could not be loaded or
+/// registered (a plugin cannot replace a built-in platform, nor another
+/// plugin).
+pub fn with_plugins(
+    host: Option<&dyn PluginHost>,
+    environment: &crate::Environment,
+) -> (Registry, Vec<PluginError>) {
+    let mut registry = crate::builtin_with(environment);
     let mut errors = Vec::new();
     let Some(host) = host else {
         return (registry, errors);
@@ -128,7 +132,7 @@ mod tests {
 
     #[test]
     fn plugins_follow_the_builtin_platforms_and_cannot_replace_one() {
-        let (registry, errors) = with_plugins(Some(&Host));
+        let (registry, errors) = with_plugins(Some(&Host), &crate::Environment::default());
         let ids = registry.ids();
         assert_eq!(ids.len(), BUILTIN.len() + 1);
         assert_eq!(ids[..BUILTIN.len()], BUILTIN);
@@ -157,7 +161,7 @@ mod tests {
 
     #[test]
     fn without_a_host_the_registry_is_the_builtin_one() {
-        let (registry, errors) = with_plugins(None);
+        let (registry, errors) = with_plugins(None, &crate::Environment::default());
         assert_eq!(registry.ids(), BUILTIN);
         assert!(errors.is_empty());
         assert!(BUILTIN.iter().all(|id| is_builtin(id)));

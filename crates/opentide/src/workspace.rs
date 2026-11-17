@@ -221,11 +221,30 @@ impl Workspace {
     /// What `opentide info` reports: the object counts, the files that did
     /// not load and each platform with its tenants. A tenant names the
     /// environment variables it reads and whether each is set in this
-    /// process, never their values.
+    /// process, never their values; [`Workspace::info_in`] looks them up in
+    /// another environment.
     pub fn info(&self) -> Info {
+        self.info_with(None)
+    }
+
+    /// [`Workspace::info`], each tenant's variables looked up in `vars` (as
+    /// `ConnectOptions::environment` names the environment a connection
+    /// reads) instead of the process's.
+    pub fn info_in<K: Into<String>, V: Into<String>>(
+        &self,
+        vars: impl IntoIterator<Item = (K, V)>,
+    ) -> Info {
+        let vars: std::collections::BTreeMap<String, String> = vars
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect();
+        self.info_with(Some(&vars))
+    }
+
+    fn info_with(&self, environment: Option<&std::collections::BTreeMap<String, String>>) -> Info {
         let index = self.inner.index();
         let count = |family: &str| index.objects.get(family).map_or(0, |objects| objects.len());
-        let is_set = |name: &str| std::env::var_os(name).is_some_and(|value| !value.is_empty());
+        let is_set = |name: &str| is_set(environment, name);
         Info {
             root: self.root().to_path_buf(),
             counts: Counts {
@@ -455,4 +474,18 @@ fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileC
 #[cfg(not(feature = "compile"))]
 fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileCheck> {
     None
+}
+
+/// Whether the variable `name` is set and not blank, as a connection reads
+/// it: in `environment`, else in the process's.
+pub(crate) fn is_set(
+    environment: Option<&std::collections::BTreeMap<String, String>>,
+    name: &str,
+) -> bool {
+    match environment {
+        Some(vars) => vars.get(name).is_some_and(|value| !value.trim().is_empty()),
+        None => {
+            std::env::var_os(name).is_some_and(|value| !value.to_string_lossy().trim().is_empty())
+        }
+    }
 }

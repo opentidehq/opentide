@@ -246,9 +246,14 @@ impl Workspace {
         to_json(&LintJson::from(&report))
     }
 
-    /// `opentide info`, as JSON.
-    fn info(&self, py: Python<'_>) -> PyResult<String> {
-        to_json(&py.detach(|| self.inner.info()))
+    /// `opentide info`, as JSON: each tenant's variables looked up in
+    /// `environment` (name, value pairs), else in the process's.
+    #[pyo3(signature = (environment=None))]
+    fn info(&self, py: Python<'_>, environment: Option<Vec<(String, String)>>) -> PyResult<String> {
+        to_json(&py.detach(|| match environment {
+            Some(vars) => self.inner.info_in(vars),
+            None => self.inner.info(),
+        }))
     }
 
     /// The detection rules: their rows of the catalogue, as JSON.
@@ -287,7 +292,11 @@ impl Workspace {
 
     /// `opentide deploy --dry-run`: `(document, summary, ok)`, the documents
     /// as JSON. Nothing is sent and nothing is written.
-    #[pyo3(signature = (*, strategies=None, uuids=Vec::new(), files=Vec::new(), platform=None, keep_deprecated=None))]
+    #[pyo3(signature = (*, strategies=None, uuids=Vec::new(), files=Vec::new(), platform=None, keep_deprecated=None, environment=None))]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the keyword arguments of `Workspace.deploy_plan`"
+    )]
     fn deploy_plan(
         &self,
         py: Python<'_>,
@@ -296,6 +305,7 @@ impl Workspace {
         files: Vec<String>,
         platform: Option<String>,
         keep_deprecated: Option<bool>,
+        environment: Option<Vec<(String, String)>>,
     ) -> PyResult<(String, Option<String>, bool)> {
         let mut options = opentide::DeployPlanOptions::default();
         for name in strategies.unwrap_or_else(|| vec!["RELEASE".to_owned()]) {
@@ -319,6 +329,9 @@ impl Workspace {
             options = options.platform(platform);
         }
         options.keep_deprecated = keep_deprecated;
+        if let Some(vars) = environment {
+            options = options.environment(vars);
+        }
         let plan = py
             .detach(|| self.inner.deploy_plan(&options))
             .map_err(|error| from_facade(&error))?;

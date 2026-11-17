@@ -7,10 +7,19 @@
 
 use std::collections::BTreeMap;
 
-/// Environment variables, by name.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Environment variables, by name. Its `Debug` names the variables and never
+/// prints a value: they hold credentials.
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct Environment {
     vars: BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Environment")
+            .field("names", &self.vars.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 impl Environment {
@@ -62,5 +71,25 @@ impl Environment {
         self.vars
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Environment;
+
+    #[test]
+    fn debug_names_the_variables_and_never_a_value() {
+        let environment =
+            Environment::from_pairs([("S1_TOKEN", "s1-secret"), ("HOME", "/home/me")]);
+        let shown = format!("{environment:?} {environment:#?}");
+        assert!(
+            shown.contains("S1_TOKEN") && shown.contains("HOME"),
+            "{shown}"
+        );
+        assert!(
+            !shown.contains("s1-secret") && !shown.contains("/home/me"),
+            "{shown}"
+        );
     }
 }

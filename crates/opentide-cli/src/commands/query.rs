@@ -697,7 +697,7 @@ fn run_on_tenant(
             return finish(outcome);
         }
     };
-    let registry = crate::plugins::registry();
+    let registry = crate::plugins::registry(environment);
     // Google SecOps reads Application Default Credentials from the command's
     // environment, not the process's.
     let secops = opentide_connectors::google_secops::GoogleSecops::new(environment.clone());

@@ -244,7 +244,8 @@ pub fn validate_live(
     cx: &Context<'_>,
 ) -> Report {
     const COMMAND: &str = "validate query";
-    let registry = crate::plugins::registry();
+    let registry =
+        crate::plugins::registry(&opentide_connectors::Environment::from_pairs(cx.env.iter()));
     let Some(validator) = registry
         .get(platform)
         .and_then(opentide_connectors::Platform::live_validator)

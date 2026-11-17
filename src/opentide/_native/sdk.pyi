@@ -142,7 +142,7 @@ class Workspace:
         """
         `opentide info coverage --technique <technique>`, as JSON.
         """
-    def deploy_plan(self, /, *, strategies: SupportsGetItem[int, str] | None = None, uuids: SupportsGetItem[int, str] = ..., files: SupportsGetItem[int, str] = ..., platform: str | None = None, keep_deprecated: bool | None = None) -> tuple[str, str | None, bool]:
+    def deploy_plan(self, /, *, strategies: SupportsGetItem[int, str] | None = None, uuids: SupportsGetItem[int, str] = ..., files: SupportsGetItem[int, str] = ..., platform: str | None = None, keep_deprecated: bool | None = None, environment: SupportsGetItem[int, tuple[str, str]] | None = None) -> tuple[str, str | None, bool]:
         """
         `opentide deploy --dry-run`: `(document, summary, ok)`, the documents
         as JSON. Nothing is sent and nothing is written.
@@ -153,9 +153,10 @@ class Workspace:
         Opens a workspace held in memory, rooted at *root*: each of *files*
         is a path (relative to *root*, or absolute) and its text.
         """
-    def info(self, /) -> str:
+    def info(self, /, environment: SupportsGetItem[int, tuple[str, str]] | None = None) -> str:
         """
-        `opentide info`, as JSON.
+        `opentide info`, as JSON: each tenant's variables looked up in
+        `environment` (name, value pairs), else in the process's.
         """
     def lint(self, /, *, checks: SupportsGetItem[int, str] = ..., files: SupportsGetItem[int, str] = ..., strict: bool = False) -> str:
         """

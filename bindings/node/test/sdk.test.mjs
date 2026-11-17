@@ -133,3 +133,30 @@ test('main, runJson, Workspace.open and deployPlan return promises, off the even
   assert.equal(typeof (await plan).ok, 'boolean')
   assert.ok(ticked)
 })
+
+test('info and a plan look a tenant\'s credentials up in the environment given', async () => {
+  const variable = 'OPENTIDE_SWEEP_NODE_TOKEN'
+  const reference = '$' + variable
+  assert.equal(process.env[variable], undefined)
+  const ws = opentide.Workspace.fromFiles('/ws', {
+    '.opentide/configurations/platforms/sentinel_one.toml':
+      '[platform]\nenabled = true\n\n[[tenants]]\nname = "lab"\nstrategies = ["PREVIEW", "RELEASE"]\n' +
+      '[tenants.setup]\nurl = "https://s1.invalid"\naccount_id = 1001\napi_token = "' + reference + '"\n',
+    'objects/rules/s1.yaml':
+      'name: S1 rule\nmetadata:\n  uuid: 00000000-0000-4000-8099-000000000202\n  schema: rule::1.0\n' +
+      '  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: S1.\n' +
+      'response:\n  alert_severity: High\nconfigurations:\n  sentinel_one:\n    status: STAGING\n' +
+      '    condition:\n      type: Single Event\n      single_event:\n        query: src.process.name = \'cmd.exe\'\n' +
+      '    response:\n      treat_as_threat: Malicious\n      network_quarantine: false\n',
+  })
+  const set = (info) => info.platforms
+    .flatMap((platform) => platform.tenants)
+    .flatMap((tenant) => tenant.variables)
+    .find((v) => v.name === variable).set
+  assert.equal(set(ws.info()), false)
+  assert.equal(set(ws.info({ [variable]: 'token' })), true)
+  const named = async (options) => JSON.stringify((await ws.deployPlan(options)).document).includes(reference)
+  const plan = { strategies: ['PREVIEW'], platform: 'sentinel_one' }
+  assert.equal(await named(plan), true)
+  assert.equal(await named({ ...plan, environment: { [variable]: 'token' } }), false)
+})
