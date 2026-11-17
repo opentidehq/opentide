@@ -27,7 +27,7 @@ opentide-workspace.workspace = true
 # crates, not the `gix` facade, whose object cache brings a second hashbrown
 # (clru), which deny.toml's multiple-versions ban refuses.
 gix-discover = "0.57"
-# The rev-spec parser's delegate reports failures as gix-error's Exn.
+# The rev-spec parser's delegate reports failures as gix_error::Error.
 gix-error = "0.5"
 gix-hash = { version = "0.28", features = ["sha1"] }
 gix-object = "0.66"

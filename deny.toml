@@ -106,7 +106,7 @@ skip = [
   # xtask (never published or shipped) needs rustix for the golden runner's
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1).
-  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile), opentide-workspace (tempfile; inotify through notify, `--watch`) and opentide-cli (inquire and crossterm, the setup wizard's prompts) use bitflags 2; lsp-types (fluent-uri 0.1) and kqueue-sys (notify on BSD and macOS) still use bitflags 1" },
+  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile), opentide-workspace (tempfile; inotify through notify, `--watch`) and opentide-cli (inquire and crossterm, the setup wizard's prompts) use bitflags 2; lsp-types 0.97 (directly and through fluent-uri 0.1, the latest lsp-types) and portable-pty 0.9 (a dev-dependency) still use bitflags 1" },
   # xtask's schema comparison (UC-1.8b, #900; `cargo xtask codegen --check`)
   # validates the corpora with the jsonschema crate, which brings these second
   # versions. Only xtask (tooling, never shipped) depends on jsonschema.
@@ -133,12 +133,13 @@ skip = [
   # derive_more-impl (opentide-cli's setup wizard) with convert_case 0.10, and
   # napi-derive (the Node binding, UC-5.3) with 0.12.
   { crate = "convert_case@0.10.0", reason = "only derive_more-impl 2.1 (crossterm, opentide-cli's setup wizard) uses it, a proc macro run at compile time; napi-derive (the Node binding's TypeScript names) uses convert_case 0.12. Neither links into an artifact" },
-  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
-  # yara-x-parser 1.23 (opentide-yara's verdict parser, language-server 0.13.0)
-  # is pinned exactly (=1.23.0) and brings rowan 0.17, which is on hashbrown
-  # 0.14 and rustc-hash 1, and itertools 0.15, a release past ratatui's.
-  { crate = "hashbrown@0.14.5", reason = "rowan 0.17 (yara-x-parser 1.23, opentide-yara) uses hashbrown 0.14; indexmap and the rest of the graph use 0.17" },
-  { crate = "rustc-hash@1.1.0", reason = "rowan 0.17 (yara-x-parser 1.23, opentide-yara) uses rustc-hash 1; the rest of the graph uses 2" },
+  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet, as do derive_more-impl, jiff-static, strum_macros, tracing-attributes, zerocopy-derive, logos-codegen, windows-implement and windows-interface and the jni macros; clap_derive, darling and the rest use syn 3. Drop this when those move" },
+  # rowan 0.17 (the latest; the lossless trees of our parser crates, and of
+  # yara-x-parser 1.23, opentide-yara's verdict parser, pinned =1.23.0) is on
+  # hashbrown 0.14 and rustc-hash 1; yara-x-parser brings itertools 0.15, a
+  # release past ratatui's.
+  { crate = "hashbrown@0.14.5", reason = "rowan 0.17 (our parser crates, and yara-x-parser 1.23) uses hashbrown 0.14; indexmap and the rest of the graph use 0.17" },
+  { crate = "rustc-hash@1.1.0", reason = "rowan 0.17 (our parser crates, and yara-x-parser 1.23) uses rustc-hash 1; the rest of the graph uses 2" },
   { crate = "itertools@0.14.0", reason = "ratatui-core 0.1 (opentide-cli's tui) uses itertools 0.14; yara-x-parser 1.23 (opentide-yara) uses 0.15" },
 ]
 
