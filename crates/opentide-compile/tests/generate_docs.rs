@@ -476,6 +476,40 @@ fn gitlab_pages_are_ordered_and_named_by_uuid() {
     );
 }
 
+/// A rule named `README` never writes `readme.md` beside the folder's
+/// `README.md`: one file where case does not count (Windows, macOS). No two
+/// files a run writes differ only by case, in any flavour.
+#[test]
+fn no_page_shares_a_name_with_an_index_but_for_case() {
+    let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+        let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+        let text = std::fs::read_to_string(&rule).unwrap();
+        std::fs::write(&rule, text.replacen("Sentinel KQL Rule", "README", 1)).unwrap();
+    });
+    for flavor in ["generic", "github", "gitlab", "azure-devops"] {
+        let written = render(&workspace, Some(flavor)).unwrap();
+        let mut seen = std::collections::HashMap::new();
+        for path in written.keys() {
+            if let Some(other) = seen.insert(path.to_lowercase(), path) {
+                panic!("{flavor}: {path} and {other} are one file on Windows and macOS");
+            }
+        }
+        assert!(
+            written["docs/rules/README.md"].contains("# Detection rules"),
+            "{flavor}: the index is the folder's README"
+        );
+    }
+    let written = render(&workspace, Some("github")).unwrap();
+    assert!(
+        written.contains_key("docs/rules/readme-00000000.md"),
+        "{:?}",
+        written
+            .keys()
+            .filter(|key| key.starts_with("docs/rules/"))
+            .collect::<Vec<_>>()
+    );
+}
+
 /// Azure DevOps: wiki links from the wiki's root, a table of contents on
 /// the index pages, and Mermaid in `::: mermaid` blocks with `graph`.
 #[test]
