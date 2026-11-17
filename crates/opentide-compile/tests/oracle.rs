@@ -143,16 +143,25 @@ fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
     if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
         return None;
     }
-    let value = |text: &str| serde_json::from_str::<Value>(text).ok();
-    if let (Some(Value::Object(mut wrapped)), Some(Value::Object(theirs))) =
-        (value(mine), value(&oracle.to_compact()))
-        && let Some(Value::Object(request)) = wrapped.get_mut("api_request")
+    // `wrapped`: the oracle's entry, byte for byte (key order kept), once
+    // the candidate's `api_request` is replaced by its `payload`.
+    let candidate: Json = serde_json::from_str(mine).ok()?;
+    if let Json::Object(entry) = &candidate
+        && let Some(Json::Object(request)) = entry.get("api_request")
         && request.len() == 2
-        && request.get("block").is_some_and(Value::is_object)
-        && let Some(payload) = request.remove("payload")
+        && matches!(request.get("block"), Some(Json::Object(_)))
+        && let Some(payload) = request.get("payload")
     {
-        wrapped.insert("api_request".into(), payload);
-        if Value::Object(wrapped) == Value::Object(theirs) {
+        let unwrapped: Json = Json::Object(
+            entry
+                .iter()
+                .map(|(key, value)| {
+                    let value = if key == "api_request" { payload } else { value };
+                    (key.clone(), value.clone())
+                })
+                .collect(),
+        );
+        if unwrapped.to_compact() == oracle.to_compact() {
             return Some("wrapped");
         }
     }
@@ -160,6 +169,7 @@ fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
     if trimmed == mine {
         return Some("nulls");
     }
+    let value = |text: &str| serde_json::from_str::<Value>(text).ok();
     (value(&trimmed)? == value(mine)?).then_some("order")
 }
 
