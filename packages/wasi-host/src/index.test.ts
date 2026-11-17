@@ -685,7 +685,20 @@ test(
       },
     );
     let buffer = "";
-    const waiting = new Map<number, (message: Record<string, unknown>) => void>();
+    let stderr = "";
+    const waiting = new Map<number, { resolve: (message: Record<string, unknown>) => void; reject: (error: Error) => void }>();
+    server.stderr.setEncoding("utf8");
+    server.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    // A server that dies (a panic is a trap in the module) answers nothing more.
+    const exited = new Promise<void>((resolve) => server.once("exit", () => resolve()));
+    void exited.then(() => {
+      for (const { reject } of waiting.values()) {
+        reject(new Error(`the server exited before answering:\n${stderr.slice(-2000)}`));
+      }
+      waiting.clear();
+    });
     server.stdout.setEncoding("utf8");
     server.stdout.on("data", (chunk: string) => {
       buffer += chunk;
@@ -694,38 +707,47 @@ test(
         buffer = buffer.slice(end + 1);
         if (line === "") continue;
         const message = JSON.parse(line) as Record<string, unknown>;
-        if (typeof message.id === "number") waiting.get(message.id)?.(message);
+        if (typeof message.id === "number") {
+          waiting.get(message.id)?.resolve(message);
+          waiting.delete(message.id);
+        }
       }
     });
     let next = 0;
-    const call = (method: string, params: object): Promise<Record<string, unknown>> => {
+    const request = (method: string, params: object): Promise<Record<string, unknown>> => {
       next += 1;
       const id = next;
-      const answered = new Promise<Record<string, unknown>>((resolve) => waiting.set(id, resolve));
+      const answered = new Promise<Record<string, unknown>>((resolve, reject) => waiting.set(id, { resolve, reject }));
       server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
       return answered;
     };
     try {
-      await call("initialize", {
+      // WASI's server reads the client with blocking reads on its one thread,
+      // so it answers once the input ends: every request is sent first.
+      const initialized = request("initialize", {
         protocolVersion: "2025-06-18",
         capabilities: {},
         clientInfo: { name: "wasi-host-test", version: "0" },
       });
       server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
-      const answer = await call("tools/call", {
+      const deployed = request("tools/call", {
         name: "deploy_rule",
         arguments: { uuid: "00000000-0000-4000-8047-000000000021", platform: "crowdstrike", dry_run: false },
       });
-      const result = answer.result as { content: { text: string }[] };
+      const listed = request("tools/list", {});
+      // Awaited below; a crash rejects them all at once.
+      for (const pending of [deployed, listed]) pending.catch(() => {});
+      server.stdin.end();
+      await initialized;
+      const result = (await deployed).result as { content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
       assert.match(text, /"status": ?"failed"/, text);
       assert.doesNotMatch(text, /stopped unexpectedly/, text);
-      // The server still serves.
-      const listed = await call("tools/list", {});
-      assert.ok(Array.isArray((listed.result as { tools: unknown[] }).tools));
+      // The server still serves after the deploy.
+      assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
     } finally {
       server.stdin.end();
-      await new Promise((resolve) => server.once("exit", resolve));
+      await exited;
       rmSync(scratch, { recursive: true, force: true });
     }
   },
