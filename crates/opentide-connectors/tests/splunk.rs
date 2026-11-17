@@ -76,6 +76,69 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
     assert_eq!(done, [Some(true), Some(true), None, None]);
 }
 
+/// The same recording through `Deployer::deploy`, as `opentide deploy`
+/// sends it: each step's settings as the request body (written, then read
+/// back), a removal as a delete. The requests are the client's, byte for
+/// byte; only the delete of a saved search the tenant had warns.
+#[test]
+fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
+    use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
+    let inputs = fixture("splunk");
+    let tenant = replay("splunk/deploy");
+    let connector = Splunk::new();
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for step in items(inputs.get("deploy").unwrap()) {
+            let deletion = text(step.get("status").unwrap()) == "REMOVED";
+            let request = DeployRequest {
+                rule_id: text(step.get("name").unwrap()).to_owned(),
+                operation: if deletion {
+                    Operation::Delete
+                } else {
+                    Operation::Update
+                },
+                body: if deletion {
+                    Vec::new()
+                } else {
+                    Json::Object(settings(step)).to_compact().into_bytes()
+                },
+                policies: None,
+            };
+            outcomes.push(connector.deploy(tenant.cx(), &request).await.unwrap());
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    let warned: Vec<Vec<(String, String)>> = outcomes
+        .iter()
+        .map(|outcome| {
+            outcome
+                .warnings
+                .iter()
+                .map(|warning| (warning.code.clone(), warning.message.clone()))
+                .collect()
+        })
+        .collect();
+    let deleted = text(items(inputs.get("deploy").unwrap())[2].get("name").unwrap()).to_owned();
+    assert_eq!(
+        warned,
+        [
+            vec![],
+            vec![],
+            vec![("splunk_alert_deleted".to_owned(), deleted)],
+            vec![]
+        ]
+    );
+    assert_eq!(
+        outcomes
+            .iter()
+            .map(|outcome| outcome.remote_id.is_some())
+            .collect::<Vec<_>>(),
+        [true, true, false, false]
+    );
+}
+
 #[test]
 fn splunk_a_single_byte_off_fails() {
     let inputs = fixture("splunk");
