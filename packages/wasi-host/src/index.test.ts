@@ -14,6 +14,7 @@ import {
   type FetchResult,
   FetchHost,
   fetchParams,
+  followsRedirect,
   performRequest,
 } from "./index.ts";
 
@@ -118,8 +119,10 @@ test("a request is sent as written and its answer read whole", async () => {
   }
 });
 
-test("redirects are followed as reqwest follows them", async () => {
+test("redirects are followed on the tenant's origin only", async () => {
+  let reached = 0;
   const other = await serve((request, response) => {
+    reached += 1;
     response.writeHead(200, { "content-type": "text/plain" });
     response.end(`${request.method} ${request.headers.authorization ?? "no authorization"}`);
   });
@@ -148,15 +151,37 @@ test("redirects are followed as reqwest follows them", async () => {
     );
     assert.equal(Buffer.from(posted.body, "base64").toString(), "GET Bearer token");
     assert.equal(posted.url, `${first.origin}/here`);
+    // #1142: a redirect to another origin is the answer; the other host,
+    // which would get Carbon Black's X-Auth-Token, receives nothing.
     const away = await performRequest(
-      params({ url: `${first.origin}/away`, headers: [["authorization", "Bearer token"]] }),
+      params({ url: `${first.origin}/away`, headers: [["x-auth-token", "secret"]] }),
       signal,
     );
-    assert.equal(Buffer.from(away.body, "base64").toString(), "GET no authorization");
+    assert.equal(away.status, 307);
+    assert.equal(away.url, `${first.origin}/away`);
+    assert.equal(reached, 0, "the other origin was asked");
   } finally {
     await first.close();
     await other.close();
   }
+});
+
+test("which redirects are followed", () => {
+  const from = new URL("https://defense.conferdeploy.net/appservices");
+  assert.ok(followsRedirect(from, new URL("https://defense.conferdeploy.net/other")));
+  assert.ok(followsRedirect(from, new URL("https://DEFENSE.conferdeploy.net:443/a")));
+  for (const to of [
+    "https://evil.example/",
+    "http://defense.conferdeploy.net/a",
+    "https://defense.conferdeploy.net:8443/a",
+    "https://defense.conferdeploy.net.evil.example/a",
+  ]) {
+    assert.ok(!followsRedirect(from, new URL(to)), to);
+  }
+  const plain = new URL("http://graylog.lab/api");
+  assert.ok(followsRedirect(plain, new URL("https://graylog.lab/api")));
+  assert.ok(!followsRedirect(plain, new URL("https://other.lab/api")));
+  assert.ok(!followsRedirect(plain, new URL("https://graylog.lab:9000/api")));
 });
 
 test("a refused connection, a silent tenant and a withdrawn request fail by kind", async () => {
@@ -655,6 +680,72 @@ for (const server of SERVERS) {
   );
 }
 
+// `opentide mcp start` answers each message as soon as it reads it: an
+// interactive client sends the next request only once the last one is
+// answered. The WASI build reads its client with blocking reads on one
+// thread, so it must not wait for more input before answering.
+for (const server of SERVERS) {
+  const name = typeof server === "string" ? server.split(":")[0] : server.name;
+  test(
+    `mcp (${name}): each request is answered before the client sends the next`,
+    { skip: typeof server === "string" ? server : false },
+    async () => {
+      const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-")));
+      const ws = join(scratch, "ws");
+      cpSync(join(root, "tests/golden/fixtures/tenants"), ws, { recursive: true });
+      const { command, args } = server as Server;
+      const child = spawn(command, [...args, "mcp", "start"], {
+        cwd: ws,
+        env: { PATH: process.env.PATH ?? "", HOME: ws, PWD: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" },
+      });
+      let buffer = "";
+      const answers = new Map<number, (message: Record<string, unknown>) => void>();
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        buffer += chunk;
+        for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+          const message = JSON.parse(buffer.slice(0, end)) as Record<string, unknown>;
+          buffer = buffer.slice(end + 1);
+          answers.get(message.id as number)?.(message);
+        }
+      });
+      const send = (message: object): void => {
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+      };
+      // The answer to request *id*, sent alone: stdin stays open and quiet.
+      const call = (id: number, method: string, params: object): Promise<Record<string, unknown>> => {
+        const answered = new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error(`no answer to ${method} while the client waits`)), 60_000);
+          answers.set(id, (message) => {
+            clearTimeout(timer);
+            resolve(message);
+          });
+        });
+        send({ jsonrpc: "2.0", id, method, params });
+        return answered;
+      };
+      try {
+        const initialized = await call(1, "initialize", {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "wasi-host-test", version: "0" },
+        });
+        assert.ok(initialized.result, JSON.stringify(initialized));
+        send({ jsonrpc: "2.0", method: "notifications/initialized" });
+        const tools = await call(2, "tools/list", {});
+        const listed = (tools.result as { tools: { name: string }[] }).tools.map((tool) => tool.name);
+        assert.ok(listed.length > 0, JSON.stringify(tools));
+        const again = await call(3, "tools/list", {});
+        assert.deepEqual(again.result, tools.result);
+      } finally {
+        child.stdin.end();
+        if (child.exitCode === null) await new Promise((resolve) => child.once("exit", resolve));
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
 // `opentide mcp start` in the WASI module (#1180, #1142). A live `deploy_rule`
 // runs the command line's deploy inside the server's runtime, and WASI has
 // no other thread to hand it to. The deploy built a runtime of its own there
@@ -727,8 +818,9 @@ test(
       return answered;
     };
     try {
-      // WASI's server reads the client with blocking reads on its one thread,
-      // so it answers once the input ends: every request is sent first.
+      // Every request is sent first and the input closed: a server that dies
+      // rejects them all at once (the request-at-a-time path is the test
+      // above).
       const initialized = request("initialize", {
         protocolVersion: "2025-06-18",
         capabilities: {},

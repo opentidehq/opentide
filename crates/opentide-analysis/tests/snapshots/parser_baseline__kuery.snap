@@ -175,7 +175,7 @@ kuery_parse_error error 0:8-0:21 KQL syntax error: a quoted string is never clos
 7..8 operator
 8..22 string
 == corpus/kuery/range_expression__invalid.kuery
-kuery_parse_error error 0:13-0:14 KQL syntax error: a value is missing after `>=`
+kuery_parse_error error 0:13-0:13 KQL syntax error: a value is missing after `>=`
 kuery_range_type hint 0:0-0:13 ECS v9.5.0 maps `event.code` as `keyword`: a range compares it as text, so "10" sorts before "9"
 0..10 property
 11..13 operator

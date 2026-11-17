@@ -216,15 +216,19 @@ struct ColumnsFile {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ColumnRow {
-    pub table: String,
-    pub profile: Option<String>,
+    /// The table's name, one allocation shared by its columns (#1071).
+    pub table: Arc<str>,
+    /// `sentinel` or `defender`, shared by the profile's columns.
+    pub profile: Option<Arc<str>>,
     pub name: String,
     #[serde(default, rename = "type")]
     pub type_name: Option<String>,
     /// The column's description (Markdown): hand-written, or the first
-    /// sentence of the Azure Monitor Logs reference's.
-    pub docs: Option<String>,
-    pub citation: Option<String>,
+    /// sentence of the Azure Monitor Logs reference's, shared with the
+    /// reference ([`tables::azure_monitor`]) and every profile (#1071).
+    pub docs: Option<Arc<str>>,
+    /// The table's reference page, shared by its columns.
+    pub citation: Option<Arc<str>>,
     /// Added from the Azure Monitor Logs reference
     /// (`data/catalogs/kql/azure-monitor/tables.toml`), not the hand-written catalog.
     #[serde(skip)]
@@ -386,7 +390,7 @@ impl Catalog {
                         profile: Some("sentinel".into()),
                         category: table.categories.first().cloned(),
                         docs: (!table.docs.is_empty()).then(|| table.docs.clone()),
-                        citation: Some(table.citation.clone()),
+                        citation: Some(table.citation.to_string()),
                         documented: false,
                         declared: false,
                     });
@@ -397,10 +401,11 @@ impl Catalog {
             Profile::Defender => "defender",
             _ => "sentinel",
         };
+        let profile_shared: Arc<str> = Arc::from(profile_name);
         let mut hand: HashMap<(String, String), usize> = columns
             .iter()
             .enumerate()
-            .map(|(i, c)| ((c.table.clone(), c.name.clone()), i))
+            .map(|(i, c)| ((c.table.to_string(), c.name.clone()), i))
             .collect();
         for row in &mut tables {
             let Some(reference) = reference.get(&row.name) else {
@@ -411,8 +416,10 @@ impl Catalog {
             };
             row.documented = true;
             if row.citation.is_none() {
-                row.citation = Some(reference.citation.clone());
+                row.citation = Some(reference.citation.to_string());
             }
+            // One allocation each, shared by the table's columns (#1071).
+            let table: Arc<str> = Arc::from(row.name.as_str());
             for column in listed {
                 let key = (row.name.clone(), column.name.clone());
                 if let Some(&i) = hand.get(&key) {
@@ -425,12 +432,12 @@ impl Catalog {
                 }
                 hand.insert(key, columns.len());
                 columns.push(ColumnRow {
-                    table: row.name.clone(),
-                    profile: Some(profile_name.into()),
+                    table: Arc::clone(&table),
+                    profile: Some(Arc::clone(&profile_shared)),
                     name: column.name.clone(),
                     type_name: Some(column.type_name.clone()),
                     docs: column.description.clone(),
-                    citation: Some(reference.citation.clone()),
+                    citation: Some(Arc::clone(&reference.citation)),
                     from_reference: true,
                     declared: false,
                 });
@@ -444,12 +451,12 @@ impl Catalog {
             {
                 hand.insert((row.name.clone(), "Timestamp".into()), columns.len());
                 columns.push(ColumnRow {
-                    table: row.name.clone(),
-                    profile: Some("defender".into()),
+                    table: Arc::from(row.name.as_str()),
+                    profile: Some(Arc::from("defender")),
                     name: "Timestamp".into(),
                     type_name: Some("datetime".into()),
-                    docs: Some("Event time in advanced hunting.".into()),
-                    citation: row.citation.clone(),
+                    docs: Some(Arc::from("Event time in advanced hunting.")),
+                    citation: row.citation.as_deref().map(Arc::from),
                     from_reference: false,
                     declared: false,
                 });
@@ -661,7 +668,7 @@ impl Catalog {
                     .get(&table.to_ascii_lowercase())
                     .and_then(|ids| {
                         ids.iter().copied().find(|&i| {
-                            self.columns[i].table == table && self.columns[i].name == column.name
+                            *self.columns[i].table == *table && self.columns[i].name == column.name
                         })
                     });
                 match existing {
@@ -671,7 +678,7 @@ impl Catalog {
                         let row = &mut self.columns[i];
                         row.type_name.clone_from(&column.type_name);
                         if let Some(description) = &column.description {
-                            row.docs = Some(description.clone());
+                            row.docs = Some(Arc::from(description.as_str()));
                             row.citation = None;
                         }
                         row.declared = true;
@@ -682,11 +689,11 @@ impl Catalog {
                             .or_default()
                             .push(self.columns.len());
                         self.columns.push(ColumnRow {
-                            table: table.to_string(),
-                            profile: Some(profile_name.into()),
+                            table: Arc::from(table),
+                            profile: Some(Arc::from(profile_name)),
                             name: column.name.clone(),
                             type_name: column.type_name.clone(),
-                            docs: column.description.clone(),
+                            docs: column.description.as_deref().map(Arc::from),
                             citation: None,
                             from_reference: false,
                             declared: true,
@@ -969,13 +976,13 @@ fn check_table_named(
     table: &str,
     range: Range,
     catalog: &Catalog,
-    lets: &BTreeSet<String>,
+    binds: impl Fn(&str) -> bool,
     out: &mut Vec<Diagnostic>,
 ) {
     // `let` bindings, tabular parameters, functions the engine knows
     // (`_GetWatchlist`) and ASIM parsers are not tables.
     if table.starts_with('$')
-        || lets.contains(table)
+        || binds(table)
         || catalog.asim_parser(table).is_some()
         || (catalog.profile == Profile::Sentinel && asim_shaped(table))
         || catalog.operator(table).is_some()
@@ -1306,7 +1313,7 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
                     col.name.clone(),
                     "column",
                     Some(detail),
-                    col.docs.clone(),
+                    col.docs.as_deref().map(str::to_owned),
                 ));
             }
         }
@@ -1640,7 +1647,7 @@ fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String
                     Some(schema::Origin::Table(table)) => catalog
                         .columns_for_table(table)
                         .into_iter()
-                        .find(|c| &c.table == table && c.name == column.name),
+                        .find(|c| *c.table == **table && c.name == column.name),
                     _ => None,
                 }
                 .or_else(|| catalog.resolve_column(source, &column.name));

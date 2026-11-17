@@ -115,7 +115,12 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
     let range = |span: ByteSpan| lines.range(span);
     let mut diagnostics = Vec::new();
     if let Some(err) = tree.errors.first() {
-        let (message, span) = parse_error(&tree, err, text);
+        let (message, mut span) = parse_error(&tree, err, text);
+        // At the end of the query: an empty span after its last token, not
+        // one over the blanks that follow it.
+        if span.start >= text.trim_end().len() {
+            span.end = span.start;
+        }
         diagnostics.push(Diagnostic::error(
             codes::LUCENE_PARSE_ERROR,
             message,

@@ -62,12 +62,13 @@ impl SdkError {
     }
 }
 
-/// The error *answer* to `method uri` is, or `None` for a 2xx or 3xx:
+/// The error *answer* to `method uri` is, or `None` for a 2xx: a 3xx is an
+/// error too, a redirect the client could not follow (#1142):
 /// `Carbon Black Cloud answered HTTP <status> <reason> to <method> <uri>`,
 /// then the body's text when there is one.
 fn sdk_error(method: &str, uri: &str, answer: &Answer) -> Option<SdkError> {
     let status = answer.status;
-    if status < 400 {
+    if (200..300).contains(&status) {
         return None;
     }
     let reason = crate::transport::StatusCode::from_u16(status)
@@ -599,7 +600,20 @@ impl CarbonBlack {
             )
             .await?
             .map_err(refused)?;
-            let body: Json = serde_json::from_slice(&page.body).unwrap_or(Json::Null);
+            // A page that is not JSON is an error, never an empty page (#1142).
+            let Some(body) = page.json() else {
+                return Err(ConnectorError::Answer {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    address: url::Url::parse(&org.server)
+                        .map(|url| crate::error::origin(&url))
+                        .unwrap_or_else(|_| org.server.clone()),
+                    reason: format!(
+                        "reading the search's results: {}",
+                        page.not_json_page().unwrap_or_default()
+                    ),
+                });
+            };
             let total = match body.get("num_available") {
                 Some(Json::Int(total)) => usize::try_from(*total).unwrap_or(0),
                 _ => 0,
@@ -817,6 +831,15 @@ mod tests {
     fn error_statuses_name_the_status_the_call_and_the_answer() {
         let uri = "https://cbc.invalid/x?y=1";
         assert_eq!(sdk_error("GET", uri, &answer(200, b"")), None);
+        // #1142: a redirect the client could not follow is no success.
+        assert_eq!(
+            sdk_error("PUT", uri, &answer(307, b"")),
+            Some(SdkError::Api(
+                "Carbon Black Cloud answered HTTP 307 Temporary Redirect to PUT \
+                 https://cbc.invalid/x?y=1"
+                    .into()
+            ))
+        );
         assert_eq!(
             sdk_error("GET", uri, &answer(502, b"")),
             Some(SdkError::Api(

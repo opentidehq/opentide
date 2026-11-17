@@ -22,6 +22,9 @@ pub(crate) struct Problem {
     /// The start of the token it sits before (the end of the source past the last).
     pub(crate) at: usize,
     pub(crate) message: String,
+    /// At the end of the input: `at` is right after the last token, and what
+    /// follows it is blanks or comments, never the token to quote.
+    pub(crate) at_end: bool,
 }
 
 struct Data {
@@ -166,8 +169,9 @@ pub(crate) fn parse(source: &str) -> Tree {
         .errors
         .iter()
         .map(|e| Problem {
-            at: usize::from(e.gap.end()),
+            at: usize::from(e.anchor(source.len())),
             message: e.message.clone(),
+            at_end: usize::from(e.gap.end()) >= source.len(),
         })
         .collect();
     let root = SyntaxNode::<Lang>::new_root(parse.green);

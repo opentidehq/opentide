@@ -167,12 +167,14 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
     );
     #[cfg(not(target_os = "wasi"))]
     let outcome = runtime.block_on(server.run(tokio::io::stdin(), rpc.file()?));
-    // WASI: tokio has no standard streams there; blocking ones serve, as
-    // nothing else runs on the current-thread runtime meanwhile.
+    // WASI: tokio has no standard streams and the module no threads, so the
+    // client is read with blocking reads, a message at a time, each answered
+    // before the next read (`interactive`).
     #[cfg(target_os = "wasi")]
-    let outcome = runtime.block_on(server.run(
-        blocking::Input(std::io::stdin()),
-        blocking::Output(rpc.writer()?),
+    let outcome = runtime.block_on(interactive::serve(
+        server,
+        std::io::stdin().lock(),
+        rpc.writer()?,
     ));
     rpc.restore()?;
     outcome?;
@@ -250,36 +252,198 @@ pub(crate) mod stdio {
     }
 }
 
-/// The standard streams as tokio's async traits, each call blocking (WASI,
-/// where tokio has no `io-std`): the MCP server runs alone on a
-/// current-thread runtime, so blocking it waits for the client and nothing
-/// else.
-#[cfg(target_os = "wasi")]
-mod blocking {
-    use std::io::{Read, Write};
+/// The server on a blocking reader and writer (WASI: no `io-std`, no threads).
+///
+/// A blocking read stops the one thread, and with it every task: read inside
+/// the transport's `poll_read`, it held the answer to a message until the
+/// client sent more input or closed it, so a client waiting for each answer
+/// before sending its next request (any interactive one) hung after
+/// `initialize`. Here the client is read a line (one JSON-RPC message) at a
+/// time outside the transport, which gets each line through an in-memory
+/// pipe; after a request the next read waits until its answer is written, so
+/// a read blocks only when nothing the client sent is still unanswered.
+#[cfg(any(target_os = "wasi", test))]
+pub(crate) mod interactive {
+    use std::io::{BufRead, Write};
     use std::pin::Pin;
+    use std::sync::{Arc, Mutex, PoisonError};
     use std::task::{Context, Poll};
 
-    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+    use rmcp::model::NumberOrString;
+    use serde_json::Value;
+    use tokio::io::{AsyncWrite, AsyncWriteExt};
+    use tokio::sync::Notify;
 
-    /// A blocking reader as an [`AsyncRead`].
-    pub struct Input<R>(pub R);
+    use super::Server;
 
-    impl<R: Read + Unpin> AsyncRead for Input<R> {
-        fn poll_read(
-            self: Pin<&mut Self>,
-            _: &mut Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<std::io::Result<()>> {
-            let this = self.get_mut();
-            let read = this.0.read(buf.initialize_unfilled())?;
-            buf.advance(read);
-            Poll::Ready(Ok(()))
+    /// Room for the pipe's unread bytes; a longer message waits for the
+    /// transport to read the first part, as it does on a real pipe.
+    const PIPE: usize = 64 * 1024;
+
+    /// What the writer has written since the reader last handed a request
+    /// over (one is in flight at a time), and whether the session ended.
+    #[derive(Default)]
+    struct Seen {
+        state: Mutex<State>,
+        changed: Notify,
+    }
+
+    #[derive(Default)]
+    struct State {
+        /// The ids answered, as rmcp reads them (`1.0` is `1`).
+        answered: Vec<NumberOrString>,
+        /// An answer without an id: a request rmcp could not read as one (an id
+        /// out of range, bad params) is refused so, never by its id.
+        refused: bool,
+        /// A request to the client: its answer is the client's next message.
+        asked: bool,
+        ended: bool,
+    }
+
+    impl Seen {
+        fn update(&self, change: impl FnOnce(&mut State)) {
+            change(&mut self.state.lock().unwrap_or_else(PoisonError::into_inner));
+            self.changed.notify_one();
+        }
+
+        fn ended(&self) -> bool {
+            self.state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .ended
+        }
+
+        /// Forgets what was written for the requests before this one.
+        fn expect(&self) {
+            let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            state.answered.clear();
+            state.refused = false;
+            state.asked = false;
+        }
+
+        /// Until *id* is answered, refused, the server asks the client
+        /// something, or the session ends.
+        async fn settled(&self, id: &NumberOrString) {
+            loop {
+                {
+                    let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+                    if state.answered.contains(id) || state.refused || state.asked || state.ended {
+                        return;
+                    }
+                }
+                self.changed.notified().await;
+            }
         }
     }
 
-    /// A blocking writer as an [`AsyncWrite`].
-    pub struct Output<W>(pub W);
+    /// A UTF-8 byte-order mark, which rmcp's transport skips.
+    const BOM: &[u8] = b"\xEF\xBB\xBF";
+
+    /// The id of a request rmcp answers by its id: a method that is not a
+    /// notification's, and an id it reads (an integer, also in float form, or
+    /// a string). Anything else is answered without an id, or not at all.
+    fn request_id(line: &[u8]) -> Option<NumberOrString> {
+        let message: Value = serde_json::from_slice(line.strip_prefix(BOM).unwrap_or(line)).ok()?;
+        let method = message.get("method")?.as_str()?;
+        if method.starts_with("notifications/") {
+            return None;
+        }
+        serde_json::from_value(message.get("id")?.clone()).ok()
+    }
+
+    /// Serves *server* until *input* ends.
+    ///
+    /// # Errors
+    ///
+    /// An I/O error reading *input* or writing *output*.
+    pub async fn serve<R, W>(server: Server, mut input: R, output: W) -> std::io::Result<()>
+    where
+        R: BufRead,
+        W: Write + Send + Unpin + 'static,
+    {
+        let seen = Arc::new(Seen::default());
+        let (mut feed, transport) = tokio::io::duplex(PIPE);
+        let writer = Output {
+            inner: output,
+            line: Vec::new(),
+            seen: Arc::clone(&seen),
+        };
+        let session = async {
+            let outcome = server.run(transport, writer).await;
+            seen.update(|state| state.ended = true);
+            outcome
+        };
+        let reader = async {
+            let mut line = Vec::new();
+            // Once the session ends, nothing more is read: the process exits
+            // as the native one does, without waiting for the client.
+            while !seen.ended() {
+                line.clear();
+                // Blocks every task: whatever the client sent is answered.
+                if input.read_until(b'\n', &mut line)? == 0 {
+                    break;
+                }
+                // A last message without its newline is framed now: the
+                // transport would add it only once the pipe ends, after this
+                // message's answer, which it would never write.
+                if line.last() != Some(&b'\n') {
+                    line.push(b'\n');
+                }
+                let id = request_id(&line);
+                seen.expect();
+                if feed.write_all(&line).await.is_err() {
+                    break; // the session ended: nothing reads the pipe
+                }
+                match id {
+                    Some(id) => seen.settled(&id).await,
+                    // A notification or an answer: let the session take it in.
+                    None => {
+                        for _ in 0..16 {
+                            tokio::task::yield_now().await;
+                        }
+                    }
+                }
+            }
+            drop(feed); // end of input
+            Ok::<_, std::io::Error>(())
+        };
+        let (outcome, input_read) = tokio::join!(session, reader);
+        input_read?;
+        outcome
+    }
+
+    /// The frames' writer: writes through, and notes each answer and each
+    /// request the server sends.
+    struct Output<W> {
+        inner: W,
+        line: Vec<u8>,
+        seen: Arc<Seen>,
+    }
+
+    impl<W> Output<W> {
+        fn note(&mut self, data: &[u8]) {
+            self.line.extend_from_slice(data);
+            while let Some(end) = self.line.iter().position(|&byte| byte == b'\n') {
+                let frame: Vec<u8> = self.line.drain(..=end).collect();
+                let Ok(message) = serde_json::from_slice::<Value>(&frame) else {
+                    continue;
+                };
+                let id = message.get("id");
+                if message.get("method").is_some() {
+                    if id.is_some() {
+                        self.seen.update(|state| state.asked = true);
+                    }
+                    continue;
+                }
+                // An answer: by an id rmcp reads, or a refusal with none (rmcp
+                // leaves the key out) that stands for the request in flight.
+                match id.and_then(|id| serde_json::from_value::<NumberOrString>(id.clone()).ok()) {
+                    Some(id) => self.seen.update(|state| state.answered.push(id)),
+                    None => self.seen.update(|state| state.refused = true),
+                }
+            }
+        }
+    }
 
     impl<W: Write + Unpin> AsyncWrite for Output<W> {
         fn poll_write(
@@ -287,15 +451,18 @@ mod blocking {
             _: &mut Context<'_>,
             data: &[u8],
         ) -> Poll<std::io::Result<usize>> {
-            Poll::Ready(self.get_mut().0.write(data))
+            let this = self.get_mut();
+            let written = this.inner.write(data)?;
+            this.note(&data[..written]);
+            Poll::Ready(Ok(written))
         }
 
         fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-            Poll::Ready(self.get_mut().0.flush())
+            Poll::Ready(self.get_mut().inner.flush())
         }
 
         fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-            Poll::Ready(self.get_mut().0.flush())
+            Poll::Ready(self.get_mut().inner.flush())
         }
     }
 }
