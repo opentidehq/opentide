@@ -310,7 +310,11 @@ impl MispClient {
                 .collect();
             builder = builder.body(Json::Object(kept).to_compact());
         }
-        let request = builder.build().map_err(|_| connectivity())?;
+        // A request that does not build (a key with a newline is no header
+        // value) says why; the reason never holds the value.
+        let request = builder
+            .build()
+            .map_err(|error| connectivity().with_detail(error.describe()))?;
         let (status, body) = self
             .runtime
             .block_on(async {

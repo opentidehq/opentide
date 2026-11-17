@@ -63,7 +63,7 @@ const CREDENTIAL_HEADERS: [&str; 5] = [
 ];
 
 /// Whether *name* carries a credential ([`CREDENTIAL_HEADERS`]).
-pub fn is_credential_header(name: &HeaderName) -> bool {
+pub(crate) fn is_credential_header(name: &HeaderName) -> bool {
     CREDENTIAL_HEADERS.contains(&name.as_str())
 }
 

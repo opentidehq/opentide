@@ -382,6 +382,10 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **A bearer token in a platform's second `401` answer is masked whole** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). When a tenant refused a new token too, the error showed the first 300 characters of what the API said, with the token masked only after the cut, so a token the API echoed across the 300th character was shown in part. The token is masked in the whole answer first, then the answer is cut.
 - **Windows paths in the workspace keep a form Windows accepts** ([#1180](https://github.com/opentidehq/opentide/issues/1180)). A network share under the workspace reads as `\\server\share` instead of `\\?\UNC\server\share`, and a path of more than 260 characters, or with a reserved name, keeps its `\\?\` prefix instead of being cut to a path Windows cannot open.
 
+### Security
+
+- **A connector request's credentials are never shown in its debug output** ([#1142](https://github.com/opentidehq/opentide/issues/1142)). `Authorization`, `Proxy-Authorization`, `Cookie`, Carbon Black's `X-Auth-Token` and Bitdefender's `X-API-Key` are marked sensitive when set (HTTP/2 never indexes them), and a request's `Debug` shows neither them, its URL's query or user, nor its body.
+
 ## [0.28.1] — 2026-11-13
 
 Optional fields such as `author` are notes, not warnings: `lint --strict` no longer fails on them, and `--verbose` shows them.
