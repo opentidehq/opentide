@@ -906,9 +906,10 @@ impl<'a> Pass<'a> {
                 }
             }
         }
-        for column in by_columns {
-            out.push_unique(column);
-        }
+        // Every column the operator makes, in order, named in one batch at
+        // the end: a batch per item rebuilt the set of names taken each time,
+        // quadratic in the items (#1424). The items read the input, not `out`.
+        let mut made = by_columns;
         for item in &aggregates {
             match self.column_item(item, &ctx_input, scope, op_span, &[]) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
@@ -922,12 +923,10 @@ impl<'a> Pass<'a> {
                     if let Some(node) = assigned_names(item).first() {
                         self.define(span(node), &columns[0]);
                     }
-                    for column in columns {
-                        out.push_unique(Column {
-                            made_by: Some(made_by),
-                            ..column
-                        });
-                    }
+                    made.extend(columns.into_iter().map(|column| Column {
+                        made_by: Some(made_by),
+                        ..column
+                    }));
                 }
                 Item::Named(_, _)
                     if aggregate_call(item)
@@ -948,22 +947,21 @@ impl<'a> Pass<'a> {
                             ..Column::new(name, type_name.clone())
                         };
                         self.define(span(&node), &column);
-                        out.push_unique(column);
+                        made.push(column);
                     }
                 }
                 Item::Unnamed(_) => match self.aggregate_columns(item, &ctx_input) {
                     Some(columns) => {
-                        for column in columns {
-                            out.push_unique(Column {
-                                made_by: Some(made_by),
-                                ..column
-                            });
-                        }
+                        made.extend(columns.into_iter().map(|column| Column {
+                            made_by: Some(made_by),
+                            ..column
+                        }));
                     }
                     None => out.make_open(),
                 },
             }
         }
+        out.push_all_unique(made);
         out
     }
 
@@ -1011,9 +1009,7 @@ impl<'a> Pass<'a> {
             "rightsemi" | "rightanti" | "rightantisemi" => right.clone(),
             _ => {
                 let mut out = left.clone();
-                for column in &right.columns {
-                    out.push_unique(column.clone());
-                }
+                out.push_all_unique(right.columns.iter().cloned());
                 out.weaken(right.known);
                 out.custom_columns |= right.custom_columns;
                 out
@@ -1057,11 +1053,13 @@ impl<'a> Pass<'a> {
             }
         }
         let mut out = left.clone();
-        for column in &right.columns {
-            if !keys.contains(&column.name) {
-                out.push_unique(column.clone());
-            }
-        }
+        out.push_all_unique(
+            right
+                .columns
+                .iter()
+                .filter(|c| !keys.contains(&c.name))
+                .cloned(),
+        );
         out.weaken(right.known);
         out.custom_columns |= right.custom_columns;
         out.reshaped_by = Some(made_by.operator);
