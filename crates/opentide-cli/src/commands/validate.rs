@@ -165,6 +165,13 @@ pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
             code::USAGE_ERROR,
         ));
     }
+    if args.allow_empty && !args.strict {
+        return Some(usage(
+            "--allow-empty relaxes --strict. Pass both.",
+            "--allow-empty",
+            code::USAGE_ERROR,
+        ));
+    }
     if let (Some(queries), Some(check)) = (args.queries, args.check) {
         if check != Check::Queries {
             return Some(usage(
@@ -483,7 +490,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let empty = !failed && args.check.is_none() && scope_full && summary.objects == 0;
     // `--strict` fails a run that checked nothing: a CI job pointed at the
     // wrong folder would otherwise pass every commit.
-    let strict_empty = empty && args.strict && !args.allow_empty;
+    // `--allow-empty` passes a workspace with no object yet (a new one, as
+    // the commit hook setup writes sees it), never a folder that is not one.
+    let strict_empty =
+        empty && args.strict && !(args.allow_empty && root::is_workspace_root(&OsFs, &root));
     let message = if failed {
         "Validation failed".to_owned()
     } else if strict_empty {

@@ -101,6 +101,7 @@ pub fn refusal(
     let refused: Vec<&str> = [
         ("--check", validate.check.is_some()),
         ("--type", !validate.object_type.is_empty()),
+        ("--allow-empty", validate.allow_empty),
         ("--fix", validate.fix),
         ("--dry-run", validate.dry_run),
         ("--watch", validate.watch),
@@ -1504,6 +1505,20 @@ mod from_cli_tests {
             problem,
             "--check, --fix, --output configure `opentide validate` itself and would be \
              ignored by `opentide validate query`."
+        );
+    }
+
+    /// `--allow-empty` relaxes `validate`'s own empty-run check, which
+    /// `validate query` does not have: refused, not dropped.
+    #[test]
+    fn allow_empty_before_query_is_refused() {
+        let problem = parse(&["validate", "--strict", "--allow-empty", "query"])
+            .err()
+            .unwrap_or_default();
+        assert_eq!(
+            problem,
+            "--allow-empty configures `opentide validate` itself and would be ignored by \
+             `opentide validate query`."
         );
     }
 

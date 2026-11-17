@@ -103,6 +103,9 @@ fn isolate_git(command: &mut Command) {
     let temp = dunce::canonicalize(std::env::temp_dir()).unwrap();
     command.env("GIT_CEILING_DIRECTORIES", temp);
     command.env("GIT_CONFIG_NOSYSTEM", "1");
+    // Nor the person's own configuration: a global `core.hooksPath` or
+    // `init.templateDir` would change what a commit runs.
+    command.env("GIT_CONFIG_GLOBAL", "/dev/null");
     for name in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
         command.env_remove(name);
     }
@@ -551,7 +554,7 @@ fn the_git_root_is_kept_from(start: &str, shown: &str) {
     let none = serde_json::json!({"rules": 0, "threats": 0, "objectives": 0});
     assert_eq!(info["counts"], none, "{start}: {info}");
 
-    let validate = opentide(&cwd, &["validate", "--strict"], &[]).ok();
+    let validate = opentide(&cwd, &["validate"], &[]).ok();
     let checked = &validate["report"]["stats"]["objects_checked"];
     assert_eq!(checked, 0, "{start}: {validate}");
     assert_eq!(
@@ -562,6 +565,23 @@ fn the_git_root_is_kept_from(start: &str, shown: &str) {
     // Relative to where it ran.
     let message = format!("Validation passed, but no detection objects were found under {shown}");
     assert_eq!(validate["message"], message, "{start}: {validate}");
+    // `--strict` fails it, naming the same folder, and `--allow-empty` does
+    // not pass a folder that is not a workspace.
+    for args in [
+        &["validate", "--strict"][..],
+        &["validate", "--strict", "--allow-empty"],
+    ] {
+        let strict = opentide(&cwd, args, &[]);
+        assert_eq!(strict.code, Some(1), "{start} {args:?}: {strict:?}");
+        let document = strict.document();
+        assert_eq!(document["failure"]["code"], "issues_found", "{document}");
+        assert_eq!(path_of(&document, "workspace"), checkout, "{document}");
+        let message = format!(
+            "Validation failed: no detection objects were found under {shown}, and --strict \
+             requires at least one"
+        );
+        assert_eq!(document["message"], message, "{start}: {document}");
+    }
 }
 
 #[test]
@@ -735,15 +755,39 @@ fn the_first_commit_of_a_fresh_setup_passes_its_hook() {
             commit.env_remove(name);
         }
     }
+    for name in LEAKED {
+        commit.env_remove(name);
+    }
     isolate_git(&mut commit);
+    // The hook is installed, executable, and runs: it leaves a trace.
+    let hook = repo.join(".git/hooks/pre-commit");
+    let script = std::fs::read_to_string(&hook).unwrap();
+    assert!(
+        script.contains("validate --strict --allow-empty"),
+        "{script}"
+    );
+    let traced = script.replacen(
+        "set -e\n",
+        &format!("set -e\ntouch {}\n", root.join("hook-ran").display()),
+        1,
+    );
+    std::fs::write(&hook, traced).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        assert_ne!(
+            std::fs::metadata(&hook).unwrap().permissions().mode() & 0o111,
+            0
+        );
+    }
     let output = commit.output().unwrap();
     assert!(
         output.status.success(),
         "the hook refused the scaffold: {output:?}"
     );
-    // The hook did run: it is installed and calls validate.
-    let hook = std::fs::read_to_string(repo.join(".git/hooks/pre-commit")).unwrap();
-    assert!(hook.contains("validate --strict --allow-empty"), "{hook}");
+    assert!(
+        root.join("hook-ran").exists(),
+        "the commit did not run the hook"
+    );
     // CI's `validate --strict` fails the same empty workspace.
     let strict = opentide(&repo, &["validate", "--strict"], &[]);
     assert_eq!(strict.code, Some(1), "{strict:?}");

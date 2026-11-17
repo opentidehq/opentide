@@ -34,7 +34,7 @@ opentide validate --check queries
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
-| `--allow-empty` | With `--strict`: pass a full run that finds no detection objects. The commit hook `opentide setup hooks` writes passes it, so a new repository commits before its first object |
+| `--allow-empty` | With `--strict` (refused without it): pass a full run that finds no detection objects in a workspace. A folder that is not a workspace still fails. The commit hook `opentide setup hooks` writes passes it, so a new repository commits before its first object |
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
 | `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |

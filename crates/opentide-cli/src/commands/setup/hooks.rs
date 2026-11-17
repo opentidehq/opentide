@@ -926,6 +926,56 @@ mod tests {
         assert!(again.strings("files").is_empty());
     }
 
+    /// The hooks an earlier release wrote (`validate --strict`, before
+    /// `--allow-empty`) are rewritten by a second `setup hooks`: the
+    /// pre-commit entry, the versioned hook and the installed one, with no
+    /// warning.
+    #[cfg(unix)]
+    #[test]
+    fn hooks_from_before_allow_empty_are_refreshed() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let env = git_repository(&root);
+        let mut stage = Stage::new();
+        hooks(&mut stage, &env, &root, true).unwrap();
+        stage.commit().unwrap();
+        let files = [
+            root.join(PRE_COMMIT_CONFIG_PATH),
+            root.join(VERSIONED_HOOK_PATH),
+            root.join(".git/hooks/pre-commit"),
+        ];
+        // As the earlier release wrote them.
+        for file in &files {
+            let text = std::fs::read_to_string(file).unwrap();
+            assert!(text.contains("validate --strict --allow-empty"), "{text}");
+            std::fs::write(file, text.replace(" --allow-empty", "")).unwrap();
+        }
+        let mut stage = Stage::new();
+        let result = hooks(&mut stage, &env, &root, true).unwrap();
+        stage.commit().unwrap();
+        assert!(
+            result.get("warnings").is_none(),
+            "{:?}",
+            result.get("warnings")
+        );
+        for file in &files {
+            let text = std::fs::read_to_string(file).unwrap();
+            assert!(
+                text.contains("validate --strict --allow-empty"),
+                "{}: {text}",
+                file.display()
+            );
+        }
+        let config = std::fs::read_to_string(&files[0]).unwrap();
+        assert_eq!(
+            config.matches("id: opentide-validate").count(),
+            1,
+            "{config}"
+        );
+        assert_ne!(mode(&files[2]) & 0o111, 0);
+    }
+
     /// A Git repository at `root`, and the environment git runs with there.
     fn git_repository(root: &Path) -> Env {
         let env = Env::from_pairs([
