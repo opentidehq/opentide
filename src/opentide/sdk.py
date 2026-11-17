@@ -782,9 +782,8 @@ class Connection:
         A whole deploy run (the plan, the deployment state, the retirements) is
         ``Workspace.run_json(["deploy", ...])``; this deploys one compiled rule.
 
-        Raises :class:`OpentideError`: ``tenant_refused``, the other codes of
-        :meth:`query`, and ``operation_unsupported`` on a platform whose rules
-        deploy only through ``opentide deploy`` (Elastic).
+        Raises :class:`OpentideError`: ``tenant_refused``, and the other codes
+        of :meth:`query`.
         """
         data = await _document(
             self._inner.deploy,

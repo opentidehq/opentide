@@ -85,7 +85,13 @@ fn the_platforms_and_what_each_can_do() {
     let sysdig = connectors::capabilities("sysdig").unwrap();
     assert!(sysdig.deploy && !sysdig.query && !sysdig.live_validation);
     let elastic = connectors::capabilities("elastic").unwrap();
-    assert!(!elastic.deploy && elastic.query && elastic.live_validation);
+    assert!(elastic.deploy && elastic.query && elastic.live_validation);
+    // Every built-in platform deploys through the SDK.
+    assert!(
+        platforms
+            .iter()
+            .all(|platform| connectors::capabilities(platform).is_some_and(|c| c.deploy))
+    );
     let exabeam = connectors::capabilities("exabeam").unwrap();
     assert!(exabeam.deploy && exabeam.query && exabeam.live_validation);
     let google_secops = connectors::capabilities("google_secops").unwrap();
@@ -249,12 +255,6 @@ async fn a_deploy_sends_the_compiled_body() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_platform_without_the_operation_says_so() {
-    let elastic = TenantConfig::new("elastic", "es", [("url", "https://es.example")]);
-    let connection = Connection::open(&elastic, &options()).unwrap();
-    let request = DeployRequest::new("r", Operation::Delete, Vec::new());
-    let error = connection.deploy(&request).await.unwrap_err();
-    assert_eq!(code(&error), connectors::OPERATION_UNSUPPORTED);
-
     let sysdig = TenantConfig::new("sysdig", "falco", [("url", "https://sysdig.example")]);
     let connection = Connection::open(&sysdig, &options()).unwrap();
     let error = connection
@@ -315,7 +315,8 @@ fn block_on_runs_an_operation_from_synchronous_code() {
     let error = connectors::block_on(connection.deploy(&request))
         .unwrap()
         .unwrap_err();
-    assert_eq!(code(&error), connectors::OPERATION_UNSUPPORTED);
+    // An empty body is no Kibana rule: refused before anything is sent.
+    assert_eq!(code(&error), "tenant_refused");
 }
 
 /// Every `api_request` of a deploy plan's document, wherever it sits.

@@ -312,7 +312,7 @@ mod tests {
         assert_eq!(can("carbon_black_cloud"), (true, true, true));
         assert_eq!(can("defender_for_endpoint"), (true, true, true));
         assert_eq!(can("sentinel_one"), (true, true, true));
-        assert_eq!(can("elastic"), (false, true, true));
+        assert_eq!(can("elastic"), (true, true, true));
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));

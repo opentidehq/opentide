@@ -22,6 +22,10 @@ use percent_encoding::utf8_percent_encode;
 use crate::answer::Answer;
 use crate::connector::{BoxFuture, LiveCheck, LiveValidator, Platform, QueryRunner, TenantContext};
 use crate::connector::{
+    DeployError, DeployEvent, DeployFailure, DeployOutcome as ConnectorOutcome, DeployRequest,
+    DeployWarning, Deployer, Operation,
+};
+use crate::connector::{
     QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow, columns_of, flatten, utc_z,
 };
 use crate::error::ConnectorError;
@@ -935,7 +939,6 @@ impl Elastic {
     /// deletes and creates it. A prebuilt rule is never modified. A 401 or
     /// 403 fails the tenant ([`ElasticError::Tenant`]); any other refusal
     /// fails the rule ([`Deployed::Failed`]).
-    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn deploy_rule(
         &self,
         cx: TenantContext<'_>,
@@ -943,7 +946,6 @@ impl Elastic {
         setup_index: &[String],
     ) -> Result<DeployOutcome, ElasticError> {
         let client = client(cx)?;
-        let tenant = cx.tenant.label.tenant.clone();
         let rule_id = rule.rule_id.as_str();
         let failed = |event: &str, status: Option<u16>, error: String| DeployOutcome {
             deployed: Deployed::Failed {
@@ -992,6 +994,20 @@ impl Elastic {
             }
             Err(other) => return Err(other),
         };
+        self.write_rule(cx, &client, rule, warnings).await
+    }
+
+    /// Creates, replaces or recreates `rule` after its checks raised
+    /// `warnings` (`_deploy_rule` past the checks).
+    async fn write_rule(
+        &self,
+        cx: TenantContext<'_>,
+        client: &Client,
+        rule: &ElasticRule,
+        warnings: Vec<String>,
+    ) -> Result<DeployOutcome, ElasticError> {
+        let tenant = cx.tenant.label.tenant.clone();
+        let rule_id = rule.rule_id.as_str();
         let with = |deployed: Deployed| DeployOutcome {
             deployed,
             warnings: warnings.clone(),
@@ -1265,9 +1281,192 @@ impl LiveValidator for Elastic {
     }
 }
 
+/// The events a rule's failed deploy is logged with (`_deployment_error`),
+/// each its [`DeployFailure`]'s code.
+pub const FAILURE_EVENTS: [&str; 8] = [
+    "elasticsearch_checks_failed",
+    "refusing_to_modify_prebuilt_rule",
+    "delete_elastic_rule_failed",
+    "get_elastic_rule_failed",
+    "create_elastic_rule_failed",
+    "recreate_elastic_rule_delete_failed",
+    "recreate_elastic_rule_failed",
+    "update_elastic_rule_failed",
+];
+
+/// The warning a deploy without the rule's block raises: the Elasticsearch
+/// checks, which read the block, did not run.
+pub const CHECKS_SKIPPED: &str = "elastic_checks_skipped";
+
+/// The warning each Elasticsearch check raises (`elasticsearch_check_warning`).
+pub const CHECK_WARNING: &str = "elasticsearch_check_warning";
+
+/// A deploy request's body: the Kibana rule (`payload`) and the rule's
+/// `elastic` block (`block`), as `opentide deploy` and `deploy_plan` write
+/// it; or the Kibana rule alone, with no block.
+fn deploy_body(body: &[u8]) -> Result<(Json, Option<Json>), String> {
+    let body: Json = serde_json::from_slice(body)
+        .map_err(|error| format!("the compiled body is not JSON: {error}"))?;
+    match body.get("payload") {
+        Some(payload @ Json::Object(_)) => {
+            let block = body
+                .get("block")
+                .filter(|block| block.as_object().is_some());
+            Ok((payload.clone(), block.cloned()))
+        }
+        Some(_) => Err("the body's payload is not a Kibana rule".to_owned()),
+        None if body.as_object().is_some() => Ok((body, None)),
+        None => Err("the compiled body is not a Kibana rule".to_owned()),
+    }
+}
+
+impl Deployer for Elastic {
+    /// One rule, Kibana's `rule_id` the request's: deleted, or checked
+    /// against Elasticsearch, then created when Kibana has no such rule,
+    /// replaced (keeping the remote's fields the rule leaves out) or, when
+    /// its type changes, deleted and created again. [`Operation::Create`]
+    /// and [`Operation::Update`] do the same; a [`Operation::Disable`]
+    /// writes the rule disabled. The body is `{"payload": <Kibana rule>,
+    /// "block": <elastic block>}` (`deploy_plan`'s); a bare Kibana rule
+    /// deploys without the checks, which read the block, and says so with
+    /// the unraised warning [`CHECKS_SKIPPED`]. The checks' findings are
+    /// [`CHECK_WARNING`]s; what was done is the outcome's event
+    /// (`elastic_rule_created`, `_updated`, `_recreated`, `_deleted`, with
+    /// its `rule_id`). The tenant's `index` is the checks' fallback source.
+    ///
+    /// A rule Kibana or the checks refuse fails with its event's code
+    /// ([`FAILURE_EVENTS`]) and the answer's status, the checks' warnings in
+    /// [`DeployError::partial`]. A key Kibana or Elasticsearch refuses (401,
+    /// 403) and every connection failure fail the tenant.
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<ConnectorOutcome, DeployError>> {
+        Box::pin(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
+            let located = |failure: DeployFailure| {
+                failure
+                    .with_field("platform", PLATFORM)
+                    .with_field("tenant", tenant)
+            };
+            let (payload, block) = if request.operation == Operation::Delete {
+                (Json::Null, None)
+            } else {
+                deploy_body(&request.body).map_err(|message| {
+                    DeployError::from(ConnectorError::refused(PLATFORM, tenant, message, None))
+                })?
+            };
+            let rule = ElasticRule {
+                rule_id: request.rule_id.clone(),
+                name: payload
+                    .get("name")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+                strategy: match request.operation {
+                    Operation::Delete => Strategy::Deletion,
+                    Operation::Disable => Strategy::Disablement,
+                    Operation::Create | Operation::Update => Strategy::Active,
+                },
+                block: block.clone().unwrap_or(Json::Null),
+                payload,
+            };
+            let deployed = match &block {
+                Some(_) => self.deploy_rule(cx, &rule, cx.tenant.list("index")).await,
+                None if rule.strategy == Strategy::Deletion => {
+                    self.deploy_rule(cx, &rule, &[]).await
+                }
+                None => match client(cx) {
+                    Ok(client) => self.write_rule(cx, &client, &rule, Vec::new()).await,
+                    Err(error) => Err(error.into()),
+                },
+            };
+            let outcome = deployed.map_err(|error| elastic_tenant_failure(error, tenant))?;
+            let mut warnings: Vec<DeployWarning> = Vec::new();
+            if block.is_none() && rule.strategy != Strategy::Deletion {
+                warnings.push(
+                    DeployWarning::new(
+                        CHECKS_SKIPPED,
+                        "the body carries no elastic block, so the Elasticsearch checks did \
+                         not run",
+                    )
+                    .unraised(),
+                );
+            }
+            warnings.extend(
+                outcome
+                    .warnings
+                    .into_iter()
+                    .map(|warning| DeployWarning::new(CHECK_WARNING, warning)),
+            );
+            let event = match &outcome.deployed {
+                Deployed::Created => "elastic_rule_created",
+                Deployed::Updated => "elastic_rule_updated",
+                Deployed::Recreated => "elastic_rule_recreated",
+                Deployed::Deleted => "elastic_rule_deleted",
+                Deployed::Failed {
+                    event,
+                    status,
+                    error,
+                } => {
+                    let code = FAILURE_EVENTS
+                        .into_iter()
+                        .find(|known| known == event)
+                        .unwrap_or("tenant_refused");
+                    let mut failure = located(DeployFailure::new(code, error.clone()));
+                    if let Some(status) = status {
+                        failure = failure.with_status(*status);
+                    }
+                    let partial =
+                        ConnectorOutcome::new(None, request.operation).with_warnings(warnings);
+                    return Err(DeployError::rule(failure).with_partial(partial));
+                }
+            };
+            let mut done = ConnectorOutcome::new(
+                (outcome.deployed != Deployed::Deleted).then(|| request.rule_id.clone()),
+                request.operation,
+            )
+            .with_warnings(warnings);
+            done.events =
+                vec![DeployEvent::new(event).with_field("rule_id", request.rule_id.as_str())];
+            Ok(done)
+        })
+    }
+}
+
+/// A deploy's failure that is not a rule's answer: the tenant's. A refused
+/// key or privilege ([`ElasticError::Tenant`]) keeps no connector error,
+/// every connection failure keeps its own; [`ElasticError::Rule`], which
+/// the checks' own failure never is (that is `elasticsearch_checks_failed`),
+/// is the rule's `tenant_refused`.
+fn elastic_tenant_failure(error: ElasticError, tenant: &str) -> DeployError {
+    match error {
+        ElasticError::Rule(message) => DeployError::rule(
+            DeployFailure::new("tenant_refused", message)
+                .with_field("platform", PLATFORM)
+                .with_field("tenant", tenant),
+        ),
+        ElasticError::Tenant(message) => DeployError::tenant(
+            DeployFailure::new("tenant_refused", message)
+                .with_field("platform", PLATFORM)
+                .with_field("tenant", tenant),
+        ),
+        ElasticError::Connector(error) => {
+            let mut failed = DeployError::from(error);
+            failed.scope = crate::connector::DeployScope::Tenant;
+            failed
+        }
+    }
+}
+
 impl Platform for Elastic {
     fn id(&self) -> &'static str {
         PLATFORM
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
     }
 
     fn live_validator(&self) -> Option<&dyn LiveValidator> {

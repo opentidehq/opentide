@@ -315,9 +315,8 @@ impl Connection {
     /// Applies `operation` to the rule `ruleId` on the tenant, sending `body`
     /// (the request `opentide deploy` compiles for this tenant) as its
     /// bytes, and resolves to the platform's identifier of the rule. Rejects
-    /// with `tenant_refused`, the other codes of `query`, and
-    /// `operation_unsupported` on a platform whose rules deploy only through
-    /// `opentide deploy` (Elastic). A `delete` takes no body (`null`); the
+    /// with `tenant_refused` and the other codes of `query`. A `delete`
+    /// takes no body (`null`); the
     /// other operations reject without one (`usage_invalid_value`).
     /// `options.signal` aborts it.
     #[napi(catch_unwind, ts_return_type = "Promise<DeployOutcome>")]
