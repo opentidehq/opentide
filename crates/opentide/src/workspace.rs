@@ -244,7 +244,7 @@ impl Workspace {
     fn info_with(&self, environment: Option<&std::collections::BTreeMap<String, String>>) -> Info {
         let index = self.inner.index();
         let count = |family: &str| index.objects.get(family).map_or(0, |objects| objects.len());
-        let is_set = |name: &str| crate::deploy::is_set(environment, name);
+        let is_set = |name: &str| is_set(environment, name);
         Info {
             root: self.root().to_path_buf(),
             counts: Counts {
@@ -474,4 +474,18 @@ fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileC
 #[cfg(not(feature = "compile"))]
 fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileCheck> {
     None
+}
+
+/// Whether the variable `name` is set and not blank, as a connection reads
+/// it: in `environment`, else in the process's.
+pub(crate) fn is_set(
+    environment: Option<&std::collections::BTreeMap<String, String>>,
+    name: &str,
+) -> bool {
+    match environment {
+        Some(vars) => vars.get(name).is_some_and(|value| !value.trim().is_empty()),
+        None => {
+            std::env::var_os(name).is_some_and(|value| !value.to_string_lossy().trim().is_empty())
+        }
+    }
 }

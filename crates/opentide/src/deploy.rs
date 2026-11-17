@@ -48,7 +48,7 @@ impl std::fmt::Display for Strategy {
 /// let options = DeployPlanOptions::new(Strategy::Preview).uuid("11111111-1111-4111-8111-111111111111");
 /// assert_eq!(options.strategies, [Strategy::Preview]);
 /// ```
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct DeployPlanOptions {
     /// `--strategy`: at least one.
@@ -67,6 +67,27 @@ pub struct DeployPlanOptions {
     /// say whether each is set (as `ConnectOptions::environment` names the
     /// one a connection reads); `None`: the process's.
     pub environment: Option<std::collections::BTreeMap<String, String>>,
+}
+
+/// Names the environment's variables, never their values: they hold
+/// credentials.
+impl std::fmt::Debug for DeployPlanOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeployPlanOptions")
+            .field("strategies", &self.strategies)
+            .field("uuids", &self.uuids)
+            .field("files", &self.files)
+            .field("platform", &self.platform)
+            .field("keep_deprecated", &self.keep_deprecated)
+            .field(
+                "environment",
+                &self
+                    .environment
+                    .as_ref()
+                    .map(|vars| vars.keys().collect::<Vec<_>>()),
+            )
+            .finish()
+    }
 }
 
 impl DeployPlanOptions {
@@ -114,18 +135,6 @@ impl DeployPlanOptions {
                 .collect(),
         );
         self
-    }
-}
-
-/// Whether the variable `name` is set and not empty: in `environment`, else
-/// in the process's.
-pub(crate) fn is_set(
-    environment: Option<&std::collections::BTreeMap<String, String>>,
-    name: &str,
-) -> bool {
-    match environment {
-        Some(vars) => vars.get(name).is_some_and(|value| !value.is_empty()),
-        None => std::env::var_os(name).is_some_and(|value| !value.is_empty()),
     }
 }
 
@@ -204,7 +213,7 @@ impl Workspace {
         let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
             Err("the facade plans every rule file or a selection".to_owned())
         };
-        let is_set = |name: &str| is_set(options.environment.as_ref(), name);
+        let is_set = |name: &str| crate::workspace::is_set(options.environment.as_ref(), name);
         let outcome = dry_run::run(ws, &owned, &request, &changed, &is_set);
         let message = || {
             outcome

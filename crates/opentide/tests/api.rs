@@ -489,5 +489,18 @@ fn info_and_a_plan_look_credentials_up_in_the_callers_environment() {
     };
     let plan = DeployPlanOptions::new(Strategy::Preview).platform("sentinel_one");
     assert!(unset(&plan), "the process does not set it");
-    assert!(!unset(&plan.environment([(variable, "token")])));
+    let given = plan.environment([(variable, "token-never-printed")]);
+    assert!(!unset(&given));
+    // A blank value is unset, as a connection reads it.
+    assert!(unset(
+        &DeployPlanOptions::new(Strategy::Preview)
+            .platform("sentinel_one")
+            .environment([(variable, "  ")])
+    ));
+    // Its `Debug` names the variable, never its value.
+    let shown = format!("{given:?}");
+    assert!(
+        shown.contains(variable) && !shown.contains("token-never-printed"),
+        "{shown}"
+    );
 }

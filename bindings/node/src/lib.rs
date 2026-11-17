@@ -168,8 +168,9 @@ pub struct LintOptions {
 }
 
 /// What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options.
+/// No `Debug`: its `environment` holds credentials.
 #[napi(object)]
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct DeployPlanOptions {
     /// `--strategy` (repeatable); default `['RELEASE']`.
     #[napi(ts_type = "Array<'PREVIEW' | 'RELEASE'>")]
