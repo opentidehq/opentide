@@ -64,10 +64,10 @@ impl Deployer for Acme {
                     .filter(|_| body["configuration"]["severity"] == json!(4)),
                 Operation::Delete => None,
             };
-            Ok(DeployOutcome {
-                remote_id: remote_id.or_else(|| body["remote_id"].as_str().map(str::to_owned)),
-                operation: request.operation,
-            })
+            Ok(DeployOutcome::new(
+                remote_id.or_else(|| body["remote_id"].as_str().map(str::to_owned)),
+                request.operation,
+            ))
         })
     }
 }

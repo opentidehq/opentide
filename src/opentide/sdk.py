@@ -36,6 +36,7 @@ __all__ = [
     "Connection",
     "DeployOutcome",
     "DeployPlan",
+    "DeployWarning",
     "LintReport",
     "LiveCheck",
     "OpentideError",
@@ -391,12 +392,25 @@ class LiveCheck:
 
 
 @dataclass(frozen=True)
+class DeployWarning:
+    """A warning a deploy raised: the rule is deployed, with something to check."""
+
+    #: The event ``opentide deploy`` logs it as (``sysdig_rule_recreated``).
+    code: str
+    #: What happened.
+    message: str
+
+
+@dataclass(frozen=True)
 class DeployOutcome:
     """What :meth:`Connection.deploy` did."""
 
     #: The platform's identifier of the rule, which a deploy keeps in its state.
     remote_id: str | None
     operation: OperationName
+    #: What the deploy raised without failing (a rule created again because the
+    #: tenant lost it, a partial deployment), as ``opentide deploy`` warns of them.
+    warnings: list[DeployWarning]
 
 
 def _capabilities(flags: tuple[bool, bool, bool]) -> Capabilities:
@@ -656,7 +670,8 @@ class Connection:
     ) -> DeployOutcome:
         """Applies *operation* to the rule *rule_id* on the tenant, sending
         *body* (a deploy plan's payload for this tenant) as its bytes. Returns
-        the platform's identifier of the rule.
+        the platform's identifier of the rule, and the warnings the deploy
+        raised without failing.
 
         *policies* are a Sysdig rule's runtime policies (the plan entry's
         ``policies``, which a block that names its own carries); ``None``
@@ -676,7 +691,11 @@ class Connection:
             bytes(body),
             policies=None if policies is None else list(policies),
         )
-        return DeployOutcome(**data)
+        return DeployOutcome(
+            remote_id=data["remote_id"],
+            operation=data["operation"],
+            warnings=[DeployWarning(**warning) for warning in data["warnings"]],
+        )
 
     def __repr__(self) -> str:
         return f"Connection({self.platform!r}, {self.tenant!r})"

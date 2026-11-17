@@ -163,10 +163,7 @@ impl Deployer for MockPlatform {
                 }
                 Operation::Delete => None,
             };
-            Ok(DeployOutcome {
-                remote_id: remote,
-                operation: request.operation,
-            })
+            Ok(DeployOutcome::new(remote, request.operation))
         })
     }
 }
