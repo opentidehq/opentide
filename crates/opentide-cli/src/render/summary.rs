@@ -318,6 +318,60 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
         failure_lines(failures, &mut lines);
         return lines.join("\n") + "\n";
     }
+    let rows = platform_rows(result, plan, failures, dry_run);
+    lines.push(String::new());
+    let header: [&str; 3] = if dry_run {
+        ["Platform", "Tenant", "Rules"]
+    } else {
+        ["Platform", "Result", "Rules"]
+    };
+    let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
+    lines.extend(table(&header, &shown, rows.len()));
+    failure_lines(failures, &mut lines);
+    let payloads = members(result, "payloads");
+    for (platform, uuids) in plan {
+        let entries: &[Json] = payloads
+            .get(platform)
+            .and_then(Json::as_array)
+            .map_or(&[], Vec::as_slice);
+        let named = |uuid: &str| -> Option<&Json> {
+            entries
+                .iter()
+                .rev()
+                .find(|entry| entry.get("uuid").and_then(Json::as_str) == Some(uuid))
+        };
+        let uuids = uuids.as_array().map_or(&[][..], Vec::as_slice);
+        let count = uuids.len();
+        let noun = if count == 1 { "rule" } else { "rules" };
+        // An HTML block: Markdown escapes would show, so HTML escaping only.
+        lines.push(String::new());
+        lines.push(format!(
+            "<details><summary>{}: {count} {noun}</summary>",
+            html_escape(platform, true)
+        ));
+        lines.push(String::new());
+        for uuid in strings(uuids).take(MAX_ROWS) {
+            lines.push(rule_line(uuid, named(uuid)));
+        }
+        if count > MAX_ROWS {
+            lines.push(format!("- … and {} more", count - MAX_ROWS));
+        }
+        lines.push(String::new());
+        lines.push("</details>".to_owned());
+    }
+    lines.join("\n") + "\n"
+}
+
+/// One row per platform (per tenant in a dry run): its tenant or result,
+/// and its rule count. A platform the run reached is `partly deployed` when
+/// one of its rules failed and another was deployed, `not deployed` when
+/// none was.
+fn platform_rows(
+    result: &Json,
+    plan: &Object,
+    failures: &[Json],
+    dry_run: bool,
+) -> Vec<Vec<String>> {
     let tenants = members(result, "tenants");
     let deployed: Vec<&str> = strings(array(result, "deployed")).collect();
     let failed_on = |platform: &str| {
@@ -364,47 +418,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
             }
         }
     }
-    lines.push(String::new());
-    let header: [&str; 3] = if dry_run {
-        ["Platform", "Tenant", "Rules"]
-    } else {
-        ["Platform", "Result", "Rules"]
-    };
-    let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
-    lines.extend(table(&header, &shown, rows.len()));
-    failure_lines(failures, &mut lines);
-    let payloads = members(result, "payloads");
-    for (platform, uuids) in plan {
-        let entries: &[Json] = payloads
-            .get(platform)
-            .and_then(Json::as_array)
-            .map_or(&[], Vec::as_slice);
-        let named = |uuid: &str| -> Option<&Json> {
-            entries
-                .iter()
-                .rev()
-                .find(|entry| entry.get("uuid").and_then(Json::as_str) == Some(uuid))
-        };
-        let uuids = uuids.as_array().map_or(&[][..], Vec::as_slice);
-        let count = uuids.len();
-        let noun = if count == 1 { "rule" } else { "rules" };
-        // An HTML block: Markdown escapes would show, so HTML escaping only.
-        lines.push(String::new());
-        lines.push(format!(
-            "<details><summary>{}: {count} {noun}</summary>",
-            html_escape(platform, true)
-        ));
-        lines.push(String::new());
-        for uuid in strings(uuids).take(MAX_ROWS) {
-            lines.push(rule_line(uuid, named(uuid)));
-        }
-        if count > MAX_ROWS {
-            lines.push(format!("- … and {} more", count - MAX_ROWS));
-        }
-        lines.push(String::new());
-        lines.push("</details>".to_owned());
-    }
-    lines.join("\n") + "\n"
+    rows
 }
 
 /// Every failure of a deploy (`failures`): its platform, tenant, rule and
