@@ -345,6 +345,78 @@ fn declared_datasets_come_from_the_workspace_s_visibility_toml() {
     );
 }
 
+/// #1142: validate's queries check run as the jobs of a thread pool, the
+/// way a host spawns one per request, two workspaces at once, one
+/// declaring the table. The check took a process-wide lock and then spread
+/// over the pool: while the thread that held it waited for a job another
+/// thread had taken, it ran the next request from the pool's queue, which
+/// took the lock again on the same thread, and hung. Each run now uses its
+/// own workspace's datasets and takes no lock. The second request comes
+/// after a few delays, so that one of them lands while the first waits;
+/// the watchdog fails the test instead of letting it hang.
+#[test]
+fn queries_checks_spawned_on_a_thread_pool_each_use_their_workspace_s_datasets() {
+    let text = rule("  defender_for_endpoint:\n    query: MyCustomTable | take 1\n");
+    let visibility =
+        "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"defender_for_endpoint\"\n";
+    // Enough objects that each check's own jobs split across the pool.
+    const OBJECTS: usize = 48;
+    let unknown = move |declared: bool| {
+        let mut files: Vec<(&str, &str)> = vec![(FILE, &text)];
+        if declared {
+            files.push(("/ws/.opentide/configurations/visibility.toml", visibility));
+        }
+        let ws = workspace(&files);
+        let paths: Vec<PathBuf> = (0..OBJECTS)
+            .map(|i| PathBuf::from(format!("/ws/objects/rules/r{i}.yaml")))
+            .collect();
+        let objects: Vec<QueryObject<'_>> = paths
+            .iter()
+            .map(|path| QueryObject {
+                path,
+                uuid: UUID,
+                family: "rule",
+                source: &text,
+            })
+            .collect();
+        EngineQueries
+            .check(&ws, &objects, false)
+            .errors
+            .iter()
+            .filter(|error| error.code == "kql_unknown_table")
+            .count()
+    };
+    let unknown = Arc::new(unknown);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap();
+    let (done, finished) = std::sync::mpsc::channel();
+    let delays = [0, 1, 2, 5, 10, 20, 40, 80];
+    for delay in delays {
+        for declared in [true, false] {
+            let (unknown, done) = (Arc::clone(&unknown), done.clone());
+            pool.spawn(move || {
+                let _ = done.send((declared, unknown(declared)));
+            });
+            if declared {
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+        }
+    }
+    for _ in 0..delays.len() * 2 {
+        let (declared, unknown) = finished
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .expect("the checks on the pool did not finish: deadlocked");
+        // Every object's query: the table is unknown unless declared.
+        assert_eq!(
+            unknown,
+            if declared { 0 } else { OBJECTS },
+            "declared: {declared}"
+        );
+    }
+}
+
 #[test]
 fn validate_runs_the_engines_and_drops_what_the_schema_check_rejects() {
     let text = rule(SENTINEL_BROKEN);
@@ -407,6 +479,65 @@ fn lint_check(text: &str) -> Vec<(String, String, usize)> {
 }
 
 const ELASTIC_KUERY: &str = "  elastic:\n    type: query\n    language: kuery\n";
+
+/// #1142: lint's queries check reads the workspace's `visibility.toml`,
+/// on whichever thread runs it and through both of its entry points (the
+/// text, and lint's own parse): a dataset the workspace does not declare
+/// is a warning, one it declares is none.
+#[test]
+fn lint_reports_the_datasets_the_workspace_does_not_declare() {
+    use opentide_workspace::lint::LintQueryCheck;
+    let text =
+        rule("  splunk:\n    query: |\n      index=main sourcetype=linux_secure | stats count\n");
+    let undeclared = |visibility: &str| -> [usize; 2] {
+        let fs = MemoryFs::new();
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.write("/ws/.opentide/configurations/visibility.toml", visibility);
+        let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
+        let file = std::path::Path::new(FILE);
+        let document = opentide_schema::node::load(&text).unwrap();
+        let count = |found: Vec<opentide_workspace::lint::LintFinding>| {
+            found
+                .iter()
+                .filter(|finding| finding.diagnostic.code == "spl_dataset_not_declared")
+                .count()
+        };
+        // On another thread, as lint's jobs run.
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    [
+                        count(
+                            check
+                                .check(file, "objects/rules/a.yaml", Some(UUID), &text)
+                                .unwrap(),
+                        ),
+                        count(
+                            check
+                                .check_parsed(
+                                    file,
+                                    "objects/rules/a.yaml",
+                                    Some(UUID),
+                                    &text,
+                                    &document,
+                                )
+                                .unwrap(),
+                        ),
+                    ]
+                })
+                .join()
+                .unwrap()
+        })
+    };
+    let declares = |sourcetype: &str| {
+        format!(
+            "[[logsources]]\nname = \"main\"\ndescription = \"x\"\nsystem = \"splunk\"\n\
+             [[logsources]]\nname = \"{sourcetype}\"\ndescription = \"x\"\nsystem = \"splunk\"\n"
+        )
+    };
+    assert_eq!(undeclared(&declares("other")), [1, 1]);
+    assert_eq!(undeclared(&declares("linux_secure")), [0, 0]);
+}
 
 /// #1233: a file whose line endings the check rewrites is parsed again
 /// from the rewritten text, not read from lint's parse of the original:

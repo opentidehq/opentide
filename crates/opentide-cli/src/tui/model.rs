@@ -810,6 +810,8 @@ fn check_files(
     // The workspace's declared datasets and Elastic tenants, as the editor
     // reads them.
     let profiles = crate::queries::Profiles::install(&opentide_workspace::OsFs, Some(root));
+    // The engine checks this thread runs below use them (#1142).
+    let datasets = profiles.enter();
     let index = workspace.index();
     let mut paths: Vec<PathBuf> = index.file_paths.values().cloned().collect();
     paths.sort();
@@ -886,7 +888,7 @@ fn check_files(
         let key = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
         findings.insert(key, placed);
     }
-    drop(profiles);
+    drop(datasets);
     LanguageServer {
         findings,
         unavailable: None,
