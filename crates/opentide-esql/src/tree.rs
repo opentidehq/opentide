@@ -45,6 +45,9 @@ pub(crate) struct Tree {
     pub(crate) problems: Vec<Problem>,
     /// Where the problems are, sorted: [`Node::has_error`] searches it.
     error_at: Vec<usize>,
+    /// The lossless tree's root: the checks moved to the typed AST read it
+    /// (#1415). Its descendants are built as they are read.
+    pub(crate) syntax: SyntaxNode<Lang>,
 }
 
 /// Stands where tree-sitter's cursor stood: iteration needs none.
@@ -168,6 +171,7 @@ pub(crate) fn parse(source: &str) -> Tree {
         })
         .collect();
     let root = SyntaxNode::<Lang>::new_root(parse.green);
+    let syntax = root.clone();
     let mut data: Vec<Data> = Vec::new();
     // The open real nodes; `None` entries are hidden nodes (`WITH {…}`).
     let mut open: Vec<Option<u32>> = Vec::new();
@@ -250,6 +254,7 @@ pub(crate) fn parse(source: &str) -> Tree {
         data,
         problems,
         error_at,
+        syntax,
     }
 }
 

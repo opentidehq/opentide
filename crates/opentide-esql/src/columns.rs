@@ -9,8 +9,11 @@
 //! unnamed expression Kibana may re-print) makes it unknown again, and the
 //! function returns `None` rather than guess.
 
+use crate::gates::{SyntaxElement, first_token, nodes_after, parts, text_of};
+use crate::syntax::SyntaxKind as K;
 use crate::tree::Node;
-use crate::{string_value, text};
+use crate::{SyntaxNode, string_value, text};
+use rowan::NodeOrToken;
 
 /// Column names a query outputs, in order, when they can be known without the
 /// index mappings; `None` otherwise.
@@ -36,17 +39,14 @@ use crate::{string_value, text};
 /// does (`count(*)`); aggregating queries reach Elasticsearch unchanged.
 pub fn output_columns(source: &str) -> Option<Vec<String>> {
     let tree = crate::tree::parse_tree(source)?;
-    let root = tree.root_node();
-    if root.has_error() {
+    if tree.root_node().has_error() {
         return None;
     }
-    let mut cursor = root.walk();
-    let query = root
-        .named_children(&mut cursor)
-        .find(|c| c.kind() == "query")?;
-    let mut columns = source_columns(query.child_by_field_name("source")?, source)?;
-    let mut cursor = query.walk();
-    for command in query.children_by_field_name("command", &mut cursor) {
+    let query = tree.syntax.children().find(|c| c.kind() == K::QUERY)?;
+    let parts = parts(&query);
+    let mut commands = parts.iter().filter_map(SyntaxElement::as_node);
+    let mut columns = source_columns(commands.next()?, source)?;
+    for command in commands {
         columns = apply(command, source, columns)?;
     }
     columns
@@ -55,16 +55,61 @@ pub fn output_columns(source: &str) -> Option<Vec<String>> {
 /// `Some(None)`: the pipeline goes on with unknown columns. `None`: give up.
 type Columns = Option<Vec<String>>;
 
-fn source_columns(node: Node, source: &str) -> Option<Columns> {
+/// The nodes of `parts` (comments aside), each with its position there.
+fn nodes(parts: &[SyntaxElement]) -> impl Iterator<Item = (usize, &SyntaxNode)> {
+    parts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| Some((i, p.as_node()?)))
+}
+
+/// The nodes of `parts` before `at` (all of them without one).
+fn nodes_before(parts: &[SyntaxElement], at: Option<usize>) -> impl Iterator<Item = &SyntaxNode> {
+    nodes(parts)
+        .take_while(move |(i, _)| at.is_none_or(|at| *i < at))
+        .map(|(_, n)| n)
+}
+
+/// An assignment's (`name = value`) name and value: the first node before
+/// `=`, and the first node after it (the first node without one). Another
+/// node (an `ERROR`) has neither. The parser reads an aggregate's `WHERE`
+/// after its `=` (`processing.rs`, `field`), and only the name of an
+/// aggregate is read.
+fn assignment(node: &SyntaxNode) -> (Option<SyntaxNode>, Option<SyntaxNode>) {
+    if !matches!(
+        node.kind(),
+        K::AGGREGATE_FIELD | K::FIELD_ASSIGNMENT_OR_EXPRESSION
+    ) {
+        return (None, None);
+    }
+    let parts = parts(node);
+    let eq = first_token(&parts, &[K::EQ]);
+    let (mut name, mut value) = (None, None);
+    for (i, n) in nodes(&parts) {
+        let slot = if eq.is_some_and(|e| i < e) {
+            &mut name
+        } else {
+            &mut value
+        };
+        slot.get_or_insert_with(|| n.clone());
+    }
+    (name, value)
+}
+
+/// The nodes of `kind` among a command's nodes.
+fn child_of(parts: &[SyntaxElement], kind: K) -> Vec<&SyntaxNode> {
+    nodes(parts)
+        .map(|(_, n)| n)
+        .filter(|n| n.kind() == kind)
+        .collect()
+}
+
+fn source_columns(node: &SyntaxNode, source: &str) -> Option<Columns> {
     match node.kind() {
-        "from_command" | "ts_command" => Some(None),
-        "row_command" => {
+        K::FROM_COMMAND | K::TS_COMMAND => Some(None),
+        K::ROW_COMMAND => {
             let mut cols = Vec::new();
-            let mut cursor = node.walk();
-            for field in node.named_children(&mut cursor) {
-                if field.kind() != "field_assignment_or_expression" {
-                    continue;
-                }
+            for field in child_of(&parts(node), K::FIELD_ASSIGNMENT_OR_EXPRESSION) {
                 define(&mut cols, field_name(field, source, false)?);
             }
             Some(Some(cols))
@@ -73,16 +118,26 @@ fn source_columns(node: Node, source: &str) -> Option<Columns> {
     }
 }
 
-fn apply(command: Node, source: &str, columns: Columns) -> Option<Columns> {
+#[expect(
+    clippy::too_many_lines,
+    reason = "one arm per command, as the pipeline reads them"
+)]
+fn apply(command: &SyntaxNode, source: &str, columns: Columns) -> Option<Columns> {
+    let own = parts(command);
     match command.kind() {
-        "where_command" | "sort_command" | "limit_command" | "sample_command"
-        | "mv_expand_command" | "dedup_command" | "fill_null_command" => Some(columns),
-        "keep_command" => keep(command, source, columns.as_deref()),
-        "drop_command" => {
+        K::WHERE_COMMAND
+        | K::SORT_COMMAND
+        | K::LIMIT_COMMAND
+        | K::SAMPLE_COMMAND
+        | K::MV_EXPAND_COMMAND
+        | K::DEDUP_COMMAND
+        | K::FILL_NULL_COMMAND => Some(columns),
+        K::KEEP_COMMAND => keep(&own, source, columns.as_deref()),
+        K::DROP_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            for pattern in name_patterns(command, source)? {
+            for pattern in name_patterns(&own, source)? {
                 let before = cols.len();
                 cols.retain(|c| !pattern.matches(c));
                 if before == cols.len() {
@@ -91,17 +146,23 @@ fn apply(command: Node, source: &str, columns: Columns) -> Option<Columns> {
             }
             Some(Some(cols))
         }
-        "rename_command" => {
+        K::RENAME_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let mut cursor = command.walk();
-            for clause in command.named_children(&mut cursor) {
-                if clause.kind() != "rename_clause" {
-                    continue;
-                }
-                let old = Pattern::of(clause.child_by_field_name("old")?, source)?.literal()?;
-                let new = Pattern::of(clause.child_by_field_name("new")?, source)?.literal()?;
+            for clause in child_of(&own, K::RENAME_CLAUSE) {
+                // `old AS new`, or `new = old`.
+                let clause_parts = parts(clause);
+                let as_first = first_token(&clause_parts, &[K::AS_KW]).is_some();
+                let mut names = nodes(&clause_parts).map(|(_, n)| n);
+                let (first, second) = (names.next(), names.next());
+                let (old, new) = if as_first {
+                    (first?, second?)
+                } else {
+                    (second?, first?)
+                };
+                let old = Pattern::of(old, source)?.literal()?;
+                let new = Pattern::of(new, source)?.literal()?;
                 let mut at = cols.iter().position(|c| *c == old)?;
                 if old != new {
                     // A column already called `new` is replaced; the renamed
@@ -117,80 +178,70 @@ fn apply(command: Node, source: &str, columns: Columns) -> Option<Columns> {
             }
             Some(Some(cols))
         }
-        "eval_command" => {
+        K::EVAL_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let mut cursor = command.walk();
-            for field in command.named_children(&mut cursor) {
-                if field.kind() == "field_assignment_or_expression" {
-                    define(&mut cols, field_name(field, source, false)?);
-                }
+            for field in child_of(&own, K::FIELD_ASSIGNMENT_OR_EXPRESSION) {
+                define(&mut cols, field_name(field, source, false)?);
             }
             Some(Some(cols))
         }
-        "stats_command" => {
+        K::STATS_COMMAND => {
             let mut cols: Vec<String> = Vec::new();
-            let mut cursor = command.walk();
-            let aggregates: Vec<Node> = command
-                .children_by_field_name("aggregate", &mut cursor)
-                .collect();
-            for agg in aggregates {
-                let name = match agg.child_by_field_name("name") {
-                    Some(name) => qualified(name, source)?,
+            let by = first_token(&own, &[K::BY_KW]);
+            for agg in nodes_before(&own, by) {
+                let name = match assignment(agg).0 {
+                    Some(name) => qualified_of(&name, source)?,
                     None => verbatim(agg, source)?,
                 };
                 push_unique(&mut cols, name)?;
             }
-            let mut cursor = command.walk();
-            let groups: Vec<Node> = command.children_by_field_name("by", &mut cursor).collect();
-            for group in groups {
+            for group in by.map(|by| nodes_after(&own, by)).into_iter().flatten() {
                 push_unique(&mut cols, field_name(group, source, true)?)?;
             }
             Some(Some(cols))
         }
-        "inline_stats_command" => {
+        K::INLINE_STATS_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let mut cursor = command.walk();
-            if command
-                .children_by_field_name("by", &mut cursor)
-                .any(|g| g.child_by_field_name("name").is_some())
+            let by = first_token(&own, &[K::BY_KW]);
+            if by
+                .map(|by| nodes_after(&own, by))
+                .into_iter()
+                .flatten()
+                .any(|g| assignment(g).0.is_some())
             {
                 return None;
             }
-            let mut cursor = command.walk();
-            let aggregates: Vec<Node> = command
-                .children_by_field_name("aggregate", &mut cursor)
-                .collect();
-            for agg in aggregates {
-                let name = qualified(agg.child_by_field_name("name")?, source)?;
-                define(&mut cols, name);
+            for agg in nodes_before(&own, by) {
+                define(&mut cols, qualified_of(&assignment(agg).0?, source)?);
             }
             Some(Some(cols))
         }
-        "dissect_command" => {
+        K::DISSECT_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let pattern = string_value(text(command.child_by_field_name("pattern")?, source))?;
-            for key in dissect_keys(&pattern)? {
+            // The input, then the pattern; the options after.
+            let pattern = nodes(&own)
+                .map(|(_, n)| n)
+                .skip(1)
+                .find(|n| n.kind() != K::COMMAND_OPTION)?;
+            for key in dissect_keys(&string_value(text_of(pattern, source))?)? {
                 define(&mut cols, key);
             }
             Some(Some(cols))
         }
-        "grok_command" => {
+        K::GROK_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
             let mut names = Vec::new();
-            let mut cursor = command.walk();
-            let patterns: Vec<Node> = command
-                .children_by_field_name("pattern", &mut cursor)
-                .collect();
-            for pattern in patterns {
-                names.extend(grok_names(&string_value(text(pattern, source))?)?);
+            // The input, then the patterns.
+            for pattern in nodes(&own).map(|(_, n)| n).skip(1) {
+                names.extend(grok_names(&string_value(text_of(pattern, source))?)?);
             }
             // Elasticsearch adds grok columns sorted by name.
             names.sort();
@@ -200,66 +251,78 @@ fn apply(command: Node, source: &str, columns: Columns) -> Option<Columns> {
             }
             Some(Some(cols))
         }
-        "enrich_command" => {
+        K::ENRICH_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let mut cursor = command.walk();
-            let clauses: Vec<Node> = command
-                .children_by_field_name("with", &mut cursor)
-                .collect();
+            // The clauses follow `WITH`; the parser reads the policy before
+            // it (`processing.rs`, `enrich`).
+            let clauses: Vec<&SyntaxNode> = first_token(&own, &[K::WITH_KW])
+                .map(|with| nodes_after(&own, with).collect())
+                .unwrap_or_default();
             if clauses.is_empty() {
                 return Some(None);
             }
             for clause in clauses {
-                let target = clause
-                    .child_by_field_name("new")
-                    .or_else(|| clause.child_by_field_name("field"))?;
-                define(&mut cols, Pattern::of(target, source)?.literal()?);
+                // `new = field`, or `field`: the first name either way.
+                if clause.kind() != K::ENRICH_WITH_CLAUSE {
+                    return None;
+                }
+                let target = nodes(&parts(clause)).map(|(_, n)| n.clone()).next()?;
+                define(&mut cols, Pattern::of(&target, source)?.literal()?);
             }
             Some(Some(cols))
         }
-        "change_point_command" => {
+        K::CHANGE_POINT_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let type_name = match command.child_by_field_name("type_name") {
-                Some(n) => qualified(n, source)?,
+            // The two names after `AS`: the type's, the p-value's. The parser
+            // reads `BY` after them (`processing.rs`, `change_point`).
+            let mut names = first_token(&own, &[K::AS_KW])
+                .map(|at| nodes_after(&own, at))
+                .into_iter()
+                .flatten();
+            let type_name = match names.next() {
+                Some(n) => qualified_of(n, source)?,
                 None => "type".to_string(),
             };
-            let pvalue = match command.child_by_field_name("pvalue_name") {
-                Some(n) => qualified(n, source)?,
+            let pvalue = match names.next() {
+                Some(n) => qualified_of(n, source)?,
                 None => "pvalue".to_string(),
             };
             define(&mut cols, type_name);
             define(&mut cols, pvalue);
             Some(Some(cols))
         }
-        "completion_command" | "rerank_command" => {
+        K::COMPLETION_COMMAND | K::RERANK_COMMAND => {
             let Some(mut cols) = columns else {
                 return Some(None);
             };
-            let name = match command.child_by_field_name("target") {
-                Some(n) => qualified(n, source)?,
-                None if command.kind() == "completion_command" => "completion".to_string(),
+            // The target: a name before `=`.
+            let eq = first_token(&own, &[K::EQ]);
+            let target = nodes_before(&own, eq.or(Some(0))).find(|n| n.kind() != K::MAP_EXPRESSION);
+            let name = match target {
+                Some(n) => qualified_of(n, source)?,
+                None if command.kind() == K::COMPLETION_COMMAND => "completion".to_string(),
                 None => "_score".to_string(),
             };
             define(&mut cols, name);
             Some(Some(cols))
         }
-        "join_command"
-        | "fork_command"
-        | "fuse_command"
-        | "uri_parts_command"
-        | "registered_domain_command"
-        | "user_agent_command"
-        | "ip_location_command"
-        | "metrics_info_command"
-        | "ts_info_command"
-        | "ts_collapse_command"
-        | "mmr_command"
-        | "highlight_command"
-        | "dense_vector_command" => Some(None),
+        K::JOIN_COMMAND
+        | K::FORK_COMMAND
+        | K::FUSE_COMMAND
+        | K::URI_PARTS_COMMAND
+        | K::REGISTERED_DOMAIN_COMMAND
+        | K::USER_AGENT_COMMAND
+        | K::IP_LOCATION_COMMAND
+        | K::METRICS_INFO_COMMAND
+        | K::TS_INFO_COMMAND
+        | K::TS_COLLAPSE_COMMAND
+        | K::MMR_COMMAND
+        | K::HIGHLIGHT_COMMAND
+        | K::DENSE_VECTOR_COMMAND => Some(None),
         _ => None,
     }
 }
@@ -281,15 +344,16 @@ fn push_unique(cols: &mut Vec<String>, name: String) -> Option<()> {
 /// The column name of an `EVAL`/`ROW`/`BY` item: its `name =`, or a plain
 /// field reference. Other unnamed expressions are named by their text, which
 /// is only trusted for `STATS … BY` (`by_text`).
-fn field_name(field: Node, source: &str, by_text: bool) -> Option<String> {
-    if let Some(name) = field.child_by_field_name("name") {
-        return qualified(name, source);
+fn field_name(field: &SyntaxNode, source: &str, by_text: bool) -> Option<String> {
+    let (name, value) = assignment(field);
+    if let Some(name) = name {
+        return qualified_of(&name, source);
     }
-    let value = field.child_by_field_name("value")?;
-    if value.kind() == "qualified_name" {
-        let name = qualified(value, source)?;
+    let value = value?;
+    if value.kind() == K::QUALIFIED_NAME {
+        let name = qualified_of(&value, source)?;
         // `EVAL x` names the column by its text; `` `x` `` would keep the backticks.
-        if by_text || text(value, source) == name {
+        if by_text || text_of(&value, source) == name {
             return Some(name);
         }
         return None;
@@ -302,9 +366,36 @@ fn field_name(field: Node, source: &str, by_text: bool) -> Option<String> {
 
 /// Exact source text, the name Elasticsearch gives an unnamed expression.
 /// Comments inside would be part of it; give up on those.
-fn verbatim(node: Node, source: &str) -> Option<String> {
-    let t = text(node, source).trim();
+fn verbatim(node: &SyntaxNode, source: &str) -> Option<String> {
+    let t = text_of(node, source).trim();
     (!t.contains("/*") && !t.contains("//") && !t.is_empty()).then(|| t.to_string())
+}
+
+/// The parts of a name (`a.b`, `a*.b`): its nodes and comments (a one-token
+/// node, `Identifier`, has neither).
+fn name_parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
+    node.children_with_tokens()
+        .filter(|c| c.as_node().is_some() || c.kind() == K::COMMENT)
+        .collect()
+}
+
+/// [`qualified`] of a rowan node: a dotted name with backquoted parts
+/// unquoted. `None` for parameters.
+pub(crate) fn qualified_of(node: &SyntaxNode, source: &str) -> Option<String> {
+    let mut out = Vec::new();
+    for part in name_parts(node) {
+        let NodeOrToken::Node(part) = part else {
+            return None;
+        };
+        match part.kind() {
+            K::IDENTIFIER | K::ID_PATTERN | K::JOIN_QUALIFIER => {
+                out.push(text_of(&part, source).to_string());
+            }
+            K::QUOTED_IDENTIFIER => out.push(unquote(text_of(&part, source))),
+            _ => return None,
+        }
+    }
+    (!out.is_empty()).then(|| out.join("."))
 }
 
 /// A dotted name with backquoted parts unquoted. `None` for parameters.
@@ -340,18 +431,20 @@ enum Piece {
 }
 
 impl Pattern {
-    fn of(node: Node, source: &str) -> Option<Self> {
+    fn of(node: &SyntaxNode, source: &str) -> Option<Self> {
         let mut pieces = Vec::new();
-        let mut cursor = node.walk();
         let mut first = true;
-        for part in node.named_children(&mut cursor) {
+        for part in name_parts(node) {
             if !first {
                 pieces.push(Piece::Text(".".into()));
             }
             first = false;
+            let NodeOrToken::Node(part) = part else {
+                return None;
+            };
             match part.kind() {
-                "id_pattern" | "identifier" => {
-                    let t = text(part, source);
+                K::ID_PATTERN | K::IDENTIFIER | K::JOIN_QUALIFIER => {
+                    let t = text_of(&part, source);
                     for (i, chunk) in t.split('*').enumerate() {
                         if i > 0 {
                             pieces.push(Piece::Star);
@@ -361,7 +454,7 @@ impl Pattern {
                         }
                     }
                 }
-                "quoted_identifier" => pieces.push(Piece::Text(unquote(text(part, source)))),
+                K::QUOTED_IDENTIFIER => pieces.push(Piece::Text(unquote(text_of(&part, source)))),
                 _ => return None,
             }
         }
@@ -408,19 +501,17 @@ impl Pattern {
     }
 }
 
-fn name_patterns(command: Node, source: &str) -> Option<Vec<Pattern>> {
-    let mut cursor = command.walk();
-    command
-        .named_children(&mut cursor)
-        .filter(|c| c.kind() == "name_pattern")
+fn name_patterns(parts: &[SyntaxElement], source: &str) -> Option<Vec<Pattern>> {
+    child_of(parts, K::NAME_PATTERN)
+        .into_iter()
         .map(|c| Pattern::of(c, source))
         .collect()
 }
 
 /// `KEEP`: each column goes to the highest-ranked pattern that matches it
 /// (rightmost on a tie) and the output follows the pattern order.
-fn keep(command: Node, source: &str, input: Option<&[String]>) -> Option<Columns> {
-    let patterns = name_patterns(command, source)?;
+fn keep(parts: &[SyntaxElement], source: &str, input: Option<&[String]>) -> Option<Columns> {
+    let patterns = name_patterns(parts, source)?;
     let Some(input) = input else {
         // Unknown input: only plain names give a known output.
         let mut names: Vec<(usize, String)> = Vec::new();
@@ -714,6 +805,11 @@ mod tests {
             v(&["a", "c"])
         );
         assert_eq!(cols("ROW a = 1 | INLINE STATS COUNT(*)"), None);
+        // A named group would add a column under its new name.
+        assert_eq!(cols("ROW a = 1 | INLINE STATS c = COUNT(*) BY g = a"), None);
+        // A comment inside a name: its parts are not one name.
+        assert_eq!(cols("ROW a = 1 | EVAL b /* c */ .d = 1"), None);
+        assert_eq!(cols("ROW a = 1 | EVAL b.d = 1"), v(&["a", "b.d"]));
         assert_eq!(
             cols("ROW ip = \"1.1.1.1\" | ENRICH p ON ip WITH city = name, country"),
             v(&["ip", "city", "country"])
