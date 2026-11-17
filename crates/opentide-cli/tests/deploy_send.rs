@@ -1198,6 +1198,66 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
     );
 }
 
+/// A Sysdig rule created, then refused its runtime policies (the listing
+/// fails): its new id is still recorded, and the rule fails with Sysdig's
+/// answer.
+#[test]
+fn sysdig_records_a_rule_created_before_its_policies_failed() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(201).set_body_string(r#"{"id": 43}"#))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/policies"))
+            .respond_with(wiremock::ResponseTemplate::new(500).set_body_string("down"))
+            .mount(&server)
+            .await;
+    });
+    let uuid = "00000000-0000-4000-8099-000000000083";
+    let block = "  sysdig:\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: \
+                 spawned_process and container\n    tags: [container]\n";
+    let ws = workspace(
+        "sysdig",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\npolicies = [\"managed\"]\n",
+            server.uri()
+        ),
+        &[("a.yaml", rule("Created rule", uuid, "Created.", block))],
+    );
+    let env = Env::from_pairs([("SYSDIG_SECURE_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "sysdig",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let rows = rows(&sent);
+    assert_eq!(rows[0].0, "failed");
+    assert!(
+        rows[0]
+            .1
+            .as_deref()
+            .unwrap_or_default()
+            .contains("HTTP 500"),
+        "{rows:?}"
+    );
+    let state = std::fs::read_to_string(
+        ws.path()
+            .join(format!(".opentide/states/deployment/{uuid}.json")),
+    )
+    .unwrap();
+    assert!(state.contains("\"lab\": \"43\""), "{state}");
+}
+
 /// Runs `opentide <argv>` on the command line, in `ws`, with `env`: the
 /// exit code, stdout and stderr.
 fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String) {
