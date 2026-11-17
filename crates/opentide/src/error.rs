@@ -113,6 +113,11 @@ pub struct DeployFailed {
     /// What locates the failure (`platform`, `tenant`, `address`,
     /// `detail`), in order.
     pub fields: Vec<(String, String)>,
+    /// What the deploy did before it failed, when the caller must keep it:
+    /// an id the tenant gave the rule (`remote_id`, which deployment state
+    /// records), and the warnings and events raised before the failure.
+    #[cfg(feature = "connectors")]
+    pub partial: Option<Box<crate::connectors::DeployOutcome>>,
 }
 
 /// What a failed deploy stops ([`Error::Deploy`]).

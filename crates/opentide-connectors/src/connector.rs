@@ -75,9 +75,9 @@ pub struct DeployRequest {
     /// `opentide deploy` sets it when deployment state cannot record the new
     /// id (`deployment_state_ignored`, `deployment_state_unpersisted`). A
     /// platform that finds a recorded rule gone then fails the rule with this
-    /// failure instead of creating it; a failed deploy carries no warnings,
-    /// so its `*_rule_recreated` warning is not returned. `None` creates it
-    /// again.
+    /// failure instead of creating it; the failure's
+    /// [`DeployError::partial`] keeps a `*_rule_recreated` warning raised
+    /// before it. `None` creates it again.
     pub recreate_refusal: Option<DeployFailure>,
 }
 
@@ -156,6 +156,7 @@ impl DeployRequest {
                     scope: DeployScope::Rule,
                     failure,
                     connector: error.connector,
+                    partial: error.partial,
                 }
             }
             _ => error,
@@ -172,7 +173,7 @@ impl DeployRequest {
 ///
 /// `#[non_exhaustive]`: a [`Deployer`] outside this crate builds one with
 /// [`DeployOutcome::new`] (and [`DeployOutcome::with_warnings`]).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct DeployOutcome {
     /// The platform's identifier of the rule, kept in deployment state.
@@ -360,6 +361,13 @@ pub struct DeployError {
     /// interrupt is [`ConnectorError::Cancelled`]); boxed, to keep the error
     /// small.
     pub connector: Option<Box<ConnectorError>>,
+    /// What the deploy did before it failed, when it did something the
+    /// caller must keep: its `remote_id` is an id the tenant gave the rule,
+    /// which deployment state records (a Sysdig rule created, then refused
+    /// its runtime policies), or `None` when there is none to record; its
+    /// warnings and events are those raised before the failure. `None` when
+    /// the failure left nothing to keep.
+    pub partial: Option<Box<DeployOutcome>>,
 }
 
 impl DeployError {
@@ -369,6 +377,7 @@ impl DeployError {
             scope: DeployScope::Rule,
             failure,
             connector: None,
+            partial: None,
         }
     }
 
@@ -378,7 +387,19 @@ impl DeployError {
             scope: DeployScope::Tenant,
             failure,
             connector: None,
+            partial: None,
         }
+    }
+
+    /// The same failure, after the deploy did *partial*
+    /// ([`DeployError::partial`]): nothing is kept when it carries no id,
+    /// warning or event.
+    #[must_use]
+    pub fn with_partial(mut self, partial: DeployOutcome) -> Self {
+        let empty =
+            partial.remote_id.is_none() && partial.warnings.is_empty() && partial.events.is_empty();
+        self.partial = (!empty).then(|| Box::new(partial));
+        self
     }
 
     /// Whether the run was interrupted.
@@ -443,6 +464,7 @@ impl From<ConnectorError> for DeployError {
                 fields: located(&error),
             },
             connector: Some(Box::new(error)),
+            partial: None,
         }
     }
 }
@@ -978,8 +1000,8 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::{
-        ConnectorError, DeployError, DeployFailure, DeployRequest, DeployScope, kql_code,
-        kql_with_limit,
+        ConnectorError, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
+        DeployScope, DeployWarning, Operation, kql_code, kql_with_limit,
     };
 
     #[test]
@@ -1031,6 +1053,34 @@ mod tests {
         assert_eq!(DeployRequest::delete("r").at(fixed).time(), fixed);
         let before = jiff::Timestamp::now();
         assert!(DeployRequest::delete("r").time() >= before);
+    }
+
+    #[test]
+    fn a_failure_keeps_what_the_deploy_did_before_it() {
+        let created = DeployOutcome::new(Some("43".into()), Operation::Create).with_events(vec![
+            DeployEvent::new("sysdig_rule_created").with_field("rule_id", "43"),
+        ]);
+        let failed = DeployError::from(ConnectorError::refused("sysdig", "soc", "HTTP 409", None))
+            .with_partial(created.clone());
+        assert_eq!(failed.partial.as_deref(), Some(&created));
+        // Nothing to keep is no partial.
+        let nothing = DeployError::rule(DeployFailure::new("x", "y"))
+            .with_partial(DeployOutcome::new(None, Operation::Update));
+        assert_eq!(nothing.partial, None);
+        // A recreate refused after its warning keeps the warning.
+        let recreated =
+            DeployOutcome::new(None, Operation::Update).with_warnings(vec![DeployWarning::new(
+                "sysdig_rule_recreated",
+                "creating it again",
+            )]);
+        let request = DeployRequest::new("7", Operation::Update, b"{}".to_vec())
+            .refusing_recreate(DeployFailure::new("deployment_state_ignored", "kept out"));
+        let refused = request.refused_recreate(
+            DeployError::from(ConnectorError::refused("sysdig", "soc", "kept out", None))
+                .with_partial(recreated.clone()),
+        );
+        assert_eq!(refused.failure.code, "deployment_state_ignored");
+        assert_eq!(refused.partial.as_deref(), Some(&recreated));
     }
 
     #[test]

@@ -546,6 +546,7 @@ impl From<opentide_connectors::connector::DeployError> for Error {
             detail: failure.field("detail").map(str::to_owned),
             status: failure.status,
             fields: failure.fields.clone(),
+            partial: error.partial,
         }))
     }
 }
@@ -766,6 +767,20 @@ mod tests {
             connection.deploy.0.http.tls.verify,
             "a deploy verifies by default"
         );
+    }
+
+    #[test]
+    fn a_failed_deploy_keeps_what_it_did_before_failing() {
+        use opentide_connectors::connector::{DeployError, DeployFailure, Operation};
+        let created = DeployOutcome::new(Some("43".into()), Operation::Create);
+        let error = Error::from(
+            DeployError::rule(DeployFailure::new("sysdig_request_failed", "HTTP 409"))
+                .with_partial(created.clone()),
+        );
+        let Error::Deploy(failed) = error else {
+            panic!("{error:?}")
+        };
+        assert_eq!(failed.partial.as_deref(), Some(&created));
     }
 
     #[test]

@@ -473,7 +473,7 @@ impl<'a> From<&'a LiveCheck> for LiveCheckJson<'a> {
 
 /// A deploy's document.
 #[derive(Serialize)]
-struct DeployJson<'a> {
+pub(super) struct DeployJson<'a> {
     remote_id: Option<&'a str>,
     operation: &'static str,
     warnings: Vec<DeployWarningJson<'a>>,

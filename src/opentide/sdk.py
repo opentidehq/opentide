@@ -89,8 +89,11 @@ class OpentideError(Exception):
     deploy) or ``"tenant"`` (the tenant cannot take any rule); ``status`` is
     the HTTP status the tenant answered with, when it answered; ``fields``
     locate the failure (``platform``, ``tenant``, ``address``, ``detail``), in
-    order. Any other error's ``scope`` and ``status`` are ``None`` and its
-    ``fields`` empty.
+    order; ``partial`` is what it did before failing, when the caller must keep
+    it: a :class:`DeployOutcome` whose ``remote_id`` is an id the tenant gave the
+    rule (record it), with the warnings and events raised first. Any other
+    error's ``scope``, ``status`` and ``partial`` are ``None`` and its ``fields``
+    empty.
     """
 
     def __init__(
@@ -102,6 +105,7 @@ class OpentideError(Exception):
         scope: str | None = None,
         status: int | None = None,
         fields: dict[str, str] | None = None,
+        partial: DeployOutcome | None = None,
     ) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
@@ -110,6 +114,7 @@ class OpentideError(Exception):
         self.scope = scope
         self.status = status
         self.fields: dict[str, str] = dict(fields or {})
+        self.partial = partial
 
 
 def _load() -> None:
@@ -122,7 +127,7 @@ def _load() -> None:
 
 def _error(exc: BaseException) -> OpentideError:
     """The ``SdkError`` *exc* as :class:`OpentideError`."""
-    code, message, detail, scope, status, fields = exc.args
+    code, message, detail, scope, status, fields, partial = exc.args
     return OpentideError(
         str(code),
         str(message),
@@ -130,6 +135,7 @@ def _error(exc: BaseException) -> OpentideError:
         scope=None if scope is None else str(scope),
         status=None if status is None else int(status),
         fields={str(key): str(value) for key, value in fields},
+        partial=None if partial is None else _deploy_outcome(json.loads(partial)),
     )
 
 
@@ -456,6 +462,17 @@ class DeployOutcome:
     events: list[DeployEvent] = field(default_factory=list)
 
 
+def _deploy_outcome(data: Document) -> DeployOutcome:
+    return DeployOutcome(
+        remote_id=data["remote_id"],
+        operation=data["operation"],
+        warnings=[DeployWarning(**warning) for warning in data["warnings"]],
+        events=[
+            DeployEvent(event["name"], dict(event["fields"])) for event in data.get("events", [])
+        ],
+    )
+
+
 def _capabilities(flags: tuple[bool, bool, bool]) -> Capabilities:
     deploy, live_validation, query = flags
     return Capabilities(deploy=deploy, live_validation=live_validation, query=query)
@@ -735,15 +752,7 @@ class Connection:
             None if body is None else bytes(body),
             policies=None if policies is None else list(policies),
         )
-        return DeployOutcome(
-            remote_id=data["remote_id"],
-            operation=data["operation"],
-            warnings=[DeployWarning(**warning) for warning in data["warnings"]],
-            events=[
-                DeployEvent(event["name"], dict(event["fields"]))
-                for event in data.get("events", [])
-            ],
-        )
+        return _deploy_outcome(data)
 
     def __repr__(self) -> str:
         return f"Connection({self.platform!r}, {self.tenant!r})"

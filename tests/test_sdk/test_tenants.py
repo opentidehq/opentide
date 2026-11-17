@@ -224,6 +224,7 @@ def test_a_failed_deploy_raises_with_its_scope_and_fields(connection: Connection
     assert raised.value.fields["platform"] == "sentinel_one"
     assert raised.value.fields["tenant"] == "soc"
     assert "SentinelOne has no such rule (HTTP 404)" in raised.value.message
+    assert raised.value.partial is None
 
 
 def test_an_unreachable_tenant_fails_the_tenant() -> None:
@@ -241,6 +242,7 @@ def test_an_error_other_than_a_deploy_has_no_scope(connection: Connection) -> No
     with pytest.raises(OpentideError) as raised:
         run(connection.deploy("x", "upsert", b"{}"))  # the refusal under test
     assert (raised.value.scope, raised.value.status, raised.value.fields) == (None, None, {})
+    assert raised.value.partial is None
 
 
 class _WarningDeployer:
@@ -278,6 +280,47 @@ def test_a_deploy_returns_its_events_and_the_warnings_it_did_not_raise() -> None
     assert outcome.warnings == [DeployWarning("splunk_alert_deleted", "Rule", raised=False)]
     assert outcome.events == [DeployEvent("sysdig_rule_created", {"uuid": "u1", "rule_id": "43"})]
     assert list(outcome.events[0].fields) == ["uuid", "rule_id"]
+
+
+class _PartlyDoneDeployer:
+    """A native connection whose deploy created the rule, then failed it."""
+
+    async def deploy(self, *_args: object, **_kwargs: object) -> str:
+        from opentide._native.sdk import SdkError
+
+        partial = {
+            "remote_id": "43",
+            "operation": "create",
+            "warnings": [],
+            "events": [{"name": "sysdig_rule_created", "fields": [["rule_id", "43"]]}],
+        }
+        raise SdkError(
+            "sysdig_request_failed",
+            "update policy: HTTP 409",
+            None,
+            "rule",
+            409,
+            [("platform", "sysdig"), ("tenant", "soc")],
+            json.dumps(partial),
+        )
+
+
+def test_a_failed_deploy_keeps_what_it_did_before_failing() -> None:
+    """A rule created, then refused its policies: the error carries the new id to record."""
+    connection = Connection(_PartlyDoneDeployer())  # ty: ignore[invalid-argument-type]  # a stand-in for the native connection
+    with pytest.raises(OpentideError) as raised:
+        run(connection.deploy("", "create", b"{}"))
+    assert (raised.value.code, raised.value.scope, raised.value.status) == (
+        "sysdig_request_failed",
+        "rule",
+        409,
+    )
+    assert raised.value.partial == DeployOutcome(
+        remote_id="43",
+        operation="create",
+        warnings=[],
+        events=[DeployEvent("sysdig_rule_created", {"rule_id": "43"})],
+    )
 
 
 def test_a_deploy_returns_the_warnings_it_raised() -> None:

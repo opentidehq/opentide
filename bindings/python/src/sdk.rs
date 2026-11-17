@@ -32,7 +32,7 @@ create_exception!(
     opentide._native.sdk,
     SdkError,
     PyException,
-    "A call the SDK could not run: `args` is `(code, message, detail, scope, status, fields)`."
+    "A call the SDK could not run: `args` is `(code, message, detail, scope, status, fields, partial)`."
 );
 
 /// [`SdkError`]'s class, as `opentide._native.sdk` exports it.
@@ -69,6 +69,7 @@ fn failure(code: &str, message: impl Into<String>) -> PyErr {
         None::<&str>,
         None::<u16>,
         Vec::<(String, String)>::new(),
+        None::<String>,
     ))
 }
 
@@ -78,11 +79,12 @@ fn usage(message: String) -> PyErr {
 
 /// The facade's error as [`SdkError`]: its code, its message and, for a
 /// tenant's refusal, the vendor's words. A failed deploy's also says what it stops
-/// (`"rule"` or `"tenant"`), the HTTP status, and its fields (pairs, in
-/// order); any other error's are `None`, `None` and empty.
+/// (`"rule"` or `"tenant"`), the HTTP status, its fields (pairs, in
+/// order), and what it did before failing, as the document a deploy returns;
+/// any other error's are `None`, `None`, empty and `None`.
 fn from_facade(error: &opentide::Error) -> PyErr {
-    let (detail, scope, status, fields) = match error {
-        opentide::Error::Connector { detail, .. } => (detail.clone(), None, None, Vec::new()),
+    let (detail, scope, status, fields, partial) = match error {
+        opentide::Error::Connector { detail, .. } => (detail.clone(), None, None, Vec::new(), None),
         opentide::Error::Deploy(failed) => (
             failed.detail.clone(),
             Some(match failed.scope {
@@ -91,8 +93,12 @@ fn from_facade(error: &opentide::Error) -> PyErr {
             }),
             failed.status,
             failed.fields.clone(),
+            failed
+                .partial
+                .as_deref()
+                .and_then(|done| serde_json::to_string(&tenants::DeployJson::from(done)).ok()),
         ),
-        _ => (None, None, None, Vec::new()),
+        _ => (None, None, None, Vec::new(), None),
     };
     SdkError::new_err((
         error.code().to_owned(),
@@ -101,6 +107,7 @@ fn from_facade(error: &opentide::Error) -> PyErr {
         scope,
         status,
         fields,
+        partial,
     ))
 }
 
