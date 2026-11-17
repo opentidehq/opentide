@@ -2312,35 +2312,42 @@ impl Sender<'_, '_> {
                 else {
                     return Ok(());
                 };
-                let plan = opentide_connectors::carbon_black::ReportDeploy {
-                    uuid: rule.uuid.clone(),
-                    name: report.name,
-                    description: report.description,
-                    query: report.query,
-                    deployment: report.deployment,
-                    tags: report.tags,
-                    severity: report.severity,
-                    watchlist: report.watchlist,
-                    report: report.report.clone(),
-                    now: self.cx.now.as_second(),
+                // The report's fields, as the Deployer reads them; a rule that
+                // is not deployed retires its IOC.
+                let body = serde_json::json!({
+                    "uuid": rule.uuid,
+                    "name": report.name,
+                    "description": report.description,
+                    "query": report.query,
+                    "tags": report.tags,
+                    "severity": report.severity,
+                    "watchlist": report.watchlist,
+                    "report": report.report,
+                });
+                let operation = if report.deployment {
+                    Operation::Update
+                } else {
+                    Operation::Delete
                 };
+                let request = DeployRequest::new(
+                    rule.uuid.clone(),
+                    operation,
+                    serde_json::to_vec(&body).unwrap_or_default(),
+                )
+                .at(self.cx.now);
+                let deployer = self.deployer(platform)?;
                 let context = self.context(connection);
-                let change = self
-                    .block(
-                        opentide_connectors::carbon_black::CarbonBlack
-                            .deploy_report(context, &plan),
-                    )
+                let outcome = self
+                    .block(async {
+                        deployer
+                            .deploy(context, &request)
+                            .await
+                            .map_err(DeployError::into_connector)
+                    })
                     .map_err(|error| raised(&error))?;
-                match change {
-                    opentide_connectors::carbon_black::ReportChange::Deleted
-                        if report.report == plan.name =>
-                    {
-                        tracing::warn!(report = report.report.as_str(), "report_deleted_with_rule");
-                    }
-                    opentide_connectors::carbon_black::ReportChange::Deleted => {
-                        tracing::warn!(report = report.report.as_str(), "report_auto_deleted");
-                    }
-                    _ => {}
+                // `report_deleted_with_rule`, `report_auto_deleted`: said, not raised.
+                for warning in &outcome.warnings {
+                    tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
                 }
             }
             _ => {

@@ -16,9 +16,9 @@ use serde_json::{Map, Value};
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
-    utc_z,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
+    flatten, utc_z,
 };
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
@@ -718,7 +718,10 @@ impl Deployer for CarbonBlack {
     /// The rule's report: `body` is a JSON object with the
     /// [`ReportDeploy`] fields (`uuid`, `name`, `description`, `query`,
     /// `tags`, `severity`, `watchlist`, `report`); a disable or a delete
-    /// retires the rule's IOC.
+    /// retires the rule's IOC. A report the retirement deletes is said, not
+    /// raised: `report_deleted_with_rule` when the report was the rule's own,
+    /// `report_auto_deleted` when the rule's IOC was its last, each naming
+    /// the report. The report is stamped with the request's time.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -763,12 +766,22 @@ impl Deployer for CarbonBlack {
                 now: request.time().as_second(),
             };
             let change = self.deploy_report(cx, &plan).await?;
+            let deleted = match change {
+                ReportChange::Deleted if plan.report == plan.name => {
+                    Some("report_deleted_with_rule")
+                }
+                ReportChange::Deleted => Some("report_auto_deleted"),
+                _ => None,
+            };
             Ok(DeployOutcome {
                 events: Vec::new(),
                 remote_id: matches!(change, ReportChange::Created | ReportChange::Updated)
                     .then(|| request.rule_id.clone()),
                 operation: request.operation,
-                warnings: Vec::new(),
+                warnings: deleted
+                    .map(|code| DeployWarning::new(code, plan.report.clone()).unraised())
+                    .into_iter()
+                    .collect(),
             })
         })
     }

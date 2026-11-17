@@ -219,3 +219,66 @@ fn carbon_black_validate_asks_search_validation() {
         other => panic!("{other:?}"),
     }
 }
+
+/// The same steps through the `Deployer`, as `opentide deploy` sends them:
+/// the report's fields as the body, a retirement as a delete, the request's
+/// clock as the report's timestamp. The requests are the recording's, and a
+/// deleted report is said (`report_deleted_with_rule`), not raised.
+#[test]
+fn carbon_black_the_deployer_sends_what_the_python_deployer_sent() {
+    use opentide_connectors::connector::{
+        DeployRequest, DeployScope, DeployWarning, Deployer, Operation,
+    };
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let now = jiff::Timestamp::from_second(*now).unwrap();
+    let tenant = replay("carbon_black/deploy");
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for step in items(inputs.get("deploy").unwrap()) {
+            let plan = plan(step, 0);
+            let body = serde_json::json!({
+                "uuid": plan.uuid,
+                "name": plan.name,
+                "description": plan.description,
+                "query": plan.query,
+                "tags": plan.tags,
+                "severity": plan.severity,
+                "watchlist": plan.watchlist,
+                "report": plan.report,
+            });
+            let operation = if plan.deployment {
+                Operation::Update
+            } else {
+                Operation::Delete
+            };
+            let request = DeployRequest::new(
+                plan.uuid.clone(),
+                operation,
+                serde_json::to_vec(&body).unwrap(),
+            )
+            .at(now);
+            outcomes.push(CarbonBlack.deploy(tenant.cx(), &request).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    let warnings: Vec<Vec<DeployWarning>> = outcomes[..5]
+        .iter()
+        .map(|outcome| outcome.as_ref().unwrap().warnings.clone())
+        .collect();
+    let deleted = warnings[4].first().unwrap();
+    assert_eq!(deleted.code, "report_deleted_with_rule");
+    // It names the report, as the command line logs it.
+    let fifth = &items(inputs.get("deploy").unwrap())[4];
+    assert_eq!(deleted.message, plan(fifth, 0).report);
+    assert!(!deleted.raised);
+    assert!(warnings[..4].iter().all(Vec::is_empty), "{warnings:?}");
+    // The watchlist that does not exist fails the rule.
+    let refused = outcomes[5].as_ref().unwrap_err();
+    assert_eq!(refused.scope, DeployScope::Rule);
+    assert_eq!(refused.failure.code, "tenant_refused");
+}
