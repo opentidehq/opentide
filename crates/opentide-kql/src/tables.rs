@@ -5,7 +5,7 @@
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 const AZURE_MONITOR_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -24,7 +24,8 @@ pub struct AzureMonitorTable {
     pub docs: String,
     #[serde(default)]
     pub categories: Vec<String>,
-    pub citation: String,
+    /// The reference page, shared by the columns of each profile (#1071).
+    pub citation: Arc<str>,
     /// Every column; `None` for a table whose columns depend on what writes
     /// to it (AzureDiagnostics).
     #[serde(default)]
@@ -42,7 +43,7 @@ pub struct AzureMonitorColumn {
     /// where the reference has none or the column comes from Azure-Sentinel's
     /// validation schemas.
     #[serde(default)]
-    pub description: Option<String>,
+    pub description: Option<Arc<str>>,
 }
 
 /// The whole file, as the test reads it to compare.
