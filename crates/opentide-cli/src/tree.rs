@@ -1552,6 +1552,11 @@ pub struct ValidateArgs {
     #[command(flatten)]
     pub strictness: QueryStrictness,
     #[arg(
+        long = "allow-empty",
+        help = "With --strict: pass a full run that finds no detection objects (the commit hook setup writes passes it)"
+    )]
+    pub allow_empty: bool,
+    #[arg(
         long = "fix",
         help = "Apply every safe fix (vocabulary typos), then validate again"
     )]
