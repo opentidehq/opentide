@@ -247,9 +247,8 @@ pub(crate) fn path_key(path: &str) -> String {
 }
 
 /// The key a root is compared under: its [`path_key`] without trailing
-/// separators, so `/w/` (a client that sends its folder with a slash, as
-/// Emacs eglot does) and `/w` are one root. A bare `/` and a drive root
-/// (`c:/`) keep theirs.
+/// separators, so `/w/` (a client that sends its folder with a slash) and
+/// `/w` are one root. A bare `/` and a drive root (`c:/`) keep theirs.
 pub(crate) fn root_key(path: &str) -> String {
     let key = path_key(path);
     let trimmed = key.trim_end_matches('/');
@@ -788,10 +787,10 @@ impl Session {
     /// Install `root`'s catalogs and declared datasets in the engine, unless
     /// they are installed already. With one root this happens once.
     ///
-    /// The installation is process-wide and takes no lock (opentide-cli's
-    /// `queries::ENGINE`): a `validate` or `lint` run in the same process
-    /// restores the datasets it found when it ends, over any installed here
-    /// meanwhile.
+    /// The installation is process-wide and takes no lock. A `validate` or
+    /// `lint` run in the same process neither reads nor replaces it: each
+    /// carries its own workspace's datasets (`opentide_analysis::Datasets`,
+    /// #1142).
     fn activate(&self, root: Option<usize>) {
         if self.active.get() == Some(root) {
             return;

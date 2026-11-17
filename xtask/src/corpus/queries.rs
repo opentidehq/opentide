@@ -67,9 +67,6 @@ impl QueryCheck for CountingQueries {
         as_warnings: bool,
     ) -> QueryFindings {
         let found = opentide_cli::queries::EngineQueries.check(ws, objects, as_warnings);
-        let _engine = opentide_cli::queries::ENGINE
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let profiles = opentide_cli::queries::Profiles::install(ws.fs().as_ref(), Some(ws.root()));
         let mut others = self
             .others
@@ -272,9 +269,6 @@ pub fn rust_lint(dir: &Path, command: &[String]) -> Result<Vec<Json>> {
         },
     )
     .map_err(|error| anyhow!("{}: open: {error}", dir.display()))?;
-    let _engine = opentide_cli::queries::ENGINE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let queries = opentide_cli::queries::EngineLintQueries::install(&OsFs, workspace.root());
     let report = workspace.lint(
         None,

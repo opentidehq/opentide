@@ -241,6 +241,9 @@ pub struct LanguageServer {
     pub advice: Option<String>,
     /// The engine's view of the workspace, for [`LanguageServer::hover`].
     host: Option<Arc<MemoryWorkspace>>,
+    /// The workspace's catalog, which [`LanguageServer::hover`] enters on
+    /// its thread as the checks did (#1142).
+    catalog: Option<opentide_analysis::Catalog>,
 }
 
 impl std::fmt::Debug for LanguageServer {
@@ -264,6 +267,10 @@ impl LanguageServer {
     /// `text`, as Markdown; `None` where it has nothing to say.
     pub fn hover(&self, text: &str, line: usize, column: usize) -> Option<String> {
         let host = self.host.as_ref()?;
+        let _catalog = self
+            .catalog
+            .as_ref()
+            .and_then(|catalog| opentide_analysis::enter_catalog(catalog).ok());
         let offset = LineStarts::new(text).offset(text, line, column);
         opentide_analysis::hover(host.as_ref(), LanguageId::TideYaml, text, offset)
     }
@@ -799,17 +806,17 @@ fn check_files(
     root: &Path,
     catalog: &opentide_analysis::Catalog,
 ) -> LanguageServer {
-    let _engine = crate::queries::ENGINE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // The declared datasets in use before the catalog's go back at the end.
-    let _restore = opentide_analysis::save_visibility();
-    // opentide's own catalog for the workspace, as the Python host installs
-    // it; when it cannot be installed, the engine's bundled one stays.
-    let _ = opentide_analysis::install_catalog(catalog);
+    // The catalog the models generate for this workspace (its Tide fields
+    // and declared datasets), entered on this thread for these checks only
+    // (#1142): nothing is installed for the process, so no lock is needed
+    // and nothing is left behind when the scope drops. A catalog that does
+    // not parse leaves the process's in use.
+    let _catalog = opentide_analysis::enter_catalog(catalog).ok();
     // The workspace's declared datasets and Elastic tenants, as the editor
     // reads them.
     let profiles = crate::queries::Profiles::install(&opentide_workspace::OsFs, Some(root));
+    // The engine checks this thread runs below use them (#1142).
+    let datasets = profiles.enter();
     let index = workspace.index();
     let mut paths: Vec<PathBuf> = index.file_paths.values().cloned().collect();
     paths.sort();
@@ -886,11 +893,12 @@ fn check_files(
         let key = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
         findings.insert(key, placed);
     }
-    drop(profiles);
+    drop(datasets);
     LanguageServer {
         findings,
         unavailable: None,
         advice: None,
         host: Some(host),
+        catalog: Some(catalog.clone()),
     }
 }

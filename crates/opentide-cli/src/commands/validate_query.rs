@@ -14,7 +14,6 @@
 //! is [`plugin_live`]'s (UC-4.5, #835).
 
 use std::path::{Path, PathBuf};
-use std::sync::PoisonError;
 
 use opentide_analysis::{LanguageId, Severity as EngineSeverity};
 use opentide_compile::plan::Scope;
@@ -26,7 +25,7 @@ use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
 use crate::json::Json;
-use crate::queries::{CheckedQuery, ENGINE, Finding, Profiles, REPORTED_AS_WARNING_NOTE};
+use crate::queries::{CheckedQuery, Finding, Profiles, REPORTED_AS_WARNING_NOTE};
 use crate::render::diagnostic::{Diagnostic, Severity, SourceFiles, relative_path};
 use crate::render::outcome::OutcomeKind;
 
@@ -892,9 +891,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             scope_label = None;
         }
     }
-    // One engine installation for the run: the workspace's datasets apply to
-    // the rules' queries and to the query files'.
-    let engine = ENGINE.lock().unwrap_or_else(PoisonError::into_inner);
+    // The workspace's datasets apply to the rules' queries and to the query
+    // files'.
     let profiles = Profiles::install(fs, Some(&root));
     let mut checks: Vec<Check> = Vec::new();
     let mut unreadable: Vec<Diagnostic> = Vec::new();
@@ -975,7 +973,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         offline_languages(name)
                             .is_some_and(|languages| languages.contains(&language.as_str()))
                     });
-                    let findings = crate::queries::check_query_text(&text, language, platform);
+                    let findings = profiles.check_query(&text, language, platform, None);
                     checks.push(Check {
                         file_path: file_path.clone(),
                         path: shown.clone(),
@@ -997,9 +995,6 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             cannot_read.push(format!("{target}: {problem}"));
         }
     }
-    // The datasets in use before go back while the engines are still held.
-    drop(profiles);
-    drop(engine);
     let base = || -> Vec<(String, Json)> {
         vec![
             (

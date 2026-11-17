@@ -148,6 +148,17 @@ fn the_catalogue_comes_from_the_workspace() {
     );
 }
 
+/// #1142: the language server's check enters the workspace's catalog on
+/// its own thread and installs nothing: after it, this thread's field
+/// catalog is not a workspace's. It used to stay installed for the process.
+#[test]
+fn checking_the_workspace_leaves_no_catalog_installed() {
+    let (_base, repo) = tutorial();
+    let app = open(&repo);
+    assert!(app.catalogue.is_some());
+    assert!(!opentide_analysis::catalog_is_workspace());
+}
+
 #[test]
 fn the_tree_nests_threats_objectives_and_rules_with_counts() {
     let (_base, repo) = tutorial();

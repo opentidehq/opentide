@@ -80,7 +80,7 @@ fn sources(tree: &Tree, source: &str) -> Option<Vec<(String, ByteSpan)>> {
 /// does not parse.
 pub fn source_indices(source: &str) -> Option<Vec<String>> {
     let tree = crate::tree::parse_tree(source)?;
-    if tree.root_node().has_error() {
+    if tree.has_error() {
         return None;
     }
     sources(&tree, source).map(|s| s.into_iter().map(|(n, _)| n).collect())
@@ -88,7 +88,7 @@ pub fn source_indices(source: &str) -> Option<Vec<String>> {
 
 /// The dataset and ECS diagnostics `analyze_for` adds.
 pub(crate) fn dataset_diagnostics(tree: &Tree, source: &str) -> Vec<Diagnostic> {
-    if tree.root_node().has_error() {
+    if tree.has_error() {
         return Vec::new();
     }
     let Some(indices) = sources(tree, source) else {
@@ -119,7 +119,7 @@ fn field_diagnostics(source: &str) -> Vec<Diagnostic> {
     let Some(tree) = crate::tree::parse_tree(source) else {
         return Vec::new();
     };
-    if tree.root_node().has_error() {
+    if tree.has_error() {
         return Vec::new();
     }
     match query_node(&tree) {

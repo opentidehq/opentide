@@ -516,11 +516,11 @@ impl Catalog {
     /// query whose text is `source`: what every query check, hover and
     /// completion reads. Without declared columns for the profile's platform
     /// it is the cached catalog itself; with them, a copy built once per set
-    /// of declarations ([`Catalog::with_declared_columns`]). A name the query
-    /// reads that is in neither, but that a declared pattern with columns
-    /// matches (`Vendor*_CL`), gets a copy of that copy with the name's
-    /// table added, kept until the query reads another such name. `Core` has
-    /// no tables and takes none.
+    /// of declarations ([`Catalog::with_declared_columns`]), the four most
+    /// recently used kept. A name the query reads that is in neither, but
+    /// that a declared pattern with columns matches (`Vendor*_CL`), gets a
+    /// copy of that copy with the name's table added, the two most recent
+    /// kept. `Core` has no tables and takes none.
     pub fn for_workspace(profile: Profile, source: &str) -> CatalogRef {
         let bundled = Self::cached(profile);
         if profile == Profile::Core {
@@ -539,8 +539,11 @@ impl Catalog {
             .filter(|n| !n.contains('*'))
             .cloned()
             .collect();
-        type Cache = Mutex<Option<(Vec<DeclaredSource>, Arc<Catalog>)>>;
-        type QueryCache = Mutex<Option<(Vec<DeclaredSource>, Vec<String>, Arc<Catalog>)>>;
+        // What a catalog is built from: the sources with columns and every
+        // declared name, which a pattern's tables are matched against.
+        type Key = (Vec<DeclaredSource>, Vec<String>);
+        type Cache = Mutex<Recent<Key, Arc<Catalog>>>;
+        type QueryCache = Mutex<Recent<(Key, Vec<String>), Arc<Catalog>>>;
         static SENTINEL: OnceLock<Cache> = OnceLock::new();
         static DEFENDER: OnceLock<Cache> = OnceLock::new();
         static SENTINEL_QUERY: OnceLock<QueryCache> = OnceLock::new();
@@ -549,20 +552,12 @@ impl Catalog {
             Profile::Defender => (&DEFENDER, &DEFENDER_QUERY),
             _ => (&SENTINEL, &SENTINEL_QUERY),
         };
-        let workspace = {
-            let mut cached = cache
-                .get_or_init(Default::default)
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            match cached.as_ref() {
-                Some((sources, catalog)) if *sources == declared => catalog.clone(),
-                _ => {
-                    let catalog = Arc::new(bundled.with_declared_columns(&declared, &exact));
-                    *cached = Some((declared.clone(), catalog.clone()));
-                    catalog
-                }
-            }
-        };
+        let cache = cache.get_or_init(Default::default);
+        let key = (declared, exact);
+        let workspace = Recent::get_or_build(cache, RECENT_CATALOGS, &key, || {
+            bundled.with_declared_columns(&key.0, &key.1)
+        });
+        let declared = &key.0;
         // Names the query reads that only a declared pattern knows.
         let patterns: Vec<&DeclaredSource> =
             declared.iter().filter(|s| s.name.contains('*')).collect();
@@ -580,21 +575,14 @@ impl Catalog {
         }
         extra.sort();
         extra.dedup();
-        let mut cached = query_cache
-            .get_or_init(Default::default)
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some((sources, names, catalog)) = cached.as_ref()
-            && *sources == declared
-            && *names == extra
-        {
-            return CatalogRef::Declared(catalog.clone());
-        }
-        let mut catalog = (*workspace).clone();
-        let targets = declared_targets(&patterns, extra.iter().map(String::as_str));
-        catalog.apply_declared(targets);
-        let catalog = Arc::new(catalog);
-        *cached = Some((declared, extra, catalog.clone()));
+        let query_cache = query_cache.get_or_init(Default::default);
+        let query_key = (key.clone(), extra);
+        let catalog = Recent::get_or_build(query_cache, RECENT_QUERY_CATALOGS, &query_key, || {
+            let mut catalog = (*workspace).clone();
+            let targets = declared_targets(&patterns, query_key.1.iter().map(String::as_str));
+            catalog.apply_declared(targets);
+            catalog
+        });
         CatalogRef::Declared(catalog)
     }
 
@@ -1906,9 +1894,133 @@ fn word_at(source: &str, offset: usize) -> Option<String> {
     }
 }
 
+/// How many catalogs built from a workspace's declarations each profile
+/// keeps: runs of a few workspaces at once (#1142) find theirs instead of
+/// rebuilding one another's.
+const RECENT_CATALOGS: usize = 4;
+
+/// How many copies with a query's pattern tables each profile keeps: a
+/// copy is a whole catalog, and a query that reads another such name makes
+/// another one.
+const RECENT_QUERY_CATALOGS: usize = 2;
+
+/// The catalogs built most recently, newest first, by what they were built
+/// from.
+struct Recent<K, V> {
+    slots: Vec<(K, V)>,
+}
+
+impl<K, V> Default for Recent<K, V> {
+    fn default() -> Self {
+        Self { slots: Vec::new() }
+    }
+}
+
+impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
+    /// The catalog built from `key`, else `build`'s, kept among the `keep`
+    /// most recent. The lock is not held while it builds: a run checking
+    /// another workspace meanwhile finds its own. Two runs that build the
+    /// same one at once keep the first. The key is copied only to keep it.
+    fn get_or_build(
+        cache: &Mutex<Self>,
+        keep: usize,
+        key: &K,
+        build: impl FnOnce() -> Catalog,
+    ) -> Arc<Catalog> {
+        let lock = || {
+            cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+        };
+        if let Some(found) = lock().take(key) {
+            return found;
+        }
+        #[cfg(test)]
+        tests::BUILT.with(|built| built.set(built.get() + 1));
+        let catalog = Arc::new(build());
+        let mut recent = lock();
+        if let Some(found) = recent.take(key) {
+            return found;
+        }
+        recent.slots.insert(0, (key.clone(), Arc::clone(&catalog)));
+        recent.slots.truncate(keep);
+        catalog
+    }
+
+    /// The catalog built from `key`, moved to the front.
+    fn take(&mut self, key: &K) -> Option<Arc<Catalog>> {
+        let at = self.slots.iter().position(|(seen, _)| seen == key)?;
+        let slot = self.slots.remove(at);
+        let found = Arc::clone(&slot.1);
+        self.slots.insert(0, slot);
+        Some(found)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// The catalogs [`Recent::get_or_build`] built on this thread.
+        pub(super) static BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// #1142: checks of two workspaces that declare columns, interleaved,
+    /// as runs of both at once are: each workspace's catalog is built once
+    /// and found after, where one slot per profile rebuilt it every time.
+    #[test]
+    fn interleaved_workspaces_each_find_their_declared_catalog() {
+        let declares = |table: &str| {
+            opentide_core::datasets::DeclaredDatasets::from_visibility(&format!(
+                "[[logsources]]\nname = \"{table}\"\ndescription = \"x\"\nsystem = \"sentinel\"\n\
+                 [logsources.columns]\nField_s = {{ type = \"string\" }}\n"
+            ))
+            .unwrap()
+        };
+        let (first, second) = (declares("FirstOne_CL"), declares("SecondOne_CL"));
+        let built = || BUILT.with(std::cell::Cell::get);
+        let start = built();
+        for round in 0..3 {
+            for (datasets, table) in [(&first, "FirstOne_CL"), (&second, "SecondOne_CL")] {
+                let _scope = opentide_core::datasets::scope_thread(Some(datasets.clone()));
+                let catalog = Catalog::for_workspace(Profile::Sentinel, table);
+                assert!(catalog.table(table).is_some(), "{table}, round {round}");
+                assert!(
+                    catalog
+                        .columns_for_table(table)
+                        .iter()
+                        .any(|column| column.name == "Field_s"),
+                    "{table}"
+                );
+            }
+        }
+        assert_eq!(built() - start, 2, "one build per workspace");
+    }
+
+    /// Two workspaces that declare the same pattern with columns, one of
+    /// them also naming a table the pattern covers (with no columns of its
+    /// own): each gets its own catalog. Keyed on the sources with columns
+    /// alone, the second was served the first's, with or without the table.
+    #[test]
+    fn a_declared_name_without_columns_is_part_of_the_catalog_s_key() {
+        let pattern = "[[logsources]]\nname = \"Vendor*_CL\"\ndescription = \"x\"\n\
+                       system = \"sentinel\"\n[logsources.columns]\nField_s = { type = \"string\" }\n";
+        let named = format!(
+            "{pattern}[[logsources]]\nname = \"VendorFoo_CL\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
+        );
+        let has_foo = |visibility: &str| {
+            let datasets =
+                opentide_core::datasets::DeclaredDatasets::from_visibility(visibility).unwrap();
+            let _scope = opentide_core::datasets::scope_thread(Some(datasets));
+            Catalog::for_workspace(Profile::Sentinel, "SecurityEvent | take 1")
+                .table("VendorFoo_CL")
+                .is_some()
+        };
+        assert!(has_foo(&named));
+        assert!(!has_foo(pattern));
+        assert!(has_foo(&named));
+    }
 
     #[test]
     fn catalog_loads() {

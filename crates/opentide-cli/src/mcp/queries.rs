@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use super::tools::{Context, next_action, quote};
 use crate::commands::validate_query::{live_query_platforms, offline_languages};
 use crate::json::Json;
-use crate::queries::{ENGINE, Profiles};
+use crate::queries::Profiles;
 
 /// `run_query`'s default row limit (`MAX_QUERY_ROWS`).
 pub const MAX_QUERY_ROWS: i64 = 100;
@@ -262,18 +262,12 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         .then(|| super::catalog::workspace(context).ok())
         .flatten()
         .map(|workspace| workspace.root().to_path_buf());
-    let findings = {
-        let _engine = ENGINE
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let _profiles = Profiles::install(&opentide_workspace::OsFs, root.as_deref());
-        crate::queries::check_query_on_stack(
-            query,
-            language_id,
-            Some(platform),
-            (!stack.is_empty()).then_some(stack.as_str()),
-        )
-    };
+    let findings = Profiles::install(&opentide_workspace::OsFs, root.as_deref()).check_query(
+        query,
+        language_id,
+        Some(platform),
+        (!stack.is_empty()).then_some(stack.as_str()),
+    );
     let diagnostics: Vec<Json> = findings
         .iter()
         .map(|finding| {

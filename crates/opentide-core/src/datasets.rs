@@ -344,7 +344,13 @@ impl Drop for ThreadScope {
 /// Use `datasets` on this thread only, whatever is installed, until the
 /// returned scope drops. `None` declares nothing.
 pub fn scope_thread(datasets: Option<DeclaredDatasets>) -> ThreadScope {
-    let datasets = Arc::new(datasets.unwrap_or_default());
+    scope_shared(Arc::new(datasets.unwrap_or_default()))
+}
+
+/// [`scope_thread`] with datasets already shared: a run that enters its
+/// datasets on every job of a thread pool clones a pointer per job, not the
+/// declarations.
+pub fn scope_shared(datasets: Arc<DeclaredDatasets>) -> ThreadScope {
     let previous = SCOPED.with(|scoped| scoped.borrow_mut().replace(datasets));
     ThreadScope {
         previous,

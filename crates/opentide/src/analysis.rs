@@ -38,11 +38,11 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 /// assert!(diagnostics.iter().any(|d| d.code == "esql_unknown_command"));
 /// ```
 ///
-/// The query is checked without a workspace: the datasets a
+/// The query is checked without a workspace: no workspace's declared
+/// datasets apply, not even ones a host installed for the process (a
 /// [`Workspace::validate`](crate::Workspace::validate) or
-/// [`Workspace::lint`](crate::Workspace::lint) installs for its run, on this
-/// thread or another, do not apply. It takes no lock, so it never waits for
-/// such a run.
+/// [`Workspace::lint`](crate::Workspace::lint) run uses its own and installs
+/// nothing). It takes no lock.
 #[must_use]
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let _standalone = opentide_analysis::standalone_datasets();
@@ -68,17 +68,16 @@ pub fn legend() -> Vec<String> {
 mod tests {
     use super::*;
 
-    /// A query checked on its own on a thread that holds the engines' lock
-    /// with a workspace's datasets installed, as a rayon worker of
-    /// `validate` that steals a job does: it neither waits for the lock nor
-    /// sees those datasets.
+    /// A query checked on its own on a thread where a host installed a
+    /// workspace's datasets, while another thread holds the engines' lock:
+    /// it neither waits for the lock nor sees those datasets.
     #[test]
     fn a_query_on_its_own_never_waits_for_or_sees_a_workspace_run() {
+        let _engine = opentide_analysis::queries::ENGINE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let (done, finished) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _engine = opentide_analysis::queries::ENGINE
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let _restore = opentide_analysis::save_visibility();
             opentide_analysis::install_visibility(Some(
                 "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
@@ -97,7 +96,7 @@ mod tests {
         });
         let codes = finished
             .recv_timeout(std::time::Duration::from_secs(30))
-            .expect("analyze_query waited for the lock its own thread holds");
+            .expect("analyze_query waited for the engines' lock");
         assert!(
             !codes.iter().any(|code| code == "kql_table_not_declared"),
             "{codes:?}"

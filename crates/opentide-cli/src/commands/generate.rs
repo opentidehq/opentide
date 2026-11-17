@@ -750,15 +750,11 @@ const UNKNOWN_TABLE_CODE: &str = "kql_unknown_table";
 /// (`dataset_reads`): each rule file is analysed with a visibility that
 /// declares only the probe for every system, so the engines report every
 /// dataset a query reads as undeclared, and the name is the quoted one in the
-/// finding. The declarations in use before are installed again after.
+/// finding. The probe is used on this thread only: nothing is installed.
 fn dataset_reads(
     index: &opentide_workspace::Index,
     files: &opentide_workspace::Index,
 ) -> Vec<DatasetRead> {
-    let _engine = crate::queries::ENGINE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _restore = opentide_analysis::save_visibility();
     let mut probe = String::new();
     for system in DATASET_SYSTEMS {
         let _ = write!(
@@ -766,7 +762,8 @@ fn dataset_reads(
             "[[logsources]]\nname = \"{PROBE}\"\ndescription = \"probe\"\nsystem = \"{system}\"\n\n"
         );
     }
-    let _ = opentide_analysis::install_visibility(Some(&probe));
+    // Checked with the probe's declarations on this thread only (#1142).
+    let datasets = opentide_analysis::Datasets::of_workspace(Some(&probe)).unwrap_or_default();
     let host = opentide_analysis::MemoryWorkspace { files: Vec::new() };
     let quoted = regex::Regex::new(r"'([^']+)'|`([^`]+)`").ok();
     let mut reads: Vec<DatasetRead> = Vec::new();
@@ -780,7 +777,7 @@ fn dataset_reads(
         else {
             continue;
         };
-        for report in opentide_analysis::analyze_queries(&host, &text) {
+        for report in datasets.scope(|| opentide_analysis::analyze_queries(&host, &text)) {
             let path = &report.field_path;
             let system = match path.as_slice() {
                 [first, second, ..] if first == "configurations" => second.clone(),
