@@ -75,9 +75,8 @@ pub struct DeployRequest {
     /// `opentide deploy` sets it when deployment state cannot record the new
     /// id (`deployment_state_ignored`, `deployment_state_unpersisted`). A
     /// platform that finds a recorded rule gone then fails the rule with this
-    /// failure instead of creating it; the failure's
-    /// [`DeployError::partial`] keeps a `*_rule_recreated` warning raised
-    /// before it. `None` creates it again.
+    /// failure instead of creating it, and returns no `*_rule_recreated`
+    /// warning: the rule is not created again. `None` creates it again.
     pub recreate_refusal: Option<DeployFailure>,
 }
 
@@ -363,10 +362,12 @@ pub struct DeployError {
     pub connector: Option<Box<ConnectorError>>,
     /// What the deploy did before it failed, when it did something the
     /// caller must keep: its `remote_id` is an id the tenant gave the rule,
-    /// which deployment state records (a Sysdig rule created, then refused
-    /// its runtime policies), or `None` when there is none to record; its
-    /// warnings and events are those raised before the failure. `None` when
-    /// the failure left nothing to keep.
+    /// which the caller records in its deployment state (a Sysdig rule
+    /// created, then refused its runtime policies), or `None` when there is
+    /// none to record; its warnings and events are those raised before the
+    /// failure. `None` when the failure left nothing to keep. No built-in
+    /// platform fills it yet: each does as its deploy moves onto its
+    /// `Deployer`, Sysdig first.
     pub partial: Option<Box<DeployOutcome>>,
 }
 
@@ -1067,11 +1068,11 @@ mod tests {
         let nothing = DeployError::rule(DeployFailure::new("x", "y"))
             .with_partial(DeployOutcome::new(None, Operation::Update));
         assert_eq!(nothing.partial, None);
-        // A recreate refused after its warning keeps the warning.
+        // A recreate refusal keeps what was done before it.
         let recreated =
             DeployOutcome::new(None, Operation::Update).with_warnings(vec![DeployWarning::new(
-                "sysdig_rule_recreated",
-                "creating it again",
+                "sysdig_rule_missing",
+                "the rule was not found",
             )]);
         let request = DeployRequest::new("7", Operation::Update, b"{}".to_vec())
             .refusing_recreate(DeployFailure::new("deployment_state_ignored", "kept out"));

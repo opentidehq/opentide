@@ -10,7 +10,7 @@
 //! A tenant operation returns an awaitable instead, which resolves to that
 //! text ([`tenants`]).
 //! A failure raises [`SdkError`] with `(code, message, detail, scope,
-//! status, fields)`: the facade's stable [`opentide::Error::code`], or
+//! status, fields, partial)`: the facade's stable [`opentide::Error::code`], or
 //! `usage_invalid_choice` for an option the command line would refuse;
 //! `detail` is the vendor's own words when a tenant gave a reason, else
 //! `None`. A failed deploy's `scope` (`"rule"` or `"tenant"`), HTTP `status`
@@ -426,7 +426,7 @@ pub mod module {
     use super::{Workspace, run_json};
 
     /// The error every call raises: `args` is `(code, message, detail, scope,
-    /// status, fields)`.
+    /// status, fields, partial)`.
     #[pymodule_export]
     #[allow(
         non_upper_case_globals,
