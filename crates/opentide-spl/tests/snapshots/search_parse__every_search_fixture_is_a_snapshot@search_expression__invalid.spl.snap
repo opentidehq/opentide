@@ -3,9 +3,9 @@ source: crates/opentide-spl/tests/search_parse.rs
 expression: render(&body(path))
 input_file: crates/testdata/corpus/spl/search_expression__invalid.spl
 ---
-SOURCE_FILE@0..29
-  PIPELINE@0..29
-    BARE_SEARCH@0..14
+SOURCE_FILE@0..18
+  PIPELINE@0..18
+    BARE_SEARCH@0..18
       FIELD_VALUE@0..10
         FIELD_REF@0..5
           IDENTIFIER@0..5
@@ -15,15 +15,15 @@ SOURCE_FILE@0..29
           IDENTIFIER@6..10
             IDENT@6..10 "main"
       WHITESPACE@10..11 " "
-      SEARCH_BOOLEAN@11..14
-        AND_KW@11..14 "AND"
-    WHITESPACE@14..15 " "
-    ERROR@15..29
-      IDENT@15..17 "OR"
-      WHITESPACE@17..18 " "
-      IDENT@18..22 "user"
-      EQ@22..23 "="
-      IDENT@23..29 "SYSTEM"
+      SEARCH_GROUP@11..18
+        L_PAREN@11..12 "("
+        SEARCH_EXPRESSION@12..16
+          IDENTIFIER@12..13
+            IDENT@12..13 "a"
+          WHITESPACE@13..14 " "
+          SEARCH_BOOLEAN@14..16
+            OR_KW@14..16 "OR"
+        WHITESPACE@16..17 " "
+        R_PAREN@17..18 ")"
 --
-14..15: expected a search term
-14..15: unexpected token (expected PIPE)
+16..17: expected a search term
