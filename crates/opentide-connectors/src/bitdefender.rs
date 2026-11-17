@@ -44,8 +44,8 @@ use opentide_compile::bitdefender::{
 use opentide_compile::json::Object;
 
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, Operation, Platform,
-    TenantContext,
+    BoxFuture, DeployEvent, DeployOutcome, DeployRequest, DeployWarning, Deployer, Operation,
+    Platform, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -857,7 +857,16 @@ impl Deployer for Bitdefender {
                     Err(ConnectorError::refused(PLATFORM, &tenant, message, None))
                 }
                 None => Ok(DeployOutcome {
-                    events: Vec::new(),
+                    // A warning the run does not raise (a create retried) is
+                    // what the deploy did: an event, as the CLI logs it.
+                    events: outcome
+                        .warnings
+                        .iter()
+                        .filter(|warning| !warning.raised)
+                        .map(|warning| {
+                            DeployEvent::new(warning.event).with_field("detail", &warning.detail)
+                        })
+                        .collect(),
                     remote_id: match outcome.state {
                         StateChange::Record(id) => Some(id),
                         StateChange::Keep => Some(request.rule_id.clone()),

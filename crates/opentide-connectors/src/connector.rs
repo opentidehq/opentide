@@ -75,8 +75,9 @@ pub struct DeployRequest {
     /// `opentide deploy` sets it when deployment state cannot record the new
     /// id (`deployment_state_ignored`, `deployment_state_unpersisted`). A
     /// platform that finds a recorded rule gone then fails the rule with this
-    /// failure, after its `*_rule_recreated` warning, instead of creating
-    /// it. `None` creates it again.
+    /// failure instead of creating it; a failed deploy carries no warnings,
+    /// so its `*_rule_recreated` warning is not returned. `None` creates it
+    /// again.
     pub recreate_refusal: Option<DeployFailure>,
 }
 
@@ -126,11 +127,25 @@ impl DeployRequest {
     }
 
     /// *error* as this request's recreate refusal when the platform failed
-    /// the rule with it (its message), so the failure keeps the refusal's
-    /// code; any other error as it is.
+    /// the rule with it, so the failure keeps the refusal's code; any other
+    /// error as it is. The platform refuses with the refusal's message, alone
+    /// or after its code (`code: message`), as `opentide deploy` matches it;
+    /// an empty message matches nothing.
     pub fn refused_recreate(&self, error: DeployError) -> DeployError {
+        let refused_with = |refusal: &DeployFailure| {
+            let message = &error.failure.message;
+            !refusal.message.is_empty()
+                && matches!(
+                    error.connector.as_deref(),
+                    Some(ConnectorError::Refused { .. })
+                )
+                && (*message == refusal.message
+                    || message
+                        .split_once(": ")
+                        .is_some_and(|(_, rest)| rest == refusal.message))
+        };
         match &self.recreate_refusal {
-            Some(refusal) if error.failure.message.contains(&refusal.message) => {
+            Some(refusal) if refused_with(refusal) => {
                 let mut failure = refusal.clone();
                 for (key, value) in &error.failure.fields {
                     if failure.field(key).is_none() {
@@ -1032,6 +1047,31 @@ mod tests {
         let other = request
             .refused_recreate(ConnectorError::refused("sysdig", "soc", "HTTP 400", None).into());
         assert_eq!(other.failure.code, "tenant_refused");
+        // After its code, as Exabeam, Google SecOps and Graylog refuse it.
+        let coded = request.refused_recreate(
+            ConnectorError::refused(
+                "exabeam",
+                "soc",
+                "exabeam_x: the new id would be lost",
+                None,
+            )
+            .into(),
+        );
+        assert_eq!(coded.failure.code, "deployment_state_unpersisted");
+        // A tenant's failure is never the rule's refusal, nor does an empty one match.
+        let unreachable = request.refused_recreate(
+            ConnectorError::Setup {
+                platform: "sysdig".into(),
+                tenant: "soc".into(),
+                message: "the new id would be lost".into(),
+            }
+            .into(),
+        );
+        assert_eq!(unreachable.scope, DeployScope::Tenant);
+        let empty = DeployRequest::delete("r")
+            .refusing_recreate(DeployFailure::new("deployment_state_unpersisted", ""));
+        let kept = empty.refused_recreate(ConnectorError::refused("s", "t", "", None).into());
+        assert_eq!(kept.failure.code, "tenant_refused");
     }
 
     #[test]
