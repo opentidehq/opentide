@@ -3,44 +3,39 @@ source: crates/opentide-cql/tests/parser_trees.rs
 expression: debug_parse(query(&file))
 input_file: crates/testdata/corpus/cql/expression_attribute__invalid.cql
 ---
-SOURCE_FILE@0..55
-  PIPELINE@0..54
-    FUNCTION_CALL@0..36
+SOURCE_FILE@0..48
+  PIPELINE@0..47
+    FUNCTION_CALL@0..47
       FUNCTION_NAME@0..9
         FUNCTION_NAME_TOKEN@0..9 "correlate"
       L_PAREN@9..10 "("
-      ARGUMENT_LIST@10..36
-        ARGUMENT@10..36
-          NAMED_SUBQUERY@10..36
-            IDENTIFIER@10..15
-              WORD@10..15 "Login"
-            COLON@15..16 ":"
-            WHITESPACE@16..17 " "
-            SUBQUERY@17..36
-              L_BRACE@17..18 "{"
-              WHITESPACE@18..19 " "
-              PIPELINE@19..34
-                FIELD_FILTER@19..34
-                  TAG@19..26
-                    TAG_TOKEN@19..26 "#action"
-                  EQ@26..27 "="
-                  STRING@27..34
-                    STRING_TOKEN@27..34 "\"login\""
-              WHITESPACE@34..35 " "
-              R_BRACE@35..36 "}"
-    WHITESPACE@36..37 " "
-    FREE_TEXT@37..44
-      UNQUOTED_PATTERN@37..44
-        WORD@37..44 "include"
-    WHITESPACE@44..45 " "
-    STATS_SHORTHAND@45..53
-      L_BRACK@45..46 "["
-      FIELD_NAME@46..52
-        WORD@46..52 "userId"
-      R_BRACK@52..53 "]"
-    ERROR@53..54
-      R_PAREN@53..54 ")"
-  WHITESPACE@54..55 "\n"
+      ARGUMENT_LIST@10..45
+        ARGUMENT@10..45
+          ATTRIBUTED_EXPRESSION@10..45
+            NAMED_SUBQUERY@10..36
+              IDENTIFIER@10..15
+                WORD@10..15 "Login"
+              COLON@15..16 ":"
+              WHITESPACE@16..17 " "
+              SUBQUERY@17..36
+                L_BRACE@17..18 "{"
+                WHITESPACE@18..19 " "
+                PIPELINE@19..34
+                  FIELD_FILTER@19..34
+                    TAG@19..26
+                      TAG_TOKEN@19..26 "#action"
+                    EQ@26..27 "="
+                    STRING@27..34
+                      STRING_TOKEN@27..34 "\"login\""
+                WHITESPACE@34..35 " "
+                R_BRACE@35..36 "}"
+            WHITESPACE@36..37 " "
+            EXPRESSION_ATTRIBUTE@37..45
+              IDENTIFIER@37..44
+                WORD@37..44 "include"
+              COLON@44..45 ":"
+      WHITESPACE@45..46 " "
+      R_PAREN@46..47 ")"
+  WHITESPACE@47..48 "\n"
 
-36..37: unexpected (expected R_PAREN, COMMA)
-53..53: unexpected
+45..46: expected an expression

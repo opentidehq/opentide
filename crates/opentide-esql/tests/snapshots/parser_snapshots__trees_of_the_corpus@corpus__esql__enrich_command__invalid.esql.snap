@@ -3,10 +3,10 @@ source: crates/opentide-esql/tests/parser_snapshots.rs
 expression: "format!(\"{tree}--- errors\\n{errors}\")"
 input_file: crates/testdata/corpus/esql/enrich_command__invalid.esql
 ---
-SOURCE_FILE@0..78
+SOURCE_FILE@0..81
   COMMENT@0..30 "// prod:enrich_command invalid"
   WHITESPACE@30..31 "\n"
-  QUERY@31..77
+  QUERY@31..81
     FROM_COMMAND@31..55
       FROM_KW@31..35 "FROM"
       WHITESPACE@35..36 " "
@@ -22,15 +22,15 @@ SOURCE_FILE@0..78
     WHITESPACE@55..56 "\n"
     PIPE@56..57 "|"
     WHITESPACE@57..58 " "
-    ENRICH_COMMAND@58..67
+    ENRICH_COMMAND@58..81
       ENRICH_KW@58..64 "ENRICH"
       WHITESPACE@64..65 " "
-      ENRICH_POLICY@65..67
-        POLICY_NAME@65..67
-          POLICY_PART@65..67 "ON"
-    WHITESPACE@67..68 " "
-    ERROR@68..77
-      POLICY_PART@68..77 "host.name"
-  WHITESPACE@77..78 "\n"
+      ENRICH_POLICY@65..77
+        POLICY_NAME@65..77
+          POLICY_PART@65..77 "hosts-policy"
+      WHITESPACE@77..78 " "
+      ON_KW@78..80 "ON"
+      WHITESPACE@80..81 "\n"
+      NAME_PATTERN@81..81
 --- errors
-67..68: expected `|` or the end of the query (expected ON_KW, WITH_KW, PIPE, R_PAREN)
+80..81: expected a name pattern (expected ID_PATTERN_TEXT)

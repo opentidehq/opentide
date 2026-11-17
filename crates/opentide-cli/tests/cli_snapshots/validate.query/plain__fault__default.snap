@@ -322,11 +322,11 @@ error[falco_rhs_field]: field 'proc.name' has type 'a string (CHARBUF)' while th
    ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
 error[lucene_parse_error]: Lucene syntax error: missing `)`
-   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:7
+   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:19
    │
 58 │     query: |
 59 │       name:(a OR b
-   │       ━━━━━━━━━━━━
+   │                   ━
    │
    ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
 

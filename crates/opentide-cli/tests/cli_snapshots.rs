@@ -10,6 +10,8 @@
     reason = "a test harness: a broken manifest or fixture is a failure"
 )]
 
+#[path = "common/normalise.rs"]
+mod normalise;
 #[path = "common/replay.rs"]
 mod replay;
 #[path = "common/snapshot.rs"]

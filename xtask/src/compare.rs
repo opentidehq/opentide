@@ -745,10 +745,9 @@ pub fn golden(
 }
 
 /// Whether a ledger entry is a cassette test's (case `cassette:<scenario>`):
-/// a command no golden case can replay, compared against its connector's
-/// cassette by an integration test of its own, which applies the entry and
-/// finds it stale (`generate extract sentinel`:
-/// `crates/opentide-cli/tests/extract_sentinel.rs`).
+/// a command no golden case can replay. No test applies such an entry any
+/// more (`crates/opentide-cli/tests/extract_sentinel.rs` holds its files to a
+/// snapshot since #1139), and the ledger has none; this tooling goes next.
 pub fn on_a_cassette(entry: &opentide_compare::Entry) -> bool {
     entry.case.starts_with("cassette:")
 }
