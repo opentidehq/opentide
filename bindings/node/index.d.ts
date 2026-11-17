@@ -69,9 +69,11 @@ export declare class Connection {
    * bytes, and resolves to the platform's identifier of the rule. Rejects
    * with `tenant_refused`, the other codes of `query`, and
    * `operation_unsupported` on a platform whose rules deploy only through
-   * `opentide deploy` (Elastic). `options.signal` aborts it.
+   * `opentide deploy` (Elastic). A `delete` takes no body (`null`); the
+   * other operations reject without one (`usage_invalid_value`).
+   * `options.signal` aborts it.
    */
-  deploy(ruleId: string, operation: 'create' | 'update' | 'disable' | 'delete', body: string | Uint8Array, options?: DeployOptions | undefined | null): Promise<DeployOutcome>
+  deploy(ruleId: string, operation: 'create' | 'update' | 'disable' | 'delete', body?: string | Uint8Array | undefined | null, options?: DeployOptions | undefined | null): Promise<DeployOutcome>
 }
 
 /**
