@@ -25,7 +25,9 @@ use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
-use opentide_connectors::connector::{DeployError, DeployRequest, Operation, TenantContext};
+use opentide_connectors::connector::{
+    DeployError, DeployRequest, Deployer as _, Operation, TenantContext,
+};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
 use opentide_schema::vocab::Vocabularies;
@@ -2805,7 +2807,7 @@ impl Sender<'_, '_> {
         result: &mut RuleResult,
     ) -> Result<(), Raised> {
         use opentide_connectors::defender::DefenderError;
-        use opentide_connectors::sentinel_one::{SentinelOne, SentinelOneError};
+        use opentide_connectors::sentinel_one::SentinelOne;
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
@@ -2886,74 +2888,85 @@ impl Sender<'_, '_> {
                 }
             }
             Some(PlatformId::SentinelOne) => {
-                let refused = |error: SentinelOneError, action: &Planned| {
-                    match &error {
-                        SentinelOneError::Invalid { detail } => tracing::error!(
-                            detail = detail.as_str(),
+                // The console's refusal, by its code: each kind's event.
+                let refused = |error: DeployError, action: &Planned| {
+                    let failure = &error.failure;
+                    let detail = failure.field("detail").unwrap_or_default();
+                    match failure.code {
+                        _ if error.connector.is_some() => {
+                            return raised(&error.into_connector());
+                        }
+                        "sentinel_one_rule_invalid" => tracing::error!(
+                            detail,
                             critical = true,
                             "received_code_400_invalid_user_input_received"
                         ),
-                        SentinelOneError::Unauthorized { detail } => {
-                            tracing::error!(
-                                detail = detail.as_str(),
-                                advice = "Check your configuration and API permissions again",
-                                critical = true,
-                                "received_code_401_unauthorized_access"
-                            );
-                            return Raised::new(format!(
-                                "could not {} the rule on tenant '{tenant}': {error}",
-                                action_verb(action)
-                            ));
-                        }
-                        SentinelOneError::NotFound { detail } => tracing::error!(
-                            detail = detail.as_str(),
+                        "sentinel_one_unauthorized" => tracing::error!(
+                            detail,
+                            advice = "Check your configuration and API permissions again",
+                            critical = true,
+                            "received_code_401_unauthorized_access"
+                        ),
+                        "sentinel_one_rule_not_found" => tracing::error!(
+                            detail,
                             advice = "Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
                             critical = true,
                             "fatal_error"
                         ),
-                        SentinelOneError::Unforeseen { status, context } => tracing::error!(
-                            detail = format!("Unforeseen error with code [{status}]").as_str(),
-                            context = context.as_str(),
+                        "sentinel_one_request_failed" => tracing::error!(
+                            detail = format!(
+                                "Unforeseen error with code [{}]",
+                                failure.status.unwrap_or_default()
+                            )
+                            .as_str(),
+                            context = detail,
                             critical = true,
                             "fatal_error"
                         ),
-                        SentinelOneError::Connector(error) => return raised(error),
-                        SentinelOneError::BadId(_) | SentinelOneError::Unreadable { .. } => {}
+                        _ => {}
                     }
                     Raised::new(format!(
-                        "could not {} the rule on tenant '{tenant}': {error}",
-                        action_verb(action)
+                        "could not {} the rule on tenant '{tenant}': {}",
+                        action_verb(action),
+                        failure.message
                     ))
                 };
-                match action {
-                    Planned::Delete(id) => {
-                        let id = opentide_connectors::sentinel_one::rule_id(id)
-                            .map_err(|error| refused(error, action))?;
-                        self.block(async { Ok(SentinelOne.delete_rule(context, id).await) })
-                            .map_err(|error| raised(&error))?
-                            .map_err(|error| refused(error, action))?;
-                        self.record_deleted(result, platform, tenant);
-                    }
+                // The Deployer's request: the stored id addresses an update
+                // or a delete; the body is the compiled rule.
+                let compiled = || body.to_compact().into_bytes();
+                let request = match action {
+                    Planned::Delete(id) => DeployRequest::delete(id.clone()),
                     Planned::Update(id) => {
-                        let id = opentide_connectors::sentinel_one::rule_id(id)
-                            .map_err(|error| refused(error, action))?;
-                        self.block(async {
-                            Ok(SentinelOne
-                                .create_update_rule(context, &body, Some(id))
-                                .await)
-                        })
-                        .map_err(|error| raised(&error))?
-                        .map_err(|error| refused(error, action))?;
+                        DeployRequest::new(id.clone(), Operation::Update, compiled())
                     }
                     Planned::Create => {
-                        let id = self
-                            .block(async {
-                                Ok(SentinelOne.create_update_rule(context, &body, None).await)
-                            })
-                            .map_err(|error| raised(&error))?
-                            .map_err(|error| refused(error, action))?;
-                        self.record_created(result, platform, tenant, &ExternalId::Int(id));
+                        DeployRequest::new(rule.uuid.clone(), Operation::Create, compiled())
                     }
+                };
+                let outcome = self
+                    .block(async { Ok(SentinelOne.deploy(context, &request).await) })
+                    .map_err(|error| raised(&error))?
+                    .map_err(|error| refused(error, action))?;
+                match (action, outcome.remote_id) {
+                    (Planned::Delete(_), _) => self.record_deleted(result, platform, tenant),
+                    (Planned::Create, Some(id)) => match id.parse::<i64>() {
+                        Ok(id) => {
+                            self.record_created(result, platform, tenant, &ExternalId::Int(id));
+                        }
+                        Err(_) => self.rule_error(
+                            result,
+                            &format!(
+                                "SentinelOne created the rule with an id that is not a number: {id}"
+                            ),
+                        ),
+                    },
+                    (Planned::Create, None) => {
+                        self.rule_error(
+                            result,
+                            "SentinelOne created the rule without an id to record",
+                        );
+                    }
+                    (Planned::Update(_), _) => {}
                 }
             }
             _ => {
