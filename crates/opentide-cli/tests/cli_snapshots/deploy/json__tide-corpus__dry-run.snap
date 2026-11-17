@@ -169,41 +169,60 @@ exit: 0
     "elastic": [
       {
         "api_request": {
-          "description": "Simulated Elastic rule for CLI E2E corpus.",
-          "enabled": true,
-          "from": "now-6m",
-          "index": [
-            "logs-*"
-          ],
-          "interval": "5m",
-          "language": "kuery",
-          "name": "Elastic KQL Rule",
-          "query": "process.name: \"powershell.exe\"",
-          "risk_score": 73,
-          "rule_id": "00000000-0000-4000-8003-000000000009",
-          "severity": "high",
-          "tags": [
-            "OpenTide"
-          ],
-          "threat": [
-            {
-              "framework": "MITRE ATT&CK",
-              "tactic": {
-                "id": "TA0002",
-                "name": "Execution",
-                "reference": "https://attack.mitre.org/tactics/TA0002/"
-              },
-              "technique": [
-                {
-                  "id": "T1059",
-                  "name": "Command and Scripting Interpreter",
-                  "reference": "https://attack.mitre.org/techniques/T1059"
-                }
-              ]
-            }
-          ],
-          "to": "now",
-          "type": "query"
+          "block": {
+            "building_block": false,
+            "enabled": true,
+            "index": [
+              "logs-*"
+            ],
+            "language": "kuery",
+            "name": "",
+            "query": "process.name: \"powershell.exe\"\n",
+            "scheduling": {
+              "interval": "5m",
+              "lookback": "1m"
+            },
+            "schema": "platform::elastic::1.0",
+            "status": "STAGING",
+            "type": "query"
+          },
+          "payload": {
+            "description": "Simulated Elastic rule for CLI E2E corpus.",
+            "enabled": true,
+            "from": "now-6m",
+            "index": [
+              "logs-*"
+            ],
+            "interval": "5m",
+            "language": "kuery",
+            "name": "Elastic KQL Rule",
+            "query": "process.name: \"powershell.exe\"",
+            "risk_score": 73,
+            "rule_id": "00000000-0000-4000-8003-000000000009",
+            "severity": "high",
+            "tags": [
+              "OpenTide"
+            ],
+            "threat": [
+              {
+                "framework": "MITRE ATT&CK",
+                "tactic": {
+                  "id": "TA0002",
+                  "name": "Execution",
+                  "reference": "https://attack.mitre.org/tactics/TA0002/"
+                },
+                "technique": [
+                  {
+                    "id": "T1059",
+                    "name": "Command and Scripting Interpreter",
+                    "reference": "https://attack.mitre.org/techniques/T1059"
+                  }
+                ]
+              }
+            ],
+            "to": "now",
+            "type": "query"
+          }
         },
         "name": "Elastic KQL Rule",
         "uuid": "00000000-0000-4000-8003-000000000009"

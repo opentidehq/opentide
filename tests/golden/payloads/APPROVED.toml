@@ -13,6 +13,13 @@ reason = "Pydantic's model_dump writes every field, an unset optional one as nul
 issue = "https://github.com/opentidehq/opentide/issues/895"
 changelog = "**A dry run's preview leaves out unset fields**"
 
+[[dump]]
+rule = "wrapped"
+platforms = ["elastic"]
+reason = "An Elastic preview's api_request is the deploy body, {\"payload\": <the Kibana rule>, \"block\": <the elastic block>}, which opentide deploy and the SDKs' deploy send: the Elasticsearch checks read the block before the rule is written. The oracle showed the Kibana rule alone; it is the payload, unchanged."
+issue = "https://github.com/opentidehq/opentide/issues/1142"
+changelog = "**A dry run's Elastic entry is the deploy body**"
+
 [[diff]]
 corpus = "payloads"
 uuid = "00000000-0000-4000-8005-000000000106"

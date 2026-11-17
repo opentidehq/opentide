@@ -464,3 +464,82 @@ async fn google_secops_reads_its_credentials_from_the_options_environment() {
     );
     server.verify().await;
 }
+
+/// #1142: a deploy plan's Elastic payload is the deploy body,
+/// `{payload, block}`, so deploying it through the SDK runs the
+/// Elasticsearch checks, which read the block (here they warn that the
+/// timestamp override is not mapped yet), and raises no
+/// `elastic_checks_skipped`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_planned_elastic_rule_deploys_with_its_checks() {
+    let uuid = "00000000-0000-4000-8099-000000000161";
+    let rule = format!(
+        "name: Planned rule\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  \
+         created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: Planned.\n\
+         response:\n  alert_severity: High\nconfigurations:\n  elastic:\n    status: STAGING\n    \
+         type: query\n    language: kuery\n    query: 'process.name: \"cmd.exe\"'\n    index: \
+         [\"logs-*\"]\n    overrides:\n      timestamp: event.ingested\n    scheduling:\n      \
+         interval: 5m\n"
+    );
+    let platform = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"es\"\nstrategies = \
+                    [\"PREVIEW\"]\n[tenants.setup]\nurl = \"https://kibana.invalid\"\n";
+    let ws = opentide::Workspace::from_files(
+        "/ws",
+        [
+            (
+                ".opentide/configurations/platforms/elastic.toml",
+                platform.to_owned(),
+            ),
+            ("objects/rules/planned.yaml", rule),
+        ],
+    )
+    .unwrap();
+    let plan = ws
+        .deploy_plan(
+            &opentide::DeployPlanOptions::new(opentide::Strategy::Preview).platform("elastic"),
+        )
+        .unwrap();
+    let mut found = Vec::new();
+    api_requests(plan.document().value(), &mut found);
+    let [body] = found.as_slice() else {
+        panic!("{}", plan.document())
+    };
+    assert_eq!(body["payload"]["rule_id"], uuid, "{body}");
+    assert_eq!(
+        body["block"]["overrides"]["timestamp"], "event.ingested",
+        "{body}"
+    );
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/logs-*/_field_caps"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/detection_engine/rules"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/detection_engine/rules"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let tenant = TenantConfig::new(
+        "elastic",
+        "es",
+        [("url", server.uri()), ("elasticsearch_url", server.uri())],
+    );
+    let connection = Connection::open(&tenant, &options()).unwrap();
+    let request = DeployRequest::new(uuid, Operation::Update, serde_json::to_vec(body).unwrap());
+    let outcome = connection.deploy(&request).await.unwrap();
+    let codes: Vec<&str> = outcome.warnings.iter().map(|w| w.code.as_str()).collect();
+    assert_eq!(codes, ["elasticsearch_check_warning"], "{outcome:?}");
+    assert_eq!(outcome.events[0].name, "elastic_rule_created");
+}

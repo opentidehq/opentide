@@ -134,18 +134,32 @@ fn without_nulls(value: Json) -> Json {
 }
 
 /// The class a model-dump preview that differs falls in: `nulls` (the
-/// oracle's `null` members left out, it is the candidate) or `order` (the
-/// same value, keys in another order); `None` for any other difference.
+/// oracle's `null` members left out, it is the candidate), `order` (the
+/// same value, keys in another order) or `wrapped` (the oracle's request
+/// as the candidate's `payload`, beside the block the candidate adds);
+/// `None` for any other difference.
 fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
     let oracle: Json = serde_json::from_str(oracle).ok()?;
     if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
         return None;
     }
+    let value = |text: &str| serde_json::from_str::<Value>(text).ok();
+    if let (Some(Value::Object(mut wrapped)), Some(Value::Object(theirs))) =
+        (value(mine), value(&oracle.to_compact()))
+        && let Some(Value::Object(request)) = wrapped.get_mut("api_request")
+        && request.len() == 2
+        && request.get("block").is_some_and(Value::is_object)
+        && let Some(payload) = request.remove("payload")
+    {
+        wrapped.insert("api_request".into(), payload);
+        if Value::Object(wrapped) == Value::Object(theirs) {
+            return Some("wrapped");
+        }
+    }
     let trimmed = without_nulls(oracle).to_compact();
     if trimmed == mine {
         return Some("nulls");
     }
-    let value = |text: &str| serde_json::from_str::<Value>(text).ok();
     (value(&trimmed)? == value(mine)?).then_some("order")
 }
 

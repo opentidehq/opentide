@@ -326,8 +326,9 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 
 /// The preview of `rule` on `platform` (`preview_rule_deployment`), the
 /// entry the dry run's `payloads` lists. Sentinel, Sysdig, Graylog and Exabeam report
-/// a rule they cannot compile as a failure; Elastic falls back to the
-/// block's dump, and every other platform shows it ([`config_dump`]).
+/// a rule they cannot compile as a failure; Elastic shows its deploy body
+/// ([`elastic_request`]) or falls back to the block's dump, and every other
+/// platform shows the dump ([`config_dump`]).
 /// `tenants` are the tenants the run sends the rule to, which Graylog's
 /// and Exabeam's requests depend on.
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
@@ -369,11 +370,24 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Err(error) => failure(rule, &error),
         },
         "elastic" => match elastic::compile(cx, rule, &elastic::Setup::none()) {
-            Ok(body) => compiled(rule, body),
+            Ok(body) => compiled(rule, elastic_request(rule, body)),
             Err(_) => dump_entry(platform, rule),
         },
         _ => dump_entry(platform, rule),
     }
+}
+
+/// What a deploy sends for an Elastic rule (`opentide deploy`'s and the
+/// connectors' deploy body): the Kibana rule (`payload`), and the rule's
+/// `elastic` block as the model dumps it (`block`), which the Elasticsearch
+/// checks read before the rule is written.
+pub fn elastic_request(rule: &Rule, payload: Json) -> Json {
+    let mut request = Object::new();
+    request.insert("payload".into(), payload);
+    if let Some(block) = rule.block("elastic").filter(|block| block.is_filled()) {
+        request.insert("block".into(), config_dump("elastic", block));
+    }
+    Json::Object(request)
 }
 
 /// Graylog's preview (`_graylog_compile_preview`): the create request for
