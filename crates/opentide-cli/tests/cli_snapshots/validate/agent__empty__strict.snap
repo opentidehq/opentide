@@ -9,4 +9,5 @@ exit: 1
 
 ━━━ stderr
 ✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
+→ opentide new rule · add a detection object to the workspace
 tip: add --json for machine-readable output

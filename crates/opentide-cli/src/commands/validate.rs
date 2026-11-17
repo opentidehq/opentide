@@ -524,6 +524,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             "opentide setup",
             "no workspace here: create one",
         ));
+    } else if strict_empty {
+        next.push(NextAction::new(
+            "opentide new rule",
+            "add a detection object to the workspace",
+        ));
     }
     if failed {
         let first = validation
@@ -621,6 +626,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 );
             }
         } else if terminal.text() {
+            // The report holds no finding that says why the run failed.
+            if strict_empty {
+                report.stderr_first.push_str(&message);
+                report.stderr_first.push('\n');
+            }
             report.whole_stdout = Some(text);
             return report;
         }

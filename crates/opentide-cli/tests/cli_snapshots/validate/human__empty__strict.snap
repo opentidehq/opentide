@@ -9,3 +9,4 @@ exit: 1
 
 ━━━ stderr
 ␛[1m␛[31m✗␛[0m Validation failed: no detection objects were found under ./, and --strict requires at least one
+␛[1m␛[36m→␛[0m ␛[1mopentide new rule␛[0m␛[2m · add a detection object to the workspace␛[0m

@@ -41,7 +41,12 @@ exit: 1
     "suggestion": null
   },
   "message": "Validation failed: no detection objects were found under ./, and --strict requires at least one",
-  "next_actions": [],
+  "next_actions": [
+    {
+      "command": "opentide --json new rule",
+      "reason": "add a detection object to the workspace"
+    }
+  ],
   "ok": false,
   "report": {
     "issues": [],

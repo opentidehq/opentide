@@ -49,6 +49,13 @@ pub fn shown(roots: &[PathBuf], cwd: &Path) -> String {
 
 /// A pass's outcome line, without the queries count a pass does not keep.
 pub fn describe(run: &WatchRun) -> String {
+    if run.failed && run.objects == 0 && run.errors == 0 && run.warnings == 0 {
+        return format!(
+            "Validation failed: no detection objects were found, and --strict requires at \
+             least one · {:.1}s",
+            run.elapsed.as_secs_f64()
+        );
+    }
     let summary = Summary {
         objects: run.objects,
         errors: run.errors,
@@ -169,7 +176,9 @@ pub fn run(
         args.strict,
         args.selection.is_empty(),
         &STRICT_EXEMPT_WARNINGS,
-    );
+    )
+    // `--strict` fails a full run that finds no object, as one run does.
+    .requiring_objects(args.strict && args.selection.is_empty() && args.check.is_none());
     let frames = terminal.frames(cx.cwd, cx.env);
     let human = terminal.mode == Mode::Human;
     let mut drawn = 0usize;

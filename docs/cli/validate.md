@@ -238,7 +238,7 @@ With `--strict` it fails, with exit `1` and `failure.code` `issues_found`, so a 
 ✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
 ```
 
-A run narrowed by `--file`, `--uuid`, `--type` or `--check` that matches nothing is not an empty catalogue, and keeps exit `0`.
+A run narrowed by `--check` is not an empty catalogue, and keeps exit `0`; one narrowed by `--file`, `--uuid` or `--type` that matches nothing fails with `scope_no_match`, with or without `--strict`. The failed run's next step is `opentide new rule`, or `opentide setup` where there is no workspace. `--watch --strict` shows such a pass as failed, and `--format` without `--output` prints the reason on stderr. A repository just scaffolded by `opentide setup` has no object yet, so the commit hook and the CI pipelines it writes, which run `validate --strict`, fail until the first one is added. The SDKs' `validate(strict=True)` report findings only, and an empty workspace has none.
 
 The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 

@@ -696,6 +696,21 @@ variant = "strict"
 args = ["validate", "--strict"]
 fixtures = ["tide-corpus", "vscode", "fault", "empty", "none"]
 
+# --strict on a workspace with no object: narrowed by --check it passes;
+# a report on stdout (no --output) prints why it failed on stderr.
+[[case]]
+command = "validate"
+variant = "strict-check-queries"
+args = ["validate", "--strict", "--check", "queries"]
+fixtures = ["empty"]
+
+[[case]]
+command = "validate"
+variant = "strict-sarif"
+args = ["validate", "--strict", "--format", "sarif"]
+modes = ["plain"]
+fixtures = ["empty"]
+
 [[case]]
 command = "validate"
 variant = "verbose"
