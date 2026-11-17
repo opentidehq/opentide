@@ -206,8 +206,11 @@ impl Workspace {
 pub struct ConnectOptions {
     /// The environment the tenant's `$NAME` credentials, `ssl`, CA bundles
     /// (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`) and proxies
-    /// (`OPENTIDE_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, ...) are read from.
-    /// `None`: the process's, read when the connection opens.
+    /// (`OPENTIDE_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, ...) are read from, and
+    /// Google SecOps's Application Default Credentials
+    /// (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file under
+    /// `CLOUDSDK_CONFIG` or `HOME`, `GCE_METADATA_HOST`). `None`: the
+    /// process's, read when the connection opens.
     pub environment: Option<BTreeMap<String, String>>,
     /// The proxy every request goes through (`--proxy`), before the
     /// environment's.
@@ -240,8 +243,9 @@ impl std::fmt::Debug for ConnectOptions {
 impl ConnectOptions {
     /// Reads credentials (Google SecOps's Application Default Credentials
     /// too: `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file under
-    /// `HOME`), CA bundles and proxies from `vars` instead of the process's
-    /// environment.
+    /// `CLOUDSDK_CONFIG` or `HOME`, `GCE_METADATA_HOST`), CA bundles and
+    /// proxies from `vars` instead of the process's environment; `vars`
+    /// that name none of Google SecOps's leave it the metadata server.
     pub fn environment<K: Into<String>, V: Into<String>>(
         mut self,
         vars: impl IntoIterator<Item = (K, V)>,

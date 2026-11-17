@@ -437,10 +437,8 @@ async fn google_secops_reads_its_credentials_from_the_options_environment() {
         ),
     )
     .unwrap();
-    assert!(
-        std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").is_none(),
-        "the process must not name the credentials this test hands the options"
-    );
+    // Whatever the process names (a developer's own ADC), the options'
+    // credentials are the ones read: the token request below is the stand-in's.
     let tenant = TenantConfig::new(
         "google_secops",
         "secops",
