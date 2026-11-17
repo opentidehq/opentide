@@ -1,5 +1,5 @@
 // prod:filesize invalid
 rule r {
   condition:
-    filesize >
+    filesize[0] > 10
 }

@@ -104,6 +104,13 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
     tree::named_kinds(source)
 }
 
+/// For each problem of `source`, the production names of the named nodes that touch it,
+/// for the corpus gate in `opentide-analysis`. Not API.
+#[doc(hidden)]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<&'static str>> {
+    tree::error_kinds(source)
+}
+
 /// How many times this thread has parsed an ES|QL query: one per call of an
 /// entry point (`tests/entry_points.rs`). Not API.
 #[doc(hidden)]

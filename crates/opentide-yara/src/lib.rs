@@ -356,6 +356,46 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     (rejected, kinds)
 }
 
+/// For each syntax error `yara-x-parser`'s CST reports in `source`, the `Debug` names of the
+/// nodes whose span touches it: what the corpus gate of `opentide-analysis` reads to check
+/// that an invalid fixture fails in the production it names. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
+    use yara_x_parser::cst::{CST, Event};
+    // Nodes by name, tokens as `PARENT/TOKEN`, as `debug_kinds` names them.
+    let mut nodes = Vec::new();
+    let mut errors = Vec::new();
+    let mut open = Vec::new();
+    for event in CST::from(source).iter() {
+        match event {
+            Event::Begin { kind, span } => {
+                nodes.push((format!("{kind:?}"), span.range()));
+                open.push(kind);
+            }
+            Event::End { .. } => {
+                open.pop();
+            }
+            Event::Token { kind, span } => {
+                if let Some(parent) = open.last() {
+                    nodes.push((format!("{parent:?}/{kind:?}"), span.range()));
+                }
+            }
+            Event::Error { span, .. } => errors.push(span.range()),
+        }
+    }
+    errors
+        .iter()
+        .map(|e| {
+            nodes
+                .iter()
+                .filter(|(_, r)| r.start <= e.end && e.start <= r.end)
+                .map(|(kind, _)| kind.clone())
+                .collect()
+        })
+        .collect()
+}
+
 /// The `Debug` names of the node kinds of `yara-x-parser`'s CST, the error
 /// node left out: the productions the corpus gate of `opentide-analysis` asks
 /// a fixture of. Not part of the API.

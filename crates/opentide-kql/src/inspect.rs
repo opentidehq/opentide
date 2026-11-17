@@ -132,6 +132,27 @@ pub fn tree_kinds(source: &str) -> (bool, BTreeSet<String>, String) {
     (!parsed.errors.is_empty(), kinds, format!("{root:#?}"))
 }
 
+/// For each syntax error of `source`, the lower-case names of the nodes that touch it: what
+/// the corpus gate reads to check that an invalid fixture fails in the production it names.
+#[must_use]
+pub fn error_kinds(source: &str) -> Vec<Vec<String>> {
+    let parsed = parse(source);
+    let root = SyntaxNode::new_root(parsed.green);
+    parsed
+        .errors
+        .iter()
+        .map(|e| {
+            root.descendants_with_tokens()
+                .filter(|n| {
+                    let r = n.text_range();
+                    r.start() <= e.gap.end() && e.gap.start() <= r.end()
+                })
+                .map(|n| format!("{:?}", n.kind()).to_ascii_lowercase())
+                .collect()
+        })
+        .collect()
+}
+
 /// The tree of `source`, for the tests of the typed AST (`tests/ast_accessors.rs`).
 #[must_use]
 pub fn tree(source: &str) -> SyntaxNode {

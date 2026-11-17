@@ -3,5 +3,5 @@ rule r {
   strings:
     $a = "abc"
   condition:
-    # > > 2
+    #a[1 > 2
 }

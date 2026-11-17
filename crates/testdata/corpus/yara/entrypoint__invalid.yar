@@ -1,5 +1,5 @@
 // prod:entrypoint invalid
 rule r {
   condition:
-    entrypoint ==
+    entrypoint[0] == 1
 }
