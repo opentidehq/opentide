@@ -62,7 +62,7 @@ mod tree;
 
 pub use debug::{debug_errors, debug_kinds, debug_tree, describe_expected};
 pub use input::{Grammar, Input, Lexeme, lex};
-pub use parser::{CompletedMarker, ErrorKind, Event, Marker, Parser};
+pub use parser::{CompletedMarker, ErrorKind, Event, Marker, Parser, TREE_BUDGET};
 pub use token_set::TokenSet;
 pub use tree::{MAX_TREE_DEPTH, Parse, SyntaxError, build};
 

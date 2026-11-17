@@ -21,7 +21,8 @@ use opentide_compile::json::Object;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, Operation, Platform,
+    TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -708,6 +709,11 @@ impl Deployer for Sysdig {
                     StateChange::Forget => None,
                 },
                 operation: request.operation,
+                warnings: outcome
+                    .warnings
+                    .into_iter()
+                    .map(|warning| DeployWarning::new(warning.event, warning.detail))
+                    .collect(),
             })
         })
     }
