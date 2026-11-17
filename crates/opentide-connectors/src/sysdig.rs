@@ -21,8 +21,8 @@ use opentide_compile::json::Object;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, Operation, Platform,
-    TenantContext,
+    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
+    DeployWarning, Deployer, Operation, Platform, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -646,25 +646,24 @@ impl Deployer for Sysdig {
     /// [`Operation::Disable`] disables, and the rule joins (or, disabled,
     /// leaves) the request's runtime policies ([`DeployRequest::policies`]:
     /// the block's), else the tenant's (its setup's `policies`), as
-    /// `opentide deploy` chooses them. A recorded rule the tenant
-    /// lost is created again and its new id returned, which the caller
-    /// keeps: the deployment-state refusals of `opentide deploy`
-    /// ([`RuleDeploy::recreate_refusal`]) are about the state it writes, and
-    /// this writes none. A delete sent without a body reads the rule's name
-    /// from the tenant, to take it out of the policies. A rule's failure is
-    /// an error here too.
+    /// `opentide deploy` chooses them. A recorded rule the tenant lost is
+    /// created again and its new id returned, unless the request refuses it
+    /// ([`DeployRequest::recreate_refusal`]). A delete sent without a body
+    /// reads the rule's name from the tenant, to take it out of the
+    /// policies. A created rule's id is the [`RULE_CREATED`] event.
+    ///
+    /// A rule Sysdig refuses fails with [`REQUEST_FAILED`] and its status,
+    /// or the refusal's code; its [`DeployError::partial`] keeps the id of a
+    /// rule created before the failure (its policies refused) and the
+    /// warnings raised (`sysdig_rule_recreated` before a refused recreate).
+    /// Refused credentials or an unreachable tenant fail the tenant.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying_for(request, async move {
-            let refused = |message: String| ConnectorError::Refused {
-                platform: PLATFORM.to_owned(),
-                tenant: cx.tenant.label.tenant.clone(),
-                message,
-                detail: None,
-            };
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        Box::pin(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
             let mut policies = request
                 .policies
                 .clone()
@@ -676,8 +675,9 @@ impl Deployer for Sysdig {
             {
                 body = Client::new(cx)
                     .get_rule(&request.rule_id)
-                    .await?
-                    .map_err(|error| refused(error.message))?;
+                    .await
+                    .map_err(tenant_failure)?
+                    .map_err(|error| rule_failure(error, tenant))?;
             }
             let (name, tuning) = identity(body.as_ref());
             if name.is_empty() {
@@ -689,6 +689,10 @@ impl Deployer for Sysdig {
                 Operation::Update | Operation::Disable => Action::Update(request.rule_id.clone()),
                 Operation::Delete => Action::Delete(request.rule_id.clone()),
             };
+            let refusal = request
+                .recreate_refusal
+                .as_ref()
+                .filter(|refusal| !refusal.message.is_empty());
             let rule = RuleDeploy {
                 action,
                 body: request.body.clone(),
@@ -696,31 +700,76 @@ impl Deployer for Sysdig {
                 tuning,
                 disable: request.operation == Operation::Disable,
                 policies,
-                recreate_refusal: request
-                    .recreate_refusal
-                    .as_ref()
-                    .map(|refusal| refusal.message.clone()),
+                recreate_refusal: refusal.map(|refusal| refusal.message.clone()),
             };
-            let outcome = deploy_rule(cx, &rule).await?;
-            if let Some(failure) = outcome.failure {
-                return Err(refused(failure.message));
-            }
-            Ok(DeployOutcome {
-                events: Vec::new(),
-                remote_id: match outcome.state {
-                    StateChange::Record(id) => Some(id),
+            let outcome = deploy_rule(cx, &rule).await.map_err(tenant_failure)?;
+            let recorded = match &outcome.state {
+                StateChange::Record(id) => Some(id.clone()),
+                StateChange::Keep | StateChange::Forget => None,
+            };
+            let done = DeployOutcome::new(
+                match &outcome.state {
+                    StateChange::Record(id) => Some(id.clone()),
                     StateChange::Keep => Some(request.rule_id.clone()),
                     StateChange::Forget => None,
                 },
-                operation: request.operation,
-                warnings: outcome
+                request.operation,
+            )
+            .with_warnings(
+                outcome
                     .warnings
                     .into_iter()
                     .map(|warning| DeployWarning::new(warning.event, warning.detail))
                     .collect(),
-            })
+            )
+            .with_events(
+                recorded
+                    .iter()
+                    .map(|id| DeployEvent::new(RULE_CREATED).with_field("rule_id", id.as_str()))
+                    .collect(),
+            );
+            let Some(failure) = outcome.failure else {
+                return Ok(done);
+            };
+            let error = match refusal {
+                Some(refusal) if refusal.message == failure.message => DeployError::rule(
+                    refusal
+                        .clone()
+                        .with_field("platform", PLATFORM)
+                        .with_field("tenant", tenant),
+                ),
+                _ => rule_failure(failure, tenant),
+            };
+            let mut partial = done;
+            partial.remote_id = recorded;
+            Err(error.with_partial(partial))
         })
     }
+}
+
+/// The event a created rule's id is logged with.
+pub const RULE_CREATED: &str = "sysdig_rule_created";
+
+/// The code of a rule Sysdig refused, or answered without what it needs.
+pub const REQUEST_FAILED: &str = "sysdig_request_failed";
+
+/// A tenant's failure from [`deploy_rule`]: refused credentials, an
+/// unreachable tenant. Each of its rules would fail the same way.
+fn tenant_failure(error: ConnectorError) -> DeployError {
+    let mut failed = DeployError::from(error);
+    failed.scope = DeployScope::Tenant;
+    failed
+}
+
+/// A rule's failure ([`REQUEST_FAILED`]), with the status Sysdig answered.
+fn rule_failure(error: ApiError, tenant: &str) -> DeployError {
+    let mut failure = DeployFailure::new(REQUEST_FAILED, error.message)
+        .with_field("platform", PLATFORM)
+        .with_field("tenant", tenant);
+    if let Some(status) = error.status {
+        failure = failure.with_status(status);
+    }
+    DeployError::rule(failure)
 }
 
 /// A rule's name and whether it is a tuning, from its compiled body or the

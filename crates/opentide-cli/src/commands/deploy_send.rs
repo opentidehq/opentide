@@ -26,7 +26,8 @@ use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
 use opentide_connectors::connector::{
-    DeployError, DeployRequest, Deployer as _, Operation, TenantContext,
+    DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer as _,
+    Operation, TenantContext,
 };
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
@@ -3270,7 +3271,7 @@ impl Sender<'_, '_> {
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn sysdig(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         const PLATFORM: &str = PlatformId::Sysdig.as_str();
-        use opentide_connectors::sysdig::{Action, RuleDeploy, StateChange, deploy_rule};
+        use opentide_connectors::sysdig::Sysdig;
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen(PLATFORM, batch, log);
@@ -3303,15 +3304,6 @@ impl Sender<'_, '_> {
                         continue;
                     }
                 };
-                let name = body
-                    .get("name")
-                    .and_then(CJson::as_str)
-                    .unwrap_or_default()
-                    .to_owned();
-                let tuning = body
-                    .get("details")
-                    .and_then(|details| details.get("append"))
-                    .is_some_and(CJson::is_true);
                 let policies = opentide_compile::sysdig::block_policies(rule)
                     .unwrap_or_else(|| tenant_policies.clone());
                 let root = self.workspace.root().to_path_buf();
@@ -3322,76 +3314,66 @@ impl Sender<'_, '_> {
                     }),
                     None => self.unpersisted(&rule.uuid, PLATFORM, &tenant),
                 };
-                let request = RuleDeploy {
-                    action: match &action {
-                        Planned::Create => Action::Create,
-                        Planned::Update(id) => Action::Update(id.clone()),
-                        Planned::Delete(id) => Action::Delete(id.clone()),
-                    },
-                    body: serde_json::to_vec(&body).unwrap_or_default(),
-                    name,
-                    tuning,
-                    disable: strategy == StatusStrategy::Disablement,
-                    policies,
-                    recreate_refusal: recreate_refusal
-                        .as_ref()
-                        .map(|refusal| refusal.message.clone()),
+                let (operation, stored) = match &action {
+                    Planned::Create => (Operation::Create, None),
+                    Planned::Update(id) if strategy == StatusStrategy::Disablement => {
+                        (Operation::Disable, Some(id.as_str()))
+                    }
+                    Planned::Update(id) => (Operation::Update, Some(id.as_str())),
+                    Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
                 };
+                let mut request = DeployRequest::new(
+                    stored.unwrap_or_default(),
+                    operation,
+                    serde_json::to_vec(&body).unwrap_or_default(),
+                )
+                .with_policies(Some(policies));
+                if let Some(refusal) = &recreate_refusal {
+                    request = request.refusing_recreate(DeployFailure::new(
+                        refusal.code,
+                        refusal.message.clone(),
+                    ));
+                }
                 let context = self.context(&connection);
-                match self.block(deploy_rule(context, &request)) {
-                    Ok(outcome) => {
-                        for warning in &outcome.warnings {
-                            self.warned = true;
-                            tracing::warn!(
-                                uuid = rule.uuid.as_str(),
-                                tenant = tenant.as_str(),
-                                detail = warning.detail,
-                                "{}",
-                                warning.event
-                            );
+                let deployed = self
+                    .block(async { Ok(Sysdig.deploy(context, &request).await) })
+                    .unwrap_or_else(|error| Err(DeployError::from(error)));
+                match deployed {
+                    Ok(done) => {
+                        let forget = done.remote_id.is_none();
+                        self.sysdig_done(&mut result, &rule.uuid, &tenant, &done, stored);
+                        if forget {
+                            self.record_deleted(&mut result, PLATFORM, &tenant);
                         }
-                        match &outcome.state {
-                            StateChange::Record(id) => {
-                                tracing::info!(
+                        log.finished(result);
+                    }
+                    Err(error) if error.scope == DeployScope::Rule => {
+                        if let Some(done) = &error.partial {
+                            self.sysdig_done(&mut result, &rule.uuid, &tenant, done, stored);
+                        }
+                        match recreate_refusal
+                            .as_ref()
+                            .filter(|refusal| refusal.code == error.failure.code)
+                        {
+                            Some(refusal) => {
+                                self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
+                                result.fail(&refusal.message);
+                            }
+                            None => {
+                                tracing::error!(
                                     uuid = rule.uuid.as_str(),
-                                    rule_id = id.as_str(),
-                                    "sysdig_rule_created"
+                                    tenant = tenant.as_str(),
+                                    status_code = error.failure.status,
+                                    error = error.failure.message.as_str(),
+                                    "sysdig_request_failed"
                                 );
-                                let external = id
-                                    .parse::<i64>()
-                                    .map_or_else(|_| ExternalId::Text(id.clone()), ExternalId::Int);
-                                self.record_created(&mut result, PLATFORM, &tenant, &external);
-                            }
-                            StateChange::Forget => {
-                                self.record_deleted(&mut result, PLATFORM, &tenant);
-                            }
-                            StateChange::Keep => {}
-                        }
-                        if let Some(failure) = &outcome.failure {
-                            match recreate_refusal
-                                .as_ref()
-                                .filter(|refusal| refusal.message == failure.message)
-                            {
-                                Some(refusal) => {
-                                    self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
-                                    result.fail(&refusal.message);
-                                }
-                                None => {
-                                    tracing::error!(
-                                        uuid = rule.uuid.as_str(),
-                                        tenant = tenant.as_str(),
-                                        status_code = failure.status,
-                                        error = failure.message.as_str(),
-                                        "sysdig_request_failed"
-                                    );
-                                    self.rule_error(&mut result, &failure.message);
-                                }
+                                self.rule_error(&mut result, &error.failure.message);
                             }
                         }
                         log.finished(result);
                     }
                     Err(error) => {
-                        let text = error.text();
+                        let text = error.into_connector().text();
                         tracing::error!(
                             tenant = tenant.as_str(),
                             error = text.as_str(),
@@ -3407,6 +3389,48 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// What a Sysdig deploy did, failed or not: its warnings, then the id
+    /// of a rule it created (its `sysdig_rule_created` event), recorded
+    /// when it is not the `stored` one.
+    fn sysdig_done(
+        &mut self,
+        result: &mut RuleResult,
+        uuid: &str,
+        tenant: &str,
+        done: &DeployOutcome,
+        stored: Option<&str>,
+    ) {
+        const PLATFORM: &str = PlatformId::Sysdig.as_str();
+        for warning in &done.warnings {
+            self.warned = true;
+            tracing::warn!(
+                uuid,
+                tenant,
+                detail = warning.message.as_str(),
+                "{}",
+                warning.code
+            );
+        }
+        for event in &done.events {
+            tracing::info!(
+                uuid,
+                rule_id = event
+                    .fields
+                    .iter()
+                    .find(|(key, _)| key == "rule_id")
+                    .map_or("", |(_, id)| id.as_str()),
+                "{}",
+                event.name
+            );
+        }
+        if let Some(id) = done.remote_id.as_deref().filter(|id| Some(*id) != stored) {
+            let external = id
+                .parse::<i64>()
+                .map_or_else(|_| ExternalId::Text(id.to_owned()), ExternalId::Int);
+            self.record_created(result, PLATFORM, tenant, &external);
+        }
     }
     /// Bitdefender GravityZone: each rule planned from deployment state,
     /// compiled for the tenant (its targets resolved), then created (its id

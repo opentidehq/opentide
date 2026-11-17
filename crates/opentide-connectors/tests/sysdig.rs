@@ -16,7 +16,7 @@ use std::sync::Arc;
 use cassette_support::{replay, repo, tenant};
 use opentide_compile::strategy::StatusStrategy;
 use opentide_compile::{Owned, Rule, sysdig as compile};
-use opentide_connectors::connector::TenantContext;
+use opentide_connectors::connector::{Deployer as _, TenantContext};
 use opentide_connectors::runtime::block_on;
 use opentide_connectors::sysdig::{
     self, Action, RuleDeploy, RuleOutcome, StateChange, Warning, deploy_rule,
@@ -347,7 +347,94 @@ fn sysdig_the_generic_deployer_refuses_to_create_again_with_the_requests_refusal
     assert_eq!(error.scope, DeployScope::Rule);
     assert_eq!(error.failure.code, "deployment_state_unpersisted");
     assert_eq!(error.failure.message, refusal.message);
+    // The warning raised before the refusal is kept, as `opentide deploy` logs it.
+    let partial = error.partial.as_deref().unwrap();
+    assert_eq!(partial.remote_id, None);
+    assert_eq!(
+        partial
+            .warnings
+            .iter()
+            .map(|w| w.code.as_str())
+            .collect::<Vec<_>>(),
+        ["sysdig_rule_recreated"]
+    );
     rt.block_on(server.verify());
+}
+
+/// A create Sysdig takes, then the policies it cannot list: the rule fails
+/// with Sysdig's status, and keeps the new id to record (its
+/// `sysdig_rule_created` event); refused credentials fail the tenant.
+#[test]
+fn sysdig_a_rule_created_then_refused_keeps_its_id_and_a_refused_token_fails_the_tenant() {
+    use opentide_connectors::connector::{DeployEvent, DeployRequest, DeployScope, Operation};
+    use wiremock::matchers::{header, method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .and(header(
+                "authorization",
+                format!("Bearer {}", TOKEN.1).as_str(),
+            ))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(r#"{"id": 43}"#))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/policies"))
+            .respond_with(wiremock::ResponseTemplate::new(500).set_body_string("down"))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(401).set_body_string("no"))
+            .mount(&server)
+            .await;
+    });
+    let (_, body, _) = compiled("STAGING", None);
+    let deploy = |token: &str| {
+        let env = opentide_connectors::Environment::from_pairs([(TOKEN.0, token)]);
+        let tenant = opentide_connectors::Tenant::from_setup(
+            "sysdig",
+            "staging",
+            &toml::from_str(&format!(
+                "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n",
+                server.uri()
+            ))
+            .unwrap(),
+            &env,
+            opentide_connectors::credentials::Mode::Required,
+            &sysdig::http_defaults(),
+        )
+        .unwrap();
+        let http =
+            opentide_connectors::HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
+        let cancel = CancellationToken::new();
+        let cx = TenantContext {
+            tenant: &tenant,
+            http: &http,
+            cancel: &cancel,
+        };
+        let request = DeployRequest::new("", Operation::Create, body.clone())
+            .with_policies(Some(vec![POLICY.to_owned()]));
+        block_on(async { sysdig::Sysdig.deploy(cx, &request).await })
+            .unwrap()
+            .unwrap_err()
+    };
+    let error = deploy(TOKEN.1);
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, sysdig::REQUEST_FAILED);
+    assert_eq!(error.failure.status, Some(500));
+    assert_eq!(error.failure.field("tenant"), Some("staging"));
+    let partial = error.partial.as_deref().unwrap();
+    assert_eq!(partial.remote_id.as_deref(), Some("43"));
+    assert_eq!(
+        partial.events,
+        [DeployEvent::new(sysdig::RULE_CREATED).with_field("rule_id", "43")]
+    );
+    let refused = deploy("another-token");
+    assert_eq!(refused.scope, DeployScope::Tenant);
+    assert_eq!(refused.partial, None);
 }
 
 /// The cassette's first step: the create, the policies read, the policy
