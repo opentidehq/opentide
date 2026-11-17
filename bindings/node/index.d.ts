@@ -229,6 +229,11 @@ export interface DeployOutcome {
   remoteId: string | null
   /** What was done. */
   operation: 'create' | 'update' | 'disable' | 'delete'
+  /**
+   * What the deploy raised without failing: the rule is deployed, and
+   * these say what to check, as `opentide deploy` warns of them.
+   */
+  warnings: Array<DeployWarning>
 }
 
 /** What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options. */
@@ -246,6 +251,14 @@ export interface DeployPlanOptions {
    * unset: the configuration's.
    */
   keepDeprecated?: boolean
+}
+
+/** A warning a deploy raised: the rule is deployed, with something to check. */
+export interface DeployWarning {
+  /** The event `opentide deploy` logs it as (`sysdig_rule_recreated`). */
+  code: string
+  /** What happened. */
+  message: string
 }
 
 /**

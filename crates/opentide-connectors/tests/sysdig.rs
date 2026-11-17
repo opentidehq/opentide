@@ -236,7 +236,65 @@ fn sysdig_the_generic_deployer_adds_a_created_rule_to_the_tenants_policies() {
         .unwrap()
         .unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some("42"));
+    assert_eq!(
+        outcome.warnings,
+        Vec::new(),
+        "a clean create raises nothing"
+    );
     assert_eq!(replay.proxy.verify(), Vec::new());
+}
+
+/// #1142: the generic deployer hands back what the deploy raised. An update
+/// of a rule the tenant lost creates it again, and says so, as
+/// `opentide deploy` warns `sysdig_rule_recreated`.
+#[test]
+fn sysdig_the_generic_deployer_reports_a_rule_created_again() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/secure/rules/42"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(404).set_body_string(r#"{"message": "not found"}"#),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(r#"{"id": 43}"#))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let (tenant, http) = local(&server);
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let (_, body, _) = compiled("STAGING", None);
+    let request = opentide_connectors::connector::DeployRequest {
+        rule_id: "42".to_owned(),
+        operation: opentide_connectors::connector::Operation::Update,
+        body,
+        policies: Some(Vec::new()),
+    };
+    let platform = sysdig::Sysdig;
+    let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome.remote_id.as_deref(), Some("43"));
+    assert_eq!(
+        outcome.warnings,
+        vec![opentide_connectors::connector::DeployWarning::new(
+            "sysdig_rule_recreated",
+            "the recorded rule no longer exists on the tenant; creating it again",
+        )]
+    );
+    rt.block_on(server.verify());
 }
 
 /// The cassette's first step: the create, the policies read, the policy

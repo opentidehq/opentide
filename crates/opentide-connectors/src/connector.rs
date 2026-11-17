@@ -65,12 +65,63 @@ pub struct DeployRequest {
 }
 
 /// What a deploy did.
+///
+/// `#[non_exhaustive]`: a [`Deployer`] outside this crate builds one with
+/// [`DeployOutcome::new`] (and [`DeployOutcome::with_warnings`]).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct DeployOutcome {
     /// The platform's identifier of the rule, kept in deployment state.
     pub remote_id: Option<String>,
     /// What was done.
     pub operation: Operation,
+    /// What the deploy raised without failing: the rule is deployed, and
+    /// these say what to check (a rule created again because the tenant
+    /// lost it, a partial deployment). `opentide deploy` logs each one and
+    /// ends with its warnings exit code. A deploy that fails is a
+    /// [`ConnectorError`], which carries none: the warnings raised before the
+    /// failure are not reported.
+    pub warnings: Vec<DeployWarning>,
+}
+
+impl DeployOutcome {
+    /// `operation` done, with the platform's identifier of the rule (`None`
+    /// once it is deleted), and no warnings.
+    pub fn new(remote_id: Option<String>, operation: Operation) -> Self {
+        Self {
+            remote_id,
+            operation,
+            warnings: Vec::new(),
+        }
+    }
+
+    /// The same outcome with `warnings`.
+    #[must_use]
+    pub fn with_warnings(mut self, warnings: Vec<DeployWarning>) -> Self {
+        self.warnings = warnings;
+        self
+    }
+}
+
+/// A warning a deploy raised: the rule is deployed, with something to check.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DeployWarning {
+    /// The event `opentide deploy` logs it as (`sysdig_rule_recreated`,
+    /// `graylog_query_warning`).
+    pub code: String,
+    /// What happened.
+    pub message: String,
+}
+
+impl DeployWarning {
+    /// The warning `code`, saying `message`.
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
+    }
 }
 
 /// Rows returned when the caller names no limit (`query.models.DEFAULT_LIMIT`).

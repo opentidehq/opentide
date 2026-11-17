@@ -56,7 +56,8 @@ class Connection:
         """
         Applies *operation* (`create`, `update`, `disable` or `delete`) to the
         rule *rule_id* on the tenant, sending *body* (a deploy plan's
-        payload) as its bytes: an awaitable of `{remote_id, operation}`, as
+        payload) as its bytes: an awaitable of `{remote_id, operation,
+        warnings}`, as
         JSON. *policies* are Sysdig's runtime policies for the rule (a plan
         entry's `policies`); `None` takes the tenant's.
         """
