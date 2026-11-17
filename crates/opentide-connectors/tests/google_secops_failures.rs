@@ -693,6 +693,62 @@ fn the_deployer_trait_sets_the_run_state_the_plan_payload_carries() {
     }
 }
 
+/// A disable disables, whatever run state its payload was planned with; a
+/// `run_state` that is not one is refused before anything is sent.
+#[test]
+fn the_deployer_trait_disables_a_disable_and_refuses_a_run_state_it_cannot_read() {
+    let planned = json!({
+        "text": TEXT,
+        "run_state": {"mask": "enabled,alerting", "body": {"enabled": true, "alerting": true}}
+    });
+    let sent = runtime().block_on(async {
+        let api = server().await;
+        serve(
+            &api,
+            on("GET", &rule_path()),
+            answer(
+                200,
+                json!({"name": format!("{RESOURCE}/rules/{ID}"), "text": TEXT}),
+            ),
+            1,
+        )
+        .await;
+        serve(
+            &api,
+            on("GET", &deployment()),
+            answer(200, json!({"enabled": true, "alerting": true})),
+            1,
+        )
+        .await;
+        serve(&api, on("PATCH", &deployment()), ok(), 1).await;
+        let request = DeployRequest::new(
+            ID.to_owned(),
+            Operation::Disable,
+            serde_json::to_vec(&planned).unwrap(),
+        );
+        let settings = HttpSettings::default();
+        with_tenant(&api, "", &settings, async |cx, connector| {
+            connector.deploy(cx, &request).await.unwrap();
+            let unreadable = DeployRequest::new(
+                String::new(),
+                Operation::Create,
+                serde_json::to_vec(&json!({"text": TEXT, "run_state": {"mask": 1}})).unwrap(),
+            );
+            let error = connector.deploy(cx, &unreadable).await.unwrap_err();
+            assert!(error.failure.message.contains("run_state"), "{error}");
+        })
+        .await;
+        api.verify().await;
+        let received = api.received_requests().await.unwrap();
+        received
+            .iter()
+            .filter(|r| r.method.as_str() == "PATCH")
+            .map(|r| serde_json::from_slice::<Value>(&r.body).unwrap())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(sent, [json!({"enabled": false, "alerting": false})]);
+}
+
 #[test]
 fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
     runtime().block_on(async {

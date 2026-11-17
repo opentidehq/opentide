@@ -317,3 +317,77 @@ fn block_on_runs_an_operation_from_synchronous_code() {
         .unwrap_err();
     assert_eq!(code(&error), connectors::OPERATION_UNSUPPORTED);
 }
+
+/// Every `api_request` of a deploy plan's document, wherever it sits.
+fn api_requests(value: &serde_json::Value, found: &mut Vec<serde_json::Value>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                if key == "api_request" && item.is_object() {
+                    found.push(item.clone());
+                } else {
+                    api_requests(item, found);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter().for_each(|item| api_requests(item, found)),
+        _ => {}
+    }
+}
+
+/// #1142: the plan payload of a STAGING (PREVIEW) Google SecOps rule
+/// carries its run state, without alerting, and its sections, which the
+/// SDK's deploy sends (`tests/google_secops_failures.rs` in the connectors
+/// shows the deploy honouring it); the payload carried the text alone, and
+/// the SDK deployed it under RELEASE.
+#[test]
+fn a_planned_preview_google_secops_rule_carries_its_run_state() {
+    let rule = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml"),
+    )
+    .unwrap();
+    assert!(rule.contains("status: STAGING"));
+    let platform = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"secops\"\nstrategies = \
+                    [\"PREVIEW\"]\n[tenants.setup]\nproject = \"acme\"\nlocation = \"eu\"\n\
+                    instance = \"i-1\"\n";
+    let ws = opentide::Workspace::from_files(
+        "/ws",
+        [
+            (
+                ".opentide/configurations/platforms/google_secops.toml",
+                platform.to_owned(),
+            ),
+            ("objects/rules/process.yaml", rule),
+        ],
+    )
+    .unwrap();
+    let plan = ws
+        .deploy_plan(
+            &opentide::DeployPlanOptions::new(opentide::Strategy::Preview)
+                .platform("google_secops"),
+        )
+        .unwrap();
+    let mut found = Vec::new();
+    api_requests(plan.document().value(), &mut found);
+    let [payload] = found.as_slice() else {
+        panic!("{}", plan.document())
+    };
+    assert!(
+        payload["text"]
+            .as_str()
+            .is_some_and(|text| text.starts_with("rule "))
+    );
+    assert_eq!(
+        payload["run_state"]["body"]["alerting"],
+        serde_json::json!(false),
+        "{payload}"
+    );
+    assert_eq!(payload["run_frequency"], "LIVE", "{payload}");
+    assert!(
+        payload["sections"]
+            .as_array()
+            .is_some_and(|sections| !sections.is_empty()),
+        "{payload}"
+    );
+}

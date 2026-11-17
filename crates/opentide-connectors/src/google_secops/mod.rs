@@ -321,9 +321,11 @@ impl Deployer for GoogleSecops {
     /// One rule from its plan payload: the `rules.create` body's `text`,
     /// with the `name`, `sections`, `run_state` (`mask`, `body`) and
     /// `run_frequency` that `opentide deploy`'s plan compiles beside it
-    /// (`opentide_compile::google_secops::compile_deployment`), so a PREVIEW
-    /// rule deploys without alerting. A body with the text alone runs a create
-    /// or an update under RELEASE and disables a [`Operation::Disable`]. A
+    /// (`opentide_compile::google_secops::compile_deployment`, the
+    /// `deploy_plan` payload), so a PREVIEW rule deploys without alerting; a
+    /// `run_state` that is not one fails the tenant's setup. A body with the
+    /// text alone runs a create or an update under RELEASE. A
+    /// [`Operation::Disable`] always disables. A
     /// [`Operation::Delete`] archives the rule, or deletes it under the
     /// tenant's `deletion = "delete"`. A rule's failure is an error here.
     fn deploy<'a>(
@@ -336,16 +338,26 @@ impl Deployer for GoogleSecops {
             let instance = Instance::of(cx.tenant)?;
             let authorizer = self.authorizer(cx.tenant)?;
             let disabling = request.operation == Operation::Disable;
-            let run_state = planned_run_state(&body).unwrap_or_else(|| {
-                if disabling {
-                    opentide_compile::google_secops::RunState::disabled()
-                } else {
-                    opentide_compile::google_secops::run_state(
+            // A disable disables, whatever state the payload was planned with.
+            let run_state = if disabling {
+                opentide_compile::google_secops::RunState::disabled()
+            } else {
+                match body.get("run_state") {
+                    None => opentide_compile::google_secops::run_state(
                         &Json::Null,
                         opentide_compile::strategy::StatusStrategy::Release,
-                    )
+                    ),
+                    Some(state) => {
+                        planned_run_state(state).ok_or_else(|| ConnectorError::Setup {
+                            platform: PLATFORM.to_owned(),
+                            tenant: cx.tenant.label.tenant.clone(),
+                            message: "the payload's run_state is not {\"mask\": text, \"body\": \
+                                      object}"
+                                .to_owned(),
+                        })?
+                    }
                 }
-            });
+            };
             let rule = deploy::RuleDeploy {
                 action: match request.operation {
                     Operation::Create => deploy::Action::Create,
@@ -459,10 +471,9 @@ fn planned_rule(body: &Json) -> AssembledRule {
     }
 }
 
-/// The run state a plan payload carries (`run_state`: `mask`, `body`), or
-/// `None` for a body without one.
-fn planned_run_state(body: &Json) -> Option<opentide_compile::google_secops::RunState> {
-    let state = body.get("run_state")?;
+/// A plan payload's `run_state` (`mask`, `body`), or `None` when it is not
+/// one.
+fn planned_run_state(state: &Json) -> Option<opentide_compile::google_secops::RunState> {
     Some(opentide_compile::google_secops::RunState {
         mask: state.get("mask")?.as_str()?.to_owned(),
         body: state.get("body")?.as_object()?.clone(),

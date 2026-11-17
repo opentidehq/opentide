@@ -130,13 +130,13 @@ pub fn compile_offline(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileErr
 /// strategy deploys (`mask`, `body`: [`run_state`]) and the block's
 /// `run_frequency` when it names one.
 pub fn compile_deployment(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileError> {
+    let assembled = assemble(cx, rule)?;
     let block = rule.block(PLATFORM).cloned().unwrap_or(Json::Null);
     let status = block.get("status").map(deploy::text).unwrap_or_default();
     let strategy = cx
         .statuses
         .strategy(&status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))?;
-    let assembled = assemble(cx, rule)?;
     let state = run_state(&block, strategy);
     let mut body = Object::new();
     body.insert("text".into(), Json::Str(assembled.text));

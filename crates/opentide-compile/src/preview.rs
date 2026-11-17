@@ -361,9 +361,10 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Err(error) => failure(rule, &error),
         },
         "exabeam" => exabeam_preview(cx, rule, &[]),
-        // `_google_secops_compile_preview`: the `rules.create` body, or the
-        // failure, named for Google SecOps.
-        "google_secops" => match google_secops::compile_offline(cx, rule) {
+        // `_google_secops_compile_preview`: the `rules.create` body with what
+        // the deploy reads beside it (`compile_deployment`), or the failure,
+        // named for Google SecOps.
+        "google_secops" => match google_secops::compile_deployment(cx, rule) {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
