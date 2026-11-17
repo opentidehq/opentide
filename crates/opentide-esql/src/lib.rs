@@ -104,6 +104,14 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
     tree::named_kinds(source)
 }
 
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
+/// for the corpus gate in `opentide-analysis`. Not API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<&'static str>> {
+    tree::error_kinds(source)
+}
+
 /// How many times this thread has parsed an ES|QL query: one per call of an
 /// entry point (`tests/entry_points.rs`). Not API.
 #[doc(hidden)]
@@ -260,7 +268,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
     // The indices `FROM` reads: undeclared ones, and ECS field checks when
     // every one holds ECS documents.
-    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(root, source));
+    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(&tree, source));
     // The tree the checks read: a second parse doubled the cost of a long query.
     let tokens = highlight(&spec, &tree, source, catalog);
     AnalyzeResult {

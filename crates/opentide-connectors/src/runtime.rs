@@ -66,19 +66,31 @@ pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T>
 /// WASI has no other thread to hand the work to (`apart` runs it on this
 /// one).
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    Ok(start()?.block_on(work))
+}
+
+/// A runtime of its own, for a caller that runs many pieces of work one
+/// after another on it (`deploy`, a request per rule): [`block_on`]'s,
+/// kept.
+///
+/// # Errors
+///
+/// As [`block_on`]'s: the runtime cannot start, or, on WASI, the caller is
+/// inside a runtime, where blocking on another would panic.
+pub fn start() -> Result<tokio::runtime::Runtime, String> {
     #[cfg(target_os = "wasi")]
     if tokio::runtime::Handle::try_current().is_ok() {
         return Err(INSIDE_A_RUNTIME.into());
     }
-    Ok(start()?.block_on(work))
+    build()
 }
 
-/// How many runtimes this process has started through [`block_on`] and
-/// [`shared`]: tests read it to prove a client reuses one.
+/// How many runtimes this process has started through [`block_on`],
+/// [`start`] and [`shared`]: tests read it to prove a client reuses one.
 static STARTED: AtomicUsize = AtomicUsize::new(0);
 
-/// A new runtime, counted in [`started`].
-fn start() -> Result<tokio::runtime::Runtime, String> {
+/// A new runtime, counted in [`started`]: [`start`]'s and [`shared`]'s.
+fn build() -> Result<tokio::runtime::Runtime, String> {
     let runtime = builder()
         .enable_all()
         .build()
@@ -104,7 +116,7 @@ pub fn started() -> usize {
 /// The runtime cannot start.
 pub fn shared() -> Result<&'static tokio::runtime::Runtime, String> {
     static SHARED: OnceLock<Result<tokio::runtime::Runtime, String>> = OnceLock::new();
-    SHARED.get_or_init(start).as_ref().map_err(Clone::clone)
+    SHARED.get_or_init(build).as_ref().map_err(Clone::clone)
 }
 
 /// Runs *work* to completion on the [`shared`] runtime, from any thread: a
@@ -305,6 +317,11 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
         assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn start_inside_a_runtime_is_refused_not_a_panic() {
+        assert_eq!(start().err().as_deref(), Some(INSIDE_A_RUNTIME));
     }
 
     #[test]

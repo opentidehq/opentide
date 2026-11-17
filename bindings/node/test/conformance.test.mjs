@@ -73,16 +73,16 @@ function files(root) {
   return out
 }
 
-function open(root, mode) {
+async function open(root, mode) {
   try {
-    return mode === 'files' ? opentide.Workspace.fromFiles(root, files(root)) : opentide.Workspace.open(root)
+    return mode === 'files' ? opentide.Workspace.fromFiles(root, files(root)) : await opentide.Workspace.open(root)
   } catch (e) {
     return error(e)
   }
 }
 
 // The manifest's options are the facade's names; the Node API's are camelCase.
-function call(ws, operation) {
+async function call(ws, operation) {
   const o = operation.options ?? {}
   switch (operation.call) {
     case 'validate': {
@@ -137,7 +137,7 @@ function call(ws, operation) {
         .tenants(operation.platform)
         .map((tenant) => ({ platform: tenant.platform, name: tenant.name, setup_keys: tenant.setupKeys }))
     case 'deploy_plan': {
-      const plan = ws.deployPlan({
+      const plan = await ws.deployPlan({
         strategies: o.strategies,
         uuids: o.uuids,
         files: o.files,
@@ -233,21 +233,21 @@ function connectors() {
   return { platforms, capabilities }
 }
 
-function guarded(ws, operation) {
+async function guarded(ws, operation) {
   try {
-    return call(ws, operation)
+    return await call(ws, operation)
   } catch (e) {
     return error(e)
   }
 }
 
-function runJson(root, operation) {
+async function runJson(root, operation) {
   const argv = operation.repo === false ? [...operation.argv] : ['--repo', root, ...operation.argv]
   const cwd = process.cwd()
   process.chdir(root)
   let document
   try {
-    document = opentide.runJson(argv)
+    document = await opentide.runJson(argv)
   } catch (e) {
     return error(e)
   } finally {
@@ -279,7 +279,7 @@ export async function runPlan(plan, out, { diverge = false } = {}) {
       if (operation.corpora && !operation.corpora.includes(corpus.name.split('/')[0])) continue
       let document
       if (operation.call === 'run_json') {
-        document = runJson(corpus.root, operation)
+        document = await runJson(corpus.root, operation)
       } else if (operation.call === 'connectors') {
         document = connectors()
       } else if (TENANT_CALLS.has(operation.call)) {
@@ -287,9 +287,9 @@ export async function runPlan(plan, out, { diverge = false } = {}) {
         document = await tenant(connected.get(operation.tenant), operation)
       } else {
         const mode = operation.open ?? 'disk'
-        if (!opened.has(mode)) opened.set(mode, open(corpus.root, mode))
+        if (!opened.has(mode)) opened.set(mode, await open(corpus.root, mode))
         const ws = opened.get(mode)
-        document = ws instanceof opentide.Workspace ? guarded(ws, operation) : ws
+        document = ws instanceof opentide.Workspace ? await guarded(ws, operation) : ws
         if (diverge && operation.call === 'validate' && ws instanceof opentide.Workspace) {
           // The document as a binding that went through a sorted map would hand it back.
           document = sorted(document)
