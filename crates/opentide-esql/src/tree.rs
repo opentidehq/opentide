@@ -48,10 +48,12 @@ impl Tree {
         self.error_at.get(first).is_some_and(|&at| at < end)
     }
 
-    /// Whether the parser reported a problem inside the query's span: a
-    /// problem at its very end (`EVAL c =`) is not in it (#1498).
+    /// Whether the parser reported any problem: the query does not parse.
+    /// One at its very end counts (`EVAL c =`): `problem_in` over the
+    /// query's span would not see it, and the columns of a query cut short
+    /// were reported as known (#1498).
     pub(crate) fn has_error(&self) -> bool {
-        self.problem_in(crate::gates::span_of(&self.syntax))
+        !self.problems.is_empty()
     }
 }
 

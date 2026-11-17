@@ -693,6 +693,13 @@ ssl = true
         // Unknown columns (no KEEP or STATS) are never guessed.
         let open = rule("user.name").replace(" | STATS c = COUNT(*) BY host.name", " METADATA _id");
         assert!(advisory_codes(&open, &[]).is_empty());
+        // A query cut short on one line (no newline after it) does not
+        // parse: no columns to check against (#1498).
+        let cut = rule("user.name").replace(
+            "query: |\n      FROM logs-* | STATS c = COUNT(*) BY host.name\n",
+            "query: \"FROM logs-* | STATS c = COUNT(*) BY host.name | EVAL b =\"\n",
+        );
+        assert!(advisory_codes(&cut, &[]).is_empty(), "{cut}");
     }
 
     #[test]
