@@ -26,6 +26,10 @@ struct Case {
     comment: Option<&'static str>,
 }
 
+/// The engines that mark the query's last token rather than the empty span
+/// after it.
+const MARK_THE_LAST_TOKEN: [&str; 3] = ["kql", "spl", "falco"];
+
 const fn case(
     name: &'static str,
     language: L,
@@ -137,8 +141,8 @@ const CASES: &[Case] = &[
     ),
 ];
 
-/// The start of the first syntax error of `text`.
-fn first_error(language: L, text: &str) -> Option<(u32, u32)> {
+/// The range and the message of the first syntax error of `text`.
+fn first_error(language: L, text: &str) -> Option<((u32, u32, u32, u32), String)> {
     let host = MemoryWorkspace {
         files: vec![("objects/rules/r.yaml".into(), text.to_string())],
     };
@@ -151,7 +155,13 @@ fn first_error(language: L, text: &str) -> Option<(u32, u32)> {
         .diagnostics
         .into_iter()
         .find(|d| d.code.ends_with("_parse_error"))
-        .map(|d| (d.range.start.line, d.range.start.character))
+        .map(|d| {
+            let (start, end) = (d.range.start, d.range.end);
+            (
+                (start.line, start.character, end.line, end.character),
+                d.message,
+            )
+        })
 }
 
 /// Line and UTF-16 column right after `last` (the query's last line) in `text`.
@@ -175,9 +185,10 @@ fn indented(text: &str, indent: &str) -> String {
         .collect()
 }
 
-/// The start of the first syntax error is right after the query's last
-/// token, or on that token (KQL, SPL and Falco mark it): never on a later
-/// line, past a comment, or on the next YAML key.
+/// The first syntax error is the empty span right after the query's last
+/// token, or that token where KQL, SPL and Falco mark it: never on a later
+/// line, past a comment, on the next YAML key or over the blanks after the
+/// query, and its message never quotes the comment that follows.
 #[test]
 fn every_engine_reports_the_end_of_a_query_after_its_last_token() {
     let mut wrong = Vec::new();
@@ -190,6 +201,7 @@ fn every_engine_reports_the_end_of_a_query_after_its_last_token() {
         ];
         if let Some(comment) = c.comment {
             endings.push(("a comment", format!(" {comment}\n")));
+            endings.push(("a comment touching it", format!("{comment}\n")));
         }
         for (ending, end) in &endings {
             let file = format!("{}{end}", c.query);
@@ -200,10 +212,20 @@ fn every_engine_reports_the_end_of_a_query_after_its_last_token() {
             }
             for (host, language, text) in texts {
                 let (line, col) = after(&text, last);
-                let got = first_error(language, &text);
-                if got != Some((line, col)) && got != Some((line, col - width)) {
+                let (range, message) = first_error(language, &text).unwrap_or_default();
+                // The empty span right after the last token, or that token.
+                let expected = if MARK_THE_LAST_TOKEN.contains(&c.name) {
+                    (line, col - width, line, col)
+                } else {
+                    (line, col, line, col)
+                };
+                // What follows the query is never quoted as the error.
+                let quoted = c.comment.is_some_and(|comment| {
+                    message.contains(comment) || message.contains(&comment[..2])
+                });
+                if range != expected || quoted {
                     wrong.push(format!(
-                        "{} {host} ending in {ending}: expected {line}:{col}, got {got:?}",
+                        "{} {host} ending in {ending}: expected {expected:?}, got {range:?} {message:?}",
                         c.name
                     ));
                 }

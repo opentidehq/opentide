@@ -504,7 +504,11 @@ fn expression_depth(root: Node) -> (usize, Option<ByteSpan>) {
 fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     let problem = tree.problems.first()?;
     let at = problem.at.min(source.len());
-    let rest = source.get(at..).unwrap_or("");
+    let rest = if problem.at_end {
+        ""
+    } else {
+        source.get(at..).unwrap_or("")
+    };
     // A bracket, pipe or operator is quoted alone; a word with its dots
     // (`host.name`) up to the next one: a whitespace-delimited chunk ran on
     // over `("a",`, or to the end of a query written without spaces.

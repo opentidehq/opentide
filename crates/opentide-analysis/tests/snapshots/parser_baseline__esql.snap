@@ -990,7 +990,7 @@ esql_parse_error error 1:6-1:6 ES|QL syntax error at the end of the query: expec
 49..50 punctuation.delimiter
 50..53 property
 == corpus/esql/enrich_command__invalid.esql
-esql_parse_error error 1:23-1:24 ES|QL syntax error at the end of the query: expected a name pattern
+esql_parse_error error 1:24-1:24 ES|QL syntax error at the end of the query: expected a name pattern
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -2086,7 +2086,7 @@ esql_unavailable information 0:13-0:43 a subquery in `FROM`: needs Elasticsearch
 59..64 keyword
 65..66 number
 == corpus/esql/stats_command__invalid.esql
-esql_parse_error error 1:20-1:21 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:21-1:21 ES|QL syntax error at the end of the query: expected an expression
 0..4 keyword
 5..11 type
 12..13 operator.pipe

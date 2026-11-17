@@ -959,10 +959,13 @@ fn remap_diagnostic(
     mut d: Diagnostic,
 ) -> Diagnostic {
     let start = opentide_core::position_to_offset(&inj.inner, d.range.start);
-    let mut end = opentide_core::position_to_offset(&inj.inner, d.range.end).max(start + 1);
+    // An empty finding (an error at the end of a query) stays empty: one
+    // character wide, it took the blank or comment after the query.
+    let width = usize::from(d.range.end != d.range.start);
+    let mut end = opentide_core::position_to_offset(&inj.inner, d.range.end).max(start + width);
     // A finding stays inside the part it starts in.
     if let Some(part) = inj.part_at(start) {
-        end = end.min(part.end).max(start + 1);
+        end = end.min(part.end).max(start + width);
         if d.field_path.is_none() {
             d.field_path = Some(part.field_path.clone());
         }

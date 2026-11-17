@@ -193,7 +193,11 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
         .collect();
     // An error past the last token (at the end of the text) is reported
     // right after that token, not past the blanks and comments after it.
-    let last = cst::significant_end(source);
+    let last = if ast.errors().is_empty() {
+        0
+    } else {
+        cst::significant_end(source)
+    };
     findings.extend(ast.errors().iter().map(|e| {
         let mut finding = errors::classify(e, source);
         if finding.start > last {

@@ -324,6 +324,7 @@ mod tests {
             message: String::new(),
             expected: TokenSet::EMPTY,
             gap: TextRange::new(start.into(), end.into()),
+            within: Vec::new(),
         };
         // `a ( // c\n`: the gap after `(` runs to the end, past the comment.
         assert_eq!(error(3, 10).anchor(10), TextSize::from(3));

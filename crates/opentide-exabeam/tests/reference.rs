@@ -30,13 +30,13 @@ const NARROWED: [&str; 2] = ["exabeam_group_by_column", "exabeam_group_by_select
 
 /// A parse error at the end of the text: the reference checker reports it
 /// past the blanks after the query's last token; the engine right after that
-/// token, where the query stops (#1431 follow-up). The reference's range is
-/// read there.
+/// token, where the query stops, as an empty span (#1431 follow-up). The
+/// reference's range is read there.
 fn at_the_end(text: &str, d: &mut (String, usize, usize)) {
     let last = text.trim_end().len();
     if d.0 == "exabeam_parse_error" && d.1 >= last && d.1 > 0 {
         d.1 = last;
-        d.2 = last + 1;
+        d.2 = last;
     }
 }
 
@@ -79,9 +79,11 @@ fn the_engine_agrees_with_the_reference_checker() {
             .filter(|f| !CATALOGUE_CODES.contains(&f.code))
             .map(|f| (f.code.to_string(), f.start, f.end))
             .collect();
+        for d in &mut expected {
+            at_the_end(text, d);
+        }
         for list in [&mut expected, &mut found] {
             for d in list.iter_mut() {
-                at_the_end(text, d);
                 if NARROWED.contains(&d.0.as_str()) {
                     d.1 = 0;
                     d.2 = 0;
