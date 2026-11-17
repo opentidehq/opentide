@@ -374,9 +374,9 @@ pub(crate) mod interactive {
             drop(feed); // end of input
             Ok::<_, std::io::Error>(())
         };
-        let (served, read) = tokio::join!(session, reader);
-        read?;
-        served
+        let (outcome, input_read) = tokio::join!(session, reader);
+        input_read?;
+        outcome
     }
 
     /// The frames' writer: writes through, and notes each answer and each
