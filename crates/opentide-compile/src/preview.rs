@@ -125,8 +125,9 @@ pub fn compile_tenant(
             exabeam::compile_deployment(cx, rule, known)
                 .map(|compiled| exabeam::create_request(&compiled)),
         ),
-        // The text is the same on every tenant: the `rules.create` body.
-        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
+        // The text is the same on every tenant: the `rules.create` body,
+        // with what the deploy reads beside it (the run state).
+        "google_secops" => Some(google_secops::compile_deployment(cx, rule)),
         "graylog" => Some(graylog_request(cx, rule, known)),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
@@ -360,9 +361,10 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Err(error) => failure(rule, &error),
         },
         "exabeam" => exabeam_preview(cx, rule, &[]),
-        // `_google_secops_compile_preview`: the `rules.create` body, or the
-        // failure, named for Google SecOps.
-        "google_secops" => match google_secops::compile_offline(cx, rule) {
+        // `_google_secops_compile_preview`: the `rules.create` body with what
+        // the deploy reads beside it (`compile_deployment`), or the failure,
+        // named for Google SecOps.
+        "google_secops" => match google_secops::compile_deployment(cx, rule) {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
