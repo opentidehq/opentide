@@ -480,6 +480,65 @@ fn lint_check(text: &str) -> Vec<(String, String, usize)> {
 
 const ELASTIC_KUERY: &str = "  elastic:\n    type: query\n    language: kuery\n";
 
+/// #1142: lint's queries check reads the workspace's `visibility.toml`,
+/// on whichever thread runs it and through both of its entry points (the
+/// text, and lint's own parse): a dataset the workspace does not declare
+/// is a warning, one it declares is none.
+#[test]
+fn lint_reports_the_datasets_the_workspace_does_not_declare() {
+    use opentide_workspace::lint::LintQueryCheck;
+    let text =
+        rule("  splunk:\n    query: |\n      index=main sourcetype=linux_secure | stats count\n");
+    let undeclared = |visibility: &str| -> [usize; 2] {
+        let fs = MemoryFs::new();
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.write("/ws/.opentide/configurations/visibility.toml", visibility);
+        let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
+        let file = std::path::Path::new(FILE);
+        let document = opentide_schema::node::load(&text).unwrap();
+        let count = |found: Vec<opentide_workspace::lint::LintFinding>| {
+            found
+                .iter()
+                .filter(|finding| finding.diagnostic.code == "spl_dataset_not_declared")
+                .count()
+        };
+        // On another thread, as lint's jobs run.
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    [
+                        count(
+                            check
+                                .check(file, "objects/rules/a.yaml", Some(UUID), &text)
+                                .unwrap(),
+                        ),
+                        count(
+                            check
+                                .check_parsed(
+                                    file,
+                                    "objects/rules/a.yaml",
+                                    Some(UUID),
+                                    &text,
+                                    &document,
+                                )
+                                .unwrap(),
+                        ),
+                    ]
+                })
+                .join()
+                .unwrap()
+        })
+    };
+    let declares = |sourcetype: &str| {
+        format!(
+            "[[logsources]]\nname = \"main\"\ndescription = \"x\"\nsystem = \"splunk\"\n\
+             [[logsources]]\nname = \"{sourcetype}\"\ndescription = \"x\"\nsystem = \"splunk\"\n"
+        )
+    };
+    assert_eq!(undeclared(&declares("other")), [1, 1]);
+    assert_eq!(undeclared(&declares("linux_secure")), [0, 0]);
+}
+
 /// #1233: a file whose line endings the check rewrites is parsed again
 /// from the rewritten text, not read from lint's parse of the original:
 /// the findings and their lines are those of the `\n` text.

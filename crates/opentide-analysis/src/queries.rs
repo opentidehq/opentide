@@ -419,12 +419,17 @@ impl Profiles {
         document: &opentide_core::node::Document,
     ) -> Vec<Finding> {
         let lines = LineStarts::new(text);
-        let response =
-            crate::analyze_tide_parsed(&self.host, &path.to_string_lossy(), text, document);
+        // The workspace's datasets, on the thread of lint's job (#1142).
+        let (response, blocks) = self.datasets.scope(|| {
+            (
+                crate::analyze_tide_parsed(&self.host, &path.to_string_lossy(), text, document),
+                crate::analyze_blocks_parsed(&self.host, text, document),
+            )
+        });
         response
             .diagnostics
             .into_iter()
-            .chain(crate::analyze_blocks_parsed(&self.host, text, document))
+            .chain(blocks)
             .map(|diagnostic| finding(text, &lines, diagnostic))
             .collect()
     }
