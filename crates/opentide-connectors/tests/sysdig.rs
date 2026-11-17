@@ -537,8 +537,15 @@ fn deploy_with_policy(
         opentide_connectors::connector::DeployRequest::new("42".to_owned(), operation, body)
             .with_policies(policies);
     let platform = sysdig::Sysdig;
-    let outcome =
-        block_on(async { platform.deployer().unwrap().deploy(cx, &request).await }).unwrap();
+    let outcome = block_on(async {
+        platform
+            .deployer()
+            .unwrap()
+            .deploy(cx, &request)
+            .await
+            .map_err(opentide_connectors::connector::DeployError::into_connector)
+    })
+    .unwrap();
     (outcome, rt.block_on(server.received_requests()).unwrap())
 }
 

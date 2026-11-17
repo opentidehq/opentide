@@ -112,8 +112,8 @@ pub struct DeployOutcome {
     /// these say what to check (a rule created again because the tenant
     /// lost it, a partial deployment). `opentide deploy` logs each one and
     /// ends with its warnings exit code. A deploy that fails is a
-    /// [`ConnectorError`], which carries none: the warnings raised before the
-    /// failure are not reported.
+    /// [`DeployError`], never an outcome: a failed deployment never looks
+    /// like a deployed one.
     pub warnings: Vec<DeployWarning>,
 }
 
@@ -155,6 +155,247 @@ impl DeployWarning {
             message: message.into(),
         }
     }
+}
+
+/// What a failed deploy stops.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DeployScope {
+    /// The rule failed (the tenant refused it, or answered for it in a way
+    /// opentide cannot read): the tenant's other rules can still deploy.
+    Rule,
+    /// The tenant cannot take any rule (unreachable, refused credentials, a
+    /// setup it cannot use): its other rules would fail the same way.
+    Tenant,
+}
+
+/// Why a deploy failed, as data: a stable code, the message, the HTTP
+/// status when the tenant answered with one, and the fields that locate it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DeployFailure {
+    /// A stable code (`tenant_refused`, `tenant_unreachable`, or the
+    /// platform's own, such as `sentinel_one_rule_not_found`).
+    pub code: &'static str,
+    /// What failed, in words; it names the tenant, never a credential.
+    pub message: String,
+    /// The HTTP status the tenant answered with, when it answered.
+    pub status: Option<u16>,
+    /// What locates the failure (`platform`, `tenant`, `address`, the
+    /// vendor's `detail`), in order.
+    pub fields: Vec<(String, String)>,
+}
+
+impl DeployFailure {
+    /// The failure `code`, saying `message`, with no status or fields.
+    pub fn new(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            status: None,
+            fields: Vec::new(),
+        }
+    }
+
+    /// The same failure, with the HTTP `status` the tenant answered.
+    #[must_use]
+    pub fn with_status(mut self, status: u16) -> Self {
+        self.status = Some(status);
+        self
+    }
+
+    /// The same failure, with the field `key` set to `value` (after the
+    /// fields it has).
+    #[must_use]
+    pub fn with_field(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.fields.push((key.into(), value.into()));
+        self
+    }
+
+    /// The value of the field `key`.
+    pub fn field(&self, key: &str) -> Option<&str> {
+        self.fields
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.as_str())
+    }
+}
+
+/// A deploy that failed: a rule's failure as much as a tenant's. A
+/// [`Deployer`] never reports a failed rule as a [`DeployOutcome`].
+#[derive(Debug, thiserror::Error)]
+#[error("{}", failure.message)]
+#[non_exhaustive]
+pub struct DeployError {
+    /// What the failure stops: the rule, or every rule of the tenant.
+    pub scope: DeployScope,
+    /// Why, as data.
+    pub failure: DeployFailure,
+    /// The connector error it came from, when it came from one (an
+    /// interrupt is [`ConnectorError::Cancelled`]); boxed, to keep the error
+    /// small.
+    pub connector: Option<Box<ConnectorError>>,
+}
+
+impl DeployError {
+    /// A rule's failure.
+    pub fn rule(failure: DeployFailure) -> Self {
+        Self {
+            scope: DeployScope::Rule,
+            failure,
+            connector: None,
+        }
+    }
+
+    /// A tenant's failure: its other rules would fail the same way.
+    pub fn tenant(failure: DeployFailure) -> Self {
+        Self {
+            scope: DeployScope::Tenant,
+            failure,
+            connector: None,
+        }
+    }
+
+    /// Whether the run was interrupted.
+    pub fn is_interrupted(&self) -> bool {
+        matches!(self.connector.as_deref(), Some(ConnectorError::Cancelled))
+    }
+
+    /// The connector error this failure came from; one a [`Deployer`] built
+    /// itself is the tenant's refusal, with its message and `detail` field.
+    pub fn into_connector(self) -> ConnectorError {
+        if let Some(error) = self.connector {
+            return *error;
+        }
+        let field = |key: &str| self.failure.field(key).unwrap_or_default().to_owned();
+        ConnectorError::Refused {
+            platform: field("platform"),
+            tenant: field("tenant"),
+            detail: self.failure.field("detail").map(str::to_owned),
+            message: self.failure.message,
+        }
+    }
+}
+
+/// A [`Deployer`]'s future from one whose failures are connector errors,
+/// each converted as [`DeployError::from`] does.
+pub fn deploying<'a>(
+    future: impl Future<Output = Result<DeployOutcome, ConnectorError>> + Send + 'a,
+) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+    Box::pin(async move { future.await.map_err(DeployError::from) })
+}
+
+impl From<ConnectorError> for DeployError {
+    /// A connector error as a deploy's failure. An answer the tenant
+    /// refused or could not give for this rule fails the rule; anything
+    /// else (the connection, the credentials, the setup, an interrupt)
+    /// fails the tenant.
+    fn from(error: ConnectorError) -> Self {
+        let (code, scope) = deploy_code(&error);
+        let status = match &error {
+            ConnectorError::Gateway { status, .. } => Some(*status),
+            _ => None,
+        };
+        Self {
+            scope,
+            failure: DeployFailure {
+                code,
+                message: error.to_string(),
+                status,
+                fields: located(&error),
+            },
+            connector: Some(Box::new(error)),
+        }
+    }
+}
+
+/// A connector error's code (the facade's) and what it stops in a deploy.
+fn deploy_code(error: &ConnectorError) -> (&'static str, DeployScope) {
+    use DeployScope::{Rule, Tenant};
+    match error {
+        ConnectorError::Unreachable { .. } => ("tenant_unreachable", Tenant),
+        ConnectorError::Timeout { .. } => ("tenant_timeout", Tenant),
+        ConnectorError::Answer { .. } => ("tenant_answer_invalid", Rule),
+        ConnectorError::Setup { .. } => ("tenant_setup_invalid", Tenant),
+        ConnectorError::MissingCredential { .. } => ("credential_unset", Tenant),
+        ConnectorError::Crashed { .. } => ("connector_crashed", Tenant),
+        ConnectorError::Refused { .. } => ("tenant_refused", Rule),
+        ConnectorError::Authentication { .. } => ("authentication_failed", Tenant),
+        ConnectorError::QueryTimedOut { .. } => ("query_timed_out", Rule),
+        ConnectorError::Gateway { .. } => ("tenant_gateway", Tenant),
+        ConnectorError::Cancelled => ("interrupted", Tenant),
+        ConnectorError::NetworkUnavailable { .. } => ("network_unavailable", Tenant),
+    }
+}
+
+/// What locates a connector error: its platform, tenant, and the address,
+/// variable or vendor's detail it names (each only when not empty).
+fn located(error: &ConnectorError) -> Vec<(String, String)> {
+    let (platform, tenant, more): (&str, &str, Option<(&str, &str)>) = match error {
+        ConnectorError::Unreachable {
+            platform,
+            tenant,
+            address,
+            ..
+        }
+        | ConnectorError::Answer {
+            platform,
+            tenant,
+            address,
+            ..
+        }
+        | ConnectorError::Timeout {
+            platform,
+            tenant,
+            address,
+            ..
+        } => (platform, tenant, Some(("address", address))),
+        ConnectorError::MissingCredential {
+            platform,
+            tenant,
+            variable,
+            ..
+        } => (platform, tenant, Some(("variable", variable))),
+        ConnectorError::Refused {
+            platform,
+            tenant,
+            detail,
+            ..
+        }
+        | ConnectorError::Authentication {
+            platform,
+            tenant,
+            detail,
+            ..
+        }
+        | ConnectorError::QueryTimedOut {
+            platform,
+            tenant,
+            detail,
+            ..
+        } => (
+            platform,
+            tenant,
+            detail.as_deref().map(|detail| ("detail", detail)),
+        ),
+        ConnectorError::Setup {
+            platform, tenant, ..
+        }
+        | ConnectorError::Crashed {
+            platform, tenant, ..
+        }
+        | ConnectorError::Gateway {
+            platform, tenant, ..
+        }
+        | ConnectorError::NetworkUnavailable { platform, tenant } => (platform, tenant, None),
+        ConnectorError::Cancelled => ("", "", None),
+    };
+    [("platform", platform), ("tenant", tenant)]
+        .into_iter()
+        .chain(more)
+        .filter(|(_, value)| !value.is_empty())
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect()
 }
 
 /// Rows returned when the caller names no limit (`query.models.DEFAULT_LIMIT`).
@@ -444,7 +685,7 @@ pub trait Deployer: Send + Sync {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>>;
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>>;
 }
 
 /// Checks queries on the tenant (`validate query --live`).
@@ -598,7 +839,88 @@ impl Registry {
 
 #[cfg(test)]
 mod tests {
-    use super::{kql_code, kql_with_limit};
+    use super::{
+        ConnectorError, DeployError, DeployFailure, DeployScope, kql_code, kql_with_limit,
+    };
+
+    #[test]
+    fn a_connector_error_fails_the_rule_or_the_tenant() {
+        let refused: DeployError =
+            ConnectorError::refused("splunk", "soc", "HTTP 400 for the rule", Some("bad".into()))
+                .into();
+        assert_eq!(refused.scope, DeployScope::Rule);
+        assert_eq!(refused.failure.code, "tenant_refused");
+        assert_eq!(refused.failure.message, "HTTP 400 for the rule");
+        assert_eq!(
+            refused.failure.fields,
+            [("platform", "splunk"), ("tenant", "soc"), ("detail", "bad")]
+                .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        );
+        let gateway: DeployError = ConnectorError::Gateway {
+            platform: "splunk".into(),
+            tenant: "soc".into(),
+            message: "HTML from the proxy".into(),
+            status: 502,
+        }
+        .into();
+        assert_eq!(gateway.scope, DeployScope::Tenant);
+        assert_eq!(
+            (gateway.failure.code, gateway.failure.status),
+            ("tenant_gateway", Some(502))
+        );
+        let unset: DeployError = ConnectorError::MissingCredential {
+            platform: "splunk".into(),
+            tenant: "soc".into(),
+            key: "token".into(),
+            variable: "SPLUNK_TOKEN".into(),
+        }
+        .into();
+        assert_eq!(unset.scope, DeployScope::Tenant);
+        assert_eq!(unset.failure.field("variable"), Some("SPLUNK_TOKEN"));
+        let interrupted: DeployError = ConnectorError::Cancelled.into();
+        assert!(interrupted.is_interrupted());
+        assert_eq!(interrupted.failure.fields, Vec::new());
+        assert!(matches!(
+            interrupted.into_connector(),
+            ConnectorError::Cancelled
+        ));
+    }
+
+    #[test]
+    fn a_deployers_own_failure_reads_back_as_a_refusal() {
+        let error = DeployError::rule(
+            DeployFailure::new("sentinel_one_rule_not_found", "no such rule")
+                .with_status(404)
+                .with_field("platform", "sentinel_one")
+                .with_field("tenant", "soc")
+                .with_field("detail", "Rule 7 not found"),
+        );
+        assert_eq!(error.to_string(), "no such rule");
+        assert!(!error.is_interrupted());
+        let ConnectorError::Refused {
+            platform,
+            tenant,
+            message,
+            detail,
+        } = error.into_connector()
+        else {
+            panic!("not a refusal");
+        };
+        assert_eq!(
+            (
+                platform.as_str(),
+                tenant.as_str(),
+                message.as_str(),
+                detail.as_deref()
+            ),
+            (
+                "sentinel_one",
+                "soc",
+                "no such rule",
+                Some("Rule 7 not found")
+            )
+        );
+    }
 
     #[test]
     fn a_doubled_quote_stays_inside_a_verbatim_string() {

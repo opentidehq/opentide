@@ -4,7 +4,7 @@
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use opentide_connectors::connector::{
-    DeployRequest, Deployer, Operation, QueryRequest, TenantContext, TimeWindow,
+    DeployError, DeployRequest, Deployer, Operation, QueryRequest, TenantContext, TimeWindow,
 };
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::runtime::block_on;
@@ -71,7 +71,9 @@ fn deploy(
     body: &[u8],
 ) -> Result<Option<String>, ConnectorError> {
     let request = DeployRequest::new(rule_id.to_owned(), operation, body.to_vec());
-    with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request))).map(|outcome| outcome.remote_id)
+    with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request)))
+        .map(|outcome| outcome.remote_id)
+        .map_err(DeployError::into_connector)
 }
 
 fn reason(error: ConnectorError) -> String {

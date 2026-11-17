@@ -818,8 +818,8 @@ impl Deployer for Bitdefender {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
-        Box::pin(async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
+        crate::connector::deploying(async move {
             let tenant = cx.tenant.label.tenant.clone();
             let compiled = compiled_from_create(&request.body).ok_or_else(|| {
                 ConnectorError::refused(

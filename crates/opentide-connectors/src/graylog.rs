@@ -1063,8 +1063,8 @@ impl Deployer for Graylog {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
-        Box::pin(async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
+        crate::connector::deploying(async move {
             let setup = |message: String| ConnectorError::Setup {
                 platform: PLATFORM.to_owned(),
                 tenant: cx.tenant.label.tenant.clone(),

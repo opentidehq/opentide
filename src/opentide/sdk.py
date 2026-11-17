@@ -83,13 +83,33 @@ class OpentideError(Exception):
     ``interrupted``, ...); ``detail`` is then the vendor's own words, when the
     tenant gave a reason. Match on the code, not the message. Findings about
     the workspace are not errors: they are in the report.
+
+    A failed deploy (:meth:`Connection.deploy`) also says what it stops:
+    ``scope`` is ``"rule"`` (the tenant refused this rule; its other rules can
+    deploy) or ``"tenant"`` (the tenant cannot take any rule); ``status`` is
+    the HTTP status the tenant answered with, when it answered; ``fields``
+    locate the failure (``platform``, ``tenant``, ``address``, ``detail``), in
+    order. Any other error's ``scope`` and ``status`` are ``None`` and its
+    ``fields`` empty.
     """
 
-    def __init__(self, code: str, message: str, detail: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        detail: str | None = None,
+        *,
+        scope: str | None = None,
+        status: int | None = None,
+        fields: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
         self.detail = detail
+        self.scope = scope
+        self.status = status
+        self.fields: dict[str, str] = dict(fields or {})
 
 
 def _load() -> None:
@@ -102,8 +122,15 @@ def _load() -> None:
 
 def _error(exc: BaseException) -> OpentideError:
     """The ``SdkError`` *exc* as :class:`OpentideError`."""
-    code, message, detail = exc.args
-    return OpentideError(str(code), str(message), None if detail is None else str(detail))
+    code, message, detail, scope, status, fields = exc.args
+    return OpentideError(
+        str(code),
+        str(message),
+        None if detail is None else str(detail),
+        scope=None if scope is None else str(scope),
+        status=None if status is None else int(status),
+        fields={str(key): str(value) for key, value in fields},
+    )
 
 
 def _call(function: Callable[..., _T], *args: object, **kwargs: object) -> _T:

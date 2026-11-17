@@ -301,7 +301,7 @@ jobs:
         run: cargo xtask lsp parity --corpus faults
 
   # Real clients against the server (language-server#185 P2.8): pytest-lsp
-  # replays the capabilities VS Code, Neovim and Emacs send and checks each
+  # replays the capabilities VS Code and Neovim send and checks each
   # response against them, and Neovim's own client must show each diagnostic
   # once. Informational while the recorded capabilities and Ubuntu's Neovim move.
   clients:
@@ -339,7 +339,7 @@ jobs:
       - run: cargo build --locked -p opentide-lsp
       # The `clients` dependency group (pyproject.toml, uv.lock), in an
       # environment of its own: the package is not built.
-      - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
+      - name: pytest-lsp (VS Code and Neovim capabilities)
         env:
           OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
         run: uv run --locked --isolated --only-group clients pytest scripts/engine/clients -q

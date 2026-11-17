@@ -163,11 +163,12 @@ const MESSAGE_CORRECTIONS: [(&str, &str, &str); 1] = [(
     "; an app on the search head may provide it (opentide cannot declare app commands yet)",
 )];
 
-/// Held while a run installs datasets or catalogs for the whole process
-/// (the TUI's workspace catalog). The queries checks of [`Profiles`] install
-/// nothing and need it no more (#1142): never hold it around a thread pool
-/// whose jobs could take it, as a pool's thread that waits for its jobs
-/// runs other jobs meanwhile, one that takes this lock included.
+/// Held by a host while it installs datasets or catalogs for the whole
+/// process. Nothing in opentide takes it any more (#1142): the queries
+/// checks of [`Profiles`] and the TUI's catalog are scoped to the threads
+/// that use them. Never hold it around a thread pool whose jobs could take
+/// it, as a pool's thread that waits for its jobs runs other jobs
+/// meanwhile, one that takes this lock included.
 pub static ENGINE: Mutex<()> = Mutex::new(());
 
 /// One engine finding, in the CLI's coordinates (1-based, code points,

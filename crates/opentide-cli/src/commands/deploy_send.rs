@@ -25,7 +25,7 @@ use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
-use opentide_connectors::connector::{DeployRequest, Operation, TenantContext};
+use opentide_connectors::connector::{DeployError, DeployRequest, Operation, TenantContext};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
 use opentide_schema::vocab::Vocabularies;
@@ -673,6 +673,7 @@ fn deploy(
     plan_warnings.extend(selection.warnings.iter().cloned());
     plan_skipped.extend(selection.skipped.iter().cloned());
     let refused = !selection.refused.is_empty();
+    let refused_rules = selection.refused.clone();
     let mut deployment = selection.platforms.clone();
     if let Some(platform) = &args.platform {
         let Some(uuids) = deployment.shift_remove(platform) else {
@@ -1031,7 +1032,7 @@ fn deploy(
                 error: bounded(&error),
             });
         }
-        let failures = failures(&results, &unusable);
+        let failures = failures(&results, &unusable, &refused_rules);
         result.push((
             "failures".into(),
             Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
@@ -1040,7 +1041,7 @@ fn deploy(
     }
     let outcome_failed = sender.failed || refused;
     let any_failed = results.iter().any(|result| result.status == "failed");
-    let failures = failures(&results, &sender.failures);
+    let failures = failures(&results, &sender.failures, &refused_rules);
     // No rule failed: the first tenant or platform that could not deploy
     // says why the run failed.
     let message = if outcome_failed && !any_failed {
@@ -1750,7 +1751,20 @@ fn more_failures(count: usize) -> String {
 /// Every failure of a run, each with its line for the run's `error`: the
 /// failed rules (platform, tenant, id, name, error), then the tenants and
 /// platforms that could not deploy.
-fn failures(results: &[RuleResult], unusable: &[Unusable]) -> Vec<(String, Json)> {
+fn failures(
+    results: &[RuleResult],
+    unusable: &[Unusable],
+    refused: &[String],
+) -> Vec<(String, Json)> {
+    // Rules refused before any platform was planned (`external_id_in_rule`).
+    let refused = refused.iter().map(|uuid| {
+        let error = "external_id_in_rule: the rule still carries vendor ids; deploy reads them \
+                     only from .opentide/states/deployment/";
+        (
+            format!("Deployment refused rule {uuid}: {error}"),
+            Json::object([("id", Json::str(uuid)), ("error", Json::str(error))]),
+        )
+    });
     let rules = results
         .iter()
         .filter(|result| result.status == "failed")
@@ -1784,7 +1798,7 @@ fn failures(results: &[RuleResult], unusable: &[Unusable]) -> Vec<(String, Json)
         };
         (line, failure.to_json())
     });
-    rules.chain(tenants).collect()
+    refused.chain(rules).chain(tenants).collect()
 }
 
 /// A connector error as a failure: of the rule for an answer the tenant
@@ -2221,8 +2235,13 @@ impl Sender<'_, '_> {
                     )
                 };
                 let context = self.context(connection);
-                self.block(deployer.deploy(context, &request))
-                    .map_err(|error| raised(&error))?;
+                self.block(async {
+                    deployer
+                        .deploy(context, &request)
+                        .await
+                        .map_err(DeployError::into_connector)
+                })
+                .map_err(|error| raised(&error))?;
             }
             Some(PlatformId::Splunk) => {
                 let splunk_cx = self.compile;
@@ -2274,7 +2293,12 @@ impl Sender<'_, '_> {
                 let deployer = self.deployer(platform)?;
                 let context = self.context(connection);
                 let outcome = self
-                    .block(deployer.deploy(context, &request))
+                    .block(async {
+                        deployer
+                            .deploy(context, &request)
+                            .await
+                            .map_err(DeployError::into_connector)
+                    })
                     .map_err(|error| raised(&error))?;
                 // `splunk_alert_deleted`: the saved search the tenant had.
                 for warning in &outcome.warnings {
@@ -2341,8 +2365,13 @@ impl Sender<'_, '_> {
                     },
                 );
                 let context = self.context(connection);
-                self.block(deployer.deploy(context, &request))
-                    .map_err(|error| raised(&error))?;
+                self.block(async {
+                    deployer
+                        .deploy(context, &request)
+                        .await
+                        .map_err(DeployError::into_connector)
+                })
+                .map_err(|error| raised(&error))?;
             }
         }
         let _ = result;
@@ -2719,7 +2748,12 @@ impl Sender<'_, '_> {
         );
         let context = self.context(connection);
         let done = self
-            .block(deployer.deploy(context, &request))
+            .block(async {
+                deployer
+                    .deploy(context, &request)
+                    .await
+                    .map_err(DeployError::into_connector)
+            })
             .map_err(|error| plugin_raised(&error))?;
         match (operation, done.remote_id) {
             (Operation::Delete, _) => self.record_deleted(result, platform, &tenant),

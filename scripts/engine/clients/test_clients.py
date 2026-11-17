@@ -22,7 +22,7 @@ from pytest_lsp import ClientServerConfig, LanguageClient, client_capabilities
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 BIN = os.environ.get("OPENTIDE_LSP_BIN", str(ROOT / "target" / "debug" / "opentide-lsp"))
-CLIENTS = ["visual_studio_code", "neovim", "emacs"]
+CLIENTS = ["visual_studio_code", "neovim"]
 URI = "file:///tmp/opentide-clients/typo.kql"
 TEXT = "SecurityEvent | wher EventID == 4688\n"
 

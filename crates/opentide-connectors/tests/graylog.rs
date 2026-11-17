@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use opentide_compile::graylog::{self as compile, CompiledDefinition, Version};
 use opentide_compile::{Json, Owned, Rule};
-use opentide_connectors::connector::{DeployRequest, Deployer, LiveValidator};
+use opentide_connectors::connector::{DeployError, DeployRequest, Deployer, LiveValidator};
 use opentide_connectors::connector::{
     Operation, QueryRequest, QueryRunner, TenantContext, TimeWindow,
 };
@@ -897,7 +897,9 @@ fn deploy_through_platform(
         cancel: &cancel,
     };
     let request = DeployRequest::new(rule_id.to_owned(), operation, body);
-    let outcome = runtime.block_on(Graylog.deploy(cx, &request));
+    let outcome = runtime
+        .block_on(Graylog.deploy(cx, &request))
+        .map_err(DeployError::into_connector);
     (
         outcome,
         runtime.block_on(server.received_requests()).unwrap(),
