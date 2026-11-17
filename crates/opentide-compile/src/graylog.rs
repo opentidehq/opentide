@@ -244,8 +244,8 @@ fn text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
     block.get(key).and_then(Json::as_str)
 }
 
-/// A non-empty string of the block (Python's truthiness of an optional
-/// string).
+/// A non-empty string of the block: a missing key, a non-string and `""`
+/// are none.
 fn set_text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
     text(block, key).filter(|value| !value.is_empty())
 }

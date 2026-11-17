@@ -1,7 +1,7 @@
 //! A configuration file read into the node tree ([`crate::node`]).
 //!
-//! The text is parsed by the `toml_edit` crate (TOML 1.0, the version
-//! Python's `tomllib` reads), whose items keep their byte spans; this module
+//! The text is parsed by the `toml_edit` crate (TOML 1.0), whose items keep
+//! their byte spans; this module
 //! only turns its tables into [`Value::Map`], its arrays into [`Value::Seq`]
 //! and its scalars into the matching [`Value`] (a date or time into
 //! [`Value::Datetime`]), each node at its position.

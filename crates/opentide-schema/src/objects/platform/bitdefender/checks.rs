@@ -176,7 +176,8 @@ fn scalar(node: &Node) -> bool {
     matches!(node.value, Value::Str(_) | Value::Int(_))
 }
 
-/// A scalar's text, as Python's `str()` writes it.
+/// A scalar's text: a string as itself, an integer in decimal; `None` for
+/// any other value.
 fn scalar_text(node: &Node) -> Option<String> {
     match &node.value {
         Value::Str(text) => Some(text.clone()),

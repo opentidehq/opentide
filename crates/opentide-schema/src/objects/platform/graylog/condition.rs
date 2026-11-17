@@ -100,7 +100,7 @@ impl Number {
     }
 
     /// The number as Graylog takes it: an integer when it has no fraction
-    /// (Python's `int`), else a float.
+    /// and fits in 64 bits, else a float.
     pub fn json(&self) -> serde_json::Value {
         if !self.0.contains('.')
             && let Ok(integer) = self.0.parse::<i64>()

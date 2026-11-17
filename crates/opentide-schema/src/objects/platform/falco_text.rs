@@ -9,8 +9,8 @@
 //! `opentide-falco`'s (the `falco_*` findings); this module needs no parser,
 //! so the model builds wherever the crate does (wasm32 included).
 //!
-//! Text is handled in Unicode code points, as the oracle's Python strings
-//! index it.
+//! Text is indexed in Unicode code points, not bytes: positions and lengths
+//! count characters.
 
 use opentide_core::falco::{BLANKS, MODIFIERS, OPERATORS};
 

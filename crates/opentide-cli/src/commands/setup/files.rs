@@ -658,8 +658,7 @@ impl McpServer {
     /// The server `opentide mcp start` runs: this program's own
     /// ([`crate::mcp`]), compiled in with everything it serves, so it starts
     /// wherever this program does and needs nothing installed beside it
-    /// (UC-6.0d, #841). The oracle's server was a Python module whose
-    /// imports the environment could lack.
+    /// (UC-6.0d, #841).
     pub fn probe() -> McpServer {
         McpServer::default()
     }

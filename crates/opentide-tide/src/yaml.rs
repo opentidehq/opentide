@@ -20,12 +20,15 @@ use opentide_core::node::{self, Mark, Node, Value};
 /// a `null` root. `None` for a text the loader refuses.
 pub(crate) fn parse(source: &str) -> Option<Arc<Node>> {
     let document = node::load(source).ok()?;
-    Some(
-        document
-            .root()
-            .cloned()
-            .unwrap_or_else(|| Arc::new(Node::null_at(Mark::default()))),
-    )
+    Some(root_of(&document))
+}
+
+/// The root of a parsed `document`: `null` for an empty one.
+pub(crate) fn root_of(document: &node::Document) -> Arc<Node> {
+    document
+        .root()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(Node::null_at(Mark::default())))
 }
 
 /// What the engine reads of a node.

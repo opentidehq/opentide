@@ -460,6 +460,24 @@ pub struct DeployOutcome {
     /// What was done.
     #[napi(ts_type = "'create' | 'update' | 'disable' | 'delete'")]
     pub operation: String,
+    /// What the deploy raised without failing: the rule is deployed, and
+    /// these say what to check, as `opentide deploy` warns of them.
+    pub warnings: Vec<DeployWarning>,
+}
+
+/// A warning a deploy raised: the rule is deployed, with something to check.
+#[napi(
+    object,
+    object_to_js = false,
+    object_from_js = false,
+    use_nullable = true
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DeployWarning {
+    /// The event `opentide deploy` logs it as (`sysdig_rule_recreated`).
+    pub code: String,
+    /// What happened.
+    pub message: String,
 }
 
 impl From<connectors::DeployOutcome> for DeployOutcome {
@@ -467,6 +485,14 @@ impl From<connectors::DeployOutcome> for DeployOutcome {
         Self {
             remote_id: outcome.remote_id,
             operation: operation_name(outcome.operation).to_owned(),
+            warnings: outcome
+                .warnings
+                .into_iter()
+                .map(|warning| DeployWarning {
+                    code: warning.code,
+                    message: warning.message,
+                })
+                .collect(),
         }
     }
 }
@@ -1184,13 +1210,19 @@ mod tests {
             serde_json::to_string(&LiveCheck::from(none)).unwrap(),
             r#"{"result":null,"errors":[],"warnings":[]}"#
         );
-        let deployed = connectors::DeployOutcome {
-            remote_id: Some("42".into()),
-            operation: Operation::Disable,
-        };
+        let deployed = connectors::DeployOutcome::new(Some("42".into()), Operation::Disable);
         assert_eq!(
             serde_json::to_string(&DeployOutcome::from(deployed)).unwrap(),
-            r#"{"remoteId":"42","operation":"disable"}"#
+            r#"{"remoteId":"42","operation":"disable","warnings":[]}"#
+        );
+        let recreated = connectors::DeployOutcome::new(Some("43".into()), Operation::Update)
+            .with_warnings(vec![connectors::DeployWarning::new(
+                "sysdig_rule_recreated",
+                "creating it again",
+            )]);
+        assert_eq!(
+            serde_json::to_string(&DeployOutcome::from(recreated)).unwrap(),
+            r#"{"remoteId":"43","operation":"update","warnings":[{"code":"sysdig_rule_recreated","message":"creating it again"}]}"#
         );
     }
 

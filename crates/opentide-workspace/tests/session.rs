@@ -177,7 +177,7 @@ mod session {
         assert_eq!(session.invalidate(&[]), 0);
         fs.reset_reads();
         let after = open(&mut session, &fs);
-        // A path outside the workspace loads it again, as the Python serve does.
+        // A path outside the workspace loads it again.
         assert_eq!(fs.reads().len(), 3, "{:?}", fs.reads());
         assert_eq!(after, fresh(&fs));
         fs.reset_reads();

@@ -301,8 +301,8 @@ pub fn signature_codes(signature: Option<&str>) -> BTreeSet<&'static str> {
 
 /// The YARA rule name deploy derives from the Tide rule `name` (decomposed
 /// form): lowercased, spaces and `-` as `_`, any other character that is not
-/// alphanumeric as `_`, and `rule_` before a leading digit. Python's
-/// `str.isalnum` keeps non-ASCII letters, which libyara refuses
+/// alphanumeric as `_`, and `rule_` before a leading digit. Non-ASCII
+/// letters count as alphanumeric and are kept, though libyara refuses them
 /// ([`rule_name_problem`]).
 #[must_use]
 pub fn derived_rule_name(name: &str) -> String {

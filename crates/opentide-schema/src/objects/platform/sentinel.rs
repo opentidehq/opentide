@@ -109,11 +109,11 @@ pub fn check_duration(value: &str) -> Result<(), Violation> {
     }
 }
 
-/// The most days deploy's duration holds (Python's `timedelta.max.days`).
+/// The most days deploy's duration holds: 999,999,999.
 pub const MAX_DURATION_DAYS: u64 = 999_999_999;
 
 /// The longest duration deploy converts, in seconds: [`MAX_DURATION_DAYS`]
-/// and a day less one second (`timedelta.max`, whole seconds).
+/// and a day less one second, in whole seconds.
 pub const MAX_DURATION_SECONDS: u64 = MAX_DURATION_DAYS * 86_400 + 86_399;
 
 /// What a Sentinel duration's text spells.

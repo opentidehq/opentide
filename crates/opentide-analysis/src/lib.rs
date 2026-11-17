@@ -318,6 +318,41 @@ pub fn analyze_blocks(host: &dyn WorkspaceHost, text: &str) -> Vec<Diagnostic> {
     opentide_tide::block_diagnostics(text, &workspace_index(host))
 }
 
+/// [`analyze_blocks`] on `document`, the host's parse of `text` after its
+/// byte-order mark ([`opentide_core::node::load`]), which it reads instead
+/// of parsing the text again (#1233).
+pub fn analyze_blocks_parsed(
+    host: &dyn WorkspaceHost,
+    text: &str,
+    document: &opentide_core::node::Document,
+) -> Vec<Diagnostic> {
+    opentide_tide::block_diagnostics_parsed(text, document, &workspace_index(host))
+}
+
+/// [`analyze`] of the Tide object `text` ([`LanguageId::TideYaml`]) at
+/// `uri`, on `document`, the host's parse of `text` after its byte-order
+/// mark, which it reads instead of parsing the text again (#1233).
+pub fn analyze_tide_parsed(
+    host: &dyn WorkspaceHost,
+    uri: &str,
+    text: &str,
+    document: &opentide_core::node::Document,
+) -> AnalyzeResponse {
+    let r = opentide_tide::analyze_parsed(
+        opentide_tide::AnalyzeInput {
+            path: uri,
+            source: text,
+            elastic_tenants: &elastic_tenants(host),
+        },
+        document,
+    );
+    AnalyzeResponse {
+        diagnostics: r.diagnostics,
+        tokens: r.tokens,
+        symbols: r.symbols,
+    }
+}
+
 /// A query on its own, outside an object file.
 #[derive(Debug, Clone)]
 pub struct QueryRequest {

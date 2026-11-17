@@ -2,8 +2,8 @@
 //! `tests/test_platforms/test_elastic_model.py`,
 //! `tests/test_platforms/test_sysdig_model.py`,
 //! `tests/test_models/test_platform*.py` and
-//! `tests/test_models/test_sentinel_attack.py`: each block is a Python dict
-//! there, a JSON value here, read as the node the YAML would give.
+//! `tests/test_models/test_sentinel_attack.py`: each block is a JSON value,
+//! read as the node the YAML would give.
 
 use garde::Validate;
 use serde_json::{Value as Json, json};
@@ -294,7 +294,7 @@ fn elastic_constraint_codes() {
     }
 }
 
-/// A boolean is no integer (Python's `bool` subclassed `int`): in
+/// A boolean is no integer (`true` is not `1`): in
 /// `threshold.value`, `risk` or `risk.score` it is the field type's
 /// `int_type` on the value (for the `int | ElasticRisk` union, one error naming
 /// an integer), never read as 0 or 1 by the block's constraints.
@@ -392,8 +392,8 @@ fn elastic_rejects_with_a_code_not_a_crash() {
     }
 }
 
-/// The block's constraints read a value by its type, not by Python's
-/// truthiness: `false` and `0` are values a key is set to, an osquery
+/// The block's constraints read a value by its type, not by whether it is
+/// empty or zero: `false` and `0` are values a key is set to, an osquery
 /// action's `query` and a `group_by` field are names (non-empty strings),
 /// and only a sequence's items are judged (the field's type refuses any
 /// other value).

@@ -321,7 +321,8 @@ fn string_entries(node: &Node) -> Vec<(String, &Node)> {
     }
 }
 
-/// A mapping key as Python's `str()` writes it.
+/// A mapping key as text: a string or a date as itself, any other key as
+/// YAML writes it (`true`, `1`, `null`).
 pub(crate) fn key_text(key: &Node) -> String {
     match &key.value {
         Value::Str(text) | Value::Datetime(text) => text.clone(),
@@ -418,7 +419,7 @@ pub(crate) fn positive_number(digits: &str) -> Option<u64> {
     {
         return None;
     }
-    // Digits past u64 are still a duration Python reads; they exceed every bound.
+    // Digits past u64 are still a duration; they exceed every bound.
     Some(digits.parse().unwrap_or(u64::MAX))
 }
 
@@ -838,7 +839,7 @@ mod tests {
     }
 
     /// A boolean in `match` is refused, and deploy writes it as YARA-L spells
-    /// it, never Python's `True`.
+    /// it, lowercase (`true`, never `True`).
     #[test]
     fn a_boolean_in_match_is_written_lowercase() {
         let flagged =

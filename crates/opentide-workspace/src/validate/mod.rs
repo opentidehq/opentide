@@ -936,7 +936,8 @@ fn nearest_key_line(root: Option<&Node>, field_path: &[String]) -> Option<usize>
     line
 }
 
-/// Python's sort key of an error (`sort_issues`).
+/// The sort key of an error (`sort_issues`): its file, its line (none
+/// first), its field path, object, code and message.
 fn sort_key(issue: &Diagnostic) -> (String, i64, &[String], &str, &str, &str) {
     (
         issue
