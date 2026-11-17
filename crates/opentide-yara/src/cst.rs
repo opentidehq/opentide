@@ -162,6 +162,16 @@ fn leaves(cst: &CST) -> Vec<Tok> {
     out
 }
 
+/// The end of the last token of `source` that is not a blank or a comment:
+/// where a signature that stops too early stops.
+pub(crate) fn significant_end(source: &str) -> usize {
+    leaves(&parsed(source))
+        .iter()
+        .rev()
+        .find(|t| !is_trivia(t.kind()))
+        .map_or(0, |t| t.span().end())
+}
+
 fn is_trivia(kind: SyntaxKind) -> bool {
     matches!(
         kind,
