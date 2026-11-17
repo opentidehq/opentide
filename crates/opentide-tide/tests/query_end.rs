@@ -18,6 +18,8 @@ use opentide_tide::{analyze_queries, extract_injections, remap_span};
 const CQL: &str = "configurations:\n  crowdstrike:\n    query: |\n      a=1 | groupBy(\n";
 const YARA: &str =
     "configurations:\n  bitdefender:\n    yara:\n      signature: |\n        rule a { condition:\n";
+const ESQL: &str =
+    "configurations:\n  elastic:\n    type: esql\n    query: |\n      FROM logs-* | WHERE (\n";
 const EXABEAM: &str =
     "configurations:\n  exabeam:\n    sequences:\n      - query: |\n          a =\n";
 
@@ -107,5 +109,16 @@ fn a_quoted_query_that_stops_early_is_reported_at_its_closing_quote() {
     assert_eq!(
         parse_error_start(source, LanguageId::Cql),
         Position::new(2, u32::try_from(quote - line_start).unwrap())
+    );
+}
+
+/// ES|QL reports an error at the end as the other engines do, an empty span
+/// where the text stops, and lands right after the query's last character
+/// (it used to mark that character itself, a workaround #1431 made needless).
+#[test]
+fn an_esql_query_that_stops_early_is_reported_where_it_stops() {
+    assert_eq!(
+        parse_error_start(ESQL, LanguageId::Esql),
+        after_the_query(ESQL)
     );
 }

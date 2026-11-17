@@ -206,6 +206,13 @@ fn parse_error(
             }
         }
     };
+    // At the end of the query: an empty span after its last token, not one
+    // over the blanks that follow it.
+    let span = if span.start >= source.trim_end().len() {
+        ByteSpan::new(span.start, span.start)
+    } else {
+        span
+    };
     Some(Diagnostic::error(
         codes::KUERY_PARSE_ERROR,
         message,
