@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS
@@ -216,3 +217,57 @@ def test_the_native_workspace_names_its_root(tide_corpus_repo: Path) -> None:
 
     native = NativeWorkspace.open(str(tide_corpus_repo))
     assert repr(native) == f"Workspace({json.dumps(native.root)})"
+
+
+_SWEEP_VARIABLE = "OPENTIDE_SWEEP_PY_TOKEN"
+_SWEEP_PLATFORM = (
+    '[platform]\nenabled = true\n\n[[tenants]]\nname = "lab"\nstrategies = ["PREVIEW", "RELEASE"]\n'
+    '[tenants.setup]\nurl = "https://s1.invalid"\naccount_id = 1001\n'
+    f'api_token = "${_SWEEP_VARIABLE}"\n'
+)
+_SWEEP_RULE = (
+    "name: S1 rule\nmetadata:\n  uuid: 00000000-0000-4000-8099-000000000203\n  schema: rule::1.0\n"
+    "  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: S1.\n"
+    "response:\n  alert_severity: High\nconfigurations:\n  sentinel_one:\n    status: STAGING\n"
+    "    condition:\n      type: Single Event\n      single_event:\n"
+    "        query: src.process.name = 'cmd.exe'\n"
+    "    response:\n      treat_as_threat: Malicious\n      network_quarantine: false\n"
+)
+
+
+def test_info_and_a_plan_look_credentials_up_in_the_environment_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1142: a credential handed over as ``environment`` (as ``Connection.open``
+    takes it) is not reported unset; without one, the process's is read."""
+    monkeypatch.delenv(_SWEEP_VARIABLE, raising=False)
+    ws = Workspace.from_files(
+        "/ws",
+        {
+            ".opentide/configurations/platforms/sentinel_one.toml": _SWEEP_PLATFORM,
+            "objects/rules/s1.yaml": _SWEEP_RULE,
+        },
+    )
+
+    def is_set(info: dict[str, Any]) -> bool:
+        for platform in info["platforms"]:
+            for tenant in platform["tenants"]:
+                for variable in tenant["variables"]:
+                    if variable["name"] == _SWEEP_VARIABLE:
+                        return bool(variable["set"])
+        raise AssertionError(info)
+
+    assert is_set(ws.info()) is False
+    assert is_set(ws.info(environment={_SWEEP_VARIABLE: "token"})) is True
+
+    def names_it(plan: DeployPlan) -> bool:
+        return f"${_SWEEP_VARIABLE}" in json.dumps(plan.document)
+
+    assert names_it(ws.deploy_plan(strategies=["PREVIEW"], platform="sentinel_one"))
+    assert not names_it(
+        ws.deploy_plan(
+            strategies=["PREVIEW"],
+            platform="sentinel_one",
+            environment={_SWEEP_VARIABLE: "token"},
+        )
+    )

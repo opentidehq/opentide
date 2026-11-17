@@ -63,6 +63,10 @@ pub struct DeployPlanOptions {
     /// default a run over every rule drops deprecated rules and a selection
     /// keeps them.
     pub keep_deprecated: Option<bool>,
+    /// The environment a tenant's `$NAME` credentials are looked up in, to
+    /// say whether each is set (as `ConnectOptions::environment` names the
+    /// one a connection reads); `None`: the process's.
+    pub environment: Option<std::collections::BTreeMap<String, String>>,
 }
 
 impl DeployPlanOptions {
@@ -96,6 +100,32 @@ impl DeployPlanOptions {
     pub fn platform(mut self, platform: impl Into<String>) -> Self {
         self.platform = Some(platform.into());
         self
+    }
+
+    /// Looks the tenants' `$NAME` credentials up in `vars` instead of the
+    /// process's environment.
+    pub fn environment<K: Into<String>, V: Into<String>>(
+        mut self,
+        vars: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        self.environment = Some(
+            vars.into_iter()
+                .map(|(key, value)| (key.into(), value.into()))
+                .collect(),
+        );
+        self
+    }
+}
+
+/// Whether the variable `name` is set and not empty: in `environment`, else
+/// in the process's.
+pub(crate) fn is_set(
+    environment: Option<&std::collections::BTreeMap<String, String>>,
+    name: &str,
+) -> bool {
+    match environment {
+        Some(vars) => vars.get(name).is_some_and(|value| !value.is_empty()),
+        None => std::env::var_os(name).is_some_and(|value| !value.is_empty()),
     }
 }
 
@@ -174,7 +204,7 @@ impl Workspace {
         let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
             Err("the facade plans every rule file or a selection".to_owned())
         };
-        let is_set = |name: &str| std::env::var_os(name).is_some_and(|value| !value.is_empty());
+        let is_set = |name: &str| is_set(options.environment.as_ref(), name);
         let outcome = dry_run::run(ws, &owned, &request, &changed, &is_set);
         let message = || {
             outcome

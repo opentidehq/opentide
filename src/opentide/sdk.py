@@ -336,11 +336,18 @@ class Workspace:
         )
         return LintReport(**data)
 
-    def info(self) -> Document:
+    def info(self, *, environment: Mapping[str, str] | None = None) -> Document:
         """``opentide info``: the object counts, the files that did not load and
         each platform with its tenants (the variables each reads and whether
-        each is set, never their values)."""
-        return json.loads(_call(self._inner.info))
+        each is set, never their values). *environment* is where the variables
+        are looked up, as :meth:`Connection.open`'s names the one a connection
+        reads; ``None``: the process's."""
+        return json.loads(
+            _call(
+                self._inner.info,
+                None if environment is None else list(environment.items()),
+            )
+        )
 
     def rules(self) -> list[Document]:
         """The detection rules: their rows of the catalogue (``uuid``, ``type``,
@@ -373,11 +380,15 @@ class Workspace:
         files: Sequence[str] = (),
         platform: str | None = None,
         keep_deprecated: bool | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> DeployPlan:
         """``opentide deploy --dry-run``: the rules the strategies select, the
         tenants each reaches and the request bodies a real run would send.
         Nothing is sent and nothing is written. Without *uuids* or *files* it
-        plans every rule file (``--all``)."""
+        plans every rule file (``--all``). *environment* is where the tenants'
+        ``$NAME`` credentials are looked up, to say which are unset, as
+        :meth:`Connection.open`'s names the one a connection reads; ``None``:
+        the process's."""
         document, summary, ok = _call(
             self._inner.deploy_plan,
             strategies=list(strategies),
@@ -385,6 +396,7 @@ class Workspace:
             files=list(files),
             platform=platform,
             keep_deprecated=keep_deprecated,
+            environment=None if environment is None else list(environment.items()),
         )
         return DeployPlan(
             document=json.loads(document),

@@ -99,11 +99,11 @@ coverage = ws.coverage("T1059")
 print(f"{coverage['count']} rules cover {coverage['technique']}")
 ```
 
-A tenant in `info()["platforms"]` names the environment variables it reads and whether each is set in this process, never their values.
+A tenant in `info()["platforms"]` names the environment variables it reads and whether each is set in this process, never their values; `info(environment={...})` looks them up in that environment instead, as `Connection.open` takes one.
 
 ## Plan a deploy
 
-`deploy_plan` is `opentide deploy --dry-run`: the rules the strategies select, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. Without `uuids` or `files` it plans every rule file (`--all`); `platform` plans for one platform, and `keep_deprecated` is `--keep-deprecated` (`True`) or `--drop-deprecated` (`False`).
+`deploy_plan` is `opentide deploy --dry-run`: the rules the strategies select, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. Without `uuids` or `files` it plans every rule file (`--all`); `platform` plans for one platform, and `keep_deprecated` is `--keep-deprecated` (`True`) or `--drop-deprecated` (`False`). `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `Connection.open` takes one; without it, the process's.
 
 ```python
 from opentide import Workspace
@@ -162,7 +162,7 @@ api_token = "$S1_API_TOKEN"
 account_id = 42
 ```
 
-`Connection.open(tenant)` resolves the tenant's `$NAME` credentials (an unset one raises `credential_unset`, naming the variable) and builds its client from that tenant's own settings: TLS, CA bundle, proxy, timeout. It sends nothing. `environment` replaces the process's environment for the credentials (Google SecOps's Application Default Credentials too: `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file (`CLOUDSDK_CONFIG`, else under `HOME`), `GCE_METADATA_HOST`; an `environment` that names none of them leaves Google SecOps the metadata server), CA bundles and proxies, `proxy` comes before the environment's, and `timeout` is how long, in seconds, the tenant may take to answer a read in a query or a live check (a deploy waits as long as `opentide deploy` does). `capabilities` says what the platform's connector can do. A tenant can also be configured in code: `TenantConfig("sentinel_one", "soc", {"url": ..., "api_token": "$S1_API_TOKEN"})`.
+`Connection.open(tenant)` resolves the tenant's `$NAME` credentials (an unset one raises `credential_unset`, naming the variable) and builds its client from that tenant's own settings: TLS, CA bundle, proxy, timeout. It sends nothing. TLS roots come from the system's store, which the process's `SSL_CERT_FILE` and `SSL_CERT_DIR` replace whatever `environment` says; a tenant's own CA bundle is read from `environment`. `environment` replaces the process's environment for the credentials (Google SecOps's Application Default Credentials too: `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file (`CLOUDSDK_CONFIG`, else under `HOME`), `GCE_METADATA_HOST`; an `environment` that names none of them leaves Google SecOps the metadata server), CA bundles and proxies, `proxy` comes before the environment's, and `timeout` is how long, in seconds, the tenant may take to answer a read in a query or a live check (a deploy waits as long as `opentide deploy` does). `capabilities` says what the platform's connector can do. A tenant can also be configured in code: `TenantConfig("sentinel_one", "soc", {"url": ..., "api_token": "$S1_API_TOKEN"})`.
 
 `query`, `validate_query` and `deploy` are `async`. Each runs on the Rust core's tokio runtime, started on the first operation, without the GIL while the `asyncio` event loop awaits it, so one connection serves many operations at once:
 

@@ -35,17 +35,22 @@ pub fn hosted() -> bool {
     HOST.get().is_some()
 }
 
-/// The built-in platforms, then the plugins. Built fresh for each caller,
-/// as [`opentide_connectors::builtin`] is: a connector's state (a token)
-/// never outlives the command that made it; the host keeps the plugins it
-/// loaded.
-pub fn registry() -> Registry {
-    plugin::with_plugins(HOST.get().map(AsRef::as_ref)).0
+/// The built-in platforms, reading the command's `environment` (Google
+/// SecOps's Application Default Credentials), then the plugins. Built fresh
+/// for each caller, as [`opentide_connectors::builtin_with`] is: a
+/// connector's state (a token) never outlives the command that made it; the
+/// host keeps the plugins it loaded.
+pub fn registry(environment: &opentide_connectors::Environment) -> Registry {
+    plugin::with_plugins(HOST.get().map(AsRef::as_ref), environment).0
 }
 
 fn loaded() -> &'static (Vec<String>, Vec<PluginError>) {
     LOADED.get_or_init(|| {
-        let (registry, errors) = plugin::with_plugins(HOST.get().map(AsRef::as_ref));
+        // Only the plugins' identifiers are read: no environment.
+        let (registry, errors) = plugin::with_plugins(
+            HOST.get().map(AsRef::as_ref),
+            &opentide_connectors::Environment::default(),
+        );
         let ids = registry
             .ids()
             .into_iter()
@@ -93,7 +98,8 @@ impl PlatformConfigurations for PluginBlocks {
     }
 
     fn check(&self, platform: &str, block: &serde_json::Value) -> Vec<PlatformFinding> {
-        let registry = registry();
+        // A block's check reads no tenant and no credential.
+        let registry = registry(&opentide_connectors::Environment::default());
         let Some(check) = registry
             .get(platform)
             .and_then(opentide_connectors::Platform::configuration_check)

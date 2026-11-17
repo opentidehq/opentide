@@ -132,8 +132,11 @@ export declare class Workspace {
    * What `opentide info` reports: the object counts, the files that did
    * not load and each platform with its tenants (the environment
    * variables each reads and whether each is set, never their values).
+   * `environment` is where the variables are looked up, as
+   * `Connection.open`'s names the one a connection reads; omitted: the
+   * process's.
    */
-  info(): any
+  info(environment?: Record<string, string> | undefined | null): any
   /**
    * The catalogue (`opentide info catalog`): every object with its
    * techniques and platforms, every edge, the signals and the ATT&CK
@@ -269,6 +272,12 @@ export interface DeployPlanOptions {
    * unset: the configuration's.
    */
   keepDeprecated?: boolean
+  /**
+   * Where the tenants' `$NAME` credentials are looked up, to say which are
+   * unset, as `Connection.open`'s `environment` names the one a connection
+   * reads; unset: the process's.
+   */
+  environment?: Record<string, string>
 }
 
 /** A warning a deploy raised: the rule is deployed, with something to check. */

@@ -183,6 +183,10 @@ pub struct DeployPlanOptions {
     /// `--keep-deprecated` (`true`) or `--no-keep-deprecated` (`false`);
     /// unset: the configuration's.
     pub keep_deprecated: Option<bool>,
+    /// Where the tenants' `$NAME` credentials are looked up, to say which are
+    /// unset, as `Connection.open`'s `environment` names the one a connection
+    /// reads; unset: the process's.
+    pub environment: Option<std::collections::HashMap<String, String>>,
 }
 
 /// A Tide workspace: its configuration, resolved once, and every object file,
@@ -264,9 +268,19 @@ impl Workspace {
     /// What `opentide info` reports: the object counts, the files that did
     /// not load and each platform with its tenants (the environment
     /// variables each reads and whether each is set, never their values).
+    /// `environment` is where the variables are looked up, as
+    /// `Connection.open`'s names the one a connection reads; omitted: the
+    /// process's.
     #[napi(catch_unwind, ts_return_type = "any")]
-    pub fn info<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
-        env.to_js_value(&self.inner.info())
+    pub fn info<'env>(
+        &self,
+        env: &'env Env,
+        environment: Option<std::collections::HashMap<String, String>>,
+    ) -> napi::Result<Unknown<'env>> {
+        match environment {
+            Some(vars) => env.to_js_value(&self.inner.info_in(vars)),
+            None => env.to_js_value(&self.inner.info()),
+        }
     }
 
     /// The catalogue (`opentide info catalog`): every object with its
@@ -749,6 +763,9 @@ fn deploy_plan_options(options: DeployPlanOptions) -> Result<opentide::DeployPla
         out = out.platform(platform);
     }
     out.keep_deprecated = options.keep_deprecated;
+    if let Some(vars) = options.environment {
+        out = out.environment(vars);
+    }
     Ok(out)
 }
 
@@ -979,6 +996,7 @@ mod tests {
             files: Some(vec![RULE.into()]),
             platform: Some("splunk".into()),
             keep_deprecated: None,
+            environment: None,
         })
         .unwrap();
         assert_eq!(plan.strategies, [opentide::Strategy::Preview]);

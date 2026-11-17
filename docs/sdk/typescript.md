@@ -105,7 +105,7 @@ Workspace.open('.').then((ws) => {
 
 ## Plan a deploy
 
-`deployPlan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. It returns a promise of `{ document, summary, ok }`; `document` is the `result` of `deploy --dry-run --json`.
+`deployPlan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. It returns a promise of `{ document, summary, ok }`; `document` is the `result` of `deploy --dry-run --json`. `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `Connection.open` takes one, and `ws.info(environment)` reports each variable as set or not in it; without one, the process's.
 
 ```js
 const { Workspace } = require('@opentide/opentide')
@@ -133,7 +133,7 @@ api_token = "$S1_API_TOKEN"
 account_id = 42
 ```
 
-`Connection.open(tenant, options)` resolves the tenant's `$NAME` credentials (an unset one throws `credential_unset`, naming the variable) and builds its client from that tenant's own settings: TLS, CA bundle, proxy, timeout. It sends nothing. The options are `environment`, which replaces the process's environment for the credentials (Google SecOps's Application Default Credentials too: `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file (`CLOUDSDK_CONFIG`, else under `HOME`), `GCE_METADATA_HOST`; an `environment` that names none of them leaves Google SecOps the metadata server), CA bundles and proxies, `proxy`, used before the environment's, and `timeout`, how long in seconds the tenant may take to answer a read in a query or a live check (a deploy waits as long as `opentide deploy` does). `capabilities` says what the platform's connector can do. A tenant can also be configured in code: `new TenantConfig('sentinel_one', 'soc', { url, api_token: '$S1_API_TOKEN' })`; `setupKeys` names its keys, never their values.
+`Connection.open(tenant, options)` resolves the tenant's `$NAME` credentials (an unset one throws `credential_unset`, naming the variable) and builds its client from that tenant's own settings: TLS, CA bundle, proxy, timeout. It sends nothing. TLS roots come from the system's store, which the process's `SSL_CERT_FILE` and `SSL_CERT_DIR` replace whatever `environment` says; a tenant's own CA bundle is read from `environment`. The options are `environment`, which replaces the process's environment for the credentials (Google SecOps's Application Default Credentials too: `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file (`CLOUDSDK_CONFIG`, else under `HOME`), `GCE_METADATA_HOST`; an `environment` that names none of them leaves Google SecOps the metadata server), CA bundles and proxies, `proxy`, used before the environment's, and `timeout`, how long in seconds the tenant may take to answer a read in a query or a live check (a deploy waits as long as `opentide deploy` does). `capabilities` says what the platform's connector can do. A tenant can also be configured in code: `new TenantConfig('sentinel_one', 'soc', { url, api_token: '$S1_API_TOKEN' })`; `setupKeys` names its keys, never their values.
 
 `query`, `validateQuery` and `deploy` return promises. Each operation runs on the Rust core's own threads (a tokio runtime the first operation starts) and settles back on Node's thread, so the event loop keeps running and one connection serves many operations at once:
 
