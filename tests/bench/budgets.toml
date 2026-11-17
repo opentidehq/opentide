@@ -117,15 +117,17 @@ target_s = 0.7
 target_rss_mib = 95.4
 # Missed. The peak was the KQL catalogs parsed through a whole toml_edit document
 # (massif; 140.3 MiB on the EPYC 7763, run 43450448595, PR #1055). #1071 parses the
-# Azure Monitor and ASIM catalogs one array item at a time: `cargo xtask bench`, one
-# 4-vCPU Xeon @ 2.30 GHz, two alternating rounds, 143.8/144.7 to 111.3/109.9 MiB
-# (lint 149.5/147.5 to 116.7/115.7). What is left is no transient: massif's heap peak is 58 MiB, of which
-# the workspace's parsed objects (about 20 MiB) and the KQL catalogs (about 14 MiB, the
-# reference's column descriptions held by the reference and by each profile) live to
-# the end; the binary's touched pages are about 30 MiB and the allocator's six thread
-# arenas keep the rest. Meeting 95.4 MiB needs those steady structures smaller (#1071).
-rss_waiver = "#1071, the catalogs' steady memory and the parsed workspace"
-waived_rss_mib = 113.0
+# Azure Monitor and ASIM catalogs one array item at a time and shares the reference's
+# column strings (description, table, profile, citation) between the catalogs.
+# `cargo xtask bench`, one 4-vCPU Xeon @ 2.30 GHz: 143.8/144.7 MiB before; 111.3/109.9
+# after the item-by-item read; 107.2/103.5/103.5 after the sharing (lint 149.5/147.5 to
+# 110.5/109.5/109.1). The rest is structural, not a transient: the binary's touched
+# pages (about 30 MiB, the catalogs compiled in), the workspace's parsed objects (about
+# 20 MiB of node trees for 4.5 MB of YAML, alive for the run), the engines' catalogs
+# and the allocator's six thread arenas. Meeting 95.4 MiB needs a lighter workspace
+# tree or catalogs that are not resident (#1071).
+rss_waiver = "#1071, the parsed workspace and the resident catalogs"
+waived_rss_mib = 103.5
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
