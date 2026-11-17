@@ -10,6 +10,7 @@ use rowan::{NodeOrToken, TextRange};
 
 /// A child the analysis sees: a node, or a token that is not trivia.
 fn visible(element: &rowan::SyntaxElement<crate::syntax::Lang>) -> bool {
+    crate::step();
     match element {
         NodeOrToken::Node(_) => true,
         NodeOrToken::Token(t) => !t.kind().is_trivia(),
@@ -95,6 +96,7 @@ pub(crate) fn element_at<'a>(
         }
         let mut next = None;
         for child in node.children_with_tokens() {
+            crate::step();
             // A span lies in its element's range: only an element whose range holds `offset`
             // needs its span, a walk down its edges.
             let whole = child.text_range();

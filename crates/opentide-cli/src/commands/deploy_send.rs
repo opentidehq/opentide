@@ -45,6 +45,7 @@ use crate::render::outcome::Console;
 use crate::render::progress::{Step, StepStatus, plural, seconds_text};
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
+use opentide_schema::platforms::PlatformId;
 
 /// The command path.
 pub const COMMAND: &str = "deploy";
@@ -1742,18 +1743,24 @@ impl Sender<'_, '_> {
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
         let batches = self.batches(platform, uuids)?;
-        match platform {
-            "elastic" => self.elastic(&batches, log),
-            "sysdig" => self.sysdig(&batches, log),
-            "bitdefender" => self.bitdefender(&batches, log),
-            "exabeam" => self.exabeam(&batches, log),
-            "google_secops" => self.google_secops(&batches, log),
-            "graylog" => self.graylog(&batches, log),
-            "defender_for_endpoint" | "sentinel_one" | "crowdstrike" => {
-                self.with_state(platform, &batches, log)
-            }
-            plugin if crate::plugins::is_plugin(plugin) => self.plugin(plugin, &batches, log),
-            _ => self.by_uuid(platform, &batches, log),
+        match PlatformId::parse(platform) {
+            Some(PlatformId::Elastic) => self.elastic(&batches, log),
+            Some(PlatformId::Sysdig) => self.sysdig(&batches, log),
+            Some(PlatformId::Bitdefender) => self.bitdefender(&batches, log),
+            Some(PlatformId::Exabeam) => self.exabeam(&batches, log),
+            Some(PlatformId::GoogleSecops) => self.google_secops(&batches, log),
+            Some(PlatformId::Graylog) => self.graylog(&batches, log),
+            Some(
+                PlatformId::DefenderForEndpoint | PlatformId::SentinelOne | PlatformId::Crowdstrike,
+            ) => self.with_state(platform, &batches, log),
+            Some(
+                PlatformId::Sentinel
+                | PlatformId::Splunk
+                | PlatformId::CarbonBlackCloud
+                | PlatformId::Harfanglab,
+            ) => self.by_uuid(platform, &batches, log),
+            None if crate::plugins::is_plugin(platform) => self.plugin(platform, &batches, log),
+            None => self.by_uuid(platform, &batches, log),
         }
     }
 
@@ -1790,7 +1797,7 @@ impl Sender<'_, '_> {
             let connection = self.connect(platform, batch)?;
             for sent in &batch.rules {
                 let rule = &sent.rule;
-                if platform == "harfanglab" {
+                if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
                     let block = rule.block(platform);
                     let kind = block.and_then(|block| {
                         if block.get("sigma").is_some_and(|value| !value.is_null()) {
@@ -1877,8 +1884,8 @@ impl Sender<'_, '_> {
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
-        match platform {
-            "sentinel" => {
+        match PlatformId::parse(platform) {
+            Some(PlatformId::Sentinel) => {
                 let deployer = self.deployer(platform)?;
                 let request = if deletion {
                     tracing::warn!(
@@ -1905,7 +1912,7 @@ impl Sender<'_, '_> {
                 self.block(deployer.deploy(context, &request))
                     .map_err(|error| raised(&error))?;
             }
-            "splunk" => {
+            Some(PlatformId::Splunk) => {
                 let splunk_cx = self.compile;
                 let bytes: [u8; 16] = *uuid::Uuid::new_v4().as_bytes();
                 let civil = jiff::tz::Offset::UTC.to_datetime(self.cx.now);
@@ -1955,7 +1962,7 @@ impl Sender<'_, '_> {
                 self.block(splunk.apply_saved_search(context, &name, &settings, false))
                     .map_err(|error| raised(&error))?;
             }
-            "carbon_black_cloud" => {
+            Some(PlatformId::CarbonBlackCloud) => {
                 let Some(report) =
                     opentide_compile::carbon_black::report(self.compile, rule, &batch.table)
                         .map_err(compile_error)?
@@ -2246,8 +2253,8 @@ impl Sender<'_, '_> {
                 cancel: &cancel,
             };
             let defender = opentide_connectors::defender::Defender::new();
-            let session = match platform {
-                "defender_for_endpoint" => {
+            let session = match PlatformId::parse(platform) {
+                Some(PlatformId::DefenderForEndpoint) => {
                     self.block(async {
                         defender
                             .token(context)
@@ -2257,7 +2264,7 @@ impl Sender<'_, '_> {
                     .map_err(|error| raised(&error))?;
                     None
                 }
-                "crowdstrike" => Some(
+                Some(PlatformId::Crowdstrike) => Some(
                     self.block(opentide_connectors::crowdstrike::Session::connect(context))
                         .map_err(|error| raised(&error))?,
                 ),
@@ -2423,14 +2430,18 @@ impl Sender<'_, '_> {
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
-        let body = match platform {
-            "defender_for_endpoint" => opentide_compile::defender::body(self.compile, rule, tenant),
-            "sentinel_one" => opentide_compile::sentinel_one::body(self.compile, rule, table),
+        let body = match PlatformId::parse(platform) {
+            Some(PlatformId::DefenderForEndpoint) => {
+                opentide_compile::defender::body(self.compile, rule, tenant)
+            }
+            Some(PlatformId::SentinelOne) => {
+                opentide_compile::sentinel_one::body(self.compile, rule, table)
+            }
             _ => opentide_compile::crowdstrike::body(self.compile, rule, table),
         }
         .map_err(compile_error)?;
-        match platform {
-            "defender_for_endpoint" => {
+        match PlatformId::parse(platform) {
+            Some(PlatformId::DefenderForEndpoint) => {
                 let advice = opentide_connectors::text::json_text(&body);
                 let refused = |error: DefenderError, action: &Planned| match error {
                     DefenderError::Refused { message, context } => {
@@ -2495,7 +2506,7 @@ impl Sender<'_, '_> {
                     }
                 }
             }
-            "sentinel_one" => {
+            Some(PlatformId::SentinelOne) => {
                 let refused = |error: SentinelOneError, action: &Planned| {
                     match &error {
                         SentinelOneError::Invalid { detail } => tracing::error!(
@@ -2627,12 +2638,13 @@ impl Sender<'_, '_> {
     /// tenant that refuses the key stops its batch (`ElasticDeploy`).
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn elastic(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        const PLATFORM: &str = PlatformId::Elastic.as_str();
         use opentide_connectors::elastic::{
             Deployed, Elastic, ElasticError, ElasticRule, Strategy,
         };
         for batch in batches {
             let tenant = batch.tenant.name.clone();
-            let connection = self.connect("elastic", batch)?;
+            let connection = self.connect(PLATFORM, batch)?;
             let setup = opentide_compile::elastic::Setup::from_tenant(&batch.table);
             let suppression_off = matches!(
                 opentide_compile::deploy::setup(&batch.table, "suppression"),
@@ -2642,8 +2654,8 @@ impl Sender<'_, '_> {
             let mut stopped: Option<String> = None;
             for sent in &batch.rules {
                 let rule = &sent.rule;
-                let mut result = RuleResult::new("elastic", Some(&tenant), &rule.uuid, &rule.name);
-                let Some(raw) = rule.block("elastic").filter(|block| block.is_filled()) else {
+                let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
+                let Some(raw) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
                     result.skip("no Elastic configuration");
                     log.finished(result);
                     continue;
@@ -2666,7 +2678,7 @@ impl Sender<'_, '_> {
                     log.finished(result);
                     continue;
                 }
-                let block = opentide_compile::preview::config_dump("elastic", raw);
+                let block = opentide_compile::preview::config_dump(PLATFORM, raw);
                 if strategy != StatusStrategy::Deletion
                     && suppression_off
                     && block
@@ -2817,14 +2829,15 @@ impl Sender<'_, '_> {
     /// (`SysdigDeploy`).
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn sysdig(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        const PLATFORM: &str = PlatformId::Sysdig.as_str();
         use opentide_connectors::sysdig::{Action, RuleDeploy, StateChange, deploy_rule};
         for batch in batches {
             let tenant = batch.tenant.name.clone();
-            let planned = self.screen("sysdig", batch, log);
+            let planned = self.screen(PLATFORM, batch, log);
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect("sysdig", batch)?;
+            let connection = self.connect(PLATFORM, batch)?;
             let tenant_policies: Vec<String> =
                 match opentide_compile::deploy::setup(&batch.table, "policies") {
                     Some(CJson::Array(items)) => {
@@ -2833,8 +2846,8 @@ impl Sender<'_, '_> {
                     _ => Vec::new(),
                 };
             for (rule, action) in planned {
-                let mut result = RuleResult::new("sysdig", Some(&tenant), &rule.uuid, &rule.name);
-                let strategy = self.strategy_of(rule, "sysdig");
+                let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
+                let strategy = self.strategy_of(rule, PLATFORM);
                 let body = strategy.clone().and_then(|_| {
                     opentide_compile::sysdig::compile_body(self.compile, rule, Some(&batch.table))
                         .map_err(|error| {
@@ -2865,7 +2878,7 @@ impl Sender<'_, '_> {
                         code: "deployment_state_ignored",
                         message: deploy_state::ignored_message(&ignore),
                     }),
-                    None => self.unpersisted(&rule.uuid, "sysdig", &tenant),
+                    None => self.unpersisted(&rule.uuid, PLATFORM, &tenant),
                 };
                 let request = RuleDeploy {
                     action: match &action {
@@ -2905,10 +2918,10 @@ impl Sender<'_, '_> {
                                 let external = id
                                     .parse::<i64>()
                                     .map_or_else(|_| ExternalId::Text(id.clone()), ExternalId::Int);
-                                self.record_created(&mut result, "sysdig", &tenant, &external);
+                                self.record_created(&mut result, PLATFORM, &tenant, &external);
                             }
                             StateChange::Forget => {
-                                self.record_deleted(&mut result, "sysdig", &tenant);
+                                self.record_deleted(&mut result, PLATFORM, &tenant);
                             }
                             StateChange::Keep => {}
                         }
@@ -2918,7 +2931,7 @@ impl Sender<'_, '_> {
                                 .filter(|refusal| refusal.message == failure.message)
                             {
                                 Some(refusal) => {
-                                    self.report_failure(refusal, &rule.uuid, "sysdig", &tenant);
+                                    self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
                                     result.fail(&refusal.message);
                                 }
                                 None => {
@@ -2963,7 +2976,7 @@ impl Sender<'_, '_> {
         use opentide_connectors::bitdefender::{
             Action, Failure, RuleDeploy, StateChange, deploy_rule,
         };
-        const PLATFORM: &str = "bitdefender";
+        const PLATFORM: &str = PlatformId::Bitdefender.as_str();
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen(PLATFORM, batch, log);
@@ -3188,7 +3201,7 @@ impl Sender<'_, '_> {
             Action, RuleDeploy, StateChange, deploy_rule,
         };
         use opentide_connectors::google_secops::{GoogleSecops, Instance};
-        let platform = "google_secops";
+        let platform = PlatformId::GoogleSecops.as_str();
         let connector = GoogleSecops::new(self.environment.clone());
         for batch in batches {
             let tenant = batch.tenant.name.clone();
@@ -3372,14 +3385,15 @@ impl Sender<'_, '_> {
     /// unscheduled or deleted (`GraylogDeploy`).
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        const PLATFORM: &str = PlatformId::Graylog.as_str();
         use opentide_connectors::graylog::{Action, Client, RuleDeploy, StateChange, deploy_rule};
         for batch in batches {
             let tenant = batch.tenant.name.clone();
-            let planned = self.screen("graylog", batch, log);
+            let planned = self.screen(PLATFORM, batch, log);
             if planned.is_empty() {
                 continue;
             }
-            let connection = self.connect("graylog", batch)?;
+            let connection = self.connect(PLATFORM, batch)?;
             // The version is read once, before any write. A refused token, an
             // unsupported version or an unreachable tenant stops the tenant.
             let version = match self.block(Client::new(self.context(&connection)).version()) {
@@ -3432,7 +3446,7 @@ impl Sender<'_, '_> {
             let setup = opentide_compile::deploy::setup(&batch.table, "setup");
             let root = self.workspace.root().to_path_buf();
             for (rule, action) in planned {
-                let mut result = RuleResult::new("graylog", Some(&tenant), &rule.uuid, &rule.name);
+                let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
                 let compiled = match &action {
                     // A delete reads the definition back from the stored id
                     // alone, so no rule compile is needed.
@@ -3482,7 +3496,7 @@ impl Sender<'_, '_> {
                 let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
                     Some(ignore) => Some(deploy_state::ignored_message(&ignore)),
                     None => self
-                        .unpersisted(&rule.uuid, "graylog", &tenant)
+                        .unpersisted(&rule.uuid, PLATFORM, &tenant)
                         .map(|refusal| refusal.message),
                 };
                 let request = RuleDeploy {
@@ -3503,7 +3517,7 @@ impl Sender<'_, '_> {
                             unresolved: Vec::new(),
                         }
                     }),
-                    disable: self.strategy_of(rule, "graylog")? == StatusStrategy::Disablement,
+                    disable: self.strategy_of(rule, PLATFORM)? == StatusStrategy::Disablement,
                     recreate_refusal,
                 };
                 let context = self.context(&connection);
@@ -3530,13 +3544,13 @@ impl Sender<'_, '_> {
                             StateChange::Record(id) => {
                                 self.record_created(
                                     &mut result,
-                                    "graylog",
+                                    PLATFORM,
                                     &tenant,
                                     &ExternalId::Text(id.clone()),
                                 );
                             }
                             StateChange::Forget => {
-                                self.record_deleted(&mut result, "graylog", &tenant);
+                                self.record_deleted(&mut result, PLATFORM, &tenant);
                             }
                             StateChange::Keep => {}
                         }

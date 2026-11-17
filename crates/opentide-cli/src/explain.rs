@@ -44,7 +44,7 @@ pub struct Retired {
     pub level: &'static str,
 }
 
-/// The retired codes, as the Python CLI listed them (`retired_codes.py`) until UC-6.2.
+/// The retired codes: codes nothing reports any more, each with its page.
 pub const RETIRED: &[Retired] = &[
     Retired {
         code: "crowdstrike_unsupported",

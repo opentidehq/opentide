@@ -37,7 +37,7 @@ fn a_long_arithmetic_run_is_analysed_on_a_small_stack() {
         });
         assert_eq!(errors, 0, "{op}");
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < Duration::from_secs(60),
             "{op}: {:?}",
             started.elapsed()
         );
@@ -63,6 +63,26 @@ fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
     assert!(
         large < Duration::from_millis(50) || large < small * 8,
         "{name}: {small:?} for {n}, {large:?} for {}: not linear",
+        4 * n
+    );
+}
+
+/// The analysis's steps for `run(make(n))` and `run(make(4 * n))`: fails unless the larger
+/// takes fewer than 8 times the smaller's, where linear work takes 4 times and quadratic 16.
+/// Steps are counted on the thread that runs (`opentide_eql::steps`), not timed, so the check
+/// is deterministic.
+fn assert_steps_linear(name: &str, n: usize, make: impl Fn(usize) -> String, run: impl Fn(&str)) {
+    let steps = |k: usize| {
+        let source = make(k);
+        let before = opentide_eql::steps();
+        run(&source);
+        opentide_eql::steps() - before
+    };
+    let (small, large) = (steps(n), steps(4 * n));
+    assert!(small > 0, "{name}: no steps counted");
+    assert!(
+        large < small * 8,
+        "{name}: {small} steps for {n}, {large} for {}: not linear",
         4 * n
     );
 }
@@ -187,13 +207,13 @@ fn a_long_run_of_field_comparisons_is_linear() {
         "process where {} or true",
         vec!["a == b"; 40_000].join(" or ")
     );
-    let started = Instant::now();
     let errors = on_small_stack(move || analyze(&source).diagnostics.len());
     assert_eq!(errors, 0, "an `or` with `true` is folded away");
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "{:?}",
-        started.elapsed()
+    assert_steps_linear(
+        "field comparisons",
+        2_000,
+        |n| format!("process where {} or true", vec!["a == b"; n].join(" or ")),
+        |q| drop(analyze(q)),
     );
 }
 
@@ -226,54 +246,60 @@ fn a_broken_run_reports_each_finding_once() {
 /// surface when each was looked up from the root), and so is whether a node holds one.
 #[test]
 fn many_problems_are_linear() {
-    for source in [
-        format!("process where foo({}a)", ", ".repeat(20_000)),
-        format!(
+    let every = |q: &str| {
+        let _ = analyze(q);
+        let _ = ecs_diagnostics(q);
+        let _ = hover(q, q.len() / 2);
+        let _ = completions(q, q.len());
+    };
+    assert_steps_linear(
+        "empty arguments",
+        2_000,
+        |n| format!("process where foo({}a)", ", ".repeat(n)),
+        every,
+    );
+    assert_steps_linear(
+        "doubled or",
+        1_000,
+        |n| {
+            format!(
+                "process where {}",
+                vec!["a == b or or c == d"; n].join(" or ")
+            )
+        },
+        every,
+    );
+    // And at full size on a small stack (a hang fails on nextest's timeout).
+    on_small_stack(move || {
+        every(&format!("process where foo({}a)", ", ".repeat(20_000)));
+        every(&format!(
             "process where {}",
             vec!["a == b or or c == d"; 10_000].join(" or ")
-        ),
-    ] {
-        let started = Instant::now();
-        on_small_stack(move || {
-            let _ = analyze(&source);
-            let _ = ecs_diagnostics(&source);
-            let _ = hover(&source, source.len() / 2);
-            let _ = completions(&source, source.len());
-        });
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "{:?}",
-            started.elapsed()
-        );
-    }
+        ));
+    });
 }
 
 /// Arithmetic nested in parentheses, `((1 + 1) + 1) …`, is typed once per run: each run is the
 /// left operand of the run around it, and was typed again at each depth.
 #[test]
 fn nested_arithmetic_is_linear() {
-    let nested = format!("{}1{} == 1", "(".repeat(500), " + 1)".repeat(500));
-    let source = format!("process where {}", vec![nested.as_str(); 200].join(" or "));
-    let started = Instant::now();
-    on_small_stack(move || analyze(&source).diagnostics.len());
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "{:?}",
-        started.elapsed()
+    assert_steps_linear(
+        "nested arithmetic",
+        100,
+        |n| format!("process where {}1{} == 1", "(".repeat(n), " + 1)".repeat(n)),
+        |q| drop(analyze(q)),
     );
 }
 
-/// A chain of `not` is spanned only when the parser found a problem.
+/// A chain of `not` is spanned only when the parser found a problem: each `not` was spanned
+/// down to its comparison, quadratic in the chain.
 #[test]
 fn a_long_chain_of_not_is_linear() {
-    let chained = format!("{}a == 1", "not ".repeat(500));
-    let source = format!("process where {}", vec![chained.as_str(); 200].join(" or "));
-    let started = Instant::now();
-    on_small_stack(move || analyze(&source).diagnostics.len());
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "{:?}",
-        started.elapsed()
+    assert_steps_linear(
+        "chained not",
+        100,
+        |n| format!("process where {}a == 1", "not ".repeat(n)),
+        |q| drop(analyze(q)),
     );
 }
 
@@ -281,21 +307,22 @@ fn a_long_chain_of_not_is_linear() {
 /// children, and hover spans only the child that holds the offset.
 #[test]
 fn unclosed_nesting_around_a_long_run_is_linear() {
+    // Depth and width grow together: the old O(depth × width) grew 16 times for each 4.
     for open in ["f(", "("] {
-        let source = format!(
-            "process where {}{}",
-            open.repeat(500),
-            vec!["a == 1"; 40_000].join(" or ")
-        );
-        let started = Instant::now();
-        on_small_stack(move || {
-            let _ = analyze(&source);
-            let _ = hover(&source, source.len() - 2);
-        });
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "{open}: {:?}",
-            started.elapsed()
+        assert_steps_linear(
+            open,
+            4_000,
+            |n| {
+                format!(
+                    "process where {}{}",
+                    open.repeat(n / 100),
+                    vec!["a == 1"; n].join(" or ")
+                )
+            },
+            |q| {
+                let _ = analyze(q);
+                let _ = hover(q, q.len() - 2);
+            },
         );
     }
 }

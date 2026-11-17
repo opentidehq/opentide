@@ -40,8 +40,14 @@ impl Parsed {
     /// Whether the parser reported a problem in `at`, or right after it.
     pub(crate) fn broken(&self, at: ByteSpan) -> bool {
         // A token starting in `start..end`, or a gap starting in `start + 1..=end`.
-        let token = self.token_starts.partition_point(|&s| s < at.start);
-        let gap = self.gap_starts.partition_point(|&s| s <= at.start);
+        let token = self.token_starts.partition_point(|&s| {
+            crate::step();
+            s < at.start
+        });
+        let gap = self.gap_starts.partition_point(|&s| {
+            crate::step();
+            s <= at.start
+        });
         self.token_starts.get(token).is_some_and(|&s| s < at.end)
             || self.gap_starts.get(gap).is_some_and(|&s| s <= at.end)
     }
@@ -72,7 +78,10 @@ pub(crate) fn parse(source: &str) -> Parsed {
         .map(|e| {
             let at = usize::from(e.gap.end());
             // The token that starts at the gap's end, the first non-empty one.
-            let first = tokens.partition_point(|&(start, _)| start < at);
+            let first = tokens.partition_point(|&(start, _)| {
+                crate::step();
+                start < at
+            });
             let end = tokens[first..]
                 .iter()
                 .take_while(|&&(start, _)| start == at)
