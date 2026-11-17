@@ -269,6 +269,7 @@ pub(crate) mod interactive {
     use std::sync::{Arc, Mutex, PoisonError};
     use std::task::{Context, Poll};
 
+    use rmcp::model::NumberOrString;
     use serde_json::Value;
     use tokio::io::{AsyncWrite, AsyncWriteExt};
     use tokio::sync::Notify;
@@ -279,8 +280,8 @@ pub(crate) mod interactive {
     /// transport to read the first part, as it does on a real pipe.
     const PIPE: usize = 64 * 1024;
 
-    /// What the writer has seen: the ids answered, whether the server asked
-    /// the client something, whether the session ended.
+    /// What the writer has written since the reader last handed a request
+    /// over (one is in flight at a time), and whether the session ended.
     #[derive(Default)]
     struct Seen {
         state: Mutex<State>,
@@ -289,7 +290,12 @@ pub(crate) mod interactive {
 
     #[derive(Default)]
     struct State {
-        answered: Vec<Value>,
+        /// The ids answered, as rmcp reads them (`1.0` is `1`).
+        answered: Vec<NumberOrString>,
+        /// An answer without an id: a request rmcp could not read as one (an id
+        /// out of range, bad params) is refused so, never by its id.
+        refused: bool,
+        /// A request to the client: its answer is the client's next message.
         asked: bool,
         ended: bool,
     }
@@ -300,18 +306,28 @@ pub(crate) mod interactive {
             self.changed.notify_one();
         }
 
-        /// Until *id* is answered, the server asks the client something (its
-        /// answer is the client's next message), or the session ends.
-        async fn settled(&self, id: &Value) {
+        fn ended(&self) -> bool {
+            self.state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .ended
+        }
+
+        /// Forgets what was written for the requests before this one.
+        fn expect(&self) {
+            let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            state.answered.clear();
+            state.refused = false;
+            state.asked = false;
+        }
+
+        /// Until *id* is answered, refused, the server asks the client
+        /// something, or the session ends.
+        async fn settled(&self, id: &NumberOrString) {
             loop {
                 {
-                    let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-                    if let Some(at) = state.answered.iter().position(|answered| answered == id) {
-                        state.answered.swap_remove(at);
-                        return;
-                    }
-                    if state.asked || state.ended {
-                        state.asked = false;
+                    let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+                    if state.answered.contains(id) || state.refused || state.asked || state.ended {
                         return;
                     }
                 }
@@ -320,12 +336,19 @@ pub(crate) mod interactive {
         }
     }
 
-    /// The id of a request (a message with a method and an id), whose answer
-    /// the client may wait for before it writes again.
-    fn request_id(line: &[u8]) -> Option<Value> {
-        let message: Value = serde_json::from_slice(line).ok()?;
-        message.get("method")?;
-        message.get("id").cloned()
+    /// A UTF-8 byte-order mark, which rmcp's transport skips.
+    const BOM: &[u8] = b"\xEF\xBB\xBF";
+
+    /// The id of a request rmcp answers by its id: a method that is not a
+    /// notification's, and an id it reads (an integer, also in float form, or
+    /// a string). Anything else is answered without an id, or not at all.
+    fn request_id(line: &[u8]) -> Option<NumberOrString> {
+        let message: Value = serde_json::from_slice(line.strip_prefix(BOM).unwrap_or(line)).ok()?;
+        let method = message.get("method")?.as_str()?;
+        if method.starts_with("notifications/") {
+            return None;
+        }
+        serde_json::from_value(message.get("id")?.clone()).ok()
     }
 
     /// Serves *server* until *input* ends.
@@ -352,16 +375,26 @@ pub(crate) mod interactive {
         };
         let reader = async {
             let mut line = Vec::new();
-            loop {
+            // Once the session ends, nothing more is read: the process exits
+            // as the native one does, without waiting for the client.
+            while !seen.ended() {
                 line.clear();
                 // Blocks every task: whatever the client sent is answered.
                 if input.read_until(b'\n', &mut line)? == 0 {
                     break;
                 }
+                // A last message without its newline is framed now: the
+                // transport would add it only once the pipe ends, after this
+                // message's answer, which it would never write.
+                if line.last() != Some(&b'\n') {
+                    line.push(b'\n');
+                }
+                let id = request_id(&line);
+                seen.expect();
                 if feed.write_all(&line).await.is_err() {
                     break; // the session ended: nothing reads the pipe
                 }
-                match request_id(&line) {
+                match id {
                     Some(id) => seen.settled(&id).await,
                     // A notification or an answer: let the session take it in.
                     None => {
@@ -395,13 +428,18 @@ pub(crate) mod interactive {
                 let Ok(message) = serde_json::from_slice::<Value>(&frame) else {
                     continue;
                 };
-                let id = message.get("id").cloned();
+                let id = message.get("id");
                 if message.get("method").is_some() {
                     if id.is_some() {
                         self.seen.update(|state| state.asked = true);
                     }
-                } else if let Some(id) = id {
-                    self.seen.update(|state| state.answered.push(id));
+                    continue;
+                }
+                // An answer: by an id rmcp reads, or a refusal with none (rmcp
+                // leaves the key out) that stands for the request in flight.
+                match id.and_then(|id| serde_json::from_value::<NumberOrString>(id.clone()).ok()) {
+                    Some(id) => self.seen.update(|state| state.answered.push(id)),
+                    None => self.seen.update(|state| state.refused = true),
                 }
             }
         }
