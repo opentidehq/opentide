@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn requests_cross_as_json() {
-        let request = DeployRequest::new("r".into(), Operation::Disable, br#"{"b": 1}"#.to_vec());
+        let request = DeployRequest::new("r", Operation::Disable, br#"{"b": 1}"#.to_vec());
         let sent: Value = serde_json::from_str(&deploy_json(&request)).expect("json");
         assert_eq!(sent["operation"], "disable");
         assert_eq!(sent["body"]["b"], 1);

@@ -251,7 +251,7 @@ async fn a_deploy_sends_the_compiled_body() {
 async fn a_platform_without_the_operation_says_so() {
     let elastic = TenantConfig::new("elastic", "es", [("url", "https://es.example")]);
     let connection = Connection::open(&elastic, &options()).unwrap();
-    let request = DeployRequest::new("r".into(), Operation::Delete, Vec::new());
+    let request = DeployRequest::new("r", Operation::Delete, Vec::new());
     let error = connection.deploy(&request).await.unwrap_err();
     assert_eq!(code(&error), connectors::OPERATION_UNSUPPORTED);
 
@@ -311,7 +311,7 @@ fn block_on_runs_an_operation_from_synchronous_code() {
     let elastic = TenantConfig::new("elastic", "es", [("url", "https://es.example")]);
     let connection =
         Connection::open(&elastic, &options().timeout(Duration::from_secs(5))).unwrap();
-    let request = DeployRequest::new("r".into(), Operation::Update, Vec::new());
+    let request = DeployRequest::new("r", Operation::Update, Vec::new());
     let error = connectors::block_on(connection.deploy(&request))
         .unwrap()
         .unwrap_err();

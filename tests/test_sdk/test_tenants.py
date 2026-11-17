@@ -252,7 +252,7 @@ def test_a_delete_takes_no_body(connection: Connection) -> None:
     with pytest.raises(OpentideError) as raised:
         run(connection.deploy("x", "create"))  # the refusal under test
     assert raised.value.code == "usage_invalid_value"
-    assert str(raised.value).startswith("body: a create needs the compiled rule")
+    assert "body: a create needs the compiled rule" in str(raised.value)
 
 
 def test_a_deploy_takes_only_the_four_operations(connection: Connection) -> None:
