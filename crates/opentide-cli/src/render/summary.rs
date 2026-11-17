@@ -325,6 +325,13 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
             .iter()
             .any(|failure| failure.get("platform").and_then(Json::as_str) == Some(platform))
     };
+    // A platform the run reached but on which no rule was deployed.
+    let none_deployed = |platform: &str| {
+        !array(result, "results").iter().any(|row| {
+            row.get("platform").and_then(Json::as_str) == Some(platform)
+                && row.get("status").and_then(Json::as_str) == Some("deployed")
+        })
+    };
     let mut rows: Vec<Vec<String>> = Vec::new();
     for (platform, uuids) in plan {
         let reach = tenants
@@ -345,6 +352,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
             _ => {
                 let done = match (deployed.contains(&platform.as_str()), failed_on(platform)) {
                     (true, false) => "deployed",
+                    (true, true) if none_deployed(platform) => "not deployed",
                     (true, true) => "partly deployed",
                     (false, _) => "not deployed",
                 };
@@ -418,7 +426,8 @@ fn failure_lines(failures: &[Json], lines: &mut Vec<String>) {
                 _ => "every rule".to_owned(),
             };
             vec![
-                code(&field(failure, "platform").unwrap_or_default()),
+                field(failure, "platform")
+                    .map_or_else(|| "every platform".to_owned(), |platform| code(&platform)),
                 field(failure, "tenant")
                     .map_or_else(|| "every tenant".to_owned(), |tenant| cell(&tenant)),
                 rule,
@@ -540,11 +549,19 @@ mod tests {
     fn a_deploy_summary_lists_every_failure() {
         let result = Json::parse(
             r#"{"dry_run": false, "status": "failed", "message": "Deployment failed",
-                "plan": {"sentinel": ["u1", "u2"], "crowdstrike": ["u3"]},
-                "deployed": ["sentinel"],
+                "plan": {"sentinel": ["u1", "u2"], "crowdstrike": ["u3"], "splunk": ["u4"]},
+                "deployed": ["sentinel", "splunk"],
+                "results": [
+                  {"platform": "sentinel", "id": "u1", "status": "deployed"},
+                  {"platform": "sentinel", "id": "u2", "status": "failed"},
+                  {"platform": "splunk", "id": "u4", "status": "failed"}
+                ],
                 "failures": [
                   {"platform": "sentinel", "tenant": "soc", "id": "u2", "name": "Rule <two>",
                    "error": "HTTP 400 | bad\nrequest"},
+                  {"platform": "splunk", "tenant": "lab", "id": "u4", "name": "Four",
+                   "error": "refused"},
+                  {"id": "u5", "error": "external_id_in_rule: vendor ids"},
                   {"platform": "crowdstrike", "tenant": "lab", "error": "Cannot reach crowdstrike"},
                   {"platform": "exabeam", "error": "no plugin"}
                 ]}"#,
@@ -553,14 +570,17 @@ mod tests {
         let summary = deploy_summary(&result, None, None);
         assert!(
             summary.contains(
-                "| `sentinel` | partly deployed | 2 |\n| `crowdstrike` | not deployed | 1 |"
+                "| `sentinel` | partly deployed | 2 |\n| `crowdstrike` | not deployed | 1 |\n\
+                 | `splunk` | not deployed | 1 |"
             ),
             "{summary}"
         );
         assert!(
             summary.contains(
-                "**3 failures**\n\n| Platform | Tenant | Rule | Error |\n|---|---|---|---|\n\
+                "**5 failures**\n\n| Platform | Tenant | Rule | Error |\n|---|---|---|---|\n\
                  | `sentinel` | soc | Rule &lt;two&gt; (`u2`) | HTTP 400 \\| bad<br>request |\n\
+                 | `splunk` | lab | Four (`u4`) | refused |\n\
+                 | every platform | every tenant | `u5` | external\\_id\\_in\\_rule: vendor ids |\n\
                  | `crowdstrike` | lab | every rule | Cannot reach crowdstrike |\n\
                  | `exabeam` | every tenant | every rule | no plugin |\n"
             ),

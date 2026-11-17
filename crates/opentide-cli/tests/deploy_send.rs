@@ -637,6 +637,28 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
     );
 }
 
+/// A rule refused before planning (vendor ids on the rule) is a failure
+/// the result lists, while the other rules deploy.
+#[test]
+fn a_rule_refused_before_planning_is_listed_with_the_failures() {
+    let mut rules = three_rules(SENTINEL_STAGING);
+    rules[1].1.push_str("    rule_id: legacy-1\n");
+    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &rules);
+    let (registry, deployer) = scripted("sentinel", Vec::new());
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(deployer.seen.lock().unwrap().len(), 2);
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert_eq!(
+        failures[0].get("id"),
+        Some(&Json::str("00000000-0000-4000-8099-000000000002"))
+    );
+}
+
 /// An interrupt still stops the run: the rule it came on fails, nothing
 /// after it is sent, and the failures before it are still listed.
 #[test]
