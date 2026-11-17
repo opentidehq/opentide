@@ -740,7 +740,7 @@ class Connection:
             operation=data["operation"],
             warnings=[DeployWarning(**warning) for warning in data["warnings"]],
             events=[
-                DeployEvent(event["name"], {key: value for key, value in event["fields"]})
+                DeployEvent(event["name"], dict(event["fields"]))
                 for event in data.get("events", [])
             ],
         )

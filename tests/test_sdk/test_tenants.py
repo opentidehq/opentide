@@ -264,9 +264,7 @@ class _EventDeployer:
             {
                 "remote_id": None,
                 "operation": "delete",
-                "warnings": [
-                    {"code": "splunk_alert_deleted", "message": "Rule", "raised": False}
-                ],
+                "warnings": [{"code": "splunk_alert_deleted", "message": "Rule", "raised": False}],
                 "events": [
                     {"name": "sysdig_rule_created", "fields": [["uuid", "u1"], ["rule_id", "43"]]}
                 ],
