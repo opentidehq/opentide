@@ -129,8 +129,7 @@ pub const APPROVED: &[Approved] = &[
 /// oracle's count, and the Rust run's with how many of its queries were
 /// CrowdStrike's, how many HarfangLab YARA rules, and how many were in files
 /// the oracle could not read (`yaml-1-2-dates`).
-#[cfg(test)]
-fn queries_checked(
+pub(crate) fn queries_checked(
     oracle: &Json,
     rust: &Json,
     crowdstrike: usize,
