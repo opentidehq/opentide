@@ -516,11 +516,12 @@ impl Catalog {
     /// query whose text is `source`: what every query check, hover and
     /// completion reads. Without declared columns for the profile's platform
     /// it is the cached catalog itself; with them, a copy built once per set
-    /// of declarations ([`Catalog::with_declared_columns`]). A name the query
-    /// reads that is in neither, but that a declared pattern with columns
-    /// matches (`Vendor*_CL`), gets a copy of that copy with the name's
-    /// table added, kept until the query reads another such name. `Core` has
-    /// no tables and takes none.
+    /// of declarations ([`Catalog::with_declared_columns`]), the
+    /// [`RECENT_CATALOGS`] most recently used kept. A name the query reads
+    /// that is in neither, but that a declared pattern with columns matches
+    /// (`Vendor*_CL`), gets a copy of that copy with the name's table added,
+    /// the [`RECENT_QUERY_CATALOGS`] most recent kept. `Core` has no tables
+    /// and takes none.
     pub fn for_workspace(profile: Profile, source: &str) -> CatalogRef {
         let bundled = Self::cached(profile);
         if profile == Profile::Core {
@@ -539,8 +540,11 @@ impl Catalog {
             .filter(|n| !n.contains('*'))
             .cloned()
             .collect();
-        type Cache = Mutex<Recent<Vec<DeclaredSource>, Arc<Catalog>>>;
-        type QueryCache = Mutex<Recent<(Vec<DeclaredSource>, Vec<String>), Arc<Catalog>>>;
+        // What a catalog is built from: the sources with columns and every
+        // declared name, which a pattern's tables are matched against.
+        type Key = (Vec<DeclaredSource>, Vec<String>);
+        type Cache = Mutex<Recent<Key, Arc<Catalog>>>;
+        type QueryCache = Mutex<Recent<(Key, Vec<String>), Arc<Catalog>>>;
         static SENTINEL: OnceLock<Cache> = OnceLock::new();
         static DEFENDER: OnceLock<Cache> = OnceLock::new();
         static SENTINEL_QUERY: OnceLock<QueryCache> = OnceLock::new();
@@ -550,9 +554,11 @@ impl Catalog {
             _ => (&SENTINEL, &SENTINEL_QUERY),
         };
         let cache = cache.get_or_init(Default::default);
-        let workspace = Recent::get_or_build(cache, declared.clone(), || {
-            bundled.with_declared_columns(&declared, &exact)
+        let key = (declared, exact);
+        let workspace = Recent::get_or_build(cache, RECENT_CATALOGS, &key, || {
+            bundled.with_declared_columns(&key.0, &key.1)
         });
+        let declared = &key.0;
         // Names the query reads that only a declared pattern knows.
         let patterns: Vec<&DeclaredSource> =
             declared.iter().filter(|s| s.name.contains('*')).collect();
@@ -571,10 +577,10 @@ impl Catalog {
         extra.sort();
         extra.dedup();
         let query_cache = query_cache.get_or_init(Default::default);
-        let key = (declared.clone(), extra);
-        let catalog = Recent::get_or_build(query_cache, key.clone(), || {
+        let query_key = (key.clone(), extra);
+        let catalog = Recent::get_or_build(query_cache, RECENT_QUERY_CATALOGS, &query_key, || {
             let mut catalog = (*workspace).clone();
-            let targets = declared_targets(&patterns, key.1.iter().map(String::as_str));
+            let targets = declared_targets(&patterns, query_key.1.iter().map(String::as_str));
             catalog.apply_declared(targets);
             catalog
         });
@@ -1889,10 +1895,15 @@ fn word_at(source: &str, offset: usize) -> Option<String> {
     }
 }
 
-/// How many catalogs built from a workspace's declarations each cache keeps:
-/// runs of a few workspaces at once (#1142) find theirs instead of
+/// How many catalogs built from a workspace's declarations each profile
+/// keeps: runs of a few workspaces at once (#1142) find theirs instead of
 /// rebuilding one another's.
 const RECENT_CATALOGS: usize = 4;
+
+/// How many copies with a query's pattern tables each profile keeps: a
+/// copy is a whole catalog, and a query that reads another such name makes
+/// another one.
+const RECENT_QUERY_CATALOGS: usize = 2;
 
 /// The catalogs built most recently, newest first, by what they were built
 /// from.
@@ -1906,29 +1917,34 @@ impl<K, V> Default for Recent<K, V> {
     }
 }
 
-impl<K: PartialEq> Recent<K, Arc<Catalog>> {
-    /// The catalog built from `key`, else `build`'s, kept. The lock is not
-    /// held while it builds: a run checking another workspace meanwhile
-    /// finds its own. Two runs that build the same one at once keep the
-    /// first.
-    fn get_or_build(cache: &Mutex<Self>, key: K, build: impl FnOnce() -> Catalog) -> Arc<Catalog> {
+impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
+    /// The catalog built from `key`, else `build`'s, kept among the `keep`
+    /// most recent. The lock is not held while it builds: a run checking
+    /// another workspace meanwhile finds its own. Two runs that build the
+    /// same one at once keep the first. The key is copied only to keep it.
+    fn get_or_build(
+        cache: &Mutex<Self>,
+        keep: usize,
+        key: &K,
+        build: impl FnOnce() -> Catalog,
+    ) -> Arc<Catalog> {
         let lock = || {
             cache
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
         };
-        if let Some(found) = lock().take(&key) {
+        if let Some(found) = lock().take(key) {
             return found;
         }
         #[cfg(test)]
         tests::BUILT.with(|built| built.set(built.get() + 1));
         let catalog = Arc::new(build());
         let mut recent = lock();
-        if let Some(found) = recent.take(&key) {
+        if let Some(found) = recent.take(key) {
             return found;
         }
-        recent.slots.insert(0, (key, Arc::clone(&catalog)));
-        recent.slots.truncate(RECENT_CATALOGS);
+        recent.slots.insert(0, (key.clone(), Arc::clone(&catalog)));
+        recent.slots.truncate(keep);
         catalog
     }
 
@@ -1981,6 +1997,30 @@ mod tests {
             }
         }
         assert_eq!(built() - start, 2, "one build per workspace");
+    }
+
+    /// Two workspaces that declare the same pattern with columns, one of
+    /// them also naming a table the pattern covers (with no columns of its
+    /// own): each gets its own catalog. Keyed on the sources with columns
+    /// alone, the second was served the first's, with or without the table.
+    #[test]
+    fn a_declared_name_without_columns_is_part_of_the_catalog_s_key() {
+        let pattern = "[[logsources]]\nname = \"Vendor*_CL\"\ndescription = \"x\"\n\
+                       system = \"sentinel\"\n[logsources.columns]\nField_s = { type = \"string\" }\n";
+        let named = format!(
+            "{pattern}[[logsources]]\nname = \"VendorFoo_CL\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
+        );
+        let has_foo = |visibility: &str| {
+            let datasets =
+                opentide_core::datasets::DeclaredDatasets::from_visibility(visibility).unwrap();
+            let _scope = opentide_core::datasets::scope_thread(Some(datasets));
+            Catalog::for_workspace(Profile::Sentinel, "SecurityEvent | take 1")
+                .table("VendorFoo_CL")
+                .is_some()
+        };
+        assert!(has_foo(&named));
+        assert!(!has_foo(pattern));
+        assert!(has_foo(&named));
     }
 
     #[test]
