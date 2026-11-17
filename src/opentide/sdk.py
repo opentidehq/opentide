@@ -91,9 +91,11 @@ class OpentideError(Exception):
     locate the failure (``platform``, ``tenant``, ``address``, ``detail``), in
     order; ``partial`` is what it did before failing, when the caller must keep
     it: a :class:`DeployOutcome` whose ``remote_id`` is an id the tenant gave the
-    rule (record it), with the warnings and events raised first. Any other
-    error's ``scope``, ``status`` and ``partial`` are ``None`` and its ``fields``
-    empty.
+    rule (record it), with the warnings and events raised first;
+    ``more_failures`` are the rule's further failures, in order, each an
+    :class:`OpentideError` of the same scope, when the deploy failed more than
+    once (this error is the first). Any other error's ``scope``, ``status`` and
+    ``partial`` are ``None`` and its ``fields`` and ``more_failures`` empty.
     """
 
     def __init__(
@@ -106,6 +108,7 @@ class OpentideError(Exception):
         status: int | None = None,
         fields: dict[str, str] | None = None,
         partial: DeployOutcome | None = None,
+        more_failures: Sequence[OpentideError] = (),
     ) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
@@ -115,6 +118,7 @@ class OpentideError(Exception):
         self.status = status
         self.fields: dict[str, str] = dict(fields or {})
         self.partial = partial
+        self.more_failures: list[OpentideError] = list(more_failures)
 
 
 def _load() -> None:
@@ -127,7 +131,7 @@ def _load() -> None:
 
 def _error(exc: BaseException) -> OpentideError:
     """The ``SdkError`` *exc* as :class:`OpentideError`."""
-    code, message, detail, scope, status, fields, partial = exc.args
+    code, message, detail, scope, status, fields, partial, more = exc.args
     return OpentideError(
         str(code),
         str(message),
@@ -136,6 +140,17 @@ def _error(exc: BaseException) -> OpentideError:
         status=None if status is None else int(status),
         fields={str(key): str(value) for key, value in fields},
         partial=None if partial is None else _deploy_outcome(json.loads(partial)),
+        more_failures=[
+            OpentideError(
+                str(further_code),
+                str(further_message),
+                dict(further_fields).get("detail"),
+                scope=None if scope is None else str(scope),
+                status=None if further_status is None else int(further_status),
+                fields={str(key): str(value) for key, value in further_fields},
+            )
+            for further_code, further_message, further_status, further_fields in more
+        ],
     )
 
 

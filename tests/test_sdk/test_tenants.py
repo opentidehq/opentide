@@ -226,6 +226,7 @@ def test_a_failed_deploy_raises_with_its_scope_and_fields(connection: Connection
     assert raised.value.fields["tenant"] == "soc"
     assert "SentinelOne has no such rule (HTTP 404)" in raised.value.message
     assert raised.value.partial is None
+    assert raised.value.more_failures == []
 
 
 def test_an_unreachable_tenant_fails_the_tenant() -> None:
@@ -244,6 +245,7 @@ def test_an_error_other_than_a_deploy_has_no_scope(connection: Connection) -> No
         run(connection.deploy("x", "upsert", b"{}"))  # the refusal under test
     assert (raised.value.scope, raised.value.status, raised.value.fields) == (None, None, {})
     assert raised.value.partial is None
+    assert raised.value.more_failures == []
 
 
 class _WarningDeployer:
@@ -303,6 +305,7 @@ class _PartlyDoneDeployer:
             409,
             [("platform", "sysdig"), ("tenant", "soc")],
             json.dumps(partial),
+            [("sysdig_policy_missing", "policy p is missing", None, [("detail", "p")])],
         )
 
 
@@ -321,6 +324,13 @@ def test_a_failed_deploy_keeps_what_it_did_before_failing() -> None:
         operation="create",
         warnings=[],
         events=[DeployEvent("sysdig_rule_created", {"rule_id": "43"})],
+    )
+    [further] = raised.value.more_failures
+    assert (further.code, further.message, further.detail, further.scope) == (
+        "sysdig_policy_missing",
+        "policy p is missing",
+        "p",
+        "rule",
     )
 
 

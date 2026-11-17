@@ -118,6 +118,11 @@ pub struct DeployFailed {
     /// records), and the warnings and events raised before the failure.
     #[cfg(feature = "connectors")]
     pub partial: Option<Box<crate::connectors::DeployOutcome>>,
+    /// The rule's further failures, in order, when the deploy failed more
+    /// than once (a Google SecOps rule whose text and then its deployment
+    /// could not be written); this one is the first.
+    #[cfg(feature = "connectors")]
+    pub more_failures: Vec<crate::connectors::DeployFailure>,
 }
 
 /// What a failed deploy stops ([`Error::Deploy`]).

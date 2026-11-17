@@ -17,7 +17,7 @@ __all__ = ["SdkError", "Canceller", "Connection", "TenantConfig", "Workspace", "
 SdkError: Final[type[Exception]]
 """
 The error every call raises: `args` is `(code, message, detail, scope,
-status, fields, partial)`.
+status, fields, partial, more)`.
 """
 
 @final
