@@ -673,6 +673,7 @@ fn deploy(
     plan_warnings.extend(selection.warnings.iter().cloned());
     plan_skipped.extend(selection.skipped.iter().cloned());
     let refused = !selection.refused.is_empty();
+    let refused_rules = selection.refused.clone();
     let mut deployment = selection.platforms.clone();
     if let Some(platform) = &args.platform {
         let Some(uuids) = deployment.shift_remove(platform) else {
@@ -1031,7 +1032,7 @@ fn deploy(
                 error: bounded(&error),
             });
         }
-        let failures = failures(&results, &unusable);
+        let failures = failures(&results, &unusable, &refused_rules);
         result.push((
             "failures".into(),
             Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
@@ -1040,7 +1041,7 @@ fn deploy(
     }
     let outcome_failed = sender.failed || refused;
     let any_failed = results.iter().any(|result| result.status == "failed");
-    let failures = failures(&results, &sender.failures);
+    let failures = failures(&results, &sender.failures, &refused_rules);
     // No rule failed: the first tenant or platform that could not deploy
     // says why the run failed.
     let message = if outcome_failed && !any_failed {
@@ -1750,7 +1751,20 @@ fn more_failures(count: usize) -> String {
 /// Every failure of a run, each with its line for the run's `error`: the
 /// failed rules (platform, tenant, id, name, error), then the tenants and
 /// platforms that could not deploy.
-fn failures(results: &[RuleResult], unusable: &[Unusable]) -> Vec<(String, Json)> {
+fn failures(
+    results: &[RuleResult],
+    unusable: &[Unusable],
+    refused: &[String],
+) -> Vec<(String, Json)> {
+    // Rules refused before any platform was planned (`external_id_in_rule`).
+    let refused = refused.iter().map(|uuid| {
+        let error = "external_id_in_rule: the rule still carries vendor ids; deploy reads them \
+                     only from .opentide/states/deployment/";
+        (
+            format!("Deployment refused rule {uuid}: {error}"),
+            Json::object([("id", Json::str(uuid)), ("error", Json::str(error))]),
+        )
+    });
     let rules = results
         .iter()
         .filter(|result| result.status == "failed")
@@ -1784,7 +1798,7 @@ fn failures(results: &[RuleResult], unusable: &[Unusable]) -> Vec<(String, Json)
         };
         (line, failure.to_json())
     });
-    rules.chain(tenants).collect()
+    refused.chain(rules).chain(tenants).collect()
 }
 
 /// A connector error as a failure: of the rule for an answer the tenant

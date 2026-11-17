@@ -313,42 +313,12 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
     ];
     strategies_line(result, &mut lines);
     let plan = members(result, "plan");
+    let failures = array(result, "failures");
     if plan.is_empty() {
+        failure_lines(failures, &mut lines);
         return lines.join("\n") + "\n";
     }
-    let tenants = members(result, "tenants");
-    let deployed: Vec<&str> = strings(array(result, "deployed")).collect();
-    let mut rows: Vec<Vec<String>> = Vec::new();
-    for (platform, uuids) in plan {
-        let reach = tenants
-            .get(platform)
-            .and_then(Json::as_object)
-            .unwrap_or(&NO_MEMBERS);
-        match reach {
-            reach if !reach.is_empty() => {
-                for (tenant, rules) in reach {
-                    rows.push(vec![code(platform), cell(tenant), len(rules).to_string()]);
-                }
-            }
-            _ if dry_run => rows.push(vec![
-                code(platform),
-                "none".to_owned(),
-                len(uuids).to_string(),
-            ]),
-            _ => {
-                let done = if deployed.contains(&platform.as_str()) {
-                    "deployed"
-                } else {
-                    "not deployed"
-                };
-                rows.push(vec![
-                    code(platform),
-                    done.to_owned(),
-                    len(uuids).to_string(),
-                ]);
-            }
-        }
-    }
+    let rows = platform_rows(result, plan, failures, dry_run);
     lines.push(String::new());
     let header: [&str; 3] = if dry_run {
         ["Platform", "Tenant", "Rules"]
@@ -357,6 +327,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
     };
     let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
     lines.extend(table(&header, &shown, rows.len()));
+    failure_lines(failures, &mut lines);
     let payloads = members(result, "payloads");
     for (platform, uuids) in plan {
         let entries: &[Json] = payloads
@@ -389,6 +360,108 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
         lines.push("</details>".to_owned());
     }
     lines.join("\n") + "\n"
+}
+
+/// One row per platform (per tenant in a dry run): its tenant or result,
+/// and its rule count. A platform the run reached is `partly deployed` when
+/// one of its rules failed and another was deployed, `not deployed` when
+/// none was.
+fn platform_rows(
+    result: &Json,
+    plan: &Object,
+    failures: &[Json],
+    dry_run: bool,
+) -> Vec<Vec<String>> {
+    let tenants = members(result, "tenants");
+    let deployed: Vec<&str> = strings(array(result, "deployed")).collect();
+    let failed_on = |platform: &str| {
+        failures
+            .iter()
+            .any(|failure| failure.get("platform").and_then(Json::as_str) == Some(platform))
+    };
+    // A platform the run reached but on which no rule was deployed.
+    let none_deployed = |platform: &str| {
+        !array(result, "results").iter().any(|row| {
+            row.get("platform").and_then(Json::as_str) == Some(platform)
+                && row.get("status").and_then(Json::as_str) == Some("deployed")
+        })
+    };
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    for (platform, uuids) in plan {
+        let reach = tenants
+            .get(platform)
+            .and_then(Json::as_object)
+            .unwrap_or(&NO_MEMBERS);
+        match reach {
+            reach if !reach.is_empty() => {
+                for (tenant, rules) in reach {
+                    rows.push(vec![code(platform), cell(tenant), len(rules).to_string()]);
+                }
+            }
+            _ if dry_run => rows.push(vec![
+                code(platform),
+                "none".to_owned(),
+                len(uuids).to_string(),
+            ]),
+            _ => {
+                let done = match (deployed.contains(&platform.as_str()), failed_on(platform)) {
+                    (true, false) => "deployed",
+                    (true, true) if none_deployed(platform) => "not deployed",
+                    (true, true) => "partly deployed",
+                    (false, _) => "not deployed",
+                };
+                rows.push(vec![
+                    code(platform),
+                    done.to_owned(),
+                    len(uuids).to_string(),
+                ]);
+            }
+        }
+    }
+    rows
+}
+
+/// Every failure of a deploy (`failures`): its platform, tenant, rule and
+/// error, so a failed job says what failed without its log.
+fn failure_lines(failures: &[Json], lines: &mut Vec<String>) {
+    if failures.is_empty() {
+        return;
+    }
+    let field =
+        |failure: &Json, key: &str| failure.get(key).and_then(Json::as_str).map(str::to_owned);
+    let rows: Vec<Vec<String>> = failures
+        .iter()
+        .map(|failure| {
+            let rule = match (field(failure, "name"), field(failure, "id")) {
+                (Some(name), Some(id)) if !name.is_empty() => {
+                    format!("{} ({})", cell(&name), code(&id))
+                }
+                (_, Some(id)) => code(&id),
+                _ => "every rule".to_owned(),
+            };
+            vec![
+                field(failure, "platform")
+                    .map_or_else(|| "every platform".to_owned(), |platform| code(&platform)),
+                field(failure, "tenant")
+                    .map_or_else(|| "every tenant".to_owned(), |tenant| cell(&tenant)),
+                rule,
+                cell(&field(failure, "error").unwrap_or_default()),
+            ]
+        })
+        .collect();
+    lines.push(String::new());
+    let count = failures.len();
+    lines.push(format!(
+        "**{count} {}**",
+        if count == 1 { "failure" } else { "failures" }
+    ));
+    lines.push(String::new());
+    let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
+    lines.extend(table(
+        &["Platform", "Tenant", "Rule", "Error"],
+        &shown,
+        rows.len(),
+    ));
 }
 
 /// Live query validation: queries sent per tenant, and the verdict.
@@ -484,6 +557,56 @@ mod tests {
             "{summary}"
         );
         assert!(summary.contains("| `sentinel` | deployed | 1 |\n| `splunk` | not deployed | 1 |"));
+    }
+
+    #[test]
+    fn a_deploy_summary_lists_every_failure() {
+        let result = Json::parse(
+            r#"{"dry_run": false, "status": "failed", "message": "Deployment failed",
+                "plan": {"sentinel": ["u1", "u2"], "crowdstrike": ["u3"], "splunk": ["u4"]},
+                "deployed": ["sentinel", "splunk"],
+                "results": [
+                  {"platform": "sentinel", "id": "u1", "status": "deployed"},
+                  {"platform": "sentinel", "id": "u2", "status": "failed"},
+                  {"platform": "splunk", "id": "u4", "status": "failed"}
+                ],
+                "failures": [
+                  {"platform": "sentinel", "tenant": "soc", "id": "u2", "name": "Rule <two>",
+                   "error": "HTTP 400 | bad\nrequest"},
+                  {"platform": "splunk", "tenant": "lab", "id": "u4", "name": "Four",
+                   "error": "refused"},
+                  {"id": "u5", "error": "external_id_in_rule: vendor ids"},
+                  {"platform": "crowdstrike", "tenant": "lab", "error": "Cannot reach crowdstrike"},
+                  {"platform": "exabeam", "error": "no plugin"}
+                ]}"#,
+        )
+        .unwrap();
+        let summary = deploy_summary(&result, None, None);
+        assert!(
+            summary.contains(
+                "| `sentinel` | partly deployed | 2 |\n| `crowdstrike` | not deployed | 1 |\n\
+                 | `splunk` | not deployed | 1 |"
+            ),
+            "{summary}"
+        );
+        assert!(
+            summary.contains(
+                "**5 failures**\n\n| Platform | Tenant | Rule | Error |\n|---|---|---|---|\n\
+                 | `sentinel` | soc | Rule &lt;two&gt; (`u2`) | HTTP 400 \\| bad<br>request |\n\
+                 | `splunk` | lab | Four (`u4`) | refused |\n\
+                 | every platform | every tenant | `u5` | external\\_id\\_in\\_rule: vendor ids |\n\
+                 | `crowdstrike` | lab | every rule | Cannot reach crowdstrike |\n\
+                 | `exabeam` | every tenant | every rule | no plugin |\n"
+            ),
+            "{summary}"
+        );
+        // A run without failures has no such section.
+        let clean = Json::parse(
+            r#"{"dry_run": false, "status": "completed", "plan": {"sentinel": ["u1"]},
+                "deployed": ["sentinel"]}"#,
+        )
+        .unwrap();
+        assert!(!deploy_summary(&clean, None, None).contains("failure"));
     }
 
     #[test]

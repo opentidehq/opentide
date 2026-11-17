@@ -637,6 +637,28 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
     );
 }
 
+/// A rule refused before planning (vendor ids on the rule) is a failure
+/// the result lists, while the other rules deploy.
+#[test]
+fn a_rule_refused_before_planning_is_listed_with_the_failures() {
+    let mut rules = three_rules(SENTINEL_STAGING);
+    rules[1].1.push_str("    rule_id: legacy-1\n");
+    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &rules);
+    let (registry, deployer) = scripted("sentinel", Vec::new());
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(deployer.seen.lock().unwrap().len(), 2);
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert_eq!(
+        failures[0].get("id"),
+        Some(&Json::str("00000000-0000-4000-8099-000000000002"))
+    );
+}
+
 /// An interrupt still stops the run: the rule it came on fails, nothing
 /// after it is sent, and the failures before it are still listed.
 #[test]
@@ -1197,6 +1219,52 @@ fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String
     let env = Env::from_pairs(env.iter().map(|(k, v)| ((*k).to_owned(), v.clone())));
     let code = run_cli(&argv, &env, &host, &mut out, &mut err);
     (code, String::from_utf8(out).unwrap(), stderr.text())
+}
+
+/// In a GitHub Actions job, a deploy that failed writes each failure to the
+/// job's summary: what failed, where, and why, without the log.
+#[test]
+fn a_failed_deploy_lists_its_failures_in_the_job_summary() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING),
+    );
+    let summary = ws.path().join("step-summary.md");
+    let refusing = "http://127.0.0.1:9".to_owned();
+    let (code, _, _) = cli(
+        ws.path(),
+        &[
+            "deploy",
+            "--platform",
+            "sentinel",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[
+            ("GITHUB_ACTIONS", "true".to_owned()),
+            ("GITHUB_STEP_SUMMARY", summary.display().to_string()),
+            ("AZURE_CLIENT_SECRET", SECRET.to_owned()),
+            ("HTTPS_PROXY", refusing.clone()),
+            ("HTTP_PROXY", refusing.clone()),
+            ("ALL_PROXY", refusing),
+        ],
+    );
+    assert_eq!(code, 1);
+    let text = std::fs::read_to_string(&summary).unwrap();
+    assert!(text.contains("| `sentinel` | not deployed | 3 |"), "{text}");
+    assert!(
+        text.contains(
+            "**1 failure**\n\n| Platform | Tenant | Rule | Error |\n|---|---|---|---|\n\
+             | `sentinel` | soc | First (`00000000-0000-4000-8099-000000000001`) | Cannot reach"
+        ),
+        "{text}"
+    );
 }
 
 /// `ws` as a git checkout of two commits, the second changing `file`.
