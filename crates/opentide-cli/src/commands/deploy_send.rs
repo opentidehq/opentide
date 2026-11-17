@@ -1934,19 +1934,6 @@ impl Sender<'_, '_> {
                 if correlation {
                     name.push_str(" - Rule");
                 }
-                let splunk = opentide_connectors::splunk::Splunk::new();
-                let context = self.context(connection);
-                if deletion {
-                    let found = self
-                        .block(splunk.saved_search(context, &name))
-                        .map_err(|error| raised(&error))?;
-                    if found.is_some() {
-                        self.block(splunk.delete_saved_search(context, &name))
-                            .map_err(|error| raised(&error))?;
-                        tracing::warn!(name = name.as_str(), "splunk_alert_deleted");
-                    }
-                    return Ok(());
-                }
                 let mut settings = opentide_compile::json::Object::new();
                 for write in writes.iter().skip(1) {
                     if let CJson::Object(members) = &write.body {
@@ -1955,8 +1942,28 @@ impl Sender<'_, '_> {
                         }
                     }
                 }
-                self.block(splunk.apply_saved_search(context, &name, &settings, false))
+                let request = DeployRequest::new(
+                    name,
+                    if deletion {
+                        Operation::Delete
+                    } else {
+                        Operation::Update
+                    },
+                    if deletion {
+                        Vec::new()
+                    } else {
+                        CJson::Object(settings).to_compact().into_bytes()
+                    },
+                );
+                let deployer = self.deployer(platform)?;
+                let context = self.context(connection);
+                let outcome = self
+                    .block(deployer.deploy(context, &request))
                     .map_err(|error| raised(&error))?;
+                // `splunk_alert_deleted`: the saved search the tenant had.
+                for warning in &outcome.warnings {
+                    tracing::warn!(name = warning.message.as_str(), "{}", warning.code);
+                }
             }
             Some(PlatformId::CarbonBlackCloud) => {
                 let Some(report) =
