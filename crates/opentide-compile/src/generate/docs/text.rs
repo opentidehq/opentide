@@ -10,18 +10,67 @@ pub fn collapse(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Every `|` not already escaped, escaped.
-fn escape_pipes(text: &str) -> String {
+/// Every `|` not already escaped, escaped: a `|` after an odd run of
+/// backslashes is escaped already; after an even run (`\\|`) the
+/// backslashes escape each other, and the `|` would end the cell.
+pub fn escape_pipes(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut previous = '\0';
+    let mut backslashes = 0usize;
     for c in text.chars() {
-        if c == '|' && previous != '\\' {
+        if c == '|' && backslashes.is_multiple_of(2) {
             out.push('\\');
         }
         out.push(c);
-        previous = c;
+        backslashes = if c == '\\' { backslashes + 1 } else { 0 };
     }
     out
+}
+
+/// A name (an object's, a signal's) as Markdown text that renders as
+/// itself: `\\`, `[`, `]`, `<` and `>` backslash-escaped, so a name cannot
+/// open a link (`[x](javascript:…)`), an image or raw HTML (`<b>`).
+///
+/// A code span (a backtick run, the text, a closing run of the same length)
+/// is kept as it is: nothing in it is Markdown, and a backslash there would
+/// show.
+pub fn markdown_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if c == '`' {
+            let run = rest.len() - rest.trim_start_matches('`').len();
+            if let Some(end) = closing_run(&rest[run..], run) {
+                let span = run + end + run;
+                out.push_str(&rest[..span]);
+                rest = &rest[span..];
+            } else {
+                // No closing run: the backticks are text, as CommonMark reads them.
+                out.push_str(&rest[..run]);
+                rest = &rest[run..];
+            }
+            continue;
+        }
+        if matches!(c, '\\' | '[' | ']' | '<' | '>') {
+            out.push('\\');
+        }
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    out
+}
+
+/// Where in `text` a run of exactly `length` backticks starts.
+fn closing_run(text: &str, length: usize) -> Option<usize> {
+    let mut at = 0;
+    while let Some(found) = text[at..].find('`') {
+        let start = at + found;
+        let run = text[start..].len() - text[start..].trim_start_matches('`').len();
+        if run == length {
+            return Some(start);
+        }
+        at = start + run;
+    }
+    None
 }
 
 /// One table cell of free text: one line, pipes escaped, `-` when empty.
@@ -184,6 +233,31 @@ pub fn title_case(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_cannot_open_links_or_html() {
+        assert_eq!(
+            markdown_text("[x](javascript:alert(1)) <b>"),
+            "\\[x\\](javascript:alert(1)) \\<b\\>"
+        );
+        assert_eq!(markdown_text("a\\b"), "a\\\\b");
+        assert_eq!(markdown_text("Plain name"), "Plain name");
+        assert_eq!(
+            markdown_text("Detect `<script>` in `C:\\Windows` <b>"),
+            "Detect `<script>` in `C:\\Windows` \\<b\\>"
+        );
+        assert_eq!(markdown_text("``a`b`` [x]"), "``a`b`` \\[x\\]");
+        assert_eq!(markdown_text("open ` [x]"), "open ` \\[x\\]");
+        assert_eq!(markdown_text("é`<é>`é <"), "é`<é>`é \\<");
+    }
+
+    #[test]
+    fn a_pipe_after_escaped_backslashes_is_escaped() {
+        assert_eq!(table_cell("a|b"), "a\\|b");
+        assert_eq!(table_cell("a\\|b"), "a\\|b");
+        assert_eq!(table_cell("a\\\\|b"), "a\\\\\\|b");
+        assert_eq!(table_cell(&markdown_text("a\\|b")), "a\\\\\\|b");
+    }
 
     #[test]
     fn cells_are_one_line_with_pipes_escaped() {

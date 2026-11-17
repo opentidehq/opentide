@@ -87,6 +87,9 @@ invariant 3 holds every code's meaning, severity, field path and position rules.
   `opentide-analysis`'s: `opentide-analysis` is published to crates.io and `opentide-workspace` is
   not yet, so the engine crate cannot depend on it. `opentide-cli` is the host the trait was made
   for; the trait passes the `Workspace` (its root and configuration) and each object's text.
+  (#1142: once `opentide-workspace` was published with it, `EngineQueries` moved to
+  `opentide_analysis::queries`, behind that crate's `queries` feature; `opentide_cli::queries`
+  re-exports it.)
 - #887 is decided by its option 2: the diagnostics keep their range (the pipe stage, plan §3
   invariant 3), and the language server's "Apply suggestion" edit replaces only the word the stage
   starts with. The CLI's query findings carry no fix, so nothing else changes.

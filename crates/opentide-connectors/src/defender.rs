@@ -252,8 +252,20 @@ impl Defender {
 
     /// Every custom detection rule of the tenant, across Graph's pages
     /// (`DefenderForEndpointImporter.list_rules`, UC-4.4b): `@odata.nextLink`
-    /// is followed, and an error answer is an error, never an empty listing.
+    /// is followed on Graph's origin only, each once, and for at most
+    /// [`crate::paging::MAX_PAGES`] pages ([`crate::paging::NextLinks`]: a
+    /// link elsewhere never receives the token), and an error answer is an
+    /// error, never an empty listing.
     pub async fn list_rules(&self, cx: TenantContext<'_>) -> Result<Vec<Json>, DefenderError> {
+        let refused = |error: crate::paging::LinkError| {
+            DefenderError::Connector(ConnectorError::Answer {
+                platform: PLATFORM.into(),
+                tenant: cx.tenant.label.tenant.clone(),
+                address: "https://graph.microsoft.com".into(),
+                reason: format!("listing the detection rules: {error}"),
+            })
+        };
+        let mut links = crate::paging::NextLinks::new(DETECTION_RULES_ENDPOINT).map_err(refused)?;
         let mut rules = Vec::new();
         let mut next = Some(DETECTION_RULES_ENDPOINT.to_owned());
         while let Some(url) = next.take() {
@@ -291,7 +303,7 @@ impl Defender {
             if let Some(Json::Str(link)) = page.get("@odata.nextLink")
                 && !link.is_empty()
             {
-                next = Some(link.clone());
+                next = Some(links.follow(link).map_err(refused)?);
             }
         }
         Ok(rules)

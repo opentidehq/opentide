@@ -1,3 +1,4 @@
 // prod:search_query invalid
 events:
-  metadata.event_type = = "NETWORK_DNS"
+  metadata.event_type = "NETWORK_DNS"
+  )

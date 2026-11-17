@@ -18,36 +18,46 @@
 //! `ip` or a date, so comparisons are never reported.
 
 use crate::catalog::Catalog;
-use crate::columns::{dissect_keys, grok_names, qualified};
-use crate::tree::Node;
-use crate::tree::node_span;
-use crate::{range, string_value, text};
+use crate::columns::{
+    Assignment, assignment, child_of, dissect_keys, grok_names, nodes, qualified_of as qualified,
+    renamed,
+};
+use crate::gates::{first_token, nodes_after, parts, span_of, text_of as text};
+use crate::syntax::SyntaxKind as K;
+use crate::tree::Tree;
+use crate::{SyntaxNode, range, string_value};
 use opentide_core::{ByteSpan, Diagnostic};
 use opentide_ecs::ValueType;
 use std::collections::HashSet;
 
-fn query_node(root: Node) -> Option<Node> {
-    let mut cursor = root.walk();
-    root.named_children(&mut cursor)
-        .find(|c| c.kind() == "query")
+fn query_node(tree: &Tree) -> Option<SyntaxNode> {
+    tree.syntax.children().find(|c| c.kind() == K::QUERY)
+}
+
+/// A query's commands, its source command first.
+fn commands(query: &SyntaxNode) -> Vec<SyntaxNode> {
+    parts(query)
+        .into_iter()
+        .filter_map(|p| p.into_node())
+        .collect()
 }
 
 /// Every index name or pattern the source command reads, as written
 /// (`remote:logs-*::data`), with its span. `None` when the query does not
 /// start with `FROM` or `TS`, or reads a subquery.
-fn sources(root: Node, source: &str) -> Option<Vec<(String, ByteSpan)>> {
-    let command = query_node(root)?.child_by_field_name("source")?;
-    if !matches!(command.kind(), "from_command" | "ts_command") {
+fn sources(tree: &Tree, source: &str) -> Option<Vec<(String, ByteSpan)>> {
+    let command = commands(&query_node(tree)?).into_iter().next()?;
+    if !matches!(command.kind(), K::FROM_COMMAND | K::TS_COMMAND) {
         return None;
     }
     let mut out = Vec::new();
-    let mut cursor = command.walk();
-    for index in command.children_by_field_name("index", &mut cursor) {
-        if index.kind() != "index_pattern" {
+    // Every node but the metadata is an index.
+    for (_, index) in nodes(&parts(&command)).filter(|(_, n)| n.kind() != K::METADATA) {
+        if index.kind() != K::INDEX_PATTERN {
             return None;
         }
         let raw = text(index, source);
-        let span = node_span(index);
+        let span = span_of(index);
         if raw.starts_with('"') {
             // `FROM "logs-*,winlogbeat-*"`: one string, several names.
             let value = string_value(raw)?;
@@ -70,19 +80,18 @@ fn sources(root: Node, source: &str) -> Option<Vec<(String, ByteSpan)>> {
 /// does not parse.
 pub fn source_indices(source: &str) -> Option<Vec<String>> {
     let tree = crate::tree::parse_tree(source)?;
-    let root = tree.root_node();
-    if root.has_error() {
+    if tree.root_node().has_error() {
         return None;
     }
-    sources(root, source).map(|s| s.into_iter().map(|(n, _)| n).collect())
+    sources(&tree, source).map(|s| s.into_iter().map(|(n, _)| n).collect())
 }
 
 /// The dataset and ECS diagnostics `analyze_for` adds.
-pub(crate) fn dataset_diagnostics(root: Node, source: &str) -> Vec<Diagnostic> {
-    if root.has_error() {
+pub(crate) fn dataset_diagnostics(tree: &Tree, source: &str) -> Vec<Diagnostic> {
+    if tree.root_node().has_error() {
         return Vec::new();
     }
-    let Some(indices) = sources(root, source) else {
+    let Some(indices) = sources(tree, source) else {
         return Vec::new();
     };
     let mut out: Vec<Diagnostic> = indices
@@ -91,9 +100,9 @@ pub(crate) fn dataset_diagnostics(root: Node, source: &str) -> Vec<Diagnostic> {
         .collect();
     let names: Vec<&str> = indices.iter().map(|(n, _)| n.as_str()).collect();
     if opentide_ecs::indices_are_ecs(&names)
-        && let Some(query) = query_node(root)
+        && let Some(query) = query_node(tree)
     {
-        let ecs = opentide_ecs::with_declared_fields(&names, || Walker::new(source).run(query));
+        let ecs = opentide_ecs::with_declared_fields(&names, || Walker::new(source).run(&query));
         out.extend(ecs);
     }
     out
@@ -110,12 +119,11 @@ fn field_diagnostics(source: &str) -> Vec<Diagnostic> {
     let Some(tree) = crate::tree::parse_tree(source) else {
         return Vec::new();
     };
-    let root = tree.root_node();
-    if root.has_error() {
+    if tree.root_node().has_error() {
         return Vec::new();
     }
-    match query_node(root) {
-        Some(query) => Walker::new(source).run(query),
+    match query_node(&tree) {
+        Some(query) => Walker::new(source).run(&query),
         None => Vec::new(),
     }
 }
@@ -138,12 +146,8 @@ impl<'s> Walker<'s> {
         }
     }
 
-    fn run(mut self, query: Node) -> Vec<Diagnostic> {
-        let mut cursor = query.walk();
-        let commands: Vec<Node> = query
-            .children_by_field_name("command", &mut cursor)
-            .collect();
-        for command in commands {
+    fn run(mut self, query: &SyntaxNode) -> Vec<Diagnostic> {
+        for command in commands(query).iter().skip(1) {
             if !self.command(command) {
                 break;
             }
@@ -159,120 +163,116 @@ impl<'s> Walker<'s> {
 
     /// Check one command and record what it defines. `false`: the columns
     /// after it are not known, so stop.
-    fn command(&mut self, command: Node) -> bool {
-        let named = |field: &str| -> Vec<Node> {
-            let mut cursor = command.walk();
-            command.children_by_field_name(field, &mut cursor).collect()
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one arm per command, as the pipeline reads them"
+    )]
+    fn command(&mut self, command: &SyntaxNode) -> bool {
+        let own = parts(command);
+        let all = || nodes(&own).map(|(_, n)| n.clone()).collect::<Vec<_>>();
+        // The aggregates before `BY`, the groups after it.
+        let by = first_token(&own, &[K::BY_KW]);
+        let aggregates = || -> Vec<SyntaxNode> {
+            nodes(&own)
+                .filter(|(i, _)| by.is_none_or(|b| *i < b))
+                .map(|(_, n)| n.clone())
+                .collect()
+        };
+        let groups = || -> Vec<SyntaxNode> {
+            by.map(|b| nodes_after(&own, b).cloned().collect())
+                .unwrap_or_default()
         };
         match command.kind() {
-            "where_command" => {
-                for n in named("condition") {
-                    self.expression(n);
+            K::WHERE_COMMAND | K::MV_EXPAND_COMMAND => {
+                for n in all() {
+                    self.expression(&n);
                 }
                 true
             }
-            "sort_command" => {
-                let mut cursor = command.walk();
-                let keys: Vec<Node> = command
-                    .named_children(&mut cursor)
-                    .filter(|c| c.kind() == "order_expression")
-                    .filter_map(|c| c.child_by_field_name("key"))
+            K::SORT_COMMAND => {
+                // An order's key: its first node.
+                let keys: Vec<SyntaxNode> = child_of(&own, K::ORDER_EXPRESSION)
+                    .into_iter()
+                    .filter_map(|c| nodes(&parts(c)).map(|(_, n)| n.clone()).next())
                     .collect();
                 for key in keys {
-                    self.expression(key);
+                    self.expression(&key);
                 }
                 true
             }
-            "eval_command" => {
-                for field in self.fields(command) {
-                    if let Some(value) = field.child_by_field_name("value") {
-                        self.expression(value);
+            K::EVAL_COMMAND => {
+                for field in child_of(&own, K::FIELD_ASSIGNMENT_OR_EXPRESSION) {
+                    let Assignment { name, value, .. } = assignment(field);
+                    if let Some(value) = value {
+                        self.expression(&value);
                     }
-                    let name = field
-                        .child_by_field_name("name")
-                        .and_then(|n| qualified(n, self.source));
+                    let name = name.and_then(|n| qualified(&n, self.source));
                     self.define(name);
                 }
                 true
             }
-            "inline_stats_command" | "stats_command" => {
-                for aggregate in named("aggregate") {
-                    if let Some(value) = aggregate.child_by_field_name("value") {
-                        self.expression(value);
+            K::INLINE_STATS_COMMAND | K::STATS_COMMAND => {
+                for aggregate in aggregates() {
+                    let Assignment { value, filter, .. } = assignment(&aggregate);
+                    if let Some(value) = value {
+                        self.expression(&value);
                     }
-                    if let Some(filter) = aggregate.child_by_field_name("filter") {
-                        self.expression(filter);
-                    }
-                }
-                for by in named("by") {
-                    if let Some(value) = by.child_by_field_name("value") {
-                        self.expression(value);
+                    if let Some(filter) = filter {
+                        self.expression(&filter);
                     }
                 }
-                if command.kind() == "stats_command" {
+                for group in groups() {
+                    if let Some(value) = assignment(&group).value {
+                        self.expression(&value);
+                    }
+                }
+                if command.kind() == K::STATS_COMMAND {
                     return false;
                 }
-                for field in named("aggregate").into_iter().chain(named("by")) {
-                    let name = field
-                        .child_by_field_name("name")
-                        .and_then(|n| qualified(n, self.source));
+                for field in aggregates().into_iter().chain(groups()) {
+                    let name = assignment(&field)
+                        .name
+                        .and_then(|n| qualified(&n, self.source));
                     self.define(name);
                 }
                 true
             }
-            "mv_expand_command" => {
-                for n in named("field") {
-                    self.expression(n);
-                }
-                true
-            }
-            "keep_command" | "drop_command" => {
-                let mut cursor = command.walk();
-                let patterns: Vec<Node> = command
-                    .named_children(&mut cursor)
-                    .filter(|c| c.kind() == "name_pattern")
-                    .collect();
-                for pattern in patterns {
+            K::KEEP_COMMAND | K::DROP_COMMAND => {
+                for pattern in child_of(&own, K::NAME_PATTERN) {
                     self.name_pattern(pattern);
                 }
                 true
             }
-            "rename_command" => {
-                let mut cursor = command.walk();
-                let clauses: Vec<Node> = command
-                    .named_children(&mut cursor)
-                    .filter(|c| c.kind() == "rename_clause")
-                    .collect();
-                for clause in clauses {
-                    let (Some(old), Some(new)) = (
-                        clause.child_by_field_name("old"),
-                        clause.child_by_field_name("new"),
-                    ) else {
+            K::RENAME_COMMAND => {
+                for clause in child_of(&own, K::RENAME_CLAUSE) {
+                    let (Some(old), Some(new)) = renamed(clause) else {
                         return false;
                     };
                     let (Some(old_name), Some(new_name)) =
-                        (qualified(old, self.source), qualified(new, self.source))
+                        (qualified(&old, self.source), qualified(&new, self.source))
                     else {
                         return false;
                     };
                     if old_name.contains('*') || new_name.contains('*') {
                         return false;
                     }
-                    self.name_pattern(old);
+                    self.name_pattern(&old);
                     self.defined.insert(old_name);
                     self.defined.insert(new_name);
                 }
                 true
             }
-            "dissect_command" | "grok_command" => {
-                for input in named("input") {
-                    self.expression(input);
+            K::DISSECT_COMMAND | K::GROK_COMMAND => {
+                // The input, then the patterns (and a dissect's options).
+                let mut kids = all().into_iter();
+                if let Some(input) = kids.next() {
+                    self.expression(&input);
                 }
-                for pattern in named("pattern") {
-                    let Some(value) = string_value(text(pattern, self.source)) else {
+                for pattern in kids.filter(|n| n.kind() != K::COMMAND_OPTION) {
+                    let Some(value) = string_value(text(&pattern, self.source)) else {
                         return false;
                     };
-                    let keys = if command.kind() == "dissect_command" {
+                    let keys = if command.kind() == K::DISSECT_COMMAND {
                         dissect_keys(&value)
                     } else {
                         grok_names(&value)
@@ -284,16 +284,21 @@ impl<'s> Walker<'s> {
                 }
                 true
             }
-            "enrich_command" => {
-                let clauses = named("with");
+            K::ENRICH_COMMAND => {
+                // The clauses follow `WITH`; the parser reads the policy
+                // before it (`processing.rs`, `enrich`).
+                let clauses: Vec<SyntaxNode> = first_token(&own, &[K::WITH_KW])
+                    .map(|with| nodes_after(&own, with).cloned().collect())
+                    .unwrap_or_default();
                 if clauses.is_empty() {
                     return false;
                 }
                 for clause in clauses {
-                    let name = clause
-                        .child_by_field_name("new")
-                        .or_else(|| clause.child_by_field_name("field"))
-                        .and_then(|n| qualified(n, self.source));
+                    // `new = field`, or `field`: the first name either way.
+                    let name = (clause.kind() == K::ENRICH_WITH_CLAUSE)
+                        .then(|| nodes(&parts(&clause)).map(|(_, n)| n.clone()).next())
+                        .flatten()
+                        .and_then(|n| qualified(&n, self.source));
                     let Some(name) = name.filter(|n| !n.contains('*')) else {
                         return false;
                     };
@@ -301,30 +306,22 @@ impl<'s> Walker<'s> {
                 }
                 true
             }
-            "limit_command" | "sample_command" | "dedup_command" => true,
+            K::LIMIT_COMMAND | K::SAMPLE_COMMAND | K::DEDUP_COMMAND => true,
             _ => false,
         }
     }
 
-    fn fields<'t>(&self, command: Node<'t>) -> Vec<Node<'t>> {
-        let mut cursor = command.walk();
-        command
-            .named_children(&mut cursor)
-            .filter(|c| c.kind() == "field_assignment_or_expression")
-            .collect()
-    }
-
     /// A column the query reads from its indices: not one it defines, not a
     /// parameter, not a pattern.
-    fn source_column(&self, node: Node) -> Option<String> {
-        if node.kind() != "qualified_name" {
+    fn source_column(&self, node: &SyntaxNode) -> Option<String> {
+        if node.kind() != K::QUALIFIED_NAME {
             return None;
         }
         let name = qualified(node, self.source)?;
         (!self.defined.contains(&name) && !name.contains('*')).then_some(name)
     }
 
-    fn name_pattern(&mut self, node: Node) {
+    fn name_pattern(&mut self, node: &SyntaxNode) {
         let Some(name) = qualified(node, self.source) else {
             return;
         };
@@ -332,39 +329,39 @@ impl<'s> Walker<'s> {
             return;
         }
         if let Some(d) =
-            opentide_ecs::unknown_field_diagnostic(&name, || range(self.source, node_span(node)))
+            opentide_ecs::unknown_field_diagnostic(&name, || range(self.source, span_of(node)))
         {
             self.out.push(d);
         }
     }
 
-    fn expression(&mut self, node: Node) {
-        let mut stack = vec![node];
+    fn expression(&mut self, node: &SyntaxNode) {
+        let mut stack = vec![node.clone()];
         while let Some(n) = stack.pop() {
             match n.kind() {
                 // `IN (FROM …)` reads other indices.
-                "source_subquery" | "map_expression" => continue,
-                "qualified_name" => {
-                    if let Some(name) = self.source_column(n)
+                K::SOURCE_SUBQUERY | K::MAP_EXPRESSION => continue,
+                K::QUALIFIED_NAME => {
+                    if let Some(name) = self.source_column(&n)
                         && let Some(d) = opentide_ecs::unknown_field_diagnostic(&name, || {
-                            range(self.source, node_span(n))
+                            range(self.source, span_of(&n))
                         })
                     {
                         self.out.push(d);
                     }
                     continue;
                 }
-                "like_expression" => self.like(n),
-                "function_call" => self.function(n),
+                K::LIKE_EXPRESSION => self.like(&n),
+                K::FUNCTION_CALL => self.function(&n),
                 _ => {}
             }
-            let mut cursor = n.walk();
-            stack.extend(n.named_children(&mut cursor));
+            stack.extend(n.children());
         }
     }
 
-    fn like(&mut self, node: Node) {
-        let Some(left) = node.child_by_field_name("left") else {
+    fn like(&mut self, node: &SyntaxNode) {
+        let own = parts(node);
+        let Some((_, left)) = nodes(&own).next() else {
             return;
         };
         let Some(name) = self.source_column(left) else {
@@ -374,21 +371,23 @@ impl<'s> Walker<'s> {
             return;
         };
         if value_type != ValueType::String {
-            let operator = node
-                .child_by_field_name("operator")
-                .map(|o| text(o, self.source).to_ascii_uppercase())
+            let operator = first_token(&own, &[K::LIKE_KW, K::RLIKE_KW])
+                .and_then(|at| own[at].as_token().map(|t| t.text().to_ascii_uppercase()))
                 .unwrap_or_else(|| "LIKE".into());
             self.out.push(opentide_ecs::type_mismatch(
                 &name,
                 type_name,
                 &format!("`{operator}`, which takes a string,"),
-                range(self.source, node_span(left)),
+                range(self.source, span_of(left)),
             ));
         }
     }
 
-    fn function(&mut self, node: Node) {
-        let Some(name_node) = node.child_by_field_name("name") else {
+    fn function(&mut self, node: &SyntaxNode) {
+        let own = parts(node);
+        // The name, then the arguments (and an options map).
+        let mut kids = nodes(&own).map(|(_, n)| n);
+        let Some(name_node) = kids.next() else {
             return;
         };
         let display = text(name_node, self.source);
@@ -414,10 +413,7 @@ impl<'s> Walker<'s> {
             return;
         }
         let variadic = sig.contains("...");
-        let mut cursor = node.walk();
-        let arguments: Vec<Node> = node
-            .children_by_field_name("arguments", &mut cursor)
-            .collect();
+        let arguments: Vec<&SyntaxNode> = kids.filter(|n| n.kind() != K::MAP_EXPRESSION).collect();
         let params = &row.parameters;
         for (i, argument) in arguments.iter().copied().enumerate() {
             // With an optional parameter before this one and fewer arguments
@@ -455,7 +451,7 @@ impl<'s> Walker<'s> {
                     display.to_ascii_uppercase(),
                     param.types.join(", ")
                 ),
-                range(self.source, node_span(argument)),
+                range(self.source, span_of(argument)),
             ));
         }
     }
@@ -543,6 +539,64 @@ mod tests {
         assert!(
             codes_of("FROM logs-* | EVAL process.nmae = 1 | WHERE process.nmae > 0").is_empty()
         );
+    }
+
+    /// Each command's checks read its own parts: a STATS filter and group,
+    /// a DISSECT input, a rename's old name, the names ENRICH defines, both
+    /// sides of `AND` (the right one first, as the walk pops them), and the
+    /// operator a type mismatch names.
+    #[test]
+    fn each_command_reads_its_own_parts() {
+        let at = |query: &str| -> Vec<u32> {
+            ecs_diagnostics(query)
+                .iter()
+                .inspect(|d| assert_eq!(d.code, codes::ECS_UNKNOWN_FIELD, "{query}"))
+                .map(|d| d.range.start.character)
+                .collect()
+        };
+        assert_eq!(
+            at("FROM logs-* | STATS c = COUNT(*) WHERE process.nmae == \"a\""),
+            [39]
+        );
+        assert_eq!(at("FROM logs-* | STATS COUNT(*) BY process.nmae"), [32]);
+        assert_eq!(
+            at("FROM logs-* | INLINE STATS c = MAX(a) BY g = process.nmae"),
+            [45]
+        );
+        assert_eq!(at("FROM logs-* | DISSECT process.nmae \"%{a}\""), [22]);
+        assert_eq!(at("FROM logs-* | RENAME process.nmae AS h"), [21]);
+        assert_eq!(
+            at("FROM logs-* | ENRICH p WITH process.nmae = city | WHERE process.nmae == \"a\""),
+            [0; 0]
+        );
+        assert_eq!(
+            at("FROM logs-* | WHERE process.nmae == \"a\" AND user.nmae == \"b\""),
+            [44, 20]
+        );
+        // SORT's keys and MV_EXPAND's field are read.
+        assert_eq!(at("FROM logs-* | SORT process.nmae DESC"), [19]);
+        assert_eq!(at("FROM logs-* | MV_EXPAND process.nmae"), [24]);
+        // A DISSECT option is no pattern: the walk goes on.
+        assert_eq!(
+            at(
+                "FROM logs-* | DISSECT process.nmae \"%{a}\" append_separator = \",\" | WHERE user.nmae == \"y\""
+            ),
+            [22, 73]
+        );
+        // ENRICH defines its clauses' names, not its policy or match field.
+        assert_eq!(
+            at("FROM logs-* | ENRICH p ON host.nmae WITH c = x | WHERE process.nmae == \"a\""),
+            [55]
+        );
+        // INLINE STATS defines its groups' names.
+        assert_eq!(
+            at(
+                "FROM logs-* | INLINE STATS c = COUNT(*) BY host.nmae = host.name | WHERE host.nmae == \"a\""
+            ),
+            [0; 0]
+        );
+        let d = ecs_diagnostics("FROM logs-* | WHERE source.ip RLIKE \"a\"");
+        assert!(d[0].message.contains("`RLIKE`"), "{}", d[0].message);
     }
 
     #[test]

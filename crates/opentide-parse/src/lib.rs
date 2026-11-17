@@ -60,7 +60,7 @@ mod parser;
 mod token_set;
 mod tree;
 
-pub use debug::{debug_errors, debug_kinds, debug_tree, describe_expected};
+pub use debug::{debug_error_kinds, debug_errors, debug_kinds, debug_tree, describe_expected};
 pub use input::{Grammar, Input, Lexeme, lex};
 pub use parser::{CompletedMarker, ErrorKind, Event, Marker, Parser, TREE_BUDGET};
 pub use token_set::TokenSet;

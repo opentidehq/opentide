@@ -249,7 +249,7 @@ warning: This build of opentide cannot set file permissions (WASI), so the hook 
 
 Run that line in the repository once (or run `opentide setup hooks` from the opentide CLI).
 
-Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the opentide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
+Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos and their line endings (a CRLF file gets CRLF lines); the opentide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 
 ### setup mcp
 
@@ -267,6 +267,8 @@ opentide setup mcp --cursor --vscode --yes
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
 The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code itself. When `.vscode/extensions.json` recommends it, `setup mcp --vscode` still writes `.vscode/mcp.json`, for teammates without the extension, and says so: JSON output has `"extension_mcp": true` and a `detail` sentence, printed as a note.
+
+An existing file is merged in place (comments, layout, line endings and a byte-order mark stay). An `opentide` server it already has is yours: setup adds the fields and `env` entries it lacks and keeps the ones it has, so a customised `command`, `args` or `env` survives a re-run. When a kept field differs from what setup writes, a warning names it; remove the entry and re-run to reset it.
 
 VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the detection workspace from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
 

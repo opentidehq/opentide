@@ -17,8 +17,10 @@ import type {
 } from '@opentide/opentide'
 
 const options: ValidateOptions = { check: 'schema', files: ['objects/rules/a.yaml'], strict: true, queries: 'warn' }
-const ws: Workspace = Workspace.open('.', { cwd: '.' })
+// Opening a workspace on disk is a promise; one in memory is not.
+const opened: Promise<Workspace> = Workspace.open('.', { cwd: '.' })
 const memory: Workspace = Workspace.fromFiles('/ws', { 'objects/rules/a.yaml': 'name: A\n' })
+const ws: Workspace = memory
 const root: string = ws.root
 
 const validation = ws.validate(options)
@@ -37,11 +39,11 @@ const rules: any[] = ws.rules()
 const families: number = ws.objectives().length + ws.threats().length
 
 const planOptions: DeployPlanOptions = { strategies: ['PREVIEW'], platform: 'sentinel', keepDeprecated: false }
-const plan = ws.deployPlan(planOptions)
-const ok: boolean = plan.ok
+const planned = ws.deployPlan(planOptions)
+const ok: Promise<boolean> = planned.then((plan) => plan.ok)
 
-const tree = runJson(['commands'])
-const code: number = main(['--version'])
+const tree: Promise<any> = runJson(['commands'])
+const code: Promise<number> = main(['--version'])
 const version: string = VERSION
 
 // The tenant operations: synchronous configuration, promises for the network.
@@ -87,4 +89,4 @@ ws.validate({ check: 'everything' })
 ws.validate({ queries: 'loud' })
 
 export { aborted, abortable, cancelled, keys, known, live, read, sysdig, timed }
-export { covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }
+export { opened, covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }

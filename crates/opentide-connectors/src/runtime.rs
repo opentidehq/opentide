@@ -9,7 +9,8 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use tokio::sync::Semaphore;
@@ -65,15 +66,84 @@ pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T>
 /// WASI has no other thread to hand the work to (`apart` runs it on this
 /// one).
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    Ok(start()?.block_on(work))
+}
+
+/// A runtime of its own, for a caller that runs many pieces of work one
+/// after another on it (`deploy`, a request per rule): [`block_on`]'s,
+/// kept.
+///
+/// # Errors
+///
+/// As [`block_on`]'s: the runtime cannot start, or, on WASI, the caller is
+/// inside a runtime, where blocking on another would panic.
+pub fn start() -> Result<tokio::runtime::Runtime, String> {
     #[cfg(target_os = "wasi")]
     if tokio::runtime::Handle::try_current().is_ok() {
         return Err(INSIDE_A_RUNTIME.into());
     }
+    build()
+}
+
+/// How many runtimes this process has started through [`block_on`],
+/// [`start`] and [`shared`]: tests read it to prove a client reuses one.
+static STARTED: AtomicUsize = AtomicUsize::new(0);
+
+/// A new runtime, counted in [`started`]: [`start`]'s and [`shared`]'s.
+fn build() -> Result<tokio::runtime::Runtime, String> {
     let runtime = builder()
         .enable_all()
         .build()
         .map_err(|error| format!("cannot start the network runtime: {error}"))?;
-    Ok(runtime.block_on(work))
+    STARTED.fetch_add(1, Ordering::Relaxed);
+    Ok(runtime)
+}
+
+/// How many runtimes [`block_on`] and [`shared`] have started in this
+/// process.
+#[doc(hidden)]
+pub fn started() -> usize {
+    STARTED.load(Ordering::Relaxed)
+}
+
+/// The process's shared runtime, started by its first caller and never
+/// dropped (a multi-thread runtime dropped inside another runtime panics).
+/// Clients that ask many times, such as the CVE lookups, run on it rather
+/// than start one per request.
+///
+/// # Errors
+///
+/// The runtime cannot start.
+pub fn shared() -> Result<&'static tokio::runtime::Runtime, String> {
+    static SHARED: OnceLock<Result<tokio::runtime::Runtime, String>> = OnceLock::new();
+    SHARED.get_or_init(build).as_ref().map_err(Clone::clone)
+}
+
+/// Runs *work* to completion on the [`shared`] runtime, from any thread: a
+/// caller inside a runtime (the MCP server's) hands it to a thread of its
+/// own ([`apart`]), since a runtime cannot block a thread that drives one.
+///
+/// # Errors
+///
+/// The runtime cannot start; *work* panicked; or, on WASI, the caller is
+/// inside a runtime, as for [`block_on`].
+pub fn block_on_shared<F: Future + Send>(work: F) -> Result<F::Output, String>
+where
+    F::Output: Send,
+{
+    let runtime = shared()?;
+    if tokio::runtime::Handle::try_current().is_err() {
+        return Ok(runtime.block_on(work));
+    }
+    #[cfg(target_os = "wasi")]
+    {
+        drop(work);
+        Err(INSIDE_A_RUNTIME.into())
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        apart(|| runtime.block_on(work)).map_err(|_| "the network work panicked".to_owned())
+    }
 }
 
 /// [`block_on`]'s refusal inside a runtime on WASI.
@@ -247,6 +317,11 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
         assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn start_inside_a_runtime_is_refused_not_a_panic() {
+        assert_eq!(start().err().as_deref(), Some(INSIDE_A_RUNTIME));
     }
 
     #[test]
