@@ -1,6 +1,6 @@
 //! The server over the CLI end-to-end corpus (`tests/fixtures/tide_corpus`),
-//! in process: every tool and resource answers, as the recorded sessions
-//! (`tests/golden/mcp/`) hold in full against the Python server.
+//! in process: every tool and resource answers (the Python server's recorded
+//! sessions, which the server was replayed against, were retired in #1142).
 
 use std::path::{Path, PathBuf};
 

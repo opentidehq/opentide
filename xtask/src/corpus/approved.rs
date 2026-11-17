@@ -12,7 +12,6 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value as Json, json};
 
-
 /// An approved class of difference: where it applies, and why.
 pub struct Approved {
     /// The rule's id.
@@ -253,8 +252,7 @@ fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bo
         && code(rust) == "yaml_parse"
         && message.starts_with("Could not parse object YAML: ")
         && ((columns && without(oracle, &place) == without(rust, &place))
-            || (tab_in_scalar(oracle, rust)
-                && without(oracle, &scalar) == without(rust, &scalar)))
+            || (tab_in_scalar(oracle, rust) && without(oracle, &scalar) == without(rust, &scalar)))
 }
 
 fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
@@ -548,11 +546,11 @@ mod tests {
             Some(&displaced),
             &oracle
         ));
-        assert!(APPROVED.iter().all(|rule| !(rule.applies)(
-            None,
-            Some(&spurious),
-            &oracle,
-        )));
+        assert!(
+            APPROVED
+                .iter()
+                .all(|rule| !(rule.applies)(None, Some(&spurious), &oracle,))
+        );
     }
 
     fn vocab_finding(suggestion: Option<&str>) -> Json {

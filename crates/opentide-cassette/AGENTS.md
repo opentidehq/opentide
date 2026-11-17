@@ -15,7 +15,7 @@ how a Rust connector is proven to send what the Python client sends. Test toolin
 ## Place
 
 foundation, tier 0 (`xtask/layers.toml`): no workspace crate. `opentide-connectors`' and
-`opentide-cli`'s tests and xtask (`cargo xtask cassettes`, cassette golden cases) use it.
+`opentide-cli`'s tests and xtask (`cargo xtask cassettes`, the snapshot cases with a cassette) use it.
 
 ## Matching
 
@@ -38,8 +38,9 @@ authenticates, negotiates content or selects an API version is a review failure,
 
 ## Invariants
 
-- **A cassette is recorded, never written.** `cargo xtask cassettes record <scenario>` records the
-  oracle (the frozen Python CLI of `tests/golden/ORACLE`) through `Proxy` in record mode;
+- **A cassette is recorded, never written.** A scenario's client is recorded through `Proxy` in
+  record mode (the cassettes here were recorded from the frozen Python CLI by `cargo xtask
+  cassettes record`, retired with the oracle in #1142);
   `cargo xtask cassettes check` fails on a digest that does not match, on anything redaction would
   still change, and on a scenario without its cassette. Scenarios are `tests/cassettes/scenarios.toml`.
 - **The client is never patched.** Recording and replay are a proxy: whatever HTTP library the
@@ -47,4 +48,4 @@ authenticates, negotiates content or selects an API version is a review failure,
   the proxy variables and a CA bundle.
 - **Normalisation hides only what the client does not choose** (its library's headers) **and
   secrets.** Widening `redact.rs` to make a difference go away is a review failure, as for the
-  goldens' normaliser.
+  snapshots' normaliser.

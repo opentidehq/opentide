@@ -7,8 +7,8 @@ description: Change opentide's MCP server (`opentide mcp start`, crates/opentide
 
 `opentide mcp start` serves the detection catalogue over MCP stdio from the Rust command line,
 on rmcp, the official Rust MCP SDK (UC-3.7, #829; UC-6.0c). The Python server it replaced was
-removed with the Python implementation (UC-6.2, #841); its recorded sessions
-(`tests/golden/mcp/*.jsonl`) are the oracle the Rust server is replayed against.
+removed with the Python implementation (UC-6.2, #841); its recorded sessions, which the Rust
+server was replayed against, were retired with the oracle tooling (#1142).
 
 ## Layout
 
@@ -42,12 +42,8 @@ removed with the Python implementation (UC-6.2, #841); its recorded sessions
 ## Adding or changing a tool
 
 1. Describe it in the manifest and implement it in `tools.rs`, with Rust tests beside it.
-2. `cargo xtask mcp replay --engine rust tests/golden/mcp/*.jsonl` must pass: a difference from
-   the recorded Python answers needs an `APPROVED_DIFFS.toml` entry (command `mcp start`, case
-   `<session>/<step>`), with its reason, issue and changelog entry ([golden](../golden/SKILL.md)).
-   A tool the recordings do not cover adds a session to `sessions.toml`; its recording comes from
-   `cargo xtask mcp record --python PATH` against a release that has the Python server, or the
-   new tool is held by Rust tests (`src/mcp/tests.rs`, `tests/mcp_stdio.rs`) alone.
+2. Hold the tool's answers with Rust tests (`src/mcp/tests.rs`, `tests/mcp_stdio.rs`); a
+   change to an existing answer is deliberate, with its `CHANGELOG.md` entry.
 3. Extend `crates/opentide-cli/tests/mcp_stdio.rs` when the wire shape matters.
 4. Document it in `docs/mcp/tools.md` (or `resources.md`), keeping the existing section shape,
    and run `scripts/validate-docs.sh`.

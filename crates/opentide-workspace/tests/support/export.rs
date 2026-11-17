@@ -1,8 +1,6 @@
 //! The index as one JSON document: what the loading tests compare a full
-//! load with an incremental one by, and what `cargo xtask registry diff`
-//! compares with the Python registry's export
-//! (`xtask/oracle/registry_export.py` writes the oracle's side in the same
-//! shape). Test support: the product crate carries no export of its own.
+//! load with an incremental one by (and what the retired `cargo xtask
+//! registry diff` compared with the Python registry's export). Test support: the product crate carries no export of its own.
 //!
 //! Paths are relative to the workspace, `/` separated; a path outside it is
 //! written whole. Bodies are the documents as JSON (a float JSON cannot hold

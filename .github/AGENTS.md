@@ -147,11 +147,9 @@ branch.
 **No byte-for-byte comparison with the Python CLI** (the maintainer's decision, 2026-11-14): golden
 compare and check, golden determinism, the corpora's diffs against the oracle, the MCP replay, the
 payload, config, validate, lint, registry, schema and vocab diffs left every workflow, with
-`golden.yml` and `golden-preview.yml`. `cargo xtask golden`, `compare` and `corpus` stay, run by
-hand; the Rust tests that replay the oracle's recordings are
-`#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`
-(`cargo nextest run --run-ignored only`); `tests/golden/APPROVED_DIFFS.toml` gates nothing
-([`tests/golden/README.md`](../tests/golden/README.md)). The vendor-parser oracles (Kusto.Language,
+`golden.yml` and `golden-preview.yml`; the recordings, the replays and that tooling were then
+deleted (#1139, #1142). The command line's behaviour is held by Rust-owned snapshots
+([`tests/golden/README.md`](../tests/golden/README.md)); `cargo xtask corpus` runs by hand. The vendor-parser oracles (Kusto.Language,
 Splunk, Elasticsearch, Lucene, Falco) are real products' parsers: they run nightly.
 
 Every Rust job in `ci.yml` sets Rust up with one composite action,
@@ -273,8 +271,7 @@ merging** → add `PR gate`, remove the others → **Save changes**.
 - [`release-build.yml`](workflows/release-build.yml): every artifact a release ships, built and
   smoke-tested once; ci.yml's `release` and publish.yml's `build` call it (above).
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
-  and `golden-preview.yml` (`cargo xtask golden check --engine python` and `golden record
-  --check-determinism` run by hand: `tests/golden/README.md`).
+  and `golden-preview.yml` (their `cargo xtask golden` commands were deleted too, #1142).
 - [`codeql.yml`](workflows/codeql.yml) (below) and [`vocab-upstream.yml`](workflows/vocab-upstream.yml)
   (its own header).
 

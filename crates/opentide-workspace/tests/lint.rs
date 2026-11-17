@@ -1,8 +1,8 @@
 //! `lint` over a workspace in memory (UC-2.3, #818): every rule of
 //! `LINT_CODES`, `lint.toml`, `--check`, `--file`, `--changed`, `--strict`,
 //! `--fix`, the JSON entry of each finding (its keys in the oracle's order)
-//! and the frame's diagnostic. The oracle comparison is `cargo xtask lint
-//! diff` (every recorded `lint --json` case).
+//! and the frame's diagnostic. The CLI's `lint` snapshots hold what
+//! `lint --json` prints (the oracle comparison was retired in #1142).
 
 #![expect(
     clippy::unwrap_used,

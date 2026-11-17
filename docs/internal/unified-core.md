@@ -183,6 +183,8 @@ The Python implementation at a frozen tag is the **oracle**. Nothing is ported w
 
 ### 5.1 Golden capture (`xtask golden`)
 
+> **Status:** retired. Once the Rust-owned snapshots held the command line's behaviour ([#1139](https://github.com/opentidehq/opentide/issues/1139)), the recordings, the ledger and `xtask golden`, `compare` and `mcp` were deleted ([#1142](https://github.com/opentidehq/opentide/issues/1142)).
+
 For every command path in `opentide --json commands`, every output mode (`human` through a pseudo-terminal at fixed width, `plain`, `json`, `agent`), and every fixture workspace: record stdout, stderr, exit code, the JSON document, and every file written (path, bytes, mode). Normalise only what is non-deterministic: `duration_ms`, timestamps, absolute paths, temporary directory names, crash-log paths. Normalisation rules are code, reviewed and tested. Recordings live under `tests/golden/cases/<command>/<mode>/<fixture>/<variant>/` (a command path's words joined by `.`, `_root` for the bare program), a file of 16 KiB or more stored once in `tests/golden/blobs/<sha256>`, with their size and coverage in `tests/golden/COVERAGE.md`; they are reviewed like code ([`tests/golden/README.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/tests/golden/README.md)).
 
 ### 5.2 Differential runner and shadow mode

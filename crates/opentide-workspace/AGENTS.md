@@ -48,7 +48,7 @@ source (`release-build.yml` `crate-packages`, `scripts/ci-local.sh`).
 | `src/lint/` | `lint` / `Workspace::lint`: every `LINT_CODES` rule, `lint.toml`, `--check`, `--file`, `--changed` (the host's diff), `--strict`, `--fix` renames; `LintFinding` (the JSON entry, keys in the oracle's order, and its `Diagnostic`; `info` is `Severity::Info`, framed `note`); `lint_file` (the editor's file name and metadata findings, KG-03/KG-05); `stems.rs` (`slugify`, `expected_stem`, `.debug` suffixes) |
 | `src/watch/` | `--watch`: `Watcher` (snapshot, references, findings by file), `select_pass` and `scoped_pass_holds` (the full-versus-scoped rules of `docs/internal/cli-experience.md`), `WorkspaceValidate`; `events.rs`, `notify`'s events that wake the loop (not on WebAssembly). Drawing a pass is UC-3.5's |
 | `src/views/` | What `opentide tui` shows beside the catalogue (UC-3.6d, #951): `chains.rs` threat chaining read once whichever end wrote it, the flow layers and the neighbourhood of a threat (`cli/services/chains_view.py`); `object.rs` an object as a page under its revision's fields from the field catalog, the fields it could add, what each UUID names (`cli/services/object_view.py`) |
-| `src/export.rs` | `Index::to_json`: what `cargo xtask registry diff` compares |
+| `src/export.rs` | `Index::to_json`: the index as one JSON document |
 | `examples/load.rs` | `cargo xtask bench`'s `load` command for the Rust engine |
 | `examples/validate.rs` | `cargo xtask bench`'s `validate_*` commands for the Rust engine |
 | `tests/loading.rs` | Discovery, counts (one read and one parse per file, one resolution), load errors, duplicates, signals, references, the registry lifecycle, invalidation, the disk |
@@ -62,32 +62,25 @@ source (`release-build.yml` `crate-packages`, `scripts/ci-local.sh`).
 
 ## Invariants
 
-- The Python registry at the frozen tag is the oracle: `cargo xtask registry diff --against python
-  --corpus all` compares the index on every fixture, the heavy workspace, the generator's layouts
-  and each fault kind alone. A difference is a bug unless a rule of `xtask/src/registry.rs`
-  `APPROVED` (or `INVALID_DATES`) explains it, with its CHANGELOG lead; a rule that explains
-  nothing fails the run.
+- The Python registry at the frozen tag was the oracle (`cargo xtask registry diff`, retired in
+  #1142): what the index holds changes only on purpose, with its CHANGELOG lead.
 - Each object file is read once and parsed once per load; an invalidation re-reads only the files
   its changes name. The configuration is resolved once per load and again only when a path in a
   configuration folder changes. `Stats` counts all three; the tests hold them.
 - The index is a pure function of the scans and the parses (`index::assemble`), taken in discovery
   order: a full load and an incremental one build the same index from the same parses.
-- `validate` reports what the oracle's `validate --json` reports: `cargo xtask validate diff`
-  runs every recorded checking case against its recording; a difference is a bug unless a rule of
-  `xtask/src/validate.rs` `APPROVED` explains it, with its CHANGELOG lead (a stale rule fails).
-  The queries check runs there on the query engines (`opentide-cli`'s `queries::EngineQueries`,
-  UC-2.5): its findings, status and `queries_checked` are compared too, and `cargo xtask corpus
-  faults --check --engine rust --only queries` compares it on every query fault kind.
+- `validate` reports what the oracle's `validate --json` reported (the recordings and `cargo xtask
+  validate diff` were retired in #1142): the CLI's `validate` snapshots hold it, and a change is
+  deliberate, with its CHANGELOG lead. `cargo xtask corpus faults --check --engine rust --only
+  queries` compares the queries check on every query fault kind.
 - A `Diagnostic`'s JSON keys and their order are the CLI contract (plan §3): never add, drop or
   move one; what only a frame shows goes in `label` and `notes`.
 - YAML is opentide-schema's (YAML 1.2, saphyr); never re-implement a YAML 1.1 rule for parity.
 - No panics on what a file holds. `std::fs` only in `fs.rs` (`OsFs`); the rest reads and writes
   through the `FileSystem` and `WriteFs`, and `watch/events.rs` holds the one other OS handle,
   `notify`'s watcher. No environment read but `RootOptions::from_env`.
-- `lint` reports what the oracle's `lint --json` reports, key for key: `cargo xtask lint diff`
-  runs every recorded case (`--fix` on a fresh copy, its renames compared); `validate diff` runs
-  the `--fix` and `--fix --dry-run` cases with their diff and files. A difference is a bug unless a
-  rule of `xtask/src/lint.rs` or `xtask/src/validate.rs` `APPROVED` explains it.
+- `lint` reports what the oracle's `lint --json` reported, key for key; the CLI's `lint` and
+  `validate --fix` snapshots hold it now (#1142).
 - A fix is a text splice: every byte outside its span is kept (`tests/fix.rs`), and a file is
   written only while it holds the text the plan read. Never write YAML back from a parsed tree.
 
@@ -95,11 +88,8 @@ source (`release-build.yml` `crate-packages`, `scripts/ci-local.sh`).
 
 ```bash
 cargo nextest run -p opentide-workspace loading index validate lint fix watch
-cargo xtask validate diff                                 # the recordings; no oracle needed
-cargo xtask lint diff                                     # the recordings; no oracle needed
 OPENTIDE_PYTHON=python3 cargo test -p opentide-workspace --test external_difflib
 cargo xtask bench --engine rust --only validate_clean,validate_warnings,validate_file
-cargo xtask registry diff --against python --corpus all   # needs the oracle (OPENTIDE_ORACLE)
 cargo xtask bench --engine rust --only load
 ```
 

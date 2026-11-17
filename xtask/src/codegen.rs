@@ -499,7 +499,9 @@ fn catalog_drift(root: &Path) -> Result<(usize, Vec<String>)> {
 mod tests {
     use super::*;
     use crate::verdict::{self, Instances};
-    use opentide_schema::generate::configuration::{configuration_schema_name, configuration_schemas};
+    use opentide_schema::generate::configuration::{
+        configuration_schema_name, configuration_schemas,
+    };
 
     #[test]
     fn an_extra_committed_template_is_stale() {

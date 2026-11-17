@@ -22,8 +22,8 @@ use opentide_workspace::validate::{Options, QueryCheck, QueryFindings, QueryObje
 use opentide_workspace::{OsFs, RootOptions, Workspace};
 use serde_json::{Value as Json, json};
 
-use super::faults::{Catalogue, Kind};
 use super::approved::Approved;
+use super::faults::{Catalogue, Kind};
 
 /// The queries check on the engines, counting the CrowdStrike queries and
 /// HarfangLab YARA rules it checked (the oracle checked neither). The counts are the last check's: a

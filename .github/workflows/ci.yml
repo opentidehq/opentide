@@ -35,9 +35,9 @@ run-name: >-
 #   (`python-matrix`) run on release pull requests and the nightly.
 #
 # Byte-for-byte comparison with the frozen Python CLI is no requirement
-# anywhere: the oracle's comparisons (golden, corpus, MCP replay, the payload,
-# config, validate and lint diffs) run by hand only (`cargo xtask golden`,
-# `compare`, `corpus`; the replay tests are #[ignore]d), tests/golden/README.md.
+# anywhere: the command line's behaviour is held by Rust-owned snapshots
+# (tests/golden/README.md), and the oracle's recordings and their comparison
+# tooling were retired (#1142); `cargo xtask corpus` still runs by hand.
 
 on:
   push:
@@ -545,8 +545,7 @@ jobs:
 
       # The artifacts generated from the Rust model are the committed ones:
       # the platform and editor templates, the editor schemas, the language
-      # server's catalogs and the diagnostics reference. `--oracle` (the
-      # comparisons with the oracle's recordings) runs by hand only.
+      # server's catalogs and the diagnostics reference.
       - name: Generated artifacts
         if: steps.bins.outputs.xtask == 'true'
         run: target/debug/xtask codegen --check
@@ -960,9 +959,6 @@ jobs:
   # bin, the packages, the TypeScript page's snippets and a `tsc --noEmit`
   # consumer); and its command line against this repository's console
   # script's: `--json commands` byte for byte. Nightly and on Run workflow.
-  # (`cargo xtask golden check --runner node`, the ported golden cases
-  # through the Node bin, is no gate since the oracle policing left CI; it
-  # stays runnable by hand.)
   node:
     name: Node package (napi-rs build, tests)
     needs: changes
@@ -1054,9 +1050,7 @@ jobs:
   # client's tests against the native, worker and WASI servers, only when
   # packages/ or the browser module change (`ts_packages`) and on every push and nightly: they check
   # the client, not the parser. The WebAssembly targets' clippy is
-  # `engine-lint`'s. (`cargo xtask golden check --runner wasi`, every golden
-  # case through the module, is no gate since the oracle policing left CI; it
-  # stays runnable by hand.)
+  # `engine-lint`'s.
   wasm:
     name: WebAssembly (browser, WASI, npm packages)
     needs: changes

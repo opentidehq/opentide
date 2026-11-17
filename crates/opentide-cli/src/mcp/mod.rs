@@ -8,8 +8,8 @@
 //! wrote it to `data/mcp/manifest.json`: MCP shapes are a plan §3 invariant.
 //!
 //! Every tool ([`TOOLS`]) and every resource runs here, on the workspace
-//! crates, and answers as the Python server's handlers do
-//! (`tests/golden/mcp/`, `cargo xtask mcp replay`): no Python is needed.
+//! crates, and answers as the Python server's handlers did (it was replayed
+//! against their recorded sessions until #1142): no Python is needed.
 //! The tools that reach a tenant (`validate_query` and `run_query` with
 //! `live`, `deploy_rule` without `dry_run`) run the command line's own
 //! commands in this process.

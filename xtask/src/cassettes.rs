@@ -18,7 +18,6 @@ use clap::Subcommand;
 use opentide_cassette::{Cassette, Redaction, cassette};
 use serde::Deserialize;
 
-
 /// `cargo xtask cassettes <command>`.
 #[derive(Subcommand)]
 #[command(
@@ -152,8 +151,9 @@ pub fn check(dir: &Path, scenarios: &Scenarios) -> Result<Vec<String>> {
     for (path, scenario) in &expected {
         let Ok(text) = std::fs::read_to_string(path) else {
             problems.push(format!(
-                "{} has no cassette: cargo xtask cassettes record {}",
-                scenario.name, scenario.name
+                "{} has no cassette ({})",
+                scenario.name,
+                path.display()
             ));
             continue;
         };
@@ -380,7 +380,10 @@ mod tests {
         std::fs::write(dir.join("nested/README.md"), "notes").unwrap();
         assert_eq!(
             check(dir, &scenarios).unwrap(),
-            ["missing has no cassette: cargo xtask cassettes record missing"]
+            [format!(
+                "missing has no cassette ({})",
+                dir.join("missing.json").display()
+            )]
         );
 
         // A cassette no scenario names, and one recording another scenario.
@@ -439,5 +442,4 @@ mod tests {
         .unwrap();
         assert_eq!(parsed.scenario[0].exit, 1);
     }
-
 }

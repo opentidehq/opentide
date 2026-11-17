@@ -108,8 +108,8 @@ impl Case {
 
 /// Every case of `tests/golden/cases.toml` this harness runs, in the
 /// manifest's order: each `[[case]]` over its modes and fixtures, a fixture
-/// lacking a `{variable}` the arguments use left out, as `cargo xtask golden
-/// record` expands it (`xtask/src/golden/case.rs`), the cases on a generated
+/// lacking a `{variable}` the arguments use left out, as the retired
+/// `cargo xtask golden record` expanded it, the cases on a generated
 /// fixture among them (see [`Case::is_generated`]). Cases that feed standard
 /// input (`serve`'s session, which `tests/serve.rs` drives) are left out.
 pub fn cases() -> Vec<Case> {
@@ -161,7 +161,7 @@ pub fn cases() -> Vec<Case> {
 }
 
 /// `tests/golden/cases.toml`, the parts this harness reads
-/// (`xtask/src/golden/case.rs` `Spec` is the whole).
+/// (the retired `xtask/src/golden/case.rs` `Spec` was the whole).
 #[derive(serde::Deserialize)]
 struct Spec {
     defaults: Defaults,
@@ -224,7 +224,7 @@ const REFUSING_PROXY: &str = "http://127.0.0.1:9";
 const CASE_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
 /// The environment every case starts from (nothing inherited): the goldens'
-/// (`xtask/src/golden/case.rs` `base_env`), less the Python oracle's own.
+/// (the retired `xtask/src/golden/case.rs` `base_env`), less the Python oracle's own.
 fn base_env(mode: &str) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = [
         ("PATH", CASE_PATH),
@@ -351,7 +351,7 @@ fn assert_case_sensitive(root: &Path) {
 pub fn run_case(case: &Case) -> String {
     let scratch = replay::case_root();
     // `<TMP>` is the case's root, which holds `ws/`, `home/` and `tmp/`
-    // (`$TMPDIR`), as `cargo xtask golden` lays it out.
+    // (`$TMPDIR`), as the retired `cargo xtask golden` laid it out.
     let root = std::fs::canonicalize(scratch.path()).unwrap();
     let (home, tmp, ws) = (root.join("home"), root.join("tmp"), root.join("ws"));
     for folder in [&home, &tmp, &ws] {

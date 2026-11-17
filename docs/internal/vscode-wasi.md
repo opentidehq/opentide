@@ -97,12 +97,10 @@ Three long-lived processes, one per protocol, each started from the same compile
 
 ## Held to the goldens
 
-CI's `wasm` job builds the module, checks its size and runs
-`cargo xtask golden check --runner wasi`: every golden case that needs no network, under wasmtime,
-compared with the oracle's recordings. The cases it leaves out are in
-`tests/golden/WASI_EXCLUDED.toml`, each with its reason: network cases, and the two capabilities
-WASI preview 1 lacks (`process`, `permissions`). Locally, `OPENTIDE_WASI_RUNTIME=node` runs the
-same check under Node's WASI (`scripts/engine/wasi-run.mjs`).
+CI's `wasm` job builds the module, checks its size and runs its smoke tests, and
+`packages/wasi-host`'s tests run it under Node's WASI (`scripts/engine/wasi-run.mjs`). Through the
+port, `cargo xtask golden check --runner wasi` held it to the oracle's recordings on every case that
+needs no network; the recordings and that check were retired in #1142.
 
 ## Before UC-6.1 starts
 

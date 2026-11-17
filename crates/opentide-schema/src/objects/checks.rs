@@ -8,7 +8,7 @@
 //! |--------|------|
 //! | `ObjectMetadata._validate_schema_identifier` (after) | [`schema_identifier`] |
 //! | `RuleMetadata._coerce_reviewed` (before), `_validate_reviewed` (after, `parse_review_instant`) | [`reviewed`] |
-//! | `ObjectMetadata._coerce_dates` (before) | none: `created` and `modified` take a string (`tests/golden/APPROVED_DIFFS.toml`) |
+//! | `ObjectMetadata._coerce_dates` (before) | none: `created` and `modified` take a string (an approved difference, `CHANGELOG.md`) |
 //! | `ThreatBody._require_vocab_list` (before) | [`crate::from_node::require_vocab_list`] |
 //! | `_single_vocab_name` (`VocabName`, after), `min_length=1` | [`check_single_vocab_name`], [`check_at_least_one`], [`vocab_names`] |
 //! | `ObjectReferences.coerce_public_keys` (`from_yaml_dict`) | [`public_references`] |
@@ -24,8 +24,8 @@ use crate::node::{Node, Value};
 use crate::pins::Pins;
 
 /// The schema identifiers the oracle's registry holds
-/// (`schema_registry.registered_identifiers()`), sorted. `cargo xtask schema
-/// diff --against python` fails when they differ.
+/// (`schema_registry.registered_identifiers()`), sorted (held to them by the
+/// retired `cargo xtask schema diff`, #1142).
 pub const REGISTERED: &[&str] = &[
     "objective::1.0",
     "rule::1.0",
