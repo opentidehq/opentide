@@ -2,7 +2,7 @@
 
 use crate::input::offset;
 use crate::{ErrorKind, Event, Input, Lexeme, TokenSet};
-use rowan::{GreenNode, GreenNodeBuilder, TextRange, TextSize};
+use rowan::{GreenNode, GreenNodeBuilder, SyntaxKind, TextRange, TextSize};
 
 /// A syntax error of a parse.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,6 +16,11 @@ pub struct SyntaxError {
     /// From the end of the last token before the error to the start of the
     /// token after it: the error sits in this gap (its trivia).
     pub gap: TextRange,
+    /// The kinds of the nodes open when the grammar recorded it, root first:
+    /// the productions it was in. A range cannot tell them at a node's edge
+    /// (a closer missing from a call, or a stray token after a whole one);
+    /// the order of the parser's events does.
+    pub within: Vec<SyntaxKind>,
 }
 
 /// A green tree and its syntax errors.
@@ -93,6 +98,7 @@ pub(crate) fn build_or_fallback(
         message: UNBALANCED.to_owned(),
         expected: TokenSet::EMPTY,
         gap: TextRange::empty(TextSize::from(0)),
+        within: Vec::new(),
     });
     Parse {
         green: builder.finish(),
@@ -103,6 +109,10 @@ pub(crate) fn build_or_fallback(
 
 /// The replay; `None` when the events are not one balanced root. Nodes past
 /// `max_tree_depth` are not opened ([`MAX_TREE_DEPTH`]).
+#[expect(
+    clippy::too_many_lines,
+    reason = "one loop over the events: each arm keeps the open nodes, their kinds and the depth in step"
+)]
 fn replay(
     input: &Input<'_>,
     mut events: Vec<Event>,
@@ -119,6 +129,8 @@ fn replay(
     let mut flattened = false;
     let mut last_end = TextSize::from(0);
     let mut parents = Vec::new();
+    // The kinds of the open nodes, root first: an error's `within`.
+    let mut kinds: Vec<SyntaxKind> = Vec::new();
     for i in 0..events.len() {
         match std::mem::replace(&mut events[i], Event::Tombstone) {
             Event::Start {
@@ -169,13 +181,16 @@ fn replay(
                             ),
                             expected: TokenSet::EMPTY,
                             gap: gap(input, next, last_end),
+                            within: kinds.clone(),
                         });
                     }
                     open.push(opened);
+                    kinds.push(kind);
                 }
             }
             Event::Finish => {
                 let opened = open.pop()?;
+                kinds.pop();
                 if open.is_empty() {
                     flush_rest(&mut builder, input, &mut next);
                 }
@@ -205,6 +220,7 @@ fn replay(
                     message,
                     expected,
                     gap: gap(input, next, last_end),
+                    within: kinds.clone(),
                 });
             }
             Event::Tombstone => {}

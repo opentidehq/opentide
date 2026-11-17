@@ -4,21 +4,18 @@ expression: "debug_parse(&body.join(\"\\n\"))"
 input_file: crates/testdata/corpus/falco/field__invalid.falco
 ---
 source_file@0..17
-  macro_reference@0..4
-    identifier@0..4 "proc"
-  ERROR@4..5
-    other@4..5 "."
-  ERROR@5..6
-    other@5..6 "."
-  macro_reference@6..10
-    identifier@6..10 "name"
-  whitespace@10..11 " "
-  ERROR@11..12
-    =@11..12 "="
+  comparison@0..12
+    field@0..12
+      field_name@0..9 "proc.name"
+      field_argument@9..12
+        [@9..10 "["
+        whitespace@10..11 " "
+        argument_value@11..12
+          =@11..12 "="
   whitespace@12..13 " "
-  macro_reference@13..17
+  ERROR@13..17
     identifier@13..17 "bash"
 errors:
-4..4: unexpected
-5..5: unexpected (expected field_name, identifier, transformer_name, ()
-10..11: unexpected
+12..13: missing `]` (expected ])
+12..13: expected an operator (expected ])
+12..13: unexpected (expected ])

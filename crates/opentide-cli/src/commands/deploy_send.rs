@@ -846,10 +846,7 @@ fn deploy(
         warned: false,
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
-        runtime: tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .ok(),
+        runtime: opentide_connectors::runtime::start(),
     };
     let total = deployment.len();
     let mut deployed: Vec<String> = Vec::new();
@@ -1646,7 +1643,9 @@ struct Sender<'s, 'c> {
     warned: bool,
     environment: Environment,
     cancel: CancellationToken,
-    runtime: Option<tokio::runtime::Runtime>,
+    /// The run's network runtime, or why it could not start (on WASI inside
+    /// the MCP server's: blocking on another there would panic).
+    runtime: Result<tokio::runtime::Runtime, String>,
 }
 
 /// A tenant's connection.
@@ -1668,12 +1667,15 @@ impl Sender<'_, '_> {
         &self,
         work: impl std::future::Future<Output = Result<T, ConnectorError>>,
     ) -> Result<T, ConnectorError> {
-        let Some(runtime) = &self.runtime else {
-            return Err(ConnectorError::Crashed {
-                platform: String::new(),
-                tenant: String::new(),
-                message: "cannot start the network runtime".into(),
-            });
+        let runtime = match &self.runtime {
+            Ok(runtime) => runtime,
+            Err(message) => {
+                return Err(ConnectorError::Crashed {
+                    platform: String::new(),
+                    tenant: String::new(),
+                    message: message.clone(),
+                });
+            }
         };
         let cancel = &self.cancel;
         let interrupted = self.cx.interrupted;
@@ -1938,19 +1940,6 @@ impl Sender<'_, '_> {
                 if correlation {
                     name.push_str(" - Rule");
                 }
-                let splunk = opentide_connectors::splunk::Splunk::new();
-                let context = self.context(connection);
-                if deletion {
-                    let found = self
-                        .block(splunk.saved_search(context, &name))
-                        .map_err(|error| raised(&error))?;
-                    if found.is_some() {
-                        self.block(splunk.delete_saved_search(context, &name))
-                            .map_err(|error| raised(&error))?;
-                        tracing::warn!(name = name.as_str(), "splunk_alert_deleted");
-                    }
-                    return Ok(());
-                }
                 let mut settings = opentide_compile::json::Object::new();
                 for write in writes.iter().skip(1) {
                     if let CJson::Object(members) = &write.body {
@@ -1959,8 +1948,29 @@ impl Sender<'_, '_> {
                         }
                     }
                 }
-                self.block(splunk.apply_saved_search(context, &name, &settings, false))
+                let request = DeployRequest {
+                    rule_id: name,
+                    operation: if deletion {
+                        Operation::Delete
+                    } else {
+                        Operation::Update
+                    },
+                    body: if deletion {
+                        Vec::new()
+                    } else {
+                        CJson::Object(settings).to_compact().into_bytes()
+                    },
+                    policies: None,
+                };
+                let deployer = self.deployer(platform)?;
+                let context = self.context(connection);
+                let outcome = self
+                    .block(deployer.deploy(context, &request))
                     .map_err(|error| raised(&error))?;
+                // `splunk_alert_deleted`: the saved search the tenant had.
+                for warning in &outcome.warnings {
+                    tracing::warn!(name = warning.message.as_str(), "{}", warning.code);
+                }
             }
             Some(PlatformId::CarbonBlackCloud) => {
                 let Some(report) =

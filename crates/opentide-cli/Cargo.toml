@@ -67,10 +67,11 @@ anstream.workspace = true
 clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
 # The query lines of a code frame, coloured as the editor colours them.
-opentide-analysis.workspace = true
+opentide-analysis = { workspace = true, features = ["queries"] }
 # The commands ported onto the framework (UC-2.4): the workspace, its
 # catalogue, coverage, tenants and review dates, and the one suggestion rule;
-# the queries check of validate on the query engines (src/queries.rs, UC-2.5):
+# the queries check of validate on the query engines (opentide-analysis's
+# `queries`, UC-2.5):
 # the workspace and its one Diagnostic, and the quoting of a suggestion.
 opentide-core.workspace = true
 # `generate` (UC-3.2): the files it writes; `deploy --dry-run` (UC-3.1c): the
@@ -204,8 +205,6 @@ opentide-cassette.workspace = true
 # deployed and checked through the CLI flow against wiremock, no recording
 # of a real instance being shareable.
 wiremock.workspace = true
-# The goldens' normalisation and comparator (tests/common/snapshot.rs, tests/extract_sentinel.rs).
-opentide-compare.workspace = true
 tempfile = "3"
 # A scratch folder's canonical path without Windows' `\\?\` prefix, which
 # git and the binary print otherwise (tests/workspace_e2e.rs).

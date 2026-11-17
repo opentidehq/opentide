@@ -5,9 +5,9 @@
 //! the oracle's files and document in `tests/extract_sentinel/oracle/`. Here the
 //! Rust command runs in a copy of the same workspace, its ids fixed the same
 //! way, against that cassette: it must send exactly the oracle's requests,
-//! and write each rule file as the oracle did, but for the differences
-//! `tests/golden/APPROVED_DIFFS.toml` approves (case
-//! `cassette:sentinel/extract`), and load to the oracle's data. Two things
+//! write each rule file under the oracle's name and load to the oracle's
+//! data; the files' bytes are held to a snapshot of the Rust command's own
+//! output (`tests/extract_sentinel/snapshots/`, #1139). Two things
 //! the oracle did are left out on purpose: it dumped the listing to
 //! `output-<tenant>.json` in the working directory, and it padded each file
 //! name with a space at both ends ([`unpadded`]).
@@ -16,6 +16,7 @@
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -23,13 +24,9 @@ use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::extract::{Context, sentinel_with};
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
-use opentide_compare::{Case, FileState, Run};
 
 /// The credential the replayed tenant gets; redacted, as the recording's was.
 const SECRET: &str = "replayed-credential-value";
-/// The ledger's case for this test's comparison.
-const CASE: &str = "cassette:sentinel/extract";
-const COMMAND: &str = "generate extract sentinel";
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -151,7 +148,6 @@ fn as_data(path: &str, bytes: &[u8]) -> String {
 }
 
 #[test]
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     let (_scratch, ws, report) = extract();
 
@@ -199,9 +195,7 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     assert!(dumped.is_empty(), "{dumped:?}");
 
     // The rule files: named as the oracle named them without its padding,
-    // and holding the oracle's bytes but for the approved differences, and
-    // the oracle's data. They are compared under the oracle's names, which
-    // the ledger's entries name.
+    // and loading to the oracle's data.
     let oracle_files = files(&here().join("oracle"), "Imported");
     let written = files(&ws, "Imported");
     assert_eq!(
@@ -230,55 +224,26 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
             "{path} loads to other data than the oracle's"
         );
     }
-    let run = |files: &BTreeMap<String, Vec<u8>>| Run {
-        exit_code: 0,
-        stdout: Vec::new(),
-        stderr: Vec::new(),
-        files: files
-            .iter()
-            .map(|(path, bytes)| {
-                (
-                    format!("ws/{path}"),
-                    FileState::Written {
-                        mode: 0o644,
-                        bytes: bytes.clone(),
-                    },
-                )
-            })
-            .collect(),
-    };
-    let ledger = opentide_compare::ledger::Ledger::parse(
-        &std::fs::read_to_string(repo().join("tests/golden/APPROVED_DIFFS.toml")).unwrap(),
-    )
-    .unwrap();
-    let mut usage = opentide_compare::ledger::Usage::default();
-    let compared = opentide_compare::compare(
-        Case {
-            command: COMMAND,
-            id: CASE,
-        },
-        &run(&oracle_files),
-        &run(&candidate_files),
-        &ledger,
-        &mut usage,
-    );
-    assert!(
-        compared.equal,
-        "differences the ledger does not approve:\n{:#?}",
-        compared.differences
-    );
-    // Every entry of this comparison applied: none is stale.
-    for (index, entry) in ledger.entries.iter().enumerate() {
-        if entry.case == CASE {
-            assert!(
-                usage.is_used(index),
-                "APPROVED_DIFFS.toml entry {} ({:?} {}) applied nowhere: it is stale",
-                index + 1,
-                entry.target,
-                entry.rule_text
-            );
+    // Byte for byte, the files are held to a reviewed snapshot of the Rust
+    // command's own output (#1139): the oracle's bytes, and the ledger that
+    // listed how Rust's differ from them (YAML quoting, `true` for `True`),
+    // are retired. The data check above still ties them to the oracle's.
+    // insta compares text with `\r\n` as `\n` and trailing whitespace
+    // trimmed, so a carriage return is shown and the end of a file marked.
+    let mut written_text = String::new();
+    for (path, bytes) in &written {
+        let text = std::str::from_utf8(bytes).unwrap().replace('\r', "<CR>");
+        write!(written_text, "── {path} ──\n{text}").unwrap();
+        if !text.ends_with('\n') {
+            written_text.push_str("\n<no final newline>\n");
         }
     }
+    insta::with_settings!({
+        snapshot_path => here().join("snapshots"),
+        prepend_module_to_snapshot => false,
+    }, {
+        insta::assert_snapshot!("written_files", written_text);
+    });
 }
 
 /// A rule whose field is of the wrong type is skipped and listed with the

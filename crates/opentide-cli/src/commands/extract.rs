@@ -233,23 +233,7 @@ fn sanitize_filename(name: &str) -> String {
         })
         .collect();
     stem.truncate(stem.floor_char_boundary(STEM_LIMIT));
-    if is_windows_device(&stem) {
-        stem.insert(0, '_');
-    }
-    stem
-}
-
-/// Whether Windows takes `stem` for a device, not a file: its base (up to
-/// the first `.`, trimmed) is `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` or
-/// `LPT1`-`LPT9`, in any case.
-fn is_windows_device(stem: &str) -> bool {
-    let base = stem.split('.').next().unwrap_or_default().trim();
-    let upper = base.to_ascii_uppercase();
-    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || upper
-            .strip_prefix("COM")
-            .or_else(|| upper.strip_prefix("LPT"))
-            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
+    opentide_workspace::lint::device_safe(&stem)
 }
 
 /// `text` as one YAML scalar that reads back as `text` (plain where that is
@@ -754,16 +738,18 @@ mod tests {
             ("lpt9 ", "_lpt9 "),
             (" con", "_ con"),
             ("con<", "_con "),
+            ("COM0", "_COM0"),
+            ("LPT0", "_LPT0"),
+            ("COM\u{b9}", "_COM\u{b9}"),
+            ("CONIN$", "_CONIN$"),
         ] {
             assert_eq!(sanitize_filename(name), expected, "{name:?}");
         }
         for name in [
             "CONSOLE",
             "COM",
-            "COM0",
             "COM10",
             "LPT",
-            "LPT0",
             "ACON",
             "con ect",
             "NULL",

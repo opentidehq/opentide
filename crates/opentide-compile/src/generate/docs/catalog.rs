@@ -904,6 +904,12 @@ fn insert(entries: &mut Vec<(String, Tree)>, key: String, value: Tree) {
     }
 }
 
+/// Page stems the generator writes itself in each folder, lower-cased
+/// (`README.md`): an object's page never takes one, since Windows and macOS
+/// do not tell `readme.md` from `README.md`. Slugs are lower case ASCII, so
+/// comparing with these is comparing without regard to case.
+const RESERVED_SLUGS: [&str; 1] = ["readme"];
+
 /// Records sorted by name (case-insensitive, stable), each with a slug no
 /// other record of the folder shares: the lowest UUID keeps the plain slug,
 /// the others get the first 8 characters of their UUID (`unique_slugs`).
@@ -911,15 +917,25 @@ fn records(scope: Scope, mut objects: Vec<(String, String, Model)>) -> Vec<Recor
     objects.sort_by_cached_key(|(_, name, _)| name.to_lowercase());
     let mut groups: IndexMap<String, Vec<usize>> = IndexMap::new();
     for (position, (_, name, _)) in objects.iter().enumerate() {
-        groups.entry(slugify(name)).or_default().push(position);
+        // A page named `con.md` cannot be made or checked out on Windows.
+        groups
+            .entry(opentide_workspace::lint::device_safe(&slugify(name)))
+            .or_default()
+            .push(position);
     }
     let mut taken: HashSet<String> = groups.keys().cloned().collect();
+    taken.extend(RESERVED_SLUGS.iter().map(|slug| (*slug).to_owned()));
     let mut slugs = vec![String::new(); objects.len()];
     for (slug, positions) in &groups {
         let mut positions = positions.clone();
         positions.sort_by(|a, b| objects[*a].0.cmp(&objects[*b].0));
         let mut positions = positions.into_iter();
-        if let Some(first) = positions.next() {
+        // A slug the generator's own files take (`readme`, beside the
+        // folder's `README.md`, one file where case does not count) is no
+        // object's: each gets the UUID suffix.
+        if !RESERVED_SLUGS.contains(&slug.as_str())
+            && let Some(first) = positions.next()
+        {
             slugs[first].clone_from(slug);
         }
         for position in positions {
@@ -1063,6 +1079,49 @@ mod tests {
             name.to_owned(),
             Model::Threat(Box::new(threat)),
         )
+    }
+
+    #[test]
+    fn no_page_takes_the_folder_index_name() {
+        let list = records(
+            Scope::Rules,
+            vec![
+                record("bbbbbbbb-2", "readme"),
+                record("aaaaaaaa-1", "README"),
+                record("cccccccc-3", "Read me"),
+            ],
+        );
+        let slugs: Vec<&str> = list.iter().map(|r| r.slug.as_str()).collect();
+        assert_eq!(slugs, ["read-me", "readme-bbbbbbbb", "readme-aaaaaaaa"]);
+        assert!(
+            list.iter()
+                .all(|record| !record.slug.eq_ignore_ascii_case("readme")),
+            "{slugs:?}"
+        );
+    }
+
+    #[test]
+    fn a_windows_device_name_never_names_a_page() {
+        let list = records(
+            Scope::Rules,
+            vec![
+                record("aaaaaaaa-1", "CON"),
+                record("bbbbbbbb-2", "nul"),
+                record("cccccccc-3", "Com1"),
+                record("dddddddd-4", "LPT1"),
+                record("eeeeeeee-5", "PRN"),
+                record("ffffffff-6", "aux"),
+                record("abababab-7", "con.txt"),
+                record("cdcdcdcd-8", "Console"),
+            ],
+        );
+        let slugs: Vec<&str> = list.iter().map(|r| r.slug.as_str()).collect();
+        assert_eq!(
+            slugs,
+            [
+                "_aux", "_com1", "_con", "con-txt", "console", "_lpt1", "_nul", "_prn"
+            ]
+        );
     }
 
     #[test]

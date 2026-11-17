@@ -238,12 +238,30 @@ impl Sentinel {
     }
 
     /// Every analytics rule of the workspace, following `nextLink`
-    /// (`AlertRules.list`).
+    /// (`AlertRules.list`) on ARM's origin only, each once, and for at most
+    /// [`crate::paging::MAX_PAGES`] pages ([`crate::paging::NextLinks`]): a
+    /// link elsewhere, a repeated one or one past the cap is
+    /// [`ConnectorError::Answer`], and the token is never sent there.
     pub async fn list(
         &self,
         cx: TenantContext<'_>,
     ) -> Result<Result<Vec<Json>, ArmError>, ConnectorError> {
-        let mut url = Some(Self::rules_url(cx, None)?);
+        // The first page as `arm` sends it, `api-version` included, so a link
+        // back to it is known for the one already followed.
+        let first = format!(
+            "{}?api-version={ALERT_RULES_API_VERSION}",
+            Self::rules_url(cx, None)?
+        );
+        let refused = |error: crate::paging::LinkError| ConnectorError::Answer {
+            platform: PLATFORM.into(),
+            tenant: cx.tenant.label.tenant.clone(),
+            address: url::Url::parse(&first)
+                .map(|url| crate::error::origin(&url))
+                .unwrap_or_default(),
+            reason: format!("listing the analytics rules: {error}"),
+        };
+        let mut links = crate::paging::NextLinks::new(&first).map_err(refused)?;
+        let mut url = Some(first.clone());
         let mut rules = Vec::new();
         while let Some(current) = url.take() {
             let page = match self
@@ -256,11 +274,13 @@ impl Sentinel {
             if let Some(Json::Array(items)) = page.get("value") {
                 rules.extend(items.iter().cloned());
             }
-            url = page
+            if let Some(link) = page
                 .get("nextLink")
                 .and_then(Json::as_str)
                 .filter(|link| !link.is_empty())
-                .map(str::to_owned);
+            {
+                url = Some(links.follow(link).map_err(refused)?);
+            }
         }
         Ok(Ok(rules))
     }
