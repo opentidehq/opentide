@@ -516,12 +516,11 @@ impl Catalog {
     /// query whose text is `source`: what every query check, hover and
     /// completion reads. Without declared columns for the profile's platform
     /// it is the cached catalog itself; with them, a copy built once per set
-    /// of declarations ([`Catalog::with_declared_columns`]), the
-    /// [`RECENT_CATALOGS`] most recently used kept. A name the query reads
-    /// that is in neither, but that a declared pattern with columns matches
-    /// (`Vendor*_CL`), gets a copy of that copy with the name's table added,
-    /// the [`RECENT_QUERY_CATALOGS`] most recent kept. `Core` has no tables
-    /// and takes none.
+    /// of declarations ([`Catalog::with_declared_columns`]), the four most
+    /// recently used kept. A name the query reads that is in neither, but
+    /// that a declared pattern with columns matches (`Vendor*_CL`), gets a
+    /// copy of that copy with the name's table added, the two most recent
+    /// kept. `Core` has no tables and takes none.
     pub fn for_workspace(profile: Profile, source: &str) -> CatalogRef {
         let bundled = Self::cached(profile);
         if profile == Profile::Core {
