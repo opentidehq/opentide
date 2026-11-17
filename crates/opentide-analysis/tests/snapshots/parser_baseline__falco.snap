@@ -9145,10 +9145,9 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 200..203 keyword
 204..244 macro
 == corpus/falco/and_expression__invalid.falco
-falco_parse_error error 0:24-0:25 unexpected token after 'and', expecting 'or', 'and' (libsinsp)
+falco_parse_error error 0:18-0:19 expected blank or '(' after 'and' (libsinsp)
 0..15 macro
 16..19 keyword
-20..23 macro
 == corpus/falco/and_expression__valid.falco
 0..15 macro
 16..19 keyword
@@ -9158,10 +9157,9 @@ falco_parse_error error 0:24-0:25 unexpected token after 'and', expecting 'or', 
 43..45 operator
 46..47 number
 == corpus/falco/append_fragment__invalid.falco
-falco_parse_error error 0:8-0:9 unexpected token after 'and', expecting 'or', 'and' (libsinsp)
+falco_unknown_macro warning 0:4-0:7 `not` is not a macro of this block or of the Falco default rules; the tenant must define it
 0..3 keyword
-4..7 macro
-20..24 macro
+4..7 keyword
 == corpus/falco/append_fragment__valid.falco
 0..3 keyword
 4..7 keyword
@@ -9173,11 +9171,9 @@ falco_parse_error error 0:8-0:9 unexpected token after 'and', expecting 'or', 'a
 38..53 string
 53..54 punctuation.bracket
 == corpus/falco/comparison__invalid.falco
-falco_parse_error error 0:11-0:12 expected a number value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)
+falco_parse_error error 0:9-0:10 expected a number value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)
 0..8 property
 9..10 operator
-11..14 string
-23..33 macro
 == corpus/falco/comparison__valid.falco
 falco_deprecated_field warning 0:70-0:77 `evt.dir` is deprecated: due to the drop of enter events, 'evt.dir = <' always evaluates to true, and 'evt.dir = >' always evaluates to false. The rule expression can be simplified by removing the condition on 'evt.dir'
 falco_no_evttype warning 0:0-0:81 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
@@ -9196,10 +9192,10 @@ falco_no_evttype warning 0:0-0:81 the rule matches 454 event types: narrow it wi
 78..79 operator
 80..81 string
 == corpus/falco/field__invalid.falco
-falco_parse_error error 0:4-0:5 unexpected token after 'proc', expecting 'or', 'and' (libsinsp)
-0..4 macro
-6..10 macro
-13..17 macro
+falco_parse_error error 0:10-0:11 expected a valid field argument: a quoted string or a bare string (libsinsp)
+0..9 property
+9..10 punctuation.bracket
+11..12 string
 == corpus/falco/field__valid.falco
 falco_no_evttype warning 0:0-0:55 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
 0..10 property
@@ -9304,9 +9300,12 @@ falco_parse_error error 0:23-0:24 unexpected token after 'sensitive', expecting 
 30..33 keyword
 34..50 macro
 == corpus/falco/not_expression__invalid.falco
-falco_parse_error error 0:10-0:11 expected a valid check operator: one of 'exists', '<=', '<', '>=', '>', '==', '=', '!=', 'glob', 'iglob', 'contains', 'icontains', 'bcontains', 'startswith', 'bstartswith', 'endswith', 'regex', 'intersects', 'in', 'pmatch' (libsinsp)
+falco_unknown_macro warning 0:21-0:24 `not` is not a macro of this block or of the Falco default rules; the tenant must define it
 0..9 property
-16..20 macro
+10..11 operator
+12..16 string
+17..20 keyword
+21..24 keyword
 == corpus/falco/not_expression__valid.falco
 falco_no_evttype warning 0:0-0:47 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
 0..3 keyword

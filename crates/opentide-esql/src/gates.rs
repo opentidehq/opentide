@@ -16,7 +16,7 @@ use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
 use opentide_parse::ast::AstNode;
 use rowan::NodeOrToken;
 
-type SyntaxElement = rowan::SyntaxElement<crate::Lang>;
+pub(crate) type SyntaxElement = rowan::SyntaxElement<crate::Lang>;
 
 /// One version-gated construct found in the query.
 pub(crate) struct Gate {
@@ -125,13 +125,13 @@ impl Gate {
 const NOT_9_0: Availability = Availability::with_8_19_since_9(1);
 
 /// A rowan node's span.
-fn span_of(node: &SyntaxNode) -> ByteSpan {
+pub(crate) fn span_of(node: &SyntaxNode) -> ByteSpan {
     let range = node.text_range();
     ByteSpan::new(usize::from(range.start()), usize::from(range.end()))
 }
 
 /// A rowan node's text in `source`.
-fn text_of<'s>(node: &SyntaxNode, source: &'s str) -> &'s str {
+pub(crate) fn text_of<'s>(node: &SyntaxNode, source: &'s str) -> &'s str {
     let span = span_of(node);
     source.get(span.start..span.end).unwrap_or("")
 }
@@ -139,7 +139,7 @@ fn text_of<'s>(node: &SyntaxNode, source: &'s str) -> &'s str {
 /// A node's children as the checks read them: its nodes and tokens in order,
 /// without whitespace and comments, and with `WITH {…}` (`NamedParameters`)
 /// read in place, as one part of the command.
-fn parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
+pub(crate) fn parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
     let mut out = Vec::new();
     for child in node.children_with_tokens() {
         match &child {
@@ -158,14 +158,14 @@ fn trivia(kind: K) -> bool {
 }
 
 /// The position of the first token of `kinds` in `parts`.
-fn first_token(parts: &[SyntaxElement], kinds: &[K]) -> Option<usize> {
+pub(crate) fn first_token(parts: &[SyntaxElement], kinds: &[K]) -> Option<usize> {
     parts
         .iter()
         .position(|p| p.as_token().is_some() && kinds.contains(&p.kind()))
 }
 
 /// The nodes of `parts` after position `at`.
-fn nodes_after(parts: &[SyntaxElement], at: usize) -> impl Iterator<Item = &SyntaxNode> {
+pub(crate) fn nodes_after(parts: &[SyntaxElement], at: usize) -> impl Iterator<Item = &SyntaxNode> {
     parts.iter().skip(at + 1).filter_map(|p| p.as_node())
 }
 

@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-analysis/tests/parser_baseline.rs
-assertion_line: 161
 expression: baseline(language)
 ---
 == conformance/columns/after-rename.kql
@@ -11602,11 +11601,12 @@ kql_control_command_unsupported error 0:0-0:12 KQL control command '.show' is no
 62..63 number
 63..64 punctuation.bracket
 == corpus/kql/distinct_operator__invalid.kql
-kql_parse_error error 0:25-0:26 KQL syntax error: unexpected input after the query; expected `|`, or `*`
+kql_parse_error error 0:33-0:34 KQL syntax error: expected an expression
 0..13 type
 14..15 operator.pipe
 16..24 keyword
-25..26 punctuation.delimiter
+25..33 property
+33..34 punctuation.delimiter
 == corpus/kql/distinct_operator__valid.kql
 0..13 type
 14..15 operator.pipe

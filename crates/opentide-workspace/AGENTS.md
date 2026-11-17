@@ -75,7 +75,7 @@ source (`release-build.yml` `crate-packages`, `scripts/ci-local.sh`).
 - `validate` reports what the oracle's `validate --json` reports: `cargo xtask validate diff`
   runs every recorded checking case against its recording; a difference is a bug unless a rule of
   `xtask/src/validate.rs` `APPROVED` explains it, with its CHANGELOG lead (a stale rule fails).
-  The queries check runs there on the query engines (`opentide-cli`'s `queries::EngineQueries`,
+  The queries check runs there on the query engines (`opentide_analysis::queries::EngineQueries`,
   UC-2.5): its findings, status and `queries_checked` are compared too, and `cargo xtask corpus
   faults --check --engine rust --only queries` compares it on every query fault kind.
 - A `Diagnostic`'s JSON keys and their order are the CLI contract (plan §3): never add, drop or

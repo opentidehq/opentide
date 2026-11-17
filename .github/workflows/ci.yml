@@ -934,6 +934,21 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc -p opentide --all-features --no-deps --locked
 
+      # Each feature with the command line in reach, built on its own: every
+      # other job unifies features, which hides a feature that leans on
+      # another for a dependency (`cli` once took opentide-cli from
+      # `queries`). `queries` brings the query engines from the domain layer
+      # and never the command line (#1142).
+      - name: The `cli` and `queries` features on their own
+        run: |
+          cargo check -p opentide --no-default-features --features cli --locked
+          cargo check -p opentide --no-default-features --features queries --locked
+          if cargo tree -p opentide --no-default-features --features queries -e normal \
+              --prefix none --locked | grep -q '^opentide-cli '; then
+            echo "::error::the facade's queries feature depends on opentide-cli (#1142)"
+            exit 1
+          fi
+
       # Against the first parent until the crate is on crates.io; then the
       # last published version is the baseline (docs/sdk/rust.md, Stability).
       # A commit that adds the crate has no baseline to compare with. The
@@ -1110,7 +1125,7 @@ jobs:
           OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
         run: |
           (cd packages/wasi-host && npm ci)
-          node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
+          node --experimental-strip-types --test --test-name-pattern='^(serve|mcp) \(wasi\)' packages/wasi-host/src/index.test.ts
 
       - name: npm packages build and pack
         run: |

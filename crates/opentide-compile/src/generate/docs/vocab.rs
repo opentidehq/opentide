@@ -59,6 +59,19 @@ pub struct Vocab<'v> {
     vocabularies: &'v Vocabularies,
 }
 
+impl Enriched {
+    /// The label as Markdown text: an entry's name as the vocabulary
+    /// writes it, a value the vocabulary lacks (the object's own text)
+    /// escaped ([`super::text::markdown_text`]).
+    pub fn text_label(&self) -> String {
+        if self.found {
+            self.label.clone()
+        } else {
+            super::text::markdown_text(&self.label)
+        }
+    }
+}
+
 impl<'v> Vocab<'v> {
     /// Over `vocabularies`.
     pub fn new(vocabularies: &'v Vocabularies) -> Self {
