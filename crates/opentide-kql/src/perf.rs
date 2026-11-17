@@ -5,8 +5,9 @@
 //! Join cardinality and `hint.shufflekey` are intentionally absent: the engine
 //! cannot know which side is larger.
 
-use crate::schema::{Analysis, Known};
+use crate::schema::{self, Analysis, Known};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
+use std::collections::HashMap;
 
 const CITE: &str = "https://learn.microsoft.com/en-us/kusto/query/best-practices";
 
@@ -32,8 +33,37 @@ pub(crate) fn check(
     out: &mut Vec<Diagnostic>,
 ) {
     let lines = LineIndex::new(source);
+    let columns = Columns::new(columns);
     for pipeline in pipelines {
-        warn_pipeline(pipeline, &lines, columns, out);
+        warn_pipeline(pipeline, &lines, &columns, out);
+    }
+}
+
+/// The column pass's analysis, with its pipelines indexed by span:
+/// [`Analysis::pipeline`] is a scan of every pipeline, and the checks look
+/// one up per pipeline, so a query of thousands of `let` functions spent
+/// most of its analysis here (#1424).
+struct Columns<'a> {
+    analysis: &'a Analysis,
+    by_span: HashMap<ByteSpan, &'a schema::Pipeline>,
+}
+
+impl<'a> Columns<'a> {
+    fn new(analysis: &'a Analysis) -> Self {
+        let mut by_span = HashMap::with_capacity(analysis.pipelines.len());
+        for pipeline in &analysis.pipelines {
+            // The first of a span, as `Analysis::pipeline` finds it.
+            by_span.entry(pipeline.span).or_insert(pipeline);
+        }
+        Columns { analysis, by_span }
+    }
+
+    fn pipeline(&self, span: ByteSpan) -> Option<&'a schema::Pipeline> {
+        self.by_span.get(&span).copied()
+    }
+
+    fn reads(&self, span: ByteSpan) -> impl Iterator<Item = &'a schema::Reference> {
+        self.analysis.reads(span)
     }
 }
 
@@ -44,7 +74,7 @@ pub(crate) fn check_scope(source: &str, out: &mut Vec<Diagnostic>) {
 }
 
 /// The pipeline starts from a table (or ASIM parser), not a `let`.
-fn source_is_table(expr: ByteSpan, columns: &Analysis) -> bool {
+fn source_is_table(expr: ByteSpan, columns: &Columns<'_>) -> bool {
     columns.pipeline(expr).is_some_and(|p| p.reads_dataset())
 }
 
@@ -52,7 +82,7 @@ fn source_is_table(expr: ByteSpan, columns: &Analysis) -> bool {
 /// ahead of that operator (#109): one an `extend` (or `summarize`, `parse`,
 /// ...) made, or one the source does not have, which a `join`, `lookup` or
 /// `union` brought in.
-fn reads_made_column(filter: ByteSpan, expr: ByteSpan, columns: &Analysis) -> bool {
+fn reads_made_column(filter: ByteSpan, expr: ByteSpan, columns: &Columns<'_>) -> bool {
     let source = columns
         .pipeline(expr)
         .map(|p| &p.source)
@@ -91,7 +121,7 @@ fn narrows(kind: &str) -> bool {
 fn warn_pipeline(
     pipeline: &Pipeline,
     lines: &LineIndex,
-    columns: &Analysis,
+    columns: &Columns<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     let ops = &pipeline.ops;
@@ -522,6 +552,25 @@ mod tests {
         warnings(src)
             .iter()
             .any(|d| d.code == code && d.message.contains(CITE))
+    }
+
+    /// The checks look a pipeline up by its span in an index, not with a
+    /// scan of every pipeline per pipeline (#1424): thousands of `let`
+    /// functions spent most of `analyze` in that scan.
+    #[test]
+    fn pipelines_are_looked_up_without_a_scan() {
+        let mut src = String::from("let f0 = (x:long) { SigninLogs | extend c = x };\n");
+        for i in 1..500 {
+            src.push_str(&format!(
+                "let f{i} = (x:long) {{ f{}(x) | where c > 1 }};\n",
+                i - 1
+            ));
+        }
+        src.push_str("f499(1) | where c > 2");
+        crate::schema::tests::PIPELINES_SCANNED.with(|n| n.set(0));
+        let _ = analyze(&src, Profile::Sentinel);
+        let scanned = crate::schema::tests::PIPELINES_SCANNED.with(std::cell::Cell::get);
+        assert_eq!(scanned, 0, "pipelines scanned by `Analysis::pipeline`");
     }
 
     #[test]

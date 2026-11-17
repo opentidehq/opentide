@@ -5,14 +5,11 @@
 //!   drift gate runs `--check`.
 //! - `sentinel-attack [--check] [--stix-dir DIR]` ([`sentinel`]): Sentinel's
 //!   ATT&CK v18 list from MITRE's STIX bundles.
-//! - `diff --against python` ([`diff`]): `opentide_schema::vocab` against the
-//!   oracle, on every corpus.
 //! - `ingest [--check|--apply]` ([`ingest`]): the weekly ATT&CK and MISP
 //!   ingest into the specifications' vocabularies.
 //! - `malapi [--check|--apply]` ([`malapi`]): the MalAPI vocabulary scraped
 //!   from malapi.io, by hand.
 
-pub mod diff;
 pub mod ingest;
 pub mod malapi;
 pub mod sentinel;
@@ -53,11 +50,6 @@ pub enum Cmd {
         #[arg(long, value_name = "DIR")]
         stix_dir: Option<PathBuf>,
     },
-    /// Resolve every vocabulary value of every corpus (the fixtures of
-    /// tests/golden/cases.toml) and generated misspellings with the oracle and
-    /// with opentide-schema, and compare; suggestion differences on corpus
-    /// values must be in tests/golden/vocab/APPROVED.toml
-    Diff(diff::Options),
     /// Fetch the latest MITRE ATT&CK STIX release and the MISP threat-actor
     /// galaxy, and merge them into the specifications checkout's att&ck,
     /// att&ck.groups, mitigations, datasources and actors vocabularies with
@@ -83,7 +75,6 @@ pub fn main(command: &Cmd) -> ExitCode {
         Cmd::SentinelAttack { check, stix_dir } => run_sentinel(*check, stix_dir.as_deref()),
         Cmd::Ingest(options) => repo_root().and_then(|root| ingest::run(&root, options)),
         Cmd::Malapi(options) => repo_root().and_then(|root| malapi::run(&root, options)),
-        Cmd::Diff(options) => diff::run(options),
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,
@@ -153,7 +144,6 @@ mod tests {
             &["sync", "--specifications"],
             &["sentinel-attack", "--frobnicate"],
             &["sentinel-attack", "--stix-dir"],
-            &["diff"],
             &["ingest", "--check", "--apply"],
             &["ingest", "--frobnicate"],
             &["ingest", "--misp-url"],

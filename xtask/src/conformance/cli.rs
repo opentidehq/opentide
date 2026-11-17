@@ -17,7 +17,7 @@ use super::{
 };
 use crate::corpus::cli::{corpora_dir, load_catalogue, materialise, repo_root, write_workspace};
 use crate::corpus::{configuration, faults, generate};
-use crate::golden::fixture::copy_tree;
+use crate::files::copy_tree;
 
 /// The variables no runner sees: the CI providers', the coding agents', and
 /// opentide's own, which change what a command writes. The runners run as a

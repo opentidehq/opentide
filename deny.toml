@@ -31,9 +31,15 @@ yanked = "deny"
 unmaintained = "all"
 unsound = "all"
 # An exception is an entry here with its reason and its follow-up issue
-# (docs/internal/supply-chain.md). None today: RUSTSEC-2024-0449
-# (unsafe-libyaml, through serde_yaml) went with serde_yaml (#850).
-ignore = []
+# (docs/internal/supply-chain.md). RUSTSEC-2024-0449 (unsafe-libyaml,
+# through serde_yaml) went with serde_yaml (#850).
+ignore = [
+    # chrono is unmaintained (no vulnerability, no safe upgrade). Not a direct
+    # dependency: it comes through rmcp 3.9 and schemars 1.2. #1513 removes it.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; transitive through rmcp and schemars; #1513" },
+    # humantime wraps chrono; it comes only through trycmd, a dev-dependency.
+    { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained; dev-only through trycmd; #1513" },
+]
 
 # Licences of what we distribute. opentide is EUPL-1.2; every crate compiled
 # into the wheel, the npm packages or the binaries must be under a licence

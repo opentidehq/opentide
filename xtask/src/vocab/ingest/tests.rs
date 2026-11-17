@@ -186,7 +186,7 @@ fn the_ingest_merges_every_vocabulary_and_reports_the_unpinned_contracts() {
     let mitigations = &report.attack.vocabularies[2].document;
     assert!(!mitigations.contains_key("model"));
 
-    let digest = crate::golden::blob::sha256_hex(&fs::read(root.join("galaxy.json")).unwrap());
+    let digest = crate::files::sha256_hex(&fs::read(root.join("galaxy.json")).unwrap());
     assert_eq!(
         written(&report.actors.vocabularies[0].document),
         json!({

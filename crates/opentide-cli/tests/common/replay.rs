@@ -24,8 +24,8 @@ pub fn generated(name: &str) -> Option<PathBuf> {
     })
 }
 
-/// A case's root directory, named and placed as `cargo xtask golden check`
-/// places it (`xtask/src/golden/run.rs`: `/tmp/golden-XXXXXX` on Unix,
+/// A case's root directory, named and placed as the retired `cargo xtask
+/// golden check` placed it (`/tmp/golden-XXXXXX` on Unix,
 /// whatever `TMPDIR` says). Paths in a frame or a message wrap by their
 /// length, so a root of another length (`tempfile::tempdir()`'s
 /// `.tmpXXXXXX`, or a `TMPDIR` elsewhere) wraps lines the real compare does
@@ -65,8 +65,8 @@ pub fn case_root_parent() -> PathBuf {
 }
 
 /// The prefix and the count of random characters of a case root's name in
-/// *parent* (canonical): `golden-` and six, as `cargo xtask golden check`
-/// names it, cut to keep the root `/tmp/golden-XXXXXX`'s length when
+/// *parent* (canonical): `golden-` and six, as the retired `cargo xtask
+/// golden check` named it, cut to keep the root `/tmp/golden-XXXXXX`'s length when
 /// *parent* is longer than `/tmp` and leaves room for three random ones.
 pub fn root_name(parent: &Path) -> (&'static str, usize) {
     const PREFIX: &str = "golden-";
@@ -147,7 +147,7 @@ pub fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// The fixture as `cargo xtask golden record` lays it out (`xtask/src/golden/fixture.rs`).
+/// The fixture as the retired `cargo xtask golden record` laid it out.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn fixture(name: &str, ws: &Path) {
     if let Some(dir) = generated(name) {
@@ -310,7 +310,7 @@ pub fn fixture(name: &str, ws: &Path) {
 
 /// The `edits` of fixture `name` in `tests/golden/cases.toml`, each `find`
 /// found once and replaced, or, with an empty `find`, a new file written
-/// (`xtask/src/golden/fixture.rs`).
+/// (as the retired `xtask/src/golden/fixture.rs` did).
 fn apply_edits(name: &str, ws: &Path) {
     let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
     let spec: toml::Table = toml::from_str(&text).unwrap();
@@ -338,7 +338,7 @@ fn apply_edits(name: &str, ws: &Path) {
 }
 
 /// `deploy-tenants` as a git checkout of two commits, the fixture and then
-/// one edit (`pushed` in `cases.toml`, laid out by `xtask/src/golden/fixture.rs`).
+/// one edit (`pushed` in `cases.toml`, laid out by the retired `xtask/src/golden/fixture.rs`).
 fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws);
     fix_modes(ws);
@@ -371,7 +371,7 @@ fn pushed_from_cases(name: &str, ws: &Path) {
 
 /// Sets every folder to 0755 and every file to 0644, or 0755 when any
 /// execute bit is set, before the fixture is committed, as
-/// `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
+/// the retired `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
 /// the umask of whoever cloned, and status promotion keeps a rule file's mode
 /// (#987), which the recordings name.
 pub fn fix_modes(dir: &Path) {
@@ -396,7 +396,7 @@ pub fn fix_modes(dir: &Path) {
 }
 
 /// Commits `ws` as it is, then `edits` (path, find, replace) as a second
-/// commit, with the fixed author and time of `xtask/src/golden/fixture.rs`.
+/// commit, with the fixed author and time of the retired `xtask/src/golden/fixture.rs`.
 fn commit_push(ws: &Path, edits: &[(String, String, String)]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")

@@ -13,7 +13,7 @@ places:
 |----------|------|
 | The engine crates' rules: I/O-free engines, `thiserror` versus `anyhow`, the pinned dependencies, `OnceLock` catalogs, UTF-16 positions | [`rust-engine`](../rust-engine/SKILL.md) |
 | The layer table, the lint policy, the test commands and the invariant scripts | [`crates/AGENTS.md`](../../../crates/AGENTS.md), then the crate's own `AGENTS.md` |
-| Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the ledger | [`golden`](../golden/SKILL.md) |
+| Changing what a command prints or writes: the CLI snapshots, `cargo insta review` | [`golden`](../golden/SKILL.md) |
 
 If this skill and `crates/AGENTS.md` disagree, `crates/AGENTS.md` is right: fix this skill.
 
@@ -156,7 +156,7 @@ cargo xtask check-layers
   `AGENTS.md`. `check-layers` fails until the crate is placed. Moving a crate between layers is a
   design decision for the maintainer, never a fix for a red check.
 - `codegen [--check]` writes the artifacts generated from the Rust model and, with `--check`,
-  compares them and what `opentide generate` writes with the golden recordings (UC-1.8, #814).
+  fails when the committed ones are stale (UC-1.8, #814).
   A new command whose work item has not landed is a stub that exits 1 and names it; a stub never
   exits 0.
 

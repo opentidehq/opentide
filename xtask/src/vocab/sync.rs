@@ -19,7 +19,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
-use crate::golden::blob::sha256_hex;
+use crate::files::sha256_hex;
 
 /// The variable naming the specifications checkout.
 pub const SPECIFICATIONS_ENV: &str = "OPENTIDE_SPECIFICATIONS_ROOT";

@@ -40,9 +40,8 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
   object writes any more, the docs folders. Nothing reaches the network. Only
   `generate/files.rs` writes: rendering is pure (a phase returns its `Output`s), and the
   command line writes them with `files::write_all`.
-- A generated file the oracle writes is byte for byte the oracle's on every recorded fixture
-  (`tests/generate_exports.rs` reads the golden recordings); a machine-read JSON export matches
-  as bytes, not only as data.
+- A generated file is held byte for byte by the CLI's `generate` snapshots (the oracle's
+  recordings were retired, #1142); a machine-read JSON export changes as bytes only on purpose.
 - gitoxide's crates, never the `gix` facade: its object cache (clru) brings a second `hashbrown`,
   which `deny.toml` bans.
 - A body's key order is the oracle's: build it with `json::Object` (an `IndexMap`) in the order
@@ -50,11 +49,11 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
   keys follow the model's field order whatever the file's order (`elastic::model_order`).
 - A rule a platform cannot compile is a `CompileError` with the oracle's `code`, reason and hint,
   never a panic.
-- `cargo xtask payloads diff --against python --corpus all` compares every body of every rule of
-  every corpus with the oracle's, on every platform; a difference is a bug or an entry of
-  `tests/golden/payloads/APPROVED.toml` (moved to `tests/golden/APPROVED_DIFFS.toml` when deploy
-  runs on the Rust command line): one difference (`[[diff]]`), or a class of the model-dump
+- `tests/oracle.rs` holds every body of the compile corpus (`tests/golden/payloads/`) to what the
+  oracle compiled (`oracle.json`); a difference is a bug or an entry of
+  `tests/golden/payloads/APPROVED.toml`: one difference (`[[diff]]`), or a class of the model-dump
   previews (`[[dump]]`: `nulls`, `order`), which serde writes and Pydantic's `model_dump` did not.
+  The recorder, `cargo xtask payloads`, was retired with the oracle (#1142).
 - A request body is the oracle's byte for byte as JSON. A text inside it that another format
   serialises (Splunk's risk JSON, HarfangLab's Sigma YAML) is the crate's natural output
   (serde_json, serde-saphyr), never a port of `json.dumps` or PyYAML; its difference is approved.
@@ -67,9 +66,7 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 cargo nextest run -p opentide-compile
 cargo nextest run -p opentide-cli --test cli_snapshots generate   # every generate case, as snapshots
 cargo nextest run -p opentide-compile generate_docs         # every page of the tide corpus, generic and GitHub
-cargo xtask payloads diff --against python --corpus all   # every body, every corpus
-cargo xtask payloads plan                                  # the dry run's plan against the recordings
-cargo xtask payloads git --against python                  # a scripted git history
+cargo nextest run -p opentide-compile --test oracle        # every body of the compile corpus
 ```
 
-`tests/golden/payloads/APPROVED.toml` holds the intended differences of all three.
+`tests/golden/payloads/APPROVED.toml` holds the intended differences.

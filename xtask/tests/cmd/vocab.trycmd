@@ -2,34 +2,18 @@
 
 ```console
 $ xtask vocab help
-The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
+The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
 ...
 
 $ xtask vocab
 ? 2
-The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
+The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
 ...
 
 $ xtask vocab frobnicate
 ? 2
 error: unrecognized subcommand 'frobnicate'
 ...
-
-$ xtask vocab diff
-? 2
-error: the following required arguments were not provided:
-  --against <AGAINST>
-
-Usage: cargo xtask vocab diff --against <AGAINST>
-
-For more information, try '--help'.
-
-$ xtask vocab diff --against rust
-? 2
-error: invalid value 'rust' for '--against <AGAINST>'
-  [possible values: python]
-
-For more information, try '--help'.
 
 $ xtask vocab sync --bogus
 ? 2

@@ -16133,7 +16133,7 @@ cql_parse_error error 0:51-0:52 CQL syntax error near `)`: expected an expressio
 170..173 number
 173..174 punctuation.bracket
 == corpus/cql/binary_expression__invalid.cql
-cql_parse_error error 0:9-0:9 CQL syntax error at the end of the query: expected an expression
+cql_parse_error error 0:8-0:8 CQL syntax error at the end of the query: expected an expression
 0..1 property
 2..4 operator
 5..6 property

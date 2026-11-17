@@ -408,9 +408,8 @@ pub enum Refuser {
 
 /// An approved verdict difference: the instance `label`, which one schema
 /// `schema` (a document's file name), `refused_by`, refuses at `at` and the
-/// other accepts. Each is an entry of `tests/golden/APPROVED_DIFFS.toml`,
-/// named by `ledger`, and must still occur: an allowance no comparison uses
-/// is stale.
+/// other accepts. Each was an entry of the retired approved-diffs ledger,
+/// named by `ledger`; the probe test that still uses this module reads none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Allowance {
     /// The instance's label (`<source>:<path or case>`).

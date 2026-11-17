@@ -406,15 +406,6 @@ impl Scratch {
     /// temporary directory, or `keep`, which must not exist yet (a kept run
     /// never writes over another).
     pub(crate) fn new(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
-        Self::create(prefix, keep, false)
-    }
-
-    /// Like [`Scratch::new`], but a `keep` that exists is used as it is.
-    pub(crate) fn reusing(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
-        Self::create(prefix, keep, true)
-    }
-
-    fn create(prefix: &str, keep: Option<&Path>, reuse: bool) -> Result<Scratch> {
         let Some(dir) = keep else {
             let temp = tempfile::Builder::new()
                 .prefix(prefix)
@@ -429,7 +420,7 @@ impl Scratch {
         // it honours.
         let path = std::path::absolute(dir)
             .with_context(|| format!("cannot resolve {}", dir.display()))?;
-        if !reuse && path.exists() {
+        if path.exists() {
             bail!(
                 "{} exists; remove it or name another --keep",
                 path.display()
@@ -814,7 +805,7 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
                 "yara": yara,
                 "yaml_1_2": 0,
             });
-            let counted = crate::validate::crowdstrike_cql(Some(&oracle), Some(&rust), &[]);
+            let counted = super::approved::crowdstrike_cql(Some(&oracle), Some(&rust), &[]);
             if counted {
                 approved += 1;
             } else {
@@ -1602,7 +1593,6 @@ mod tests {
             Scratch::new("xtask-scratch-test-", Some(&kept)).is_err(),
             "a kept run is never written over"
         );
-        drop(Scratch::reusing("xtask-scratch-test-", Some(&kept)).unwrap());
         let scratch = Scratch::new("xtask-scratch-test-", None).unwrap();
         let path = scratch.path.clone();
         assert!(path.is_dir() && path.is_absolute());

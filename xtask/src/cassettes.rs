@@ -1,27 +1,22 @@
-//! `cargo xtask cassettes`: record and check the recorded-HTTP cassettes
-//! (UC-4.1, #831; plan §5.4 "HTTP").
+//! `cargo xtask cassettes`: check the recorded-HTTP cassettes (UC-4.1, #831;
+//! plan §5.4 "HTTP").
 //!
-//! `tests/cassettes/scenarios.toml` lists the scenarios. `record <name>…`
-//! runs each one's client (the frozen Python implementation, the oracle of
-//! `tests/golden/ORACLE`) behind the recording proxy of `opentide-cassette`
-//! and writes `tests/cassettes/<name>.json`. `check` reads every cassette and
+//! `tests/cassettes/scenarios.toml` lists the scenarios, each recorded from
+//! the frozen Python implementation (`cassettes record`, retired with the
+//! oracle in #1142; a cassette is now re-recorded only by hand, with the
+//! proxy of `opentide-cassette`). `check` reads every cassette and
 //! fails on a digest that does not match (a hand edit), on a request or
 //! answer that redaction would still change (a secret, a transport header),
 //! on a value of a scenario's secret, and on a scenario without its cassette
 //! or a cassette without its scenario.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
-use opentide_cassette::{Cassette, Mode, Proxy, Redaction, cassette};
+use opentide_cassette::{Cassette, Redaction, cassette};
 use serde::Deserialize;
-
-use crate::golden::Layout;
-use crate::golden::oracle::{self, Oracle};
 
 /// `cargo xtask cassettes <command>`.
 #[derive(Subcommand)]
@@ -32,19 +27,6 @@ use crate::golden::oracle::{self, Oracle};
 pub enum Cmd {
     /// Check every cassette under tests/cassettes
     Check,
-    /// Record the scenarios named (all with --all) from the oracle of
-    /// tests/golden/ORACLE, or of FILE (tests/golden/ORACLE.next)
-    Record {
-        /// Scenarios of tests/cassettes/scenarios.toml
-        #[arg(required_unless_present = "all")]
-        names: Vec<String>,
-        /// Every scenario
-        #[arg(long)]
-        all: bool,
-        /// The oracle to record from
-        #[arg(long, value_name = "FILE")]
-        oracle: Option<PathBuf>,
-    },
     /// List the scenarios
     List,
 }
@@ -119,8 +101,7 @@ impl Scenarios {
 
 /// Runs `cargo xtask cassettes <command>`.
 pub fn run(command: &Cmd) -> Result<u8> {
-    let layout = Layout::find()?;
-    let dir = layout.repo.join("tests/cassettes");
+    let dir = crate::corpus::cli::repo_root().join("tests/cassettes");
     let scenarios = Scenarios::parse(
         &std::fs::read_to_string(dir.join("scenarios.toml")).context("read scenarios.toml")?,
     )?;
@@ -146,168 +127,7 @@ pub fn run(command: &Cmd) -> Result<u8> {
             }
             Ok(0)
         }
-        Cmd::Record { names, all, oracle } => {
-            let all = *all;
-            let oracle_file = oracle
-                .clone()
-                .unwrap_or_else(|| layout.golden.join("ORACLE"));
-            let chosen: Vec<&Scenario> = scenarios
-                .scenario
-                .iter()
-                .filter(|scenario| all || names.contains(&scenario.name))
-                .collect();
-            if chosen.is_empty() || (!all && chosen.len() != names.len()) {
-                eprintln!("cassettes record: name scenarios of scenarios.toml, or --all");
-                return Ok(2);
-            }
-            let (oracle, oracle_dir) = Oracle::read_file(&oracle_file)?;
-            let engine = oracle.provision(&oracle_dir, &oracle::cache_dir(&layout.target))?;
-            for scenario in chosen {
-                let cassette = record(scenario, &layout.repo, &engine.bin_dir)?;
-                let path = dir.join(format!("{}.json", scenario.name));
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::write(&path, cassette.to_text())
-                    .with_context(|| format!("write {}", path.display()))?;
-                println!(
-                    "cassettes record: {} ({} interactions)",
-                    path.display(),
-                    cassette.interactions.len()
-                );
-            }
-            Ok(0)
-        }
     }
-}
-
-/// A random value for a scenario's secret.
-fn random_secret() -> String {
-    use std::hash::{BuildHasher, Hasher};
-    let mut value = String::from("rec-");
-    for _ in 0..2 {
-        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
-        hasher.write_u128(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |time| time.as_nanos()),
-        );
-        value.push_str(&format!("{:016x}", hasher.finish()));
-    }
-    value
-}
-
-/// One argument of a scenario's command line, its placeholders filled.
-fn expand(arg: &str, bin: &Path) -> String {
-    arg.replace("{python}", &bin.join("python").to_string_lossy())
-        .replace("{oracle}", &bin.to_string_lossy())
-}
-
-/// A running stand-in tenant; killed when dropped.
-struct Child(std::process::Child);
-
-impl Drop for Child {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
-/// Records *scenario* with the oracle in *bin*.
-pub fn record(scenario: &Scenario, repo: &Path, bin: &Path) -> Result<Cassette> {
-    let secrets: BTreeMap<String, String> = scenario
-        .secrets
-        .iter()
-        .map(|name| (name.clone(), random_secret()))
-        .collect();
-    let scratch = tempfile::tempdir().context("make a scratch directory")?;
-    let home = scratch.path().join("home");
-    let work = scratch.path().join("work");
-    std::fs::create_dir_all(&home)?;
-    std::fs::create_dir_all(&work)?;
-    let base_env = |command: &mut Command| {
-        command
-            .env_clear()
-            .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
-            .env("HOME", &home)
-            .env("LANG", "C.UTF-8")
-            .env("TZ", "UTC")
-            .env("PYTHONDONTWRITEBYTECODE", "1")
-            .envs(&secrets);
-    };
-    let mut routes = BTreeMap::new();
-    let _tenant = if scenario.tenant.is_empty() {
-        None
-    } else {
-        let mut command = Command::new(expand(&scenario.tenant[0], bin));
-        command
-            .args(scenario.tenant[1..].iter().map(|arg| expand(arg, bin)))
-            .current_dir(repo)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
-        base_env(&mut command);
-        let mut child = Child(command.spawn().context("start the stand-in tenant")?);
-        let stdout = child.0.stdout.take().context("the tenant's stdout")?;
-        let mut line = String::new();
-        BufReader::new(stdout)
-            .read_line(&mut line)
-            .context("read the tenant's port")?;
-        let port: u16 = line.trim().parse().context("the tenant printed no port")?;
-        for host in &scenario.routes {
-            routes.insert(host.clone(), format!("http://127.0.0.1:{port}"));
-        }
-        Some(child)
-    };
-    let proxy = Proxy::start(
-        Mode::Record { routes },
-        Redaction::new(secrets.values().cloned()),
-    )
-    .map_err(|error| anyhow::anyhow!("start the recording proxy: {error}"))?;
-    let ca = scratch.path().join("ca.pem");
-    std::fs::write(&ca, proxy.ca_pem())?;
-    let argv: Vec<String> = scenario.client.iter().map(|arg| expand(arg, bin)).collect();
-    let mut command = Command::new(&argv[0]);
-    command
-        .args(&argv[1..])
-        .current_dir(if scenario.cwd == "repo" { repo } else { &work });
-    base_env(&mut command);
-    command.envs(proxy.client_env(&ca.to_string_lossy()));
-    let output = command
-        .output()
-        .with_context(|| format!("run {}", argv[0]))?;
-    if output.status.code() != Some(scenario.exit) {
-        bail!(
-            "scenario {}: the client exited with {}, not {}\nstdout: {}\nstderr: {}",
-            scenario.name,
-            output.status,
-            scenario.exit,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    // What the client printed (the outcomes a scenario's Rust test expects).
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        eprintln!("cassettes record: {}: {line}", scenario.name);
-    }
-    let interactions = proxy.interactions();
-    if interactions.is_empty() {
-        bail!(
-            "scenario {}: the client sent nothing through the proxy",
-            scenario.name
-        );
-    }
-    let recorded_from: Vec<String> = scenario.client.clone();
-    let cassette = Cassette::new(&scenario.name, recorded_from, interactions);
-    let text = cassette.to_text();
-    for (name, value) in &secrets {
-        if text.contains(value.as_str()) {
-            bail!(
-                "scenario {}: {name}'s value survived redaction",
-                scenario.name
-            );
-        }
-    }
-    Ok(cassette)
 }
 
 /// Every problem with the cassettes in *dir*.
@@ -331,8 +151,9 @@ pub fn check(dir: &Path, scenarios: &Scenarios) -> Result<Vec<String>> {
     for (path, scenario) in &expected {
         let Ok(text) = std::fs::read_to_string(path) else {
             problems.push(format!(
-                "{} has no cassette: cargo xtask cassettes record {}",
-                scenario.name, scenario.name
+                "{} has no cassette ({})",
+                scenario.name,
+                path.display()
             ));
             continue;
         };
@@ -529,32 +350,6 @@ mod tests {
         assert!(parse_error("[[scenario]]\nname = \"a\"\n").contains("parse scenarios.toml"));
     }
 
-    #[test]
-    fn placeholders_name_the_oracles_interpreter_and_bin_directory() {
-        let bin = Path::new("/opt/oracle/bin");
-        assert_eq!(
-            expand("{python}", bin),
-            bin.join("python").to_string_lossy()
-        );
-        assert_eq!(
-            expand("{oracle}/opentide", bin),
-            format!("{}/opentide", bin.display())
-        );
-        assert_eq!(expand("--json", bin), "--json");
-    }
-
-    #[test]
-    fn each_secret_is_a_fresh_marked_value() {
-        let first = random_secret();
-        let second = random_secret();
-        assert_ne!(first, second);
-        for value in [&first, &second] {
-            let hex = value.strip_prefix("rec-").expect("marked rec-");
-            assert_eq!(hex.len(), 32, "{value}");
-            assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "{value}");
-        }
-    }
-
     fn write_cassette(dir: &Path, name: &str, scenario: &str) {
         let path = dir.join(format!("{name}.json"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -585,7 +380,10 @@ mod tests {
         std::fs::write(dir.join("nested/README.md"), "notes").unwrap();
         assert_eq!(
             check(dir, &scenarios).unwrap(),
-            ["missing has no cassette: cargo xtask cassettes record missing"]
+            [format!(
+                "missing has no cassette ({})",
+                dir.join("missing.json").display()
+            )]
         );
 
         // A cassette no scenario names, and one recording another scenario.
@@ -614,11 +412,6 @@ mod tests {
         assert!(format!("{error:#}").contains("read "), "{error:#}");
     }
 
-    #[cfg(unix)]
-    fn words(words: &[&str]) -> Vec<String> {
-        words.iter().map(|word| (*word).to_owned()).collect()
-    }
-
     /// The exit status of `cassettes <args>`: clap's 2 for a usage error.
     fn exit_status(args: &[&str]) -> u8 {
         match crate::parse_subcommand::<Cmd>(args) {
@@ -637,151 +430,16 @@ mod tests {
         if !cfg!(windows) {
             assert_eq!(exit_status(&["check"]), 0);
         }
-        // `record` names scenarios of scenarios.toml, every one known, before
-        // it provisions the oracle.
+        // `record` was retired with the oracle (#1142).
         assert_eq!(exit_status(&["record"]), 2);
-        assert_eq!(exit_status(&["record", "no-such-scenario"]), 2);
-        assert_eq!(
-            exit_status(&["record", "skills/manifest", "no-such-scenario"]),
-            2
-        );
     }
 
-    #[cfg(unix)]
-    fn scenario(client: &[&str], tenant: &[&str], cwd: &str) -> Scenario {
-        Scenario {
-            name: "s".into(),
-            description: String::new(),
-            client: words(client),
-            tenant: words(tenant),
-            routes: vec!["tenant.invalid".into()],
-            secrets: vec!["SCENARIO_TOKEN".into()],
-            cwd: cwd.into(),
-            exit: 0,
-        }
-    }
-
-    #[cfg(unix)]
-    fn record_error(scenario: &Scenario, repo: &Path) -> String {
-        format!(
-            "{:#}",
-            record(scenario, repo, Path::new("/nonexistent/bin")).unwrap_err()
-        )
-    }
-
-    #[cfg(unix)]
     #[test]
-    fn a_client_that_fails_is_reported_with_what_it_printed() {
-        let repo = tempfile::tempdir().unwrap();
-        // The client runs in a clean environment: its own HOME, the secret
-        // set to a fresh value, the proxy variables, nothing inherited.
-        let error = record_error(
-            &scenario(
-                &[
-                    "/bin/sh",
-                    "-c",
-                    "pwd; echo \"token=$SCENARIO_TOKEN home=$HOME proxy=${HTTPS_PROXY:+set} \
-                     cargo=${CARGO:-unset}\"; echo oops >&2; exit 3",
-                ],
-                &[],
-                "repo",
-            ),
-            repo.path(),
-        );
-        assert!(
-            error.starts_with("scenario s: the client exited with"),
-            "{error}"
-        );
-        assert!(error.contains("stderr: oops"), "{error}");
-        let canonical = repo.path().canonicalize().unwrap();
-        assert!(
-            error.contains(&format!("stdout: {}\n", canonical.display()))
-                || error.contains(&format!("stdout: {}\n", repo.path().display())),
-            "cwd repo runs in the repository: {error}"
-        );
-        assert!(error.contains("token=rec-"), "{error}");
-        assert!(error.contains("proxy=set"), "{error}");
-        assert!(error.contains("cargo=unset"), "{error}");
-        assert!(
-            error.contains("/home proxy=set"),
-            "HOME is the scratch home: {error}"
-        );
-
-        // `tmp` runs in an empty scratch folder, not the repository.
-        let error = record_error(
-            &scenario(&["/bin/sh", "-c", "pwd; ls -A; exit 1"], &[], "tmp"),
-            repo.path(),
-        );
-        assert!(error.contains("/work\n"), "{error}");
-        assert!(
-            !error.contains(&repo.path().display().to_string()),
-            "{error}"
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_client_must_exit_with_the_scenarios_code() {
-        let repo = tempfile::tempdir().unwrap();
-        let mut failing = scenario(&["/bin/sh", "-c", "exit 1"], &[], "tmp");
-        let error = record_error(&failing, repo.path());
-        assert!(error.contains("the client exited with"), "{error}");
-        assert!(error.contains(", not 0"), "{error}");
-        // Expected to fail: the run goes on to the proxy, which saw nothing.
-        failing.exit = 1;
-        assert_eq!(
-            record_error(&failing, repo.path()),
-            "scenario s: the client sent nothing through the proxy"
-        );
+    fn a_scenario_names_the_exit_code_its_client_ends_with() {
         let parsed = Scenarios::parse(
             "[[scenario]]\nname = \"a/b\"\ndescription = \"\"\nclient = [\"x\"]\ncwd = \"tmp\"\nexit = 1\n",
         )
         .unwrap();
         assert_eq!(parsed.scenario[0].exit, 1);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_client_that_sends_nothing_records_nothing() {
-        let repo = tempfile::tempdir().unwrap();
-        let error = record_error(
-            &scenario(&["/bin/sh", "-c", "echo done"], &[], "tmp"),
-            repo.path(),
-        );
-        assert_eq!(
-            error,
-            "scenario s: the client sent nothing through the proxy"
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_tenant_must_start_and_print_its_port() {
-        let repo = tempfile::tempdir().unwrap();
-        let client = ["/bin/sh", "-c", "exit 0"];
-        let error = record_error(
-            &scenario(&client, &["/bin/sh", "-c", "echo listening"], "tmp"),
-            repo.path(),
-        );
-        assert!(error.starts_with("the tenant printed no port"), "{error}");
-        let error = record_error(
-            &scenario(&client, &["/nonexistent/tenant"], "tmp"),
-            repo.path(),
-        );
-        assert!(error.starts_with("start the stand-in tenant"), "{error}");
-        // A tenant that prints its port is started and its hosts routed; the
-        // client then sending nothing is the failure.
-        let error = record_error(
-            &scenario(
-                &client,
-                &["/bin/sh", "-c", "echo 40000; exec sleep 30"],
-                "tmp",
-            ),
-            repo.path(),
-        );
-        assert_eq!(
-            error,
-            "scenario s: the client sent nothing through the proxy"
-        );
     }
 }

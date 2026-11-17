@@ -8,7 +8,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "The repository's Rust tooling: cargo xtask check-layers, compare, golden and bench, and the codegen command to come"
+description = "The repository's Rust tooling: cargo xtask check-layers, codegen, corpus, conformance, bench and the rest (cargo xtask help)"
 
 [lints]
 workspace = true
@@ -16,26 +16,26 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-# `parallel::in_order`: the cases of a comparison on every core, in order.
+# `parallel::in_order`: a run's cases on every core, in order.
 rayon.workspace = true
 # Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
 # with `/` does not resolve under it, and the oracle names no such path.
 dunce = "1"
 # `vocab ingest`'s UTC time stamps (no time zone database).
 jiff.workspace = true
+# `files::sha256_hex`: the vocabulary bundle's and its sources' digests.
+sha2 = "0.11"
 opentide-compare.workspace = true
 # `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
 opentide-cassette.workspace = true
-# The object models' oracle comparisons (`corpus faults --engine rust`,
-# `schema diff`), the rules' platform blocks included (UC-1.4).
+# The object models' oracle comparisons (`corpus faults --engine rust`), the
+# rules' platform blocks included (UC-1.4), and `codegen`.
 opentide-schema = { workspace = true }
-# `registry diff` (UC-2.1, #816) and the `load` benchmark.
+# The `load` benchmark (UC-2.1, #816) and `lsp parity`.
 opentide-workspace.workspace = true
-# `validate diff` and `corpus faults --only queries` (UC-2.5): the queries
-# check on the query engines, `opentide_analysis::queries` (as `opentide_cli::queries`).
+# `corpus faults --only queries` (UC-2.5): the queries check on the query
+# engines, `opentide_analysis::queries` (as `opentide_cli::queries`).
 opentide-cli.workspace = true
-# xtask payloads (src/payloads/): the deploy compile against the oracle.
-opentide-compile.workspace = true
 # `lsp parity` (UC-2.6): the language server in this process, and the
 # engine's own analysis it adds to validate's findings.
 opentide-lsp.workspace = true
@@ -48,8 +48,8 @@ toml.workspace = true
 ungrammar.workspace = true
 wait4.workspace = true
 regex.workspace = true
-# xtask golden (src/golden/): only the tooling uses these, at the versions
-# Cargo.lock already holds for the engine's dev-dependencies.
+# Only the tooling uses these, at the versions Cargo.lock already holds for
+# the engine's dev-dependencies.
 glob = "0.3"
 similar = "2.7"
 tempfile = "3"
@@ -67,10 +67,5 @@ jsonschema = { version = "0.61.1", default-features = false }
 html5ever = "0.40.1"
 markup5ever_rcdom = "0.40.1"
 
-[target.'cfg(unix)'.dependencies]
-# The pseudo-terminals of human mode and killing a case's process group.
-rustix = { version = "1.1", features = ["fs", "process", "pty", "termios"] }
-
 [dev-dependencies]
 trycmd.workspace = true
-strsim.workspace = true

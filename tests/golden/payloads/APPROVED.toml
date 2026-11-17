@@ -1,10 +1,9 @@
 # Approved differences of `cargo xtask payloads` (UC-3.1, #823): the deploy
 # compile's request bodies (`[[diff]]`, `payloads diff --against python`) and
 # deploy --dry-run's plan (`[[plan]]`, `payloads plan`) where opentide-compile
-# is right and the oracle is not. Every field is required; an entry that
-# matches nothing is stale and fails the run. When deploy runs on the Rust
-# command line, each [[plan]] entry moves to tests/golden/APPROVED_DIFFS.toml
-# as the rule of the deploy cases it applies to.
+# is right and the oracle is not. Every field is required. The tool was
+# retired with the oracle (#1142); opentide-compile's tests/oracle.rs reads
+# the [[dump]] classes and the corpus's entries.
 
 [[plan]]
 case = "deploy/json/fault/dry-run"

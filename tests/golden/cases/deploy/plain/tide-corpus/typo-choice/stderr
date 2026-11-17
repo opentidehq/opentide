@@ -1,2 +1,0 @@
-error: --strategy 'PREVEW' is not a deployable strategy. Use PREVIEW or RELEASE
-  help: did you mean 'PREVIEW'?
