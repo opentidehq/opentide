@@ -44,8 +44,8 @@ use opentide_compile::bitdefender::{
 use opentide_compile::json::Object;
 
 use crate::connector::{
-    BoxFuture, DeployEvent, DeployOutcome, DeployRequest, DeployWarning, Deployer, Operation,
-    Platform, TenantContext,
+    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
+    DeployWarning, Deployer, Operation, Platform, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -810,25 +810,59 @@ pub struct Bitdefender;
 
 impl Deployer for Bitdefender {
     /// One rule, from the compiled `createCustomRule` params alone (the
-    /// [`DeployRequest`]'s body): created, updated (a [`Operation::Disable`]
-    /// is an update of a body compiled under the DISABLEMENT), or deleted.
-    /// A rule's failure is an error here too; [`deploy_rule`] takes the
-    /// compiled rule.
+    /// [`DeployRequest`]'s body, bare or as `params`): created, updated (a
+    /// [`Operation::Disable`] is an update of a body compiled under the
+    /// DISABLEMENT), or deleted, which takes no body. A body that also
+    /// says `"actions_unsupported": true` raises
+    /// [`ACTIONS_UNSUPPORTED`], as `opentide deploy` does for a block whose
+    /// actions the tenant cannot take. What was done is the outcome's event
+    /// (`bitdefender_rule_created`, with its `rule_id`;
+    /// `bitdefender_rule_deleted`); a create retried is an unraised warning.
+    ///
+    /// A rule Bitdefender refuses fails with its own code
+    /// ([`REQUEST_FAILED`], [`NAME_CONFLICT`], ...) and its `detail`, or the
+    /// request's recreate refusal; [`DeployError::partial`] keeps the
+    /// warnings raised before the failure. A refused key, no Incidents API
+    /// or no answer fail the tenant ([`TENANT_UNAUTHORIZED`],
+    /// [`INCIDENTS_API_UNAVAILABLE`], [`TENANT_UNREACHABLE`]).
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying_for(request, async move {
-            let tenant = cx.tenant.label.tenant.clone();
-            let compiled = compiled_from_create(&request.body).ok_or_else(|| {
-                ConnectorError::refused(
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        Box::pin(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
+            let located = |failure: DeployFailure| {
+                failure
+                    .with_field("platform", PLATFORM)
+                    .with_field("tenant", tenant)
+            };
+            let compiled = if request.operation == Operation::Delete && request.body.is_empty() {
+                Some(GravityZoneRule {
+                    uuid: String::new(),
+                    kind: opentide_schema::objects::platform::bitdefender::Kind::Detection,
+                    name: String::new(),
+                    description: String::new(),
+                    tags: Vec::new(),
+                    settings: Object::new(),
+                    targets: None,
+                    company_id: None,
+                })
+            } else {
+                compiled_from_create(&request.body)
+            };
+            let compiled = compiled.ok_or_else(|| {
+                DeployError::from(ConnectorError::refused(
                     PLATFORM,
-                    &tenant,
+                    tenant,
                     "the request body is not createCustomRule params",
                     None,
-                )
+                ))
             })?;
+            let refusal = request
+                .recreate_refusal
+                .as_ref()
+                .filter(|refusal| !refusal.message.is_empty());
             let rule = RuleDeploy {
                 action: match request.operation {
                     Operation::Create => Action::Create,
@@ -839,50 +873,92 @@ impl Deployer for Bitdefender {
                 },
                 compiled,
                 disable: request.operation == Operation::Disable,
-                actions_unsupported: false,
-                recreate_refusal: request
-                    .recreate_refusal
-                    .as_ref()
-                    .map(|refusal| refusal.message.clone()),
+                actions_unsupported: serde_json::from_slice::<Json>(&request.body)
+                    .is_ok_and(|body| body.get("actions_unsupported") == Some(&Json::Bool(true))),
+                recreate_refusal: refusal.map(|refusal| refusal.message.clone()),
             };
-            let outcome = deploy_rule(cx, &rule).await?;
-            match outcome.failure {
-                Some(Failure::Request { code, error, .. }) => Err(ConnectorError::refused(
-                    PLATFORM,
-                    &tenant,
-                    format!("{code}: {error}"),
-                    None,
-                )),
-                Some(Failure::Refused(message)) => {
-                    Err(ConnectorError::refused(PLATFORM, &tenant, message, None))
+            let outcome = deploy_rule(cx, &rule).await.map_err(tenant_failure)?;
+            let mut done = DeployOutcome::new(
+                match &outcome.state {
+                    StateChange::Record(id) => Some(id.clone()),
+                    StateChange::Keep => Some(request.rule_id.clone()),
+                    StateChange::Forget => None,
+                },
+                request.operation,
+            )
+            .with_warnings(
+                outcome
+                    .warnings
+                    .into_iter()
+                    .map(|warning| {
+                        let said = DeployWarning::new(warning.event, warning.detail);
+                        if warning.raised {
+                            said
+                        } else {
+                            said.unraised()
+                        }
+                    })
+                    .collect(),
+            );
+            done.events = match &outcome.state {
+                StateChange::Record(id) => {
+                    vec![DeployEvent::new(RULE_CREATED).with_field("rule_id", id.as_str())]
                 }
-                None => Ok(DeployOutcome {
-                    // A warning the run does not raise (a create retried) is
-                    // what the deploy did: an event, as the CLI logs it.
-                    events: outcome
-                        .warnings
-                        .iter()
-                        .filter(|warning| !warning.raised)
-                        .map(|warning| {
-                            DeployEvent::new(warning.event).with_field("detail", &warning.detail)
-                        })
-                        .collect(),
-                    remote_id: match outcome.state {
-                        StateChange::Record(id) => Some(id),
-                        StateChange::Keep => Some(request.rule_id.clone()),
-                        StateChange::Forget => None,
-                    },
-                    operation: request.operation,
-                    warnings: outcome
-                        .warnings
-                        .into_iter()
-                        .filter(|warning| warning.raised)
-                        .map(|warning| DeployWarning::new(warning.event, warning.detail))
-                        .collect(),
-                }),
-            }
+                StateChange::Forget => vec![DeployEvent::new(RULE_DELETED)],
+                StateChange::Keep => Vec::new(),
+            };
+            let failed = match outcome.failure {
+                None => return Ok(done),
+                Some(Failure::Refused(message)) => match refusal {
+                    Some(refusal) if refusal.message == message => located(refusal.clone()),
+                    _ => located(DeployFailure::new("tenant_refused", message)),
+                },
+                Some(Failure::Request {
+                    code,
+                    error,
+                    detail,
+                }) => {
+                    let failure = located(DeployFailure::new(code, error));
+                    match detail {
+                        Some(detail) => failure.with_field("detail", detail),
+                        None => failure,
+                    }
+                }
+            };
+            // A failure leaves no id to record: only the warnings before it.
+            done.remote_id = None;
+            done.events.clear();
+            Err(DeployError::rule(failed).with_partial(done))
         })
     }
+}
+
+/// The event a created rule's id is logged with.
+pub const RULE_CREATED: &str = "bitdefender_rule_created";
+
+/// The event a deleted rule is logged with.
+pub const RULE_DELETED: &str = "bitdefender_rule_deleted";
+
+/// A tenant's failure from [`deploy_rule`], with its own code when it has
+/// one ([`TENANT_UNAUTHORIZED`], [`INCIDENTS_API_UNAVAILABLE`],
+/// [`TENANT_UNREACHABLE`]): each of its rules would fail the same way.
+fn tenant_failure(error: ConnectorError) -> DeployError {
+    let own = match &error {
+        ConnectorError::Refused { message, .. } => [
+            TENANT_UNAUTHORIZED,
+            INCIDENTS_API_UNAVAILABLE,
+            TENANT_UNREACHABLE,
+        ]
+        .into_iter()
+        .find(|code| message.starts_with(&format!("{code}: "))),
+        _ => None,
+    };
+    let mut failed = DeployError::from(error);
+    failed.scope = DeployScope::Tenant;
+    if let Some(code) = own {
+        failed.failure.code = code;
+    }
+    failed
 }
 
 /// A compiled rule read back from `createCustomRule` params (a

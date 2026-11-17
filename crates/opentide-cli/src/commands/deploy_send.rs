@@ -3449,10 +3449,8 @@ impl Sender<'_, '_> {
     /// (its id forgotten) (`BitdefenderDeploy.deploy_tenant`).
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn bitdefender(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        use opentide_compile::bitdefender::{GravityZoneRule, compile_rule};
-        use opentide_connectors::bitdefender::{
-            Action, Failure, RuleDeploy, StateChange, deploy_rule,
-        };
+        use opentide_compile::bitdefender::{compile_rule, create_params};
+        use opentide_connectors::bitdefender::Bitdefender;
         const PLATFORM: &str = PlatformId::Bitdefender.as_str();
         for batch in batches {
             let tenant = batch.tenant.name.clone();
@@ -3477,42 +3475,53 @@ impl Sender<'_, '_> {
                         continue;
                     }
                 };
-                let compiled = match &action {
-                    // A delete sends the recorded id alone.
-                    Planned::Delete(_) => GravityZoneRule {
-                        uuid: rule.uuid.clone(),
-                        kind: opentide_schema::objects::platform::bitdefender::Kind::Detection,
-                        name: rule.name.clone(),
-                        description: String::new(),
-                        tags: Vec::new(),
-                        settings: opentide_compile::json::Object::new(),
-                        targets: None,
-                        company_id: None,
-                    },
-                    _ => match compile_rule(self.compile, rule, strategy, Some(&batch.table)) {
-                        Ok(compiled) => compiled,
-                        Err(error) => {
-                            let message = format!("{}: {}", error.code, error.reason);
-                            tracing::error!(
-                                code = error.code,
-                                uuid = rule.uuid.as_str(),
-                                tenant = tenant.as_str(),
-                                name = rule.name.as_str(),
-                                error = message.as_str(),
-                                "{}",
-                                error.code
-                            );
-                            self.rule_error(&mut result, &message);
-                            log.finished(result);
-                            continue;
-                        }
-                    },
-                };
                 let actions_unsupported = !automatic
                     && rule
                         .block(PLATFORM)
                         .and_then(|block| block.get("actions"))
                         .is_some_and(|actions| !actions.is_null());
+                let (operation, stored) = match &action {
+                    Planned::Create => (Operation::Create, None),
+                    Planned::Update(id) if strategy == StatusStrategy::Disablement => {
+                        (Operation::Disable, Some(id.as_str()))
+                    }
+                    Planned::Update(id) => (Operation::Update, Some(id.as_str())),
+                    Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
+                };
+                let mut request = if let Planned::Delete(id) = &action {
+                    // A delete sends the recorded id alone.
+                    DeployRequest::delete(id.clone())
+                } else {
+                    let compiled =
+                        match compile_rule(self.compile, rule, strategy, Some(&batch.table)) {
+                            Ok(compiled) => compiled,
+                            Err(error) => {
+                                let message = format!("{}: {}", error.code, error.reason);
+                                tracing::error!(
+                                    code = error.code,
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    name = rule.name.as_str(),
+                                    error = message.as_str(),
+                                    "{}",
+                                    error.code
+                                );
+                                self.rule_error(&mut result, &message);
+                                log.finished(result);
+                                continue;
+                            }
+                        };
+                    let mut body = opentide_compile::json::Object::new();
+                    body.insert("params".into(), create_params(&compiled));
+                    if actions_unsupported {
+                        body.insert("actions_unsupported".into(), CJson::Bool(true));
+                    }
+                    DeployRequest::new(
+                        stored.unwrap_or_default(),
+                        operation,
+                        serde_json::to_vec(&CJson::Object(body)).unwrap_or_default(),
+                    )
+                };
                 let root = self.workspace.root().to_path_buf();
                 let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
                     Some(ignore) => Some(StateError {
@@ -3521,86 +3530,62 @@ impl Sender<'_, '_> {
                     }),
                     None => self.unpersisted(&rule.uuid, PLATFORM, &tenant),
                 };
-                let request = RuleDeploy {
-                    action: match &action {
-                        Planned::Create => Action::Create,
-                        Planned::Update(id) => Action::Update(id.clone()),
-                        Planned::Delete(id) => Action::Delete(id.clone()),
-                    },
-                    compiled,
-                    disable: strategy == StatusStrategy::Disablement,
-                    actions_unsupported,
-                    recreate_refusal: recreate_refusal
-                        .as_ref()
-                        .map(|refusal| refusal.message.clone()),
-                };
+                if let Some(refusal) = &recreate_refusal {
+                    request = request.refusing_recreate(DeployFailure::new(
+                        refusal.code,
+                        refusal.message.clone(),
+                    ));
+                }
                 let context = self.context(&connection);
-                match self.block(deploy_rule(context, &request)) {
-                    Ok(outcome) => {
-                        for warning in &outcome.warnings {
-                            if warning.raised {
-                                self.warned = true;
-                            }
-                            tracing::warn!(
+                let deployed = self
+                    .block(async { Ok(Bitdefender.deploy(context, &request).await) })
+                    .unwrap_or_else(|error| Err(DeployError::from(error)));
+                match deployed {
+                    Ok(done) => {
+                        self.bitdefender_done(&rule.uuid, &tenant, &done);
+                        match done.remote_id.as_deref() {
+                            None => self.record_deleted(&mut result, PLATFORM, &tenant),
+                            Some(id) if Some(id) != stored => self.record_created(
+                                &mut result,
+                                PLATFORM,
+                                &tenant,
+                                &ExternalId::Text(id.to_owned()),
+                            ),
+                            Some(_) => {}
+                        }
+                        log.finished(result);
+                    }
+                    Err(error) if error.scope == DeployScope::Rule => {
+                        if let Some(done) = &error.partial {
+                            self.bitdefender_done(&rule.uuid, &tenant, done);
+                        }
+                        let failure = &error.failure;
+                        if let Some(refusal) = recreate_refusal
+                            .as_ref()
+                            .filter(|refusal| refusal.code == failure.code)
+                        {
+                            self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
+                            self.failed = true;
+                            result.fail(&refusal.message);
+                        } else {
+                            tracing::error!(
+                                code = failure.code,
                                 uuid = rule.uuid.as_str(),
                                 tenant = tenant.as_str(),
-                                detail = warning.detail.as_str(),
+                                error = failure.message.as_str(),
+                                detail = failure.field("detail").unwrap_or_default(),
                                 "{}",
-                                warning.event
+                                failure.code
                             );
-                        }
-                        match &outcome.state {
-                            StateChange::Record(id) => {
-                                tracing::info!(
-                                    uuid = rule.uuid.as_str(),
-                                    rule_id = id.as_str(),
-                                    "bitdefender_rule_created"
-                                );
-                                let external = ExternalId::Text(id.clone());
-                                self.record_created(&mut result, PLATFORM, &tenant, &external);
-                            }
-                            StateChange::Forget => {
-                                tracing::info!(
-                                    uuid = rule.uuid.as_str(),
-                                    "bitdefender_rule_deleted"
-                                );
-                                self.record_deleted(&mut result, PLATFORM, &tenant);
-                            }
-                            StateChange::Keep => {}
-                        }
-                        match &outcome.failure {
-                            Some(Failure::Refused(message)) => {
-                                if let Some(refusal) = recreate_refusal
-                                    .as_ref()
-                                    .filter(|refusal| refusal.message == *message)
-                                {
-                                    self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
-                                }
-                                self.failed = true;
-                                result.fail(message);
-                            }
-                            Some(Failure::Request {
-                                code,
-                                error,
-                                detail,
-                            }) => {
-                                tracing::error!(
-                                    code = *code,
-                                    uuid = rule.uuid.as_str(),
-                                    tenant = tenant.as_str(),
-                                    error = error.as_str(),
-                                    detail = detail.as_deref().unwrap_or_default(),
-                                    "{}",
-                                    code
-                                );
-                                self.rule_error(&mut result, &format!("{code}: {error}"));
-                            }
-                            None => {}
+                            self.rule_error(
+                                &mut result,
+                                &format!("{}: {}", failure.code, failure.message),
+                            );
                         }
                         log.finished(result);
                     }
                     Err(error) => {
-                        let text = error.text();
+                        let text = error.into_connector().text();
                         tracing::error!(
                             tenant = tenant.as_str(),
                             error = text.as_str(),
@@ -3616,6 +3601,31 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// What a Bitdefender deploy did, failed or not: its warnings (the
+    /// unraised ones only said), then what was done.
+    fn bitdefender_done(&mut self, uuid: &str, tenant: &str, done: &DeployOutcome) {
+        for warning in &done.warnings {
+            if warning.raised {
+                self.warned = true;
+            }
+            tracing::warn!(
+                uuid,
+                tenant,
+                detail = warning.message.as_str(),
+                "{}",
+                warning.code
+            );
+        }
+        for event in &done.events {
+            match event.fields.iter().find(|(key, _)| key == "rule_id") {
+                Some((_, rule_id)) => {
+                    tracing::info!(uuid, rule_id = rule_id.as_str(), "{}", event.name);
+                }
+                None => tracing::info!(uuid, "{}", event.name),
+            }
+        }
     }
 
     /// GravityZone's cap on YARA rules per company: when the YARA rules
