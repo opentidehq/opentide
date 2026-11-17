@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use opentide_compile::google_secops::RunState;
 use opentide_connectors::connector::{
-    DeployRequest, Deployer, LiveValidator, Operation, QueryRequest, QueryRunner, TenantContext,
-    TimeWindow,
+    DeployRequest, DeployScope, Deployer, LiveValidator, Operation, QueryRequest, QueryRunner,
+    TenantContext, TimeWindow,
 };
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::google_secops::deploy::{
@@ -170,7 +170,7 @@ async fn deploy(api: &MockServer, rule: &RuleDeploy) -> RuleOutcome {
 /// The failures' codes, then the warnings'.
 fn codes(outcome: &RuleOutcome) -> (Vec<&str>, Vec<&str>) {
     (
-        outcome.failures.iter().map(|f| f.code.as_str()).collect(),
+        outcome.failures.iter().map(|f| f.code).collect(),
         outcome.warnings.iter().map(|w| w.code).collect(),
     )
 }
@@ -387,7 +387,7 @@ fn a_bound_rule_that_is_gone_is_created_again_or_forgotten() {
 
         // Not retiring, but deployment state cannot take a new id: the refusal.
         let mut refused = rule(Action::Update(ID.to_owned()));
-        refused.recreate_refusal = Some(("state_ignored".into(), "state is ignored".into()));
+        refused.recreate_refusal = Some(("state_ignored", "state is ignored".into()));
         let outcome = deploy(&api, &refused).await;
         let recreated = (vec!["state_ignored"], vec!["google_secops_rule_recreated"]);
         assert_eq!(codes(&outcome), recreated);
@@ -595,16 +595,14 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
         );
         let settings = HttpSettings::default();
-        let [check, search, deploy] = with_tenant(&api, "", &settings, async |cx, connector| {
-            [
-                connector.validate(cx, &request).await.unwrap_err(),
-                connector.run(cx, &request).await.unwrap_err(),
-                connector
-                    .deploy(cx, &create)
-                    .await
-                    .unwrap_err()
-                    .into_connector(),
-            ]
+        let ([check, search], deploy) = with_tenant(&api, "", &settings, async |cx, connector| {
+            (
+                [
+                    connector.validate(cx, &request).await.unwrap_err(),
+                    connector.run(cx, &request).await.unwrap_err(),
+                ],
+                connector.deploy(cx, &create).await.unwrap_err(),
+            )
         })
         .await;
         // Each is a refusal: the tenant's words in the detail, no secret anywhere.
@@ -632,11 +630,10 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             searched,
             (expected.to_owned(), Some("bad query".to_owned()))
         );
-        let (message, _) = refusal(&deploy);
-        assert!(
-            message.starts_with("google_secops_verify_failed: "),
-            "{message}"
-        );
+        // A rule's failure keeps Google SecOps's own code.
+        assert_eq!(deploy.scope, DeployScope::Rule);
+        assert_eq!(deploy.failure.code, "google_secops_verify_failed");
+        assert_eq!(deploy.failure.field("tenant"), Some("secops-eu"));
         api.verify().await;
     });
 }
@@ -747,6 +744,85 @@ fn the_deployer_trait_disables_a_disable_and_refuses_a_run_state_it_cannot_read(
             .collect::<Vec<_>>()
     });
     assert_eq!(sent, [json!({"enabled": false, "alerting": false})]);
+}
+
+/// Through the `Deployer`: a rule created, then refused its run state, keeps
+/// its new id and event in `partial`; a disable whose text and then its
+/// deployment fail reports both, in order; refused credentials fail the
+/// tenant with Google SecOps's code.
+#[test]
+fn the_deployer_trait_keeps_every_failure_and_what_was_done_before_them() {
+    let payload = |text: &str| serde_json::to_vec(&json!({"text": text})).unwrap();
+    runtime().block_on(async {
+        let settings = HttpSettings::default();
+        // A create, then its run state refused.
+        let api = server().await;
+        serve(&api, on("POST", VERIFY), verified(), ..).await;
+        let created = answer(200, json!({"name": format!("{RESOURCE}/rules/{ID}")}));
+        serve(&api, on("POST", "/rules"), created, 1).await;
+        let refused = google_error(400, "FAILED_PRECONDITION", "quota");
+        serve(&api, on("PATCH", &deployment()), refused, 1).await;
+        let create = DeployRequest::new(String::new(), Operation::Create, payload(TEXT));
+        let error = with_tenant(&api, "", &settings, async |cx, connector| {
+            connector.deploy(cx, &create).await.unwrap_err()
+        })
+        .await;
+        assert_eq!(error.scope, DeployScope::Rule);
+        assert_eq!(error.failure.code, "google_secops_deployment_failed");
+        let partial = error.partial.as_deref().unwrap();
+        assert_eq!(partial.remote_id.as_deref(), Some(ID));
+        assert_eq!(partial.events[0].name, "google_secops_rule_created");
+
+        // A disable whose new text does not compile, then whose run state fails.
+        let api = server().await;
+        serve(
+            &api,
+            on("GET", &rule_path()),
+            answer(200, json!({"text": "rule old {}"})),
+            ..,
+        )
+        .await;
+        let enabled = answer(200, json!({"enabled": true, "alerting": true}));
+        serve(&api, on("GET", &deployment()), enabled, ..).await;
+        let bad =
+            json!({"message": "bad field", "severity": "ERROR", "position": {"startLine": 1}});
+        serve(
+            &api,
+            on("POST", VERIFY),
+            answer(200, json!({"compilationDiagnostics": [bad]})),
+            1,
+        )
+        .await;
+        let down = google_error(500, "INTERNAL", "later");
+        serve(&api, patch(&deployment(), "enabled,alerting"), down, 1).await;
+        let disable = DeployRequest::new(ID.to_owned(), Operation::Disable, payload(TEXT));
+        let error = with_tenant(&api, "", &settings, async |cx, connector| {
+            connector.deploy(cx, &disable).await.unwrap_err()
+        })
+        .await;
+        let codes: Vec<&str> = std::iter::once(&error.failure)
+            .chain(&error.more)
+            .map(|failure| failure.code)
+            .collect();
+        assert_eq!(
+            codes,
+            [
+                "google_secops_verify_failed",
+                "google_secops_deployment_failed"
+            ]
+        );
+
+        // Refused credentials.
+        let api = server().await;
+        let denied = google_error(403, "PERMISSION_DENIED", "caller lacks chronicle.rules");
+        serve(&api, on("POST", VERIFY), denied, 1).await;
+        let error = with_tenant(&api, "", &settings, async |cx, connector| {
+            connector.deploy(cx, &create).await.unwrap_err()
+        })
+        .await;
+        assert_eq!(error.scope, DeployScope::Tenant);
+        assert_eq!(error.failure.code, "google_secops_tenant_unauthorized");
+    });
 }
 
 #[test]
