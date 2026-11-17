@@ -898,7 +898,7 @@ pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
 /// parse at all.
 pub fn columns(source: &str, profile: Profile) -> schema::Analysis {
     let catalog = Catalog::for_workspace(profile, source);
-    diagnose::columns(source, &catalog)
+    std::rc::Rc::unwrap_or_clone(diagnose::columns(source, &catalog))
 }
 
 /// Parses `source`, checks it against `catalog` and highlights it: every

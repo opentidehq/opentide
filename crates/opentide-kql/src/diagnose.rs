@@ -17,6 +17,7 @@ use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::SyntaxError;
 use rowan::NodeOrToken;
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 /// An analysis on the new parser.
 pub(crate) struct Analysis {
@@ -185,11 +186,54 @@ fn with_typed_literal_hint(diagnostics: &mut Vec<Diagnostic>) {
     diagnostics[0].message = format!("{}; {}", diagnostics[0].message, hint.message);
 }
 
-/// The column pass alone (`opentide_kql::columns`), on the memoised parse.
-pub(crate) fn columns(source: &str, catalog: &Catalog) -> schema::Analysis {
+thread_local! {
+    /// The column passes this thread ran: what the memo's test counts.
+    static COLUMN_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The last text [`columns`] ran on against a profile's bundled catalog,
+    /// with the catalog's profile and the pass.
+    static LAST_COLUMNS: std::cell::RefCell<Option<(String, crate::Profile, Rc<schema::Analysis>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// How many column passes this thread has run (not counting memo hits).
+#[cfg(test)]
+pub(crate) fn column_passes() -> u64 {
+    COLUMN_PASSES.with(std::cell::Cell::get)
+}
+
+/// The column pass alone (`opentide_kql::columns`, a column's hover), on the
+/// memoised parse, and itself memoised for the last text when the catalog is
+/// a profile's bundled one: hover asks for it at each offset of the same
+/// text, and on a query of 30 nested `join`s 25 hovers took 10 s in a debug
+/// build, one pass each (#1424). A workspace's catalog with declared columns
+/// is not memoised: it is not the same catalog from one call to the next.
+pub(crate) fn columns(source: &str, catalog: &Catalog) -> Rc<schema::Analysis> {
+    let bundled = std::ptr::eq(catalog, Catalog::cached(catalog.profile));
+    if bundled
+        && let Some(hit) = LAST_COLUMNS.with(|last| {
+            last.borrow()
+                .as_ref()
+                .filter(|(text, profile, _)| text == source && *profile == catalog.profile)
+                .map(|(_, _, analysis)| Rc::clone(analysis))
+        })
+    {
+        return hit;
+    }
     let parsed = parse_once(source);
     let root = SyntaxNode::new_root(parsed.green);
-    schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty())
+    COLUMN_PASSES.with(|n| n.set(n.get() + 1));
+    let analysis = Rc::new(schema::new_tree::analyze(
+        &root,
+        source,
+        catalog,
+        parsed.errors.is_empty(),
+    ));
+    if bundled {
+        LAST_COLUMNS.with(|last| {
+            *last.borrow_mut() = Some((source.to_owned(), catalog.profile, Rc::clone(&analysis)));
+        });
+    }
+    analysis
 }
 
 /// The tabular expressions of the query, in source order, as the
@@ -660,6 +704,26 @@ mod tests {
             ),
             vec!["D".to_string()]
         );
+    }
+
+    /// Hover at many offsets of one text runs the column pass once (#1424),
+    /// and a different text or profile runs it again.
+    #[test]
+    fn hover_runs_the_column_pass_once_per_text() {
+        let mut q = String::from("SecurityEvent");
+        for _ in 0..10 {
+            q = format!("SecurityEvent | join ({q}) on Account");
+        }
+        let before = column_passes();
+        for offset in (0..q.len()).step_by(7) {
+            let _ = crate::hover(&q, offset, Profile::Sentinel);
+        }
+        assert_eq!(column_passes() - before, 1);
+        let _ = crate::columns(&q, Profile::Sentinel);
+        assert_eq!(column_passes() - before, 1);
+        let _ = crate::columns(&q, Profile::Defender);
+        let _ = crate::columns("SigninLogs | project AppId", Profile::Sentinel);
+        assert_eq!(column_passes() - before, 3);
     }
 
     fn parse_error(source: &str) -> Diagnostic {

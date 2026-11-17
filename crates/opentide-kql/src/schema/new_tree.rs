@@ -906,9 +906,7 @@ impl<'a> Pass<'a> {
                 }
             }
         }
-        for column in by_columns {
-            out.push_unique(column);
-        }
+        out.push_all_unique(by_columns);
         for item in &aggregates {
             match self.column_item(item, &ctx_input, scope, op_span, &[]) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
@@ -922,12 +920,10 @@ impl<'a> Pass<'a> {
                     if let Some(node) = assigned_names(item).first() {
                         self.define(span(node), &columns[0]);
                     }
-                    for column in columns {
-                        out.push_unique(Column {
-                            made_by: Some(made_by),
-                            ..column
-                        });
-                    }
+                    out.push_all_unique(columns.into_iter().map(|column| Column {
+                        made_by: Some(made_by),
+                        ..column
+                    }));
                 }
                 Item::Named(_, _)
                     if aggregate_call(item)
@@ -953,12 +949,10 @@ impl<'a> Pass<'a> {
                 }
                 Item::Unnamed(_) => match self.aggregate_columns(item, &ctx_input) {
                     Some(columns) => {
-                        for column in columns {
-                            out.push_unique(Column {
-                                made_by: Some(made_by),
-                                ..column
-                            });
-                        }
+                        out.push_all_unique(columns.into_iter().map(|column| Column {
+                            made_by: Some(made_by),
+                            ..column
+                        }));
                     }
                     None => out.make_open(),
                 },
@@ -1011,9 +1005,7 @@ impl<'a> Pass<'a> {
             "rightsemi" | "rightanti" | "rightantisemi" => right.clone(),
             _ => {
                 let mut out = left.clone();
-                for column in &right.columns {
-                    out.push_unique(column.clone());
-                }
+                out.push_all_unique(right.columns.iter().cloned());
                 out.weaken(right.known);
                 out.custom_columns |= right.custom_columns;
                 out
@@ -1057,11 +1049,13 @@ impl<'a> Pass<'a> {
             }
         }
         let mut out = left.clone();
-        for column in &right.columns {
-            if !keys.contains(&column.name) {
-                out.push_unique(column.clone());
-            }
-        }
+        out.push_all_unique(
+            right
+                .columns
+                .iter()
+                .filter(|c| !keys.contains(&c.name))
+                .cloned(),
+        );
         out.weaken(right.known);
         out.custom_columns |= right.custom_columns;
         out.reshaped_by = Some(made_by.operator);

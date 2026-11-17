@@ -24,7 +24,7 @@
 
 use crate::{Catalog, Profile, tables};
 use opentide_core::{ByteSpan, Diagnostic, codes};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub(crate) mod new_tree;
 
@@ -160,7 +160,11 @@ impl Schema {
     }
 
     pub fn column(&self, name: &str) -> Option<&Column> {
-        self.columns.iter().find(|c| c.name == name)
+        self.columns.iter().find(|c| {
+            #[cfg(test)]
+            tests::count_name_compared();
+            c.name == name
+        })
     }
 
     fn has(&self, name: &str) -> bool {
@@ -190,6 +194,34 @@ impl Schema {
         }
         self.removed.remove(&column.name);
         self.columns.push(column);
+    }
+
+    /// [`Schema::push_unique`] for each of `columns`, in order, with one set
+    /// of the names taken and, per name, the next suffix to try: a join adds
+    /// every column of its right side, and a scan of the schema per column
+    /// (and per suffix tried) made nested joins cubic in their depth
+    /// (#1424). The smallest free suffix of a name only grows as columns are
+    /// added, so resuming from the last one gives the same names.
+    fn push_all_unique(&mut self, columns: impl IntoIterator<Item = Column>) {
+        let mut taken: HashSet<String> = self.columns.iter().map(|c| c.name.clone()).collect();
+        let mut next: HashMap<String, usize> = HashMap::new();
+        for mut column in columns {
+            #[cfg(test)]
+            tests::count_name_compared();
+            if taken.contains(&column.name) {
+                let base = std::mem::take(&mut column.name);
+                let n = next.entry(base.clone()).or_insert(1);
+                while taken.contains(&format!("{base}{n}")) {
+                    #[cfg(test)]
+                    tests::count_name_compared();
+                    *n += 1;
+                }
+                column.name = format!("{base}{n}");
+            }
+            taken.insert(column.name.clone());
+            self.removed.remove(&column.name);
+            self.columns.push(column);
+        }
     }
 
     fn remove(&mut self, name: &str, by: &'static str) {
@@ -837,6 +869,88 @@ pub(crate) fn unknown_column(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::glob_matches;
+    use super::{Column, Schema};
+
+    /// The names the scan per column gave, before #1424.
+    fn naive(start: &[&str], added: &[&str]) -> Vec<String> {
+        let mut names: Vec<String> = start.iter().map(ToString::to_string).collect();
+        for name in added {
+            let mut chosen = (*name).to_string();
+            if names.contains(&chosen) {
+                let mut n = 1;
+                while names.contains(&format!("{name}{n}")) {
+                    n += 1;
+                }
+                chosen = format!("{name}{n}");
+            }
+            names.push(chosen);
+        }
+        names
+    }
+
+    fn pushed(start: &[&str], added: &[&str]) -> Vec<String> {
+        let mut schema = Schema::open();
+        schema.push_all_unique(start.iter().map(|n| Column::new((*n).to_string(), None)));
+        schema.push_all_unique(added.iter().map(|n| Column::new((*n).to_string(), None)));
+        schema.columns.into_iter().map(|c| c.name).collect()
+    }
+
+    /// One pass gives each column the name a scan per column gave: the
+    /// smallest free suffix, with names added earlier in the batch taken.
+    #[test]
+    fn a_batch_names_columns_as_one_at_a_time() {
+        for (start, added) in [
+            (&["a", "b"][..], &["a", "a", "a1", "a", "b", "c"][..]),
+            (&["a", "a1", "a3"][..], &["a", "a", "a", "a2"][..]),
+            (&["x1"][..], &["x", "x", "x", "x1", "x11"][..]),
+            (&[][..], &["k", "k", "k1", "k11", "k1", "k"][..]),
+        ] {
+            assert_eq!(
+                pushed(start, added),
+                naive(start, added),
+                "{start:?} + {added:?}"
+            );
+        }
+    }
+
+    thread_local! {
+        /// The column names compared or looked up on this thread.
+        static NAMES_COMPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(super) fn count_name_compared() {
+        NAMES_COMPARED.with(|n| n.set(n.get() + 1));
+    }
+
+    /// Adding `n` columns to a schema of `n` compares or looks up about one
+    /// name per column, whose names collide or not: a scan of the schema per
+    /// column, the way a join added its right side, made a 30-deep nested
+    /// `join` take 100 s in a debug build (#1424). A work count, not a clock
+    /// (the rule of #1459).
+    #[test]
+    fn a_batch_of_columns_compares_about_one_name_each() {
+        let schema = |n: usize, prefix: &str| {
+            let mut s = Schema::open();
+            s.push_all_unique((0..n).map(|i| Column::new(format!("{prefix}{i}x"), None)));
+            s
+        };
+        for n in [1_000, 4_000] {
+            for prefix in ["c", "d"] {
+                let mut left = schema(n, "c");
+                let right = schema(n, prefix);
+                NAMES_COMPARED.with(|c| c.set(0));
+                left.push_all_unique(right.columns);
+                let compared = NAMES_COMPARED.with(std::cell::Cell::get);
+                assert_eq!(left.columns.len(), 2 * n);
+                // One lookup per column, and one more per suffix tried when
+                // its name is taken (`c0x` → `c0x1`).
+                assert!(
+                    compared <= 3 * n,
+                    "{n} `{prefix}` columns: {compared} names compared"
+                );
+            }
+        }
+    }
 
     thread_local! {
         /// The pipelines [`super::Analysis::pipeline`] scanned on this thread.
