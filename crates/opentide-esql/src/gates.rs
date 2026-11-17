@@ -152,30 +152,33 @@ pub(crate) fn parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
     out
 }
 
-/// A node's children as the arena listed them: its nodes, tokens and
-/// comments in order, without whitespace, with `WITH {…}` read in place;
-/// none for a one-token node (`Identifier`).
-pub(crate) fn children_of(node: &SyntaxNode) -> Vec<SyntaxElement> {
-    if crate::tree::is_leaf(node.kind()) {
-        return Vec::new();
-    }
-    let mut out = Vec::new();
-    for child in node.children_with_tokens() {
-        match &child {
-            NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS => {
-                out.extend(
-                    n.children_with_tokens()
-                        .filter(|c| c.kind() != K::WHITESPACE),
-                );
-            }
-            _ if child.kind() == K::WHITESPACE => {}
-            _ => out.push(child),
-        }
-    }
-    out
+/// A node's children as the tree-sitter tree listed them: its nodes, tokens
+/// and comments in order, without whitespace, with `WITH {…}` read in
+/// place; none for a one-token node (`Identifier`). Lazy: hover stops at
+/// the child it looks for.
+pub(crate) fn tree_children(node: &SyntaxNode) -> impl Iterator<Item = SyntaxElement> + use<> {
+    let leaf = crate::tree::is_leaf(node.kind());
+    node.children_with_tokens()
+        .filter(move |_| !leaf)
+        .flat_map(|child| {
+            let inner = match &child {
+                NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS => {
+                    Some(n.children_with_tokens())
+                }
+                _ => None,
+            };
+            let own = inner.is_none().then_some(child);
+            own.into_iter().chain(inner.into_iter().flatten())
+        })
+        .filter(|c| c.kind() != K::WHITESPACE)
 }
 
-/// Whether the arena named `element`: a node or a comment.
+/// [`tree_children`], collected.
+pub(crate) fn children_of(node: &SyntaxNode) -> Vec<SyntaxElement> {
+    tree_children(node).collect()
+}
+
+/// Whether the tree-sitter tree named `element`: a node or a comment.
 pub(crate) fn is_named(element: &SyntaxElement) -> bool {
     element.as_node().is_some() || element.kind() == K::COMMENT
 }
@@ -569,7 +572,7 @@ mod tests {
     use super::*;
     use crate::syntax::Lang;
 
-    /// The arena stopped a subquery's ancestors at a node whose name ends in
+    /// The tree-sitter tree stopped a subquery's ancestors at a node whose name ends in
     /// `_command`; the typed check stops at the same kinds.
     #[test]
     fn the_command_kinds_are_the_command_nodes() {

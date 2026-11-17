@@ -48,7 +48,8 @@ impl Tree {
         self.error_at.get(first).is_some_and(|&at| at < end)
     }
 
-    /// Whether the parser reported a problem inside the whole query.
+    /// Whether the parser reported a problem inside the query's span: a
+    /// problem at its very end (`EVAL c =`) is not in it (#1498).
     pub(crate) fn has_error(&self) -> bool {
         self.problem_in(crate::gates::span_of(&self.syntax))
     }
@@ -196,9 +197,9 @@ fn keyword_captures() -> &'static std::collections::HashMap<&'static str, &'stat
     })
 }
 
-/// The element's parent as the arena had it: `WITH {…}` (`NamedParameters`)
+/// The element's parent as the tree-sitter tree had it: `WITH {…}` (`NamedParameters`)
 /// is no node of its own.
-pub(crate) fn arena_parent(element: &SyntaxElement) -> Option<SyntaxNode<Lang>> {
+pub(crate) fn parent_of(element: &SyntaxElement) -> Option<SyntaxNode<Lang>> {
     let parent = element.parent()?;
     if parent.kind() == K::NAMED_PARAMETERS {
         parent.parent()
@@ -207,7 +208,7 @@ pub(crate) fn arena_parent(element: &SyntaxElement) -> Option<SyntaxNode<Lang>> 
     }
 }
 
-/// The highlight capture of a leaf of the arena (a token, a comment, a
+/// The highlight capture of a leaf of the tree-sitter tree (a token, a comment, a
 /// one-token node), by the patterns of `highlights.scm` in their order
 /// (first wins).
 pub(crate) fn capture(element: &SyntaxElement) -> Option<&'static str> {
@@ -221,7 +222,7 @@ pub(crate) fn capture(element: &SyntaxElement) -> Option<&'static str> {
         NodeOrToken::Node(n) => n,
     };
     let kind = node_name(node.kind());
-    let parent_node = arena_parent(element);
+    let parent_node = parent_of(element);
     let parent = parent_node.as_ref().map(|p| node_name(p.kind()));
     // The first node of the parent: a call's or an option's name.
     let first = || {

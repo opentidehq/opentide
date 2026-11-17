@@ -1035,7 +1035,8 @@ pub(crate) fn highlight(
     catalog: &Catalog,
 ) -> Vec<HighlightToken> {
     let mut spans: Vec<(ByteSpan, String)> = Vec::new();
-    // The arena's leaves in document order: tokens, comments, one-token nodes.
+    // The tree-sitter tree's leaves in document order: tokens, comments,
+    // one-token nodes.
     let mut stack = vec![NodeOrToken::Node(tree.syntax.clone())];
     while let Some(element) = stack.pop() {
         if let NodeOrToken::Node(node) = &element {
@@ -1069,27 +1070,41 @@ pub(crate) fn highlight(
 
 // ---- Hover ----------------------------------------------------------------
 
-/// The smallest element of the arena (a node, a token, a comment) that holds
-/// `offset`, as tree-sitter finds it.
+/// The smallest element of the tree-sitter tree (a node, a token, a comment)
+/// that holds `offset`, with half-open spans, as tree-sitter finds it: the
+/// token there (found by rowan's search, not a scan of each level's
+/// children), whitespace standing for the node it is in, and the outermost
+/// one-token node around it standing for its insides. At the end of the
+/// query, the root.
 fn element_at(root: &SyntaxNode, offset: usize) -> SyntaxElement {
-    let mut element = NodeOrToken::Node(root.clone());
-    'down: loop {
-        let NodeOrToken::Node(node) = &element else {
-            return element;
-        };
-        for child in children_of(node) {
-            let span = element_span(&child);
-            if span.end <= offset {
-                continue;
-            }
-            if offset < span.start {
-                break;
-            }
-            element = child;
-            continue 'down;
-        }
-        return element;
+    let Ok(at) = u32::try_from(offset).map(rowan::TextSize::from) else {
+        return NodeOrToken::Node(root.clone());
+    };
+    if at >= root.text_range().end() {
+        return NodeOrToken::Node(root.clone());
     }
+    // Between two tokens, the one that starts here.
+    let Some(token) = root.token_at_offset(at).right_biased() else {
+        return NodeOrToken::Node(root.clone());
+    };
+    let mut element = if token.kind() == K::WHITESPACE {
+        match tree::parent_of(&NodeOrToken::Token(token)) {
+            Some(parent) => NodeOrToken::Node(parent),
+            None => return NodeOrToken::Node(root.clone()),
+        }
+    } else {
+        NodeOrToken::Token(token)
+    };
+    let start = match &element {
+        NodeOrToken::Node(n) => n.parent(),
+        NodeOrToken::Token(t) => t.parent(),
+    };
+    for ancestor in std::iter::successors(start, rowan::SyntaxNode::parent) {
+        if tree::is_leaf(ancestor.kind()) {
+            element = NodeOrToken::Node(ancestor);
+        }
+    }
+    element
 }
 
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
@@ -1106,7 +1121,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     let text = element_text(&element, source);
     let node = element.as_node();
     // Function name.
-    if let Some(parent) = tree::arena_parent(&element) {
+    if let Some(parent) = tree::parent_of(&element) {
         if parent.kind() == K::FUNCTION_CALL
             && node.is_some()
             && parent.children().next().as_ref() == node
@@ -1123,7 +1138,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     // Command keyword.
     let mut cur = match &element {
         NodeOrToken::Node(n) => Some(n.clone()),
-        NodeOrToken::Token(_) => tree::arena_parent(&element),
+        NodeOrToken::Token(_) => tree::parent_of(&element),
     };
     while let Some(n) = cur {
         if gates::is_command(n.kind()) {
@@ -1137,7 +1152,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
             }
             break;
         }
-        cur = tree::arena_parent(&NodeOrToken::Node(n));
+        cur = tree::parent_of(&NodeOrToken::Node(n));
     }
     // Operator.
     if !is_named(&element)
@@ -2068,7 +2083,7 @@ mod tests {
         assert_eq!((deep[0].0, deep[0].1), (28, 35), "{deep:?}");
     }
 
-    /// Highlight, hover and the debug kinds read the tree as the arena did:
+    /// Highlight, hover and the debug kinds read the tree as tree-sitter did:
     /// only a call's first node is its name, an element ends before the
     /// offset at its end, and a comment is a named node.
     #[test]
@@ -2086,5 +2101,21 @@ mod tests {
         let eq = q.find("==").unwrap_or_default();
         assert!(hover(q, eq + 1).is_some_and(|h| h.contains("`==`")));
         assert_eq!(hover(q, eq + 2), None, "the space after `==`");
+        let comment = analyze("ROW a = 1 // c").tokens;
+        assert!(
+            comment
+                .iter()
+                .any(|t| t.span.start == 10 && t.capture == "comment")
+        );
+        // A problem inside the query, not only at its end, hides its indices.
+        assert_eq!(source_indices("FROM a | KEEP , b"), None);
+        // Completions offer the names that parse, not one with a problem.
+        let q = "FROM docs\n| RERANK ON title | WHERE a.b == 1 | EVAL x = ";
+        let columns: Vec<String> = completions(q, q.len())
+            .into_iter()
+            .filter(|c| c.kind == "property")
+            .map(|c| c.label)
+            .collect();
+        assert_eq!(columns, ["a.b", "x"]);
     }
 }
