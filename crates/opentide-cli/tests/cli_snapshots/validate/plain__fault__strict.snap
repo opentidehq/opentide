@@ -341,11 +341,11 @@ error[invalid_uuid]: UUID "bad-1" is not a valid UUIDv4
   ╰─ help: replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
 
 error[esql_parse_error]: ES|QL syntax error at the end of the query: expected an expression
-   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:40
+   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:41
    │
 75 │     query: |
 76 │       FROM logs-* METADATA _id | WHERE (
-   │                                        ━
+   │                                         ━
    │
    ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
 
@@ -613,11 +613,11 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[lucene_parse_error]: Lucene syntax error: missing `)`
-   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:7
+   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:19
    │
 58 │     query: |
 59 │       name:(a OR b
-   │       ━━━━━━━━━━━━
+   │                   ━
    │
    ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
 

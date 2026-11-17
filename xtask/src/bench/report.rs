@@ -28,8 +28,9 @@ pub struct Report {
     pub runs: u32,
     /// Unmeasured runs per command before them.
     pub warmup: u32,
-    /// What ran for the `python` engine: `opentide 0.23.0`, or the path given
-    /// with `--opentide`. `None` for `rust`.
+    /// What ran: for `python`, `opentide 0.23.0` or the path given with
+    /// `--opentide`; for `rust`, the path given with `--opentide`, `None` for
+    /// this checkout's build (a different binary is not compared with it).
     pub oracle: Option<String>,
     /// The machine.
     pub host: Host,

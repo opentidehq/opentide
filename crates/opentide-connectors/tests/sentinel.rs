@@ -324,3 +324,53 @@ fn sentinel_a_next_link_that_loops_is_not_followed() {
     );
     assert_eq!(tenant.verify(), Vec::new());
 }
+
+/// #1142: a list page that is not JSON (a sign-in or gateway page served
+/// with 200) is an error naming its content type, never an empty page.
+#[test]
+fn sentinel_a_list_page_that_is_not_json_is_an_error() {
+    let full = support::cassette("sentinel/deploy");
+    let mut page = full.interactions[4].clone();
+    page.response.headers = vec![("content-type".into(), "text/html".into())];
+    page.response.body = opentide_cassette::cassette::Body::Text(
+        "<html><head><title>Sign in</title></head></html>".into(),
+    );
+    let (listed, tenant) = list_from(opentide_cassette::Cassette::new(
+        &full.scenario,
+        full.recorded_from,
+        vec![
+            full.interactions[0].clone(),
+            full.interactions[1].clone(),
+            page,
+        ],
+    ));
+    let error = listed.unwrap_err();
+    assert!(matches!(error, ConnectorError::Answer { .. }), "{error:?}");
+    assert!(
+        error.to_string().ends_with(
+            "listing the analytics rules: the page is not JSON (Content-Type text/html): HTTP \
+             200 with an HTML page titled \"Sign in\""
+        ),
+        "{error}"
+    );
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// `Sentinel::list` on a tenant the cassette serves.
+#[expect(
+    clippy::unwrap_used,
+    reason = "a test helper: a failed set-up is a failure"
+)]
+fn list_from(cassette: opentide_cassette::Cassette) -> (Result<usize, ConnectorError>, Replayed) {
+    let tenant = Replayed::start_with(
+        cassette,
+        sentinel::PLATFORM,
+        SETUP,
+        "AZURE_CLIENT_SECRET",
+        &sentinel::http_settings(Duration::from_secs(60)),
+    );
+    let listed = block_on(async { connector().list(tenant.cx()).await })
+        .unwrap()
+        .map(|rules| rules.unwrap().len());
+    (listed, tenant)
+}

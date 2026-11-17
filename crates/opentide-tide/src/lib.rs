@@ -116,26 +116,6 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
     }
 }
 
-pub fn slugify(name: &str) -> String {
-    let mut slug = String::new();
-    let mut prev_dash = false;
-    for ch in name.trim().chars() {
-        if ch.is_ascii_alphanumeric() {
-            slug.push(ch.to_ascii_lowercase());
-            prev_dash = false;
-        } else if !prev_dash {
-            slug.push('-');
-            prev_dash = true;
-        }
-    }
-    let slug = slug.trim_matches('-').to_string();
-    if slug.is_empty() {
-        "object".into()
-    } else {
-        slug
-    }
-}
-
 /// A query block extracted from a YAML document, with indent-stripped text and
 /// a mapper back onto host coordinates.
 #[derive(Debug, Clone)]
@@ -273,21 +253,26 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
     injection::extract_injections(opentide_core::strip_bom(source))
 }
 
+/// The host span of `inner`, a span of `query`'s text. An offset at or past
+/// the text's end is the host offset right after its last byte, where an
+/// engine's "missing `)`" points (#1431: a span starting there landed at
+/// the query's start, and its frame took the whole query). A decoded escape
+/// maps its character onto the escape's first bytes, so after a query that
+/// ends in `\u00e9` that offset is inside the escape.
 pub fn remap_span(query: &InjectedQuery, inner: ByteSpan) -> ByteSpan {
-    if query.host_map.is_empty() {
+    let Some(&last) = query.host_map.last() else {
         return query.host_span;
-    }
+    };
+    let after_last = last + 1;
     let start = query
         .host_map
         .get(inner.start)
         .copied()
-        .unwrap_or(query.host_span.start);
+        .unwrap_or(after_last);
     let end = query
         .host_map
         .get(inner.end.saturating_sub(1))
-        .copied()
-        .map(|b| b + 1)
-        .unwrap_or(query.host_span.end);
+        .map_or(after_last, |b| b + 1);
     ByteSpan::new(start, end.max(start))
 }
 
@@ -962,10 +947,13 @@ fn remap_diagnostic(
     mut d: Diagnostic,
 ) -> Diagnostic {
     let start = inner.offset(d.range.start);
-    let mut end = inner.offset(d.range.end).max(start + 1);
+    // An empty finding (an error at the end of a query) stays empty: one
+    // character wide, it took the blank or comment after the query.
+    let width = usize::from(d.range.end != d.range.start);
+    let mut end = inner.offset(d.range.end).max(start + width);
     // A finding stays inside the part it starts in.
     if let Some(part) = inj.part_at(start) {
-        end = end.min(part.end).max(start + 1);
+        end = end.min(part.end).max(start + width);
         if d.field_path.is_none() {
             d.field_path = Some(part.field_path.clone());
         }
@@ -1796,12 +1784,6 @@ threat:
             language_for_field_path(&["configurations", "sysdig", "condition"]),
             Some(LanguageId::Falco)
         );
-    }
-
-    #[test]
-    fn slugify_matches_python() {
-        assert_eq!(slugify("Sentinel KQL Rule"), "sentinel-kql-rule");
-        assert_eq!(slugify("  Hi---There  "), "hi-there");
     }
 
     #[test]

@@ -794,7 +794,7 @@ exabeam_time_exact error 1:62-1:84 time takes a range, not an exact value: write
 166..170 property
 171..175 keyword
 == conformance/external/exabeam/dns-tunnel-length.broken.rule.exabeam
-exabeam_parse_error error 3:0-3:0 expected a term
+exabeam_parse_error error 2:43-2:43 expected a term
 0..13 property
 13..14 operator
 14..27 string
@@ -1619,13 +1619,11 @@ exabeam_parse_error error 0:15-0:16 expected `)`
 82..83 operator
 83..94 string
 == corpus/exabeam/and_expression__invalid.exabeam
-exabeam_parse_error error 0:35-0:36 `AND` is an operator, not a term: an operand is missing
+exabeam_parse_error error 0:34-0:34 expected a term
 0..13 property
 13..14 operator
 14..30 string
 31..34 keyword
-35..38 string
-39..40 punctuation.bracket
 == corpus/exabeam/and_expression__valid.exabeam
 exabeam_implicit_and warning 0:55-0:58 two terms with no operator are read as AND: write AND
 0..13 property
@@ -1679,14 +1677,16 @@ exabeam_parse_error error 0:38-0:38 unclosed function call
 59..69 string
 69..70 punctuation.bracket
 == corpus/exabeam/column__invalid.exabeam
-exabeam_reserved_alias error 0:15-0:20 `WHERE` is a reserved word
-exabeam_parse_error error 0:21-0:22 expected a clause
+exabeam_parse_error error 0:15-0:16 expected a name
 0..6 keyword
 7..11 property
 12..14 keyword
-15..20 variable
-27..28 operator
-28..39 string
+15..16 punctuation.delimiter
+17..18 operator
+19..24 keyword
+25..31 property
+31..32 operator
+32..43 string
 == corpus/exabeam/column__valid.exabeam
 0..6 keyword
 7..11 property

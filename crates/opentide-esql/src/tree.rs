@@ -22,6 +22,9 @@ pub(crate) struct Problem {
     /// The start of the token it sits before (the end of the source past the last).
     pub(crate) at: usize,
     pub(crate) message: String,
+    /// At the end of the input: `at` is right after the last token, and what
+    /// follows it is blanks or comments, never the token to quote.
+    pub(crate) at_end: bool,
 }
 
 struct Data {
@@ -34,8 +37,8 @@ struct Data {
     field: Option<&'static str>,
     /// The rowan node of a node the version gates read
     /// ([`crate::gates::GATED`]): the checks being moved to the typed AST read
-    /// it (#1415). No other node keeps one, so the lossless tree is freed as
-    /// the arena is built.
+    /// it (#1415). The lossless tree itself stays alive through
+    /// [`Tree::syntax`].
     syntax: Option<SyntaxNode<Lang>>,
 }
 
@@ -45,6 +48,9 @@ pub(crate) struct Tree {
     pub(crate) problems: Vec<Problem>,
     /// Where the problems are, sorted: [`Node::has_error`] searches it.
     error_at: Vec<usize>,
+    /// The lossless tree's root: the checks moved to the typed AST read it
+    /// (#1415). Its descendants are built as they are read.
+    pub(crate) syntax: SyntaxNode<Lang>,
 }
 
 /// Stands where tree-sitter's cursor stood: iteration needs none.
@@ -163,11 +169,13 @@ pub(crate) fn parse(source: &str) -> Tree {
         .errors
         .iter()
         .map(|e| Problem {
-            at: usize::from(e.gap.end()),
+            at: usize::from(e.anchor(source.len())),
             message: e.message.clone(),
+            at_end: usize::from(e.gap.end()) >= source.len(),
         })
         .collect();
     let root = SyntaxNode::<Lang>::new_root(parse.green);
+    let syntax = root.clone();
     let mut data: Vec<Data> = Vec::new();
     // The open real nodes; `None` entries are hidden nodes (`WITH {…}`).
     let mut open: Vec<Option<u32>> = Vec::new();
@@ -250,6 +258,7 @@ pub(crate) fn parse(source: &str) -> Tree {
         data,
         problems,
         error_at,
+        syntax,
     }
 }
 
@@ -1005,6 +1014,23 @@ pub(crate) fn production_names() -> Vec<&'static str> {
         .map(|raw| <Lang as rowan::Language>::kind_from_raw(rowan::SyntaxKind(raw)))
         .filter(|kind| !matches!(kind, K::NAMED_PARAMETERS | K::JOIN_QUALIFIER))
         .map(node_name)
+        .collect()
+}
+
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
+/// root first (`opentide_parse::SyntaxError::within`).
+pub(crate) fn error_kinds(source: &str) -> Vec<Vec<&'static str>> {
+    parser::parse(source)
+        .errors
+        .iter()
+        .map(|e| {
+            e.within
+                .iter()
+                .map(|&raw| <Lang as rowan::Language>::kind_from_raw(raw))
+                .filter(|kind| !matches!(kind, K::NAMED_PARAMETERS | K::ERROR))
+                .map(node_name)
+                .collect()
+        })
         .collect()
 }
 

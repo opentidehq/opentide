@@ -76,7 +76,9 @@ pub(crate) fn parse(source: &str) -> Parsed {
         .errors
         .iter()
         .map(|e| {
-            let at = usize::from(e.gap.end());
+            let at = usize::from(e.anchor(source.len()));
+            // At the end of the input the error is the empty span there.
+            let at_end = usize::from(e.gap.end()) >= source.len();
             // The token that starts at the gap's end, the first non-empty one.
             let first = tokens.partition_point(|&(start, _)| {
                 crate::step();
@@ -86,7 +88,7 @@ pub(crate) fn parse(source: &str) -> Parsed {
                 .iter()
                 .take_while(|&&(start, _)| start == at)
                 .map(|&(_, end)| end)
-                .find(|&end| end > at)
+                .find(|&end| end > at && !at_end)
                 .unwrap_or(at);
             Problem {
                 span: ByteSpan::new(usize::from(e.gap.start()), at),

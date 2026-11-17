@@ -60,7 +60,18 @@ trait KindNames {
     fn productions(&self) -> BTreeSet<String>;
     /// Parses `body` and returns the tree's error flag and its kind names.
     fn parse(&self, body: &str) -> Parsed;
+    /// For each syntax error of `body`, the nodes the parser recorded it in,
+    /// root first, each as its tags: where the error falls. `None` when the
+    /// parser cannot say (YARA: yara-x reports its errors outside the nodes of
+    /// its CST, and drops a construct it cannot parse).
+    fn error_kinds(&self, body: &str) -> Option<Vec<Within>>;
 }
+
+/// The nodes a syntax error was recorded in, root first, each as its tags.
+type Within = Vec<Vec<String>>;
+
+/// A crate's `debug_error_kinds`: for each syntax error, the names of the nodes it was in.
+type ErrorKindsFn = fn(&str) -> Vec<Vec<String>>;
 
 /// The `snake_case` spelling of a kind's `Debug` name: `FieldValueExpression`
 /// and `FIELD_VALUE_EXPRESSION` are both `field_value_expression`.
@@ -90,6 +101,7 @@ fn snake_case(name: &str) -> String {
 struct RustNames {
     node_kinds: fn() -> Vec<String>,
     kinds: fn(&str) -> (bool, Vec<String>),
+    error_kinds: Option<ErrorKindsFn>,
     tags: &'static [(&'static str, &'static str)],
     tokens: &'static [&'static str],
 }
@@ -141,6 +153,16 @@ impl KindNames for RustNames {
             kinds: kinds.into_iter().collect(),
         }
     }
+
+    fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
+        let kinds = self.error_kinds?;
+        Some(
+            kinds(body)
+                .iter()
+                .map(|nodes| nodes.iter().map(|k| self.tags_of(k)).collect())
+                .collect(),
+        )
+    }
 }
 
 /// The ES|QL names of `opentide-esql`'s own parser (#1228): its node kinds,
@@ -168,6 +190,22 @@ impl KindNames for EsqlNames {
             dump: kinds.join(" "),
             kinds: kinds.into_iter().map(str::to_string).collect(),
         }
+    }
+
+    fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
+        let body = body.to_string();
+        let errors = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || opentide_esql::debug_error_kinds(&body))
+            .unwrap()
+            .join()
+            .expect("the ES|QL parser overflowed a 1 MB stack or panicked");
+        Some(
+            errors
+                .into_iter()
+                .map(|e| e.into_iter().map(|k| vec![k.to_string()]).collect())
+                .collect(),
+        )
     }
 }
 
@@ -218,6 +256,16 @@ impl KindNames for KqlNames {
             dump,
         }
     }
+
+    fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
+        let errors = opentide_kql::inspect::error_kinds(body);
+        Some(
+            errors
+                .into_iter()
+                .map(|e| e.into_iter().map(|k| vec![kql_tag(k)]).collect())
+                .collect(),
+        )
+    }
 }
 
 /// The names of CQL's pure-Rust parser: its node kinds in `snake_case`, which
@@ -238,14 +286,25 @@ impl KindNames for CqlNames {
             kinds: kinds.into_iter().collect(),
         }
     }
+
+    fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
+        let errors = opentide_cql::debug_error_kinds(body);
+        Some(
+            errors
+                .into_iter()
+                .map(|e| e.into_iter().map(|k| vec![k]).collect())
+                .collect(),
+        )
+    }
 }
 
 /// The kind-name table of `language`.
 fn kind_names(language: LanguageId) -> Box<dyn KindNames> {
-    let rust = |node_kinds, kinds, tags, tokens| -> Box<dyn KindNames> {
+    let rust = |node_kinds, kinds, error_kinds, tags, tokens| -> Box<dyn KindNames> {
         Box::new(RustNames {
             node_kinds,
             kinds,
+            error_kinds,
             tags,
             tokens,
         })
@@ -257,48 +316,56 @@ fn kind_names(language: LanguageId) -> Box<dyn KindNames> {
         LanguageId::Spl => rust(
             opentide_spl::debug_node_kinds,
             opentide_spl::debug_kinds,
+            Some(opentide_spl::debug_error_kinds),
             SPL_TAGS,
             SPL_TOKENS,
         ),
         LanguageId::Eql => rust(
             opentide_eql::debug_node_kinds,
             opentide_eql::debug_kinds,
+            Some(opentide_eql::debug_error_kinds),
             EQL_TAGS,
             EQL_TOKENS,
         ),
         LanguageId::Kuery => rust(
             opentide_kuery::debug_node_kinds,
             opentide_kuery::debug_kinds,
+            Some(opentide_kuery::debug_error_kinds),
             KUERY_TAGS,
             KUERY_TOKENS,
         ),
         LanguageId::Lucene => rust(
             opentide_lucene::debug_node_kinds,
             opentide_lucene::debug_kinds,
+            Some(opentide_lucene::debug_error_kinds),
             LUCENE_TAGS,
             LUCENE_TOKENS,
         ),
         LanguageId::Falco => rust(
             opentide_falco::debug_node_kinds,
             opentide_falco::debug_kinds,
+            Some(opentide_falco::debug_error_kinds),
             FALCO_TAGS,
             FALCO_TOKENS,
         ),
         LanguageId::Exabeam => rust(
             opentide_exabeam::debug_node_kinds,
             opentide_exabeam::debug_kinds,
+            Some(opentide_exabeam::debug_error_kinds),
             EXABEAM_TAGS,
             EXABEAM_TOKENS,
         ),
         LanguageId::Yaral => rust(
             opentide_yaral::debug_node_kinds,
             opentide_yaral::debug_kinds,
+            Some(opentide_yaral::debug_error_kinds),
             YARAL_TAGS,
             YARAL_TOKENS,
         ),
         LanguageId::Yara => rust(
             opentide_yara::debug_node_kinds,
             opentide_yara::debug_kinds,
+            None,
             YARA_TAGS,
             YARA_TOKENS,
         ),
@@ -641,6 +708,14 @@ fn kql_invalid_fixtures_exist_per_required_rule() {
         engine_rejects,
         &fixtures,
     );
+    let required = KQL_REQUIRED.iter().map(ToString::to_string).collect();
+    assert_errors_located(
+        dir,
+        &*kind_names(LanguageId::Kql),
+        &required,
+        &fixtures,
+        KQL_UNLOCATED,
+    );
 }
 
 fn kql_body(src: &str) -> String {
@@ -672,6 +747,14 @@ fn spl_invalid_fixtures_are_rejected() {
         &*kind_names(LanguageId::Spl),
         engine_rejects,
         &fixtures,
+    );
+    let required = SPL_REQUIRED.iter().map(ToString::to_string).collect();
+    assert_errors_located(
+        dir,
+        &*kind_names(LanguageId::Spl),
+        &required,
+        &fixtures,
+        SPL_UNLOCATED,
     );
 }
 
@@ -736,6 +819,7 @@ fn the_gate_checks_its_invalid_fixtures() {
         id: "kuery",
         structural: &["source_file"],
         unparsed: &[],
+        unlocated: KUERY_UNLOCATED,
     };
     let names = kind_names(LanguageId::Kuery);
     let blind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -774,6 +858,88 @@ fn spl_valid_bare_search_and_unknown_command_parse() {
     assert!(tree.has_kind("unknown_command"), "{}", tree.dump);
 }
 
+// The invalid fixtures whose syntax error cannot be in their production.
+
+/// An unclosed token (a string, a comment, a regular expression) never forms: the error is
+/// recorded where it starts, in the node that would have held it.
+const UNCLOSED: &str = "an unclosed token never forms";
+/// The fault breaks the production's own syntax (a name, an operator, a missing piece), so
+/// the parser does not build it, and records the error in the node around it.
+const UNFORMED: &str = "the fault keeps the production from forming";
+/// A production of one keyword or one number (Falco's `anyof`, ES|QL's `DEDUP`, SPL's
+/// `tail`): it has no syntax of its own to break, so its fault follows it.
+const BARE: &str = "one keyword or number: its fault follows it";
+/// A token (a fuzzy suffix, a star, a number): an error is recorded between tokens, never
+/// inside one.
+const TOKEN: &str = "a token: an error is recorded between tokens";
+const CQL_UNLOCATED: &[(&str, &str)] = &[
+    ("block_comment__invalid.cql", UNCLOSED),
+    ("field_name__invalid.cql", UNFORMED),
+    ("free_text__invalid.cql", UNFORMED),
+    ("line_comment__invalid.cql", UNFORMED),
+    ("string__invalid.cql", UNCLOSED),
+];
+const EQL_UNLOCATED: &[(&str, &str)] = &[
+    ("any__invalid.eql", BARE),
+    ("comment__invalid.eql", UNCLOSED),
+    ("missing_event_open__invalid.eql", UNFORMED),
+    ("number__invalid.eql", TOKEN),
+];
+const ESQL_UNLOCATED: &[(&str, &str)] = &[
+    ("comment__invalid.esql", UNCLOSED),
+    ("comment__invalid.nested.esql", TOKEN),
+    ("dedup_command__invalid.esql", BARE),
+    ("metrics_info_command__invalid.esql", BARE),
+    ("number__invalid.esql", TOKEN),
+    ("parameter__invalid.esql", UNFORMED),
+    ("ts_collapse_command__invalid.esql", BARE),
+    ("ts_info_command__invalid.esql", BARE),
+];
+const EXABEAM_UNLOCATED: &[(&str, &str)] = &[
+    ("free_text__invalid.exabeam", UNCLOSED),
+    ("statement__invalid.exabeam", UNFORMED),
+];
+const FALCO_UNLOCATED: &[(&str, &str)] = &[
+    ("list_reference__invalid.falco", UNFORMED),
+    ("macro_reference__invalid.falco", UNFORMED),
+    ("operator_modifier__invalid.falco", BARE),
+    ("quoted_string__invalid.falco", UNCLOSED),
+];
+const KQL_UNLOCATED: &[(&str, &str)] = &[
+    ("comment__invalid.kql", UNCLOSED),
+    ("control_command__invalid.kql", UNFORMED),
+    ("number__invalid.kql", TOKEN),
+    ("quoted_identifier__invalid.kql", UNCLOSED),
+    ("string__invalid.kql", UNCLOSED),
+    ("typed_literal__invalid.kql", UNCLOSED),
+];
+const KUERY_UNLOCATED: &[(&str, &str)] = &[
+    ("quoted_string__invalid.kuery", UNCLOSED),
+    ("value_expression__invalid.kuery", UNFORMED),
+];
+const LUCENE_UNLOCATED: &[(&str, &str)] = &[
+    ("boost__invalid.lucene", TOKEN),
+    ("fuzzy__invalid.lucene", TOKEN),
+    ("phrase_query__invalid.lucene", UNCLOSED),
+    ("regexp_query__invalid.lucene", UNCLOSED),
+    ("star__invalid.lucene", TOKEN),
+    ("term_query__invalid.lucene", UNFORMED),
+];
+const SPL_UNLOCATED: &[(&str, &str)] = &[
+    ("fields_command__invalid.spl", UNFORMED),
+    ("tail_command__invalid.spl", BARE),
+];
+const YARAL_UNLOCATED: &[(&str, &str)] = &[
+    ("comment__invalid.yaral", UNCLOSED),
+    ("duration__invalid.yaral", UNFORMED),
+    ("limit_section__invalid.yaral", UNFORMED),
+    ("raw_string__invalid.yaral", UNCLOSED),
+    ("reference_list__invalid.yaral", UNFORMED),
+    ("regex__invalid.yaral", UNCLOSED),
+];
+/// YARA is not read: its `error_kinds` is `None`.
+const YARA_UNLOCATED: &[(&str, &str)] = &[];
+
 /// One Elastic language's corpus gate: every required production is tagged
 /// in a valid and an invalid fixture, every named grammar rule is either
 /// tagged or structural, and every valid fixture parses cleanly. Kibana KQL
@@ -787,6 +953,9 @@ struct ElasticGate {
     /// rejects: each with its reason where the gate is declared. They must
     /// stay rejected, so one the parser comes to accept is given back.
     unparsed: &'static [&'static str],
+    /// Invalid fixtures (file names) whose syntax error does not touch a node
+    /// of their production, each with its reason ([`assert_errors_located`]).
+    unlocated: &'static [(&'static str, &'static str)],
 }
 
 /// Whether a language's analysis reports an error for a query ([`engine_rejects`] in the
@@ -822,6 +991,77 @@ fn assert_invalid_fixtures_rejected(
         accepted.is_empty(),
         "invalid fixtures in {dir} that parse and analyse without an error: {accepted:?}"
     );
+}
+
+/// An invalid fixture that fails on syntax must fail in the production it names: one of its
+/// syntax errors was recorded while a node of that production was open. The parser's events
+/// say which nodes were, so a stray token after a whole production is not in it, and a
+/// closer missing from one is. A production that holds the errors of most fixtures (a
+/// pipeline, a statement, a query) proves nothing by holding one: for it the error must be
+/// in no other required production below it. Otherwise the fixture is listed in
+/// `unlocated` with the reason it cannot be (an unclosed token never forms; a construct the
+/// parser drops); a listed fixture that comes to fail in its production is given back, as
+/// `unparsed` is. A fixture that fails only an analysis check is not read here.
+fn assert_errors_located(
+    dir: &str,
+    names: &dyn KindNames,
+    required: &BTreeSet<String>,
+    fixtures: &[(String, String)],
+    unlocated: &[(&str, &str)],
+) {
+    let mut errors: Vec<(&String, Vec<Within>)> = Vec::new();
+    for (name, body) in fixtures {
+        if names.parse(body).has_error {
+            let Some(within) = names.error_kinds(body) else {
+                return;
+            };
+            errors.push((name, within));
+        }
+    }
+    // The tags that hold the errors of more than half the fixtures.
+    let mut holding: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for (_, within) in &errors {
+        let tags: BTreeSet<&str> = within
+            .iter()
+            .flatten()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        for tag in tags {
+            *holding.entry(tag).or_default() += 1;
+        }
+    }
+    let broad = |tag: &str| holding.get(tag).is_some_and(|n| n * 2 > errors.len());
+    let mut wrong = Vec::new();
+    for (name, within) in &errors {
+        let rule = name.split("__").next().unwrap_or("");
+        let located = within.iter().any(|w| {
+            if broad(rule) {
+                innermost_is(w, rule, required)
+            } else {
+                w.iter().flatten().any(|t| t == rule)
+            }
+        });
+        let listed = unlocated.iter().any(|(fixture, _)| fixture == *name);
+        if located && listed {
+            wrong.push(format!("{name}: located now; take it off `unlocated`"));
+        } else if !located && !listed {
+            wrong.push(format!(
+                "{name}: no syntax error is in `{rule}`: {within:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{dir}:\n{}", wrong.join("\n"));
+}
+
+/// Whether the innermost node of `within` that is a `required` production (or `rule`) is a
+/// `rule` node.
+fn innermost_is(within: &Within, rule: &str, required: &BTreeSet<String>) -> bool {
+    within
+        .iter()
+        .rev()
+        .find(|tags| tags.iter().any(|t| t == rule || required.contains(t)))
+        .is_some_and(|tags| tags.iter().any(|t| t == rule))
 }
 
 /// The `__invalid` fixtures of `dir` (file name, query), the query as `body` reads it.
@@ -917,6 +1157,8 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames, rejects: Rejects) 
         }
     }
     assert_invalid_fixtures_rejected(&dir, gate.language, names, rejects, &invalid);
+    let required: BTreeSet<String> = required.into_iter().collect();
+    assert_errors_located(&dir, names, &required, &invalid, gate.unlocated);
     for rule in &required {
         for kind in ["valid", "invalid"] {
             assert!(
@@ -979,6 +1221,7 @@ const ESQL_GATE: ElasticGate = ElasticGate {
         "unknown_text",
     ],
     unparsed: &[],
+    unlocated: ESQL_UNLOCATED,
 };
 
 #[test]
@@ -1008,6 +1251,7 @@ fn eql_corpus_gate() {
             "parenthesized_expression",
         ],
         unparsed: &[],
+        unlocated: EQL_UNLOCATED,
     });
 }
 
@@ -1018,6 +1262,7 @@ fn kuery_corpus_gate() {
         id: "kuery",
         structural: &["source_file"],
         unparsed: &[],
+        unlocated: KUERY_UNLOCATED,
     });
 }
 
@@ -1036,6 +1281,7 @@ fn lucene_corpus_gate() {
             "not",
         ],
         unparsed: &[],
+        unlocated: LUCENE_UNLOCATED,
     });
 }
 
@@ -1053,6 +1299,7 @@ fn falco_corpus_gate() {
             "bare_string",
         ],
         unparsed: &[],
+        unlocated: FALCO_UNLOCATED,
     });
 }
 
@@ -1087,6 +1334,7 @@ fn cql_corpus_gate() {
             "unquoted_pattern",
         ],
         unparsed: &[],
+        unlocated: CQL_UNLOCATED,
     });
 }
 
@@ -1117,6 +1365,7 @@ fn yara_corpus_gate() {
             // `base*` as a product, which a rule set does not take.
             "rule_wildcard__valid.yar",
         ],
+        unlocated: YARA_UNLOCATED,
     });
 }
 
@@ -1136,6 +1385,7 @@ fn exabeam_corpus_gate() {
             "context_table",
         ],
         unparsed: &[],
+        unlocated: EXABEAM_UNLOCATED,
     });
 }
 
@@ -1168,6 +1418,7 @@ fn yaral_corpus_gate() {
             "time_unit",
         ],
         unparsed: &[],
+        unlocated: YARAL_UNLOCATED,
     });
 }
 
@@ -1235,6 +1486,7 @@ fn an_unparsed_fixture_that_parses_fails_the_gate() {
             id: "kuery",
             structural: &["source_file"],
             unparsed: &["group__valid.kuery"],
+            unlocated: KUERY_UNLOCATED,
         });
     });
     assert!(
@@ -1262,6 +1514,9 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
             self.parses.set(self.parses.get() + 1);
             self.inner.parse(body)
         }
+        fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
+            self.inner.error_kinds(body)
+        }
     }
 
     let names = Counting {
@@ -1275,6 +1530,7 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
             id: "kuery",
             structural: &["source_file"],
             unparsed: &[],
+            unlocated: KUERY_UNLOCATED,
         },
         &names,
         engine_rejects,
@@ -1313,6 +1569,9 @@ fn the_esql_table_flags_what_the_gate_must() {
         }
         fn parse(&self, body: &str) -> Parsed {
             self.0.parse(body)
+        }
+        fn error_kinds(&self, body: &str) -> Option<Vec<Within>> {
+            self.0.error_kinds(body)
         }
     }
     let gate = std::panic::catch_unwind(|| {
@@ -1362,4 +1621,51 @@ fn cql_names_are_the_pure_rust_tree() {
     assert!(productions.contains("match_statement"));
     // An enum of the ungram is no node, and no production.
     assert!(!productions.contains("filter") && !productions.contains("expr"));
+}
+
+/// An invalid fixture must fail in the production it names: a syntax error elsewhere fails
+/// the gate (`search a | | stats count` fails between the pipes), so does a stray token
+/// after a whole production (`search a=1 )`: the parser records it after `search` closed),
+/// and so does a listed fixture whose error comes to be in its production. Found by review:
+/// a range test counted the stray token, which touches the end of `search`.
+#[test]
+fn an_error_outside_the_production_fails_the_gate() {
+    static LISTED: &[(&str, &str)] = &[("search_command__invalid.spl", UNFORMED)];
+    let names = kind_names(LanguageId::Spl);
+    let fixture = |body: &str| [("search_command__invalid.spl".to_string(), body.to_string())];
+    let fails = |fixtures: [(String, String); 1], unlocated: &[(&str, &str)]| {
+        let names = &*names;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let required = SPL_REQUIRED.iter().map(ToString::to_string).collect();
+            assert_errors_located("test", names, &required, &fixtures, unlocated);
+        }))
+        .is_err()
+    };
+    let elsewhere = fixture("search a | | stats count");
+    let after = fixture("index=main | search a=1 )");
+    let located = fixture("index=main | search a=");
+    assert!(
+        fails(elsewhere.clone(), &[]),
+        "an error outside `search` must fail"
+    );
+    assert!(fails(after, &[]), "a stray token after `search` must fail");
+    assert!(!fails(located.clone(), &[]), "an error in `search` passes");
+    assert!(!fails(elsewhere, LISTED), "a listed fixture passes");
+    assert!(
+        fails(located, LISTED),
+        "a listed fixture that is located now must fail"
+    );
+}
+
+/// A production that holds most errors (a pipeline) is no free pass: the error must be in
+/// no required production below it.
+#[test]
+fn a_broad_production_needs_the_innermost_error() {
+    let within: Within = ["source_file", "pipeline", "and_filter"]
+        .iter()
+        .map(|t| vec![(*t).to_string()])
+        .collect();
+    let required: BTreeSet<String> = ["pipeline", "and_filter"].map(String::from).into();
+    assert!(!innermost_is(&within, "pipeline", &required));
+    assert!(innermost_is(&within, "and_filter", &required));
 }

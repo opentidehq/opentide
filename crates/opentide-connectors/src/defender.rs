@@ -286,7 +286,17 @@ impl Defender {
                     context: None,
                 });
             }
-            let page = answer.json().unwrap_or(Json::Null);
+            let Some(page) = answer.json() else {
+                return Err(DefenderError::Connector(ConnectorError::Answer {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    address: "https://graph.microsoft.com".into(),
+                    reason: format!(
+                        "listing the detection rules: {}",
+                        answer.not_json_page().unwrap_or_default()
+                    ),
+                }));
+            };
             if let Some(Json::Array(items)) = page.get("value") {
                 rules.extend(items.iter().cloned());
             }
