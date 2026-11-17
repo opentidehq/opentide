@@ -6,8 +6,8 @@
 //! The Rust diff is the `similar` crate's (Myers, its default) in its unified
 //! format, never a port of difflib, and its layout is not difflib's goal:
 //! where a changed line is next to an identical line the two algorithms may
-//! show the change against a different copy (`fix-diff-alignment` in
-//! `tests/golden/APPROVED_DIFFS.toml`). What must hold is the behaviour:
+//! show the change against a different copy (an approved difference,
+//! `fix-diff-alignment`). What must hold is the behaviour:
 //! both diffs patch the file before into the file after, and this test
 //! checks that they do, on generated files and the in-place value edits
 //! `--fix` makes; the recorded dry run's diff is the oracle's text.

@@ -1,6 +1,5 @@
 // Runs a WASI (preview 1) module under Node's own WASI, as wasmtime would
-// run it for `cargo xtask golden check --runner wasi`
-// (OPENTIDE_WASI_RUNTIME=node): the host's root is the guest's root, the
+// run it (packages/wasi-host's tests use it): the host's root is the guest's root, the
 // environment is passed in whole, and the module's exit code is this
 // process's. A local stand-in for wasmtime, not a host for users.
 //

@@ -1,8 +1,7 @@
 //! The tide_corpus objects as the engine reads them: indexed, their queries
 //! injected and checked in their languages. The object checks are
 //! `opentide-workspace`'s `validate` (UC-2.6, #821), compared with the
-//! oracle by `cargo xtask validate diff` and with the language server by
-//! `cargo xtask lsp parity`.
+//! language server by `cargo xtask lsp parity`.
 
 #![expect(
     clippy::unwrap_used,

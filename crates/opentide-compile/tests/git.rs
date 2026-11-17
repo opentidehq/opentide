@@ -1,6 +1,5 @@
 //! The git baseline on repositories the `git` program builds: each CI diff
-//! source, and the failures a run reports. The local diff is compared with
-//! the oracle by `cargo xtask payloads git --against python`.
+//! source, and the failures a run reports.
 #![expect(
     clippy::unwrap_used,
     clippy::expect_used,

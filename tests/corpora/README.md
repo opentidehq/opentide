@@ -64,8 +64,8 @@ cargo xtask corpus clean --engine python --repo /tmp/heavy           # validate 
 - **Clean.** Seed 1 (30/30/50) and seed 20261107 (300/300/500) have zero findings in the
   oracle's `validate` and `lint`; ci.yml's `corpus` job checks the heavy one.
 
-Consumers: `xtask golden` (UC-0.5) records the small workspace (seed 1, 30/30/50) and the fault
-workspace as fixtures; `xtask bench` (UC-0.8) generates seed 20261107 with `--scale`. The library
+Consumers: the CLI snapshots run the small workspace (seed 1, 30/30/50) and the fault workspace as
+fixtures (`OPENTIDE_REPLAY_FIXTURES`, tests/golden/README.md); `xtask bench` (UC-0.8) generates seed 20261107 with `--scale`. The library
 API is `xtask::corpus::generate::{generate, Options, Counts, Layout}` and
 `xtask::corpus::cli::write_workspace`.
 

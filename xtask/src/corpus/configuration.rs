@@ -237,7 +237,10 @@ pub const QUOTING_CHANGELOG: &str = "**Messages quote values the same way everyw
 /// in the quote characters around the values their messages name.
 pub fn quoting_only(oracle: &[Json], rust: &[Json]) -> bool {
     let unquoted = |findings: &[Json]| {
-        let mut all: Vec<Json> = findings.iter().map(crate::lint::unquoted_json).collect();
+        let mut all: Vec<Json> = findings
+            .iter()
+            .map(super::approved::unquoted_json)
+            .collect();
         all.sort_by_key(ToString::to_string);
         all
     };

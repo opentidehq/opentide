@@ -10,9 +10,8 @@
 //! routed by its name rather than by a key inside it.
 //!
 //! The documents accept and refuse what the oracle's do (`cargo xtask
-//! codegen --check` validates every configuration file of the corpora
-//! against both); their text differs as `tests/golden/APPROVED_DIFFS.toml`
-//! records (`configuration-schema-text`).
+//! codegen --check --oracle` validated every configuration file of the
+//! corpora against both until #1142); their text is schemars'.
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::Transform;

@@ -12,13 +12,13 @@
 |------|------------|------------|
 | `src/opentide/` | The PyPI package: the console script, the SDK, the models, the plugin API, bundled data (`src/opentide/data/`) around the Rust core | [`src/AGENTS.md`](src/AGENTS.md) |
 | `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E, MCP and LSP stdio, docs and CI contracts | the testing skills below |
-| `tests/golden/` | The goldens of the frozen Python CLI (the oracle): `cargo xtask golden record\|check` | [`tests/golden/README.md`](tests/golden/README.md) |
+| `tests/golden/` | The command line's snapshot cases (`cases.toml`) and their fixtures, which `crates/opentide-cli/tests/cli_snapshots.rs` runs | [`tests/golden/README.md`](tests/golden/README.md) |
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide/` | The `opentide` crate: the Rust SDK (the facade), the only crate with a stability promise | [`crates/opentide/AGENTS.md`](crates/opentide/AGENTS.md) |
 | `crates/opentide-*/` | The engine and language server crates, one guide each | `crates/<crate>/AGENTS.md` |
 | `bindings/python/` | The PyO3 binding compiled into the package as `opentide._native` | [`bindings/python/AGENTS.md`](bindings/python/AGENTS.md) |
 | `bindings/node/` | The npm package `@opentide/opentide`: the napi-rs binding of the facade, the SDK and the `opentide` bin for Node.js | [`bindings/node/AGENTS.md`](bindings/node/AGENTS.md) |
-| `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), the benchmarks (`bench`, budgets in `tests/bench/`), `codegen`, `golden` and the oracle comparisons | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
+| `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), the benchmarks (`bench`, budgets in `tests/bench/`), `codegen`, `cassettes`, `corpus` | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
 | `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `docs/` | The site's four tabs (Usage, CLI, MCP, SDK); `docs/internal/` (with the ADRs, `docs/internal/adr/`) and `docs/engine/` for maintainers | [`docs/README.md`](docs/README.md) |
 | `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
@@ -45,7 +45,7 @@
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
 | Releases (the release train, `publish.yml`: PyPI, crates.io, npm, binaries), release candidates, `v*` tag, install pins, post-release skills review | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 | Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
-| Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
+| Changing what a command prints or writes: the snapshot cases, `cases.toml`, `cargo insta review` | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
 | The query parsers: lexers, grammars on `crates/opentide-parse`, `.ungram`, keyword tables | [`.agents/skills/parser/SKILL.md`](.agents/skills/parser/SKILL.md) |
 | The language server host (`crates/opentide-lsp`), `editors/` | [`.agents/skills/lsp-host/SKILL.md`](.agents/skills/lsp-host/SKILL.md) |
@@ -154,8 +154,7 @@ lint, the facade's semver checks, cargo deny, docs) when its paths changed; one 
 package and its install on each OS, and Python 3.10 to 3.13; the nightly (`nightly.yml`) adds the
 workspace's tests on macOS and Windows, coverage, benchmarks, every fuzz target for ten minutes
 (`engine-fuzz.yml`), lsp parity and the vendor-parser oracles, and never gates. Nothing compares
-with the frozen Python oracle: `cargo xtask golden`, `compare` and `corpus` run by hand
-(`tests/golden/README.md`).
+with the frozen Python oracle: the command line is held by its snapshots (`tests/golden/README.md`).
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
 

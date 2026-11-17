@@ -13,22 +13,13 @@ Commands:
   check-layers  Check that every dependency between workspace crates points down the layer table (xtask/layers.toml, plan section 4)
   coverage      Check each workspace crate's line coverage against its gate (xtask/coverage.toml, plan section 5.4)
   mutants       The crates the weekly mutation run mutates, and its report (xtask/mutants.toml)
-  compare       Compare a candidate's run with the oracle's, applying the approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml), or check the ledger itself
   conformance   Run every operation of tests/conformance/manifest.json on every corpus through the Rust, Python and Node SDKs and require byte-identical documents (UC-5.4, #839)
   corpus        Generate the heavy workspace, run the fault catalogue against the oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
-  config        Resolve every fixture and generated workspace's configuration with opentide-schema and compare it with the oracle's (UC-1.5, #811)
-  registry      Load every corpus with opentide-workspace and compare its index with the Python registry's (UC-2.1, #816)
   lsp           For each fault kind `opentide validate` reports, the language server's published diagnostics against validate's findings (UC-2.6, #821)
-  validate      Run opentide-workspace's validate on every recorded `validate --json` case and compare it with the recording (UC-2.2, #817; UC-2.3, #818)
-  lint          Run opentide-workspace's lint on every recorded `lint --json` case and compare it with the recording (UC-2.3, #818)
   codegen       Write the artifacts generated from the Rust model (the platform templates); `--check` compares them (UC-1.8, #814)
-  mcp           Record the MCP sessions from the Python server and replay them against the Rust server (UC-3.7, #829)
   cassettes     The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
-  golden        Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden --help` lists the commands
   bench         Run the benchmarks against their budgets (UC-0.8, #806)
-  payloads      The deploy compile's request bodies against the oracle's (UC-3.1, #823)
-  vocab         The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
-  schema        The object models against the oracle: their JSON Schemas, and their verdict on every object file of every corpus (UC-1.3, #809)
+  vocab         The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
   spec-fields   Check every model field's description against its row in the field tables of the specifications checkout
   stubs         Generate src/opentide/_native/models.pyi and sdk.pyi from the extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
   help          Print this message or the help of the given subcommand(s)

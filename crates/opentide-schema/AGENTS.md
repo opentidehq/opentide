@@ -30,7 +30,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/migration.rs` | Forward one-step `From` impls (`From<RuleV1_0> for RuleV1_1`), `TideObject::step`, `migrate_to`, `into_newest`, `path` (`SchemaVersionChain`), `stamp_schema_identifier`; `migration/tests.rs`: the migration properties |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
-| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate` (`schema_annotations.py`, its patterns on `fancy-regex`), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (`pydantic_skeleton.py`, walking the schemars schema), `snippets` (`vscode_snippets.py`), `schema` (UC-1.8b, #900: each revision's editor schema and `visibility.toml`'s, schemars' schema with opentide's `Transform`s: root extras, pins, platform recomposition, vocabulary and configured enums with their dropdowns and search hints, closure, the pinned identifier, `tide.*` stripped), `configuration` (each configuration file's schema from the configuration models' derived `JsonSchema`, and the router), `workspace` (the `schemas`, `templates` and `snippets` phases from a resolved configuration), `catalog` (UC-3.5d, #933: the language server's `fields.json` and `deprecations.json`, from each revision's model schema and its editor schema without the platform recomposition; one generator for `generate schemas` and the language server, #926), `tests.rs` (the committed platform templates and the tide-corpus golden templates) |
+| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate` (`schema_annotations.py`, its patterns on `fancy-regex`), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (`pydantic_skeleton.py`, walking the schemars schema), `snippets` (`vscode_snippets.py`), `schema` (UC-1.8b, #900: each revision's editor schema and `visibility.toml`'s, schemars' schema with opentide's `Transform`s: root extras, pins, platform recomposition, vocabulary and configured enums with their dropdowns and search hints, closure, the pinned identifier, `tide.*` stripped), `configuration` (each configuration file's schema from the configuration models' derived `JsonSchema`, and the router), `workspace` (the `schemas`, `templates` and `snippets` phases from a resolved configuration), `catalog` (UC-3.5d, #933: the language server's `fields.json` and `deprecations.json`, from each revision's model schema and its editor schema without the platform recomposition; one generator for `generate schemas` and the language server, #926), `tests.rs` (the committed platform templates and the tide-corpus templates) |
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (ported from 0.28.0's `tests/test_models/`, which left with the Pydantic models in UC-6.2) |
 | `src/objects/platform/` | The platform blocks (UC-1.4, #810): one module per platform with its nested models (`platform_block!` puts `PlatformConfigBase`'s fields first), `PLATFORM_CONFIG_MODELS` (closed), `LEGACY_KEYS` (the oracle declares none to tolerate), the named checks `elastic_rule_shape` and `sysdig_rule_shape` (`NAMED_CHECKS`, each block's before-validator: codes judged on the raw block, one `value_error` naming them), `QueryText`, the Sentinel ATT&CK v18 and duration checks, `durations` (Elastic; `opentide_core::duration` re-exported), `falco_text` (the oracle's `resolve_list` and macro scan; Falco's terms are `opentide_core::falco`'s), `schema` (`platform_schema.py`), `deprecation` (`deprecated_field`), `table.rs` (`tests/oracle/platform_cases.toml` against the oracle) and `tests.rs` (the ported Python tests) |
 | `tests/platform.rs` | Every block of `tests/fixtures/sysdig` and `tests/fixtures/elastic` |
@@ -56,8 +56,8 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 
 - The Pydantic models in `src/opentide/models` at the frozen tag are the oracle. A model here is
   the same shape: field names, serialised names, order, optional and defaulted fields, closure,
-  constraints, metadata keys. A difference is an approved diff (`tests/golden/APPROVED_DIFFS.toml`)
-  or a bug.
+  constraints, metadata keys. A difference is deliberate, with its `CHANGELOG.md` entry, or a bug
+  (the approved-diffs ledger was retired with the oracle's recordings, #1142).
 - One concrete struct per revision; no generic model (`#[pyclass]` cannot take one).
 - Every model is a `#[pyclass(frozen, get_all, eq, name = "<Pydantic name>", module =
   "opentide._native.models")]` behind `python`, listed in `python.rs` (`py_models!` and the
@@ -75,8 +75,8 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   `opentide_core::codes::SCHEMA_VALIDATION`): never mint one, never a second string at a call site.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`). The derives compile for wasm32.
 - Suggestions are `opentide_core::suggest`'s (strsim), never a port of Python's `difflib`: where
-  one differs from the oracle's on a corpus value, `tests/golden/vocab/APPROVED.toml` lists it and
-  `cargo xtask vocab diff --against python` checks it. Accepted values and validity never differ.
+  one differs from the oracle's, the difference was reviewed when `vocab diff` ran (retired, #1142).
+  Accepted values and validity never differ.
 - YAML is YAML 1.2, read by the saphyr crates; never re-implement a YAML 1.1 rule to match the
   oracle. A case where the oracle reads YAML differently names a `[[difference]]` in
   `tests/oracle/yaml_cases.toml` (reason, CHANGELOG lead); `YAML.md` shows them all.
@@ -103,13 +103,11 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   with it (UC-2.6, #821). The language server's own walk of the block, and
   `xtask/tests/sysdig_engines.rs`, which held the two engines together, went with that;
   opentide-tide's `sysdig` keeps only `sysdig_list_self_reference`, the advisory `lint` owns.
-- A generated template, snippet file or router schema is byte for byte what the oracle writes:
-  `cargo xtask codegen --check` compares them with every golden recording of `opentide
-  generate`. A generated JSON Schema (each revision's, `visibility.toml`'s, the configuration
-  schemas) is compared by verdict instead (UC-1.8b, #900): it must accept and refuse every corpus
-  object, configuration file and fault as the oracle's does; its text (titles, descriptions, key
-  order, `type` arrays for Pydantic's `anyOf` with `null`, the dropdown Markdown) is schemars' and
-  is listed in `tests/golden/APPROVED_DIFFS.toml`. Never port Pydantic's schema pipeline to close
+- A generated template, snippet file or router schema was held byte for byte to what the oracle
+  writes, and a generated JSON Schema by verdict (UC-1.8b, #900), until the recordings were retired
+  (#1142); the CLI's `generate` snapshots, `tests/generate_files.rs` and `cargo xtask codegen
+  --check` hold them now. Its text (titles, descriptions, key order, `type` arrays for Pydantic's
+  `anyOf` with `null`, the dropdown Markdown) is schemars'. Never port Pydantic's schema pipeline to close
   a text difference; adapt schemars' output with a `Transform`. A model a template or schema reaches is listed in `generate::models` (its field
   order); `generate::tests` fails on one it does not list. A Pydantic `Literal` is written in place
   (`literal_enum!`'s `inline_schema`), as Pydantic writes it: the template offers its first value.
@@ -125,20 +123,18 @@ cargo nextest run -p opentide-schema                       # native, no Python
 cargo nextest run -p opentide-schema --features python     # + the Python class and trybuild
 cargo build -p opentide-schema --target wasm32-unknown-unknown
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
-cargo xtask vocab diff --against python                    # against the oracle, every corpus
 cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
 cargo nextest run -p opentide-schema platform              # the platform blocks, against the oracle's table too
 cargo xtask corpus faults --check --engine rust --only platforms
 cargo nextest run -p opentide-schema revision migration    # the registry, dispatch and migrations (properties)
-cargo xtask schema diff --against python                   # JSON Schemas and every corpus, live
 cargo xtask corpus faults --check --engine rust --only objects
 cargo nextest run -p opentide-schema generate             # the generated templates, snippets, router
-cargo xtask codegen --check                                # against every golden `opentide generate`
+cargo xtask codegen --check                                # the committed artifacts are current
 ```
 
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),
 which must be 3.10 or later; put its `LIBDIR` on `LD_LIBRARY_PATH` if the loader cannot find it.
-The oracle tables are regenerated with the oracle's interpreter (`tests/golden/ORACLE`):
+The oracle tables are regenerated with the oracle's interpreter (opentide 0.28.1's wheel):
 `<oracle python> tests/oracle/yaml_table.py`, `from_node_table.py` and `objects_table.py`; after a change to what the
 loader reads, `UPDATE_YAML_TABLE=1 cargo test -p opentide-schema --test yaml_table` rewrites
 `YAML.md`. After an intended schema change, `cargo insta review`; after a compiler message change,

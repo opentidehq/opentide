@@ -2,7 +2,7 @@
 //! answered, in order.
 //!
 //! JSON, under `tests/cassettes/<scenario>.json`. A cassette is written by
-//! the recorder (`cargo xtask cassettes record`) and never by hand: its
+//! the recorder ([`crate::Proxy`] in record mode) and never by hand: its
 //! `digest` is the SHA-256 of its interactions as written, and `cargo xtask
 //! cassettes check` fails on one that does not match, or on one that holds
 //! anything [`crate::redact`] would still redact.
@@ -146,7 +146,7 @@ impl Cassette {
         if cassette.digest != digest {
             return Err(format!(
                 "its digest is {}, its interactions hash to {digest}: a cassette is recorded \
-                 (cargo xtask cassettes record), never edited",
+                 through the proxy, never edited",
                 cassette.digest
             ));
         }

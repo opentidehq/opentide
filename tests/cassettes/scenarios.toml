@@ -1,13 +1,14 @@
 # The recorded-HTTP scenarios (UC-4.1, #831): each one is a client run whose
-# requests `cargo xtask cassettes record <name>` records through the
-# recording proxy into `<name>.json` beside this file. Never write or edit a
+# requests were recorded through the recording proxy into `<name>.json`
+# beside this file (`cargo xtask cassettes record`, retired with the oracle
+# in #1142). Never write or edit a
 # cassette by hand; `cargo xtask cassettes check` fails on one whose digest
 # does not match, on one that still holds anything redaction removes, and on a
 # scenario without its cassette or a cassette without its scenario.
 #
-# client: the command line; `{python}` is the oracle's interpreter and
-#   `{oracle}` its bin directory (tests/golden/ORACLE), so the client is the
-#   frozen Python implementation.
+# client: the command line; `{python}` was the oracle's interpreter and
+#   `{oracle}` its bin directory, so the client is the frozen Python
+#   implementation.
 # tenant: a stand-in tenant to start first; it prints its port on its first
 #   line, and every host in `routes` is sent to it.
 # secrets: environment variables given a fresh random value for the run; the
