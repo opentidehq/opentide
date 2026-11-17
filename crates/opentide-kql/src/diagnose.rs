@@ -548,7 +548,8 @@ fn tables(
     if catalog.tables.is_empty() {
         return 0;
     }
-    // (the layer it is over, its parameters); layer 0 is the query's `lets`.
+    // (the layer it is over, its parameters). Layer 0 holds no names: the
+    // walk ends there, at the query's `lets`.
     let mut scopes: Vec<(usize, BTreeSet<String>)> = vec![(0, BTreeSet::new())];
     let binds = |scopes: &[(usize, BTreeSet<String>)], mut at: usize, name: &str| loop {
         if scopes[at].1.contains(name) {
@@ -622,6 +623,42 @@ mod tests {
         assert!(
             out.iter().any(|d| d.message.contains("NopeTable")),
             "{out:?}"
+        );
+    }
+
+    /// The tables `analyze` reports unknown in `source` (Sentinel).
+    fn unknown_tables(source: &str) -> Vec<String> {
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        analyze(source, &catalog)
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .filter_map(|d| d.message.split('\'').nth(1).map(str::to_string))
+            .collect()
+    }
+
+    /// A tabular parameter is bound in its function's body and in every
+    /// function nested in it, through each layer out to the query's `let`
+    /// names, and nowhere after its function ends (#1424's layers).
+    #[test]
+    fn tabular_parameters_bind_through_the_layers() {
+        assert_eq!(
+            unknown_tables(
+                "let f = (T:(*)) { let g = (U:(*)) { T | union U }; g(T) };\nf(SigninLogs)"
+            ),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            unknown_tables("let f = (T:(*)) { T };\nT | take 1"),
+            vec!["T".to_string()]
+        );
+        assert_eq!(
+            unknown_tables(
+                "let L = SigninLogs;\n\
+                 let f = (A:(*)) { let g = (B:(*)) { let h = (C:(*)) { A | union B, C, D, L }; h(B) }; g(A) };\n\
+                 f(SigninLogs)"
+            ),
+            vec!["D".to_string()]
         );
     }
 
