@@ -499,6 +499,33 @@ fn no_page_shares_a_name_with_an_index_but_for_case() {
             "{flavor}: the index is the folder's README"
         );
     }
+    // GitLab without UUID permalinks names its pages by slug: `.order`
+    // lists the page under its suffixed name, after the folder's README.
+    let (_dir, slugged) = open_edited("tide-corpus", |ws| {
+        let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+        let text = std::fs::read_to_string(&rule).unwrap();
+        std::fs::write(&rule, text.replacen("Sentinel KQL Rule", "README", 1)).unwrap();
+        documentation(
+            ws,
+            "[flavor]\ndefault = \"gitlab\"\n\n[gitlab]\nuuid_permalinks = false\n",
+        );
+    });
+    let written = render(&slugged, None).unwrap();
+    assert!(written.contains_key("docs/rules/readme-00000000.md"));
+    let order = &written["docs/rules/.order"];
+    assert!(order.starts_with("README\n"), "{order}");
+    assert_eq!(
+        order
+            .lines()
+            .filter(|line| line.eq_ignore_ascii_case("readme"))
+            .count(),
+        1,
+        "{order}"
+    );
+    assert!(
+        order.lines().any(|line| line == "readme-00000000"),
+        "{order}"
+    );
     let written = render(&workspace, Some("github")).unwrap();
     assert!(
         written.contains_key("docs/rules/readme-00000000.md"),
