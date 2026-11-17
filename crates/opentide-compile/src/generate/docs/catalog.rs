@@ -911,7 +911,11 @@ fn records(scope: Scope, mut objects: Vec<(String, String, Model)>) -> Vec<Recor
     objects.sort_by_cached_key(|(_, name, _)| name.to_lowercase());
     let mut groups: IndexMap<String, Vec<usize>> = IndexMap::new();
     for (position, (_, name, _)) in objects.iter().enumerate() {
-        groups.entry(slugify(name)).or_default().push(position);
+        // A page named `con.md` cannot be made or checked out on Windows.
+        groups
+            .entry(opentide_workspace::lint::device_safe(&slugify(name)))
+            .or_default()
+            .push(position);
     }
     let mut taken: HashSet<String> = groups.keys().cloned().collect();
     let mut slugs = vec![String::new(); objects.len()];
@@ -1063,6 +1067,30 @@ mod tests {
             name.to_owned(),
             Model::Threat(Box::new(threat)),
         )
+    }
+
+    #[test]
+    fn a_windows_device_name_never_names_a_page() {
+        let list = records(
+            Scope::Rules,
+            vec![
+                record("aaaaaaaa-1", "CON"),
+                record("bbbbbbbb-2", "nul"),
+                record("cccccccc-3", "Com1"),
+                record("dddddddd-4", "LPT1"),
+                record("eeeeeeee-5", "PRN"),
+                record("ffffffff-6", "aux"),
+                record("abababab-7", "con.txt"),
+                record("cdcdcdcd-8", "Console"),
+            ],
+        );
+        let slugs: Vec<&str> = list.iter().map(|r| r.slug.as_str()).collect();
+        assert_eq!(
+            slugs,
+            [
+                "_aux", "_com1", "_con", "con-txt", "console", "_lpt1", "_nul", "_prn"
+            ]
+        );
     }
 
     #[test]
