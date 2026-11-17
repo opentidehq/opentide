@@ -1,3 +1,0 @@
-error: Unknown object type(s): RULE. Choose rule, threat, or objective.
-  help: did you mean 'rule'?
-tip: add --json for machine-readable output
