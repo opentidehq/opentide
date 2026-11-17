@@ -476,6 +476,67 @@ fn gitlab_pages_are_ordered_and_named_by_uuid() {
     );
 }
 
+/// A rule named `README` never writes `readme.md` beside the folder's
+/// `README.md`: one file where case does not count (Windows, macOS). No two
+/// files a run writes differ only by case, in any flavour.
+#[test]
+fn no_page_shares_a_name_with_an_index_but_for_case() {
+    let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+        let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+        let text = std::fs::read_to_string(&rule).unwrap();
+        std::fs::write(&rule, text.replacen("Sentinel KQL Rule", "README", 1)).unwrap();
+    });
+    for flavor in ["generic", "github", "gitlab", "azure-devops"] {
+        let written = render(&workspace, Some(flavor)).unwrap();
+        let mut seen = std::collections::HashMap::new();
+        for path in written.keys() {
+            if let Some(other) = seen.insert(path.to_lowercase(), path) {
+                panic!("{flavor}: {path} and {other} are one file on Windows and macOS");
+            }
+        }
+        assert!(
+            written["docs/rules/README.md"].contains("# Detection rules"),
+            "{flavor}: the index is the folder's README"
+        );
+    }
+    // GitLab without UUID permalinks names its pages by slug: `.order`
+    // lists the page under its suffixed name, after the folder's README.
+    let (_dir, slugged) = open_edited("tide-corpus", |ws| {
+        let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+        let text = std::fs::read_to_string(&rule).unwrap();
+        std::fs::write(&rule, text.replacen("Sentinel KQL Rule", "README", 1)).unwrap();
+        documentation(
+            ws,
+            "[flavor]\ndefault = \"gitlab\"\n\n[gitlab]\nuuid_permalinks = false\n",
+        );
+    });
+    let written = render(&slugged, None).unwrap();
+    assert!(written.contains_key("docs/rules/readme-00000000.md"));
+    let order = &written["docs/rules/.order"];
+    assert!(order.starts_with("README\n"), "{order}");
+    assert_eq!(
+        order
+            .lines()
+            .filter(|line| line.eq_ignore_ascii_case("readme"))
+            .count(),
+        1,
+        "{order}"
+    );
+    assert!(
+        order.lines().any(|line| line == "readme-00000000"),
+        "{order}"
+    );
+    let written = render(&workspace, Some("github")).unwrap();
+    assert!(
+        written.contains_key("docs/rules/readme-00000000.md"),
+        "{:?}",
+        written
+            .keys()
+            .filter(|key| key.starts_with("docs/rules/"))
+            .collect::<Vec<_>>()
+    );
+}
+
 /// `page`'s Markdown: without its Mermaid blocks (fenced, or Azure DevOps'
 /// `::: mermaid`) and its wiki front matter, which are not Markdown.
 fn without_mermaid(page: &str) -> String {

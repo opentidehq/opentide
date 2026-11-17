@@ -162,7 +162,7 @@ Each platform block is documented in full, walked from its model: every value it
 
 Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes).
 
-A page is named after its object's slugified name, with a `_` before a name Windows reserves for a device (`CON` is `_con.md`). When two objects in one folder slugify alike, the one with the lowest UUID keeps the plain name and the others get a `-<uuid[:8]>` suffix, so existing page names change only on a collision.
+A page is named after its object's slugified name, with a `_` before a name Windows reserves for a device (`CON` is `_con.md`). A page never takes the folder index's name: an object named `README` gets `readme-<uuid[:8]>.md`, since `readme.md` and `README.md` are one file on Windows and macOS. When two objects in one folder slugify alike, the one with the lowest UUID keeps the plain name and the others get a `-<uuid[:8]>` suffix, so existing page names change only on a collision.
 
 Every run (full, scoped and `--changed`) removes generated pages that no object writes any more, such as the old page of a renamed object, and lists them under `removed` in the result. Only files directly inside an object folder that carry the generator's metadata table are removed; `README.md` and hand-written pages are never touched.
 
