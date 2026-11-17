@@ -798,13 +798,8 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             ));
         }
         if oracle_count != rust_count {
-            let oracle = json!({"queries_checked": oracle_count});
-            let rust = json!({
-                "queries_checked": rust_count,
-                "crowdstrike": crowdstrike,
-                "yara": yara,
-                "yaml_1_2": 0,
-            });
+            let (oracle, rust) =
+                super::approved::queries_checked(&oracle_count, &rust_count, crowdstrike, yara, 0);
             let counted = super::approved::crowdstrike_cql(Some(&oracle), Some(&rust), &[]);
             if counted {
                 approved += 1;

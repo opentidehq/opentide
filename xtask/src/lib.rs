@@ -21,7 +21,8 @@ pub(crate) mod recorded;
 pub mod script;
 pub mod spec_fields;
 pub mod stubs;
-pub mod verdict;
+#[cfg(test)]
+mod verdict;
 pub mod vocab;
 pub mod yara_modules;
 

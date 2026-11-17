@@ -1,54 +1,9 @@
-# Approved differences of `cargo xtask payloads` (UC-3.1, #823): the deploy
-# compile's request bodies (`[[diff]]`, `payloads diff --against python`) and
-# deploy --dry-run's plan (`[[plan]]`, `payloads plan`) where opentide-compile
-# is right and the oracle is not. Every field is required. The tool was
-# retired with the oracle (#1142); opentide-compile's tests/oracle.rs reads
-# the [[dump]] classes and the corpus's entries.
-
-[[plan]]
-case = "deploy/json/fault/dry-run"
-key = "warnings"
-oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/elevated-exfiltration-rule-0014.yaml, objects/rules/encoded-beacon-rule-0034.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/staged-exfiltration-rule-0021.yaml; opentide validate shows where"]'''
-candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-beacon-rule-0034.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/staged-exfiltration-rule-0021.yaml; opentide validate shows where"]'''
-reason = "objects/rules/elevated-exfiltration-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
-issue = "https://github.com/opentidehq/opentide/issues/808"
-changelog = "**Tide objects are read as YAML 1.2**"
-
-[[plan]]
-case = "deploy/json/fault/progress-json"
-key = "warnings"
-oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/elevated-exfiltration-rule-0014.yaml, objects/rules/encoded-beacon-rule-0034.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/staged-exfiltration-rule-0021.yaml; opentide validate shows where"]'''
-candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-beacon-rule-0034.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/staged-exfiltration-rule-0021.yaml; opentide validate shows where"]'''
-reason = "objects/rules/elevated-exfiltration-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
-issue = "https://github.com/opentidehq/opentide/issues/808"
-changelog = "**Tide objects are read as YAML 1.2**"
-
-[[plan]]
-case = "deploy/json/tide-corpus/typo-choice"
-key = "message"
-oracle = "\"--strategy 'PREVEW' is not a deployable strategy. Use PREVIEW or RELEASE\""
-candidate = "\"--strategy \\\"PREVEW\\\" is not a deployable strategy. Use PREVIEW or RELEASE\""
-reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[plan]]
-case = "deploy/json/vscode/dry-run"
-key = "message"
-oracle = "\"\\\"'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\\\"\""
-candidate = "\"\\\"Suspicious LSASS Access\\\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\""
-reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[plan]]
-case = "deploy/json/vscode/uuid"
-key = "message"
-oracle = "\"\\\"'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\\\"\""
-candidate = "\"\\\"Suspicious LSASS Access\\\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\""
-reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
+# Approved differences between opentide-compile and the oracle's recorded
+# compile (UC-3.1, #823): the request bodies of the compile corpus (`[[diff]]`),
+# the oracle's own faults (`[[fault]]`) and the dump classes (`[[dump]]`),
+# which opentide-compile's tests/oracle.rs reads. Every field is required.
+# The `cargo xtask payloads` tool that wrote and checked this file, and the
+# dry-run plan entries it compared, were retired with the oracle (#1142).
 
 [[dump]]
 rule = "nulls"

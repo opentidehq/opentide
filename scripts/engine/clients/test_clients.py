@@ -4,6 +4,10 @@ pytest-lsp starts the server (``OPENTIDE_LSP_BIN``, else the debug build)
 with the capabilities each editor records, and checks every response the
 server sends against them: a Markdown hover for a plain-text client, a
 pushed diagnostic for a client that pulls, and the like fail here.
+
+Its dependencies are the `clients` dependency group, not `dev`'s:
+``uv run --isolated --only-group clients pytest scripts/engine/clients``
+(``cargo build -p opentide-lsp`` first).
 """
 
 from __future__ import annotations
