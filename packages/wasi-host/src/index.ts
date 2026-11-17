@@ -7,7 +7,8 @@
 // a string ("h1", "h2", ...). `FetchHost` answers those requests from the
 // extension host, with Node's own HTTP stack: the tenant's TLS verification
 // and CA bundles, its proxy (a CONNECT tunnel), its connect and read
-// timeouts, redirects as reqwest follows them, and cancellation when the
+// timeouts, redirects as the native transport follows them (on the tenant's
+// origin only), and cancellation when the
 // server withdraws a request (`$/cancelRequest`). VS Code's proxy support
 // (`http.proxy`, the OS certificate store), which patches Node's `https`,
 // applies as it does to any extension.
@@ -430,14 +431,35 @@ function withTimeout<T>(work: Promise<T>, ms: number, kind: FailureKind, signal:
   });
 }
 
+/**
+ * Whether a redirect from *from* to *to* is followed, as the native
+ * transport's `follows_redirect`: on the same origin, or from `http` to
+ * `https` on the same host with default ports. Any other hop would carry a
+ * platform's own credential header (Carbon Black's `X-Auth-Token`,
+ * Bitdefender's `X-API-Key`) to another host, so it is not taken (#1142).
+ */
+export function followsRedirect(from: URL, to: URL): boolean {
+  if (from.origin === to.origin) {
+    return true;
+  }
+  return (
+    from.protocol === "http:" &&
+    to.protocol === "https:" &&
+    from.hostname === to.hostname &&
+    from.port === "" &&
+    to.port === ""
+  );
+}
+
 /** Headers no redirect to another origin carries (as reqwest strips them). */
 const SENSITIVE = new Set(["authorization", "cookie", "proxy-authorization", "www-authenticate"]);
 
 /**
  * Makes the request *params* describe with Node's HTTP stack, following
- * redirects as reqwest does: at most `MAX_REDIRECTS`; a 303, and a 301 or
- * 302 to a POST, become a GET without a body; credentials are not sent to
- * another origin.
+ * redirects as the native transport does: at most `MAX_REDIRECTS`, and only
+ * those `followsRedirect` takes (any other is the answer); a 303, and a 301
+ * or 302 to a POST, become a GET without a body; the standard credentials
+ * are not sent to another origin (an http to https upgrade).
  */
 export async function performRequest(params: FetchParams, signal: AbortSignal): Promise<FetchResult> {
   let url = new URL(params.url);
@@ -449,8 +471,10 @@ export async function performRequest(params: FetchParams, signal: AbortSignal): 
     const answer = await exchange(url, method, headers, body, params, signal);
     elapsed ??= answer.elapsed;
     const location = answer.headers.find(([name]) => name === "location")?.[1];
-    const redirected = [301, 302, 303, 307, 308].includes(answer.status) && location !== undefined;
-    if (!redirected || redirects >= MAX_REDIRECTS) {
+    const next = location === undefined ? undefined : new URL(location, url);
+    const redirected =
+      [301, 302, 303, 307, 308].includes(answer.status) && next !== undefined && followsRedirect(url, next);
+    if (!redirected || next === undefined || redirects >= MAX_REDIRECTS) {
       return {
         status: answer.status,
         headers: answer.headers,
@@ -459,7 +483,6 @@ export async function performRequest(params: FetchParams, signal: AbortSignal): 
         elapsed_ms: elapsed,
       };
     }
-    const next = new URL(location, url);
     if (answer.status === 303 || ((answer.status === 301 || answer.status === 302) && method === "POST")) {
       method = "GET";
       body = null;

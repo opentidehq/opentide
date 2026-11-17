@@ -14,6 +14,7 @@ import {
   type FetchResult,
   FetchHost,
   fetchParams,
+  followsRedirect,
   performRequest,
 } from "./index.ts";
 
@@ -118,8 +119,10 @@ test("a request is sent as written and its answer read whole", async () => {
   }
 });
 
-test("redirects are followed as reqwest follows them", async () => {
+test("redirects are followed on the tenant's origin only", async () => {
+  let reached = 0;
   const other = await serve((request, response) => {
+    reached += 1;
     response.writeHead(200, { "content-type": "text/plain" });
     response.end(`${request.method} ${request.headers.authorization ?? "no authorization"}`);
   });
@@ -148,15 +151,37 @@ test("redirects are followed as reqwest follows them", async () => {
     );
     assert.equal(Buffer.from(posted.body, "base64").toString(), "GET Bearer token");
     assert.equal(posted.url, `${first.origin}/here`);
+    // #1142: a redirect to another origin is the answer; the other host,
+    // which would get Carbon Black's X-Auth-Token, receives nothing.
     const away = await performRequest(
-      params({ url: `${first.origin}/away`, headers: [["authorization", "Bearer token"]] }),
+      params({ url: `${first.origin}/away`, headers: [["x-auth-token", "secret"]] }),
       signal,
     );
-    assert.equal(Buffer.from(away.body, "base64").toString(), "GET no authorization");
+    assert.equal(away.status, 307);
+    assert.equal(away.url, `${first.origin}/away`);
+    assert.equal(reached, 0, "the other origin was asked");
   } finally {
     await first.close();
     await other.close();
   }
+});
+
+test("which redirects are followed", () => {
+  const from = new URL("https://defense.conferdeploy.net/appservices");
+  assert.ok(followsRedirect(from, new URL("https://defense.conferdeploy.net/other")));
+  assert.ok(followsRedirect(from, new URL("https://DEFENSE.conferdeploy.net:443/a")));
+  for (const to of [
+    "https://evil.example/",
+    "http://defense.conferdeploy.net/a",
+    "https://defense.conferdeploy.net:8443/a",
+    "https://defense.conferdeploy.net.evil.example/a",
+  ]) {
+    assert.ok(!followsRedirect(from, new URL(to)), to);
+  }
+  const plain = new URL("http://graylog.lab/api");
+  assert.ok(followsRedirect(plain, new URL("https://graylog.lab/api")));
+  assert.ok(!followsRedirect(plain, new URL("https://other.lab/api")));
+  assert.ok(!followsRedirect(plain, new URL("https://graylog.lab:9000/api")));
 });
 
 test("a refused connection, a silent tenant and a withdrawn request fail by kind", async () => {
