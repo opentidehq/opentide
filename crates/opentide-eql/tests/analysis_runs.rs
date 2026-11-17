@@ -328,3 +328,32 @@ fn a_ladder_past_the_depth_limit_stops_growing() {
         "{past} steps for 1,000 levels, {far} for 4,000: growing past the limit"
     );
 }
+
+/// A long `in` list, valid or broken by a trailing comma, stays linear on every surface: one
+/// finding per element (`eql_field_comparison`) and each finding's range from one line table.
+/// It took 6.5 s at 5,000 elements and 106 s at 20,000 when each range scanned the query from
+/// its start (#1435).
+#[test]
+fn a_long_in_list_is_linear() {
+    for tail in ["", " ,"] {
+        let list = |n: usize| {
+            let items: Vec<String> = (0..n).map(|i| format!("f{i}")).collect();
+            format!("process where a in ({}{tail})", items.join(" , "))
+        };
+        let every = |q: &str| {
+            let scans = opentide_core::scans_from_the_start();
+            let findings = analyze(q).diagnostics.len();
+            let _ = ecs_diagnostics(q);
+            let _ = sequences(q);
+            let _ = hover(q, q.len() / 2);
+            let _ = completions(q, q.len() - 1);
+            let _ = signature_help(q, q.len() - 1);
+            assert_eq!(
+                opentide_core::scans_from_the_start(),
+                scans,
+                "{findings} findings: a range scanned the query from its start"
+            );
+        };
+        assert_steps_linear(&format!("in list{tail}"), 1_000, list, every);
+    }
+}
