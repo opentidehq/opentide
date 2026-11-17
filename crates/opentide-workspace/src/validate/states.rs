@@ -81,8 +81,8 @@ pub fn legacy_external_id_keys(rule: &Node) -> Vec<(String, String)> {
 }
 
 /// `metadata.uuid` in lowercase canonical form, or `None` when it is not a
-/// UUID (Python's `uuid.UUID(str(value).strip())`, which also takes braces,
-/// `urn:uuid:` and the unhyphenated form).
+/// UUID; surrounding white space, braces, `urn:uuid:` and the unhyphenated
+/// form are taken too.
 pub fn canonical_uuid(value: &str) -> Option<String> {
     uuid::Uuid::try_parse(value.trim())
         .ok()

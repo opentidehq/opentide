@@ -976,4 +976,82 @@ mod lint {
         let without = LintFinding::from_engine("objects/rules/r.yaml", None, engine);
         assert_eq!(without.diagnostic.object_uuid, "");
     }
+
+    /// The queries check's calls: each file's text, and whether lint handed
+    /// the check its parse (`check_parsed`) or left it to parse (`check`).
+    #[derive(Default)]
+    struct Counting {
+        calls: std::sync::Mutex<Vec<(String, bool)>>,
+    }
+
+    impl opentide_workspace::lint::LintQueryCheck for Counting {
+        fn check(
+            &self,
+            _: &Path,
+            relative: &str,
+            _: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((relative.to_owned(), false));
+            Ok(Vec::new())
+        }
+
+        fn check_parsed(
+            &self,
+            _: &Path,
+            relative: &str,
+            _: Option<&str>,
+            text: &str,
+            document: &opentide_schema::node::Document,
+        ) -> Result<Vec<LintFinding>, String> {
+            assert_eq!(document.source(), text, "the parse is the text's");
+            self.calls.lock().unwrap().push((relative.to_owned(), true));
+            Ok(Vec::new())
+        }
+    }
+
+    /// #1233: lint parses each object file once. The queries check gets the
+    /// tree lint read the file into, through [`lint`] and through
+    /// [`Workspace::lint`] (which reads the files as `lint` does); a file
+    /// that does not parse is not checked.
+    #[test]
+    fn the_queries_check_reads_the_parse_lint_made() {
+        let fs = Arc::new(workspace());
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "B"));
+        fs.write("/ws/objects/rules/c.yaml", "name: [unclosed\n");
+        let check = Counting::default();
+        let options = LintOptions {
+            checks: vec![LintCheck::Queries],
+            query_check: Some(&check),
+            ..options()
+        };
+        let sorted = |check: &Counting| {
+            let mut calls = std::mem::take(&mut *check.calls.lock().unwrap());
+            calls.sort();
+            calls
+        };
+        let expected = [
+            ("objects/rules/a.yaml".to_owned(), true),
+            ("objects/rules/b.yaml".to_owned(), true),
+        ];
+        run(&fs, &LintConfig::default(), &options);
+        assert_eq!(sorted(&check), expected);
+        let workspace = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from(ROOT)),
+                    cwd: PathBuf::from(ROOT),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        workspace.lint(None, &options);
+        assert_eq!(sorted(&check), expected);
+    }
 }

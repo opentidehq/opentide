@@ -155,7 +155,8 @@ impl<'s> Walker<'s> {
             if target.get("properties").is_some() {
                 return Ok(Core::Model(name.to_owned(), target));
             }
-            // A named enum (a Python `Enum`) offers no literal placeholder.
+            // A named enum (a definition without properties) offers no
+            // literal placeholder.
             return Ok(match self.core(target, depth + 1)? {
                 Core::Scalar(schema, _) => Core::Scalar(schema, false),
                 other => other,

@@ -73,7 +73,7 @@ mod tests {
     /// it neither waits for the lock nor sees those datasets.
     #[test]
     fn a_query_on_its_own_never_waits_for_or_sees_a_workspace_run() {
-        let _engine = opentide_cli::queries::ENGINE
+        let _engine = opentide_analysis::queries::ENGINE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let (done, finished) = std::sync::mpsc::channel();

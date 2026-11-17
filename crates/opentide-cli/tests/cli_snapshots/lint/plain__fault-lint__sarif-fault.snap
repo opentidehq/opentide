@@ -1,5 +1,6 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
+assertion_line: 868
 description: lint/plain/fault-lint/sarif-fault
 ---
 args: opentide lint --format sarif --output opentide-reports/lint.sarif
@@ -649,7 +650,7 @@ warning[filename_mismatch]: Filename "hidden-downgrade-threat-0005-v2.yaml" does
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/lint.sarif · created 0644
-(1085425 bytes; long strings and the largest parts elided)
+(1085919 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -663,7 +664,7 @@ warning[filename_mismatch]: Filename "hidden-downgrade-threat-0005-v2.yaml" does
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 277284 bytes, sha256 2939f1dd69cd9fbf7df5ce0a201cb226ae5beb40f027d998006582fe7a6c396a>",
+          "rules": "<elided 277284 bytes, sha256 8e9e3d96fe7ec5423f450ab528cac3f500046908f9d4c7476d957534eecc484f>",
           "version": "0.28.1"
         }
       }

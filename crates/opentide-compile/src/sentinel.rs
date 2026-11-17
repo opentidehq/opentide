@@ -36,7 +36,8 @@ const TACTICS: [&str; 17] = [
     "InhibitResponseFunction",
 ];
 
-/// Python's `str.title`: each run of letters capitalised.
+/// Title case: the first letter of each run of letters upper case, the rest
+/// lower case.
 fn title(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut in_word = false;

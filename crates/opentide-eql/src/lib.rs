@@ -20,25 +20,37 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+/// The typed AST `cargo xtask codegen` writes from `eql.ungram`. Public but hidden, as SPL's
+/// and KQL's, so that the accessors no check reads yet are not dead code.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
+mod ast_ext;
+mod builder;
 mod ecs;
+mod highlight;
 mod lexer;
 mod lexical;
+mod nav;
+mod parsed;
 mod parser;
 mod regex;
 mod semantics;
 mod syntax;
-mod tree;
 
 pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, Severity, SignatureHelp,
-    SignatureInformation, codes, span_to_range, suggest,
+    ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, SignatureHelp,
+    SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_parse::ast::AstNode;
 use serde::Deserialize;
 use std::sync::OnceLock;
-use tree::{Node, node_span, walk};
+use syntax::SyntaxKind as K;
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 
 const FUNCTIONS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -250,9 +262,28 @@ pub struct AnalyzeResult {
 
 /// Parses `source` as Elasticsearch reads it (the lexer ends a block comment where its lexer
 /// does, nested ones too), with what `lexical` finds about its comments.
-fn parse_prepared(source: &str) -> Option<(tree::Tree, lexical::Prepared)> {
+fn parse_prepared(source: &str) -> Option<(parsed::Parsed, lexical::Prepared)> {
     let prepared = lexical::prepare(source);
-    Some((tree::parse(source), prepared))
+    Some((parsed::parse(source), prepared))
+}
+
+thread_local! {
+    /// The steps of the analysis's inner loops on this thread: [`steps`].
+    static STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one step of an inner loop: a child looked at for a span or hover, an operand typed,
+/// a run level folded, a parent climbed.
+pub(crate) fn step() {
+    STEPS.set(STEPS.get().wrapping_add(1));
+}
+
+/// How many steps of its inner loops the analysis has taken on this thread. For the tests that
+/// hold the work to linear in the query (`tests/analysis_runs.rs`): counted, not timed, so the
+/// checks are deterministic. Not API.
+#[doc(hidden)]
+pub fn steps() -> usize {
+    STEPS.get()
 }
 
 /// Analyze an EQL query: its diagnostics and highlight tokens. The findings'
@@ -268,7 +299,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 fn analyze_lines(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
-    let Some((tree, prepared)) = parse_prepared(source) else {
+    let Some((parsed, prepared)) = parse_prepared(source) else {
         return AnalyzeResult {
             diagnostics: vec![Diagnostic::error(
                 codes::EQL_PARSE_ERROR,
@@ -278,9 +309,8 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
             tokens: Vec::new(),
         };
     };
-    let root = tree.root_node();
     let mut out = Vec::new();
-    if let Some(problem) = tree.problems.first() {
+    if let Some(problem) = parsed.problems.first() {
         out.push(Diagnostic::error(
             codes::EQL_PARSE_ERROR,
             parse_error_message(problem, source),
@@ -288,7 +318,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     check_comments(&prepared.comments, source, &mut out);
-    if let Some(span) = expression_depth_exceeded(root) {
+    if let Some(span) = highlight::expression_depth_exceeded(&parsed.syntax) {
         out.push(Diagnostic::warning(
             codes::EQL_EXPRESSION_DEPTH,
             format!(
@@ -298,12 +328,18 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
             range(source, span),
         ));
     }
-    let mut translated = std::collections::HashMap::new();
-    tree::walk_with_ancestors(root, |node, ancestors| {
-        check_node(node, ancestors, &mut translated, source, catalog, &mut out);
-    });
-    check_pipes(root, source, catalog, &mut out);
-    let tokens = highlight(&spec, source, root);
+    let mut translated = semantics::Translated::default();
+    semantics::forget_types();
+    for event in parsed.syntax.preorder() {
+        if let rowan::WalkEvent::Enter(node) = event {
+            check_node(&node, &parsed, &mut translated, source, catalog, &mut out);
+        }
+    }
+    semantics::forget_types();
+    if let Some(root) = ast::SourceFile::cast(parsed.syntax.clone()) {
+        builder::check_pipes(&root, source, catalog, &mut out);
+    }
+    let tokens = highlight(&spec, source, &parsed.syntax);
     AnalyzeResult {
         diagnostics: out,
         tokens,
@@ -329,7 +365,7 @@ fn check_comments(found: &[lexical::CommentFinding], source: &str, out: &mut Vec
 
 /// The parser's first error, worded for a reader: the token it stopped at and what it
 /// expected there.
-fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
+fn parse_error_message(problem: &parsed::Problem, source: &str) -> String {
     if problem.too_deep {
         return format!("EQL syntax error: {}", problem.message);
     }
@@ -369,723 +405,104 @@ fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
     }
 }
 
-/// `EqlParser` scans the tokens before parsing: `(` and `)` move a depth counter, and a run of
-/// prefix-capable `not`, `-`, `+` tokens adds to it; any other visible token ends the run.
-/// Whitespace and comments do not. Returns the token where `depth + run` first exceeds the
-/// limit.
-fn expression_depth_exceeded(root: Node) -> Option<ByteSpan> {
-    let mut depth: i64 = 0;
-    let mut chain: i64 = 0;
-    let mut found = None;
-    walk(root, |node| {
-        if found.is_some() || node.child_count() > 0 || node.end_byte() <= node.start_byte() {
-            return;
-        }
-        match node.kind() {
-            "(" => depth += 1,
-            ")" => depth -= 1,
-            "not" | "-" | "+" if !node.is_named() => chain += 1,
-            "comment" => {}
-            _ => chain = 0,
-        }
-        if depth + chain > lexical::MAX_EXPRESSION_DEPTH {
-            found = Some(node_span(node));
-        }
-    });
-    found
+/// Runs `check` on `node` as the typed node `N`.
+fn with_ast<N: AstNode<Language = Lang>>(node: &SyntaxNode, check: impl FnOnce(N)) {
+    if let Some(n) = N::cast(node.clone()) {
+        check(n);
+    }
 }
 
 fn check_node(
-    node: Node,
-    ancestors: &[Node],
-    translated: &mut std::collections::HashMap<usize, bool>,
+    node: &SyntaxNode,
+    parsed: &parsed::Parsed,
+    translated: &mut semantics::Translated,
     source: &str,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    // Keyword tokens share their kind with the node (`sequence`, `join`).
-    if !node.is_named() {
-        return;
-    }
+    let kind = node.kind();
+    let expression = matches!(
+        kind,
+        K::COMPARISON
+            | K::PREDICATE_EXPRESSION
+            | K::UNARY_EXPRESSION
+            | K::NOT_EXPRESSION
+            | K::FUNCTION_CALL
+    );
     // An expression the parser could not finish (`startsWith(a, `) is not checked further: its
     // arity and types are those of a fragment, and the syntax error already says what is wrong.
-    let expression = matches!(
-        node.kind(),
-        "comparison"
-            | "predicate_expression"
-            | "binary_expression"
-            | "unary_expression"
-            | "and_expression"
-            | "or_expression"
-            | "not_expression"
-            | "function_call"
-    );
-    if expression && node.has_error() {
+    // (A span is a walk down the node's edges: worth it only when the parser found a problem.)
+    if expression && parsed.has_problems() && parsed.broken(nav::span(node)) {
         return;
     }
-    match node.kind() {
-        "string" => check_string(node, source, out),
-        "index" => out.push(Diagnostic::error(
-            codes::EQL_UNSUPPORTED,
-            "array indexes are not supported in Elasticsearch EQL",
-            range(source, node_span(node)),
-        )),
-        "field" => check_field_case(node, source, out),
-        "event_category" => check_category_case(node, source, out),
-        "comparison" => {
-            check_literal_wildcard(node, source, out);
-            semantics::check_field_comparisons(node, ancestors, translated, source, out);
-        }
-        "predicate_expression" => {
-            check_literal_wildcard(node, source, out);
-            regex::check_regex(node, source, out);
-            semantics::check_types(node, source, out);
-            semantics::check_field_comparisons(node, ancestors, translated, source, out);
-        }
-        "binary_expression" | "unary_expression" => semantics::check_types(node, source, out),
-        "and_expression" | "or_expression" | "not_expression" | "event_query" => {
-            semantics::check_conditions(node, source, out);
-        }
-        "function_call" => {
-            if check_function(node, source, catalog, out) {
-                semantics::check_types(node, source, out);
+    match kind {
+        K::STRING => with_ast(node, |n| builder::check_string(&n, source, out)),
+        K::INDEX | K::JOIN | K::RELATIONSHIP => builder::check_shape(node, source, out),
+        K::FIELD => with_ast(node, |n| builder::check_field_case(&n, source, out)),
+        K::EVENT_CATEGORY => with_ast(node, |n| builder::check_category_case(&n, source, out)),
+        K::COMPARISON => with_ast(node, |n: ast::Comparison| {
+            builder::check_comparison_wildcard(&n, source, out);
+            semantics::check_comparison_fields(&n, translated, source, out);
+        }),
+        K::PREDICATE_EXPRESSION => with_ast(node, |n: ast::PredicateExpression| {
+            builder::check_predicate_wildcard(&n, source, out);
+            regex::check_regex(&n, source, out);
+            semantics::check_predicate_types(&n, source, out);
+            semantics::check_predicate_fields(&n, translated, source, out);
+        }),
+        // A run is checked at each level Elasticsearch's builder nests it in, the outermost
+        // first; a level that holds a syntax error is not.
+        K::BINARY_EXPRESSION | K::AND_EXPRESSION | K::OR_EXPRESSION => {
+            let run = semantics::Run::of(node);
+            for level in (0..run.len()).rev() {
+                if parsed.broken(run.span(level)) {
+                    continue;
+                }
+                if kind == K::BINARY_EXPRESSION {
+                    semantics::check_level_types(&run, level, source, out);
+                } else {
+                    semantics::check_level_conditions(&run, level, source, out);
+                }
             }
         }
-        "sequence" => check_sequence(node, source, out),
-        "sample" => check_sample(node, source, out),
-        "join" => out.push(unsupported(
-            node,
-            source,
-            "Elasticsearch EQL does not support `join`; use `sequence` or `sample`",
-            keyword_span(node),
-        )),
-        "relationship" => {
-            let relation = node
-                .child_by_field_name("relation")
-                .map(|n| text(n, source))
-                .unwrap_or("of");
-            out.push(unsupported(
-                node,
-                source,
-                &format!("Elasticsearch EQL does not support the lineage keyword `{relation} of`"),
-                node_span(node),
-            ));
-        }
-        "subquery" => {
-            semantics::check_conditions(node, source, out);
-            let missing = node
-                .child_by_field_name("open")
-                .is_some_and(|o| o.kind() == "missing_event_open");
-            let in_sequence = ancestors
-                .iter()
-                .rev()
-                .nth(1)
-                .is_some_and(|g| g.kind() == "sequence");
-            if missing && !in_sequence {
-                out.push(Diagnostic::error(
-                    codes::EQL_PARSE_ERROR,
-                    "missing events (`![ ... ]`) are supported only in sequences",
-                    range(source, node_span(node)),
-                ));
+        K::UNARY_EXPRESSION => with_ast(node, |n| semantics::check_unary_types(&n, source, out)),
+        K::NOT_EXPRESSION => with_ast(node, |n: ast::NotExpression| {
+            semantics::check_condition(n.operand(), source, out);
+        }),
+        K::EVENT_QUERY => with_ast(node, |n: ast::EventQuery| {
+            semantics::check_condition(n.condition(), source, out);
+        }),
+        K::FUNCTION_CALL => with_ast(node, |n| {
+            if builder::check_function(&n, source, catalog, out) {
+                semantics::check_call_types(&n, source, out);
             }
+        }),
+        K::SEQUENCE => with_ast(node, |n| builder::check_sequence(&n, source, out)),
+        K::SAMPLE => with_ast(node, |n| builder::check_sample(&n, source, out)),
+        K::SUBQUERY => {
+            with_ast(node, |n: ast::Subquery| {
+                semantics::check_condition(n.condition(), source, out);
+            });
+            builder::check_shape(node, source, out);
         }
         _ => {}
     }
-}
-
-fn check_string(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let t = text(node, source);
-    let message = if t.starts_with('\'') {
-        Some("use double quotes [\"] for string literals, not single quotes [']")
-    } else if t.starts_with('?') {
-        Some(
-            "`?\"` and `?'` are not raw strings in Elasticsearch EQL; use triple double quotes [\"\"\"]",
-        )
-    } else {
-        None
-    };
-    // Elasticsearch's lexer has no token for these, so they fail to parse.
-    if let Some(message) = message {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            message,
-            range(source, node_span(node)),
-        ));
-        return;
-    }
-    if t.starts_with("\"\"\"") {
-        return;
-    }
-    // `"…"` accepts only these escapes; anything else fails the lexer.
-    let bytes = t.as_bytes();
-    let mut i = 1;
-    while i + 1 < bytes.len() {
-        if bytes[i] != b'\\' {
-            i += 1;
-            continue;
-        }
-        let next = bytes[i + 1];
-        let bad = match next {
-            b'b' | b't' | b'n' | b'f' | b'r' | b'"' | b'\'' | b'\\' => false,
-            b'u' => {
-                let rest = &t[i + 2..];
-                let digits = rest
-                    .strip_prefix('{')
-                    .and_then(|r| r.split_once('}'))
-                    .map(|(h, _)| h);
-                !digits.is_some_and(|h| {
-                    (2..=8).contains(&h.len()) && h.chars().all(|c| c.is_ascii_hexdigit())
-                })
-            }
-            _ => true,
-        };
-        if bad {
-            let at = node.start_byte() + i;
-            // The escaped character may be several bytes (`\é`): the span and
-            // the message take all of it.
-            let escaped = t[i + 1..].chars().next().unwrap_or(next as char);
-            out.push(Diagnostic::error(
-                codes::EQL_PARSE_ERROR,
-                format!(
-                    "invalid escape `\\{escaped}`: EQL strings accept \\b \\t \\n \\f \\r \\\" \\' \\\\ and \\u{{2-8 hex}}; use `\\\\` or a triple-quoted string"
-                ),
-                range(source, ByteSpan::new(at, at + 1 + escaped.len_utf8())),
-            ));
-            return;
-        }
-        i += 2;
-    }
-}
-
-/// `x == TRUE` reads a field named `TRUE`: keywords are lower case.
-fn check_field_case(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let t = text(node, source).trim_start_matches('?').trim();
-    let lower = t.to_ascii_lowercase();
-    if KEYWORD_WORDS.contains(&lower.as_str()) && t != lower {
-        out.push(
-            Diagnostic::warning(
-                codes::EQL_CASE_SENSITIVE,
-                format!("EQL keywords are lower case: `{t}` here is a field name, not `{lower}`"),
-                range(source, node_span(node)),
-            )
-            .with_suggestion(lower),
-        );
-    }
-}
-
-/// Categories compare case-sensitively with `event.category`, which ECS
-/// keeps lower case: `PROCESS where` matches nothing.
-fn check_category_case(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let t = text(node, source).trim_matches('"');
-    if t.chars().any(|c| c.is_ascii_uppercase()) {
-        out.push(
-            Diagnostic::warning(
-                codes::EQL_CASE_SENSITIVE,
-                format!(
-                    "event category `{t}` is compared case-sensitively; ECS categories are lower case"
-                ),
-                range(source, node_span(node)),
-            )
-            .with_suggestion(t.to_ascii_lowercase()),
-        );
-    }
-}
-
-/// `==`, `!=`, `in`, and `in~` do not expand wildcards, so `"*.exe"` is
-/// matched literally. A `*` next to a backslash (`\\*\\ADMIN$`) is left alone.
-fn check_literal_wildcard(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let operator = node
-        .child_by_field_name("operator")
-        .map(|o| text(o, source))
-        .unwrap_or("");
-    if !matches!(operator, "==" | "!=" | "in" | "in~") {
-        return;
-    }
-    let mut cursor = node.walk();
-    let candidates: Vec<Node> = if node.kind() == "comparison" {
-        node.child_by_field_name("right").into_iter().collect()
-    } else {
-        node.children_by_field_name("values", &mut cursor).collect()
-    };
-    for value in candidates {
-        if value.kind() != "string" {
-            continue;
-        }
-        let t = text(value, source);
-        let bytes = t.as_bytes();
-        let wild = bytes.iter().enumerate().any(|(i, b)| {
-            *b == b'*'
-                && bytes.get(i.wrapping_sub(1)) != Some(&b'\\')
-                && bytes.get(i + 1) != Some(&b'\\')
-        });
-        if wild {
-            let suggestion = if operator.starts_with("in") {
-                ":"
-            } else {
-                "like"
-            };
-            out.push(
-                Diagnostic::warning(
-                    codes::EQL_LITERAL_WILDCARD,
-                    format!(
-                        "`{operator}` matches `*` literally; use `{suggestion}` for a wildcard"
-                    ),
-                    range(source, node_span(value)),
-                )
-                .with_suggestion(suggestion),
-            );
-            return;
-        }
-    }
-}
-
-/// Name, `~`, and arity checks. Returns whether the call resolves, so its
-/// argument types are worth checking.
-fn check_function(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) -> bool {
-    let Some(name_node) = node.child_by_field_name("name") else {
-        return false;
-    };
-    let raw = text(name_node, source);
-    let (name, insensitive) = match raw.strip_suffix('~') {
-        Some(base) => (base, true),
-        None => (raw, false),
-    };
-    let span = node_span(name_node);
-    match catalog.function(name) {
-        Some(row) if insensitive && !row.case_insensitive => {
-            out.push(Diagnostic::error(
-                codes::EQL_UNKNOWN_FUNCTION,
-                format!("function `{name}` has no case-insensitive `{name}~` form"),
-                range(source, span),
-            ));
-            false
-        }
-        Some(row) => {
-            let mut c = node.walk();
-            // The field spans the comma list, so count named nodes only.
-            let args = node
-                .children_by_field_name("arguments", &mut c)
-                .filter(|n| n.is_named())
-                .count();
-            let too_many = row.max_args.is_some_and(|m| args > m);
-            if args < row.min_args || too_many {
-                let expected = match row.max_args {
-                    Some(m) if m == row.min_args => format!("{m}"),
-                    Some(m) => format!("{} to {m}", row.min_args),
-                    None => format!("at least {}", row.min_args),
-                };
-                out.push(Diagnostic::error(
-                    codes::EQL_FUNCTION_ARITY,
-                    format!("`{}` takes {expected} arguments, found {args}", row.name),
-                    range(source, node_span(node)),
-                ));
-                return false;
-            }
-            true
-        }
-        None => {
-            let mut d = Diagnostic::error(
-                codes::EQL_UNKNOWN_FUNCTION,
-                format!("unknown EQL function `{name}`"),
-                range(source, span),
-            );
-            if let Some(s) =
-                suggest::closest(name, catalog.functions.iter().map(|f| f.name.as_str()))
-            {
-                d = d.with_suggestion(s);
-            }
-            out.push(d);
-            false
-        }
-    }
-}
-
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "check_runs returns 1..=MAX_RUNS (100)"
-)]
-fn check_sequence(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let children: Vec<Node> = node.children(&mut cursor).collect();
-    // `sequence with maxspan=... by k` is rejected: `by` must come first.
-    let params_pos = children.iter().position(|c| c.kind() == "sequence_params");
-    let by_pos = children.iter().position(|c| {
-        c.kind() == "join_keys" && node.child_by_field_name("by").map(|b| b.id()) == Some(c.id())
-    });
-    if let (Some(p), Some(b)) = (params_pos, by_pos)
-        && p < b
-    {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            "specify sequence `by` before `with maxspan`, not after",
-            range(source, node_span(children[b])),
-        ));
-    }
-    let maxspan = params_pos.and_then(|p| children[p].child_by_field_name("maxspan"));
-    if let Some(unit) = maxspan {
-        check_maxspan(unit, source, out);
-    }
-    // `LogicalPlanBuilder.visitSequence` expands `runs` over every term,
-    // the `until` term included, then takes the last query as `until`.
-    let mut expanded: Vec<bool> = Vec::new();
-    let mut cursor = node.walk();
-    for term in node.children_by_field_name("term", &mut cursor) {
-        let runs = check_runs(term, source, out);
-        expanded.extend(std::iter::repeat_n(is_missing_term(term), runs as usize));
-    }
-    let until = node.child_by_field_name("until");
-    if let Some(until) = until {
-        let runs = check_runs(until, source, out);
-        expanded.extend(std::iter::repeat_n(is_missing_term(until), runs as usize));
-        check_until(until, runs, source, out);
-    }
-    let queries = expanded.len() as u64;
-    if queries < 2 {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            format!("a sequence requires a minimum of 2 queries, found [{queries}]"),
-            range(source, keyword_span(node)),
-        ));
-    } else if until.is_some() && queries == 2 {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            "a sequence requires a minimum of 2 queries besides `until`, found [1]",
-            range(source, keyword_span(node)),
-        ));
-    }
-    if queries > MAX_SEQUENCE_QUERIES {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            format!(
-                "a sequence cannot contain more than {MAX_SEQUENCE_QUERIES} queries after `runs`, found [{queries}]"
-            ),
-            range(source, keyword_span(node)),
-        ));
-    }
-    check_key_counts(node, source, out);
-    if until.is_some() {
-        expanded.pop();
-    }
-    let missing = expanded.iter().filter(|m| **m).count();
-    if missing > 0 && maxspan.is_none() {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            "`maxspan` is required for sequences with missing events",
-            range(source, keyword_span(node)),
-        ));
-    }
-    if !expanded.is_empty() && missing == expanded.len() {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            "a sequence requires at least one positive event query",
-            range(source, keyword_span(node)),
-        ));
-    }
-    if maxspan.is_none() && missing == 0 {
-        out.push(Diagnostic {
-            severity: Severity::Hint,
-            ..Diagnostic::warning(
-                codes::EQL_MAXSPAN_MISSING,
-                "sequence has no `with maxspan=`: its events can be any distance apart within the search window. A maxspan bounds matches and the partial sequences Elasticsearch keeps",
-                range(source, keyword_span(node)),
-            )
-        });
-    }
-}
-
-fn is_missing_term(term: Node) -> bool {
-    term.named_child(0)
-        .and_then(|s| s.child_by_field_name("open"))
-        .is_some_and(|o| o.kind() == "missing_event_open")
-}
-
-/// `until [...] with runs=n` repeats the `until` query: only the last copy
-/// ends sequences, the other copies become ordinary steps. `until ![...]`
-/// parses, but Elasticsearch documents no meaning for it.
-fn check_until(until: Node, runs: u64, source: &str, out: &mut Vec<Diagnostic>) {
-    if let Some(option) = term_option(until)
-        && runs > 1
-    {
-        out.push(Diagnostic::warning(
-                codes::EQL_UNTIL_TERM,
-                format!(
-                    "`runs` on the `until` term adds {} copies of it as ordinary sequence steps before the real `until`; remove `with runs`",
-                    runs - 1
-                ),
-                range(source, node_span(option)),
-            ));
-    }
-    if is_missing_term(until) {
-        let open = until
-            .named_child(0)
-            .and_then(|s| s.child_by_field_name("open"))
-            .unwrap_or(until);
-        out.push(Diagnostic::warning(
-            codes::EQL_UNTIL_TERM,
-            "a missing event (`![`) as the `until` term parses, but Elasticsearch documents no behaviour for it; use `[`",
-            range(source, node_span(open)),
-        ));
-    }
-}
-
-fn term_option(term: Node) -> Option<Node> {
-    term.child_by_field_name("term_option").or_else(|| {
-        let mut c = term.walk();
-        term.named_children(&mut c)
-            .find(|n| n.kind() == "term_option")
-    })
-}
-
-/// Number of queries a term contributes (`with runs=n` repeats it).
-fn check_runs(term: Node, source: &str, out: &mut Vec<Diagnostic>) -> u64 {
-    let Some(option) = term_option(term) else {
-        return 1;
-    };
-    let key = option
-        .child_by_field_name("key")
-        .map(|k| text(k, source))
-        .unwrap_or("");
-    if key != "runs" {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            format!("unrecognized option [{key}], expecting [runs]"),
-            range(source, node_span(option)),
-        ));
-        return 1;
-    }
-    let value = option
-        .child_by_field_name("value")
-        .map(|v| text(v, source))
-        .unwrap_or("");
-    // Only an integer literal is read; a decimal leaves `runs` at 1.
-    if !value.bytes().all(|b| b.is_ascii_digit()) {
-        out.push(
-            Diagnostic::warning(
-                codes::EQL_RUNS_IGNORED,
-                format!(
-                    "Elasticsearch ignores a decimal `runs` value: [{value}] runs the query once; use an integer from 1 to {MAX_RUNS}"
-                ),
-                range(source, node_span(option)),
-            ),
-        );
-        return 1;
-    }
-    match value.parse::<u64>() {
-        Ok(n) if (1..=MAX_RUNS).contains(&n) => n,
-        Ok(0) => {
-            out.push(Diagnostic::error(
-                codes::EQL_PARSE_ERROR,
-                "a positive `runs` value is required; found [0]",
-                range(source, node_span(option)),
-            ));
-            1
-        }
-        // Larger than a long reads as a double, whose long value is still
-        // over the limit.
-        _ => {
-            out.push(Diagnostic::error(
-                codes::EQL_PARSE_ERROR,
-                format!("a query cannot be repeated more than {MAX_RUNS} times; found [{value}]"),
-                range(source, node_span(option)),
-            ));
-            1
-        }
-    }
-}
-
-fn check_maxspan(unit: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let value = unit
-        .child_by_field_name("value")
-        .map(|v| text(v, source))
-        .unwrap_or("");
-    let suffix = unit.child_by_field_name("unit").map(|u| text(u, source));
-    let span = node_span(unit);
-    match value.parse::<u64>() {
-        Ok(0) => out.push(Diagnostic::error(
-            codes::EQL_MAXSPAN_UNIT,
-            "a positive `maxspan` value is required; found [0]",
-            range(source, span),
-        )),
-        Ok(_) => {}
-        Err(_) => out.push(Diagnostic::error(
-            codes::EQL_MAXSPAN_UNIT,
-            format!("decimal time interval [{value}] is not supported; use a positive integer"),
-            range(source, span),
-        )),
-    }
-    match suffix {
-        None => out.push(
-            Diagnostic::error(
-                codes::EQL_MAXSPAN_UNIT,
-                format!("no time unit in `maxspan={value}`; use one of ms, s, m, h, d"),
-                range(source, span),
-            )
-            .with_suggestion(format!("{value}s")),
-        ),
-        Some(u) if !MAXSPAN_UNITS.iter().any(|(name, _)| *name == u) => {
-            out.push(Diagnostic::error(
-                codes::EQL_MAXSPAN_UNIT,
-                format!("unrecognized time unit [{u}] in `maxspan`; use one of ms, s, m, h, d"),
-                range(source, span),
-            ));
-        }
-        Some(_) => {}
-    }
-}
-
-fn check_sample(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let terms: Vec<Node> = node.children_by_field_name("term", &mut cursor).collect();
-    if terms.len() < 2 {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            format!(
-                "a sample requires a minimum of 2 queries, found [{}]",
-                terms.len()
-            ),
-            range(source, keyword_span(node)),
-        ));
-    }
-    if terms.len() > MAX_SAMPLE_QUERIES {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            format!(
-                "a sample cannot contain more than {MAX_SAMPLE_QUERIES} queries, found [{}]",
-                terms.len()
-            ),
-            range(source, node_span(terms[MAX_SAMPLE_QUERIES])),
-        ));
-    }
-    check_key_counts(node, source, out);
-    let shared_keys = node.child_by_field_name("by").is_some();
-    if !shared_keys && terms.iter().any(|t| t.child_by_field_name("by").is_none()) {
-        out.push(Diagnostic::error(
-            codes::EQL_PARSE_ERROR,
-            "a sample must have at least one join key, found none",
-            range(source, keyword_span(node)),
-        ));
-    }
-}
-
-/// Every term of a sequence or sample (and `until`) names the same number
-/// of join keys.
-fn check_key_counts(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut terms = Vec::new();
-    let mut cursor = node.walk();
-    terms.extend(node.children_by_field_name("term", &mut cursor));
-    if let Some(until) = node.child_by_field_name("until") {
-        terms.push(until);
-    }
-    let mut expected: Option<usize> = None;
-    for term in terms {
-        let keys = term
-            .child_by_field_name("by")
-            .map_or(0, |b| b.named_child_count());
-        match expected {
-            None => expected = Some(keys),
-            Some(e) if e != keys => {
-                let at = term.child_by_field_name("by").unwrap_or(term);
-                out.push(Diagnostic::error(
-                    codes::EQL_PARSE_ERROR,
-                    format!("inconsistent number of join keys specified; expected [{e}] but found [{keys}]"),
-                    range(source, node_span(at)),
-                ));
-                return;
-            }
-            _ => {}
-        }
-    }
-}
-
-fn check_pipes(root: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let is_sample = root
-        .child_by_field_name("query")
-        .is_some_and(|q| q.kind() == "sample");
-    let mut cursor = root.walk();
-    for pipe in root.children_by_field_name("pipe", &mut cursor) {
-        let Some(name_node) = pipe.child_by_field_name("name") else {
-            continue;
-        };
-        let name = text(name_node, source);
-        if is_sample {
-            out.push(Diagnostic::error(
-                codes::EQL_UNSUPPORTED,
-                "samples do not support pipes",
-                range(source, node_span(pipe)),
-            ));
-            continue;
-        }
-        if catalog.pipe(name).is_none() {
-            let endgame = matches!(
-                name,
-                "count" | "filter" | "sort" | "unique" | "unique_count"
-            );
-            let message = if endgame {
-                format!(
-                    "Elasticsearch EQL does not support the `{name}` pipe; only `head` and `tail`"
-                )
-            } else {
-                format!("unrecognized pipe [{name}]; Elasticsearch EQL supports `head` and `tail`")
-            };
-            out.push(unsupported(pipe, source, &message, node_span(name_node)));
-            continue;
-        }
-        let mut c = pipe.walk();
-        let args: Vec<Node> = pipe
-            .children_by_field_name("arguments", &mut c)
-            .filter(|n| n.is_named())
-            .collect();
-        let positive_int = args.len() == 1
-            && args[0].kind() == "number"
-            // A Java `int`: Elasticsearch rejects `head 2147483648`.
-            && text(args[0], source).parse::<i32>().is_ok_and(|n| n >= 0);
-        if !positive_int {
-            out.push(Diagnostic::error(
-                codes::EQL_PARSE_ERROR,
-                format!("pipe [{name}] expects exactly one positive integer argument"),
-                range(source, node_span(pipe)),
-            ));
-        }
-    }
-}
-
-fn unsupported(_node: Node, source: &str, message: &str, span: ByteSpan) -> Diagnostic {
-    Diagnostic::error(codes::EQL_UNSUPPORTED, message, range(source, span))
-}
-
-fn keyword_span(node: Node) -> ByteSpan {
-    let first = node.child(0).unwrap_or(node);
-    node_span(first)
 }
 
 fn range(source: &str, span: ByteSpan) -> Range {
     span_to_range(source, span)
 }
 
-fn text<'a>(node: Node, source: &'a str) -> &'a str {
-    source.get(node.start_byte()..node.end_byte()).unwrap_or("")
-}
-
-/// Each leaf's capture (`tree::capture`), a known function's as `function.builtin`.
-fn highlight(spec: &HighlightSpec, source: &str, root: Node) -> Vec<HighlightToken> {
+/// Each token's capture (`highlight::captures`), a known function's as `function.builtin`.
+fn highlight(spec: &HighlightSpec, source: &str, root: &syntax::SyntaxNode) -> Vec<HighlightToken> {
     let catalog = Catalog::cached();
-    let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
-    walk(root, |node| {
-        if node.child_count() > 0 || node.end_byte() <= node.start_byte() {
-            return;
+    let mut spans = highlight::captures(root);
+    for (span, capture) in &mut spans {
+        let name = source.get(span.start..span.end).unwrap_or("");
+        if *capture == "function" && catalog.function(name.trim_end_matches('~')).is_some() {
+            *capture = "function.builtin";
         }
-        let Some(mut capture) = tree::capture(node) else {
-            return;
-        };
-        if capture == "function"
-            && catalog
-                .function(text(node, source).trim_end_matches('~'))
-                .is_some()
-        {
-            capture = "function.builtin";
-        }
-        spans.push((node_span(node), capture));
-    });
+    }
     tokens_from_spans(spec, source, &spans).unwrap_or_default()
 }
 
@@ -1111,36 +528,36 @@ pub struct Maxspan {
 
 /// Every `sequence` in the query, with its `maxspan` in milliseconds.
 pub fn sequences(source: &str) -> Vec<SequenceInfo> {
-    let Some((tree, _)) = parse_prepared(source) else {
+    let Some((parsed, _)) = parse_prepared(source) else {
         return Vec::new();
     };
-    let mut out = Vec::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() != "sequence" || !node.is_named() {
-            return;
-        }
-        let maxspan = node
-            .named_children(&mut node.walk())
-            .find(|c| c.kind() == "sequence_params")
-            .and_then(|p| p.child_by_field_name("maxspan"))
-            .map(|unit| Maxspan {
-                span: node_span(unit),
-                millis: maxspan_millis(unit, source),
-            });
-        out.push(SequenceInfo {
-            span: keyword_span(node),
-            maxspan,
-        });
-    });
-    out
+    parsed
+        .syntax
+        .descendants()
+        .filter_map(ast::Sequence::cast)
+        .map(|sequence| {
+            let maxspan = sequence
+                .params()
+                .next()
+                .and_then(|p| p.maxspan())
+                .map(|unit| Maxspan {
+                    span: nav::span(unit.syntax()),
+                    millis: maxspan_millis(&unit, source),
+                });
+            SequenceInfo {
+                span: nav::first_child_span(sequence.syntax()),
+                maxspan,
+            }
+        })
+        .collect()
 }
 
-fn maxspan_millis(unit: Node, source: &str) -> Option<u64> {
+fn maxspan_millis(unit: &ast::TimeUnit, source: &str) -> Option<u64> {
     let value = unit
-        .child_by_field_name("value")
-        .and_then(|v| text(v, source).parse::<u64>().ok())
+        .value()
+        .and_then(|v| nav::text(v.syntax(), source).parse::<u64>().ok())
         .filter(|v| *v > 0)?;
-    let suffix = text(unit.child_by_field_name("unit")?, source);
+    let suffix = nav::text(unit.unit()?.syntax(), source);
     let factor = MAXSPAN_UNITS.iter().find(|(n, _)| *n == suffix)?.1;
     Some(value.saturating_mul(factor))
 }
@@ -1166,18 +583,17 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     if !source.is_char_boundary(offset) {
         return None;
     }
-    let (tree, _) = parse_prepared(source)?;
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
+    let (parsed, _) = parse_prepared(source)?;
+    let (word, parent) = nav::element_at(&parsed.syntax, offset, source);
     let catalog = Catalog::cached();
-    let parent = node.parent();
-    if parent.is_some_and(|p| p.kind() == "function_call") {
-        let name = text(node, source).trim_end_matches('~');
+    if parent == Some(K::FUNCTION_CALL) {
+        let name = word.trim_end_matches('~');
         if let Some(row) = catalog.function(name) {
             return Some(function_hover(row));
         }
     }
-    if parent.is_some_and(|p| p.kind() == "pipe")
-        && let Some(row) = catalog.pipe(text(node, source))
+    if parent == Some(K::PIPE_STAGE)
+        && let Some(row) = catalog.pipe(word)
     {
         let mut md = format!(
             "**{}** (pipe)\n\n```eql\n{}\n```\n\n{}",
@@ -1188,11 +604,6 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         }
         return Some(md);
     }
-    let word = match node.kind() {
-        "missing_event_open" => "![",
-        "optional_marker" => "?",
-        _ => text(node, source),
-    };
     KEYWORDS
         .iter()
         .find(|(k, _, _)| *k == word)
@@ -1341,15 +752,15 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
 }
 
 fn fields_in(source: &str) -> Vec<String> {
-    let Some((tree, _)) = parse_prepared(source) else {
+    let Some((parsed, _)) = parse_prepared(source) else {
         return Vec::new();
     };
-    let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() == "field" && !node.has_error() {
-            names.insert(text(node, source).trim_start_matches('?').to_string());
-        }
-    });
+    let names: std::collections::BTreeSet<String> = parsed
+        .syntax
+        .descendants()
+        .filter(|node| node.kind() == K::FIELD && !parsed.broken(nav::span(node)))
+        .map(|node| nav::text(&node, source).trim_start_matches('?').to_string())
+        .collect();
     names.into_iter().collect()
 }
 
@@ -1431,6 +842,15 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     opentide_parse::debug_kinds::<syntax::Lang>(&parser::parse(source))
 }
 
+/// For each syntax error of `source`, the `Debug` names of the nodes it was recorded in: what
+/// the corpus gate of `opentide-analysis` reads to check that an invalid fixture fails in
+/// the production it names. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
+    opentide_parse::debug_error_kinds::<syntax::Lang>(&parser::parse(source))
+}
+
 /// The `Debug` names of the node kinds the grammar declares, the error node
 /// left out: the productions the corpus gate of `opentide-analysis` asks a
 /// fixture of. Not part of the API.
@@ -1443,6 +863,7 @@ pub fn debug_node_kinds() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentide_core::Severity;
 
     /// Codes of errors, warnings, and information; hints are left out.
     fn codes_of(src: &str) -> Vec<String> {

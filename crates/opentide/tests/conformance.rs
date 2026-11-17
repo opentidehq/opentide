@@ -37,7 +37,7 @@ use opentide::connectors::{
 use opentide::lint::{LintCheck, LintReport};
 use opentide::validate::{Check, QueriesMode, Validation};
 use opentide::{DeployPlanOptions, LintOptions, Options, Strategy, ValidateOptions, Workspace};
-use opentide_compare::json::{self as ordered, Json, Layout};
+use opentide_cli::json::{Json, Object};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -48,24 +48,24 @@ const DIVERGE_ENV: &str = "OPENTIDE_CONFORMANCE_DIVERGE";
 /// `value` as an ordered JSON tree: the facade's types serialise in their
 /// field order, which the tree keeps.
 fn tree<T: Serialize + ?Sized>(value: &T) -> Json {
-    ordered::parse_str(&serde_json::to_string(value).unwrap()).unwrap()
+    Json::from_serialize(value).unwrap()
+}
+
+/// `text` as an ordered JSON tree.
+fn parse(text: &str) -> Json {
+    Json::parse(text).unwrap()
 }
 
 fn object(members: Vec<(&str, Json)>) -> Json {
-    Json::Object(
-        members
-            .into_iter()
-            .map(|(key, value)| (key.to_owned(), value))
-            .collect(),
-    )
+    Json::object(members)
 }
 
 fn error(error: &opentide::Error) -> Json {
     object(vec![(
         "error",
         object(vec![
-            ("code", Json::String(error.code().to_owned())),
-            ("message", Json::String(error.to_string())),
+            ("code", Json::Str(error.code().to_owned())),
+            ("message", Json::Str(error.to_string())),
         ]),
     )])
 }
@@ -77,14 +77,14 @@ fn tenant_error(error: &opentide::Error) -> Json {
         opentide::Error::Connector {
             detail: Some(detail),
             ..
-        } => Json::String(detail.clone()),
+        } => Json::Str(detail.clone()),
         _ => Json::Null,
     };
     object(vec![(
         "error",
         object(vec![
-            ("code", Json::String(error.code().to_owned())),
-            ("message", Json::String(error.to_string())),
+            ("code", Json::Str(error.code().to_owned())),
+            ("message", Json::Str(error.to_string())),
             ("detail", detail),
         ]),
     )])
@@ -108,20 +108,10 @@ fn normalise(mut document: Json) -> Json {
         };
         let mut parent = Some(&mut document);
         for key in parents {
-            parent = match parent {
-                Some(Json::Object(members)) => members
-                    .iter_mut()
-                    .find(|(k, _)| k == key)
-                    .map(|(_, value)| value),
-                _ => None,
-            };
+            parent = parent.and_then(|value| value.get_mut(key));
         }
-        if let Some(Json::Object(members)) = parent {
-            for (key, value) in members.iter_mut() {
-                if key == last {
-                    *value = Json::Null;
-                }
-            }
+        if let Some(value) = parent.and_then(|parent| parent.get_mut(last)) {
+            *value = Json::Null;
         }
     }
     document
@@ -130,7 +120,7 @@ fn normalise(mut document: Json) -> Json {
 /// The document as every runner writes it: two-space indentation, keys in
 /// their order, UTF-8 as is, a final newline.
 fn canonical(document: &Json) -> Vec<u8> {
-    ordered::write(document, Layout::Indented, true)
+    opentide_cli::json::document_text(document, true).into_bytes()
 }
 
 /// Sorts every object's keys: the test-only divergence.
@@ -138,11 +128,11 @@ fn sorted(value: Json) -> Json {
     match value {
         Json::Array(items) => Json::Array(items.into_iter().map(sorted).collect()),
         Json::Object(members) => {
-            let mut members: Vec<(String, Json)> = members
+            let mut members: Object = members
                 .into_iter()
                 .map(|(key, value)| (key, sorted(value)))
                 .collect();
-            members.sort_by(|a, b| a.0.cmp(&b.0));
+            members.sort_keys();
             Json::Object(members)
         }
         other => other,
@@ -170,8 +160,8 @@ fn validation(validation: &Validation) -> Json {
                 (
                     check.name().to_owned(),
                     object(vec![
-                        ("check", Json::String(check.name().to_owned())),
-                        ("status", Json::String((*status).to_owned())),
+                        ("check", Json::Str(check.name().to_owned())),
+                        ("status", Json::Str((*status).to_owned())),
                     ]),
                 )
             })
@@ -254,8 +244,8 @@ fn call(ws: &Workspace, operation: &Value) -> Result<Json, opentide::Error> {
                 .iter()
                 .map(|tenant| {
                     object(vec![
-                        ("platform", Json::String(tenant.platform().to_owned())),
-                        ("name", Json::String(tenant.name().to_owned())),
+                        ("platform", Json::Str(tenant.platform().to_owned())),
+                        ("name", Json::Str(tenant.name().to_owned())),
                         ("setup_keys", tree(&tenant.setup_keys().collect::<Vec<_>>())),
                     ])
                 })
@@ -285,12 +275,11 @@ fn call(ws: &Workspace, operation: &Value) -> Result<Json, opentide::Error> {
             }
             o.keep_deprecated = options["keep_deprecated"].as_bool();
             let plan = ws.deploy_plan(&o)?;
-            let parse = |document: &opentide::Document| ordered::parse_str(document.as_str());
             object(vec![
-                ("document", parse(plan.document()).unwrap()),
+                ("document", parse(plan.document().as_str())),
                 (
                     "summary",
-                    plan.summary().map_or(Json::Null, |s| parse(s).unwrap()),
+                    plan.summary().map_or(Json::Null, |s| parse(s.as_str())),
                 ),
                 ("ok", Json::Bool(plan.ok())),
             ])
@@ -371,7 +360,7 @@ fn query_request(operation: &Value) -> QueryRequest {
 
 /// A query's document, by the facade's names.
 fn query_document(outcome: &QueryOutcome) -> Json {
-    let text = |value: &Option<String>| value.clone().map_or(Json::Null, Json::String);
+    let text = |value: &Option<String>| value.clone().map_or(Json::Null, Json::Str);
     object(vec![
         (
             "columns",
@@ -381,7 +370,7 @@ fn query_document(outcome: &QueryOutcome) -> Json {
                     .iter()
                     .map(|column| {
                         object(vec![
-                            ("name", Json::String(column.name.clone())),
+                            ("name", Json::Str(column.name.clone())),
                             ("type", text(&column.kind)),
                         ])
                     })
@@ -437,11 +426,8 @@ fn tenant_call(connection: &Connection, operation: &Value) -> Result<Json, opent
                 Operation::Delete => "delete",
             };
             object(vec![
-                (
-                    "remote_id",
-                    outcome.remote_id.map_or(Json::Null, Json::String),
-                ),
-                ("operation", Json::String(operation.to_owned())),
+                ("remote_id", outcome.remote_id.map_or(Json::Null, Json::Str)),
+                ("operation", Json::Str(operation.to_owned())),
             ])
         }
         other => panic!("unknown tenant call {other}"),
@@ -525,7 +511,7 @@ fn run_json(root: &str, operation: &Value) -> Json {
     let result = opentide::cli::run_json(argv);
     std::env::set_current_dir(cwd).unwrap();
     match result {
-        Ok(document) => ordered::parse_str(document.as_str()).unwrap(),
+        Ok(document) => parse(document.as_str()),
         Err(e) => error(&e),
     }
 }
@@ -665,7 +651,7 @@ fn the_rust_runner_writes_every_document() {
     assert!(!written.is_empty(), "the plan names no operation");
     for path in &written {
         let text = std::fs::read_to_string(path).unwrap();
-        assert!(ordered::parse_str(&text).is_some(), "{}", path.display());
+        assert!(Json::parse(&text).is_ok(), "{}", path.display());
     }
     if !driven {
         assert_eq!(written.len(), plan["operations"].as_array().unwrap().len());
@@ -704,13 +690,11 @@ fn the_divergence_flag_changes_the_bytes_and_not_the_data() {
     let before = std::fs::read_to_string(&same[0]).unwrap();
     let after = std::fs::read_to_string(&diverged[0]).unwrap();
     assert_ne!(before, after);
-    let (before, after) = (
-        ordered::parse_str(&before).unwrap(),
-        ordered::parse_str(&after).unwrap(),
-    );
-    assert!(before.same(&after));
+    let (before, after) = (parse(&before), parse(&after));
+    // An object's equality ignores its keys' order.
+    assert_eq!(before, after);
     let Json::Object(members) = after else {
         panic!("an object")
     };
-    assert_eq!(members[1].0, "exit_code");
+    assert_eq!(members.get_index(1).unwrap().0, "exit_code");
 }

@@ -17,7 +17,7 @@ coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819: `cli/services/cata
 domain, tier 0 (`xtask/layers.toml`), beside opentide-tide: it depends on opentide-schema (the
 YAML 1.2 node tree, the configuration models and their layering) and on no other domain crate.
 `publish = false` while opentide-schema is unpublished; CI packages it with neither and scans its
-source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
+source (`release-build.yml` `crate-packages`, `scripts/ci-local.sh`).
 
 ## Layout
 
@@ -75,7 +75,7 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 - `validate` reports what the oracle's `validate --json` reports: `cargo xtask validate diff`
   runs every recorded checking case against its recording; a difference is a bug unless a rule of
   `xtask/src/validate.rs` `APPROVED` explains it, with its CHANGELOG lead (a stale rule fails).
-  The queries check runs there on the query engines (`opentide-cli`'s `queries::EngineQueries`,
+  The queries check runs there on the query engines (`opentide_analysis::queries::EngineQueries`,
   UC-2.5): its findings, status and `queries_checked` are compared too, and `cargo xtask corpus
   faults --check --engine rust --only queries` compares it on every query fault kind.
 - A `Diagnostic`'s JSON keys and their order are the CLI contract (plan §3): never add, drop or

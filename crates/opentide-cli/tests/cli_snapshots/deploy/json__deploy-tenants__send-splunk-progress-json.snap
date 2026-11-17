@@ -87,7 +87,10 @@ exit: 0
   }
 }
 
-━━━ stderr
-{"status":404,"event":"Splunk answered HTTP 404 Not Found: Could not find object id=absent","level":"warning","timestamp":"0000-00-00 00:00:00"}
-{"status":404,"event":"Splunk answered HTTP 404 Not Found: Could not find object id=absent","level":"warning","timestamp":"0000-00-00 00:00:00"}
-{"event":"progress","step":"splunk","done":1,"total":1}
+━━━ stderr · json, 1 lines
+{
+  "done": 1,
+  "event": "progress",
+  "step": "splunk",
+  "total": 1
+}

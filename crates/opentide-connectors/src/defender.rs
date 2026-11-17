@@ -18,9 +18,9 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, kql_code,
-    kql_with_limit, utc_z,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    kql_code, kql_with_limit, utc_z,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
@@ -111,6 +111,11 @@ impl DefenderError {
         }
     }
 }
+
+/// The warning of a rule created with the safer configuration
+/// ([`Created::partial`]): the event `opentide deploy` logs for it.
+pub const PARTIAL_DEPLOYMENT: &str =
+    "this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa";
 
 /// A rule Graph created.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -247,8 +252,20 @@ impl Defender {
 
     /// Every custom detection rule of the tenant, across Graph's pages
     /// (`DefenderForEndpointImporter.list_rules`, UC-4.4b): `@odata.nextLink`
-    /// is followed, and an error answer is an error, never an empty listing.
+    /// is followed on Graph's origin only, each once, and for at most
+    /// [`crate::paging::MAX_PAGES`] pages ([`crate::paging::NextLinks`]: a
+    /// link elsewhere never receives the token), and an error answer is an
+    /// error, never an empty listing.
     pub async fn list_rules(&self, cx: TenantContext<'_>) -> Result<Vec<Json>, DefenderError> {
+        let refused = |error: crate::paging::LinkError| {
+            DefenderError::Connector(ConnectorError::Answer {
+                platform: PLATFORM.into(),
+                tenant: cx.tenant.label.tenant.clone(),
+                address: "https://graph.microsoft.com".into(),
+                reason: format!("listing the detection rules: {error}"),
+            })
+        };
+        let mut links = crate::paging::NextLinks::new(DETECTION_RULES_ENDPOINT).map_err(refused)?;
         let mut rules = Vec::new();
         let mut next = Some(DETECTION_RULES_ENDPOINT.to_owned());
         while let Some(url) = next.take() {
@@ -276,7 +293,7 @@ impl Defender {
             if let Some(Json::Str(link)) = page.get("@odata.nextLink")
                 && !link.is_empty()
             {
-                next = Some(link.clone());
+                next = Some(links.follow(link).map_err(refused)?);
             }
         }
         Ok(rules)
@@ -749,14 +766,20 @@ impl Deployer for Defender {
                     message: format!("the compiled rule is not JSON: {error}"),
                 })
             };
+            let mut warnings = Vec::new();
             let remote_id = match request.operation {
-                Operation::Create => Some(
-                    self.create_rule(cx, &body()?)
-                        .await
-                        .map_err(answer)?
-                        .id
-                        .to_string(),
-                ),
+                Operation::Create => {
+                    let created = self.create_rule(cx, &body()?).await.map_err(answer)?;
+                    if created.partial {
+                        warnings.push(DeployWarning::new(
+                            PARTIAL_DEPLOYMENT,
+                            "the rule was created with a safer configuration after Defender \
+                             refused the full one: check the impacted assets in the Defender \
+                             portal",
+                        ));
+                    }
+                    Some(created.id.to_string())
+                }
                 // A disabled rule is the rule with `isEnabled` false.
                 Operation::Update | Operation::Disable => {
                     self.update_rule(cx, &body()?, &request.rule_id)
@@ -774,6 +797,7 @@ impl Deployer for Defender {
             Ok(DeployOutcome {
                 remote_id,
                 operation: request.operation,
+                warnings,
             })
         })
     }

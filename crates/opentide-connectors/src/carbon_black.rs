@@ -753,6 +753,7 @@ impl Deployer for CarbonBlack {
                 remote_id: matches!(change, ReportChange::Created | ReportChange::Updated)
                     .then(|| request.rule_id.clone()),
                 operation: request.operation,
+                warnings: Vec::new(),
             })
         })
     }

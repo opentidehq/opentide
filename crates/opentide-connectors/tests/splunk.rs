@@ -76,6 +76,149 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
     assert_eq!(done, [Some(true), Some(true), None, None]);
 }
 
+/// The same recording through `Deployer::deploy`, as `opentide deploy`
+/// sends it: each step's settings as the request body (written, then read
+/// back), a removal as a delete. The requests are the client's, byte for
+/// byte; only the delete of a saved search the tenant had warns.
+#[test]
+fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
+    use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
+    let inputs = fixture("splunk");
+    let tenant = replay("splunk/deploy");
+    let connector = Splunk::new();
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for step in items(inputs.get("deploy").unwrap()) {
+            let deletion = text(step.get("status").unwrap()) == "REMOVED";
+            let request = DeployRequest {
+                rule_id: text(step.get("name").unwrap()).to_owned(),
+                operation: if deletion {
+                    Operation::Delete
+                } else {
+                    Operation::Update
+                },
+                body: if deletion {
+                    Vec::new()
+                } else {
+                    Json::Object(settings(step)).to_compact().into_bytes()
+                },
+                policies: None,
+            };
+            outcomes.push(connector.deploy(tenant.cx(), &request).await.unwrap());
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    let warned: Vec<Vec<(String, String)>> = outcomes
+        .iter()
+        .map(|outcome| {
+            outcome
+                .warnings
+                .iter()
+                .map(|warning| (warning.code.clone(), warning.message.clone()))
+                .collect()
+        })
+        .collect();
+    let deleted = text(items(inputs.get("deploy").unwrap())[2].get("name").unwrap()).to_owned();
+    assert_eq!(
+        warned,
+        [
+            vec![],
+            vec![],
+            vec![("splunk_alert_deleted".to_owned(), deleted)],
+            vec![]
+        ]
+    );
+    assert_eq!(
+        outcomes
+            .iter()
+            .map(|outcome| outcome.remote_id.is_some())
+            .collect::<Vec<_>>(),
+        [true, true, false, false]
+    );
+}
+
+/// Every tracing event's level and message, from the first test that asks.
+#[derive(Clone, Default)]
+struct Logs(std::sync::Arc<std::sync::Mutex<Vec<(tracing::Level, String)>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Message<'a>(&'a mut String);
+        impl tracing::field::Visit for Message<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    self.0.push_str(&format!("{value:?}"));
+                }
+            }
+        }
+        let mut message = String::new();
+        event.record(&mut Message(&mut message));
+        self.0
+            .lock()
+            .unwrap()
+            .push((*event.metadata().level(), message));
+    }
+}
+
+/// The global subscriber, installed once, before any request.
+fn logs() -> &'static Logs {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    static LOGS: std::sync::OnceLock<Logs> = std::sync::OnceLock::new();
+    LOGS.get_or_init(|| {
+        let logs = Logs::default();
+        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(logs.clone()))
+            .unwrap();
+        logs
+    })
+}
+
+/// A saved search the tenant does not have yet is created: the `404` of
+/// the lookup before it is the normal path, logged at debug, never as a
+/// warning or an error.
+#[test]
+fn splunk_creating_an_absent_saved_search_logs_no_warning() {
+    let logs = logs();
+    let inputs = fixture("splunk");
+    let step = &items(inputs.get("deploy").unwrap())[0];
+    let tenant = replay("splunk/deploy");
+    let written = block_on(async {
+        Splunk::new()
+            .apply_saved_search(
+                tenant.cx(),
+                text(step.get("name").unwrap()),
+                &settings(step),
+                false,
+            )
+            .await
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(written, Some(true), "the recording's first step creates it");
+    // The log is the process's: other tests' events are in it too, so this
+    // reads the 404s alone (no other recording answers one).
+    let events: Vec<_> = logs
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(_, message)| message.contains("404"))
+        .cloned()
+        .collect();
+    let loud: Vec<_> = events
+        .iter()
+        .filter(|(level, _)| *level <= tracing::Level::WARN)
+        .collect();
+    assert!(loud.is_empty(), "{loud:?}");
+    assert!(
+        events
+            .iter()
+            .any(|(level, message)| *level == tracing::Level::DEBUG && message.contains("404")),
+        "{events:?}"
+    );
+}
+
 #[test]
 fn splunk_a_single_byte_off_fails() {
     let inputs = fixture("splunk");

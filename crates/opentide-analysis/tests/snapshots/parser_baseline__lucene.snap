@@ -8025,11 +8025,11 @@ lucene_parse_error error 0:127-1:0 Lucene syntax error: missing `)`
 119..120 operator
 120..126 string
 == corpus/lucene/boolean_query__invalid.lucene
-lucene_parse_error error 0:26-0:26 Lucene syntax error: a clause is missing after `AND`
-0..14 property
-14..15 operator
-15..22 string
-23..26 keyword
+lucene_parse_error error 0:11-0:11 Lucene syntax error: a clause is missing after `AND`
+0..1 string
+2..5 keyword
+6..7 string
+8..11 keyword
 == corpus/lucene/boolean_query__valid.lucene
 0..14 property
 14..15 operator

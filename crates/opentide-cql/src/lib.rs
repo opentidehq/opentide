@@ -68,6 +68,25 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     (!parse.errors.is_empty(), kinds)
 }
 
+/// For each syntax error of `source`, the `snake_case` names of the nodes it was recorded in: what
+/// the corpus gate of `opentide-analysis` reads to check that an invalid fixture fails in the
+/// production it names. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
+    let (_, parse) = parser::parse(source);
+    parse
+        .errors
+        .iter()
+        .map(|e| {
+            e.within
+                .iter()
+                .map(|&k| syntax::snake_case(syntax::SyntaxKind::from_raw(k)))
+                .collect()
+        })
+        .collect()
+}
+
 /// The `snake_case` names of the tree's named productions: the nodes of `cql.ungram`
 /// a parse builds (an enum of the ungram, such as `filter` or `expr`, is no node).
 /// Not part of the API.

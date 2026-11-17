@@ -82,7 +82,7 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 - `opentide` CLI; 5-platform query validation only
 - **CLI E2E** (`tests/test_cli/e2e/`): Typer `CliRunner` tests backed by `tests/fixtures/tide_corpus/` (threat/objective/rule naming, `*::1.0` baseline)
 - **First-user workflow** (`test_workflow_e2e.py`): CLI-only `setup` → empty `generate` → author tutorial objects (including object `actors` and **unquoted** `metadata.created` / `modified`) → populated `generate` → `validate --strict` → `lint --strict` → `info` → `validate query` → `deploy --dry-run` (no `DEPLOYMENT_PLAN`) → `generate docs` → `setup env`/`hooks`
-- Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); separate `cli-e2e` CI job on Python 3.14 after unit matrix
+- Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); run in CI's one `python` job (Python 3.14, with the unit tests and the coverage gate); the `full_set` E2E tests run in `python-matrix` (release pull requests and the nightly)
 - Deploy dry-run returns `plan` + `payloads` (unit golden tests in `tests/test_deployment/test_deploy_payloads.py`)
 - Skill: [`.agents/skills/cli-e2e-testing/SKILL.md`](../../.agents/skills/cli-e2e-testing/SKILL.md)
 - Interactive `setup`: construct real Questionary prompts and mock only `.ask()` (`test_setup_interactive.py`), which keeps catching prompt-kwarg regressions such as #177.

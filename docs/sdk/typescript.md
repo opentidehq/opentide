@@ -41,7 +41,7 @@ The plain `opentide` package is an alias that depends on `@opentide/opentide`, s
 
 ## Open a workspace
 
-`Workspace.open` takes the repository's folder (the one with `.opentide/` and `objects/`). `Workspace.fromFiles` opens one held in memory, for an editor's buffers or a test: each key is a path relative to the root, each value the file's text.
+`Workspace.open` takes the repository's folder (the one with `.opentide/` and `objects/`) and returns a promise of the workspace: it reads and indexes the files off Node's event loop. `Workspace.fromFiles` opens one held in memory, synchronously, for an editor's buffers or a test: each key is a path relative to the root, each value the file's text.
 
 ```js
 const { Workspace } = require('@opentide/opentide')
@@ -57,7 +57,7 @@ for (const finding of [...validation.report.issues, ...validation.report.warning
 }
 ```
 
-Opening reads every object file once into one index; each method then reads the index, so keep the `Workspace` and call as many methods on it as you need. Every `Workspace` method runs synchronously. The operations on a tenant, which wait on the network, return promises: see [Tenant operations](#tenant-operations).
+Opening reads every object file once into one index; each method then reads the index, so keep the `Workspace` and call as many methods on it as you need. Its methods that read the index (`validate`, `lint`, `info`, `catalog`, `rules`, `coverage`, `tenants`) run synchronously; `deployPlan`, which compiles every rule it selects, returns a promise, as do `Workspace.open`, `runJson` and `main`, which run off Node's event loop. The operations on a tenant, which wait on the network, return promises too: see [Tenant operations](#tenant-operations).
 
 ## Validate and lint
 
@@ -66,16 +66,20 @@ Opening reads every object file once into one index; each method then reads the 
 ```js
 const { Workspace } = require('@opentide/opentide')
 
-const ws = Workspace.open('.')
-const validation = ws.validate({ types: ['rule'], strict: true })
-for (const finding of validation.report.issues) {
-  console.log(`${finding.path}:${finding.line}: ${finding.message}`)
-}
-console.log(validation.summary.objects, 'objects checked')
+async function main() {
+  const ws = await Workspace.open('.')
+  const validation = ws.validate({ types: ['rule'], strict: true })
+  for (const finding of validation.report.issues) {
+    console.log(`${finding.path}:${finding.line}: ${finding.message}`)
+  }
+  console.log(validation.summary.objects, 'objects checked')
 
-const lint = ws.lint({ checks: ['filenames', 'metadata'] })
-console.log(lint.status, lint.findings.length)
-process.exitCode = validation.exitCode
+  const lint = ws.lint({ checks: ['filenames', 'metadata'] })
+  console.log(lint.status, lint.findings.length)
+  process.exitCode = validation.exitCode
+}
+
+main()
 ```
 
 `lint` runs `opentide lint` without `--fix`: its `findings` and `summary` are those of `lint --json`.
@@ -87,27 +91,32 @@ process.exitCode = validation.exitCode
 ```js
 const { Workspace } = require('@opentide/opentide')
 
-const ws = Workspace.open('.')
-const info = ws.info()
-console.log(`${info.counts.rules} rules, ${info.load_errors} load errors`)
-const catalogue = ws.catalog()
-console.log(catalogue.objects.length, 'objects,', catalogue.edges.length, 'edges')
-const coverage = ws.coverage('T1059')
-console.log(`${coverage.count} rules cover ${coverage.technique}`)
-for (const rule of ws.rules()) console.log(rule.uuid, rule.name)
-console.log(ws.objectives().length, 'objectives,', ws.threats().length, 'threats')
+Workspace.open('.').then((ws) => {
+  const info = ws.info()
+  console.log(`${info.counts.rules} rules, ${info.load_errors} load errors`)
+  const catalogue = ws.catalog()
+  console.log(catalogue.objects.length, 'objects,', catalogue.edges.length, 'edges')
+  const coverage = ws.coverage('T1059')
+  console.log(`${coverage.count} rules cover ${coverage.technique}`)
+  for (const rule of ws.rules()) console.log(rule.uuid, rule.name)
+  console.log(ws.objectives().length, 'objectives,', ws.threats().length, 'threats')
+})
 ```
 
 ## Plan a deploy
 
-`deployPlan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. `document` is the `result` of `deploy --dry-run --json`.
+`deployPlan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. It returns a promise of `{ document, summary, ok }`; `document` is the `result` of `deploy --dry-run --json`.
 
 ```js
 const { Workspace } = require('@opentide/opentide')
 
-const ws = Workspace.open('.')
-const plan = ws.deployPlan({ strategies: ['PREVIEW'] })
-console.log(plan.ok, plan.document.strategies, Object.keys(plan.document.plan))
+async function main() {
+  const ws = await Workspace.open('.')
+  const plan = await ws.deployPlan({ strategies: ['PREVIEW'] })
+  console.log(plan.ok, plan.document.strategies, Object.keys(plan.document.plan))
+}
+
+main()
 ```
 
 ## Tenant operations
@@ -131,13 +140,12 @@ account_id = 42
 ```js
 const { Connection, Workspace } = require('@opentide/opentide')
 
-const ws = Workspace.open('.')
-const tenant = ws.tenants('sentinel_one')[0]
-console.log(tenant.name) // soc
-const connection = Connection.open(tenant)
-console.log(connection.capabilities.liveValidation) // true
-
 async function hunt() {
+  const ws = await Workspace.open('.')
+  const tenant = ws.tenants('sentinel_one')[0]
+  console.log(tenant.name) // soc
+  const connection = Connection.open(tenant)
+  console.log(connection.capabilities.liveValidation) // true
   const [check, found] = await Promise.all([
     connection.validateQuery("EventType = 'Process Creation'"),
     connection.query("EventType = 'Process Creation'", { limit: 10 }),
@@ -151,16 +159,19 @@ hunt().then((rows) => console.log(rows.length)) // 2
 
 `query(text, options)` searches the 24 hours before now unless given `start` and `end` (each a `Date` or an RFC 3339 instant such as `'2026-11-12T09:00:00Z'`; an invalid `Date` rejects with `usage_invalid_value`), resolves to at most `limit` rows (100 by default) as a `QueryResult` (`columns`, `rows`, `truncated`, `partial`, `warnings`, `vendorQueryId`, `sent`, `language`) and saves nothing on the tenant. Each row is an object of its columns in the order they came. `language` is the query's (`kql`, `esql`, `s1ql`; unset takes the platform's first), `index` the Elastic indices, the HarfangLab telemetry source or the CrowdStrike repository, `dataView` Elastic's, and `timeout` how long, in seconds, an asynchronous search may run. `validateQuery` takes the same options and searches for one row over the minute before now; it resolves to a `LiveCheck` (`result`, `errors`, `warnings`) for a query the tenant accepts, whose `errors` are why validation still fails it (Defender's required columns).
 
-`deploy(ruleId, operation, body)` creates, updates, disables or deletes one rule on the tenant, sending `body` (a `Buffer`, `Uint8Array` or string: the request `opentide deploy` compiles for this tenant) as its bytes, and resolves to a `DeployOutcome` with the platform's identifier of the rule (`remoteId`). `ruleId` is the rule's identifier on the platform, which a deploy keeps in its deployment state. Sysdig adds a rule to its runtime policies, and takes a disabled or deleted rule out of them: `options.policies` (pass the plan entry's `policies`, which a block that names its own carries), else the tenant setup's `policies`, as `opentide deploy` chooses them. Graylog bodies from `deploy_plan` are compiled for Graylog 7.2, and every one carries `tags` (opentide always tags its definitions), which only 7.2 takes. The tenant's version is read first: below 6.3 it is refused; below 7.2, a create, update or disable is refused before any write with the code `graylog_field_unsupported_version`, so through the SDK such a tenant takes deletions only, and `opentide deploy`, which compiles for the tenant's version, deploys the rest. A body that fits is sent in the shape the version takes. `opentide deploy`'s warning about a Graylog version that does not revoke access tokens is not raised here: a deploy outcome carries no warnings. A whole deploy run, with its plan, deployment state and retirements, is `runJson(['deploy', ...])`.
+`deploy(ruleId, operation, body)` creates, updates, disables or deletes one rule on the tenant, sending `body` (a `Buffer`, `Uint8Array` or string: the request `opentide deploy` compiles for this tenant) as its bytes, and resolves to a `DeployOutcome` with the platform's identifier of the rule (`remoteId`) and the deploy's `warnings`. `ruleId` is the rule's identifier on the platform, which a deploy keeps in its deployment state. Sysdig adds a rule to its runtime policies, and takes a disabled or deleted rule out of them: `options.policies` (pass the plan entry's `policies`, which a block that names its own carries), else the tenant setup's `policies`, as `opentide deploy` chooses them. Graylog bodies from `deploy_plan` are compiled for Graylog 7.2, and every one carries `tags` (opentide always tags its definitions), which only 7.2 takes. The tenant's version is read first: below 6.3 it is refused; below 7.2, a create, update or disable is refused before any write with the code `graylog_field_unsupported_version`, so through the SDK such a tenant takes deletions only, and `opentide deploy`, which compiles for the tenant's version, deploys the rest. A body that fits is sent in the shape the version takes. A tenant whose Graylog version does not revoke access tokens reliably adds the outcome's `graylog_version_vulnerable` warning: `warnings` lists what a deploy raised without failing, each `{code, message}` with the `code` `opentide deploy` logs, such as a rule created again because the tenant lost it. A whole deploy run, with its plan, deployment state and retirements, is `runJson(['deploy', ...])`.
 
 ```js
 const { Connection, Workspace } = require('@opentide/opentide')
 
-const connection = Connection.open(Workspace.open('.').tenants('sentinel_one')[0])
-const rule = { data: { name: 'Example', queryType: 'events' } }
-connection
-  .deploy('11111111-1111-4111-8111-111111111111', 'create', JSON.stringify(rule))
-  .then((outcome) => console.log(outcome.operation)) // create
+async function main() {
+  const connection = Connection.open((await Workspace.open('.')).tenants('sentinel_one')[0])
+  const rule = { data: { name: 'Example', queryType: 'events' } }
+  const outcome = await connection.deploy('11111111-1111-4111-8111-111111111111', 'create', JSON.stringify(rule))
+  console.log(outcome.operation, outcome.warnings) // create []
+}
+
+main()
 ```
 
 `query`, `validateQuery` and `deploy` each take a `signal` option, an `AbortSignal`, that stops that one operation: when it aborts, the promise rejects with `interrupted` and a search it stops is stopped on the tenant where the API allows it (CrowdStrike); the connection's other operations run on. A signal already aborted rejects at once. `deploy` takes it as its fourth argument, `{ signal }`; a deploy aborted after the tenant received it may have been applied.
@@ -168,13 +179,23 @@ connection
 ```js
 const { Connection, Workspace } = require('@opentide/opentide')
 
-const connection = Connection.open(Workspace.open('.').tenants('sentinel_one')[0])
-const end = new Date()
-const start = new Date(end.getTime() - 60 * 60 * 1000)
-connection
-  .query("EventType = 'Process Creation'", { start, end, signal: AbortSignal.timeout(30_000) })
-  .then((found) => console.log(found.rows.length)) // 2
-  .catch((error) => console.error(error.code)) // `interrupted` if the search outlives 30 s
+async function main() {
+  const connection = Connection.open((await Workspace.open('.')).tenants('sentinel_one')[0])
+  const end = new Date()
+  const start = new Date(end.getTime() - 60 * 60 * 1000)
+  try {
+    const found = await connection.query("EventType = 'Process Creation'", {
+      start,
+      end,
+      signal: AbortSignal.timeout(30_000),
+    })
+    console.log(found.rows.length) // 2
+  } catch (error) {
+    console.error(error.code) // `interrupted` if the search outlives 30 s
+  }
+}
+
+main()
 ```
 
 `connection.canceller()` returns a `Canceller` that stops every operation of the connection from elsewhere, a `SIGINT` handler or a timer: the running one, and every later one, rejects with `interrupted`, and a search it stops is stopped on the tenant where the API allows it (CrowdStrike).
@@ -184,40 +205,48 @@ A platform that cannot do an operation rejects with `operation_unsupported`, nev
 ```js
 const { Connection, Workspace } = require('@opentide/opentide')
 
-const connection = Connection.open(Workspace.open('.').tenants('sentinel_one')[0])
-connection.query("EventType = 'Process Creation' | syntax").catch((error) => {
-  console.log(error.code) // tenant_refused
-  console.log(error.detail)
-})
+async function main() {
+  const connection = Connection.open((await Workspace.open('.')).tenants('sentinel_one')[0])
+  try {
+    await connection.query("EventType = 'Process Creation' | syntax")
+  } catch (error) {
+    console.log(error.code) // tenant_refused
+    console.log(error.detail)
+  }
+}
+
+main()
 ```
 
 The other codes are `tenant_unreachable`, `tenant_timeout`, `query_timed_out`, `authentication_failed`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `connector_crashed`, `interrupted`, `runtime_unavailable` and `usage_invalid_value` (a window or a timeout that does not read). `platforms()` lists the platforms with a connector, and `capabilities(platform)` says what one can do.
 
 ## Run a command
 
-`runJson(argv)` runs one command in the process and returns its `--json` document, parsed, with the command line's keys in its order: the envelope (`ok`, `command`, `result`, `failure`, ...) or, for `commands`, the command tree. A command that fails still returns its document, with `ok: false` and `failure.code`. `main(argv)` is the whole program, on the process's streams; it returns the exit code.
+`runJson(argv)` runs one command in the process, off Node's event loop, and resolves to its `--json` document, parsed, with the command line's keys in its order: the envelope (`ok`, `command`, `result`, `failure`, ...) or, for `commands`, the command tree. A command that fails still returns its document, with `ok: false` and `failure.code`. `main(argv)` is the whole program, on the process's streams; it resolves to the exit code. Both read the process's working directory and environment when the command starts, on the Rust core's thread: pass `--repo` rather than `process.chdir` between runs, and leave `process.env` unchanged while one is pending (Node and the core would write and read it at once).
 
 ```js
 const { runJson } = require('@opentide/opentide')
 
-const info = runJson(['--repo', '.', 'info'])
-console.log(info.ok, info.counts.rules)
-const tree = runJson(['commands'])
-console.log(tree.program, tree.version)
+async function main() {
+  const info = await runJson(['--repo', '.', 'info'])
+  console.log(info.ok, info.counts.rules)
+  const tree = await runJson(['commands'])
+  console.log(tree.program, tree.version)
+}
+
+main()
 ```
 
 ## Errors
 
-A call that cannot run throws an `Error` whose `code` is a stable code: `configuration_invalid` or the configuration check's own code (`config_parse`, ...), `io_error`, `usage_invalid_choice` for an option the command line would refuse, `no_json_document` when `runJson`'s command writes no document (`--version`), and the [tenant operations](#tenant-operations)' codes, with which their promises reject. Match on the code, not the message; `detail` holds the vendor's own words when a tenant gave a reason, and is `null` otherwise. Findings about the workspace are not errors: they are in the report.
+A call that cannot run throws an `Error`, or rejects its promise with one, whose `code` is a stable code: `configuration_invalid` or the configuration check's own code (`config_parse`, ...), `io_error`, `usage_invalid_choice` for an option the command line would refuse, `no_json_document` when `runJson`'s command writes no document (`--version`), and the [tenant operations](#tenant-operations)' codes, with which their promises reject. A failure inside the Rust core itself is `internal_error` (or `GenericFailure` from a synchronous method), never a crash of Node. Match on the code, not the message; `detail` holds the vendor's own words when a tenant gave a reason, and is `null` otherwise. Findings about the workspace are not errors: they are in the report.
 
 ```js
 const { runJson } = require('@opentide/opentide')
 
-try {
-  runJson(['--version'])
-} catch (error) {
+runJson(['--version']).catch((error) => {
   console.log(error.code) // no_json_document
-}
+})
 ```
 
 ## Types

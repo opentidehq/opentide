@@ -11,10 +11,8 @@ exit: 0
 ━━━ stderr
 Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 1 to delete
-warning: Splunk answered HTTP 404 Not Found: Could not find object id=absent · status: 404
 
 Deploying to splunk / lab · 2 rules
   [1/2] ✓ deployed  Splunk create rule <SECONDS>
-warning: Splunk answered HTTP 404 Not Found: Could not find object id=absent · status: 404
   [2/2] ✓ deleted   Splunk retire rule <SECONDS>
 ✓ splunk · 2 deployed, 0 failed, 0 not attempted · <SECONDS>

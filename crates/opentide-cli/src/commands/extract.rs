@@ -233,23 +233,15 @@ fn sanitize_filename(name: &str) -> String {
         })
         .collect();
     stem.truncate(stem.floor_char_boundary(STEM_LIMIT));
-    if is_windows_device(&stem) {
-        stem.insert(0, '_');
-    }
-    stem
+    opentide_workspace::lint::device_safe(&stem)
 }
 
-/// Whether Windows takes `stem` for a device, not a file: its base (up to
-/// the first `.`, trimmed) is `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` or
-/// `LPT1`-`LPT9`, in any case.
-fn is_windows_device(stem: &str) -> bool {
-    let base = stem.split('.').next().unwrap_or_default().trim();
-    let upper = base.to_ascii_uppercase();
-    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || upper
-            .strip_prefix("COM")
-            .or_else(|| upper.strip_prefix("LPT"))
-            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
+/// `text` as one YAML scalar that reads back as `text` (plain where that is
+/// safe, quoted otherwise): a value from the tenant goes into the template
+/// this way, so a `: `, a ` #`, a `[` or a `yes` cannot break the rule's
+/// YAML or change what it says.
+fn plain(text: &str) -> String {
+    sentinel::scalar(&CJson::Str(text.to_owned()))
 }
 
 /// `text` as a JSON string.
@@ -355,7 +347,10 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
     };
     let severity = alert("severity")?;
     let author = need_text(rule, "createdBy", "createdBy")?;
-    let mut description = alert("description")?.to_owned();
+    let mut description = sentinel::block_text(
+        alert("description")?,
+        "detectionAction.alertTemplate.description",
+    )?;
     let schedule = match need(
         need(rule, "schedule", "schedule")?,
         "period",
@@ -382,7 +377,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
     // contributor.
     let contributors = match rule.get("lastModifiedBy") {
         Some(CJson::Str(editor)) if editor != author => {
-            fill(CONTRIBUTORS_TEMPLATE, &[("contributor", editor)])
+            fill(CONTRIBUTORS_TEMPLATE, &[("contributor", &plain(editor))])
                 .trim()
                 .to_owned()
         }
@@ -399,6 +394,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
                         .ok_or_else(|| FieldError::not(TECHNIQUES, "a list of strings"))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
+            let names: Vec<String> = names.into_iter().map(plain).collect();
             let list = format!("- {}", names.join("\n        - "));
             fill(TECHNIQUES_TEMPLATE, &[("techniques_list", &list)])
                 .trim_end()
@@ -412,6 +408,10 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
             NO_RECOMMENDATION_TEMPLATE.trim().to_owned()
         }
         Some(CJson::Str(recommended)) => {
+            let recommended = &sentinel::block_text(
+                recommended,
+                "detectionAction.alertTemplate.recommendedActions",
+            )?;
             description.push_str("\n\n---\nRecommended Actions : ");
             description.push_str(recommended);
             fill(
@@ -446,39 +446,45 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
         let kind = need_text(asset, "@odata.type", &shown("@odata.type"))?;
         let identifier = || need_text(asset, "identifier", &shown("identifier"));
         if kind.ends_with("impactedDeviceAsset") {
-            impacted_device = format!("device: {}", capitalised(identifier()?));
+            impacted_device = format!("device: {}", plain(&capitalised(identifier()?)));
             impacted_entities_flag = "";
         }
         if kind.ends_with("impactedUserAsset") {
-            impacted_user = format!("user: {}", capitalised(identifier()?));
+            impacted_user = format!("user: {}", plain(&capitalised(identifier()?)));
             impacted_entities_flag = "";
         }
     }
     let tenants = tenant_names
         .iter()
-        .map(|name| json_string(name))
+        .map(|name| opentide_schema::node::double_quoted(name))
         .collect::<Vec<_>>()
         .join("\n      - ");
     let body = fill(
         TEMPLATE,
         &[
-            ("name", &json_string(name)),
+            ("name", &opentide_schema::node::double_quoted(name)),
             ("tenants", &tenants),
-            ("uuid", uuid),
-            ("created", created),
-            ("modified", modified),
-            ("alert_severity", &capitalised(&severity.to_lowercase())),
+            ("uuid", &plain(uuid)),
+            ("created", &sentinel::date_scalar(created)),
+            ("modified", &sentinel::date_scalar(modified)),
+            (
+                "alert_severity",
+                &plain(&capitalised(&severity.to_lowercase())),
+            ),
             ("alert_recommendation", &alert_recommendation),
             ("impacted_device", &impacted_device),
             ("impacted_user", &impacted_user),
             ("impacted_entities_flag", impacted_entities_flag),
-            ("author", author),
+            ("author", &plain(author)),
             ("contributors", &contributors),
             ("description", &fix_multiline(&description, 2)),
-            ("schedule", &schedule),
-            ("category", &category),
+            ("schedule", &plain(&schedule)),
+            ("category", &plain(&category)),
             ("techniques", &techniques),
-            ("query", &fix_multiline(query, 6)),
+            (
+                "query",
+                &fix_multiline(&sentinel::block_text(query, "queryCondition.queryText")?, 6),
+            ),
             ("status", status),
         ],
     );
@@ -732,16 +738,18 @@ mod tests {
             ("lpt9 ", "_lpt9 "),
             (" con", "_ con"),
             ("con<", "_con "),
+            ("COM0", "_COM0"),
+            ("LPT0", "_LPT0"),
+            ("COM\u{b9}", "_COM\u{b9}"),
+            ("CONIN$", "_CONIN$"),
         ] {
             assert_eq!(sanitize_filename(name), expected, "{name:?}");
         }
         for name in [
             "CONSOLE",
             "COM",
-            "COM0",
             "COM10",
             "LPT",
-            "LPT0",
             "ACON",
             "con ect",
             "NULL",
@@ -813,6 +821,170 @@ mod tests {
             body.ends_with("    query: |\n      T\n      | take 1"),
             "{body}"
         );
+    }
+
+    /// A tenant's values go into the template as YAML scalars: none of them
+    /// can break the rule's YAML or change what it reads as.
+    #[test]
+    fn hostile_values_read_back_as_written() {
+        let hostile = "Mimikatz: dump [x] #1";
+        let rule: CJson = serde_json::from_str(
+            r##"{"id": "201", "displayName": "D", "isEnabled": true,
+                "createdBy": "Mimikatz: dump [x] #1", "lastModifiedBy": "yes",
+                "createdDateTime": "2026: 01 #x", "lastModifiedDateTime": "2026-02-03T00:00:00Z",
+                "detectorId": "null", "queryCondition": {"queryText": "T"},
+                "schedule": {"period": "1H #x"},
+                "detectionAction": {"alertTemplate": {"severity": "high: #1",
+                  "description": "Desc", "category": "[x]",
+                  "mitreTechniques": ["T1: x", "'q", "- y"], "impactedAssets": [
+                  {"@odata.type": "#impactedUserAsset", "identifier": "a #b: c"}]}}}"##,
+        )
+        .unwrap();
+        let (_, body) = render_rule(&rule, &["lab".into()]).unwrap();
+        let document =
+            opentide_schema::node::load(&body).unwrap_or_else(|e| panic!("{e:?}\n{body}"));
+        let root = document.root().unwrap();
+        let at = |path: &[&str]| -> Option<String> {
+            let mut node = root;
+            for key in path {
+                node = node.get(key)?;
+            }
+            node.value.as_str().map(str::to_owned)
+        };
+        assert_eq!(
+            at(&["metadata", "author"]).as_deref(),
+            Some(hostile),
+            "{body}"
+        );
+        assert_eq!(at(&["metadata", "uuid"]).as_deref(), Some("null"), "{body}");
+        assert_eq!(
+            at(&["metadata", "created"]).as_deref(),
+            Some("2026: 01 #x"),
+            "{body}"
+        );
+        assert_eq!(
+            at(&["response", "alert_severity"]).as_deref(),
+            Some("High: #1"),
+            "{body}"
+        );
+        let block = ["configurations", "defender_for_endpoint"];
+        let block_at = |rest: &[&str]| at(&[block.as_slice(), rest].concat());
+        assert_eq!(
+            block_at(&["scheduling"]).as_deref(),
+            Some("1H #x"),
+            "{body}"
+        );
+        assert_eq!(
+            block_at(&["alert", "category"]).as_deref(),
+            Some("[x]"),
+            "{body}"
+        );
+        assert_eq!(
+            block_at(&["impacted_entities", "user"]).as_deref(),
+            Some("A #b: c"),
+            "{body}"
+        );
+        let configuration = root
+            .get("configurations")
+            .unwrap()
+            .get("defender_for_endpoint")
+            .unwrap();
+        let strings = |node: &opentide_schema::node::Node| -> Vec<String> {
+            match &node.value {
+                opentide_schema::node::Value::Seq(items) => items
+                    .iter()
+                    .map(|item| item.value.as_str().unwrap_or("<not a string>").to_owned())
+                    .collect(),
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(
+            strings(configuration.get("contributors").unwrap()),
+            ["yes"],
+            "{body}"
+        );
+        assert_eq!(
+            strings(
+                configuration
+                    .get("alert")
+                    .unwrap()
+                    .get("techniques")
+                    .unwrap()
+            ),
+            ["T1: x", "'q", "- y"],
+            "{body}"
+        );
+    }
+
+    /// A lone CR, NEL or line separator in tenant text cannot end a block
+    /// scalar and start a key; a control character refuses the rule.
+    #[test]
+    fn line_breaks_in_tenant_text_stay_inside_their_block() {
+        let rule = |edit: &dyn Fn(&mut Object)| {
+            let mut rule = rule();
+            if let CJson::Object(object) = &mut rule {
+                edit(object);
+            }
+            rule
+        };
+        let template = |object: &mut Object, key: &str, value: &str| {
+            let Some(CJson::Object(action)) = object.get_mut("detectionAction") else {
+                panic!()
+            };
+            let Some(CJson::Object(template)) = action.get_mut("alertTemplate") else {
+                panic!()
+            };
+            template.insert(key.into(), CJson::Str(value.into()));
+        };
+        let rule = rule(&|object| {
+            template(
+                object,
+                "description",
+                "line1\rstatus: INJECTED\u{2028}schema: x",
+            );
+            template(object, "recommendedActions", "r\rname: X\u{85}y");
+            object.insert(
+                "queryCondition".into(),
+                serde_json::from_str(r#"{"queryText": "T\rname: INJECTED"}"#).unwrap(),
+            );
+            object.insert("displayName".into(), CJson::Str("a\u{7f}b\u{85}c".into()));
+        });
+        let (_, body) = render_rule(&rule, &["lab".into()]).unwrap();
+        let document =
+            opentide_schema::node::load(&body).unwrap_or_else(|e| panic!("{e:?}\n{body}"));
+        let root = document.root().unwrap();
+        assert_eq!(
+            root.get("name").unwrap().value.as_str(),
+            Some("a\u{7f}b\u{85}c"),
+            "{body}"
+        );
+        assert!(root.get("status").is_none(), "{body}");
+        assert!(root.get("schema").is_none(), "{body}");
+        let description = root.get("description").unwrap().value.as_str().unwrap();
+        assert!(description.contains("status: INJECTED"), "{body}");
+        let query = root
+            .get("configurations")
+            .and_then(|block| block.get("defender_for_endpoint"))
+            .and_then(|block| block.get("query"))
+            .unwrap();
+        assert_eq!(query.value.as_str(), Some("T\nname: INJECTED"), "{body}");
+
+        let control = rule_with_description("a\u{1}b");
+        assert_eq!(
+            render_rule(&control, &[]).unwrap_err().to_string(),
+            "field `detectionAction.alertTemplate.description` is not text without control characters"
+        );
+    }
+
+    fn rule_with_description(description: &str) -> CJson {
+        let mut rule = rule();
+        if let CJson::Object(object) = &mut rule
+            && let Some(CJson::Object(action)) = object.get_mut("detectionAction")
+            && let Some(CJson::Object(template)) = action.get_mut("alertTemplate")
+        {
+            template.insert("description".into(), CJson::Str(description.into()));
+        }
+        rule
     }
 
     #[test]
@@ -2057,8 +2229,10 @@ mod elastic_tests {
         );
     }
 
-    /// The derived ids are those of Python's `uuid.uuid5`, which the
-    /// importer this ports used: the values below come from it.
+    /// The derived ids are version-5 UUIDs (SHA-1, RFC 9562) of the
+    /// migration namespace. The expected values are the ids the Python
+    /// importer produced (`uuid.uuid5`), so a re-import keeps the ids earlier
+    /// imports created: the test checks against that outside source.
     #[test]
     fn prebuilt_rule_ids_match_python_uuid5() {
         assert_eq!(
@@ -2081,7 +2255,7 @@ mod elastic_tests {
 
     /// A field Kibana holds as one string where it usually holds a list is a
     /// list of that one string: `index: "logs-*"` is `["logs-*"]`, not one
-    /// item per character (the Python importer's `list(str)`).
+    /// item per character.
     #[test]
     fn a_single_string_is_a_one_item_list() {
         let converted = kibana_to_opentide(

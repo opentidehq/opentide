@@ -3,8 +3,8 @@ source: crates/opentide-spl/tests/table_parse.rs
 expression: render(&body(path))
 input_file: crates/testdata/corpus/spl/tail_command__invalid.spl
 ---
-SOURCE_FILE@0..17
-  PIPELINE@0..17
+SOURCE_FILE@0..21
+  PIPELINE@0..21
     BARE_SEARCH@0..10
       FIELD_VALUE@0..10
         FIELD_REF@0..5
@@ -19,4 +19,8 @@ SOURCE_FILE@0..17
     WHITESPACE@12..13 " "
     TAIL_COMMAND@13..17
       TAIL_KW@13..17 "tail"
+    WHITESPACE@17..18 " "
+    ERROR@18..21
+      IDENT@18..21 "abc"
 --
+17..18: unexpected token (expected PIPE)

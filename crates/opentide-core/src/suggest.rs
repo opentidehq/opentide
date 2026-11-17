@@ -30,9 +30,9 @@
 //! bound: for a check whose own threshold decides whether a near miss is
 //! reported at all.
 //!
-//! This is deliberately not Python's `difflib.get_close_matches`: a ratio of
-//! matching blocks suggests unrelated words that share letters (`Big
-//! incident` → `Substantial incident`), and an edit distance does not.
+//! This is deliberately an edit distance, not a ratio of matching blocks
+//! (`difflib.get_close_matches`): such a ratio suggests unrelated words that
+//! share letters (`Big incident` → `Substantial incident`).
 
 use std::cmp::Ordering;
 
