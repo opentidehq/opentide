@@ -78,6 +78,13 @@ dev = [
     "ty>=0.0.65",
     "pre-commit>=4.0",
 ]
+# The language server against real editors' capabilities
+# (scripts/engine/clients, the nightly's `clients` job): pytest-lsp, with
+# pytest-asyncio. Kept out of `dev`, whose suite does not collect it:
+# `uv run --only-group clients` runs it without building the package.
+clients = [
+    "pytest-lsp==1.0.1",
+]
 
 [tool.uv]
 # What uv builds of opentide (`uv sync`'s editable install, `uv build`) compile

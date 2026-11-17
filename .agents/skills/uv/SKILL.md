@@ -46,6 +46,7 @@ opentide compiles its analysis engine (`bindings/python/`, PyO3 bindings of the 
 | Group | Purpose |
 |-------|---------|
 | `dev` | Tests, ruff, ty, pre-commit |
+| `clients` | pytest-lsp for `scripts/engine/clients` (the nightly `clients` job): `uv run --isolated --only-group clients pytest scripts/engine/clients`, after `cargo build -p opentide-lsp`; isolated, so the dev environment stays and no wheel is built |
 
 Docs build/deploy: [opentidehq/website](https://github.com/opentidehq/website). This repo validates with `scripts/validate-docs.sh`.
 

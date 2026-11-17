@@ -33,7 +33,8 @@ opentide validate --check queries
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
+| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
+| `--allow-empty` | With `--strict` (refused without it): pass a full run that finds no detection objects in a workspace. A folder that is not a workspace still fails. The commit hook `opentide setup hooks` writes passes it, so a new repository commits before its first object |
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
 | `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |
@@ -226,11 +227,19 @@ opentide --json validate --check schema   | jq '.report.issues'
 
 Run from anywhere inside the detection workspace: the CLI walks up to it (see [Repository root resolution](./global-options.md#repository-root-resolution)). The JSON payload names the directory it read objects from under `workspace`.
 
-An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
+An empty catalogue is not an error by default. A full run that checked no objects still passes with exit `0`, but says where it looked:
 
 ```text illustrative
 ✓ Validation passed, but no detection objects were found under ./
 ```
+
+With `--strict` it fails, with exit `1` and `failure.code` `issues_found`, so a CI job or hook pointed at the wrong folder, or run outside the workspace, does not pass every commit:
+
+```text illustrative
+✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
+```
+
+A run narrowed by `--check` is not an empty catalogue, and keeps exit `0`; one narrowed by `--file`, `--uuid` or `--type` that matches nothing fails with `scope_no_match`, with or without `--strict`. The failed run's next step is `opentide new rule`, or `opentide setup` where there is no workspace. `--watch --strict` shows such a pass as failed, and `--format` without `--output` prints the reason on stderr. A repository just scaffolded by `opentide setup` has no object yet. The commit hook setup writes runs `validate --strict --allow-empty`, so the scaffold commits; the CI pipelines it writes run `validate --strict`, so their validate jobs fail until the first object is added, which is the point: an empty workspace in CI is a misconfigured job. The SDKs' `validate(strict=True)` report findings only, and an empty workspace has none.
 
 The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 

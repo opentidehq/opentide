@@ -264,6 +264,7 @@ pub struct Watcher<'fs, V: Validate> {
     findings: BTreeMap<Option<PathBuf>, Vec<Diagnostic>>,
     objects: usize,
     runs: usize,
+    require_objects: bool,
 }
 
 /// WebAssembly has no change events (no [`events`]): the loop looks every
@@ -323,7 +324,16 @@ impl<'fs, V: Validate> Watcher<'fs, V> {
             findings: BTreeMap::new(),
             objects: 0,
             runs: 0,
+            require_objects: false,
         }
+    }
+
+    /// With `require`, a pass fails when the scope holds no object at all,
+    /// as `validate --strict` fails a full run that found none.
+    #[must_use]
+    pub fn requiring_objects(mut self, require: bool) -> Self {
+        self.require_objects = require;
+        self
     }
 
     /// The validator.
@@ -438,7 +448,9 @@ impl<'fs, V: Validate> Watcher<'fs, V> {
         let fixable = crate::fix::plan(self.fs, &everything).changes.len();
         WatchRun {
             number: self.runs,
-            failed: errors > 0 || (self.strict && failing_warnings),
+            failed: errors > 0
+                || (self.strict && failing_warnings)
+                || (self.require_objects && self.objects == 0),
             diagnostics: everything,
             found,
             objects: self.objects,

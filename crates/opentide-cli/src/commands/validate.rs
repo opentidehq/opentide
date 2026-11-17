@@ -44,6 +44,8 @@ pub struct Args {
     pub selection: Selection,
     /// `--strict`.
     pub strict: bool,
+    /// `--allow-empty`: `--strict` passes a full run with no objects.
+    pub allow_empty: bool,
     /// `--queries`, when given.
     pub queries: Option<QueriesMode>,
     /// `--fix`.
@@ -78,6 +80,7 @@ impl From<&crate::tree::ValidateArgs> for Args {
                 types: args.object_type.clone(),
             },
             strict: args.strictness.strict,
+            allow_empty: args.allow_empty,
             queries: args.strictness.queries.map(QueriesMode::from),
             fix: args.fix,
             dry_run: args.dry_run,
@@ -159,6 +162,13 @@ pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
         return Some(usage(
             "--dry-run previews --fix. Pass both.",
             "--dry-run",
+            code::USAGE_ERROR,
+        ));
+    }
+    if args.allow_empty && !args.strict {
+        return Some(usage(
+            "--allow-empty relaxes --strict. Pass both.",
+            "--allow-empty",
             code::USAGE_ERROR,
         ));
     }
@@ -478,8 +488,20 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let failed = validation.failed;
     let scope_full = args.selection.is_empty();
     let empty = !failed && args.check.is_none() && scope_full && summary.objects == 0;
+    // `--strict` fails a run that checked nothing: a CI job pointed at the
+    // wrong folder would otherwise pass every commit.
+    // `--allow-empty` passes a workspace with no object yet (a new one, as
+    // the commit hook setup writes sees it), never a folder that is not one.
+    let strict_empty =
+        empty && args.strict && !(args.allow_empty && root::is_workspace_root(&OsFs, &root));
     let message = if failed {
         "Validation failed".to_owned()
+    } else if strict_empty {
+        format!(
+            "Validation failed: no detection objects were found under {}, and --strict \
+             requires at least one",
+            shown_directory(&root, cx.cwd)
+        )
     } else if empty {
         format!(
             "Validation passed, but no detection objects were found under {}",
@@ -514,6 +536,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         next.push(NextAction::new(
             "opentide setup",
             "no workspace here: create one",
+        ));
+    } else if strict_empty {
+        next.push(NextAction::new(
+            "opentide new rule",
+            "add a detection object to the workspace",
         ));
     }
     if failed {
@@ -580,14 +607,23 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             ));
         }
     }
-    let exit_code = validation.exit_code();
+    let exit_code = if strict_empty {
+        1
+    } else {
+        validation.exit_code()
+    };
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = if failed { "failed" } else { "passed" }.into();
+    report.outcome.status = if failed || strict_empty {
+        "failed"
+    } else {
+        "passed"
+    }
+    .into();
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
     report.outcome.summary = summary_json.into_iter().collect();
     report.outcome.next_actions = next;
-    if failed {
+    if failed || strict_empty {
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, message.clone()));
     }
     report.stderr_first = progress_lines(cx.env, &summary);
@@ -603,6 +639,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 );
             }
         } else if terminal.text() {
+            // The report holds no finding that says why the run failed.
+            if strict_empty {
+                report.stderr_first.push_str(&message);
+                report.stderr_first.push('\n');
+            }
             report.whole_stdout = Some(text);
             return report;
         }
