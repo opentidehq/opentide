@@ -61,12 +61,18 @@ pub use columns::output_columns;
 pub use ecs::{ecs_diagnostics, source_indices};
 pub use version::{Availability, RELEASES, StackTarget};
 
+use gates::{
+    SyntaxElement, children_of, element_span, first_token, is_named, nodes_after, parts, span_of,
+    text_of,
+};
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, Severity, SignatureHelp,
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use rowan::NodeOrToken;
 use std::collections::HashMap;
+use syntax::SyntaxKind as K;
 use tree::{Node, node_span, walk};
 
 pub struct AnalyzeResult {
@@ -161,28 +167,29 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
             tokens: Vec::new(),
         };
     };
-    let root = tree.root_node();
     let mut diagnostics = Vec::new();
     if let Some(d) = parse_problem(&tree, source) {
         diagnostics.push(d);
     }
     let to_range = |span: ByteSpan| range(source, span);
-    walk(root, |node| {
-        if let Some(syntax) = node.syntax() {
-            for gate in gates::syntax_gates(syntax, source) {
-                diagnostics.extend(gate.diagnostic(target, to_range));
-            }
+    for node in named_nodes(&tree.syntax) {
+        for gate in gates::syntax_gates(&node, source) {
+            diagnostics.extend(gate.diagnostic(target, to_range));
         }
-        if let Some((spacing, span)) = gates::command_spacing(node, source) {
-            let word = node.child(0).map(|k| text(k, source)).unwrap_or_default();
+        if let Some((spacing, span)) = gates::command_spacing(&node, source) {
+            let word = children_of(&node)
+                .first()
+                .map(|k| element_text(k, source))
+                .unwrap_or_default();
             match gates::spacing_gate(word, spacing, span, to_range(span)) {
                 Ok(gate) => diagnostics.extend(gate.diagnostic(target, to_range)),
                 Err(d) => diagnostics.push(*d),
             }
         }
-        if node.kind() == "unknown_command" {
-            diagnostics.push(unknown_command(node, source, &mut suggestions));
-        } else if let Some(name) = command_name(node, source) {
+        let kind = node.kind();
+        if kind == K::UNKNOWN_COMMAND {
+            diagnostics.push(unknown_command(&node, source, &mut suggestions));
+        } else if let Some(name) = command_name(&node, source) {
             if let Some(row) = catalog.command(&name)
                 && let Some(d) = availability(
                     target,
@@ -191,55 +198,59 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
                     row.snapshot_only,
                     &Lifecycle::parse(&row.stack),
                     row.availability(),
-                    keyword_span(node),
+                    keyword_span(&node),
                     &to_range,
                 )
             {
                 diagnostics.push(d);
             }
-        } else if node.kind() == "function_call" {
-            if let Some(d) = function_diagnostic(target, node, source, catalog, &mut suggestions) {
+        } else if kind == K::FUNCTION_CALL {
+            if let Some(d) = function_diagnostic(target, &node, source, catalog, &mut suggestions) {
                 diagnostics.push(d);
             }
-        } else if node.kind() == "inline_cast" {
-            if let Some(d) = cast_diagnostic(target, node, source, catalog, &mut suggestions) {
+        } else if kind == K::INLINE_CAST {
+            if let Some(d) = cast_diagnostic(target, &node, source, catalog, &mut suggestions) {
                 diagnostics.push(d);
             }
-        } else if node.kind() == "qualified_name" {
-            if let Some(d) = reserved_name(node, source) {
+        } else if kind == K::QUALIFIED_NAME {
+            if let Some(d) = reserved_name(&node, source) {
                 diagnostics.push(d);
             }
-        } else if node.kind() == "string" {
-            if let Some(d) = string_escape(node, source) {
+        } else if kind == K::STRING {
+            if let Some(d) = string_escape(&node, source) {
                 diagnostics.push(d);
             }
-        } else if node.kind() == "like_expression" {
-            diagnostics.extend(pattern_problems(node, source));
-        } else if node.kind() == "selector" {
-            let name = text(node, source);
+        } else if kind == K::LIKE_EXPRESSION {
+            diagnostics.extend(pattern_problems(&node, source));
+        } else if kind == K::SELECTOR {
+            let name = text_of(&node, source);
             if !matches!(name.to_ascii_lowercase().as_str(), "data" | "failures") {
                 diagnostics.push(Diagnostic::error(
                     codes::ESQL_PARSE_ERROR,
                     format!("unknown index selector `::{name}`; Elasticsearch knows `::data` and `::failures`"),
-                    range(source, node_span(node)),
+                    range(source, span_of(&node)),
                 ));
             }
-        } else if node.kind() == "qualified_interval" {
-            let value = node.child_by_field_name("value").map(|v| text(v, source));
+        } else if kind == K::QUALIFIED_INTERVAL {
+            // The number; the unit after it.
+            let value = node
+                .children()
+                .find(|v| v.kind() == K::NUMBER)
+                .map(|v| text_of(&v, source));
             if value.is_some_and(|v| !v.bytes().all(|b| b.is_ascii_digit())) {
                 diagnostics.push(Diagnostic::error(
                     codes::ESQL_PARSE_ERROR,
                     "a time span needs a whole number (`90 minutes`, not `1.5 hours`)",
-                    range(source, node_span(node)),
+                    range(source, span_of(&node)),
                 ));
             }
         }
-    });
+    }
     // Elasticsearch caps expression depth: 400 until 8.19.16, 9.0-9.2,
     // 9.3.4, and 9.4.2; 300 from 8.19.17, 9.3.5, 9.4.3, and 9.5.
-    let (depth, deepest) = expression_depth(root);
+    let (depth, deepest) = expression_depth(&tree.syntax);
     if depth > 300 {
-        let span = deepest.unwrap_or_else(|| node_span(root));
+        let span = deepest.unwrap_or_else(|| span_of(&tree.syntax));
         let (severity, message) = if depth > 400 {
             (
                 Severity::Error,
@@ -262,7 +273,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     // Kibana 9.4 and later add `METADATA _id` themselves (elastic-1.0
     // Advisories), so a declared 9.4+ or Serverless target skips the advisory.
     if !target.is_some_and(|t| t.at_least(StackVersion::new(9, 4)))
-        && let Some(d) = metadata_id_advisory(root, source)
+        && let Some(d) = metadata_id_advisory(&tree.syntax, source)
     {
         diagnostics.push(d);
     }
@@ -277,6 +288,21 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
 }
 
+/// `root` and the nodes below it in document order, but not the insides of
+/// a one-token node (`IndexName`'s string): what the checks see.
+fn named_nodes(root: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> {
+    let mut stack = vec![root.clone()];
+    std::iter::from_fn(move || {
+        let node = stack.pop()?;
+        if !tree::is_leaf(node.kind()) {
+            let at = stack.len();
+            stack.extend(node.children());
+            stack[at..].reverse();
+        }
+        Some(node)
+    })
+}
+
 /// Words the expression lexer always reads as keywords. A field with one of
 /// these names needs backticks: `` `by` ``.
 const EXPRESSION_KEYWORDS: &[&str] = &[
@@ -284,20 +310,19 @@ const EXPRESSION_KEYWORDS: &[&str] = &[
     "nulls", "on", "or", "rlike", "true", "where", "with",
 ];
 
-fn reserved_name(node: Node, source: &str) -> Option<Diagnostic> {
-    let mut cursor = node.walk();
-    let part = node.named_children(&mut cursor).find(|part| {
-        part.kind() == "identifier"
-            && EXPRESSION_KEYWORDS.contains(&text(*part, source).to_ascii_lowercase().as_str())
+fn reserved_name(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+    let part = node.children().find(|part| {
+        matches!(part.kind(), K::IDENTIFIER | K::JOIN_QUALIFIER)
+            && EXPRESSION_KEYWORDS.contains(&text_of(part, source).to_ascii_lowercase().as_str())
     })?;
-    let word = text(part, source);
+    let word = text_of(&part, source);
     Some(
         Diagnostic::error(
             codes::ESQL_PARSE_ERROR,
             format!(
                 "`{word}` is an ES|QL keyword here; quote a field with that name as `` `{word}` ``"
             ),
-            range(source, node_span(part)),
+            range(source, span_of(&part)),
         )
         .with_suggestion(format!("`{word}`")),
     )
@@ -305,8 +330,8 @@ fn reserved_name(node: Node, source: &str) -> Option<Diagnostic> {
 
 /// Double-quoted strings allow only `\t \n \r \" \\`; anything else, such as
 /// `"C:\Windows"`, fails the lexer. Triple-quoted strings take no escapes.
-fn string_escape(node: Node, source: &str) -> Option<Diagnostic> {
-    let t = text(node, source);
+fn string_escape(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+    let t = text_of(node, source);
     if t.starts_with("\"\"\"") {
         return None;
     }
@@ -315,7 +340,7 @@ fn string_escape(node: Node, source: &str) -> Option<Diagnostic> {
     while i + 1 < bytes.len() {
         if bytes[i] == b'\\' {
             if !matches!(bytes[i + 1], b't' | b'n' | b'r' | b'"' | b'\\') {
-                let at = node.start_byte() + i;
+                let at = span_of(node).start + i;
                 return Some(
                     Diagnostic::error(
                         codes::ESQL_PARSE_ERROR,
@@ -385,20 +410,21 @@ pub(crate) fn string_value(raw: &str) -> Option<String> {
 /// release (crates/testdata/oracles/elasticsearch/esql-functions): a `LIKE` escape
 /// that is not `\*`, `\?`, or `\\`, and an `RLIKE` body Lucene's `RegExp`
 /// rejects or cannot determinize.
-fn pattern_problems(node: Node, source: &str) -> Vec<Diagnostic> {
-    let rlike = node
-        .child_by_field_name("operator")
-        .is_some_and(|o| text(o, source).eq_ignore_ascii_case("rlike"));
+fn pattern_problems(node: &SyntaxNode, source: &str) -> Vec<Diagnostic> {
+    // The patterns follow the operator; the parser reads the operand before
+    // it (`expressions.rs`, `Infix::Like`).
+    let own = parts(node);
+    let op = first_token(&own, &[K::LIKE_KW, K::RLIKE_KW]);
+    let rlike = op.is_some_and(|at| own[at].kind() == K::RLIKE_KW);
     let mut out = Vec::new();
-    let mut cursor = node.walk();
-    for pattern in node.children_by_field_name("pattern", &mut cursor) {
-        if pattern.kind() != "string" {
+    for pattern in op.map(|at| nodes_after(&own, at)).into_iter().flatten() {
+        if pattern.kind() != K::STRING {
             continue;
         }
-        let Some(value) = string_value(text(pattern, source)) else {
+        let Some(value) = string_value(text_of(pattern, source)) else {
             continue;
         };
-        let at = range(source, node_span(pattern));
+        let at = range(source, span_of(pattern));
         if rlike {
             for problem in opentide_lucene::regexp::elasticsearch_problems(&value) {
                 let mut d = Diagnostic::error(
@@ -441,34 +467,33 @@ fn pattern_problems(node: Node, source: &str) -> Vec<Diagnostic> {
 /// arithmetic, predicate, cast, call, or parenthesized node adds one. A flat
 /// chain of `k` terms nests `k - 1` levels (the first two terms the deepest,
 /// as in a left-leaning tree); the span reported is the innermost pair.
-fn expression_depth(root: Node) -> (usize, Option<ByteSpan>) {
-    const NESTING: &[&str] = &[
-        "not_expression",
-        "and_expression",
-        "or_expression",
-        "in_expression",
-        "is_null_expression",
-        "like_expression",
-        "match_expression",
-        "comparison",
-        "unary_expression",
-        "binary_expression",
-        "parenthesized_expression",
-        "inline_cast",
-        "function_call",
+fn expression_depth(root: &SyntaxNode) -> (usize, Option<ByteSpan>) {
+    const NESTING: &[K] = &[
+        K::NOT_EXPRESSION,
+        K::AND_EXPRESSION,
+        K::OR_EXPRESSION,
+        K::IN_EXPRESSION,
+        K::IS_NULL_EXPRESSION,
+        K::LIKE_EXPRESSION,
+        K::MATCH_EXPRESSION,
+        K::COMPARISON,
+        K::UNARY_EXPRESSION,
+        K::BINARY_EXPRESSION,
+        K::PARENTHESIZED_EXPRESSION,
+        K::INLINE_CAST,
+        K::FUNCTION_CALL,
     ];
     // Iterative: a 10 000-term chain must not overflow the stack.
-    let mut stack = vec![(root, 0usize)];
+    let mut stack = vec![(root.clone(), 0usize)];
     let (mut max, mut deepest) = (0usize, None);
     while let Some((node, base)) = stack.pop() {
-        let mut cursor = node.walk();
-        let kids: Vec<Node> = node
-            .named_children(&mut cursor)
-            .filter(|k| k.kind() != "comment")
+        let kids: Vec<SyntaxNode> = children_of(&node)
+            .into_iter()
+            .filter_map(NodeOrToken::into_node)
             .collect();
         let flat = matches!(
             node.kind(),
-            "and_expression" | "or_expression" | "binary_expression"
+            K::AND_EXPRESSION | K::OR_EXPRESSION | K::BINARY_EXPRESSION
         ) && kids.len() > 1;
         let mut depths = vec![base; kids.len()];
         if NESTING.contains(&node.kind()) {
@@ -476,9 +501,9 @@ fn expression_depth(root: Node) -> (usize, Option<ByteSpan>) {
             if base + levels > max {
                 max = base + levels;
                 deepest = Some(if flat {
-                    ByteSpan::new(node.start_byte(), kids[1].end_byte())
+                    ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
                 } else {
-                    node_span(node)
+                    span_of(&node)
                 });
             }
             for (i, d) in depths.iter_mut().enumerate() {
@@ -617,14 +642,32 @@ pub(crate) fn text<'a>(node: Node, source: &'a str) -> &'a str {
     source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
 
+/// The text of a node or token.
+fn element_text<'s>(element: &SyntaxElement, source: &'s str) -> &'s str {
+    let span = element_span(element);
+    source.get(span.start..span.end).unwrap_or("")
+}
+
+/// A join's kind (`LOOKUP`, `LEFT`): its first child when that is a token.
+fn join_kind(node: &SyntaxNode) -> Option<SyntaxElement> {
+    children_of(node)
+        .into_iter()
+        .next()
+        .filter(|first| !is_named(first))
+}
+
 /// Catalog name of a command node: `stats`, `inline stats`, `lookup join`.
-pub(crate) fn command_name(node: Node, source: &str) -> Option<String> {
-    let kind = node.kind();
-    let base = kind.strip_suffix("_command")?;
+pub(crate) fn command_name(node: &SyntaxNode, source: &str) -> Option<String> {
+    if !gates::is_command(node.kind()) {
+        return None;
+    }
+    let base = tree::node_name(node.kind()).strip_suffix("_command")?;
     Some(match base {
         "unknown" => return None,
         "inline_stats" => {
-            let first = node.child(0).map(|c| text(c, source).to_ascii_lowercase());
+            let first = children_of(node)
+                .first()
+                .map(|c| element_text(c, source).to_ascii_lowercase());
             if first.as_deref() == Some("inlinestats") {
                 "inlinestats".into()
             } else {
@@ -632,9 +675,8 @@ pub(crate) fn command_name(node: Node, source: &str) -> Option<String> {
             }
         }
         "join" => {
-            let join_kind = node
-                .child_by_field_name("kind")
-                .map(|k| text(k, source).to_ascii_lowercase())
+            let join_kind = join_kind(node)
+                .map(|k| element_text(&k, source).to_ascii_lowercase())
                 .unwrap_or_else(|| "lookup".into());
             format!("{join_kind} join")
         }
@@ -647,8 +689,8 @@ fn display_name(name: &str) -> String {
     name.to_ascii_uppercase()
 }
 
-/// The command's keyword on a rowan node (`LIMIT`), for the version gates:
-/// [`keyword_span`] of a one-keyword command.
+/// The command's keyword (`LIMIT`), for the version gates: [`keyword_span`]
+/// of a one-keyword command.
 pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
     let start = usize::from(node.text_range().start());
     let end = node
@@ -660,28 +702,24 @@ pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
 }
 
 /// The command's leading keywords (`LOOKUP JOIN`, `INLINE STATS`).
-pub(crate) fn keyword_span(node: Node) -> ByteSpan {
-    let start = node.start_byte();
+pub(crate) fn keyword_span(node: &SyntaxNode) -> ByteSpan {
+    let start = span_of(node).start;
     let mut end = start;
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if child.is_named() {
+    let kids = children_of(node);
+    let several = matches!(node.kind(), K::INLINE_STATS_COMMAND | K::JOIN_COMMAND);
+    for child in &kids {
+        if is_named(child) || matches!(child.kind(), K::PIPE | K::L_PAREN) {
             break;
         }
-        if child.kind() == "|" || child.kind() == "(" {
-            break;
-        }
-        end = child.end_byte();
-        if node.kind() != "inline_stats_command" && node.kind() != "join_command" {
+        end = element_span(child).end;
+        if !several {
             break;
         }
     }
-    if node.kind() == "join_command"
-        && let Some(kind) = node.child_by_field_name("kind")
-    {
-        end = end.max(kind.end_byte());
-        if let Some(join) = kind.next_sibling() {
-            end = end.max(join.end_byte());
+    // The join's kind and the child after it (`JOIN`).
+    if node.kind() == K::JOIN_COMMAND && join_kind(node).is_some() {
+        for kid in kids.iter().take(2) {
+            end = end.max(element_span(kid).end);
         }
     }
     ByteSpan::new(start, end.max(start + 1))
@@ -751,15 +789,16 @@ pub fn suggestion_scans() -> usize {
     SUGGESTION_SCANS.get()
 }
 
-fn unknown_command(node: Node, source: &str, suggestions: &mut Suggestions) -> Diagnostic {
-    let name_node = node.child_by_field_name("name").unwrap_or(node);
-    let name = text(name_node, source);
+fn unknown_command(node: &SyntaxNode, source: &str, suggestions: &mut Suggestions) -> Diagnostic {
+    // The name: the command's first node.
+    let name_node = node.children().next().unwrap_or_else(|| node.clone());
+    let name = text_of(&name_node, source);
     let mut d = Diagnostic::error(
         codes::ESQL_UNKNOWN_COMMAND,
         format!(
             "unknown ES|QL command `{name}`; Elasticsearch rejects it, and Kibana 9.4 and 9.5 run a non-aggregating rule without it"
         ),
-        range(source, node_span(name_node)),
+        range(source, span_of(&name_node)),
     );
     if let Some(s) = suggestions.command(name) {
         d = d.with_suggestion(display_name(&s));
@@ -769,17 +808,18 @@ fn unknown_command(node: Node, source: &str, suggestions: &mut Suggestions) -> D
 
 fn function_diagnostic(
     target: Option<StackTarget>,
-    node: Node,
+    node: &SyntaxNode,
     source: &str,
     catalog: &Catalog,
     suggestions: &mut Suggestions,
 ) -> Option<Diagnostic> {
-    let name_node = node.child_by_field_name("name")?;
-    if name_node.kind() == "parameter" {
+    // The name: the call's first node.
+    let name_node = node.children().next()?;
+    if name_node.kind() == K::PARAMETER {
         return None;
     }
-    let name = text(name_node, source);
-    let span = node_span(name_node);
+    let name = text_of(&name_node, source);
+    let span = span_of(&name_node);
     let lower = name.to_ascii_lowercase();
     if lower != "first" && lower != "last" && EXPRESSION_KEYWORDS.contains(&lower.as_str()) {
         // `in(x)`: the expression lexer reads the name as a keyword.
@@ -819,17 +859,17 @@ fn function_diagnostic(
 /// some releases know is a version gate.
 fn cast_diagnostic(
     target: Option<StackTarget>,
-    node: Node,
+    node: &SyntaxNode,
     source: &str,
     catalog: &Catalog,
     suggestions: &mut Suggestions,
 ) -> Option<Diagnostic> {
-    let type_node = node.child_by_field_name("type")?;
-    let name = text(type_node, source);
+    let type_node = node.children().find(|c| c.kind() == K::TYPE_NAME)?;
+    let name = text_of(&type_node, source);
     if name.starts_with('?') || name.starts_with('`') {
         return None;
     }
-    let span = node_span(type_node);
+    let span = span_of(&type_node);
     match catalog.cast_type(name) {
         Some(row) => {
             let mut gate = gates_for_type(row, span);
@@ -962,31 +1002,27 @@ fn availability(
 
 /// Non-aggregating `FROM` queries need `METADATA _id` so Elastic Security can
 /// de-duplicate alerts ([elastic-1.0] Advisories).
-fn metadata_id_advisory(root: Node, source: &str) -> Option<Diagnostic> {
-    let query = named_child_of_kind(root, "query")?;
-    let source_cmd = query.child_by_field_name("source")?;
-    if source_cmd.kind() != "from_command" {
+fn metadata_id_advisory(root: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+    let query = root.children().find(|c| c.kind() == K::QUERY)?;
+    let mut commands = parts(&query).into_iter().filter_map(NodeOrToken::into_node);
+    let source_cmd = commands.next()?;
+    if source_cmd.kind() != K::FROM_COMMAND {
         return None;
     }
-    let mut cursor = query.walk();
-    let aggregates = query
-        .children_by_field_name("command", &mut cursor)
-        .any(|c| c.kind() == "stats_command");
-    if aggregates {
+    if commands.any(|c| c.kind() == K::STATS_COMMAND) {
         return None;
     }
-    let metadata = source_cmd.child_by_field_name("metadata");
-    let has_id = metadata.is_some_and(|m| {
-        let mut c = m.walk();
-        m.children_by_field_name("field", &mut c)
-            .any(|f| text(f, source) == "_id")
+    let metadata = source_cmd.children().find(|c| c.kind() == K::METADATA);
+    let has_id = metadata.as_ref().is_some_and(|m| {
+        m.children()
+            .any(|f| f.kind() == K::METADATA_FIELD && text_of(&f, source) == "_id")
     });
     if has_id {
         return None;
     }
     let span = metadata
-        .map(node_span)
-        .unwrap_or_else(|| keyword_span(source_cmd));
+        .as_ref()
+        .map_or_else(|| keyword_span(&source_cmd), span_of);
     Some(
         Diagnostic::warning(
             codes::ESQL_METADATA_ID,
@@ -995,11 +1031,6 @@ fn metadata_id_advisory(root: Node, source: &str) -> Option<Diagnostic> {
         )
         .with_suggestion("METADATA _id, _version, _index"),
     )
-}
-
-fn named_child_of_kind<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).find(|c| c.kind() == kind)
 }
 
 pub(crate) fn highlight(
@@ -1034,6 +1065,62 @@ pub(crate) fn highlight(
 
 // ---- Hover ----------------------------------------------------------------
 
+/// [`command_name`] of an arena node, for hover until it reads the typed
+/// AST (#1415).
+fn arena_command_name(node: Node, source: &str) -> Option<String> {
+    let kind = node.kind();
+    let base = kind.strip_suffix("_command")?;
+    Some(match base {
+        "unknown" => return None,
+        "inline_stats" => {
+            let first = node.child(0).map(|c| text(c, source).to_ascii_lowercase());
+            if first.as_deref() == Some("inlinestats") {
+                "inlinestats".into()
+            } else {
+                "inline stats".into()
+            }
+        }
+        "join" => {
+            let join_kind = node
+                .child_by_field_name("kind")
+                .map(|k| text(k, source).to_ascii_lowercase())
+                .unwrap_or_else(|| "lookup".into());
+            format!("{join_kind} join")
+        }
+        "fill_null" => "fillnull".into(),
+        other => other.to_string(),
+    })
+}
+
+/// [`keyword_span`] of an arena node, for hover until it reads the typed AST
+/// (#1415).
+fn arena_keyword_span(node: Node) -> ByteSpan {
+    let start = node.start_byte();
+    let mut end = start;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.is_named() {
+            break;
+        }
+        if child.kind() == "|" || child.kind() == "(" {
+            break;
+        }
+        end = child.end_byte();
+        if node.kind() != "inline_stats_command" && node.kind() != "join_command" {
+            break;
+        }
+    }
+    if node.kind() == "join_command"
+        && let Some(kind) = node.child_by_field_name("kind")
+    {
+        end = end.max(kind.end_byte());
+        if let Some(join) = kind.next_sibling() {
+            end = end.max(join.end_byte());
+        }
+    }
+    ByteSpan::new(start, end.max(start + 1))
+}
+
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize) -> Option<String> {
@@ -1064,12 +1151,12 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     let mut cur = Some(node);
     while let Some(n) = cur {
         if n.kind().ends_with("_command") {
-            let span = keyword_span(n);
+            let span = arena_keyword_span(n);
             if offset >= span.start && offset < span.end {
                 if n.kind() == "unknown_command" {
                     return None;
                 }
-                let name = command_name(n, source)?;
+                let name = arena_command_name(n, source)?;
                 return catalog.command(&name).map(command_hover);
             }
             break;
@@ -1944,5 +2031,63 @@ mod tests {
         // every engine reports the end of a query (#1431 follow-up).
         assert_eq!((d.range.start.line, d.range.start.character), (0, 21));
         assert_eq!((d.range.end.line, d.range.end.character), (0, 21));
+    }
+
+    /// What the analysis walk reads from each node: a join's two words, an
+    /// escape's place, a command's spelling, the innermost pair of a long
+    /// chain; and not the inside of a one-token node (an index name's
+    /// string is no string literal).
+    #[test]
+    fn the_walk_reads_each_node_s_parts() {
+        let found = |q: &str, code: &str| -> Vec<(u32, u32, String)> {
+            analyze_for(q, at("8.19"))
+                .diagnostics
+                .into_iter()
+                .filter(|d| d.code == code)
+                .map(|d| (d.range.start.character, d.range.end.character, d.message))
+                .collect()
+        };
+        let join = found(
+            "FROM a METADATA _id | LEFT JOIN t ON x",
+            codes::ESQL_UNAVAILABLE,
+        );
+        assert_eq!((join[0].0, join[0].1), (22, 31), "{join:?}");
+        // A comment after the join's kind ends the keywords there.
+        let join = found(
+            "FROM a METADATA _id | LEFT /* c */ JOIN t ON x",
+            codes::ESQL_UNAVAILABLE,
+        );
+        assert_eq!((join[0].0, join[0].1), (22, 34), "{join:?}");
+        let escape = found("ROW a = \"C:\\Windows\"", codes::ESQL_PARSE_ERROR);
+        assert_eq!((escape[0].0, escape[0].1), (11, 13), "{escape:?}");
+        assert!(
+            found("FROM \"a\\qb\" METADATA _id", codes::ESQL_PARSE_ERROR).is_empty(),
+            "an index name's string is not checked as a literal"
+        );
+        let inline = found(
+            "ROW a = 1 | INLINESTATS c = COUNT(*)",
+            codes::ESQL_UNAVAILABLE,
+        );
+        assert!(inline[0].2.contains("`INLINESTATS`"), "{inline:?}");
+        let inline = found(
+            "ROW a = 1 | INLINE STATS c = COUNT(*)",
+            codes::ESQL_UNAVAILABLE,
+        );
+        assert!(inline[0].2.contains("`INLINE STATS`"), "{inline:?}");
+        assert_eq!((inline[0].0, inline[0].1), (12, 24), "both words");
+        // The advisory reads the query, not what recovery left after it,
+        // and INLINE STATS does not aggregate the rows away.
+        for q in ["FROM a | KEEP b )", "FROM a | INLINE STATS c = COUNT(*)"] {
+            assert_eq!(found(q, codes::ESQL_METADATA_ID).len(), 1, "{q}");
+        }
+        // A parameter names no function.
+        assert!(analyze("ROW a = 1 | EVAL x = ?p(a)").diagnostics.is_empty());
+        // A chain of names: the innermost pair, `a AND a`.
+        let chain = format!(
+            "FROM a METADATA _id | WHERE {}",
+            vec!["a"; 302].join(" AND ")
+        );
+        let deep = found(&chain, codes::ESQL_EXPRESSION_DEPTH);
+        assert_eq!((deep[0].0, deep[0].1), (28, 35), "{deep:?}");
     }
 }
