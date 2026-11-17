@@ -21,13 +21,13 @@
 //! `validate`'s (its warnings and notes are `lint`'s); `--queries warn`
 //! reports them as warnings with a note.
 //!
-//! The datasets a workspace declares are installed process-wide in the
-//! engines, as the language server installs them, so one check runs at a
-//! time ([`ENGINE`]).
+//! The datasets a workspace declares are its [`Profiles`]': each check
+//! enters them on the thread that runs it, so checks of different
+//! workspaces run at once and take no lock (#1142).
 
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use indexmap::IndexMap;
 use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
@@ -163,8 +163,11 @@ const MESSAGE_CORRECTIONS: [(&str, &str, &str); 1] = [(
     "; an app on the search head may provide it (opentide cannot declare app commands yet)",
 )];
 
-/// Held while a workspace's datasets are installed in the engines and its
-/// queries checked: the installation is process-wide.
+/// Held while a run installs datasets or catalogs for the whole process
+/// (the TUI's workspace catalog). The queries checks of [`Profiles`] install
+/// nothing and need it no more (#1142): never hold it around a thread pool
+/// whose jobs could take it, as a pool's thread that waits for its jobs
+/// runs other jobs meanwhile, one that takes this lock included.
 pub static ENGINE: Mutex<()> = Mutex::new(());
 
 /// One engine finding, in the CLI's coordinates (1-based, code points,
@@ -227,13 +230,15 @@ impl CheckedQuery {
 }
 
 /// The profiles of one workspace: its Elastic tenants, read from
-/// [`ELASTIC_CONFIGURATION`]. Built by [`Profiles::install`], which also
-/// installs the datasets of its [`VISIBILITY_CONFIGURATION`]; dropping it
-/// installs the ones in use before again (drop it before [`ENGINE`]).
+/// [`ELASTIC_CONFIGURATION`], and the datasets its
+/// [`VISIBILITY_CONFIGURATION`] declares. Its checks use them on whatever
+/// thread runs them, without installing anything for the process (#1142):
+/// it needs no lock, and runs on other threads, nested thread pools
+/// included, are not affected.
 pub struct Profiles {
     host: MemoryWorkspace,
-    /// Puts the datasets in use before [`Profiles::install`] back on drop.
-    _restore: Option<opentide_analysis::RestoreVisibility>,
+    /// The declared datasets every check of these profiles uses.
+    datasets: opentide_analysis::Datasets,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
     /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
@@ -242,11 +247,10 @@ pub struct Profiles {
 }
 
 impl Profiles {
-    /// Reads the profiles of the workspace at `root` and installs its
-    /// declared datasets in the engines: none when there is no
-    /// `visibility.toml`, or it cannot be read or is not TOML (the
-    /// configuration check reports that). Hold [`ENGINE`] while the queries
-    /// are checked.
+    /// Reads the profiles of the workspace at `root`: with its declared
+    /// datasets, or the host's when there is no `visibility.toml`; none when
+    /// it cannot be read or is not TOML (the configuration check reports
+    /// that). Nothing is installed: the name says what it replaced.
     pub fn install(fs: &dyn FileSystem, root: Option<&Path>) -> Self {
         let read = |relative: &str| -> Result<Option<String>, String> {
             let Some(root) = root else {
@@ -259,18 +263,17 @@ impl Profiles {
             let bytes = fs.read(&path).map_err(|error| error.to_string())?;
             decode(&bytes).map(Some)
         };
-        let restore = opentide_analysis::save_visibility();
-        let visibility_problem = match read(VISIBILITY_CONFIGURATION)
-            .and_then(|text| opentide_analysis::install_visibility(text.as_deref()))
+        let (datasets, visibility_problem) = match read(VISIBILITY_CONFIGURATION)
+            .and_then(|text| opentide_analysis::Datasets::of_workspace(text.as_deref()))
         {
-            Ok(()) => None,
-            Err(problem) => {
-                // Declares nothing; the configuration check reports the file.
-                let _ = opentide_analysis::install_visibility(None);
+            Ok(datasets) => (datasets, None),
+            Err(problem) => (
+                // The host's; the configuration check reports the file.
+                opentide_analysis::Datasets::of_workspace(None).unwrap_or_default(),
                 Some(format!(
                     "the declared datasets could not be read: {problem}"
-                ))
-            }
+                )),
+            ),
         };
         let files = match read(ELASTIC_CONFIGURATION) {
             Ok(Some(text)) => vec![(ELASTIC_CONFIGURATION.to_owned(), text)],
@@ -284,7 +287,7 @@ impl Profiles {
         };
         Self {
             host: MemoryWorkspace { files },
-            _restore: Some(restore),
+            datasets,
             visibility_problem,
             graylog_tenants,
         }
@@ -295,7 +298,10 @@ impl Profiles {
     pub fn check_object(&self, text: &str) -> Vec<CheckedQuery> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
-        let mut checked: Vec<CheckedQuery> = opentide_analysis::analyze_queries(&self.host, &text)
+        let reports = self
+            .datasets
+            .scope(|| opentide_analysis::analyze_queries(&self.host, &text));
+        let mut checked: Vec<CheckedQuery> = reports
             .into_iter()
             .map(|report| {
                 let (line, column, _, _) = lines.convert(&text, report.range);
@@ -316,6 +322,24 @@ impl Profiles {
             .collect();
         self.allow_leading_wildcards(&text, &mut checked);
         one_secops_rule(checked)
+    }
+
+    /// [`check_query_on_stack`] with these profiles' declared datasets.
+    pub fn check_query(
+        &self,
+        text: &str,
+        language: opentide_analysis::LanguageId,
+        platform: Option<&str>,
+        stack: Option<&str>,
+    ) -> Vec<Finding> {
+        self.datasets
+            .scope(|| check_query_on_stack(text, language, platform, stack))
+    }
+
+    /// These profiles' declared datasets in use on this thread until the
+    /// guard drops: for engine calls outside the checks above.
+    pub fn enter(&self) -> opentide_analysis::DatasetsScope {
+        self.datasets.enter()
     }
 
     /// The Graylog queries of `text` without `graylog_leading_wildcard` when
@@ -363,26 +387,32 @@ impl Profiles {
     pub fn check_file(&self, path: &Path, text: &str) -> Vec<Finding> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
-        let response = opentide_analysis::analyze(
-            &self.host,
-            opentide_analysis::AnalyzeRequest {
-                uri: path.to_string_lossy().into_owned(),
-                language: opentide_analysis::LanguageId::TideYaml,
-                text: text.clone().into_owned(),
-            },
-        );
+        let (response, blocks) = self.datasets.scope(|| {
+            (
+                opentide_analysis::analyze(
+                    &self.host,
+                    opentide_analysis::AnalyzeRequest {
+                        uri: path.to_string_lossy().into_owned(),
+                        language: opentide_analysis::LanguageId::TideYaml,
+                        text: text.clone().into_owned(),
+                    },
+                ),
+                opentide_analysis::analyze_blocks(&self.host, &text),
+            )
+        });
         response
             .diagnostics
             .into_iter()
-            .chain(opentide_analysis::analyze_blocks(&self.host, &text))
+            .chain(blocks)
             .map(|diagnostic| finding(&text, &lines, diagnostic))
             .collect()
     }
 }
 
 /// One query on its own (a query file), in its own coordinates, with
-/// `platform`'s profile when one is given (`check_query`). Hold [`ENGINE`]
-/// with the workspace's [`Profiles`] installed: the declared datasets apply.
+/// `platform`'s profile when one is given (`check_query`), with the
+/// datasets in use on this thread: [`Profiles::check_query`] checks it with
+/// a workspace's.
 pub fn check_query_text(
     text: &str,
     language: opentide_analysis::LanguageId,
@@ -453,8 +483,7 @@ const ELASTIC_ADVISORIES: [&str; 5] = [
 /// `lint`'s queries check on the query engines (`_query_findings`): each
 /// object's query warnings and notes and its platform blocks' advisories. A
 /// query the engine rejects is `validate`'s; a placeholder query is the
-/// placeholders check's. Build it with [`EngineLintQueries::install`] and
-/// hold [`ENGINE`] while lint runs.
+/// placeholders check's. Build it with [`EngineLintQueries::install`].
 pub struct EngineLintQueries {
     profiles: Profiles,
 }
@@ -925,7 +954,6 @@ impl QueryCheck for EngineQueries {
     ) -> QueryFindings {
         let fs = ws.fs().as_ref();
         let root = ws.root();
-        let _engine = ENGINE.lock().unwrap_or_else(PoisonError::into_inner);
         let profiles = Profiles::install(fs, Some(root));
         let mut found = QueryFindings::default();
         let severity = if as_warnings {
@@ -933,9 +961,9 @@ impl QueryCheck for EngineQueries {
         } else {
             Severity::Error
         };
-        // The engines analyse the objects on every core (the installed
-        // datasets are only read while ENGINE is held); the findings are
-        // then gathered in the objects' order.
+        // The engines analyse the objects on every core, each job with the
+        // workspace's datasets; the findings are then gathered in the
+        // objects' order.
         let checked: Vec<Vec<CheckedQuery>> = objects
             .par_iter()
             .map(|object| profiles.check_object(object.source))
@@ -998,7 +1026,7 @@ mod tests {
                     SecurityEvent\n";
         let profiles = Profiles {
             host: MemoryWorkspace { files: Vec::new() },
-            _restore: None,
+            datasets: opentide_analysis::Datasets::of_workspace(None).unwrap(),
             visibility_problem: None,
             graylog_tenants: Vec::new(),
         };

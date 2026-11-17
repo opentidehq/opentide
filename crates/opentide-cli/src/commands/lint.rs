@@ -5,7 +5,6 @@
 //! and the CI sinks.
 
 use std::path::{Path, PathBuf};
-use std::sync::PoisonError;
 
 use opentide_workspace::lint::{Changed, LintCheck, LintOptions, LintStatus, NO_COMMITS_ADVICE};
 use opentide_workspace::{FileSystem as _, OsFs};
@@ -15,7 +14,7 @@ use super::{Block, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE};
 use crate::json::Json;
-use crate::queries::{ENGINE, EngineLintQueries};
+use crate::queries::EngineLintQueries;
 use crate::render::diagnostic::{Diagnostic, SourceFiles};
 use crate::render::outcome::OutcomeKind;
 use crate::render::report::{ReportFormat, check_report_options};
@@ -126,7 +125,6 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         .then(|| changed_files(&OsFs.resolve(&root), cx.cwd, cx.env));
     let wants_queries = args.checks.is_empty() || args.checks.contains(&LintCheck::Queries);
     let lint = {
-        let _engine = wants_queries.then(|| ENGINE.lock().unwrap_or_else(PoisonError::into_inner));
         let queries = wants_queries.then(|| EngineLintQueries::install(&OsFs, &root));
         let options = LintOptions {
             checks: args.checks.clone(),

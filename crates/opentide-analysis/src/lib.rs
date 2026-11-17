@@ -503,6 +503,60 @@ pub fn standalone_datasets() -> StandaloneDatasets {
     }
 }
 
+/// The declared datasets of one run, passed to the checks explicitly
+/// instead of installed for the whole process (#1142): runs on other threads,
+/// a language server's installation and nested thread pools neither see nor
+/// wait for each other's. Cheap to clone.
+#[derive(Debug, Clone, Default)]
+pub struct Datasets(std::sync::Arc<DeclaredDatasets>);
+
+impl Datasets {
+    /// The datasets a workspace whose `visibility.toml` holds `text`
+    /// declares, as [`install_visibility`] would make them current: with no
+    /// file, the host's ([`set_default_catalog`]), else none.
+    ///
+    /// # Errors
+    ///
+    /// The text is not a `visibility.toml`.
+    pub fn of_workspace(text: Option<&str>) -> Result<Self, String> {
+        let workspace = parse_visibility(text)?;
+        Ok(Self::of(workspace.or_else(|| {
+            dataset_layers()
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .default
+                .clone()
+        })))
+    }
+
+    /// `datasets` as they are (`None` declares nothing).
+    pub fn of(datasets: Option<DeclaredDatasets>) -> Self {
+        Self(std::sync::Arc::new(datasets.unwrap_or_default()))
+    }
+
+    /// Runs `run` on this thread with these datasets in use, whatever is
+    /// installed; the thread's own come back after. A check that spreads
+    /// over a thread pool enters them on each job: a scope does not follow
+    /// work to another thread.
+    pub fn scope<T>(&self, run: impl FnOnce() -> T) -> T {
+        let _scope = self.enter();
+        run()
+    }
+
+    /// [`Datasets::scope`] until the returned guard drops, on this thread.
+    pub fn enter(&self) -> DatasetsScope {
+        DatasetsScope {
+            _scope: opentide_core::datasets::scope_shared(std::sync::Arc::clone(&self.0)),
+        }
+    }
+}
+
+/// The datasets of [`Datasets::enter`] in use on its thread while it lives.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct DatasetsScope {
+    _scope: opentide_core::datasets::ThreadScope,
+}
+
 /// Install workspace catalogs for the whole process. A `None` part goes back
 /// to the bundled catalog. A part that does not parse is an error and changes
 /// nothing.
