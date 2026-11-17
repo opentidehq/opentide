@@ -10,6 +10,7 @@ use rowan::{NodeOrToken, TextRange};
 
 /// A child the analysis sees: a node, or a token that is not trivia.
 fn visible(element: &rowan::SyntaxElement<crate::syntax::Lang>) -> bool {
+    crate::step();
     match element {
         NodeOrToken::Node(_) => true,
         NodeOrToken::Token(t) => !t.kind().is_trivia(),
@@ -32,11 +33,13 @@ fn edge(node: &SyntaxNode, first: bool) -> usize {
             let r = own_token_range(&node);
             return usize::from(if first { r.start() } else { r.end() });
         }
-        let mut children = node.children_with_tokens().filter(visible);
+        // The last child is found from the end: a run's node, or the error node a query too
+        // deep leaves, can hold thousands of children.
         let child = if first {
-            children.next()
+            node.children_with_tokens().find(visible)
         } else {
-            children.last()
+            std::iter::successors(node.last_child_or_token(), |c| c.prev_sibling_or_token())
+                .find(visible)
         };
         match child {
             Some(NodeOrToken::Node(child)) => node = child,

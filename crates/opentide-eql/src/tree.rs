@@ -39,9 +39,6 @@ struct Data {
     parent: Option<u32>,
     children: Vec<u32>,
     field: Option<&'static str>,
-    /// The parser's node this one stands for (none for a token, a comment, or a level of a
-    /// re-nested run).
-    syntax: Option<SyntaxNode>,
 }
 
 /// A parsed query.
@@ -50,11 +47,6 @@ pub(crate) struct Tree {
     pub(crate) problems: Vec<Problem>,
     /// The parser's tree, which this one stands over.
     pub(crate) syntax: SyntaxNode,
-    /// The node of this tree each node of the parser's stands for (none inside a leaf).
-    by_syntax: std::collections::HashMap<SyntaxNode, u32>,
-    /// A small value an analysis pass computed for a node, kept so that a pass over a long
-    /// left-nested run reads each node once (`semantics`' operand types).
-    memo: std::cell::RefCell<std::collections::HashMap<u32, u8>>,
 }
 
 /// Stands where tree-sitter's cursor stood: iteration needs none.
@@ -155,8 +147,6 @@ pub(crate) fn parse(source: &str) -> Tree {
         data: Vec::new(),
         problems,
         syntax: root.clone(),
-        by_syntax: std::collections::HashMap::new(),
-        memo: std::cell::RefCell::default(),
     };
     let mut open: Vec<u32> = Vec::new();
     let mut skip = 0usize;
@@ -182,8 +172,6 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.start()),
                     usize::from(r.end()),
                 );
-                tree.data[id as usize].syntax = Some(node.clone());
-                tree.by_syntax.insert(node.clone(), id);
                 if is_leaf(kind) {
                     skip = 1;
                 }
@@ -251,7 +239,6 @@ impl Tree {
             parent,
             children: Vec::new(),
             field: None,
-            syntax: None,
         });
         if let Some(p) = parent {
             self.data[p as usize].children.push(id);
@@ -365,12 +352,6 @@ impl Tree {
             node = c;
         }
     }
-
-    /// The node of this tree that stands for `node` of the parser's.
-    pub(crate) fn view(&self, node: &SyntaxNode) -> Option<Node<'_>> {
-        self.by_syntax.get(node).map(|&id| Node { tree: self, id })
-    }
-
     pub(crate) fn root_node(&self) -> Node<'_> {
         Node { tree: self, id: 0 }
     }
@@ -538,32 +519,14 @@ impl<'t> Node<'t> {
             id,
         }
     }
-
-    /// The value [`Node::remember`] kept for this node.
-    pub(crate) fn remembered(&self) -> Option<u8> {
-        self.tree.memo.borrow().get(&self.id).copied()
-    }
-
     /// Keeps `value` for this node.
-    pub(crate) fn remember(&self, value: u8) {
-        self.tree.memo.borrow_mut().insert(self.id, value);
-    }
-
     /// The parser's node this one stands for.
-    pub(crate) fn syntax(&self) -> Option<SyntaxNode> {
-        self.d().syntax.clone()
-    }
-
     pub(crate) fn kind(&self) -> &'static str {
         self.d().kind
     }
 
     pub(crate) fn is_named(&self) -> bool {
         self.d().named
-    }
-
-    pub(crate) fn id(&self) -> usize {
-        self.id as usize
     }
 
     pub(crate) fn start_byte(&self) -> usize {
@@ -590,10 +553,6 @@ impl<'t> Node<'t> {
 
     pub(crate) fn child(&self, i: usize) -> Option<Node<'t>> {
         self.d().children.get(i).map(|&c| self.at(c))
-    }
-
-    pub(crate) fn named_child(&self, i: usize) -> Option<Node<'t>> {
-        self.named_children(&mut Cursor).nth(i)
     }
 
     pub(crate) fn walk(&self) -> Cursor {
