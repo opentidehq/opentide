@@ -47,15 +47,24 @@ exit: 1
   ],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment failed · 2 created or updated, 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
+  "error": "Deployment to elastic failed on Elastic prebuilt rule: refusing to modify prebuilt rule",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment failed · 2 created or updated, 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
+    "message": "Deployment to elastic failed on Elastic prebuilt rule: refusing to modify prebuilt rule",
     "suggestion": null
   },
+  "failures": [
+    {
+      "error": "refusing to modify prebuilt rule",
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "name": "Elastic prebuilt rule",
+      "platform": "elastic",
+      "tenant": "soc"
+    }
+  ],
   "message": "Deployment failed · 2 created or updated, 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
   "next_actions": [],
   "ok": false,

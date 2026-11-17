@@ -23,6 +23,7 @@ error: Fatal error · detail: {"errors": [{"code": 4040010, "title": "Not Found"
                                                              (HTTP 404): {"errors": [{"code":
                                                              4040010, "title": "Not Found",…␛[0m
   ␛[1m␛[31m✗␛[0m  ␛[1msentinel_one␛[0m  ␛[2m2 deployed, 1 failed, 1 skipped, 0 not attempted␛[0m ␛[2m<SECONDS>␛[0m
+␛[1m␛[33mwarning:␛[0m Some rules reported deployment warnings
 ␛[1m␛[31m✗␛[0m Deployment failed · 1 created, 1 deleted, 1 skipped, 1 failed, 0 not attempted · <SECONDS>
 
 ━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000011.json · created 0644

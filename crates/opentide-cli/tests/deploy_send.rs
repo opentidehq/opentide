@@ -6,8 +6,8 @@
 //! its connector's cassette recorded from the Python client
 //! (`tests/cassettes/<platform>/deploy.json`): the rules of a workspace,
 //! through the deploy plan, the tenant's batch and the connector, send
-//! exactly the requests the oracle sent. The flow's own rules (a refusal
-//! stops the run, the rules after it not attempted; deployment state written
+//! exactly the requests the oracle sent. The flow's own rules (a refused
+//! rule fails alone and the run goes on; deployment state written
 //! only when the platform accepted the rule) run against a scripted deployer.
 
 #![cfg(unix)]
@@ -404,6 +404,19 @@ fn harfanglab_deletes_a_yara_file_as_the_python_client_did() {
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
 }
 
+/// A registered platform that forwards to a [`Scripted`] the test keeps.
+struct Forward(&'static Scripted);
+
+impl Platform for Forward {
+    fn id(&self) -> &'static str {
+        self.0.id
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
 /// A deployer that answers each request in turn with `outcomes`.
 struct Scripted {
     id: &'static str,
@@ -436,83 +449,310 @@ impl Platform for Scripted {
     }
 }
 
+const SENTINEL_STAGING: &str = "  sentinel:\n    status: STAGING\n    query: SecurityEvent\n    \
+     scheduling:\n      frequency: PT1H\n      lookback: PT1H\n    alert:\n      suppression: \
+     false\n    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n";
+
+const SPLUNK_BLOCK: &str = "  splunk:\n    status: STAGING\n    query: index=main\n";
+
+/// Three rules of `block`: First, Second and Third.
+fn three_rules(block: &str) -> Vec<(&'static str, String)> {
+    [
+        ("a.yaml", "First", 1),
+        ("b.yaml", "Second", 2),
+        ("c.yaml", "Third", 3),
+    ]
+    .into_iter()
+    .map(|(file, name, n)| {
+        let uuid = format!("00000000-0000-4000-8099-00000000000{n}");
+        (file, rule(name, &uuid, &format!("{name}."), block))
+    })
+    .collect()
+}
+
+/// A scripted `platform` deployer answering with `outcomes`, then `Ok`.
+fn scripted(
+    platform: &'static str,
+    outcomes: Vec<Result<(), ConnectorError>>,
+) -> (Registry, &'static Scripted) {
+    let scripted: &'static Scripted = Box::leak(Box::new(Scripted {
+        id: platform,
+        outcomes: Mutex::new(outcomes.into()),
+        seen: Mutex::new(Vec::new()),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Forward(scripted))).unwrap();
+    (registry, scripted)
+}
+
+/// A refused rule fails alone: the rules after it are still sent, the run
+/// reports the failure and exits 1. The Python deployer stopped the run at
+/// the first refusal (`DEPLOYMENT_ERROR_RAISED` raised): opentide deploys
+/// everything that can deploy.
 #[test]
-fn a_refusal_stops_the_run_and_the_rest_is_not_attempted() {
-    let block = "  sentinel:\n    status: STAGING\n    query: SecurityEvent\n    scheduling:\n      \
-         frequency: PT1H\n      lookback: PT1H\n    alert:\n      suppression: false\n    \
-         grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n";
-    let ws = workspace(
-        "sentinel",
-        "soc",
-        SENTINEL_SETUP,
-        &[
-            (
-                "a.yaml",
-                rule(
-                    "First",
-                    "00000000-0000-4000-8099-000000000001",
-                    "First.",
-                    block,
-                ),
-            ),
-            (
-                "b.yaml",
-                rule(
-                    "Second",
-                    "00000000-0000-4000-8099-000000000002",
-                    "Second.",
-                    block,
-                ),
-            ),
-            (
-                "c.yaml",
-                rule(
-                    "Third",
-                    "00000000-0000-4000-8099-000000000003",
-                    "Third.",
-                    block,
-                ),
-            ),
-        ],
-    );
-    let scripted = Scripted {
-        id: "sentinel",
-        outcomes: Mutex::new(
-            [
+fn a_refused_rule_fails_alone_and_the_rules_after_it_are_deployed() {
+    let splunk_setup = "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n";
+    for (platform, setup, block) in [
+        ("sentinel", SENTINEL_SETUP, SENTINEL_STAGING),
+        ("splunk", splunk_setup, SPLUNK_BLOCK),
+    ] {
+        let ws = workspace(platform, "soc", setup, &three_rules(block));
+        let (registry, deployer) = scripted(
+            platform,
+            vec![
                 Ok(()),
                 Err(ConnectorError::refused(
-                    "sentinel",
+                    platform,
                     "soc",
                     "PUT https://x failed with HTTP 400 BadRequest: no",
                     None,
                 )),
-            ]
-            .into(),
-        ),
-        seen: Mutex::new(Vec::new()),
-    };
-    let mut registry = Registry::new();
-    registry.register(Box::new(scripted)).unwrap();
+            ],
+        );
+        let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET), ("SPLUNK_TOKEN", SECRET)]);
+        let (sent, stderr) = deploy(ws.path(), platform, &env, &registry, 0);
+        let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+        assert_eq!(statuses, ["deployed", "failed", "deployed"], "{platform}");
+        assert_eq!(deployer.seen.lock().unwrap().len(), 3, "{platform}");
+        assert!(
+            stderr.contains(&format!(
+                "✗ {platform} · 2 deployed, 1 failed, 0 not attempted · "
+            )),
+            "{stderr}"
+        );
+        assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{platform}");
+        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{platform}");
+        assert_eq!(
+            value(&sent, "error"),
+            &Json::str(
+                "Deployment to {platform} failed on Second: PUT https://x failed with HTTP 400 \
+                 BadRequest: no"
+                    .replace("{platform}", platform)
+            ),
+            "{platform}"
+        );
+        assert_eq!(
+            value(&sent, "failures"),
+            &Json::Array(vec![Json::object([
+                ("platform", Json::str(platform)),
+                ("tenant", Json::str("soc")),
+                ("id", Json::str("00000000-0000-4000-8099-000000000002")),
+                ("name", Json::str("Second")),
+                (
+                    "error",
+                    Json::str("PUT https://x failed with HTTP 400 BadRequest: no")
+                ),
+            ])]),
+            "{platform}"
+        );
+        assert_eq!(
+            value(&sent, "deployed"),
+            &Json::Array(vec![Json::str(platform)]),
+            "{platform}"
+        );
+    }
+}
+
+/// A tenant that refuses the credentials stops only its own rules: the
+/// next tenant gets every rule.
+#[test]
+fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING),
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let second = text.replacen(
+        "[[tenants]]\nname = \"soc\"",
+        "[[tenants]]\nname = \"lab\"",
+        1,
+    );
+    let tenants = &second[second.find("[[tenants]]").unwrap()..];
+    std::fs::write(&config, format!("{text}\n{tenants}")).unwrap();
+    let (registry, deployer) = scripted(
+        "sentinel",
+        vec![Err(ConnectorError::Authentication {
+            platform: "sentinel".into(),
+            tenant: "soc".into(),
+            message: "the credentials were refused".into(),
+            detail: None,
+        })],
+    );
     let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
-    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
-    assert_eq!(statuses, ["deployed", "failed", "not_attempted"]);
+    let mut by_tenant: Vec<(String, String)> = match value(&sent, "results") {
+        Json::Array(rows) => rows
+            .iter()
+            .map(|row| {
+                let text = |key| {
+                    row.get(key)
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_owned()
+                };
+                (text("tenant"), text("status"))
+            })
+            .collect(),
+        other => panic!("{other:?}"),
+    };
+    by_tenant.sort();
+    assert_eq!(
+        by_tenant,
+        [
+            ("lab", "deployed"),
+            ("lab", "deployed"),
+            ("lab", "deployed"),
+            ("soc", "failed"),
+            ("soc", "not_attempted"),
+            ("soc", "not_attempted"),
+        ]
+        .map(|(tenant, status)| (tenant.to_owned(), status.to_owned()))
+    );
+    assert_eq!(deployer.seen.lock().unwrap().len(), 4);
     assert!(
-        stderr.contains("[3/3] · skipped   Third   not attempted after a failure"),
+        stderr.contains("not attempted: tenant soc failed"),
         "{stderr}"
     );
-    assert!(
-        stderr.contains("✗ sentinel · 1 deployed, 1 failed, 1 not attempted · "),
-        "{stderr}"
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    // One cause, one failure: the rule it came on carries it.
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert_eq!(
+        failures[0].get("error"),
+        Some(&Json::str(
+            "sentinel tenant 'soc': the credentials were refused"
+        ))
     );
     assert_eq!(
         value(&sent, "error"),
         &Json::str(
-            "Deployment to sentinel failed on Second: PUT https://x failed with HTTP 400 BadRequest: \
-             no"
+            "Deployment to sentinel failed on First: sentinel tenant 'soc': the credentials were refused"
         )
     );
-    assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()));
+}
+
+/// An interrupt still stops the run: the rule it came on fails, nothing
+/// after it is sent, and the failures before it are still listed.
+#[test]
+fn an_interrupt_stops_the_run_and_keeps_the_failures_before_it() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING),
+    );
+    let (registry, deployer) = scripted(
+        "sentinel",
+        vec![
+            Err(ConnectorError::refused(
+                "sentinel",
+                "soc",
+                "PUT https://x failed with HTTP 400",
+                None,
+            )),
+            Err(ConnectorError::Cancelled),
+        ],
+    );
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["failed", "failed", "not_attempted"]);
+    assert_eq!(deployer.seen.lock().unwrap().len(), 2);
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(
+        value(&sent, "error"),
+        &Json::str("Deployment to sentinel failed on Second: interrupted")
+    );
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    let names: Vec<_> = failures
+        .iter()
+        .filter_map(|failure| failure.get("name"))
+        .collect();
+    assert_eq!(names, [&Json::str("First"), &Json::str("Second")]);
+}
+
+/// A rule refused on one platform leaves the next platform's rules to
+/// deploy.
+#[test]
+fn a_refused_rule_on_one_platform_leaves_the_next_platform_to_deploy() {
+    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &[]);
+    let platforms = ws.path().join(".opentide/configurations/platforms");
+    std::fs::write(
+        platforms.join("splunk.toml"),
+        "[platform]\nenabled = true\nname = \"Stand-in\"\n\n[[tenants]]\nname = \"lab\"\n\
+         strategies = [\"PREVIEW\", \"RELEASE\"]\n[tenants.setup]\nurl = \"splunk.invalid\"\n\
+         token = \"$SPLUNK_TOKEN\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        ws.path().join("objects/rules/a.yaml"),
+        rule(
+            "Both",
+            "00000000-0000-4000-8099-000000000001",
+            "Both.",
+            &format!("{SENTINEL_STAGING}{SPLUNK_BLOCK}"),
+        ),
+    )
+    .unwrap();
+    let refused = ConnectorError::refused(
+        "sentinel",
+        "soc",
+        "PUT https://x failed with HTTP 400",
+        None,
+    );
+    let sentinel: &'static Scripted = Box::leak(Box::new(Scripted {
+        id: "sentinel",
+        outcomes: Mutex::new([Err(refused)].into()),
+        seen: Mutex::new(Vec::new()),
+    }));
+    let splunk: &'static Scripted = Box::leak(Box::new(Scripted {
+        id: "splunk",
+        outcomes: Mutex::new(std::collections::VecDeque::new()),
+        seen: Mutex::new(Vec::new()),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Forward(sentinel))).unwrap();
+    registry.register(Box::new(Forward(splunk))).unwrap();
+    let args = Args {
+        strategies: vec!["PREVIEW".into(), "RELEASE".into()],
+        all: true,
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET), ("SPLUNK_TOKEN", SECRET)]);
+    let (sent, _) = deploy_with(ws.path(), &args, &env, &registry, 0);
+    let mut statuses: Vec<(String, String)> = match value(&sent, "results") {
+        Json::Array(rows) => rows
+            .iter()
+            .map(|row| {
+                let text = |key| {
+                    row.get(key)
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_owned()
+                };
+                (text("platform"), text("status"))
+            })
+            .collect(),
+        other => panic!("{other:?}"),
+    };
+    statuses.sort();
+    assert_eq!(
+        statuses,
+        [("sentinel", "failed"), ("splunk", "deployed")]
+            .map(|(platform, status)| (platform.to_owned(), status.to_owned()))
+    );
+    assert_eq!(splunk.seen.lock().unwrap().len(), 1);
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
 }
 
 #[test]

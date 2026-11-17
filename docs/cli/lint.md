@@ -261,7 +261,7 @@ warning[placeholder]: mitre_attack[0] holds a placeholder value written by opent
    ╰─ help: replace the value, then delete the '# opentide:placeholder' comment
 ```
 
-Plain `lint` and `validate` still pass, so a draft can be committed (a placeholder query, `...`, is not sent to the analysis engine: neither `validate` nor the `queries` check reports it as a query): the commit hook runs `validate --strict` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).
+Plain `lint` and `validate` still pass, so a draft can be committed (a placeholder query, `...`, is not sent to the analysis engine: neither `validate` nor the `queries` check reports it as a query): the commit hook runs `validate --strict --allow-empty` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).
 
 ### Queries
 

@@ -43,8 +43,8 @@
 //! ANSI escape codes are kept: they are part of what human mode prints.
 //!
 //! Written for `cargo xtask golden` (UC-0.5, #803), then held in
-//! `opentide-compare`; the oracle gone, it lives here, with the snapshots
-//! that use it ([`crate::snapshot`], #1139).
+//! `opentide-compare` (deleted with the oracle, #1142); it lives here, with
+//! the snapshots that use it ([`crate::snapshot`], #1139).
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
 

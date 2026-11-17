@@ -25,7 +25,6 @@ dunce = "1"
 jiff.workspace = true
 # `files::sha256_hex`: the vocabulary bundle's and its sources' digests.
 sha2 = "0.11"
-opentide-compare.workspace = true
 # `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
 opentide-cassette.workspace = true
 # The object models' oracle comparisons (`corpus faults --engine rust`), the
@@ -59,7 +58,6 @@ indexmap = { version = "2", features = ["serde"] }
 # the introspection data PyO3 compiles into the extension (`maturin
 # generate-stubs` uses the same crate). Its version is PyO3's.
 pyo3-introspection = "0.30.1"
-jsonschema = { version = "0.61.1", default-features = false }
 # xtask vocab malapi (src/vocab/malapi/): malapi.io's pages, parsed with
 # html5ever (the parser scraper wraps) into markup5ever_rcdom's tree. Not
 # scraper itself: its selectors and cssparser are MPL-2.0, which deny.toml's
@@ -68,4 +66,6 @@ html5ever = "0.40.1"
 markup5ever_rcdom = "0.40.1"
 
 [dev-dependencies]
+# codegen's probe test (src/verdict.rs): the verdict of a generated schema.
+jsonschema = { version = "0.61.1", default-features = false }
 trycmd.workspace = true

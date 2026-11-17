@@ -176,6 +176,32 @@ mod watch {
         )
     }
 
+    /// `validate --watch --strict` on a workspace with no object fails each
+    /// pass, as one `validate --strict` run does; without the requirement,
+    /// or with an object, it passes.
+    #[test]
+    fn a_pass_with_no_object_fails_when_objects_are_required() {
+        let fs = MemoryFs::new();
+        let empty = |require| {
+            let mut watcher = watcher(&fs, Scripted::default(), true).requiring_objects(require);
+            watcher.start()
+        };
+        let required = empty(true);
+        assert_eq!((required.objects, required.errors), (0, 0));
+        assert!(required.failed);
+        assert!(!empty(false).failed);
+        let mut one = watcher(
+            &fs,
+            Scripted {
+                objects: 1,
+                ..Scripted::default()
+            },
+            true,
+        )
+        .requiring_objects(true);
+        assert!(!one.start().failed);
+    }
+
     #[test]
     fn the_watcher_validates_once_then_only_what_changed() {
         let fs = folder();

@@ -5,6 +5,9 @@
 //! The tree is built through `serde_json`'s parser without its
 //! `preserve_order` feature, which would change the map type of every crate
 //! in a build that unifies features.
+//!
+//! Moved from the retired `opentide-compare` crate (#1142): the conformance
+//! comparator is its last user.
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
