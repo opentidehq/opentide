@@ -56,7 +56,7 @@ impl TenantConfig {
     /// The tenant `name` of `platform` with its `setup`: each key and its
     /// value, a `$NAME` value read from the environment when it connects
     /// (`{ url: 'https://s1.example', api_token: '$S1_API_TOKEN' }`).
-    #[napi(constructor)]
+    #[napi(catch_unwind, constructor)]
     pub fn new(platform: String, name: String, setup: HashMap<String, String>) -> Self {
         Self {
             inner: connectors::TenantConfig::new(platform, name, setup),
@@ -64,19 +64,19 @@ impl TenantConfig {
     }
 
     /// The platform's identifier (`splunk`, `sentinel_one`).
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn platform(&self) -> String {
         self.inner.platform().to_owned()
     }
 
     /// The tenant's name.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn name(&self) -> String {
         self.inner.name().to_owned()
     }
 
     /// The keys of its `setup`, in name order; never their values.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn setup_keys(&self) -> Vec<String> {
         self.inner.setup_keys().map(str::to_owned).collect()
     }
@@ -107,7 +107,7 @@ impl From<connectors::Capabilities> for Capabilities {
 }
 
 /// The platforms with a connector, in the order opentide lists them.
-#[napi]
+#[napi(catch_unwind)]
 pub fn platforms() -> Vec<String> {
     connectors::platforms()
         .into_iter()
@@ -117,7 +117,7 @@ pub fn platforms() -> Vec<String> {
 
 /// What the connector of `platform` can do; `null` for a platform without
 /// one.
-#[napi]
+#[napi(catch_unwind)]
 pub fn capabilities(platform: String) -> Option<Capabilities> {
     connectors::capabilities(&platform).map(Capabilities::from)
 }
@@ -207,13 +207,13 @@ pub struct Canceller {
 #[napi]
 impl Canceller {
     /// Cancels.
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn cancel(&self) {
         self.inner.cancel();
     }
 
     /// Whether `cancel` was called.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn is_cancelled(&self) -> bool {
         self.inner.is_cancelled()
     }
@@ -236,7 +236,7 @@ impl Connection {
     /// (naming the variable), `tenant_setup_invalid`,
     /// `operation_unsupported` (a platform without a connector) or
     /// `usage_invalid_value` (a timeout that is not a number of seconds).
-    #[napi(factory)]
+    #[napi(catch_unwind, factory)]
     pub fn open(
         env: &Env,
         tenant: &TenantConfig,
@@ -246,26 +246,26 @@ impl Connection {
     }
 
     /// The platform's identifier.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn platform(&self) -> String {
         self.inner.platform().to_owned()
     }
 
     /// The tenant's name.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn tenant(&self) -> String {
         self.inner.tenant().to_owned()
     }
 
     /// What this tenant's connector can do.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn capabilities(&self) -> Capabilities {
         self.inner.capabilities().into()
     }
 
     /// A handle that cancels this connection's operations from elsewhere (a
     /// signal handler, a timer).
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn canceller(&self) -> Canceller {
         Canceller {
             inner: self.inner.canceller(),
@@ -277,7 +277,7 @@ impl Connection {
     /// `tenant_refused` (the vendor's words in `detail`), `query_timed_out`,
     /// `tenant_unreachable`, `authentication_failed`, `interrupted`,
     /// `operation_unsupported`, ...
-    #[napi(ts_return_type = "Promise<QueryResult>")]
+    #[napi(catch_unwind, ts_return_type = "Promise<QueryResult>")]
     pub fn query<'env>(
         &self,
         env: &'env Env,
@@ -297,7 +297,7 @@ impl Connection {
     /// a query the tenant accepts; rejects with `tenant_refused` for one it
     /// refuses, and with `operation_unsupported` on a platform that cannot
     /// check a query live (CrowdStrike, HarfangLab, Sysdig).
-    #[napi(ts_return_type = "Promise<LiveCheck>")]
+    #[napi(catch_unwind, ts_return_type = "Promise<LiveCheck>")]
     pub fn validate_query<'env>(
         &self,
         env: &'env Env,
@@ -318,7 +318,7 @@ impl Connection {
     /// with `tenant_refused`, the other codes of `query`, and
     /// `operation_unsupported` on a platform whose rules deploy only through
     /// `opentide deploy` (Elastic). `options.signal` aborts it.
-    #[napi(ts_return_type = "Promise<DeployOutcome>")]
+    #[napi(catch_unwind, ts_return_type = "Promise<DeployOutcome>")]
     pub fn deploy<'env>(
         &self,
         env: &'env Env,
@@ -744,7 +744,7 @@ where
 
 /// The runtime the operations run on, started by the first one: a failure
 /// to start it is `runtime_unavailable`, never a panic.
-fn runtime() -> Result<&'static tokio::runtime::Runtime, Failure> {
+pub(crate) fn runtime() -> Result<&'static tokio::runtime::Runtime, Failure> {
     static RUNTIME: OnceLock<Result<tokio::runtime::Runtime, String>> = OnceLock::new();
     RUNTIME
         .get_or_init(|| {
