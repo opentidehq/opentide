@@ -258,6 +258,7 @@ pub fn offset_to_position(source: &str, offset: usize) -> Position {
     reason = "a char is one or two UTF-16 units"
 )]
 pub fn position_to_offset(source: &str, position: Position) -> usize {
+    scoped::SCANS.with(|scans| scans.set(scans.get() + 1));
     let mut line = 0u32;
     let mut col = 0u32;
     for (idx, ch) in source.char_indices() {
@@ -428,8 +429,9 @@ pub fn with_line_index<T>(source: &str, run: impl FnOnce() -> T) -> T {
 }
 
 /// How many times [`span_to_range`] and [`offset_to_position`] scanned a text
-/// from its start on this thread: no [`with_line_index`] table was installed
-/// for it. Tests read it to prove an analysis converts its findings through
+/// from its start on this thread (no [`with_line_index`] table was installed
+/// for it), and [`position_to_offset`], which always does ([`LineIndex::offset`]
+/// is its table's). Tests read it to prove an analysis converts its findings through
 /// one table (a work count, not a wall clock).
 #[doc(hidden)]
 pub fn scans_from_the_start() -> usize {

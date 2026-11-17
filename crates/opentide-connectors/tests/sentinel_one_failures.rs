@@ -70,12 +70,7 @@ fn deploy(
     rule_id: &str,
     body: &[u8],
 ) -> Result<Option<String>, ConnectorError> {
-    let request = DeployRequest {
-        rule_id: rule_id.to_owned(),
-        operation,
-        body: body.to_vec(),
-        policies: None,
-    };
+    let request = DeployRequest::new(rule_id.to_owned(), operation, body.to_vec());
     with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request))).map(|outcome| outcome.remote_id)
 }
 

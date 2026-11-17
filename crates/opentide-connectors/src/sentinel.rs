@@ -188,7 +188,9 @@ impl Sentinel {
                 }
             })
             .await?;
-        if answer.status < 400 {
+        // A 3xx is a failure: a redirect the client could not follow (no
+        // `Location`) is not a rule written (#1142).
+        if (200..300).contains(&answer.status) {
             return Ok(Ok(answer));
         }
         let (code, message) = arm_error(&answer);
