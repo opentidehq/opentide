@@ -34,7 +34,7 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 | `examples/` | `validate`, `catalog`, `deploy_plan`, `query` (`connectors`): the four examples of `docs/sdk/rust.md`; the page shows `query`'s `docs:start`..`docs:end` part verbatim, which `tests/examples.rs` checks |
 | `tests/api.rs` | The API on `tests/fixtures/tide_corpus` laid out under a temporary folder |
 | `tests/examples.rs` | Each example compiled in (`#[path]`) and run on the corpus |
-| `tests/cli.rs` | `cli`: the binary's `--json commands` against the PyPI CLI's recording, through the goldens' comparator and `APPROVED_DIFFS.toml`; `run_json` |
+| `tests/cli.rs` | `cli`: the binary and `run_json` |
 | `tests/lsp.rs` | `lsp`: the lifecycle over frames and one message at a time |
 | `tests/connectors.rs` | `connectors`: tenants from a workspace, and query, live check, deploy, cancellation and errors on wiremock stand-in tenants (each connection is given its environment, so no proxy of the process applies) |
 | `tests/conformance.rs` | `cli` and `connectors`: the Rust runner of the cross-SDK conformance suite (UC-5.4, `tests/conformance/README.md`); on its own, every operation on the corpus, and the tenant operations on the stand-in tenants of `tests/cassettes/` it starts with `python3` (`$PYTHON`) |

@@ -1,3 +1,0 @@
-error: Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.
-  help: did you mean 'rules'?
-tip: add --json for machine-readable output

@@ -2,8 +2,7 @@
 //! is `true`/`false`, `0`/`1` or one of the words that name one (`yes`,
 //! `off`, ...); an integer is a whole number, written as a number or as
 //! text. Unknown arguments are ignored. A missing required argument or a
-//! value of the wrong type refuses the call, worded by opentide
-//! (`tests/golden/APPROVED_DIFFS.toml`).
+//! value of the wrong type refuses the call, worded by opentide.
 
 use serde_json::{Map, Value};
 

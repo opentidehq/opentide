@@ -30,11 +30,11 @@
 //!
 //! then [`super::annotate::annotate_editor_schema`] adds the hover texts.
 //!
-//! The comparison with the oracle is by verdict, not by text: `cargo xtask
-//! codegen --check` validates every corpus object and fault against both
-//! documents and requires the same verdict. The text differences (titles,
+//! The comparison with the oracle was by verdict, not by text (`cargo xtask
+//! codegen --check --oracle`, retired in #1142): every corpus object and
+//! fault got the same verdict from both documents. The text (titles,
 //! descriptions, key order, `type` arrays where Pydantic writes `anyOf` with
-//! `null`) are recorded in `tests/golden/APPROVED_DIFFS.toml`.
+//! `null`) is schemars'.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};

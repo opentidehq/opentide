@@ -6,7 +6,7 @@
 //! Each model follows ADR 0001: field names, serialised names, order,
 //! optional and defaulted fields, closure and `tide.*` keys are the
 //! oracle's, and each doc comment is the schema's description, held to the
-//! oracle's text by `cargo xtask schema diff --against python`. The
+//! oracle's text (by `cargo xtask schema diff` until #1142). The
 //! structural conversion ([`crate::from_node`]) reads a file
 //! with every error placed; garde ([`garde::Validate`]) checks a value built
 //! in memory. The validators both run are in [`checks`].

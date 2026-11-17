@@ -12,8 +12,8 @@
 #[path = "common/replay.rs"]
 mod replay;
 
-/// A replayed case's root is named and placed as `cargo xtask golden
-/// check` places it (`/tmp/golden-XXXXXX`): a frame wraps a message by the
+/// A case's root is named and placed as the retired `cargo xtask golden
+/// check` placed it (`/tmp/golden-XXXXXX`): a frame wraps a message by the
 /// length of the path in it, so a root of another length (`tempfile`'s
 /// `.tmpXXXXXX`) let a replay pass where the real compare differed. Where
 /// `/tmp` is a link to a longer folder (macOS), the name is shortened to
@@ -268,7 +268,7 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
 #[test]
 fn a_case_root_keeps_the_recorded_length_behind_a_longer_tmp() {
     use std::path::Path;
-    // Linux's `/tmp`: the name `cargo xtask golden check` gives.
+    // Linux's `/tmp`: the name the retired `cargo xtask golden check` gave.
     assert_eq!(replay::root_name(Path::new("/tmp")), ("golden-", 6));
     // macOS's `/tmp` is `/private/tmp`: `/private/tmp/goXXX` is as long as
     // `/tmp/golden-XXXXXX`, so paths wrap where the recordings wrap.

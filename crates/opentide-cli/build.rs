@@ -1,8 +1,8 @@
 //! Compiles in the `opentide explain` pages: one `include_str!` per Markdown
 //! file of `src/opentide/data/diagnostics/`, written to
 //! `$OUT_DIR/explain_pages.rs` as `PAGES: &[(&str, &str)]` (code, Markdown),
-//! sorted by code. The pages are the package's data; the Python CLI reads
-//! the same files.
+//! sorted by code. The pages are the package's data, shipped in the wheel
+//! beside the compiled command line.
 //!
 //! Also points `include_str!` at that data (`OPENTIDE_ASSETS`, the MCP host
 //! templates of `setup`): the workspace root in a checkout, or else the

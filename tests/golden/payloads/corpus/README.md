@@ -8,8 +8,7 @@ schedule, skew and `[[modifiers]]`, SentinelOne's site or account, CrowdStrike's
 HarfangLab's type, Carbon Black's watchlist). `.opentide/states/deployment/` records ids on some
 tenants, so Defender, SentinelOne and CrowdStrike rules are created on one tenant and updated or
 deleted on the other.
-`cargo xtask payloads diff --against python --corpus payloads --record` writes what the oracle
-compiles from it to `tests/golden/payloads/oracle.json` (generated: never edit); `opentide-compile`'s
-`tests/oracle.rs` compares with it, and `cargo xtask payloads diff --against python --corpus
-payloads` with the oracle itself. Credentials are `$VARIABLE` references and hosts are on
+`tests/golden/payloads/oracle.json` is what the oracle compiled from it (recorded by `cargo xtask
+payloads`, retired with the oracle in #1142: never edit); `opentide-compile`'s `tests/oracle.rs`
+compares with it. Credentials are `$VARIABLE` references and hosts are on
 example domains.

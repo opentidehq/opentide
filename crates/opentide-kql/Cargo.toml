@@ -20,7 +20,7 @@ opentide-highlight.workspace = true
 opentide-parse.workspace = true
 logos.workspace = true
 rowan.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["rc"] }
 toml.workspace = true
 regex.workspace = true
 

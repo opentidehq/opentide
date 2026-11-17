@@ -1,41 +1,27 @@
 ---
 name: golden
-description: Hold the Rust command line to the Python oracle - golden capture of the frozen Python CLI (cargo xtask golden record, check and diff, from UC-0.5), golden check --engine rust and the comparator (UC-0.7, UC-6.2), and the tests/golden/APPROVED_DIFFS.toml ledger, where every intended difference needs a reason, an issue and a changelog entry. Use when porting a command or a check to Rust, when a golden or a compare run fails, when recording or reviewing goldens, or when a change means to alter what a command prints or writes.
+description: Change what an opentide command prints or writes - the command line's Rust-owned snapshots (crates/opentide-cli/tests/cli_snapshots.rs), the cases of tests/golden/cases.toml and their fixtures, the normalisation rules, and cargo insta review. Use when a change alters a command's output, files, exit code or JSON, when a snapshot test fails, when adding a case or a fixture, or when reviewing snapshot diffs. The Python oracle's recordings and the compare tooling were retired (#1142).
 ---
 
-# Goldens, compare and the approved-diffs ledger
+# The command line's snapshots
 
-The unified core ([#790](https://github.com/opentidehq/opentide/issues/790)) moves the CLI's logic
-from Python to Rust one command at a time, and the user-visible contract does not move. The Python
-CLI at a frozen tag is the **oracle**. No Rust code replaces Python code without a test that
-compares the Rust result with the oracle's. The source of this skill is the plan,
-§5.1 and §5.2 ([`unified-core.md`](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#5-correctness-strategy)),
-and the issues of the two items that build the tools.
+The unified core ([#790](https://github.com/opentidehq/opentide/issues/790)) moved the CLI from
+Python to Rust. Through the port, the frozen Python CLI was the **oracle**: `cargo xtask golden`
+recorded what it did, and the Rust engine was compared with those recordings through an
+approved-diffs ledger. Once the Rust-owned snapshots held the same behaviour, the replays (#1139)
+and then the recordings, the ledger and their tooling (#1142) were deleted. What a command does
+today is held by its snapshots, and a change to it is a reviewed snapshot diff.
 
-**In CI: none of it, since 2026-11-14.** The port is done, and the maintainer took the oracle
-policing out of CI: no workflow runs `golden record`, `check` or `diff`, the corpora's diffs, the
-MCP replay or `codegen --check --oracle`, and `APPROVED_DIFFS.toml` gates nothing. Every command
-below stays, run by hand: before a re-record's or a new oracle's pull request, or to measure a
-behaviour change against the oracle (`tests/golden/README.md`).
+**[`tests/golden/README.md`](../../../tests/golden/README.md) is the reference** for the cases,
+the fixtures, the snapshot layout and the normalisation rules. Where this skill and the README
+disagree, the README is right: fix this skill.
 
-**Status.** These tools were built:
+## Changing what a command prints or writes
 
-| Tool | Work item | State |
-|------|-----------|-------|
-| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1160 cases recorded from opentide 0.23.0; run by hand (no workflow runs them) |
-| The comparator, `tests/golden/APPROVED_DIFFS.toml`, `golden check --engine rust` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805); UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841) | Present: every case runs on the Rust core, the only implementation; `OPENTIDE_ENGINE` and compare mode were removed with the Python implementation |
-
-**`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
-the fixtures and the normalisation rules. Where this skill and the README disagree, the README is
-right: fix this skill. Never use a flag that neither names (`cargo xtask golden --help` prints the
-usage).
-
-## Snapshots first (#1139)
-
-The command line's regression net is no longer the oracle: it is the Rust-owned snapshots of
-`crates/opentide-cli/tests/cli_snapshots.rs`, one per case of `tests/golden/cases.toml`, with
-the Rust CLI's own output as the expected value (`tests/golden/README.md`, "Snapshots"). A change
-that alters what a command prints or writes updates its snapshots in the same pull request:
+`crates/opentide-cli/tests/cli_snapshots.rs` runs every case of `tests/golden/cases.toml`
+in-process and holds what it did (exit code, stdout, stderr, every file written, changed or
+deleted) to an insta snapshot under `crates/opentide-cli/tests/cli_snapshots/<command>/`. A
+change that alters what a command prints or writes updates its snapshots in the same pull request:
 
 1. Run `cargo nextest run -p opentide-cli --test cli_snapshots` (narrow it with
    `OPENTIDE_SNAPSHOT_FILTER=<part of a case id>`).
@@ -44,137 +30,36 @@ that alters what a command prints or writes updates its snapshots in the same pu
 3. Commit the `.snap` files with the change. The reviewer reads them as the user-visible diff:
    each changed line follows from the change, and the information a user or an agent relies on
    (exit code, error code, the fields of a JSON envelope, the files written) is still there.
+4. A user-visible change has its `CHANGELOG.md` entry ([`release-notes`](../release-notes/SKILL.md)).
 
-Never hand-edit a `.snap`, never commit a `.snap.new`, and never widen a normalisation rule to
-hide a difference. A new behaviour gets a `[[case]]` in `cases.toml`, and so a snapshot.
+The cases on the generated workspaces (`fault`, `fault-lint`, `heavy-small`) need
+`OPENTIDE_REPLAY_FIXTURES`: the README's "Snapshots" section has the commands.
 
 ## The rules
 
-1. **The oracle is the Python CLI installed from a frozen tag**, recorded in `tests/golden/ORACLE`
-   (the tag, the wheel and its SHA-256). UC-0.5 chooses the tag and writes that file. Changing the
-   oracle is a pull request of its own: edit `ORACLE`, `cargo xtask golden lock`,
-   `cargo xtask golden record`, and review every difference.
-2. **Recordings are generated, never hand-edited**: not `cases/`, not `blobs/`, not
-   `COVERAGE.md`. A change is a re-record plus a reviewed diff.
-3. **In a comparison with the oracle, anything that differs is a bug**, unless the difference is
-   recorded in `tests/golden/APPROVED_DIFFS.toml` with its reason, its issue and its changelog
-   entry. No CI tier runs that comparison and the ledger gates nothing (since 2026-11-14): a
-   behaviour change is still deliberate, with its `CHANGELOG.md` entry, and a by-hand run that
-   finds an unrecorded difference is fixed or recorded.
-4. **Never loosen the comparison** to get green: no widened normalisation rule, no broader ledger
-   entry, no skipped case, no deleted recording. Normalisation hides only what differs between two
-   runs of the same case; each rule is code in `crates/opentide-cli/tests/common/normalise.rs` (the
-   snapshots'; `xtask::golden::normalise` re-exports the recorder's copy in `opentide-compare`) with a unit test. No Rust test replays `tests/golden/cases` any more (#1139): the commands' behaviour is
-   held by the reviewed snapshots of `crates/opentide-cli/tests/cli_snapshots.rs`
-   ([golden README](../../../tests/golden/README.md), "Snapshots"), and a new `#[ignore]` is a
-   loosened comparison.
-5. **The plan's invariants (§3) do not move.** If a port seems to need a change to the CLI
-   contract, the command tree, a diagnostic code, a cross-repository contract, MCP, a workspace
-   format, an SDK import path, the supported platforms or the security posture, stop and raise it
-   as a separate decision. A ledger entry does not authorise that.
+1. **Never hand-edit a `.snap`**, never commit a `.snap.new`.
+2. **Never loosen the net** to get green: no widened normalisation rule, no skipped case, no
+   deleted snapshot, no new `#[ignore]`. Normalisation hides only what differs between two runs of
+   the same case or two hosts; each rule is code in `crates/opentide-cli/tests/common/normalise.rs`
+   with a unit test.
+3. **A new behaviour gets a case**: a `[[case]]` in `cases.toml` (and a fixture under
+   `tests/golden/fixtures/` when none fits), and so a snapshot.
+4. **The plan's invariants (§3) do not move.** A change to the CLI contract, the command tree, a
+   diagnostic code, a cross-repository contract, MCP, a workspace format, an SDK import path, the
+   supported platforms or the security posture is a separate decision, not a snapshot update.
 
-## Golden capture (UC-0.5)
+## Reviewing a snapshot diff
 
-| Command | What it does |
-|---------|--------------|
-| `cargo xtask golden record` | Runs every case of `cases.toml` through the oracle and writes `cases/`, `blobs/` and `COVERAGE.md`. Only the oracle records: `record` takes no `--engine` |
-| `cargo xtask golden record --check-determinism` | Runs every case twice and fails, writing nothing, unless both runs agree byte for byte. **Run it, with `golden lock`, before opening any pull request that re-records**: no workflow runs it |
-| `cargo xtask golden check --engine python` | A fresh run against the recordings; also checks `COVERAGE.md` and that no recording is missing or orphaned |
-| `cargo xtask golden diff` | `check`, printing every difference in full |
-| `cargo xtask golden lock` | Rewrites `oracle-requirements.txt` from `ORACLE` |
-| `cargo xtask golden coverage` | Rewrites `COVERAGE.md` |
-
-`record`, `check` and `diff` take `--filter GLOB` (over case ids,
-`<command>/<mode>/<fixture>/<variant>`, or their leading parts: `explain/*` is every `explain`
-case) and `--jobs N`; `check` and `diff` take
-`--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
-
-**Preview of the next oracle** (`tests/golden/ORACLE.next`, none committed now; 0.28.1 during the catch-up, #1122): judge a
-port against it without committing recordings, `cargo xtask golden record --oracle
-tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
-check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in
-the PR. `golden lock --oracle FILE` writes that file's requirements beside it; `cassettes record`
-and `mcp record` take `--oracle FILE` too. The README has the rules.
-
-What is recorded (the README has the detail):
-
-- **Coverage:** every command path in `opentide --json commands`, in every mode (`human` through a
-  pseudo-terminal, `plain`, `json`, `agent`; `mcp` comes with UC-3.7), against the fixtures each
-  case lists. `record` and `check` fail when a path or mode has no case.
-- **A recording:** `tests/golden/cases/<command>/<mode>/<fixture>/<variant>/` holds `case.toml`,
-  `stdout`, `stderr`, `outcome.toml` (exit code and every file created, modified or deleted) and
-  `files/`. A file of 16 KiB or more is stored once in `tests/golden/blobs/<sha256>`.
-- **Normalisation:** only values that differ between two runs of the same case (temporary paths,
-  clock times, wall times, random ids; the README's table lists every rule). ANSI codes are kept in
-  `human` mode.
-- **Tenants:** paths that contact a tenant are recorded only as their failure without tenants.
-  Their success paths are UC-4.1's recorded HTTP cassettes.
-
-## The comparator (UC-0.7, UC-6.2)
-
-`cargo xtask golden check --engine rust` runs every case through this repository's CLI (the
-console script of `.venv`, which runs the Rust core in process) and compares each run with the
-oracle's recording through `opentide-compare`: stdout, stderr, the exit code, the files and the
-JSON document (by its data: key order, indentation, escapes and the final newline are layout, not
-compared), with the goldens' normalisation. Everything else is compared byte for byte. `--runner node` launches the npm package's bin
-instead; `--runner wasi` launches the WASI build of the command line
-(`build-wasm.sh cli`) under wasmtime, or Node's WASI with `OPENTIDE_WASI_RUNTIME=node`, and leaves
-out the cases that need the network: those with a cassette, and those
-`tests/golden/WASI_EXCLUDED.toml` lists, each with its reason and network evidence (a network
-fixture or command, or a refused request in the oracle's recording), which xtask's tests check. Run by hand (CI's `Golden compare` job left with the oracle
-policing), with `--report` for the JSON report; `--partition K/N` runs the cases whose id hashes (FNV-1a) to part K, so
-parts 1/N to N/N run every case once, and `--unused FILE` writes the ledger entries the part did
-not apply instead of failing on them; an entry every part lists is stale, and the gather fails.
-
-`uv sync` builds the console script's native module (`src/opentide/_native.*`) once and does not
-rebuild it when the Rust sources change: after a pull, a merge or an edit, the CLI would run the
-Rust code of an earlier checkout. So `golden check --engine rust` stops first (exit status 2) when
-the module is older than a file it is built from (cargo's dep-info for it, else the tracked Rust
-sources), names that file, and says to run `uv sync --group dev --reinstall-package opentide`.
-
-Until UC-6.2 (#841), `OPENTIDE_ENGINE=python|rust|compare` chose a command's implementation at run
-time and `--engine compare` ran only the cases the Python dispatch table covered; both went with
-the Python implementation. The oracle stays the frozen PyPI release (`tests/golden/ORACLE`).
-
-## The approved-diffs ledger
-
-`tests/golden/APPROVED_DIFFS.toml` records each intended difference from the oracle. Every field
-is required (#805):
-
-| Field | Holds |
-|-------|-------|
-| command | The command path |
-| case glob | The cases it applies to, as narrow as possible |
-| rule | A JSON pointer; a `help` rule: a help screen laid out by clap where the oracle's was Typer's, approved only where both say the same (`opentide_compare::help`), with `help-text` for one wording changed on purpose; a text rule: one whole line on each side, approved where the oracle and candidate lines match it at the same line number (`<SHA256>` once in the candidate: any digest there, for a digest over the version); or a lines rule: consecutive whole lines on each side, approved where the candidate has its block where the oracle has its own (an inserted or removed row); or a mode rule: one file's permission bits, four octal digits a side (`0600`, `0644`), its bytes still compared |
-| oracle value | What Python prints or writes |
-| candidate value | What Rust prints or writes |
-| reason | Why the difference is right |
-| issue | The issue that decided it |
-| changelog | The `CHANGELOG.md` entry users read |
-
-The comparator applies each entry narrowly and fails on a stale entry that no longer matches
-anything. The field names in the file are UC-0.7's: read them from its schema, not from this table.
-
-To add an entry:
-
-1. Make sure the difference is meant. If not, fix the Rust code.
-2. Link the issue that decides it, or open one.
-3. Write the `CHANGELOG.md` entry under `## [Unreleased]` ([`release-notes`](../release-notes/SKILL.md)).
-4. Add the entry with the narrowest case glob and rule that covers the difference.
-5. Re-run the compare and the golden check. Both must pass, and no other entry may go stale.
-
-## Reviewing a golden diff
-
-- Every changed recording has a cause in the same pull request: a new or changed case in
-  `cases.toml`, a fixture change, a normalisation rule with its unit test, or a new oracle (in a PR
-  of its own). Each changed line follows from that cause.
-- A changed recording with none of those causes means the recording is not deterministic. Fix the
+- Every changed snapshot has a cause in the same pull request: a code change, a new or changed case
+  in `cases.toml`, a fixture change, or a normalisation rule with its unit test. Each changed line
+  follows from that cause.
+- A changed snapshot with none of those causes means the run is not deterministic. Fix the
   normalisation code, with a test, rather than accept the churn.
 - Read the diff of every file. A diff too big to read is a reason to split the pull request.
 
 ## Related
 
-- [`rust`](../rust/SKILL.md): the workspace loop. [`review-checklist`](../review-checklist/SKILL.md):
-  the golden and compare rules as review items.
+- [`rust`](../rust/SKILL.md): the workspace loop, insta and nextest.
+  [`review-checklist`](../review-checklist/SKILL.md): the snapshot rules as review items.
 - [`docs/internal/cli-experience.md`](../../../docs/internal/cli-experience.md): the CLI contract
-  the goldens record.
+  the snapshots hold.

@@ -1,8 +1,10 @@
 //! The generated templates against what the oracle writes (UC-1.8, #814):
 //! the committed platform templates
 //! (`src/opentide/schemas/data/platform_templates`, which the Python suite
-//! keeps equal to its render) and the golden recordings of `opentide
-//! generate` on the tide-corpus fixture. They read files, so they live here:
+//! keeps equal to its render) and the object templates the oracle's
+//! `opentide generate` wrote on the tide-corpus fixture, kept in
+//! `tests/templates/tide-corpus/` since the recordings were retired (#1142).
+//! They read files, so they live here:
 //! the crate's `src` stays I/O-free (`scripts/engine/check-io-free.sh`).
 
 use std::path::{Path, PathBuf};
@@ -33,8 +35,7 @@ fn every_platform_template_is_the_committed_one() {
 #[test]
 fn every_object_template_is_the_oracles_on_the_tide_corpus() {
     // tide-corpus requires lint's default metadata keys.
-    let dir = repo()
-        .join("tests/golden/cases/generate/agent/tide-corpus/default/files/ws/.opentide/templates");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/templates/tide-corpus");
     for identifier in ["objective::1.0", "rule::1.0", "rule::1.1", "threat::1.0"] {
         let file = format!("{}.template.yaml", identifier.replace("::", "."));
         let expected = read(&dir.join(&file));

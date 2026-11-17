@@ -1,3 +1,0 @@
-error: Missing command.
-  usage: opentide migrate [OPTIONS] COMMAND [ARGS]...
-  help: run 'opentide migrate --help'

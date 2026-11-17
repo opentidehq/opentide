@@ -372,8 +372,8 @@ exit: 1
     },
     {
       "code": "esql_parse_error",
-      "column": 40,
-      "end_column": 41,
+      "column": 41,
+      "end_column": 42,
       "end_line": 76,
       "explain": "opentide explain esql_parse_error",
       "field_path": [

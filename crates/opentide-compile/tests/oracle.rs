@@ -1,7 +1,6 @@
 //! Every body of the compile corpus (`tests/golden/payloads/corpus`) against
 //! what the oracle compiled from it (`tests/golden/payloads/oracle.json`,
-//! written by `cargo xtask payloads diff --against python --corpus payloads
-//! --record`): the dry run's body, each tenant's (the writes a deployer
+//! recorded by `cargo xtask payloads`, retired with the oracle in #1142): the dry run's body, each tenant's (the writes a deployer
 //! sends, for the six platforms whose body is built from the tenant), and
 //! the dry run's payload entry, byte for byte.
 #![expect(
@@ -19,7 +18,7 @@ use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
 
-/// The Splunk clock the oracle's probe pins (`xtask/src/payloads/probe.py`):
+/// The Splunk clock the oracle's probe pinned when it recorded:
 /// a random minute and hour of 7, the time 03:04 UTC.
 const PROBE_CLOCK: splunk::Clock = splunk::Clock {
     random: (7, 7),
