@@ -176,9 +176,9 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
             diagnostics.extend(gate.diagnostic(target, to_range));
         }
         if let Some((spacing, span)) = gates::command_spacing(&node, source) {
-            let word = children_of(&node)
-                .first()
-                .map(|k| element_text(k, source))
+            let word = gates::tree_children(&node)
+                .next()
+                .map(|k| element_text(&k, source))
                 .unwrap_or_default();
             match gates::spacing_gate(word, spacing, span, to_range(span)) {
                 Ok(gate) => diagnostics.extend(gate.diagnostic(target, to_range)),
@@ -645,8 +645,7 @@ fn element_text<'s>(element: &SyntaxElement, source: &'s str) -> &'s str {
 
 /// A join's kind (`LOOKUP`, `LEFT`): its first child when that is a token.
 fn join_kind(node: &SyntaxNode) -> Option<SyntaxElement> {
-    children_of(node)
-        .into_iter()
+    gates::tree_children(node)
         .next()
         .filter(|first| !is_named(first))
 }
@@ -660,9 +659,9 @@ pub(crate) fn command_name(node: &SyntaxNode, source: &str) -> Option<String> {
     Some(match base {
         "unknown" => return None,
         "inline_stats" => {
-            let first = children_of(node)
-                .first()
-                .map(|c| element_text(c, source).to_ascii_lowercase());
+            let first = gates::tree_children(node)
+                .next()
+                .map(|c| element_text(&c, source).to_ascii_lowercase());
             if first.as_deref() == Some("inlinestats") {
                 "inlinestats".into()
             } else {
@@ -700,21 +699,21 @@ pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
 pub(crate) fn keyword_span(node: &SyntaxNode) -> ByteSpan {
     let start = span_of(node).start;
     let mut end = start;
-    let kids = children_of(node);
     let several = matches!(node.kind(), K::INLINE_STATS_COMMAND | K::JOIN_COMMAND);
-    for child in &kids {
-        if is_named(child) || matches!(child.kind(), K::PIPE | K::L_PAREN) {
+    // Lazy: a command of 100,000 names is read up to its first name.
+    for child in gates::tree_children(node) {
+        if is_named(&child) || matches!(child.kind(), K::PIPE | K::L_PAREN) {
             break;
         }
-        end = element_span(child).end;
+        end = element_span(&child).end;
         if !several {
             break;
         }
     }
     // The join's kind and the child after it (`JOIN`).
     if node.kind() == K::JOIN_COMMAND && join_kind(node).is_some() {
-        for kid in kids.iter().take(2) {
-            end = end.max(element_span(kid).end);
+        for kid in gates::tree_children(node).take(2) {
+            end = end.max(element_span(&kid).end);
         }
     }
     ByteSpan::new(start, end.max(start + 1))

@@ -525,7 +525,7 @@ pub(crate) fn command_spacing(node: &SyntaxNode, source: &str) -> Option<(Spacin
     if !is_command(node.kind()) || node.kind() == K::UNKNOWN_COMMAND {
         return None;
     }
-    let keyword = children_of(node).into_iter().next()?;
+    let keyword = tree_children(node).next()?;
     if is_named(&keyword) {
         return None;
     }
