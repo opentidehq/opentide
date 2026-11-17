@@ -120,8 +120,18 @@ pub fn deploy_http_settings(platform: &str) -> HttpSettings {
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
 /// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
-/// New-Scale SIEM (P-EX).
+/// New-Scale SIEM (P-EX). Google SecOps reads Application Default
+/// Credentials from the process environment; [`builtin_with`] names another.
 pub fn builtin() -> Registry {
+    builtin_with(&Environment::process())
+}
+
+/// [`builtin`], each connector that reads the environment beyond a tenant's
+/// setup (Google SecOps's Application Default Credentials:
+/// `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file, the metadata
+/// server) reading `environment`, as a caller with an environment of its
+/// own (the SDK's `ConnectOptions::environment`, the command line) sets it.
+pub fn builtin_with(environment: &Environment) -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
         Box::new(defender::Defender::new()),
@@ -135,11 +145,9 @@ pub fn builtin() -> Registry {
         Box::new(bitdefender::Bitdefender),
         Box::new(graylog::Graylog),
         Box::new(exabeam::Exabeam::new()),
-        // Application Default Credentials are the process's own ambient
-        // credentials (google-auth's `default()` reads the process
-        // environment): a caller with an environment of its own (the CLI)
-        // builds `GoogleSecops::new` with it.
-        Box::new(google_secops::GoogleSecops::new(Environment::process())),
+        // Application Default Credentials are the environment's ambient
+        // credentials (google-auth's `default()`).
+        Box::new(google_secops::GoogleSecops::new(environment.clone())),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).

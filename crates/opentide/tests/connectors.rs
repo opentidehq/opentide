@@ -391,3 +391,77 @@ fn a_planned_preview_google_secops_rule_carries_its_run_state() {
         "{payload}"
     );
 }
+
+/// #1142: `ConnectOptions::environment` is the environment Google SecOps
+/// reads its Application Default Credentials from, as every other
+/// connector reads its credentials: the process (which names none here)
+/// is not read.
+#[tokio::test(flavor = "multi_thread")]
+async fn google_secops_reads_its_credentials_from_the_options_environment() {
+    let server = MockServer::start().await;
+    let resource = "projects/acme/locations/eu/instances/i-1";
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"access_token": "ya29.test", "expires_in": 3600}"#),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/{resource}:verifyRuleText")))
+        .and(header("Authorization", "Bearer ya29.test"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"success": true}"#))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/{resource}/rules")))
+        .respond_with(ResponseTemplate::new(200).set_body_string(format!(
+            r#"{{"name": "{resource}/rules/ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1"}}"#
+        )))
+        .mount(&server)
+        .await;
+    Mock::given(method("PATCH"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .mount(&server)
+        .await;
+    let home = tempfile::tempdir().unwrap();
+    let adc = home.path().join("adc.json");
+    std::fs::write(
+        &adc,
+        format!(
+            r#"{{"type": "authorized_user", "client_id": "cid", "client_secret": "cs",
+                "refresh_token": "rt", "token_uri": "{}/token"}}"#,
+            server.uri()
+        ),
+    )
+    .unwrap();
+    assert!(
+        std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").is_none(),
+        "the process must not name the credentials this test hands the options"
+    );
+    let tenant = TenantConfig::new(
+        "google_secops",
+        "secops",
+        [
+            ("project", "acme"),
+            ("location", "eu"),
+            ("instance", "i-1"),
+            ("endpoint", server.uri().as_str()),
+        ],
+    );
+    let options = ConnectOptions::default().environment([
+        ("GOOGLE_APPLICATION_CREDENTIALS", adc.to_str().unwrap()),
+        ("HOME", home.path().to_str().unwrap()),
+    ]);
+    let connection = Connection::open(&tenant, &options).unwrap();
+    let body = r#"{"text": "rule r {\n  events:\n    $e.metadata.event_type = \"PROCESS_LAUNCH\"\n  condition:\n    $e\n}\n"}"#;
+    let request = DeployRequest::new("", Operation::Create, body.as_bytes().to_vec());
+    let deployed = connection.deploy(&request).await.unwrap();
+    assert_eq!(
+        deployed.remote_id.as_deref(),
+        Some("ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1")
+    );
+    server.verify().await;
+}

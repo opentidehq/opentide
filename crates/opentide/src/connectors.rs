@@ -238,8 +238,10 @@ impl std::fmt::Debug for ConnectOptions {
 }
 
 impl ConnectOptions {
-    /// Reads credentials, CA bundles and proxies from `vars` instead of the
-    /// process's environment.
+    /// Reads credentials (Google SecOps's Application Default Credentials
+    /// too: `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known file under
+    /// `HOME`), CA bundles and proxies from `vars` instead of the process's
+    /// environment.
     pub fn environment<K: Into<String>, V: Into<String>>(
         mut self,
         vars: impl IntoIterator<Item = (K, V)>,
@@ -305,14 +307,16 @@ impl Connection {
     /// `tenant_setup_invalid` for a setup the client cannot use (an `ssl`
     /// that is not a boolean, a CA bundle or proxy that does not read).
     pub fn open(tenant: &TenantConfig, options: &ConnectOptions) -> Result<Self, Error> {
-        let registry = opentide_connectors::builtin();
-        if registry.get(&tenant.platform).is_none() {
-            return Err(unsupported(tenant, "has no connector"));
-        }
         let environment = match &options.environment {
             Some(vars) => Environment::from_pairs(vars.clone()),
             None => Environment::process(),
         };
+        // Every connector reads this environment, Google SecOps's
+        // Application Default Credentials too.
+        let registry = opentide_connectors::builtin_with(&environment);
+        if registry.get(&tenant.platform).is_none() {
+            return Err(unsupported(tenant, "has no connector"));
+        }
         let settings = opentide_connectors::http_settings(
             &tenant.platform,
             options.timeout.unwrap_or(DEFAULT_QUERY_TIMEOUT),
