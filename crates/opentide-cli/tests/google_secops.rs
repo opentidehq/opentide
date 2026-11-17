@@ -312,6 +312,84 @@ fn a_created_rule_whose_run_state_fails_is_recorded_and_fails() {
     runtime.block_on(server.verify());
 }
 
+/// A rule to disable whose new text Google refuses, then that turns out to
+/// be gone (its scope update answers 404): the rule fails with the verify
+/// error, and its id is forgotten all the same, as the tenant lost it.
+#[test]
+fn a_rule_to_disable_that_is_gone_is_forgotten_after_its_failure() {
+    let runtime = runtime();
+    let rule = format!("/v1/{}/rules/{RULE_ID}", resource());
+    let server = runtime.block_on(async {
+        let server = MockServer::start().await;
+        mount_token(&server).await;
+        let diagnostic = serde_json::json!({"message": "bad field", "severity": "ERROR"});
+        mount_verify(
+            &server,
+            serde_json::json!({"compilationDiagnostics": [diagnostic]}),
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path(rule.clone()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({"name": rule.trim_start_matches("/v1/"), "text": "rule old {}"}),
+            ))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("{rule}/deployment")))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"enabled": true, "alerting": true})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path(rule.clone()))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "error": {"code": 404, "status": "NOT_FOUND", "message": "gone"}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        server
+    });
+    let (ws, env) = workspace(&server.uri(), "DISABLED");
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/google_secops.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str("data_access_scope = \"soc\"\n");
+    std::fs::write(&config, text).unwrap();
+    let states = opentide_cli::commands::deploy_state::state_dir(ws.path());
+    std::fs::create_dir_all(&states).unwrap();
+    let shard = states.join(format!("{UUID}.json"));
+    std::fs::write(
+        &shard,
+        format!(
+            "{{\"object_uuid\": \"{UUID}\", \"platforms\": {{\"google_secops\": \
+             {{\"secops-eu\": \"{RULE_ID}\"}}}}, \"schema\": \"deployment.state::1.0\"}}\n"
+        ),
+    )
+    .unwrap();
+    let (sent, stderr) = deploy(ws.path(), &env);
+    runtime.block_on(server.verify());
+    let rows = rows(&sent);
+    assert_eq!(rows[0].0, "failed", "{stderr}");
+    assert!(
+        rows[0]
+            .1
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with("google_secops_verify_failed: "),
+        "{rows:?}"
+    );
+    assert!(
+        !shard.exists(),
+        "{}",
+        std::fs::read_to_string(&shard).unwrap_or_default()
+    );
+}
+
 #[test]
 fn a_rule_google_refuses_fails_with_the_compile_error() {
     let runtime = runtime();

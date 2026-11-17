@@ -3765,11 +3765,15 @@ impl Sender<'_, '_> {
                     Planned::Update(id) => (Operation::Update, Some(id.as_str())),
                     Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
                 };
-                let mut request = DeployRequest::new(
-                    stored.unwrap_or_default(),
-                    operation,
-                    serde_json::to_vec(&payload).unwrap_or_default(),
-                );
+                let body = match serde_json::to_vec(&payload) {
+                    Ok(body) => body,
+                    Err(error) => {
+                        self.rule_error(&mut result, &format!("compile_failed: {error}"));
+                        log.finished(result);
+                        continue;
+                    }
+                };
+                let mut request = DeployRequest::new(stored.unwrap_or_default(), operation, body);
                 if let Some(refusal) = &recreate_refusal {
                     request = request.refusing_recreate(DeployFailure::new(
                         refusal.code,
@@ -3791,6 +3795,15 @@ impl Sender<'_, '_> {
                     Err(error) if error.scope == DeployScope::Rule => {
                         if let Some(done) = &error.partial {
                             self.google_secops_done(&mut result, &rule.uuid, &tenant, done, stored);
+                            // A rule to retire that the tenant lost: its id
+                            // is forgotten, before the failure that preceded it.
+                            if done
+                                .warnings
+                                .iter()
+                                .any(|warning| warning.code == "google_secops_rule_missing")
+                            {
+                                self.record_deleted(&mut result, platform, &tenant);
+                            }
                         }
                         for failure in std::iter::once(&error.failure).chain(&error.more) {
                             match recreate_refusal

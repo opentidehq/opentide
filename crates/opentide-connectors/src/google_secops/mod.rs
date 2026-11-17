@@ -456,20 +456,23 @@ fn outcome_of(
 pub const RULE_CREATED: &str = "google_secops_rule_created";
 
 /// A tenant's failure (its instance, its credentials, an answer it did not
-/// give), with Google SecOps's code: `google_secops_credentials_missing` or
-/// `google_secops_tenant_unauthorized` when the error names it, else
-/// `google_secops_tenant_unreachable`; an interrupt stays `interrupted`.
+/// give): Google SecOps's code when the error names one
+/// (`google_secops_credentials_missing`, `google_secops_tenant_unauthorized`),
+/// else the connector error's own (`tenant_unreachable`, `tenant_timeout`,
+/// `interrupted`, ...).
 fn tenant_failure(error: ConnectorError) -> DeployError {
     let text = error.text();
     let named = text.split_once(": ").map(|(code, _)| code);
     let mut failed = DeployError::from(error);
     failed.scope = crate::connector::DeployScope::Tenant;
-    if !failed.is_interrupted() {
-        failed.failure.code = match named {
-            Some("google_secops_credentials_missing") => "google_secops_credentials_missing",
-            Some("google_secops_tenant_unauthorized") => "google_secops_tenant_unauthorized",
-            _ => "google_secops_tenant_unreachable",
-        };
+    match named {
+        Some("google_secops_credentials_missing") => {
+            failed.failure.code = "google_secops_credentials_missing";
+        }
+        Some("google_secops_tenant_unauthorized") => {
+            failed.failure.code = "google_secops_tenant_unauthorized";
+        }
+        _ => {}
     }
     failed
 }
