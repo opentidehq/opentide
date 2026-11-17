@@ -618,21 +618,65 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
         "{stderr}"
     );
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    // One cause, one failure: the rule it came on carries it.
     let Json::Array(failures) = value(&sent, "failures") else {
         panic!("no failures")
     };
-    assert_eq!(failures.len(), 2, "{failures:?}");
+    assert_eq!(failures.len(), 1, "{failures:?}");
     assert_eq!(
-        failures[1],
-        Json::object([
-            ("platform", Json::str("sentinel")),
-            ("tenant", Json::str("soc")),
-            (
-                "error",
-                Json::str("sentinel tenant 'soc': the credentials were refused")
-            ),
-        ])
+        failures[0].get("error"),
+        Some(&Json::str(
+            "sentinel tenant 'soc': the credentials were refused"
+        ))
     );
+    assert_eq!(
+        value(&sent, "error"),
+        &Json::str(
+            "Deployment to sentinel failed on First: sentinel tenant 'soc': the credentials were refused"
+        )
+    );
+}
+
+/// An interrupt still stops the run: the rule it came on fails, nothing
+/// after it is sent, and the failures before it are still listed.
+#[test]
+fn an_interrupt_stops_the_run_and_keeps_the_failures_before_it() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING),
+    );
+    let (registry, deployer) = scripted(
+        "sentinel",
+        vec![
+            Err(ConnectorError::refused(
+                "sentinel",
+                "soc",
+                "PUT https://x failed with HTTP 400",
+                None,
+            )),
+            Err(ConnectorError::Cancelled),
+        ],
+    );
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["failed", "failed", "not_attempted"]);
+    assert_eq!(deployer.seen.lock().unwrap().len(), 2);
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(
+        value(&sent, "error"),
+        &Json::str("Deployment to sentinel failed on Second: interrupted")
+    );
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    let names: Vec<_> = failures
+        .iter()
+        .filter_map(|failure| failure.get("name"))
+        .collect();
+    assert_eq!(names, [&Json::str("First"), &Json::str("Second")]);
 }
 
 /// A rule refused on one platform leaves the next platform's rules to
