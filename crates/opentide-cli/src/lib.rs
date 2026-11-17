@@ -32,7 +32,9 @@ pub mod logging;
 pub mod mcp;
 pub mod mode;
 pub mod plugins;
-pub mod queries;
+/// The queries checks of `validate` and `lint` on the query engines: the
+/// domain layer's (`opentide_analysis::queries`), named here as before.
+pub use opentide_analysis::queries;
 pub mod redact;
 pub mod render;
 pub mod schemas;
