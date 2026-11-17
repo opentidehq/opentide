@@ -2952,11 +2952,19 @@ impl Sender<'_, '_> {
                         ),
                         _ => {}
                     }
+                    // A refused key (`sentinel_one_unauthorized`) fails the
+                    // tenant: its other rules are not attempted.
+                    let stops = if error.scope == DeployScope::Tenant {
+                        Stops::Tenant
+                    } else {
+                        Stops::Rule
+                    };
                     Raised::new(format!(
                         "could not {} the rule on tenant '{tenant}': {}",
                         action_verb(action),
                         failure.message
                     ))
+                    .stopping(stops)
                 };
                 // The Deployer's request: the stored id addresses an update
                 // or a delete; the body is the compiled rule.
@@ -4434,6 +4442,85 @@ pub fn shard_path(workspace: &Path, uuid: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A connector error stops what the SDK's `DeployError` says it fails:
+    /// the platforms whose arm reads a connector error (`raised`) stop the
+    /// tenant exactly when the SDK reports the tenant's failure.
+    #[test]
+    fn a_connector_error_stops_what_the_sdk_says_it_fails() {
+        let (p, t) = (String::from("p"), String::from("t"));
+        let every = [
+            ConnectorError::Unreachable {
+                platform: p.clone(),
+                tenant: t.clone(),
+                address: String::new(),
+                reason: String::new(),
+            },
+            ConnectorError::Timeout {
+                platform: p.clone(),
+                tenant: t.clone(),
+                address: String::new(),
+                seconds: 1,
+            },
+            ConnectorError::Answer {
+                platform: p.clone(),
+                tenant: t.clone(),
+                address: String::new(),
+                reason: String::new(),
+            },
+            ConnectorError::Setup {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+            },
+            ConnectorError::MissingCredential {
+                platform: p.clone(),
+                tenant: t.clone(),
+                key: String::new(),
+                variable: String::new(),
+            },
+            ConnectorError::Crashed {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+            },
+            ConnectorError::refused(&p, &t, "no", None),
+            ConnectorError::Authentication {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+                detail: None,
+            },
+            ConnectorError::QueryTimedOut {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+                detail: None,
+                timeout: std::time::Duration::from_secs(1),
+            },
+            ConnectorError::Gateway {
+                platform: p.clone(),
+                tenant: t.clone(),
+                message: String::new(),
+                status: 502,
+            },
+            ConnectorError::Cancelled,
+            ConnectorError::NetworkUnavailable {
+                platform: p.clone(),
+                tenant: t.clone(),
+            },
+        ];
+        for error in every {
+            let stops = raised(&error).stops;
+            let shown = format!("{error:?}");
+            let scope = DeployError::from(error).scope;
+            assert_eq!(
+                stops == Stops::Rule,
+                scope == DeployScope::Rule,
+                "{shown}: the CLI stops {stops:?}, the SDK fails the {scope:?}"
+            );
+        }
+    }
 
     fn result(status: &'static str, action: &str, tenant: Option<&str>, id: &str) -> RuleResult {
         let mut result = RuleResult::new("elastic", tenant, id, "Rule");
