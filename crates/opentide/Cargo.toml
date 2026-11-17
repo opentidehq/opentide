@@ -92,15 +92,14 @@ workspace = ["schema", "dep:opentide-workspace"]
 compile = ["workspace", "dep:opentide-compile"]
 # The offline query engines (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco,
 # CQL) behind validate's and lint's queries checks. Without them a queries
-# check reports `engine_unavailable`, never a skipped check. They come from the
-# command line's crate until they move to the domain layer (plan §4), so this
-# feature builds opentide-cli.
-queries = ["workspace", "dep:opentide-cli"]
+# check reports `engine_unavailable`, never a skipped check. They are the
+# domain layer's (`opentide_analysis::queries`): the command line is not built.
+queries = ["workspace", "analysis", "opentide-analysis/queries"]
 # The command line: `opentide::cli::main(argv)`, `opentide::cli::run_json`,
 # and the `opentide` binary (`cargo install opentide --features cli`). The
 # only feature that brings the command line's terminal UI and prompts
 # (opentide-cli's `terminal`).
-cli = ["compile", "queries", "opentide-cli?/terminal"]
+cli = ["compile", "queries", "dep:opentide-cli", "opentide-cli/terminal"]
 # The language server (`opentide::lsp`): stdio, or one message at a time.
 lsp = ["workspace", "dep:opentide-lsp"]
 # Tenant operations (`opentide::connectors`): a query run, a live query check
