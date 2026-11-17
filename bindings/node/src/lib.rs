@@ -520,26 +520,29 @@ fn parse<'env>(env: Env, text: &str) -> napi::Result<Unknown<'env>> {
 /// `no_json_document`, `usage_invalid_choice`, `tenant_refused`, ...), a
 /// message, and the vendor's own words when a tenant gave a reason. A failed
 /// deploy also says what it stops (`rule` or `tenant`), the HTTP status the
-/// tenant answered with, and the fields that locate it.
+/// tenant answered with, the fields that locate it, and what it did before
+/// failing when the caller must keep it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Failure {
-    code: String,
+    code: &'static str,
     message: String,
     detail: Option<String>,
     scope: Option<&'static str>,
     status: Option<u16>,
     fields: Vec<(String, String)>,
+    partial: Option<Box<tenants::DeployOutcome>>,
 }
 
 impl Failure {
-    fn new(code: &str, message: String) -> Self {
+    fn new(code: &'static str, message: String) -> Self {
         Self {
-            code: code.to_owned(),
+            code,
             message,
             detail: None,
             scope: None,
             status: None,
             fields: Vec::new(),
+            partial: None,
         }
     }
 
@@ -581,6 +584,7 @@ impl From<opentide::Error> for Failure {
                 });
                 failure.status = failed.status;
                 failure.fields = failed.fields;
+                failure.partial = failed.partial.map(|done| Box::new((*done).into()));
             }
             _ => {}
         }
@@ -591,8 +595,11 @@ impl From<opentide::Error> for Failure {
 /// `failure` as the JavaScript `Error` the call throws: its `message`, its
 /// `code` the failure's code, and its `detail` the vendor's words or `null`.
 /// A failed deploy's also has its `scope` (`'rule'` or `'tenant'`), the HTTP
-/// `status` (or `null`) and its `fields`, an object in order; any other
-/// failure's `scope` and `status` are `null` and its `fields` empty.
+/// `status` (or `null`), its `fields`, an object in order, and its `partial`:
+/// what it did before failing when the caller must keep it, a
+/// `DeployOutcome` whose `remoteId` is an id to record (or `null`). Any other
+/// failure's `scope`, `status` and `partial` are `null` and its `fields`
+/// empty.
 fn throw(env: Env, failure: Failure) -> napi::Error {
     let built = env
         .create_error(napi::Error::new(
@@ -600,7 +607,7 @@ fn throw(env: Env, failure: Failure) -> napi::Error {
             failure.message.clone(),
         ))
         .and_then(|mut object| {
-            object.set_named_property("code", failure.code.as_str())?;
+            object.set_named_property("code", failure.code)?;
             match failure.detail.as_deref() {
                 Some(detail) => object.set_named_property("detail", detail)?,
                 None => object.set_named_property("detail", Null)?,
@@ -618,6 +625,10 @@ fn throw(env: Env, failure: Failure) -> napi::Error {
                 fields.set_named_property(key, value.as_str())?;
             }
             object.set_named_property("fields", fields)?;
+            match &failure.partial {
+                Some(done) => object.set_named_property("partial", env.to_js_value(&**done)?)?,
+                None => object.set_named_property("partial", Null)?,
+            }
             Ok(napi::Error::from(object.to_unknown()))
         });
     built.unwrap_or_else(|error| error)
@@ -701,6 +712,19 @@ fn deploy_plan_options(options: DeployPlanOptions) -> Result<opentide::DeployPla
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_deploy_keeps_what_it_did_before_failing() {
+        use opentide::connectors::{DeployError, DeployFailure, DeployOutcome, Operation};
+        let created = DeployOutcome::new(Some("43".into()), Operation::Create);
+        let failure = Failure::from(opentide::Error::from(
+            DeployError::rule(DeployFailure::new("sysdig_request_failed", "HTTP 409"))
+                .with_partial(created.clone()),
+        ));
+        assert_eq!(failure.partial, Some(Box::new(created.into())));
+        let usage = Failure::usage("no".into());
+        assert_eq!(usage.partial, None);
+    }
 
     #[test]
     fn options_convert_as_the_command_line_parses_them() {
