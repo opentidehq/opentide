@@ -17,8 +17,8 @@
 
 use std::path::{Path, PathBuf};
 
-use gix_error::bstr::{BStr, ByteSlice as _};
 use gix_error::ErrorExt as _;
+use gix_error::bstr::{BStr, ByteSlice as _};
 use gix_hash::ObjectId;
 use gix_object::{Find as _, FindExt as _};
 use gix_ref::file::ReferenceExt as _;
