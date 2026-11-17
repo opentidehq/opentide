@@ -181,26 +181,13 @@ impl Schema {
         }
     }
 
-    /// Add `column` under a name not yet taken: `Name`, `Name1`, `Name2`, ...
-    /// as Kusto names the columns `join`, `lookup` and `summarize` repeat.
-    fn push_unique(&mut self, mut column: Column) {
-        if self.has(&column.name) {
-            let base = column.name.clone();
-            let mut n = 1;
-            while self.has(&format!("{base}{n}")) {
-                n += 1;
-            }
-            column.name = format!("{base}{n}");
-        }
-        self.removed.remove(&column.name);
-        self.columns.push(column);
-    }
-
-    /// [`Schema::push_unique`] for each of `columns`, in order, with one set
-    /// of the names taken and, per name, the next suffix to try: a join adds
-    /// every column of its right side, and a scan of the schema per column
-    /// (and per suffix tried) made nested joins cubic in their depth
-    /// (#1424). The smallest free suffix of a name only grows as columns are
+    /// Add `columns`, in order, each under a name not yet taken: `Name`,
+    /// `Name1`, `Name2`, ... as Kusto names the columns `join`, `lookup` and
+    /// `summarize` repeat, the columns added before it counting as taken.
+    /// One set of the names taken and, per name, the next suffix to try: a
+    /// scan of the schema per column (and per suffix tried) made nested
+    /// joins cubic in their depth (#1424). An operator adds all its columns
+    /// in one call: a call per item rebuilt the set each time. The smallest free suffix of a name only grows as columns are
     /// added, so resuming from the last one gives the same names.
     fn push_all_unique(&mut self, columns: impl IntoIterator<Item = Column>) {
         let mut taken: HashSet<String> = self.columns.iter().map(|c| c.name.clone()).collect();
@@ -920,6 +907,46 @@ pub(crate) mod tests {
 
     pub(super) fn count_name_compared() {
         NAMES_COMPARED.with(|n| n.set(n.get() + 1));
+    }
+
+    /// Through the column pass: nested `join`s, a `summarize` of many
+    /// `arg_max(*)` and one of many same-named aggregates compare or look up
+    /// at most about three names per column their stages make. Each call
+    /// site adding its columns one at a time, or one batch per item, probed
+    /// the suffixes again from 1 for each and grew with the square (#1424).
+    #[test]
+    fn operators_compare_about_one_name_per_column_they_make() {
+        let mut joins = String::from("SecurityEvent");
+        for _ in 0..30 {
+            joins = format!("SecurityEvent | join ({joins}) on Account");
+        }
+        let items = |item: &str, n: usize| {
+            format!(
+                "SecurityEvent | summarize {} by Account",
+                vec![item; n].join(", ")
+            )
+        };
+        for (name, q) in [
+            ("30 nested joins", joins),
+            ("100 arg_max(*)", items("arg_max(TimeGenerated, *)", 100)),
+            ("1000 `x = count()`", items("x = count()", 1000)),
+            ("1000 `count()`", items("count()", 1000)),
+        ] {
+            NAMES_COMPARED.with(|c| c.set(0));
+            let analysis = crate::columns(&q, crate::Profile::Sentinel);
+            let compared = NAMES_COMPARED.with(std::cell::Cell::get);
+            let made: usize = analysis
+                .pipelines
+                .iter()
+                .flat_map(|p| &p.stages)
+                .map(|s| s.output.columns.len())
+                .sum();
+            assert!(made > 1000, "{name}: {made}");
+            assert!(
+                compared <= 3 * made,
+                "{name}: {compared} names compared for {made} columns"
+            );
+        }
     }
 
     /// Adding `n` columns to a schema of `n` compares or looks up about one

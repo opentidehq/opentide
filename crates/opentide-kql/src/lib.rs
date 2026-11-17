@@ -1451,7 +1451,7 @@ pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let word = word_at(source, offset)?;
-    if let Some(md) = column_hover(source, offset, catalog) {
+    if let Some(md) = column_hover(source, offset, &workspace) {
         return Some(md);
     }
     if let Some(parser) = catalog.asim_parser(&word) {
@@ -1616,7 +1616,7 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
 
 /// Hover for a column the query reads or defines: its name and type as the
 /// pipeline has them at that point, and where it comes from.
-fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String> {
+fn column_hover(source: &str, offset: usize, catalog: &CatalogRef) -> Option<String> {
     let analysis = diagnose::columns(source, catalog);
     let column = analysis.column_at(offset)?;
     let type_name = column.type_name.as_deref().unwrap_or("unknown type");

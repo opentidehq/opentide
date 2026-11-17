@@ -9,8 +9,8 @@ use crate::parser::parse_once;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use crate::syntax_util::{is_operator, legacy_kind, span, text, token_at};
 use crate::{
-    Catalog, Hir, HirOp, TYPED_LITERAL_TYPES, check_table_named, overlay_catalog_captures, perf,
-    schema,
+    Catalog, CatalogRef, Hir, HirOp, TYPED_LITERAL_TYPES, check_table_named,
+    overlay_catalog_captures, perf, schema,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes, suggest};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
@@ -189,9 +189,9 @@ fn with_typed_literal_hint(diagnostics: &mut Vec<Diagnostic>) {
 thread_local! {
     /// The column passes this thread ran: what the memo's test counts.
     static COLUMN_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-    /// The last text [`columns`] ran on against a profile's bundled catalog,
-    /// with the catalog's profile and the pass.
-    static LAST_COLUMNS: std::cell::RefCell<Option<(String, crate::Profile, Rc<schema::Analysis>)>> =
+    /// The last text [`columns`] ran on, the catalog it ran against, and the
+    /// pass.
+    static LAST_COLUMNS: std::cell::RefCell<Option<(String, CatalogRef, Rc<schema::Analysis>)>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -202,21 +202,20 @@ pub(crate) fn column_passes() -> u64 {
 }
 
 /// The column pass alone (`opentide_kql::columns`, a column's hover), on the
-/// memoised parse, and itself memoised for the last text when the catalog is
-/// a profile's bundled one: hover asks for it at each offset of the same
-/// text, and on a query of 30 nested `join`s 25 hovers took 10 s in a debug
-/// build, one pass each (#1424). A workspace's catalog with declared columns
-/// is not memoised: it is not the same catalog from one call to the next.
-pub(crate) fn columns(source: &str, catalog: &Catalog) -> Rc<schema::Analysis> {
-    let bundled = std::ptr::eq(catalog, Catalog::cached(catalog.profile));
-    if bundled
-        && let Some(hit) = LAST_COLUMNS.with(|last| {
-            last.borrow()
-                .as_ref()
-                .filter(|(text, profile, _)| text == source && *profile == catalog.profile)
-                .map(|(_, _, analysis)| Rc::clone(analysis))
-        })
-    {
+/// memoised parse, and itself memoised for the last text and catalog: hover
+/// asks for it at each offset of the same text, and on a query of 30 nested
+/// `join`s 25 hovers took 10 s in a debug build, one pass each (#1424). The
+/// memo holds the catalog it ran against (a profile's bundled one, or a
+/// workspace's with declared columns, which `Catalog::for_workspace` keeps
+/// while the declarations stay the same) and compares it by identity: held,
+/// its address cannot be reused by another catalog.
+pub(crate) fn columns(source: &str, catalog: &CatalogRef) -> Rc<schema::Analysis> {
+    if let Some(hit) = LAST_COLUMNS.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(text, held, _)| text == source && same_catalog(held, catalog))
+            .map(|(_, _, analysis)| Rc::clone(analysis))
+    }) {
         return hit;
     }
     let parsed = parse_once(source);
@@ -228,12 +227,19 @@ pub(crate) fn columns(source: &str, catalog: &Catalog) -> Rc<schema::Analysis> {
         catalog,
         parsed.errors.is_empty(),
     ));
-    if bundled {
-        LAST_COLUMNS.with(|last| {
-            *last.borrow_mut() = Some((source.to_owned(), catalog.profile, Rc::clone(&analysis)));
-        });
-    }
+    LAST_COLUMNS.with(|last| {
+        *last.borrow_mut() = Some((source.to_owned(), catalog.clone(), Rc::clone(&analysis)));
+    });
     analysis
+}
+
+/// The same catalog: the same static, or the same `Arc`.
+fn same_catalog(a: &CatalogRef, b: &CatalogRef) -> bool {
+    match (a, b) {
+        (CatalogRef::Bundled(a), CatalogRef::Bundled(b)) => std::ptr::eq(*a, *b),
+        (CatalogRef::Declared(a), CatalogRef::Declared(b)) => std::sync::Arc::ptr_eq(a, b),
+        _ => false,
+    }
 }
 
 /// The tabular expressions of the query, in source order, as the
@@ -724,6 +730,29 @@ mod tests {
         let _ = crate::columns(&q, Profile::Defender);
         let _ = crate::columns("SigninLogs | project AppId", Profile::Sentinel);
         assert_eq!(column_passes() - before, 3);
+    }
+
+    /// With a workspace that declares columns, hover still runs the column
+    /// pass once per text: the memo holds the declared catalog `Arc` that
+    /// `Catalog::for_workspace` keeps while the declarations stay the same.
+    #[test]
+    fn hover_memoises_against_a_declared_catalog() {
+        let declared = opentide_core::datasets::DeclaredDatasets::from_visibility(
+            "[[logsources]]\nname = \"Contoso_Audit_CL\"\ndescription = \"x\"\n\
+             system = \"sentinel\"\n\n[logsources.columns]\nActor_s = { type = \"string\" }\n",
+        )
+        .expect("visibility.toml");
+        let _scope = opentide_core::datasets::scope_thread(Some(declared));
+        let q = "Contoso_Audit_CL | where Actor_s == 'a' | join (SecurityEvent) on Account";
+        assert!(matches!(
+            Catalog::for_workspace(Profile::Sentinel, q),
+            CatalogRef::Declared(_)
+        ));
+        let before = column_passes();
+        for offset in 0..q.len() {
+            let _ = crate::hover(q, offset, Profile::Sentinel);
+        }
+        assert_eq!(column_passes() - before, 1);
     }
 
     fn parse_error(source: &str) -> Diagnostic {
