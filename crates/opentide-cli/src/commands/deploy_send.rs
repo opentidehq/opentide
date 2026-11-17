@@ -3071,9 +3071,7 @@ impl Sender<'_, '_> {
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn elastic(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         const PLATFORM: &str = PlatformId::Elastic.as_str();
-        use opentide_connectors::elastic::{
-            Deployed, Elastic, ElasticError, ElasticRule, Strategy,
-        };
+        use opentide_connectors::elastic::{Elastic, FAILURE_EVENTS};
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let Some(connection) = self.connect_or_fail(PLATFORM, batch, log)? else {
@@ -3153,60 +3151,60 @@ impl Sender<'_, '_> {
                 if non_enterprise {
                     self.warned = true;
                 }
-                let elastic_rule = ElasticRule {
-                    rule_id: rule.uuid.clone(),
-                    name: rule.name.clone(),
-                    strategy: match strategy {
-                        StatusStrategy::Deletion => Strategy::Deletion,
-                        StatusStrategy::Disablement => Strategy::Disablement,
-                        _ => Strategy::Active,
-                    },
-                    block,
-                    payload,
-                };
-                let index = setup.index.clone().unwrap_or_default();
-                let context = self.context(&connection);
-                let outcome = self.block(async {
-                    match Elastic.deploy_rule(context, &elastic_rule, &index).await {
-                        Ok(outcome) => Ok(Ok(outcome)),
-                        Err(ElasticError::Connector(error)) => Err(error),
-                        Err(other) => Ok(Err(other)),
+                let request = match strategy {
+                    StatusStrategy::Deletion => DeployRequest::delete(rule.uuid.clone()),
+                    _ => {
+                        // The body `deploy_plan` shows for it.
+                        let body = opentide_compile::preview::elastic_request(rule, payload);
+                        let operation = if strategy == StatusStrategy::Disablement {
+                            Operation::Disable
+                        } else {
+                            Operation::Update
+                        };
+                        match serde_json::to_vec(&body) {
+                            Ok(body) => DeployRequest::new(rule.uuid.clone(), operation, body),
+                            Err(error) => {
+                                let text = format!("the compiled rule is not JSON: {error}");
+                                self.rule_error(&mut result, &text);
+                                log.finished(result);
+                                continue;
+                            }
+                        }
                     }
-                });
-                match outcome {
-                    Ok(Ok(outcome)) => {
-                        for warning in &outcome.warnings {
-                            self.warned = true;
-                            tracing::warn!(
-                                rule_id = rule.uuid.as_str(),
-                                rule = rule.name.as_str(),
-                                warning = warning.as_str(),
-                                "elasticsearch_check_warning"
-                            );
-                        }
-                        if let Deployed::Failed {
-                            event,
-                            status,
-                            error,
-                        } = &outcome.deployed
-                        {
-                            self.elastic_failure(&mut result, rule, event, *status, error);
-                        }
+                };
+                let context = self.context(&connection);
+                let deployed = self
+                    .block(async { Ok(Elastic.deploy(context, &request).await) })
+                    .unwrap_or_else(|error| {
+                        let mut failed = DeployError::from(error);
+                        failed.scope = DeployScope::Tenant;
+                        Err(failed)
+                    });
+                match deployed {
+                    Ok(done) => {
+                        self.elastic_warnings(rule, &done);
                         log.finished(result);
                     }
                     // The rule itself failed: the other rules go on.
-                    Ok(Err(failed @ ElasticError::Rule(_))) => {
-                        self.rule_error(&mut result, &failed.to_string());
+                    Err(error) if error.scope == DeployScope::Rule => {
+                        if let Some(done) = &error.partial {
+                            self.elastic_warnings(rule, done);
+                        }
+                        let failure = &error.failure;
+                        if FAILURE_EVENTS.contains(&failure.code) {
+                            self.elastic_failure(
+                                &mut result,
+                                rule,
+                                failure.code,
+                                failure.status,
+                                &failure.message,
+                            );
+                        } else {
+                            self.rule_error(&mut result, &failure.message);
+                        }
                         log.finished(result);
                     }
-                    Ok(Err(other)) => {
-                        let text = other.to_string();
-                        result.fail(&text);
-                        log.finished(result);
-                        stopped = Some(text);
-                        break;
-                    }
-                    Err(ConnectorError::Cancelled) => {
+                    Err(error) if error.is_interrupted() => {
                         result.fail("interrupted");
                         log.finished(result);
                         self.failed = true;
@@ -3219,10 +3217,19 @@ impl Sender<'_, '_> {
                         return Err(Raised::new("interrupted").stopping(Stops::Run));
                     }
                     Err(error) => {
-                        let text = error.to_string();
-                        result.fail(&raised(&error).describe());
+                        match error.connector {
+                            // The tenant could not be reached.
+                            Some(connector) => {
+                                result.fail(&raised(&connector).describe());
+                                stopped = Some(connector.to_string());
+                            }
+                            // A key or privilege the tenant refuses.
+                            None => {
+                                result.fail(&error.failure.message);
+                                stopped = Some(error.failure.message);
+                            }
+                        }
                         log.finished(result);
-                        stopped = Some(text);
                         break;
                     }
                 }
@@ -3238,6 +3245,22 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// The Elasticsearch checks' warnings of an Elastic deploy, failed or not.
+    fn elastic_warnings(&mut self, rule: &opentide_compile::Rule, done: &DeployOutcome) {
+        for warning in &done.warnings {
+            if warning.code != opentide_connectors::elastic::CHECK_WARNING {
+                continue;
+            }
+            self.warned = true;
+            tracing::warn!(
+                rule_id = rule.uuid.as_str(),
+                rule = rule.name.as_str(),
+                warning = warning.message.as_str(),
+                "elasticsearch_check_warning"
+            );
+        }
     }
 
     /// `_deployment_error` for an Elastic rule, with the fields its event logs.

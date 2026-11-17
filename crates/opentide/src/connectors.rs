@@ -22,8 +22,8 @@
 //! ```
 //!
 //! A query saves nothing on the tenant. A platform that cannot do an
-//! operation (CrowdStrike, HarfangLab and Sysdig cannot check a query live;
-//! Elastic deploys through `opentide deploy` only) answers it
+//! operation (CrowdStrike, HarfangLab and Sysdig cannot check a query live,
+//! Sysdig runs no queries) answers it
 //! with [`Error::Connector`] and the code `operation_unsupported`, never with
 //! a faked result. A whole deploy run (the plan, the deployment state, the
 //! retirements) is the command line's `deploy` (`cli::run_json`); a
@@ -466,8 +466,8 @@ impl Connection {
     /// with its scope (the rule, or the whole tenant), the HTTP status when
     /// the tenant gave one, and its fields. [`Error::Connector`]:
     /// `interrupted`, and
-    /// `operation_unsupported` on a platform whose rules deploy only through
-    /// `opentide deploy` (Elastic).
+    /// `operation_unsupported` on a platform without a deployer, which no
+    /// built-in platform is.
     pub async fn deploy(&self, request: &DeployRequest) -> Result<DeployOutcome, Error> {
         let deployer = self
             .connector()

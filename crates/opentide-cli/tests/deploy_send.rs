@@ -2297,6 +2297,241 @@ fn graylog_does_not_create_again_a_lost_definition_and_stops_on_a_refused_token(
     assert!(err.contains("✗ failed    First rule"), "{err}");
 }
 
+/// An Elastic rule block of `status`, on `logs-*`, with `extra` lines.
+fn elastic_block(status: &str, extra: &str) -> String {
+    format!(
+        "  elastic:\n    status: {status}\n    type: query\n    language: kuery\n    query: \
+         'process.name: \"cmd.exe\"'\n    index: [\"logs-*\"]\n    scheduling:\n      interval: \
+         5m\n{extra}"
+    )
+}
+
+/// `opentide deploy --platform elastic` in `ws`, both strategies, every rule.
+fn elastic_deploy(ws: &Path) -> (i32, String) {
+    let (code, _, err) = cli(
+        ws,
+        &[
+            "--verbose",
+            "deploy",
+            "--platform",
+            "elastic",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[("ELASTIC_API_KEY", "key".to_owned())],
+    );
+    (code, err)
+}
+
+/// A workspace of one Elastic tenant, `lab`, on `server` (Kibana and
+/// Elasticsearch both), with `rules` (file, name, uuid, block).
+fn elastic_workspace(server: &str, rules: &[(&str, &str, &str, String)]) -> tempfile::TempDir {
+    let setup = format!(
+        "url = \"{server}\"\nelasticsearch_url = \"{server}\"\napi_key = \"$ELASTIC_API_KEY\"\n"
+    );
+    let files: Vec<(&str, String)> = rules
+        .iter()
+        .map(|(file, name, uuid, block)| (*file, rule(name, uuid, "A rule.", block)))
+        .collect();
+    workspace("elastic", "lab", &setup, &files)
+}
+
+/// The stand-in Kibana and Elasticsearch of the Elastic deploy test: the
+/// mappings lack every field; Kibana has `present` and the prebuilt
+/// `prebuilt`, deletes `removed`, refuses to create `broken` (500) and
+/// creates any other rule.
+fn mount_elastic(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    [present, prebuilt, removed, broken]: [&str; 4],
+) {
+    use wiremock::matchers::{method, path, path_regex, query_param};
+    rt.block_on(async {
+        // The timestamp override is not in the mappings yet: a warning.
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(server)
+            .await;
+        let rules = "/api/detection_engine/rules";
+        for (uuid, answer) in [
+            (
+                present,
+                serde_json::json!({"rule_id": present, "type": "query"}),
+            ),
+            (
+                prebuilt,
+                serde_json::json!({"rule_id": prebuilt, "type": "query", "immutable": true}),
+            ),
+        ] {
+            wiremock::Mock::given(method("GET"))
+                .and(path(rules))
+                .and(query_param("rule_id", uuid))
+                .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(answer))
+                .mount(server)
+                .await;
+        }
+        wiremock::Mock::given(method("GET"))
+            .and(path(rules))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(rules))
+            .and(wiremock::matchers::body_partial_json(
+                serde_json::json!({"rule_id": broken}),
+            ))
+            .respond_with(
+                wiremock::ResponseTemplate::new(500)
+                    .set_body_json(serde_json::json!({"message": "storage down"})),
+            )
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(rules))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path(rules))
+            .and(query_param("rule_id", present))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("DELETE"))
+            .and(path(rules))
+            .and(query_param("rule_id", removed))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .expect(1)
+            .mount(server)
+            .await;
+    });
+}
+
+/// Elastic through the command line: a rule the checks warn about is
+/// created, one Kibana has is updated, a prebuilt one is refused, a removed
+/// one deleted, and a create Kibana refuses fails alone with its status.
+#[test]
+fn elastic_creates_updates_refuses_and_deletes_as_it_deploys() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (fresh, present, prebuilt, removed, broken) = (
+        "00000000-0000-4000-8099-000000000141",
+        "00000000-0000-4000-8099-000000000142",
+        "00000000-0000-4000-8099-000000000143",
+        "00000000-0000-4000-8099-000000000144",
+        "00000000-0000-4000-8099-000000000145",
+    );
+    mount_elastic(&rt, &server, [present, prebuilt, removed, broken]);
+    let overridden = "    overrides:\n      timestamp: event.ingested\n";
+    let ws = elastic_workspace(
+        &server.uri(),
+        &[
+            (
+                "a.yaml",
+                "Fresh rule",
+                fresh,
+                elastic_block("STAGING", overridden),
+            ),
+            (
+                "b.yaml",
+                "Present rule",
+                present,
+                elastic_block("STAGING", ""),
+            ),
+            (
+                "c.yaml",
+                "Prebuilt rule",
+                prebuilt,
+                elastic_block("STAGING", ""),
+            ),
+            (
+                "d.yaml",
+                "Removed rule",
+                removed,
+                elastic_block("REMOVED", ""),
+            ),
+            (
+                "e.yaml",
+                "Broken rule",
+                broken,
+                elastic_block("STAGING", overridden),
+            ),
+        ],
+    );
+    let (code, err) = elastic_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 1, "{err}");
+    let ordered = [
+        "Timestamp field 'event.ingested' not found in mappings yet",
+        "✓ deployed  Fresh rule",
+        "✓ deployed  Present rule",
+        "refusing to modify prebuilt rule",
+        "✓ deleted   Removed rule",
+        // The checks' warning, then Kibana's refusal.
+        "rule_id: 00000000-0000-4000-8099-000000000145 · rule: Broken rule · warning: Timestamp \
+         field",
+        "status_code: 500",
+        "HTTP 500: storage down",
+    ];
+    let at: Vec<usize> = ordered
+        .iter()
+        .map(|line| {
+            err.find(line)
+                .unwrap_or_else(|| panic!("no {line} in {err}"))
+        })
+        .collect();
+    assert!(at.windows(2).all(|pair| pair[0] < pair[1]), "{err}");
+}
+
+/// A tenant whose key Kibana refuses fails at its first rule, and no other
+/// rule is sent to it.
+#[test]
+fn elastic_stops_a_tenant_refusing_the_key() {
+    use wiremock::matchers::method;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server),
+    );
+    let ws = elastic_workspace(
+        &server.uri(),
+        &[
+            (
+                "a.yaml",
+                "First rule",
+                "00000000-0000-4000-8099-000000000151",
+                elastic_block("STAGING", ""),
+            ),
+            (
+                "b.yaml",
+                "Second rule",
+                "00000000-0000-4000-8099-000000000152",
+                elastic_block("STAGING", ""),
+            ),
+        ],
+    );
+    let (code, err) = elastic_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("✗ failed    First rule"), "{err}");
+    assert!(
+        err.contains("error: Elastic tenant deployment failed · tenant: *** · error: Tenant *** auth error: HTTP 401"),
+        "{err}"
+    );
+}
+
 /// A SentinelOne tenant that refuses the key (401) fails at its first rule,
 /// as the SDK's `sentinel_one_unauthorized` (tenant scope) says: its other
 /// rules are not attempted, and nothing more is sent to it.
