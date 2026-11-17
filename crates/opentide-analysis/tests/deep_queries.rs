@@ -581,12 +581,12 @@ fn spl_eval_ladder(n: usize) -> String {
     )
 }
 
-/// The eval ladder analyses cleanly at the limit its six levels a step leave (1,024 / 6,
-/// less the root), and past it, up to a million characters of it, is one parse error:
+/// The eval ladder analyses cleanly at the limit its six levels a step leave (170, which
+/// take 1,020 of 1,024), and past it, up to a million characters of it, is one parse error:
 /// never an abort, and linear.
 #[test]
 fn spl_eval_ladder_stops_with_one_error() {
-    analyzes_cleanly("spl eval ladder", spl_eval_ladder(169), |q| {
+    analyzes_cleanly("spl eval ladder", spl_eval_ladder(170), |q| {
         opentide_spl::analyze(q).diagnostics
     });
     let step = "f(a OR b AND NOT c == d + e * -(".len() + "))".len();
