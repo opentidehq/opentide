@@ -131,8 +131,12 @@ const EXPRESSION_START: [K; 12] = [
 ];
 
 /// What a syntax error says the parser expected, as one phrase. Operators are named by their
-/// class with an example, as KQL names "a comparison operator" (a list ran to 24 items); where
+/// class with an example, as KQL names "a comparison operator" (a list ran to 27 items); where
 /// an expression could start, "an expression" stands for its first tokens.
+///
+/// `+` and `-` are signs where an expression starts, and the grammar records them there only
+/// with every other first token (`expr_bp`): so a set holding them without `WORD` is an
+/// operator position, and "an arithmetic operator" is right. The tests pin both cases.
 pub(crate) fn expected_list(expected: opentide_parse::TokenSet) -> Option<String> {
     let expression = EXPRESSION_START
         .iter()
@@ -199,5 +203,22 @@ mod tests {
         );
         assert_eq!(message("process where a == 1 | "), "a name");
         assert_eq!(message("any where a.b."), "a name or a quoted name");
+    }
+
+    #[test]
+    fn a_partial_class_is_named_by_its_class() {
+        // After `a + b` the loop records `*`, `/`, `%` (one level up), not `+`, `-`: the
+        // class still stands, as `+` is valid there too.
+        assert!(
+            message("process where a + b c").contains("an arithmetic operator such as `+`"),
+            "{}",
+            message("process where a + b c")
+        );
+        // A comparison is not associative: after `1 == 1` the comparison class is gone.
+        assert_eq!(
+            message("process where 1 == 1 == "),
+            "`and`, a match operator such as `in`, `not`, `or`, `|`, or an arithmetic \
+             operator such as `+`"
+        );
     }
 }
