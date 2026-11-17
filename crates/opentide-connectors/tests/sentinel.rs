@@ -249,3 +249,78 @@ fn sentinel_validate_searches_one_row() {
         assert!(check.errors.is_empty());
     }
 }
+
+/// The cassette `sentinel/deploy`'s sign-in and first list page, the page's
+/// `nextLink` set to *link*.
+#[expect(
+    clippy::unwrap_used,
+    reason = "a test helper: a failed set-up is a failure"
+)]
+fn listing_linking_to(link: &str) -> opentide_cassette::Cassette {
+    let full = support::cassette("sentinel/deploy");
+    let mut page = full.interactions[4].clone();
+    let mut body: serde_json::Value = serde_json::from_slice(&page.response.body.bytes()).unwrap();
+    body["nextLink"] = serde_json::Value::String(link.to_owned());
+    page.response.body = opentide_cassette::cassette::Body::Text(body.to_string());
+    let interactions = vec![
+        full.interactions[0].clone(),
+        full.interactions[1].clone(),
+        page,
+    ];
+    opentide_cassette::Cassette::new(&full.scenario, full.recorded_from, interactions)
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "a test helper: a failed set-up is a failure"
+)]
+fn list_through(
+    cassette: opentide_cassette::Cassette,
+) -> (Result<usize, ConnectorError>, Replayed) {
+    let tenant = Replayed::start_with(
+        cassette,
+        sentinel::PLATFORM,
+        SETUP,
+        "AZURE_CLIENT_SECRET",
+        &sentinel::http_settings(Duration::from_secs(60)),
+    );
+    let listed = block_on(async { connector().list(tenant.cx()).await })
+        .unwrap()
+        .map(|rules| rules.unwrap().len());
+    (listed, tenant)
+}
+
+/// #1142: a `nextLink` to another host is not followed, so ARM's bearer
+/// token never reaches it; the listing fails and says why.
+#[test]
+fn sentinel_a_next_link_to_another_host_receives_no_token() {
+    let (listed, tenant) = list_through(listing_linking_to("https://evil.example/loop"));
+    let error = listed.unwrap_err();
+    assert!(matches!(error, ConnectorError::Answer { .. }), "{error:?}");
+    assert_eq!(
+        error.to_string(),
+        "sentinel tenant 'replayed' at https://management.azure.com: listing the analytics rules: \
+         the next-page link points to https://evil.example, not to https://management.azure.com, \
+         where the listing started; it is not followed, so the tenant's token is not sent there"
+    );
+    // The sign-in and the one page, and nothing sent to evil.example.
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// #1142: a `nextLink` back to the page itself ends the listing with an
+/// error, never an endless loop.
+#[test]
+fn sentinel_a_next_link_that_loops_is_not_followed() {
+    let first = "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/\
+                 providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/\
+                 Microsoft.SecurityInsights/alertRules?api-version=2025-10-01-preview";
+    let (listed, tenant) = list_through(listing_linking_to(first));
+    let error = listed.unwrap_err().to_string();
+    assert!(
+        error.ends_with(
+            "the next-page link repeats one already followed; the listing would never end"
+        ),
+        "{error}"
+    );
+    assert_eq!(tenant.verify(), Vec::new());
+}

@@ -261,27 +261,11 @@ fn mark_referenced_objectives(files: &mut [File]) {
     }
 }
 
-/// `slugify` as opentide's lint applies it: runs of anything but ASCII
-/// letters and digits become one `-`, trimmed, lowercased.
+/// `slugify` as opentide's lint applies it (`opentide_workspace::lint`):
+/// runs of anything but ASCII letters and digits become one `-`, trimmed,
+/// lowercased, and a stem Windows reserves for a device gets a `_` before it.
 pub fn slugify(name: &str) -> String {
-    let mut slug = String::new();
-    let mut dash = false;
-    for c in name.trim().chars() {
-        if c.is_ascii_alphanumeric() {
-            if dash && !slug.is_empty() {
-                slug.push('-');
-            }
-            dash = false;
-            slug.push(c.to_ascii_lowercase());
-        } else {
-            dash = true;
-        }
-    }
-    if slug.is_empty() {
-        "object".to_string()
-    } else {
-        slug
-    }
+    opentide_workspace::lint::slugify(name)
 }
 
 fn object_name(rng: &mut Rng, kind: &str, index: usize) -> String {
@@ -1685,6 +1669,7 @@ mod tests {
         );
         assert_eq!(slugify("  a--b  C "), "a-b-c");
         assert_eq!(slugify("***"), "object");
+        assert_eq!(slugify("CON"), "_con");
     }
 
     #[test]
