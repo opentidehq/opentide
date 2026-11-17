@@ -38,7 +38,7 @@ use rowan::NodeOrToken;
 /// does (`count(*)`); aggregating queries reach Elasticsearch unchanged.
 pub fn output_columns(source: &str) -> Option<Vec<String>> {
     let tree = crate::tree::parse_tree(source)?;
-    if tree.root_node().has_error() {
+    if tree.has_error() {
         return None;
     }
     let query = tree.syntax.children().find(|c| c.kind() == K::QUERY)?;

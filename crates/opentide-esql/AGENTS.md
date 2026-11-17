@@ -11,7 +11,7 @@ foundation, tier 4: depends on opentide-core, -ecs, -lucene, -highlight, -parse.
 
 ## Invariants
 
-- Analysis runs on the pure-Rust parser (`src/lexer.rs`, `src/parser/`, read through the arena of `src/tree.rs`).
+- Analysis runs on the pure-Rust parser (`src/lexer.rs`, `src/parser/`, read as a rowan tree through the typed AST of `src/generated/ast.rs` and the parse memo of `src/tree.rs`).
 - I/O-free: no `std::fs` in `src/`; the catalogs are compiled in (`include_str!`) and parsed once (`OnceLock`).
 - ES|QL findings are `opentide_core::Diagnostic`s with codes from `opentide_core::codes`; no error enum of its own.
 - A name the catalog does not know is a diagnostic, not a parse error (Kibana drops an unknown command and runs the rest).
