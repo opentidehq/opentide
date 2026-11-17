@@ -457,7 +457,7 @@ fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     let columns: Vec<Column> = catalog
         .columns_for_table(name)
         .into_iter()
-        .filter(|c| c.table == name)
+        .filter(|c| &*c.table == name)
         .map(|c| {
             Column::new(c.name.clone(), c.type_name.clone())
                 .with_origin(Origin::Table(name.to_string()))
