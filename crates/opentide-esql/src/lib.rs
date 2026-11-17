@@ -67,7 +67,6 @@ use opentide_core::{
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use std::collections::HashMap;
-use syntax::SyntaxKind as K;
 use tree::{Node, node_span, walk};
 
 pub struct AnalyzeResult {
@@ -654,37 +653,19 @@ fn display_name(name: &str) -> String {
     name.to_ascii_uppercase()
 }
 
-/// The command's leading keywords (`LOOKUP JOIN`, `INLINE STATS`).
-/// [`keyword_span`] of a rowan node: the command's keyword (`LIMIT`), or its
-/// words (`INLINE STATS`, `LEFT JOIN`).
+/// The command's keyword on a rowan node (`LIMIT`), for the version gates:
+/// [`keyword_span`] of a one-keyword command.
 pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
     let start = usize::from(node.text_range().start());
-    let mut end = start;
-    let several = matches!(node.kind(), K::INLINE_STATS_COMMAND | K::JOIN_COMMAND);
-    let mut parts = node
+    let end = node
         .children_with_tokens()
-        .filter(|c| c.kind() != K::WHITESPACE)
-        .peekable();
-    while let Some(part) = parts.next() {
-        // A comment or a node ends the keyword, and so do `|` and `(`.
-        if part.as_node().is_some() || matches!(part.kind(), K::COMMENT | K::PIPE | K::L_PAREN) {
-            break;
-        }
-        end = usize::from(part.text_range().end());
-        if node.kind() == K::JOIN_COMMAND && part.text_range().start() == node.text_range().start()
-        {
-            // The join's kind and the `JOIN` after it.
-            if let Some(join) = parts.peek() {
-                end = end.max(usize::from(join.text_range().end()));
-            }
-        }
-        if !several {
-            break;
-        }
-    }
+        .next()
+        .filter(|first| first.as_token().is_some())
+        .map_or(start, |first| usize::from(first.text_range().end()));
     ByteSpan::new(start, end.max(start + 1))
 }
 
+/// The command's leading keywords (`LOOKUP JOIN`, `INLINE STATS`).
 pub(crate) fn keyword_span(node: Node) -> ByteSpan {
     let start = node.start_byte();
     let mut end = start;

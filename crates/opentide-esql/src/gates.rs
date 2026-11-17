@@ -10,13 +10,13 @@
 
 use crate::syntax::SyntaxKind as K;
 use crate::tree::Node;
+use crate::version::{Availability, StackTarget};
 use crate::{SyntaxNode, ast};
+use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
 use opentide_parse::ast::AstNode;
 use rowan::NodeOrToken;
 
 type SyntaxElement = rowan::SyntaxElement<crate::Lang>;
-use crate::version::{Availability, StackTarget};
-use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
 
 /// One version-gated construct found in the query.
 pub(crate) struct Gate {
@@ -174,6 +174,26 @@ fn is_command(kind: K) -> bool {
     ast::Command::can_cast(kind) || kind == K::SET_COMMAND
 }
 
+/// The kinds [`syntax_gates`] reads: the arena keeps the rowan node of these
+/// only, so the rest of the lossless tree is freed as it is built (a test
+/// checks that no other kind has a gate).
+pub(crate) const GATED: &[K] = &[
+    K::RENAME_CLAUSE,
+    K::LIKE_EXPRESSION,
+    K::INDEX_PATTERN,
+    K::PARAMETER,
+    K::QUALIFIED_INTERVAL,
+    K::SOURCE_SUBQUERY,
+    K::IN_TUPLE,
+    K::LIMIT_COMMAND,
+    K::GROK_COMMAND,
+    K::CHANGE_POINT_COMMAND,
+    K::JOIN_COMMAND,
+    K::MAP_EXPRESSION,
+    K::COMPLETION_COMMAND,
+    K::METADATA,
+];
+
 /// Version gates for one node (not names: those come from the catalog).
 pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
     let mut out = Vec::new();
@@ -212,14 +232,9 @@ pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
                     ),
                 );
             }
-            // The patterns follow the operator; the first node is the
-            // operand wherever it stands.
-            let first = nodes.first().copied();
-            let patterns = op.map_or_else(Vec::new, |at| {
-                nodes_after(&parts, at)
-                    .filter(|n| Some(*n) != first)
-                    .collect()
-            });
+            // The patterns follow the operator; the parser reads the operand
+            // before it (`expressions.rs`, `Infix::Like`).
+            let patterns = op.map(|at| nodes_after(&parts, at)).into_iter().flatten();
             for pattern in patterns {
                 match pattern.kind() {
                     K::STRING => {}
@@ -312,12 +327,10 @@ pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
             ));
         }
         K::JOIN_COMMAND => {
+            // The conditions follow `ON`; the parser reads the index before it
+            // (`processing.rs`, `join`).
             let conditions: Vec<&SyntaxNode> = first_token(&parts, &[K::ON_KW])
-                .map(|on| {
-                    nodes_after(&parts, on)
-                        .filter(|n| n.kind() != K::INDEX_PATTERN)
-                        .collect()
-                })
+                .map(|on| nodes_after(&parts, on).collect())
                 .unwrap_or_default();
             let simple = conditions.len() == 1 && conditions[0].kind() == K::QUALIFIED_NAME;
             if !simple && !conditions.is_empty() {
@@ -352,16 +365,10 @@ pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
         }
         K::COMPLETION_COMMAND => {
             // 8.19 and 9.1: `COMPLETION prompt WITH endpoint`; the first node
-            // after `WITH` that is not the `{…}` map, and not a target before
-            // `=`.
-            let eq = first_token(&parts, &[K::EQ]);
-            let endpoint = first_token(&parts, &[K::WITH_KW]).and_then(|with| {
-                parts.iter().enumerate().find_map(|(i, p)| {
-                    let n = p.as_node()?;
-                    (i > with && n.kind() != K::MAP_EXPRESSION && eq.is_none_or(|eq| i >= eq))
-                        .then_some(n)
-                })
-            });
+            // after `WITH` that is not the `{…}` map. A target (`x =`) comes
+            // before `WITH` (`processing.rs`, `completion`).
+            let endpoint = first_token(&parts, &[K::WITH_KW])
+                .and_then(|with| nodes_after(&parts, with).find(|n| n.kind() != K::MAP_EXPRESSION));
             if let Some(endpoint) = endpoint {
                 let id = text_of(endpoint, source).trim_matches('`');
                 out.push(
@@ -529,5 +536,110 @@ mod tests {
             let named = format!("{kind:?}").ends_with("_COMMAND");
             assert_eq!(is_command(kind), named, "{kind:?}");
         }
+    }
+    /// What every gate of `query` says: (subject, the text of its span, its
+    /// suggestion). Each node that has a gate is of a [`GATED`] kind.
+    fn gates(query: &str) -> Vec<(String, &str, Option<String>)> {
+        crate::syntax_tree(query)
+            .descendants()
+            .flat_map(|n| {
+                let gates = syntax_gates(&n, query);
+                assert!(
+                    gates.is_empty() || GATED.contains(&n.kind()),
+                    "{:?} has a gate but is not in GATED",
+                    n.kind()
+                );
+                gates
+            })
+            .map(|g| (g.subject, &query[g.span.start..g.span.end], g.suggestion))
+            .collect()
+    }
+
+    /// The children each gate reads, by position where the grammar labels
+    /// none: a rename's old and new, a LIKE's patterns beside its operand,
+    /// a join's conditions beside its index, a completion's endpoint beside
+    /// its target, a map entry's value beside its key.
+    #[test]
+    fn each_gate_reads_its_own_children() {
+        let one = |s: &str, at: &'static str, sug: Option<&str>| {
+            vec![(s.to_string(), at, sug.map(ToString::to_string))]
+        };
+        let rename = "`RENAME new = old`";
+        assert_eq!(
+            gates("ROW a = 1 | RENAME b = a"),
+            one(rename, "b = a", Some("a AS b"))
+        );
+        assert_eq!(
+            gates("FROM i | RENAME a = b AS c"),
+            one(rename, "a = b", Some("b AS a"))
+        );
+        assert_eq!(gates("ROW a = 1 | RENAME c AS d"), []);
+        let endpoint = "`COMPLETION … WITH endpoint`";
+        assert_eq!(
+            gates("FROM i | COMPLETION p WITH ep"),
+            one(endpoint, "ep", None)
+        );
+        assert_eq!(
+            gates("FROM i | COMPLETION x = p WITH ep"),
+            one(endpoint, "ep", None)
+        );
+        let map = "an empty or nested map";
+        assert_eq!(
+            gates("FROM a | FUSE linear WITH {\"a\": {\"b\": 1}}"),
+            one(map, "{\"a\": {\"b\": 1}}", None)
+        );
+        assert_eq!(gates("FROM a | FUSE linear WITH {\"a\": 1}"), []);
+        assert_eq!(gates("FROM a | FUSE linear WITH {}"), one(map, "{}", None));
+        assert_eq!(gates("ROW a = \"x\" | WHERE a LIKE \"x\""), []);
+        assert_eq!(
+            gates("ROW a = \"x\" | WHERE a LIKE ?p"),
+            one("a parameter as a LIKE pattern", "?p", None)
+        );
+        assert_eq!(
+            gates("ROW a = \"x\" | WHERE a LIKE b"),
+            one("a LIKE pattern that is not a string literal", "b", None)
+        );
+        assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
+        let join = "a `LOOKUP JOIN` condition with several fields or an expression";
+        let q = "FROM a | LOOKUP JOIN t ON x, y";
+        assert_eq!(gates(q), one(join, &q[9..], None));
+        assert_eq!(
+            gates("ROW a = 1 | LIMIT 1 BY a"),
+            one("`LIMIT … BY`", "LIMIT", None)
+        );
+        assert_eq!(gates("ROW a = 1 | LIMIT 1"), []);
+        assert_eq!(
+            gates("FROM logs-* [METADATA _id, _index]"),
+            one(
+                "`[METADATA …]` in brackets",
+                "[METADATA _id, _index]",
+                Some("METADATA _id, _index")
+            )
+        );
+    }
+
+    /// Every gate fires on its form, from a node of a [`GATED`] kind.
+    #[test]
+    fn every_gated_kind_has_a_gate() {
+        let mut fired = std::collections::HashSet::new();
+        for query in [
+            "ROW a = 1 | RENAME b = a",
+            "ROW a = \"x\" | WHERE a LIKE (\"x\", \"y\")",
+            "FROM c:logs-*::data, logs-*::failures [METADATA _id]",
+            "ROW a = 1 | WHERE a == ??b",
+            "ROW a = NOW() - 5 m",
+            "FROM a, (FROM b) | WHERE (b, e) IN (FROM c | KEEP d, f)",
+            "ROW a = 1 | LIMIT 1 BY a | CHANGE_POINT a BY b",
+            "ROW a = \"x\" | GROK a \"%{WORD:b}\", \"%{WORD:c}\"",
+            "FROM a | LOOKUP JOIN t ON x, y | COMPLETION p WITH ep | FUSE linear WITH {}",
+        ] {
+            for node in crate::syntax_tree(query).descendants() {
+                if !syntax_gates(&node, query).is_empty() {
+                    fired.insert(node.kind());
+                }
+            }
+        }
+        let silent: Vec<_> = GATED.iter().filter(|k| !fired.contains(k)).collect();
+        assert!(silent.is_empty(), "no gate fired on {silent:?}");
     }
 }

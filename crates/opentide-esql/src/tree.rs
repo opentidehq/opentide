@@ -32,8 +32,10 @@ struct Data {
     parent: Option<u32>,
     children: Vec<u32>,
     field: Option<&'static str>,
-    /// The rowan node of a named node (a token's arena node has none): the
-    /// checks being moved to the typed AST read it (#1415).
+    /// The rowan node of a node the version gates read
+    /// ([`crate::gates::GATED`]): the checks being moved to the typed AST read
+    /// it (#1415). No other node keeps one, so the lossless tree is freed as
+    /// the arena is built.
     syntax: Option<SyntaxNode<Lang>>,
 }
 
@@ -193,7 +195,9 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.start()),
                     usize::from(r.end()),
                 );
-                data[id as usize].syntax = Some(node.clone());
+                if crate::gates::GATED.contains(&kind) {
+                    data[id as usize].syntax = Some(node.clone());
+                }
                 if options && kind == K::MAP_EXPRESSION {
                     data[id as usize].field = Some("options");
                 }
@@ -768,7 +772,7 @@ impl<'t> Node<'t> {
         }
     }
 
-    /// The rowan node of a named node; `None` for a token or a comment.
+    /// The rowan node of a node of a [`crate::gates::GATED`] kind.
     pub(crate) fn syntax(&self) -> Option<&'t SyntaxNode<Lang>> {
         self.d().syntax.as_ref()
     }
