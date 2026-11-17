@@ -402,11 +402,11 @@ impl DeployError {
         }
     }
 
-    /// The same failure, followed by *more* failures of the same rule
-    /// ([`DeployError::more`]).
+    /// The same failure, followed by *more* failures of the same rule, after
+    /// any it already has ([`DeployError::more`]).
     #[must_use]
-    pub fn with_more(mut self, more: Vec<DeployFailure>) -> Self {
-        self.more = more;
+    pub fn with_more(mut self, more: impl IntoIterator<Item = DeployFailure>) -> Self {
+        self.more.extend(more);
         self
     }
 

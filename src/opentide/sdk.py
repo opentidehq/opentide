@@ -144,7 +144,7 @@ def _error(exc: BaseException) -> OpentideError:
             OpentideError(
                 str(further_code),
                 str(further_message),
-                dict(further_fields).get("detail"),
+                next((str(value) for key, value in further_fields if key == "detail"), None),
                 scope=None if scope is None else str(scope),
                 status=None if further_status is None else int(further_status),
                 fields={str(key): str(value) for key, value in further_fields},

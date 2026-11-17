@@ -78,6 +78,22 @@ fn failure(code: &str, message: impl Into<String>) -> PyErr {
 /// it: its code, message, HTTP status and fields.
 type Further = (String, String, Option<u16>, Vec<(String, String)>);
 
+/// A failed deploy's further failures, in order, as [`Further`] items.
+fn further(failed: &opentide::DeployFailed) -> Vec<Further> {
+    failed
+        .more_failures
+        .iter()
+        .map(|further| {
+            (
+                further.code.to_owned(),
+                further.message.clone(),
+                further.status,
+                further.fields.clone(),
+            )
+        })
+        .collect()
+}
+
 fn usage(message: String) -> PyErr {
     failure("usage_invalid_choice", message)
 }
@@ -105,18 +121,7 @@ fn from_facade(error: &opentide::Error) -> PyErr {
                 .partial
                 .as_deref()
                 .and_then(|done| serde_json::to_string(&tenants::DeployJson::from(done)).ok()),
-            failed
-                .more_failures
-                .iter()
-                .map(|further| {
-                    (
-                        further.code.to_owned(),
-                        further.message.clone(),
-                        further.status,
-                        further.fields.clone(),
-                    )
-                })
-                .collect::<Vec<Further>>(),
+            further(failed),
         ),
         _ => (None, None, None, Vec::new(), None, Vec::new()),
     };
@@ -459,6 +464,31 @@ pub mod module {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_deploys_further_failures_are_sdk_errors_eighth_item() {
+        use opentide::connectors::{DeployError, DeployFailure};
+        let error = opentide::Error::from(
+            DeployError::rule(DeployFailure::new("google_secops_text_failed", "HTTP 400"))
+                .with_more(vec![
+                    DeployFailure::new("google_secops_deployment_failed", "HTTP 500")
+                        .with_status(500)
+                        .with_field("detail", "down"),
+                ]),
+        );
+        let opentide::Error::Deploy(failed) = &error else {
+            panic!("{error:?}")
+        };
+        assert_eq!(
+            super::further(failed),
+            [(
+                "google_secops_deployment_failed".to_owned(),
+                "HTTP 500".to_owned(),
+                Some(500),
+                vec![("detail".to_owned(), "down".to_owned())],
+            )]
+        );
+    }
 
     #[test]
     fn queries_modes_are_the_command_lines() {
