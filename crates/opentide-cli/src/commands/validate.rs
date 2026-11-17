@@ -44,6 +44,8 @@ pub struct Args {
     pub selection: Selection,
     /// `--strict`.
     pub strict: bool,
+    /// `--allow-empty`: `--strict` passes a full run with no objects.
+    pub allow_empty: bool,
     /// `--queries`, when given.
     pub queries: Option<QueriesMode>,
     /// `--fix`.
@@ -78,6 +80,7 @@ impl From<&crate::tree::ValidateArgs> for Args {
                 types: args.object_type.clone(),
             },
             strict: args.strictness.strict,
+            allow_empty: args.allow_empty,
             queries: args.strictness.queries.map(QueriesMode::from),
             fix: args.fix,
             dry_run: args.dry_run,
@@ -480,7 +483,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let empty = !failed && args.check.is_none() && scope_full && summary.objects == 0;
     // `--strict` fails a run that checked nothing: a CI job pointed at the
     // wrong folder would otherwise pass every commit.
-    let strict_empty = empty && args.strict;
+    let strict_empty = empty && args.strict && !args.allow_empty;
     let message = if failed {
         "Validation failed".to_owned()
     } else if strict_empty {

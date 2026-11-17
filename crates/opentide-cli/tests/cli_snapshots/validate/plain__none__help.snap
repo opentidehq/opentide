@@ -38,6 +38,9 @@ Options:
           
           [possible values: error, warn, off]
 
+      --allow-empty
+          With --strict: pass a full run that finds no detection objects (the commit hook setup writes passes it)
+
       --fix
           Apply every safe fix (vocabulary typos), then validate again
 

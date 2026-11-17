@@ -5,7 +5,7 @@ description: commands/json/none/indent-2
 args: opentide --json commands
 exit: 0
 
-━━━ stdout · json, 15517 lines
+━━━ stdout · json, 15532 lines
 {
   "$defs": {
     "AttackSkeleton": {
@@ -10396,6 +10396,21 @@ exit: 0
           "required": false,
           "secondary_flags": [],
           "type": "choice"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--allow-empty"
+          ],
+          "help": "With --strict: pass a full run that finds no detection objects (the commit hook setup writes passes it)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "allow_empty",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
         },
         {
           "choices": null,

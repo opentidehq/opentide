@@ -693,3 +693,61 @@ fn the_first_user_workflow_passes_end_to_end() {
         "{coverage}"
     );
 }
+
+/// `opentide setup --hooks` then the first `git commit` of the scaffold:
+/// the commit hook it installs runs `validate --strict --allow-empty`, so a
+/// workspace with no detection object yet commits; `validate --strict`
+/// alone, as the generated CI runs it, fails on the same scaffold.
+#[cfg(unix)]
+#[test]
+fn the_first_commit_of_a_fresh_setup_passes_its_hook() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    opentide(&repo, &["setup", "--hooks", "--yes"], &[]).ok();
+    // The hook runs `opentide` from PATH: this build.
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_opentide-cli"), bin.join("opentide")).unwrap();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    git(&repo, &["add", "-A"]);
+    let mut commit = Command::new("git");
+    commit
+        .args(["-c", "user.email=e2e@opentide.test", "-c", "user.name=e2e"])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "-m",
+            "scaffold",
+        ])
+        .current_dir(&repo)
+        .env("PATH", &path);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("OPENTIDE_") {
+            commit.env_remove(name);
+        }
+    }
+    isolate_git(&mut commit);
+    let output = commit.output().unwrap();
+    assert!(
+        output.status.success(),
+        "the hook refused the scaffold: {output:?}"
+    );
+    // The hook did run: it is installed and calls validate.
+    let hook = std::fs::read_to_string(repo.join(".git/hooks/pre-commit")).unwrap();
+    assert!(hook.contains("validate --strict --allow-empty"), "{hook}");
+    // CI's `validate --strict` fails the same empty workspace.
+    let strict = opentide(&repo, &["validate", "--strict"], &[]);
+    assert_eq!(strict.code, Some(1), "{strict:?}");
+    assert_eq!(strict.document()["failure"]["code"], "issues_found");
+    let allowed = opentide(&repo, &["validate", "--strict", "--allow-empty"], &[]);
+    assert_eq!(allowed.code, Some(0), "{allowed:?}");
+}

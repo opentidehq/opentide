@@ -10402,6 +10402,21 @@ exit: 0
           "default": false,
           "envvars": [],
           "flags": [
+            "--allow-empty"
+          ],
+          "help": "With --strict: pass a full run that finds no detection objects (the commit hook setup writes passes it)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "allow_empty",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
             "--fix"
           ],
           "help": "Apply every safe fix (vocabulary typos), then validate again",

@@ -178,7 +178,9 @@ pub fn run(
         &STRICT_EXEMPT_WARNINGS,
     )
     // `--strict` fails a full run that finds no object, as one run does.
-    .requiring_objects(args.strict && args.selection.is_empty() && args.check.is_none());
+    .requiring_objects(
+        args.strict && !args.allow_empty && args.selection.is_empty() && args.check.is_none(),
+    );
     let frames = terminal.frames(cx.cwd, cx.env);
     let human = terminal.mode == Mode::Human;
     let mut drawn = 0usize;
