@@ -143,7 +143,7 @@ pub fn builtin_with(environment: &Environment) -> Registry {
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
         Box::new(bitdefender::Bitdefender),
-        Box::new(graylog::Graylog),
+        Box::new(graylog::Graylog::new()),
         Box::new(exabeam::Exabeam::new()),
         // Application Default Credentials are the environment's ambient
         // credentials (google-auth's `default()`).

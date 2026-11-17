@@ -1977,3 +1977,322 @@ fn bitdefender_counts_the_yara_rules_deployment_state_records() {
         "{rows:?}"
     );
 }
+
+/// A Graylog rule block of `status` whose query is `query`.
+fn graylog_block(status: &str, query: &str) -> String {
+    format!(
+        "  graylog:\n    schema: platform::graylog::1.0\n    status: {status}\n    query: \
+         '{query}'\n"
+    )
+}
+
+/// A stand-in Graylog of `version`: the query check refuses a query that
+/// says `refused` and warns on one that says `odd`; a create answers
+/// `CREATED_ID`; an update of `LOST_ID` is a 404, of any other id a 200; a
+/// delete a 204.
+fn graylog_stand(rt: &tokio::runtime::Runtime, version: &str) -> wiremock::MockServer {
+    use wiremock::matchers::{method, path, path_regex};
+    let server = rt.block_on(wiremock::MockServer::start());
+    let verdict = |request: &wiremock::Request| {
+        let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+        let query = body["query"].as_str().unwrap_or_default();
+        let verdict = if query.contains("refused") {
+            serde_json::json!({"status": "ERROR", "explanations": [
+                {"error_type": "QUERY_PARSING_ERROR", "error_message": "cannot parse"}]})
+        } else if query.contains("odd") {
+            serde_json::json!({"status": "WARNING", "explanations": [
+                {"error_type": "UNKNOWN_FIELD", "error_message": "no field odd"}]})
+        } else {
+            serde_json::json!({"status": "OK"})
+        };
+        wiremock::ResponseTemplate::new(200).set_body_json(verdict)
+    };
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/system"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"version": version})),
+            )
+            // Read once for the tenant, whatever its rules.
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/search/validate"))
+            .respond_with(verdict)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/events/definitions"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(201)
+                    .set_body_json(serde_json::json!({"id": GRAYLOG_CREATED})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path(format!("/api/events/definitions/{GRAYLOG_BROKEN}")))
+            .respond_with(
+                wiremock::ResponseTemplate::new(500).set_body_json(
+                    serde_json::json!({"type": "ApiError", "message": "storage down"}),
+                ),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path(format!("/api/events/definitions/{GRAYLOG_LOST}")))
+            .respond_with(
+                wiremock::ResponseTemplate::new(404)
+                    .set_body_json(serde_json::json!({"type": "ApiError", "message": "Not found"})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path_regex("^/api/events/definitions/[0-9a-f]{24}$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"id": GRAYLOG_KEPT})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("DELETE"))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .mount(&server)
+            .await;
+    });
+    server
+}
+
+const GRAYLOG_CREATED: &str = "65f1c0de2a3b4c5d6e7f8091";
+const GRAYLOG_LOST: &str = "65f1c0de2a3b4c5d6e7f0000";
+const GRAYLOG_KEPT: &str = "65f1c0de2a3b4c5d6e7f1111";
+const GRAYLOG_BROKEN: &str = "65f1c0de2a3b4c5d6e7f5000";
+
+/// `opentide deploy --platform graylog` in `ws`, both strategies, every rule.
+fn graylog_deploy(ws: &Path) -> (i32, String) {
+    let (code, _, err) = cli(
+        ws,
+        &[
+            "--verbose",
+            "deploy",
+            "--platform",
+            "graylog",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[("GRAYLOG_TOKEN", "token".to_owned())],
+    );
+    (code, err)
+}
+
+/// The deployment state's shard of `uuid` in `ws`, empty when there is none.
+fn shard_of(ws: &Path, uuid: &str) -> String {
+    std::fs::read_to_string(ws.join(format!(".opentide/states/deployment/{uuid}.json")))
+        .unwrap_or_default()
+}
+
+/// Graylog through the command line, on a version that does not revoke
+/// tokens: the version is read and warned about once; a created definition's
+/// id is recorded; a query Graylog warns about is updated with the warning;
+/// a disabled definition the tenant lost is forgotten; a refused query fails
+/// its rule alone; a removed one is deleted and forgotten.
+#[test]
+fn graylog_logs_records_and_forgets_as_it_deploys() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, "7.1.0");
+    let setup = format!("url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\n", server.uri());
+    let (created, warned, lost, refused, removed, broken) = (
+        "00000000-0000-4000-8099-000000000121",
+        "00000000-0000-4000-8099-000000000122",
+        "00000000-0000-4000-8099-000000000123",
+        "00000000-0000-4000-8099-000000000124",
+        "00000000-0000-4000-8099-000000000125",
+        "00000000-0000-4000-8099-000000000126",
+    );
+    let ws = stated(
+        "graylog",
+        &setup,
+        &[
+            (
+                "b.yaml",
+                warned,
+                graylog_block("STAGING", "odd:1"),
+                GRAYLOG_KEPT,
+            ),
+            (
+                "c.yaml",
+                lost,
+                graylog_block("DISABLED", "EventID:1"),
+                GRAYLOG_LOST,
+            ),
+            (
+                "d.yaml",
+                refused,
+                graylog_block("STAGING", "refused"),
+                GRAYLOG_KEPT,
+            ),
+            (
+                "e.yaml",
+                removed,
+                graylog_block("REMOVED", "EventID:1"),
+                GRAYLOG_KEPT,
+            ),
+            (
+                "f.yaml",
+                broken,
+                graylog_block("STAGING", "EventID:1"),
+                GRAYLOG_BROKEN,
+            ),
+        ],
+    );
+    std::fs::write(
+        ws.path().join("objects/rules/a.yaml"),
+        rule(
+            "Created rule",
+            created,
+            "Created.",
+            &graylog_block("STAGING", "EventID:1"),
+        ),
+    )
+    .unwrap();
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 1, "{err}");
+    // Once for the tenant, before any rule.
+    assert_eq!(
+        err.matches("Graylog version vulnerable").count(),
+        1,
+        "{err}"
+    );
+    let ordered = [
+        "warning: Graylog version vulnerable",
+        "warning: External id recorded",
+        "✓ created   Created rule",
+        "warning: Graylog unknown field",
+        "✓ updated   Recorded rule",
+        "warning: Graylog definition missing",
+        "✓ disabled  Recorded rule",
+        "code: graylog_query_invalid · error: Graylog refuses the query, so nothing is saved: \
+         QUERY_PARSING_ERROR: cannot parse",
+        "✓ deleted   Recorded rule",
+        "status_code: 500 · code: graylog_request_failed",
+    ];
+    let at: Vec<usize> = ordered
+        .iter()
+        .map(|line| {
+            err.find(line)
+                .unwrap_or_else(|| panic!("no {line} in {err}"))
+        })
+        .collect();
+    assert!(at.windows(2).all(|pair| pair[0] < pair[1]), "{err}");
+    assert!(
+        shard_of(ws.path(), created).contains(GRAYLOG_CREATED),
+        "{err}"
+    );
+    assert!(shard_of(ws.path(), warned).contains(GRAYLOG_KEPT));
+    assert!(shard_of(ws.path(), lost).is_empty());
+    assert!(shard_of(ws.path(), refused).contains(GRAYLOG_KEPT));
+    assert!(shard_of(ws.path(), removed).is_empty());
+}
+
+/// A definition the tenant lost while git ignores deployment state is not
+/// created again: the warning, then the state's refusal; and a tenant that
+/// refuses the token on a rule stops there.
+#[test]
+fn graylog_does_not_create_again_a_lost_definition_and_stops_on_a_refused_token() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, "7.2.1");
+    let setup = format!("url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\n", server.uri());
+    let lost = "00000000-0000-4000-8099-000000000131";
+    let ws = stated(
+        "graylog",
+        &setup,
+        &[(
+            "a.yaml",
+            lost,
+            graylog_block("STAGING", "EventID:1"),
+            GRAYLOG_LOST,
+        )],
+    );
+    std::fs::write(ws.path().join(".gitignore"), ".opentide/states/\n").unwrap();
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 1, "{err}");
+    // The warning, then the state's refusal, and nothing created.
+    let warned = err
+        .find("warning: Graylog definition recreated")
+        .expect(&err);
+    let refused = err
+        .find("✗ failed    Recorded rule  git ignores")
+        .expect(&err);
+    assert!(warned < refused, "{err}");
+    // Logged as the request it stopped.
+    assert!(
+        err.contains("code: graylog_request_failed · error: git ignores"),
+        "{err}"
+    );
+    assert!(!err.contains("External id recorded"), "{err}");
+    assert!(!err.contains("Graylog version vulnerable"), "{err}");
+    assert!(shard_of(ws.path(), lost).contains(GRAYLOG_LOST));
+
+    let refusing = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/system"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"version": "7.2.1"})),
+            )
+            .expect(1)
+            .mount(&refusing)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/search/validate"))
+            .respond_with(wiremock::ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&refusing)
+            .await;
+    });
+    let setup = format!("url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\n", refusing.uri());
+    let block = graylog_block("STAGING", "EventID:1");
+    let ws = workspace(
+        "graylog",
+        "lab",
+        &setup,
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "First rule",
+                    "00000000-0000-4000-8099-000000000132",
+                    "A.",
+                    &block,
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Second rule",
+                    "00000000-0000-4000-8099-000000000133",
+                    "B.",
+                    &block,
+                ),
+            ),
+        ],
+    );
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(refusing.verify());
+    assert_eq!(code, 1, "{err}");
+    // The first rule fails with the tenant; the second is never sent.
+    assert!(
+        err.contains("code: graylog_tenant_unauthenticated"),
+        "{err}"
+    );
+    assert!(err.contains("✗ failed    First rule"), "{err}");
+}
