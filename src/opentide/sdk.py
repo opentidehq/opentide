@@ -121,46 +121,18 @@ class OpentideError(Exception):
         self.more_failures: list[OpentideError] = list(more_failures)
 
     def __reduce__(self) -> tuple[Any, ...]:
-        """Pickles and copies with every field: ``args`` holds the message alone."""
-        return (
-            _rebuilt_error,
-            (
-                type(self),
-                self.code,
-                self.message,
-                self.detail,
-                self.scope,
-                self.status,
-                dict(self.fields),
-                self.partial,
-                list(self.more_failures),
-            ),
-            self.__dict__,
-        )
+        """Pickles and copies with every field: the error is rebuilt from its
+        ``args`` and its attributes, without calling ``__init__``, so a subclass
+        with a constructor of its own round-trips too."""
+        return (_rebuilt_error, (type(self), self.args), self.__dict__)
 
 
-def _rebuilt_error(
-    cls: type[OpentideError],
-    code: str,
-    message: str,
-    detail: str | None,
-    scope: str | None,
-    status: int | None,
-    fields: dict[str, str],
-    partial: DeployOutcome | None,
-    more_failures: list[OpentideError],
-) -> OpentideError:
-    """An :class:`OpentideError` (or *cls*) unpickled from its fields."""
-    return cls(
-        code,
-        message,
-        detail,
-        scope=scope,
-        status=status,
-        fields=fields,
-        partial=partial,
-        more_failures=more_failures,
-    )
+def _rebuilt_error(cls: type[OpentideError], args: tuple[Any, ...]) -> OpentideError:
+    """An :class:`OpentideError` (or *cls*) unpickled: its ``args``, then its
+    attributes from the pickle's state."""
+    error = cls.__new__(cls)
+    error.args = args
+    return error
 
 
 def _load() -> None:

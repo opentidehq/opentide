@@ -92,6 +92,27 @@ def test_a_plain_error_round_trips_too() -> None:
     )
 
 
+class _Named(OpentideError):
+    """A subclass with a constructor of its own."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__("named", f"{name} failed", scope="rule")
+        self.name = name
+
+
+def test_a_subclass_and_an_error_that_holds_itself_round_trip() -> None:
+    named = _Named("rule-a")
+    again = pickle.loads(pickle.dumps(named))
+    assert _fields(again) == _fields(named)
+    assert again.name == "rule-a"
+    looped = _failed()
+    looped.more_failures.append(looped)
+    copied = copy.deepcopy(looped)
+    assert copied.more_failures[-1] is copied
+    unpickled = pickle.loads(pickle.dumps(looped))
+    assert unpickled.more_failures[-1] is unpickled
+
+
 def _raise_in_a_worker() -> None:
     raise _failed()
 
