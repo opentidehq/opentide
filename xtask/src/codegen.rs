@@ -9,34 +9,6 @@
 //!   `generate templates` writes for the bundled configuration (#814; a file
 //!   there no snippet reads is stale). Without `--check` they are written;
 //!   with it, a difference fails.
-//! - **Golden parity** (`--check --oracle` only, by hand): each recording in
-//!   `tests/golden/cases` of an `opentide generate` that exited 0 and ran
-//!   the `schemas`, `templates` and `snippets` phases (a bare `generate`,
-//!   or those phases named with others) holds the templates, the snippets
-//!   and the router schema the oracle wrote. Recordings missing one of those
-//!   phases, and of a failed run, are not compared: every bare `generate`
-//!   on vscode-workspace exits 1 in the docs phase, so that fixture is
-//!   compared through `generate schemas templates vocabs snippets`. In each
-//!   compared case the same files, generated from the fixture's resolved
-//!   configuration, must be byte-identical, and neither side may hold one
-//!   the other has not.
-//!
-//! - **Schemas by verdict** (`--check --oracle` only, by hand; UC-1.8b, #900): the JSON
-//!   Schemas of the `schemas` phase (each object revision's, and
-//!   `visibility.toml`'s) in each such recording and in each recording of
-//!   `opentide new` that generated them, and every configuration
-//!   schema the oracle generates (`crates/opentide-schema/tests/oracle/
-//!   configuration_schemas.json`, from `configuration_schemas.py`), are
-//!   compared with Rust's by what they accept and refuse, not by their text
-//!   ([`crate::verdict`]): every object and configuration file of the
-//!   fixtures and of the fault catalogue (every kind must apply), the object
-//!   and configuration tables' cases, the bundled configuration files and
-//!   the comparison's own probes must get the same verdict from both, but
-//!   for each approved difference (`verdict::ALLOWANCES`, which must still
-//!   occur). Each compared document must accept at least one instance and
-//!   refuse at least one, so a document handed the wrong kind of instance
-//!   fails. The configuration router must be the same document. The text
-//!   differences are listed in `tests/golden/APPROVED_DIFFS.toml`.
 //! - **Diagnostics reference** (committed): `docs/cli/diagnostics.md`, every
 //!   `opentide explain` page on one page, its prose made safe for MDX
 //!   (`opentide_cli::explain::reference_markdown`).
@@ -47,39 +19,27 @@
 //! - **Language-server catalogs** (UC-3.5d, #933): the `fields.json` and
 //!   `deprecations.json` the `schemas` phase writes, from
 //!   `opentide_schema::generate::catalog`: the committed copy in
-//!   `data/catalogs/tide/generated/` (`--check`), and, with `--check
-//!   --oracle` by hand, byte for byte as in each golden recording of
-//!   `opentide generate` that wrote them (the oracle's version as the label).
+//!   `data/catalogs/tide/generated/` (`--check`).
 //!
-//! The comparisons with the oracle (`--oracle`) left CI with the rest of the
-//! oracle policing (2026-11-14): Engine lint runs `codegen --check`.
+//! The comparisons with the oracle's recordings (`--oracle`) were retired
+//! with the recordings (#1142). Engine lint runs `codegen --check`.
 
-use std::collections::{BTreeMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::Args;
 use opentide_schema::configuration::resolve::{Instance, resolve};
-use opentide_schema::generate::configuration::{
-    ROUTER_NAME, configuration_schema_name, configuration_schemas, file_keys,
-};
 use opentide_schema::generate::schema::{Sources, revision_schema};
 use opentide_schema::generate::workspace::{
-    Artifact, CORE_OBJECT_TYPES, identifiers_for_families, platform_template,
-    platform_template_name, router_artifact, schema_artifacts, snippets, templates,
+    CORE_OBJECT_TYPES, identifiers_for_families, platform_template, platform_template_name,
+    templates,
 };
-use opentide_schema::node::Node;
 use opentide_schema::objects::platform::PLATFORM_CONFIG_MODELS;
 use opentide_schema::vocab::Vocabularies;
-use opentide_workspace::{OsFs, RootOptions, Workspace};
 use serde_json::Value;
 
-use crate::corpus::cli::{read_folder, repo_root};
-use crate::golden::case::Spec;
-use crate::golden::recording::{Recording, recorded_ids};
-use crate::golden::snapshot::{ChangeKind, Kind};
-use crate::verdict::{self, Instances};
+use crate::corpus::cli::repo_root;
 
 /// The arguments of `cargo xtask codegen`. With no option it writes the
 /// committed artifacts generated from the Rust model:
@@ -95,25 +55,10 @@ pub struct CodegenArgs {
     /// data/catalogs/tide/generated; exit 1 on a difference (CI's Engine lint)
     #[arg(long)]
     pub check: bool,
-    /// With --check, also compare with the frozen Python oracle (by hand: no
-    /// workflow runs it): what `opentide generate` writes (templates,
-    /// snippets, the router schema) with each golden recording of an
-    /// `opentide generate` that ran those phases and exited 0, byte for byte;
-    /// the JSON Schemas it writes (each revision's, visibility.toml's) and the
-    /// configuration schemas with the oracle's by verdict on every corpus
-    /// object, configuration file and fault; and the language server's catalogs
-    /// with the recordings, byte for byte
-    #[arg(long, requires = "check")]
-    pub oracle: bool,
 }
 
 /// Where the committed editor schemas live, relative to the repository.
 pub const EDITOR_SCHEMAS: &str = "data/catalogs/tide/schemas";
-
-/// The oracle's configuration schemas, written by `configuration_schemas.py`
-/// with the oracle's interpreter.
-pub const ORACLE_CONFIGURATION_SCHEMAS: &str =
-    "crates/opentide-schema/tests/oracle/configuration_schemas.json";
 
 /// Where the committed language-server catalogs live, relative to the
 /// repository.
@@ -142,76 +87,27 @@ pub const EDITOR_TEMPLATE_NAMES: [&str; 3] = [
 
 /// Runs `codegen`: `Ok(0)` passed, `Ok(1)` a difference.
 pub fn run(args: &CodegenArgs) -> Result<u8> {
-    let CodegenArgs { check, oracle } = *args;
+    let CodegenArgs { check } = *args;
     let root = repo_root();
     let mut problems = committed(&root, check)?;
     problems.extend(engine_catalog(&root, check)?);
     problems.extend(crate::astgen::sync(&root, check)?);
     problems.extend(crate::yara_modules::sync(&root, check)?);
-    let mut compared = 0;
-    let mut judged = 0;
-    let mut differences = Vec::new();
-    if check && !oracle {
-        // `--check` alone: the committed language-server catalogs' drift
-        // from the generator, no recordings of the oracle read.
+    if check {
+        // The committed language-server catalogs' drift from the generator.
         problems.extend(catalog_drift(&root)?.1);
     }
-    if oracle {
-        let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
-        let ledger = opentide_compare::ledger::Ledger::parse(
-            &std::fs::read_to_string(&ledger_path)
-                .with_context(|| format!("read {}", ledger_path.display()))?,
-        )
-        .map_err(|error| anyhow::anyhow!("{}:\n{error}", ledger_path.display()))?;
-        // The three comparisons share nothing: each on threads of its own
-        // (Engine lint waited on them one after the other, #841), their
-        // problems reported in the same order as before.
-        let (golden, verdicts, catalogs) = std::thread::scope(|scope| {
-            let golden = scope.spawn(|| golden_parity(&root));
-            let verdicts = scope.spawn(|| schema_verdicts(&root));
-            let catalogs = scope.spawn(|| {
-                let mut usage = opentide_compare::ledger::Usage::default();
-                catalog_parity(&root, &ledger, &mut usage)
-            });
-            fn join<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> T {
-                handle
-                    .join()
-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-            }
-            (join(golden), join(verdicts), join(catalogs))
-        });
-        let (count, golden) = golden?;
-        compared = count;
-        differences.extend(golden);
-        let (count, verdicts) = verdicts?;
-        judged = count;
-        differences.extend(verdicts);
-        let (count, drift, catalogs) = catalogs?;
-        compared += count;
-        problems.extend(drift);
-        differences.extend(catalogs);
-    }
-    // Under `--oracle`, the differences from the oracle's recordings gate
-    // with the committed artifacts' drift from the generator.
-    problems.extend(differences);
     for problem in &problems {
         eprintln!("error: {problem}");
     }
     if problems.is_empty() {
-        if oracle {
-            println!(
-                "codegen: the committed artifacts are current, {compared} files of the \
-                 golden recordings of `opentide generate` match byte for byte, and the \
-                 schemas agree with the oracle's on {judged} verdicts"
-            );
-        } else if check {
+        if check {
             println!("codegen: the committed artifacts are current");
         }
         Ok(0)
     } else {
         eprintln!(
-            "codegen: {} difference(s); run `cargo xtask codegen` for the committed files, \
-             and fix opentide-schema's generator for a golden difference",
+            "codegen: {} difference(s); run `cargo xtask codegen` for the committed files",
             problems.len()
         );
         Ok(1)
@@ -565,152 +461,6 @@ fn stale_editor_templates(names: &[String]) -> Vec<String> {
     stale
 }
 
-/// The phases of `opentide generate` that write the files this generator
-/// covers: `schemas` the router, `templates` the templates and `snippets`
-/// the snippets.
-const COMPARED_PHASES: [&str; 3] = ["schemas", "templates", "snippets"];
-
-/// The phases a recording can name besides those: they write other files.
-const OTHER_PHASES: [&str; 5] = ["vocabs", "docs", "explorer", "exports", "inflight"];
-
-/// Whether a case's argv runs every phase that writes the files this
-/// generator covers: a bare `opentide generate`, or phases named as words
-/// after it that include all of [`COMPARED_PHASES`]. Only global flags
-/// (`--json`, `--no-color`) may come with it.
-fn writes_compared_phases(argv: &[String]) -> bool {
-    if argv.iter().any(|arg| arg == "--help" || arg == "-h") {
-        return false;
-    }
-    let words: Vec<&str> = argv
-        .iter()
-        .skip(1)
-        .map(String::as_str)
-        .filter(|arg| !arg.starts_with('-'))
-        .collect();
-    let Some((&"generate", phases)) = words.split_first() else {
-        return false;
-    };
-    phases.is_empty()
-        || (COMPARED_PHASES.iter().all(|phase| phases.contains(phase))
-            && phases
-                .iter()
-                .all(|phase| COMPARED_PHASES.contains(phase) || OTHER_PHASES.contains(phase)))
-}
-
-/// Whether a workspace path is one of the files this generator writes.
-fn generated_here(path: &str) -> bool {
-    path.starts_with(".opentide/templates/")
-        || path.ends_with(".code-snippets")
-        || path == ".opentide/schemas/opentide.schema.json"
-}
-
-/// What `opentide generate` writes, of the files this generator covers, in
-/// the workspace at `dir`.
-pub fn workspace_artifacts(dir: &Path) -> Result<Vec<Artifact>> {
-    let own_dir = dir.join(".opentide").join("configurations");
-    let own = read_folder(&own_dir, &own_dir.to_string_lossy())?;
-    let resolved = resolve(&Instance {
-        workspace: own.as_ref(),
-        parent: None,
-        // Generation sets OPENTIDE_TIDE_WORKSPACE: no parent instance.
-        skip_parent: true,
-    })
-    .map_err(|error| anyhow::anyhow!("{}", error.message()))?;
-    let mut artifacts = templates(&resolved.tree)?;
-    let snippet = snippets(&resolved.tree, &artifacts).map_err(anyhow::Error::msg)?;
-    artifacts.push(snippet);
-    artifacts.push(router_artifact(&resolved.tree));
-    Ok(artifacts)
-}
-
-/// The number of recorded files that matched, and the differences.
-fn golden_parity(root: &Path) -> Result<(usize, Vec<String>)> {
-    let golden = root.join("tests/golden");
-    let spec_text = std::fs::read_to_string(golden.join("cases.toml"))
-        .context("read tests/golden/cases.toml")?;
-    let spec = Spec::parse(&spec_text)?;
-    let cases = golden.join("cases");
-    let blobs = golden.join("blobs");
-    let scratch = tempfile::tempdir().context("create a scratch directory")?;
-    let mut generated: BTreeMap<String, Vec<Artifact>> = BTreeMap::new();
-    let mut problems = Vec::new();
-    let mut compared = 0;
-    for id in recorded_ids(&cases)? {
-        if !id.starts_with("generate/") {
-            continue;
-        }
-        let recording = Recording::read(&cases.join(&id), &blobs)?;
-        if !writes_compared_phases(&recording.case.argv) || recording.exit_code != 0 {
-            continue;
-        }
-        let fixture = recording.case.fixture.clone();
-        if !generated.contains_key(&fixture) {
-            let fixture_spec = spec
-                .fixtures
-                .get(&fixture)
-                .with_context(|| format!("{id}: no fixture {fixture} in cases.toml"))?;
-            let dir: PathBuf = scratch.path().join(&fixture);
-            std::fs::create_dir_all(&dir)?;
-            fixture_spec.materialise(root, &dir)?;
-            generated.insert(fixture.clone(), workspace_artifacts(&dir)?);
-        }
-        let artifacts = &generated[&fixture];
-        let mut recorded: BTreeMap<String, &[u8]> = BTreeMap::new();
-        for file in &recording.files {
-            let Some(path) = file.path.strip_prefix("ws/") else {
-                continue;
-            };
-            if file.kind == Kind::File
-                && file.change != ChangeKind::Deleted
-                && generated_here(path)
-                && let Some(contents) = &file.contents
-            {
-                recorded.insert(path.to_owned(), contents);
-            }
-        }
-        compared += compare(&id, artifacts, recorded, &mut problems);
-    }
-    if compared == 0 && problems.is_empty() {
-        problems.push("no golden recording of `opentide generate` was compared".to_owned());
-    }
-    Ok((compared, problems))
-}
-
-/// The sources of what `opentide generate schemas` writes in the workspace
-/// at `dir`: its resolved configuration, its vocabularies and its objects'.
-pub fn workspace_sources(dir: &Path) -> Result<Sources> {
-    let workspace = Workspace::open(
-        Arc::new(OsFs),
-        opentide_workspace::Options {
-            roots: RootOptions {
-                repo: None,
-                repo_root_env: None,
-                tide_workspace_env: Some(dir.to_path_buf()),
-                cwd: dir.to_path_buf(),
-            },
-        },
-    )
-    .map_err(|error| anyhow::anyhow!("open {}: {error}", dir.display()))?;
-    let tree: Node = workspace.configuration().resolved.tree.clone();
-    let mut vocabularies = Vocabularies::bundled();
-    for vocabulary in
-        opentide_workspace::vocabularies::object_vocabularies(workspace.index(), &tree)
-    {
-        vocabularies.insert(vocabulary);
-    }
-    Ok(Sources {
-        config: Arc::new(tree),
-        vocabularies: Arc::new(vocabularies),
-    })
-}
-
-/// What `opentide generate schemas` writes in the workspace at `dir`, but
-/// the router: each object revision's schema and `visibility.toml`'s, from
-/// the workspace's resolved configuration, its vocabularies and its objects.
-pub fn workspace_schema_artifacts(dir: &Path) -> Result<Vec<Artifact>> {
-    Ok(schema_artifacts(&workspace_sources(dir)?))
-}
-
 /// A catalog document without the keys that only label it.
 fn unlabelled(path: &str, text: &str) -> Result<Value> {
     use opentide_schema::generate::catalog::LABEL_KEYS;
@@ -722,21 +472,6 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
         }
     }
     Ok(value)
-}
-
-/// The language server's catalogs the `schemas` phase writes
-/// (`.opentide/lsp/catalogs/generated/`): the committed copy the engine
-/// compiles in (`data/catalogs/tide/generated/`) must hold what the Rust
-/// generator writes from the bundled configuration, its `opentide` and
-/// `generator` labels aside (`catalog_differences`); and each golden
-/// recording of an `opentide generate` that wrote them must hold, byte for
-/// byte, what the generator writes for the fixture with the oracle's version
-/// as the label. Returns the number of files compared, the committed copy's
-/// drift and the differences from the oracle's recordings.
-/// A file a run left written, world-readable (the mode does not matter here:
-/// only the bytes are compared).
-fn written(bytes: Vec<u8>) -> opentide_compare::FileState {
-    opentide_compare::FileState::Written { mode: 0o644, bytes }
 }
 
 /// The committed language-server catalogs' drift from what the Rust
@@ -760,568 +495,11 @@ fn catalog_drift(root: &Path) -> Result<(usize, Vec<String>)> {
     Ok((compared, drift))
 }
 
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn catalog_parity(
-    root: &Path,
-    ledger: &opentide_compare::ledger::Ledger,
-    usage: &mut opentide_compare::ledger::Usage,
-) -> Result<(usize, Vec<String>, Vec<String>)> {
-    use opentide_compare::Run;
-    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
-    let mut problems = Vec::new();
-    let (mut compared, drift) = catalog_drift(root)?;
-
-    let golden = root.join("tests/golden");
-    let oracle =
-        std::fs::read_to_string(golden.join("ORACLE")).context("read tests/golden/ORACLE")?;
-    let version = oracle
-        .lines()
-        .find_map(|line| line.strip_prefix("version = "))
-        .map(|value| value.trim().trim_matches('"').to_owned())
-        .context("tests/golden/ORACLE names no version")?;
-    let spec_text = std::fs::read_to_string(golden.join("cases.toml"))
-        .context("read tests/golden/cases.toml")?;
-    let spec = Spec::parse(&spec_text)?;
-    let cases = golden.join("cases");
-    let blobs = golden.join("blobs");
-    let scratch = tempfile::tempdir().context("create a scratch directory")?;
-    let mut generated: BTreeMap<String, Vec<(&'static str, String)>> = BTreeMap::new();
-    let prefix = format!("ws/{CATALOG_DIR}/");
-    for id in recorded_ids(&cases)? {
-        if !id.starts_with("generate/") {
-            continue;
-        }
-        let recording = Recording::read(&cases.join(&id), &blobs)?;
-        if recording.exit_code != 0 {
-            continue;
-        }
-        let recorded: Vec<(&str, &[u8])> = recording
-            .files
-            .iter()
-            .filter(|file| file.kind == Kind::File && file.change != ChangeKind::Deleted)
-            .filter_map(|file| {
-                let name = file.path.strip_prefix(&prefix)?;
-                Some((name, file.contents.as_deref()?))
-            })
-            .collect();
-        if recorded.is_empty() {
-            continue;
-        }
-        let fixture = recording.case.fixture.clone();
-        if !generated.contains_key(&fixture) {
-            let fixture_spec = spec
-                .fixtures
-                .get(&fixture)
-                .with_context(|| format!("{id}: no fixture {fixture} in cases.toml"))?;
-            let dir: PathBuf = scratch.path().join(&fixture);
-            std::fs::create_dir_all(&dir)?;
-            fixture_spec.materialise(root, &dir)?;
-            generated.insert(
-                fixture.clone(),
-                catalog_texts(&version, &workspace_sources(&dir)?),
-            );
-        }
-        let ours = &generated[&fixture];
-        // The oracle's catalog and the generator's, compared through the
-        // approved-diffs ledger, as `golden check --engine rust` compares the
-        // same files: a field the models added after the oracle (Splunk's
-        // `advanced`, #878) is a `json-extend:` entry there, not drift here.
-        let mut oracle_run = Run::default();
-        let mut candidate_run = Run::default();
-        for (name, bytes) in recorded {
-            let path = format!("{prefix}{name}");
-            oracle_run
-                .files
-                .insert(path.clone(), written(bytes.to_vec()));
-            match ours.iter().find(|(known, _)| *known == name) {
-                Some((_, text)) => {
-                    candidate_run
-                        .files
-                        .insert(path, written(text.as_bytes().to_vec()));
-                }
-                None => problems.push(format!(
-                    "{id}: {CATALOG_DIR}/{name}: the generator writes no such file"
-                )),
-            }
-        }
-        compared += oracle_run.files.len();
-        let report = opentide_compare::compare(
-            opentide_compare::Case {
-                command: "generate",
-                id: &id,
-            },
-            &oracle_run,
-            &candidate_run,
-            ledger,
-            usage,
-        );
-        for difference in &report.differences {
-            problems.push(format!(
-                "{id}: {} {} differs from the oracle's{}",
-                difference.target,
-                difference.pointer.as_deref().unwrap_or(""),
-                if difference.kind == opentide_compare::Kind::JsonValue {
-                    format!(
-                        " (oracle {}, generator {})",
-                        difference.oracle, difference.candidate
-                    )
-                } else {
-                    String::new()
-                }
-            ));
-        }
-    }
-    if generated.is_empty() {
-        problems.push("no golden recording of `opentide generate` wrote the catalogs".to_owned());
-    }
-    Ok((compared, drift, problems))
-}
-
-/// The fixtures whose object and configuration files are validated against
-/// both schemas, besides the fault catalogue's.
-const INSTANCE_FIXTURES: [&str; 5] = [
-    "tide-corpus",
-    "tide-corpus-typo",
-    "vscode",
-    "heavy-small",
-    "fault",
-];
-
-/// Whether a recorded workspace path is a JSON Schema of the `schemas`
-/// phase compared by verdict: a `*.schema.json` file the byte comparison
-/// does not cover (the router).
-fn judged_here(path: &str) -> bool {
-    std::path::Path::new(path)
-        .file_name()
-        .is_some_and(|name| name.to_string_lossy().ends_with(".schema.json"))
-        && path.starts_with(".opentide/")
-        && !generated_here(path)
-}
-
-/// What a JSON Schema of the `schemas` phase validates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SchemaKind {
-    /// `visibility.toml` (`.opentide/schemas/visibility.schema.json`).
-    Visibility,
-    /// An object revision (`.opentide/schemas/rule.1.1.schema.json`).
-    Object,
-}
-
-fn schema_kind(path: &str) -> SchemaKind {
-    let name = path.rsplit('/').next().unwrap_or(path);
-    if name.starts_with("visibility.") {
-        SchemaKind::Visibility
-    } else {
-        SchemaKind::Object
-    }
-}
-
-fn parse_json(label: &str, bytes: &[u8]) -> Result<Value> {
-    serde_json::from_slice(bytes).with_context(|| format!("{label}: not JSON"))
-}
-
-/// One schema of a recording, with the one Rust generates for its path.
-struct SchemaComparison {
-    /// `<case id>: <path>`, for messages.
-    name: String,
-    path: String,
-    kind: SchemaKind,
-    oracle: Vec<u8>,
-    rust: String,
-}
-
-/// The number of verdicts compared, and the differences: the schemas of
-/// every recorded `generate` that wrote them, and the configuration
-/// schemas, against the oracle's.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
-    let golden = root.join("tests/golden");
-    let spec_text = std::fs::read_to_string(golden.join("cases.toml"))
-        .context("read tests/golden/cases.toml")?;
-    let spec = Spec::parse(&spec_text)?;
-    let scratch = tempfile::tempdir().context("create a scratch directory")?;
-    let mut dirs: BTreeMap<String, PathBuf> = BTreeMap::new();
-    let mut instances = Instances::default();
-    for fixture in INSTANCE_FIXTURES {
-        let fixture_spec = spec
-            .fixtures
-            .get(fixture)
-            .with_context(|| format!("no fixture {fixture} in cases.toml"))?;
-        let dir = scratch.path().join(fixture);
-        std::fs::create_dir_all(&dir)?;
-        fixture_spec.materialise(root, &dir)?;
-        instances.extend(verdict::workspace_instances(fixture, &dir)?);
-        dirs.insert(fixture.to_owned(), dir);
-    }
-    instances.extend(verdict::fault_instances()?);
-    instances.extend(verdict::configuration_case_instances(root)?);
-    instances.extend(verdict::object_case_instances(root)?);
-    instances.extend(verdict::probe_instances());
-    let objects: Vec<&verdict::Instance> = instances.objects.iter().collect();
-    let visibility: Vec<&verdict::Instance> =
-        instances.configurations_of("visibility.toml").collect();
-
-    let mut problems = Vec::new();
-    let mut judged = 0;
-    let mut allowed = Vec::new();
-    // Each schema the oracle wrote, with Rust's, compared on every core below.
-    let mut comparisons: Vec<SchemaComparison> = Vec::new();
-    let cases = golden.join("cases");
-    let blobs = golden.join("blobs");
-    let mut generated: BTreeMap<String, Vec<Artifact>> = BTreeMap::new();
-    let mut done: HashSet<(String, String, u64)> = HashSet::new();
-    for id in recorded_ids(&cases)? {
-        // `new` runs the `schemas` phase first where the workspace has no
-        // schema yet (UC-3.5d, #933), and `setup vscode` before it writes
-        // the editor settings (UC-3.6c, #951): their recordings hold the
-        // oracle's too.
-        if !id.starts_with("generate/")
-            && !id.starts_with("new.")
-            && !id.starts_with("setup.vscode/")
-        {
-            continue;
-        }
-        let recording = Recording::read(&cases.join(&id), &blobs)?;
-        if recording.exit_code != 0 {
-            continue;
-        }
-        let mut recorded: BTreeMap<String, &[u8]> = BTreeMap::new();
-        for file in &recording.files {
-            let Some(path) = file.path.strip_prefix("ws/") else {
-                continue;
-            };
-            if file.kind == Kind::File
-                && file.change != ChangeKind::Deleted
-                && judged_here(path)
-                && let Some(contents) = &file.contents
-            {
-                recorded.insert(path.to_owned(), contents);
-            }
-        }
-        if recorded.is_empty() {
-            continue;
-        }
-        let fixture = recording.case.fixture.clone();
-        if !dirs.contains_key(&fixture) {
-            let fixture_spec = spec
-                .fixtures
-                .get(&fixture)
-                .with_context(|| format!("{id}: no fixture {fixture} in cases.toml"))?;
-            let dir = scratch.path().join(&fixture);
-            std::fs::create_dir_all(&dir)?;
-            fixture_spec.materialise(root, &dir)?;
-            dirs.insert(fixture.clone(), dir);
-        }
-        if !generated.contains_key(&fixture) {
-            generated.insert(
-                fixture.clone(),
-                workspace_schema_artifacts(&dirs[&fixture])?,
-            );
-        }
-        let artifacts = &generated[&fixture];
-        for artifact in artifacts {
-            if !recorded.contains_key(&artifact.path) {
-                problems.push(format!(
-                    "{id}: {} is generated, the oracle did not write it",
-                    artifact.path
-                ));
-            }
-        }
-        for (path, bytes) in recorded {
-            let Some(artifact) = artifacts.iter().find(|artifact| artifact.path == path) else {
-                problems.push(format!("{id}: the oracle wrote {path}, Rust does not"));
-                continue;
-            };
-            let key = (fixture.clone(), path.clone(), {
-                use std::hash::{Hash, Hasher};
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                bytes.hash(&mut hasher);
-                hasher.finish()
-            });
-            if !done.insert(key) {
-                continue;
-            }
-            comparisons.push(SchemaComparison {
-                name: format!("{id}: {path}"),
-                kind: schema_kind(&path),
-                oracle: bytes.to_vec(),
-                rust: artifact.text.clone(),
-                path,
-            });
-        }
-    }
-    // Every verdict is independent: on every core, the problems in the
-    // recordings' order whichever thread finished first.
-    let compared = crate::parallel::in_order(&comparisons, |comparison| {
-        let oracle = parse_json(&comparison.name, &comparison.oracle)?;
-        let rust = parse_json(
-            &format!("Rust's {}", comparison.path),
-            comparison.rust.as_bytes(),
-        )?;
-        let subjects = match comparison.kind {
-            SchemaKind::Visibility => &visibility,
-            SchemaKind::Object => &objects,
-        };
-        let mut found = Vec::new();
-        let tally = verdict::compare(
-            &comparison.name,
-            &oracle,
-            &rust,
-            subjects,
-            &verdict::ALLOWANCES,
-            &mut found,
-        )?;
-        Ok::<_, anyhow::Error>((tally, found))
-    });
-    for outcome in compared {
-        let (tally, found) = outcome?;
-        problems.extend(found);
-        judged += tally.compared;
-        allowed.extend(tally.allowed);
-    }
-
-    let oracle_path = root.join(ORACLE_CONFIGURATION_SCHEMAS);
-    let oracle_text = std::fs::read_to_string(&oracle_path)
-        .with_context(|| format!("read {ORACLE_CONFIGURATION_SCHEMAS}"))?;
-    let oracle: Value = serde_json::from_str(&oracle_text)
-        .with_context(|| format!("{ORACLE_CONFIGURATION_SCHEMAS}: not JSON"))?;
-    let documents = oracle
-        .get("documents")
-        .and_then(Value::as_object)
-        .with_context(|| format!("{ORACLE_CONFIGURATION_SCHEMAS}: no `documents`"))?;
-    let tally = configuration_verdicts(
-        documents,
-        &configuration_schemas(),
-        &instances,
-        &mut problems,
-    )?;
-    judged += tally.compared;
-    allowed.extend(tally.allowed);
-    problems.extend(verdict::stale_allowances(&verdict::ALLOWANCES, &allowed));
-    if judged == 0 && problems.is_empty() {
-        problems.push("no schema verdict was compared".to_owned());
-    }
-    Ok((judged, problems))
-}
-
-/// Compares the configuration documents Rust generates (`rust`, by file
-/// name) with the oracle's (`oracle`): each file only one side generates is
-/// a problem, the router must be the same document, and every other schema
-/// is compared by verdict on the configuration files routed to it. Returns
-/// the comparisons' sum.
-fn configuration_verdicts(
-    oracle: &serde_json::Map<String, Value>,
-    rust: &[(String, Value)],
-    instances: &Instances,
-    problems: &mut Vec<String>,
-) -> Result<verdict::Tally> {
-    let mut sum = verdict::Tally::default();
-    for name in oracle.keys() {
-        if !rust.iter().any(|(known, _)| known == name) {
-            problems.push(format!("the oracle generates {name}, Rust does not"));
-        }
-    }
-    for (name, document) in rust {
-        let Some(expected) = oracle.get(name) else {
-            problems.push(format!("Rust generates {name}, the oracle does not"));
-            continue;
-        };
-        if name == ROUTER_NAME {
-            // The router names schemas; it validates no file.
-            if expected != document {
-                problems.push(format!("{name}: differs from the oracle's"));
-            }
-            continue;
-        }
-        let keys: Vec<String> = file_keys()
-            .into_iter()
-            .filter(|key| configuration_schema_name(key) == *name)
-            .collect();
-        let subjects: Vec<&verdict::Instance> = instances
-            .configurations
-            .iter()
-            .filter(|(key, _)| keys.contains(key))
-            .map(|(_, instance)| instance)
-            .collect();
-        let tally = verdict::compare(
-            name,
-            expected,
-            document,
-            &subjects,
-            &verdict::ALLOWANCES,
-            problems,
-        )?;
-        sum.compared += tally.compared;
-        sum.accepted += tally.accepted;
-        sum.refused += tally.refused;
-        sum.allowed.extend(tally.allowed);
-    }
-    Ok(sum)
-}
-
-/// Compares what Rust generates with what case `id` recorded, by path:
-/// pushes a problem for each file whose bytes differ and each file only one
-/// side has, and returns the number of files that matched.
-fn compare(
-    id: &str,
-    artifacts: &[Artifact],
-    mut recorded: BTreeMap<String, &[u8]>,
-    problems: &mut Vec<String>,
-) -> usize {
-    let mut matched = 0;
-    for artifact in artifacts {
-        match recorded.remove(&artifact.path) {
-            Some(bytes) if bytes == artifact.text.as_bytes() => matched += 1,
-            Some(bytes) => problems.push(format!(
-                "{id}: {} differs from the oracle's\n{}",
-                artifact.path,
-                crate::golden::recording::unified(&String::from_utf8_lossy(bytes), &artifact.text)
-            )),
-            None => problems.push(format!(
-                "{id}: {} is generated, the oracle did not write it",
-                artifact.path
-            )),
-        }
-    }
-    for path in recorded.keys() {
-        problems.push(format!("{id}: the oracle wrote {path}, Rust does not"));
-    }
-    matched
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_oracle_comparison_needs_check_and_unknown_options_fail() {
-        use clap::Parser;
-        #[derive(Parser)]
-        struct Cli {
-            #[command(flatten)]
-            args: CodegenArgs,
-        }
-        // `--oracle` alone would write the committed artifacts, not compare.
-        assert!(Cli::try_parse_from(["codegen", "--oracle"]).is_err());
-        assert!(Cli::try_parse_from(["codegen", "--check", "--oracle"]).is_ok());
-        assert!(Cli::try_parse_from(["codegen", "--orcale"]).is_err());
-    }
-
-    #[test]
-    fn the_generated_files_are_recognised() {
-        assert!(generated_here(".opentide/templates/rule.1.1.template.yaml"));
-        assert!(generated_here(
-            ".opentide/templates/platforms/elastic.template.yaml"
-        ));
-        assert!(generated_here(".vscode/model-templates.code-snippets"));
-        assert!(generated_here(".opentide/schemas/opentide.schema.json"));
-        assert!(!generated_here(".opentide/schemas/rule.1.1.schema.json"));
-        assert!(!generated_here("docs/README.md"));
-    }
-
-    #[test]
-    fn only_runs_of_every_compared_phase_are_compared() {
-        let argv = |args: &[&str]| -> Vec<String> {
-            std::iter::once("opentide")
-                .chain(args.iter().copied())
-                .map(str::to_owned)
-                .collect()
-        };
-        assert!(writes_compared_phases(&argv(&["generate"])));
-        assert!(writes_compared_phases(&argv(&[
-            "--json",
-            "--no-color",
-            "generate"
-        ])));
-        assert!(writes_compared_phases(&argv(&[
-            "generate",
-            "schemas",
-            "templates",
-            "vocabs",
-            "snippets"
-        ])));
-        assert!(writes_compared_phases(&argv(&[
-            "generate",
-            "snippets",
-            "templates",
-            "schemas"
-        ])));
-        assert!(!writes_compared_phases(&argv(&["generate", "--help"])));
-        assert!(!writes_compared_phases(&argv(&["generate", "schemas"])));
-        // One compared phase missing: its files would be absent.
-        assert!(!writes_compared_phases(&argv(&[
-            "generate",
-            "schemas",
-            "templates"
-        ])));
-        assert!(!writes_compared_phases(&argv(&[
-            "generate",
-            "templates",
-            "snippets",
-            "vocabs"
-        ])));
-        // A word that is no phase: a different command or a positional.
-        assert!(!writes_compared_phases(&argv(&[
-            "generate",
-            "schemas",
-            "templates",
-            "snippets",
-            "x"
-        ])));
-        assert!(!writes_compared_phases(&argv(&[
-            "generate", "docs", "--output", "x"
-        ])));
-        assert!(!writes_compared_phases(&argv(&["info"])));
-    }
-
-    fn artifact(path: &str, text: &str) -> Artifact {
-        Artifact {
-            path: path.to_owned(),
-            text: text.to_owned(),
-        }
-    }
-
-    #[test]
-    fn the_comparison_reports_differing_bytes_and_files_only_one_side_has() {
-        let artifacts = [
-            artifact("same.yaml", "a: 1\n"),
-            artifact("differs.yaml", "a: 1\n"),
-            artifact("rust-only.yaml", "a: 1\n"),
-        ];
-        let recorded: BTreeMap<String, &[u8]> = BTreeMap::from([
-            ("same.yaml".to_owned(), b"a: 1\n".as_slice()),
-            ("differs.yaml".to_owned(), b"a: 2\n".as_slice()),
-            ("oracle-only.yaml".to_owned(), b"a: 1\n".as_slice()),
-        ]);
-        let mut problems = Vec::new();
-        assert_eq!(compare("case", &artifacts, recorded, &mut problems), 1);
-        assert_eq!(problems.len(), 3, "{problems:#?}");
-        assert!(
-            problems[0].starts_with("case: differs.yaml differs from the oracle's\n"),
-            "{problems:#?}"
-        );
-        assert!(problems[0].contains("-a: 2") && problems[0].contains("+a: 1"));
-        assert_eq!(
-            problems[1],
-            "case: rust-only.yaml is generated, the oracle did not write it"
-        );
-        assert_eq!(
-            problems[2],
-            "case: the oracle wrote oracle-only.yaml, Rust does not"
-        );
-    }
-
-    #[test]
-    fn identical_files_compare_clean() {
-        let artifacts = [artifact("a.yaml", "x\n"), artifact("b.json", "{}\n")];
-        let recorded: BTreeMap<String, &[u8]> = BTreeMap::from([
-            ("a.yaml".to_owned(), b"x\n".as_slice()),
-            ("b.json".to_owned(), b"{}\n".as_slice()),
-        ]);
-        let mut problems = Vec::new();
-        assert_eq!(compare("case", &artifacts, recorded, &mut problems), 2);
-        assert!(problems.is_empty(), "{problems:#?}");
-    }
+    use crate::verdict::{self, Instances};
+    use opentide_schema::generate::configuration::{configuration_schema_name, configuration_schemas};
 
     #[test]
     fn an_extra_committed_template_is_stale() {
@@ -1435,51 +613,6 @@ mod tests {
         assert!(editor_reference_text(&schema).ends_with("}\n"));
     }
 
-    fn oracle_configuration_documents() -> serde_json::Map<String, Value> {
-        let text = std::fs::read_to_string(repo_root().join(ORACLE_CONFIGURATION_SCHEMAS)).unwrap();
-        let oracle: Value = serde_json::from_str(&text).unwrap();
-        oracle["documents"].as_object().unwrap().clone()
-    }
-
-    #[test]
-    fn the_configuration_documents_agree_with_the_oracles_and_a_changed_router_does_not() {
-        let oracle = oracle_configuration_documents();
-        let mut instances = verdict::configuration_case_instances(&repo_root()).unwrap();
-        instances.extend(verdict::probe_instances());
-        let rust = configuration_schemas();
-        let mut problems = Vec::new();
-        let tally = configuration_verdicts(&oracle, &rust, &instances, &mut problems).unwrap();
-        assert!(problems.is_empty(), "{problems:#?}");
-        assert!(tally.accepted > 0 && tally.refused > 0, "{tally:?}");
-
-        let mut changed = rust.clone();
-        let router = changed
-            .iter_mut()
-            .find(|(name, _)| name == ROUTER_NAME)
-            .map(|(_, document)| document)
-            .unwrap();
-        router["files"].as_object_mut().unwrap().insert(
-            "extra.toml".to_owned(),
-            serde_json::json!("extra.schema.json"),
-        );
-        let mut problems = Vec::new();
-        configuration_verdicts(&oracle, &changed, &instances, &mut problems).unwrap();
-        assert_eq!(
-            problems,
-            [format!("{ROUTER_NAME}: differs from the oracle's")]
-        );
-
-        // A document only one side generates is reported.
-        let mut fewer = rust.clone();
-        fewer.retain(|(name, _)| name != "sharing.schema.json");
-        let mut problems = Vec::new();
-        configuration_verdicts(&oracle, &fewer, &instances, &mut problems).unwrap();
-        assert_eq!(
-            problems,
-            ["the oracle generates sharing.schema.json, Rust does not"]
-        );
-    }
-
     #[test]
     fn the_probes_get_their_verdict_from_the_schemas_rust_generates() {
         let rust = configuration_schemas();
@@ -1511,26 +644,6 @@ mod tests {
                 "probe {index} ({path}): {verdict:?}\n{text}"
             );
         }
-    }
-
-    #[test]
-    fn a_visibility_schema_validates_visibility_files_and_any_other_objects() {
-        assert_eq!(
-            schema_kind(".opentide/schemas/visibility.1.0.schema.json"),
-            SchemaKind::Visibility
-        );
-        assert_eq!(
-            schema_kind(".opentide/schemas/visibility.schema.json"),
-            SchemaKind::Visibility
-        );
-        assert_eq!(
-            schema_kind(".opentide/schemas/rule.1.1.schema.json"),
-            SchemaKind::Object
-        );
-        assert_eq!(
-            schema_kind(".opentide/schemas/objective.1.0.schema.json"),
-            SchemaKind::Object
-        );
     }
 
     #[test]
@@ -1705,7 +818,13 @@ mod tests {
             .current_dir(dir)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .envs(crate::payloads::git::QUIET_GIT)
+            .envs([
+                ("GIT_CONFIG_COUNT", "2"),
+                ("GIT_CONFIG_KEY_0", "maintenance.auto"),
+                ("GIT_CONFIG_VALUE_0", "false"),
+                ("GIT_CONFIG_KEY_1", "gc.auto"),
+                ("GIT_CONFIG_VALUE_1", "0"),
+            ])
             .env("GIT_AUTHOR_NAME", "golden")
             .env("GIT_AUTHOR_EMAIL", "golden@example.invalid")
             .env("GIT_COMMITTER_NAME", "golden")

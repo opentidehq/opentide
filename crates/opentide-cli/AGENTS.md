@@ -60,8 +60,8 @@ process and the filesystem, and hosts the language server (`lsp start`, UC-3.6b)
   lenient parse (`app::lenient_matches`, clap's `ignore_errors`).
 - The tree is code: a port changes its struct. When an option's catalogue entry needs what clap
   cannot say, add a row to `tree_meta.rs`, never a special case in `catalog.rs`.
-- `data/output-schemas.json` is generated, never edited: `OPENTIDE_CLI_BLESS=1 cargo nextest run
-  -p opentide-cli framework_schemas` rewrites it from the oracle's recording.
+- `data/output-schemas.json` is edited directly (it was generated from the oracle's recording until
+  #1142); the `commands` snapshots of `tests/cli_snapshots.rs` hold every schema it gives.
 - Library crates log through `tracing` and never print; this crate's `logging` layer writes their
   events.
 - The renderers' output is the contract (plan §3 invariant 1): `tests/render.rs` renders recorded
