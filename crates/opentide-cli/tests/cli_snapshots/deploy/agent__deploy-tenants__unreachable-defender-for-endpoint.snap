@@ -10,12 +10,12 @@ exit: 1
 ━━━ stderr
 Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
 Plan: 1 to create, 1 to update, 0 to disable, 1 to delete
+error: Tenant deployment failed · platform: defender_for_endpoint · tenant: *** · error: Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 
 Deploying to defender_for_endpoint / lab · 3 rules
-  [1/3] · skipped   Defender create rule  not attempted after a failure
-  [2/3] · skipped   Defender update rule  not attempted after a failure
-  [3/3] · skipped   Defender retire rule  not attempted after a failure
+  [1/3] · skipped   Defender create rule  not attempted: tenant lab failed
+  [2/3] · skipped   Defender update rule  not attempted: tenant lab failed
+  [3/3] · skipped   Defender retire rule  not attempted: tenant lab failed
 ✗ defender_for_endpoint · 0 deployed, 0 failed, 3 not attempted · <SECONDS>
-error: Platform deployment failed · system: defender_for_endpoint · detail: Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
-error: Deployment to defender_for_endpoint failed: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+error: Deployment to defender_for_endpoint failed on tenant lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output

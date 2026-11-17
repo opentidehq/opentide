@@ -454,9 +454,9 @@ exit = 1
 # through the CLI flow.
 
 [[scenario]]
-name = "golden/deploy-defender"
-description = "deploy on Defender for Endpoint's stand-in, the golden cases' cassette: sign in, create a rule (its id recorded), then update a recorded id Graph does not know (404): the run stops, the retired rule not attempted."
-client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+name = "golden/deploy-defender-continues"
+description = "deploy on Defender for Endpoint's stand-in, recorded with the Rust CLI (the reference since #1512 retired the Python oracle, which stopped at the 404): sign in, create a rule (its id recorded), update a recorded id Graph does not know (404), then still delete the retired rule (404 too): each failure is the rule's own and the run goes on."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec opentide --repo \"$HOME/ws\" --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
 tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
 routes = ["login.microsoftonline.com", "graph.microsoft.com"]
 secrets = ["DEFENDER_CLIENT_SECRET"]

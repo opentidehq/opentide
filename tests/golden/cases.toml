@@ -1882,7 +1882,7 @@ fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
-cassette = "golden/deploy-defender"
+cassette = "golden/deploy-defender-continues"
 
 [[case]]
 command = "deploy"
