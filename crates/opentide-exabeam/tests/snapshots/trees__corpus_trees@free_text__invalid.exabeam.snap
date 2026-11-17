@@ -3,19 +3,20 @@ source: crates/opentide-exabeam/tests/trees.rs
 expression: "debug_parse(&body.join(\"\\n\"))"
 input_file: crates/testdata/corpus/exabeam/free_text__invalid.exabeam
 ---
-source_file@0..12
-  ERROR@0..1
-    error_token@0..1 "\""
-  statement@1..12
-    filter@1..12
-      and_expression@1..12
-        free_text@1..6
-          identifier@1..6
-            letters@1..6 "Admin"
-        whitespace@6..7 " "
-        free_text@7..12
-          identifier@7..12
-            letters@7..12 "login"
+source_file@0..11
+  statement@0..4
+    filter@0..4
+      free_text@0..4
+        text_word@0..4
+          letters@0..3 "web"
+          *@3..4 "*"
+  whitespace@4..5 " "
+  ERROR@5..6
+    error_token@5..6 "\""
+  statement@6..11
+    filter@6..11
+      free_text@6..11
+        identifier@6..11
+          letters@6..11 "Admin"
 errors:
-0..0: expected a statement
-0..0: unexpected
+4..5: unexpected

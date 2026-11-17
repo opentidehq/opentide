@@ -3,10 +3,10 @@ source: crates/opentide-esql/tests/parser_snapshots.rs
 expression: "format!(\"{tree}--- errors\\n{errors}\")"
 input_file: crates/testdata/corpus/esql/parameter__invalid.esql
 ---
-SOURCE_FILE@0..75
+SOURCE_FILE@0..76
   COMMENT@0..25 "// prod:parameter invalid"
   WHITESPACE@25..26 "\n"
-  QUERY@26..74
+  QUERY@26..75
     FROM_COMMAND@26..50
       FROM_KW@26..30 "FROM"
       WHITESPACE@30..31 " "
@@ -35,10 +35,10 @@ SOURCE_FILE@0..75
         WHITESPACE@68..69 " "
         EQ_EQ@69..71 "=="
         WHITESPACE@71..72 " "
-        BINARY_EXPRESSION@72..74
-          PARAMETER@72..73
-            PARAM@72..73 "?"
-          MINUS@73..74 "-"
-  WHITESPACE@74..75 "\n"
+        PARAMETER@72..74
+          PARAM@72..74 "?1"
+    ERROR@74..75
+      WORD@74..75 "x"
+  WHITESPACE@75..76 "\n"
 --- errors
-74..75: expected an expression (expected PLUS, MINUS)
+74..74: expected `|` or the end of the query (expected AND_KW, OR_KW, PIPE, R_PAREN)

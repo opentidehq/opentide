@@ -1777,9 +1777,9 @@ exabeam_parse_error error 0:29-0:30 FOREACH names a field
 86..91 keyword
 92..94 number
 == corpus/exabeam/free_text__invalid.exabeam
-exabeam_parse_error error 0:0-0:1 unterminated string
-1..6 string
-7..12 string
+exabeam_parse_error error 0:5-0:6 unterminated string
+0..4 string
+6..11 string
 == corpus/exabeam/free_text__valid.exabeam
 0..13 string
 14..18 string

@@ -395,15 +395,19 @@ yara_parse_error error 2:0-2:1 YARA syntax error: expecting expression or identi
 37..40 number
 41..42 punctuation.bracket
 == corpus/yara/entrypoint__invalid.yar
-yara_parse_error error 3:0-3:1 YARA syntax error: expecting expression or identifier, found `}`
+yara_parse_error error 2:14-2:15 YARA syntax error: expecting `%`, operator, `of`, expression or `}`, found `[`
 0..4 keyword
 5..6 type
 7..8 punctuation.bracket
 11..20 keyword
 20..21 punctuation.delimiter
 26..36 constant
-37..39 operator
-40..41 punctuation.bracket
+36..37 punctuation.bracket
+37..38 number
+38..39 punctuation.bracket
+40..42 operator
+43..44 number
+45..46 punctuation.bracket
 == corpus/yara/entrypoint__valid.yar
 yara_entrypoint_deprecated warning 2:4-2:14 `entrypoint` is deprecated in libyara and refused by YARA-X: use `pe.entry_point` or `elf.entry_point`
 yara_undefined_identifier error 2:4-2:14 `entrypoint` is unsupported: use `pe.entry_point` or `elf.entry_point`
@@ -417,15 +421,19 @@ yara_undefined_identifier error 2:4-2:14 `entrypoint` is unsupported: use `pe.en
 40..45 number
 46..47 punctuation.bracket
 == corpus/yara/filesize__invalid.yar
-yara_parse_error error 3:0-3:1 YARA syntax error: expecting expression or identifier, found `}`
+yara_parse_error error 2:12-2:13 YARA syntax error: expecting `%`, operator, `of`, expression or `}`, found `[`
 0..4 keyword
 5..6 type
 7..8 punctuation.bracket
 11..20 keyword
 20..21 punctuation.delimiter
 26..34 constant
-35..36 operator
-37..38 punctuation.bracket
+34..35 punctuation.bracket
+35..36 number
+36..37 punctuation.bracket
+38..39 operator
+40..42 number
+43..44 punctuation.bracket
 == corpus/yara/filesize__valid.yar
 0..4 keyword
 5..6 type
@@ -1442,7 +1450,7 @@ yara_parse_error error 4:12-4:17 YARA syntax error: expecting expression or iden
 79..80 punctuation.bracket
 81..82 punctuation.bracket
 == corpus/yara/string_count__invalid.yar
-yara_parse_error error 4:8-4:9 YARA syntax error: expecting expression or identifier, found `>`
+yara_parse_error error 4:6-4:7 YARA syntax error: expecting `in`, `%`, operator, `of`, expression or `}`, found `[`
 0..4 keyword
 5..6 type
 7..8 punctuation.bracket
@@ -1453,11 +1461,12 @@ yara_parse_error error 4:8-4:9 YARA syntax error: expecting expression or identi
 29..34 string
 37..46 keyword
 46..47 punctuation.delimiter
-52..53 variable
-54..55 operator
-56..57 operator
-58..59 number
-60..61 punctuation.bracket
+52..54 variable
+54..55 punctuation.bracket
+55..56 number
+57..58 operator
+59..60 number
+61..62 punctuation.bracket
 == corpus/yara/string_count__valid.yar
 0..4 keyword
 5..6 type

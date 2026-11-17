@@ -3,9 +3,13 @@ source: crates/opentide-lucene/tests/trees.rs
 expression: "debug_parse(&source.join(\"\\n\"))"
 input_file: crates/testdata/corpus/lucene/star__invalid.lucene
 ---
-SourceFile@0..2
-  FieldQuery@0..2
+SourceFile@0..4
+  FieldQuery@0..3
     FieldName@0..1
       Star@0..1 "*"
     Colon@1..2 ":"
-2..2: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)
+    TermQuery@2..3
+      Star@2..3 "*"
+  Error@3..4
+    Colon@3..4 ":"
+3..3: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

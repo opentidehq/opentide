@@ -357,7 +357,7 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
 }
 
 /// For each syntax error `yara-x-parser`'s CST reports in `source`, the `Debug` names of the
-/// nodes whose span touches it: what the corpus gate of `opentide-analysis` reads to check
+/// nodes and tokens (`PARENT/TOKEN`, as [`debug_kinds`] names them) whose span touches it: what the corpus gate of `opentide-analysis` reads to check
 /// that an invalid fixture fails in the production it names. Not part of the API.
 #[doc(hidden)]
 #[must_use]
