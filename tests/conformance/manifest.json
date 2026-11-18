@@ -46,7 +46,7 @@
   ],
   "tenants": [
     { "name": "soc", "platform": "sentinel_one", "setup": { "url": "{sentinel_one}", "api_token": "$S1_API_TOKEN", "account_id": "42" }, "environment": { "S1_API_TOKEN": "s1-stand-in-token" }, "about": "the SentinelOne stand-in" },
-    { "name": "lab", "platform": "harfanglab", "setup": { "url": "{harfanglab}", "api_token": "$HARFANGLAB_API_TOKEN", "type": "Sigma" }, "environment": { "HARFANGLAB_API_TOKEN": "hl-stand-in-token" }, "about": "the HarfangLab stand-in, Sigma rules" },
+    { "name": "lab", "platform": "harfanglab", "setup": { "url": "{harfanglab}", "api_token": "$HARFANGLAB_API_TOKEN" }, "environment": { "HARFANGLAB_API_TOKEN": "hl-stand-in-token" }, "about": "the HarfangLab stand-in: one tenant, Sigma rules and YARA files" },
     { "name": "closed", "platform": "sentinel_one", "setup": { "url": "http://127.0.0.1:9", "api_token": "$S1_API_TOKEN", "account_id": "42" }, "environment": { "S1_API_TOKEN": "s1-stand-in-token" }, "about": "a loopback port nothing listens on: tenant_unreachable" },
     { "name": "unset", "platform": "sentinel_one", "setup": { "url": "{sentinel_one}", "api_token": "$S1_API_TOKEN", "account_id": "42" }, "environment": {}, "about": "a credential the environment does not set: Connection.open fails with credential_unset" }
   ],
@@ -110,9 +110,11 @@
     { "name": "query-lab-gateway", "call": "query", "tenant": "lab", "text": "processes process_name=gateway.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
     { "name": "query-lab-no-source", "call": "query", "tenant": "lab", "text": "process_name=cmd.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
     { "name": "validate_query-lab", "call": "validate_query", "tenant": "lab", "text": "processes process_name=cmd.exe", "options": { "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
-    { "name": "deploy-lab-create", "call": "deploy", "tenant": "lab", "rule_id": "22222222-2222-4222-8222-222222222222", "operation": "create", "body": "{\"name\": \"Example Sigma\", \"content\": \"title: Example\", \"enabled\": true}", "corpora": ["tide_corpus"] },
-    { "name": "deploy-lab-refused", "call": "deploy", "tenant": "lab", "rule_id": "33333333-3333-4333-8333-333333333333", "operation": "create", "body": "{\"name\": \"Rejected Sigma\", \"content\": \"title: Rejected\"}", "corpora": ["tide_corpus"] },
-    { "name": "deploy-lab-delete", "call": "deploy", "tenant": "lab", "rule_id": "sigma-1", "operation": "delete", "body": "", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-create", "call": "deploy", "tenant": "lab", "rule_id": "22222222-2222-4222-8222-222222222222", "operation": "create", "body": "{\"kind\": \"Sigma\", \"rule\": {\"name\": \"Example Sigma\", \"content\": \"title: Example\", \"enabled\": true}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-yara", "call": "deploy", "tenant": "lab", "rule_id": "44444444-4444-4444-8444-444444444444", "operation": "create", "body": "{\"kind\": \"YARA\", \"rule\": {\"name\": \"Example YARA\", \"content\": \"rule example { condition: true }\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-refused", "call": "deploy", "tenant": "lab", "rule_id": "33333333-3333-4333-8333-333333333333", "operation": "create", "body": "{\"kind\": \"Sigma\", \"rule\": {\"name\": \"Rejected Sigma\", \"content\": \"title: Rejected\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-delete", "call": "deploy", "tenant": "lab", "rule_id": "sigma-1", "operation": "delete", "body": "{\"kind\": \"Sigma\"}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-delete-yara", "call": "deploy", "tenant": "lab", "rule_id": "yara-1", "operation": "delete", "body": "{\"kind\": \"YARA\"}", "corpora": ["tide_corpus"] },
     { "name": "query-closed", "call": "query", "tenant": "closed", "text": "x", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
     { "name": "query-unset", "call": "query", "tenant": "unset", "text": "x", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
     { "name": "deploy-unset", "call": "deploy", "tenant": "unset", "rule_id": "r", "operation": "create", "body": "{}", "corpora": ["tide_corpus"] }

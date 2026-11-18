@@ -357,35 +357,21 @@ fn harfanglab_deletes_a_yara_file_as_the_python_client_did() {
     let ws = workspace(
         "harfanglab",
         "lab",
-        "ssl = true\ntype = \"YARA\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
+        "ssl = true\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
          \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
-        &[
-            (
-                "a-loader.yaml",
-                rule(
-                    "HarfangLab YARA Loader",
-                    "00000000-0000-4000-8003-000000000007",
-                    "Retired.",
-                    "  harfanglab:\n    status: REMOVED\n    yara:\n      meta:\n        os: \
-                     Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n",
-                ),
+        &[(
+            "a-loader.yaml",
+            rule(
+                "HarfangLab YARA Loader",
+                "00000000-0000-4000-8003-000000000007",
+                "Retired.",
+                "  harfanglab:\n    status: REMOVED\n    yara:\n      meta:\n        os: \
+                 Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n",
             ),
-            (
-                "b-sigma.yaml",
-                rule(
-                    "HarfangLab Sigma on a YARA tenant",
-                    "00000000-0000-4000-8003-000000000099",
-                    "Skipped.",
-                    "  harfanglab:\n    status: STAGING\n    sigma:\n      logsource:\n        \
-                     category: process_creation\n        product: windows\n      selections:\n        \
-                     - name: selection\n          field: Image\n          value: cmd.exe\n      \
-                     condition: selection\n",
-                ),
-            ),
-        ],
+        )],
     );
     let (proxy, env, _ca) = replay("harfanglab/deploy", &[9], "HARFANGLAB_API_TOKEN");
-    let (sent, stderr) = deploy(
+    let (sent, _) = deploy(
         ws.path(),
         "harfanglab",
         &env,
@@ -393,15 +379,78 @@ fn harfanglab_deletes_a_yara_file_as_the_python_client_did() {
         0,
     );
     assert_eq!(proxy.verify(), Vec::new());
-    assert_eq!(
-        rows(&sent),
-        [("deployed".to_owned(), None), ("skipped".to_owned(), None)]
-    );
-    assert!(
-        stderr.contains("· skipped   HarfangLab Sigma on a YARA tenant  Sigma rule, YARA tenant"),
-        "{stderr}"
-    );
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+}
+
+/// One HarfangLab tenant deploys Sigma rules and YARA files in one run
+/// (platform-harfanglab 1.6): each rule goes to the endpoint of its own
+/// block's kind, created, updated or deleted there; nothing is skipped for
+/// its kind.
+#[test]
+fn harfanglab_deploys_sigma_and_yara_to_one_tenant() {
+    use wiremock::matchers::{method, path};
+    const SIGMA: &str = "00000000-0000-4000-8003-0000000000a1";
+    const YARA: &str = "00000000-0000-4000-8003-0000000000a2";
+    const GONE_SIGMA: &str = "00000000-0000-4000-8003-0000000000a3";
+    const GONE_YARA: &str = "00000000-0000-4000-8003-0000000000a4";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let endpoint = "/api/data/threat_intelligence";
+    rt.block_on(async {
+        for (verb, at, status) in [
+            ("PUT", format!("{endpoint}/SigmaRule/{SIGMA}/"), 200),
+            ("POST", format!("{endpoint}/YaraFile/"), 201),
+            ("DELETE", format!("{endpoint}/SigmaRule/{GONE_SIGMA}/"), 204),
+            ("DELETE", format!("{endpoint}/YaraFile/{GONE_YARA}/"), 204),
+        ] {
+            wiremock::Mock::given(method(verb))
+                .and(path(at))
+                .respond_with(wiremock::ResponseTemplate::new(status).set_body_string("{}"))
+                .expect(1)
+                .mount(&server)
+                .await;
+        }
+    });
+    let sigma = |status: &str| {
+        format!(
+            "  harfanglab:\n    status: {status}\n    sigma:\n      logsource:\n        \
+             category: process_creation\n        product: windows\n      selections:\n        \
+             - name: selection\n          field: Image\n          value: cmd.exe\n      \
+             condition: selection\n"
+        )
+    };
+    let yara = |status: &str| {
+        format!(
+            "  harfanglab:\n    status: {status}\n    yara:\n      meta:\n        os: \
+             Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n"
+        )
+    };
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
+            server.uri()
+        ),
+        &[
+            ("a.yaml", rule("Sigma rule", SIGMA, "A.", &sigma("STAGING"))),
+            ("b.yaml", rule("YARA file", YARA, "B.", &yara("STAGING"))),
+            ("c.yaml", rule("Gone Sigma", GONE_SIGMA, "C.", &sigma("REMOVED"))),
+            ("d.yaml", rule("Gone YARA", GONE_YARA, "D.", &yara("REMOVED"))),
+        ],
+    );
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 4]);
+    assert_eq!(value(&sent, "status"), &Json::str("completed"));
 }
 
 /// A registered platform that forwards to a [`Scripted`] the test keeps.
@@ -2748,92 +2797,3 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     assert_tenant_stopped(&sent, "lab");
 }
 
-/// A HarfangLab tenant whose `type` is neither Sigma nor YARA, or names an
-/// unset variable, fails before any rule is sent, as the SDK fails it: its
-/// rules are not attempted, never skipped as if of the other kind.
-#[test]
-fn harfanglab_fails_a_tenant_whose_type_is_unset_or_unknown() {
-    let sigma = "  harfanglab:\n    status: STAGING\n    sigma:\n      logsource:\n        \
-                 category: process_creation\n        product: windows\n      selections:\n        \
-                 - name: selection\n          field: Image\n          value: cmd.exe\n      \
-                 condition: selection\n";
-    for (kind, said) in [
-        (
-            "Sigmaa",
-            "harfanglab tenant 'lab' setup: type is Sigma or YARA, got \"Sigmaa\"",
-        ),
-        ("$HARFANGLAB_TYPE", "HARFANGLAB_TYPE"),
-    ] {
-        let ws = workspace(
-            "harfanglab",
-            "lab",
-            &format!(
-                "ssl = true\ntype = \"{kind}\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
-                 \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n"
-            ),
-            &[(
-                "a.yaml",
-                rule(
-                    "HarfangLab Sigma",
-                    "00000000-0000-4000-8099-000000000201",
-                    "A.",
-                    sigma,
-                ),
-            )],
-        );
-        let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
-        let (sent, _) = deploy(
-            ws.path(),
-            "harfanglab",
-            &env,
-            &opentide_connectors::builtin(),
-            0,
-        );
-        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{kind}");
-        assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()), "{kind}");
-        assert_eq!(rows(&sent), [("not_attempted".to_owned(), None)], "{kind}");
-        let Json::Array(failures) = value(&sent, "failures") else {
-            panic!("no failures")
-        };
-        let error = failures[0].get("error").and_then(Json::as_str).unwrap();
-        assert!(error.contains(said), "{kind}: {error}");
-    }
-}
-
-/// A HarfangLab `type` that names a set variable is resolved: the YARA file
-/// is deleted on the tenant, the request the Python client sent, never
-/// reported deployed with nothing sent.
-#[test]
-fn harfanglab_resolves_a_type_that_names_a_set_variable() {
-    let ws = workspace(
-        "harfanglab",
-        "lab",
-        "ssl = true\ntype = \"$HARFANGLAB_TYPE\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
-         \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
-        &[(
-            "a-loader.yaml",
-            rule(
-                "HarfangLab YARA Loader",
-                "00000000-0000-4000-8003-000000000007",
-                "Retired.",
-                "  harfanglab:\n    status: REMOVED\n    yara:\n      meta:\n        os: \
-                 Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n",
-            ),
-        )],
-    );
-    let (proxy, env, _ca) = replay("harfanglab/deploy", &[9], "HARFANGLAB_API_TOKEN");
-    let env = Env::from_pairs(
-        env.iter()
-            .map(|(key, value)| (key.to_owned(), value.to_owned()))
-            .chain([("HARFANGLAB_TYPE".to_owned(), "YARA".to_owned())]),
-    );
-    let (sent, _) = deploy(
-        ws.path(),
-        "harfanglab",
-        &env,
-        &opentide_connectors::builtin(),
-        0,
-    );
-    assert_eq!(proxy.verify(), Vec::new());
-    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-}

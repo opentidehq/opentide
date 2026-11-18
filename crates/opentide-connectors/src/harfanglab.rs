@@ -4,7 +4,8 @@
 //! A port of `platforms/harfanglab/client.py` (`HarfangLabService`: the
 //! `Token` header, a Sigma rule put by the rule's UUID and created with
 //! `POST` when the tenant does not hold it, a YARA file posted, deletes),
-//! `deployer.py` (a tenant's `type` says which kind of rule it takes) and
+//! `deployer.py` (each rule's kind picks its endpoint: every tenant takes
+//! Sigma rules and YARA files, platform-harfanglab 1.6) and
 //! `runner.py` (one telemetry source filtered by `field=value` words),
 //! request for request. HarfangLab has no live validation (`supported:
 //! False`) and no query language for a rule: `opentide query` runs a
@@ -78,14 +79,11 @@ pub fn http_defaults() -> HttpSettings {
     }
 }
 
-/// The kind of rule a tenant takes (its `type`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind {
-    /// Sigma rules.
-    Sigma,
-    /// YARA files.
-    Yara,
-}
+/// The kind of a rule, which its block names: it picks the endpoint.
+pub use opentide_compile::harfanglab::Kind;
+
+/// The code of a deploy request whose body is not `{"kind": .., "rule": ..}`.
+pub const REQUEST_INVALID: &str = "harfanglab_request_invalid";
 
 fn refused(cx: TenantContext<'_>, message: String, detail: Option<String>) -> ConnectorError {
     ConnectorError::Refused {
@@ -114,19 +112,6 @@ impl<'a> Client<'a> {
     /// The tenant's client; its `url` and `api_token` are read when sent.
     pub fn new(cx: TenantContext<'a>) -> Self {
         Self { cx }
-    }
-
-    /// The tenant's `type`.
-    pub fn kind(&self) -> Result<Kind, ConnectorError> {
-        let kind = self.cx.tenant.secret("type")?;
-        match kind.expose() {
-            "Sigma" => Ok(Kind::Sigma),
-            "YARA" => Ok(Kind::Yara),
-            other => Err(setup(
-                self.cx,
-                format!("type is Sigma or YARA, got {other:?}"),
-            )),
-        }
     }
 
     fn base(&self) -> Result<String, ConnectorError> {
@@ -395,16 +380,18 @@ pub fn sources_detail() -> String {
     format!("one of: {}; then field=value filters", names.join(", "))
 }
 
-/// The platform: a deployer of the kind of rule each tenant takes, and the
-/// telemetry runner. No live validator.
+/// The platform: a deployer of Sigma rules and YARA files, each to the
+/// endpoint of its own kind, and the telemetry runner. No live validator.
 #[derive(Debug, Default)]
 pub struct HarfangLab;
 
 impl Deployer for HarfangLab {
     /// Puts a Sigma rule (creating it on a 404) or posts a YARA file, by
-    /// the tenant's `type`; a delete removes it. *request*'s `rule_id` is
-    /// the rule's UUID, its body the compiled rule; nothing is kept in
-    /// deployment state.
+    /// the kind *request*'s body names; a delete removes it from that kind's
+    /// endpoint. *request*'s `rule_id` is the rule's UUID, its body
+    /// `{"kind": "Sigma" | "YARA", "rule": <the compiled rule>}`
+    /// (`opentide_compile::harfanglab::request_body`; a delete's names the
+    /// kind alone). Nothing is kept in deployment state.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -412,15 +399,11 @@ impl Deployer for HarfangLab {
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
             let client = Client::new(cx);
-            let kind = client.kind()?;
+            let (kind, rule) = read_request(request)?;
             match (request.operation, kind) {
                 (Operation::Delete, kind) => client.delete_rule(kind, &request.rule_id).await?,
-                (_, Kind::Sigma) => {
-                    client
-                        .put_sigma_rule(&request.rule_id, &request.body)
-                        .await?;
-                }
-                (_, Kind::Yara) => client.post_yara_rule(&request.body).await?,
+                (_, Kind::Sigma) => client.put_sigma_rule(&request.rule_id, &rule).await?,
+                (_, Kind::Yara) => client.post_yara_rule(&rule).await?,
             }
             Ok(DeployOutcome {
                 events: Vec::new(),
@@ -430,6 +413,36 @@ impl Deployer for HarfangLab {
             })
         })
     }
+}
+
+/// The kind a request's body names and the rule it carries, byte for byte
+/// as compiled: `{"kind": "Sigma" | "YARA", "rule": {...}}`, a delete's
+/// without `rule`. Any other body fails the rule ([`REQUEST_INVALID`]).
+fn read_request(
+    request: &DeployRequest,
+) -> Result<(Kind, Vec<u8>), crate::connector::DeployError> {
+    let invalid = |reason: &str| {
+        crate::connector::DeployError::rule(crate::connector::DeployFailure::new(
+            REQUEST_INVALID,
+            format!(
+                "A HarfangLab deploy request's body is {{\"kind\": \"Sigma\" or \"YARA\", \"rule\": \
+                 <the compiled rule>}}: {reason}"
+            ),
+        ))
+    };
+    let fields: std::collections::BTreeMap<String, &serde_json::value::RawValue> =
+        serde_json::from_slice(&request.body).map_err(|_| invalid("not JSON"))?;
+    let kind = fields
+        .get("kind")
+        .and_then(|kind| serde_json::from_str::<String>(kind.get()).ok())
+        .and_then(|kind| Kind::parse(&kind))
+        .ok_or_else(|| invalid("no kind"))?;
+    let rule = match fields.get("rule").map(|rule| rule.get()) {
+        Some(rule) if rule != "null" => rule.as_bytes().to_vec(),
+        _ if request.operation == Operation::Delete => Vec::new(),
+        _ => return Err(invalid("no rule")),
+    };
+    Ok((kind, rule))
 }
 
 impl QueryRunner for HarfangLab {

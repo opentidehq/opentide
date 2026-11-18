@@ -926,41 +926,48 @@ platform!(
     CrowdstrikeConfiguration, "CrowdstrikeConfiguration", CrowdstrikeTenant
 );
 
-/// The kind of rule a HarfangLab tenant receives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, FromNode, JsonSchema)]
-#[from_node(literal)]
-pub enum HarfangLabKind {
-    /// `Sigma`.
-    #[serde(rename = "Sigma")]
-    Sigma,
-    /// `YARA`.
-    #[serde(rename = "YARA")]
-    Yara,
-}
+/// The keys a HarfangLab tenant's setup no longer takes, each with the
+/// error it fails with: `type` was removed in platform-harfanglab 1.6, as
+/// every tenant takes both Sigma rules and YARA files.
+pub const REMOVED_HARFANGLAB_KEYS: [(&str, &str); 1] = [(
+    "type",
+    "`type` is removed: a HarfangLab tenant takes both Sigma and YARA rules, and each \
+     rule's own `sigma` or `yara` block picks its kind; delete this key",
+)];
 
-/// A HarfangLab tenant's `type`: its kind, or a `$NAME` placeholder that
-/// holds one, which deploy reads when it runs.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
-#[serde(untagged)]
-#[from_node(union)]
-pub enum HarfangLabType {
-    /// `Sigma` or `YARA`.
-    Kind(HarfangLabKind),
-    /// A placeholder.
-    Placeholder(EnvPlaceholder),
+/// The names of [`REMOVED_HARFANGLAB_KEYS`], which the closed model leaves
+/// to [`no_removed_harfanglab_keys`].
+const REMOVED_HARFANGLAB_NAMES: &[&str] = &["type"];
+
+/// Each removed key of a HarfangLab setup fails on its key, with why it went
+/// and what to do; the other keys are still checked.
+fn no_removed_harfanglab_keys(node: &Node, cx: &mut Context) -> bool {
+    if let Value::Map(entries) = &node.value {
+        for entry in entries {
+            let Some(key) = entry.key.value.as_str() else {
+                continue;
+            };
+            if let Some((_, message)) = REMOVED_HARFANGLAB_KEYS.iter().find(|(name, _)| *name == key)
+            {
+                cx.at_key(key, |cx| value_error(cx, *message, &entry.value));
+            }
+        }
+    }
+    true
 }
 
 /// `[tenants.setup]` for HarfangLab.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[from_node(model = "HarfangLabSetup")]
+#[from_node(
+    model = "HarfangLabSetup",
+    before = "no_removed_harfanglab_keys",
+    tolerate = "REMOVED_HARFANGLAB_NAMES"
+)]
 pub struct HarfangLabSetup {
     /// Verify the tenant's TLS certificate.
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
-    /// Rule type the tenant receives: `Sigma` or `YARA` (case matters), or a
-    /// `$NAME` placeholder that holds one of them.
-    pub r#type: HarfangLabType,
     /// HarfangLab manager URL.
     pub url: String,
     /// API token.
