@@ -294,6 +294,8 @@ fn named_nodes(root: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> {
     let mut stack = vec![root.clone()];
     std::iter::from_fn(move || {
         let node = stack.pop()?;
+        #[cfg(test)]
+        NAMED_READ.set(NAMED_READ.get() + 1);
         if !tree::is_leaf(node.kind()) {
             let at = stack.len();
             stack.extend(node.children());
@@ -1044,11 +1046,14 @@ struct Walked {
 thread_local! {
     /// Elements [`walk`] visited on this thread.
     static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Nodes [`named_nodes`] gave on this thread.
+    static NAMED_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Visits each element of `root` once, in preorder. Below a one-token node
-/// (`tree::is_leaf`) nothing is read, as neither walk it replaces read
-/// there. A node is a leaf of the highlight when none of its children is
+/// Visits each element of `root` once, in preorder. The elements below a
+/// one-token node (`tree::is_leaf`) are visited but taken by neither the
+/// checks nor the highlight, as neither walk it replaces read there. The
+/// root is never read in place. A node is a leaf of the highlight when none of its children is
 /// listed: whitespace is not, and a `WITH {…}` (`NamedParameters`) child
 /// lists its own children in its place, so it is never a leaf itself.
 fn walk(root: &SyntaxNode) -> Walked {
@@ -1082,7 +1087,8 @@ fn walk(root: &SyntaxNode) -> Walked {
         };
         // The child is listed by the nearest node not read in place: a
         // listed child makes it no leaf.
-        let in_place = matches!(&element, NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS)
+        let in_place = depth > 0
+            && matches!(&element, NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS)
             && !open.last().is_some_and(|o| o.in_place);
         if listed
             && !in_place
@@ -1930,10 +1936,26 @@ mod tests {
     #[test]
     fn the_checks_and_the_highlight_visit_each_element_once() {
         for source in walk_probes().iter().take(20) {
-            let elements = tree::parse(source).syntax.descendants_with_tokens().count();
+            let tree = tree::parse(source);
+            let elements = tree.syntax.descendants_with_tokens().count();
+            // The highlight reads each non-empty leaf once.
+            let leaves = walk(&tree.syntax)
+                .leaves
+                .iter()
+                .filter(|l| {
+                    let span = element_span(l);
+                    span.end > span.start
+                })
+                .count();
             VISITS.set(0);
+            NAMED_READ.set(0);
+            tree::CAPTURES.set(0);
             let _ = analyze(source);
+            // No other walk: the walk visits every element, the checks read
+            // no node from `named_nodes`, and the highlight no leaf twice.
             assert_eq!(VISITS.get(), elements, "{source:?}");
+            assert_eq!(NAMED_READ.get(), 0, "{source:?}");
+            assert_eq!(tree::CAPTURES.get(), leaves, "{source:?}");
         }
     }
 
