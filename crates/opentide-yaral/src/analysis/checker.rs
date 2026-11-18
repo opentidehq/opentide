@@ -90,7 +90,6 @@ pub(crate) struct Checker<'s> {
 struct Descendants {
     nodes: std::rc::Rc<Vec<SyntaxNode>>,
     ends: Vec<usize>,
-    at: std::collections::HashMap<SyntaxNode, usize>,
 }
 
 impl Descendants {
@@ -112,17 +111,25 @@ impl Descendants {
                 }
             }
         }
-        let at = nodes
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(i, n)| (n, i))
-            .collect();
         Self {
             nodes: std::rc::Rc::new(nodes),
             ends,
-            at,
         }
+    }
+
+    /// Where `node` is: preorder sorts the nodes by where they start, so a
+    /// binary search finds the nodes starting where it does (a node and its
+    /// first descendants), and `node` is one of them.
+    fn place(&self, node: &SyntaxNode) -> Option<usize> {
+        let start = node.text_range().start();
+        let first = self
+            .nodes
+            .partition_point(|n| n.text_range().start() < start);
+        self.nodes[first..]
+            .iter()
+            .take_while(|n| n.text_range().start() == start)
+            .position(|n| n == node)
+            .map(|i| first + i)
     }
 }
 
@@ -145,9 +152,16 @@ impl Iterator for Under {
             Under::Indexed { nodes, next, end } => {
                 let node = (*next < *end).then(|| nodes[*next].clone())?;
                 *next += 1;
+                #[cfg(test)]
+                INDEXED.set(INDEXED.get() + 1);
                 Some(node)
             }
-            Under::Walked(walk) => walk.next(),
+            Under::Walked(walk) => {
+                let node = walk.next()?;
+                #[cfg(test)]
+                WALKED.set(WALKED.get() + 1);
+                Some(node)
+            }
         }
     }
 }
@@ -184,27 +198,23 @@ impl<'s> Checker<'s> {
         self.push(code, Severity::Warning, message, at);
     }
 
-    /// Every check on a tree that parsed.
     /// `node` and the nodes below it, in preorder: rowan's `descendants`,
     /// read from the index [`Checker::run`] builds.
     pub(super) fn under(&self, node: &SyntaxNode) -> Under {
         match &self.nodes {
-            Some(index) => match index.at.get(node) {
-                Some(&i) => Under::Indexed {
+            Some(index) => match index.place(node) {
+                Some(i) => Under::Indexed {
                     nodes: std::rc::Rc::clone(&index.nodes),
                     next: i,
                     end: index.ends[i],
                 },
                 None => Under::Walked(Box::new(node.descendants())),
             },
-            None => {
-                #[cfg(test)]
-                WALKS.set(WALKS.get() + 1);
-                Under::Walked(Box::new(node.descendants()))
-            }
+            None => Under::Walked(Box::new(node.descendants())),
         }
     }
 
+    /// Every check on a tree that parsed.
     pub(crate) fn run(&mut self, root: &SyntaxNode) {
         self.nodes = Some(Descendants::new(root));
         let rules: Vec<SyntaxNode> = root
@@ -1425,8 +1435,10 @@ impl<'s> Checker<'s> {
 
 #[cfg(test)]
 thread_local! {
-    /// The descendant walks the checks made without the index on this thread.
-    static WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The descendants the checks read from the index on this thread.
+    static INDEXED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The descendants the checks walked to with rowan on this thread.
+    static WALKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -1486,14 +1498,15 @@ mod index_tests {
         }
     }
 
-    /// The checks walk no subtree of their own (ADR 0014 §7): each read its
-    /// sections' and statements' descendants with a walk.
+    /// The checks read every descendant from the index and walk to none
+    /// (ADR 0014 §7): each walked its sections' and statements' subtrees.
     #[test]
     fn the_checks_walk_no_subtree() {
-        for source in [SAMPLES[0], SAMPLES[2]] {
-            let before = WALKS.get();
+        for source in [SAMPLES[0], SAMPLES[1]] {
+            let (indexed, walked) = (INDEXED.get(), WALKED.get());
             crate::analyze(source);
-            assert_eq!(WALKS.get() - before, 0, "{source:?}");
+            assert_eq!(WALKED.get() - walked, 0, "{source:?}");
+            assert!(INDEXED.get() - indexed > 0, "{source:?}");
         }
     }
 }
