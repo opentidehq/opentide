@@ -25,11 +25,6 @@
           "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
           "title": "Ssl"
         },
-        "type": {
-          "description": "Rule type the tenant receives.",
-          "title": "Type",
-          "type": "string"
-        },
         "url": {
           "description": "HarfangLab manager URL.",
           "title": "Url",
@@ -47,7 +42,6 @@
         }
       },
       "required": [
-        "type",
         "url",
         "api_token",
         "source_id"

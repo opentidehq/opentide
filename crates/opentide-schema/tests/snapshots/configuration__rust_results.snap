@@ -54,7 +54,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "type"
       ],
       "file_path": "/w/.opentide/configurations/platforms/harfanglab.toml",
-      "message": "expected a string",
+      "message": "`type` is removed: a HarfangLab tenant takes both Sigma and YARA rules, and each rule's own `sigma` or `yara` block picks its kind; delete this key",
       "severity": "error"
     },
     {
