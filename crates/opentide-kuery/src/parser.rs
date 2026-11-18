@@ -313,32 +313,41 @@ mod tests {
     use crate::syntax::Kuery;
     use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
 
-    /// The texts of the corpus and the external sets, each cut at every
+    /// Queries of the corpus and the external sets, written here: an engine
+    /// crate reads no file, its tests in `src/` included (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        r#"process.name:"cmd.exe""#,
+        r#"host.os.type:(not )"#,
+        r#""process.name:cmd.exe"#,
+        r#"not(user.name:SYSTEM)"#,
+        r#"message:"failed login""#,
+        r#"(a:1 or b:2) and c:3"#,
+        r#"event.category:process and(event.type:start)"#,
+        r#"process.name:(cmd.exe or"#,
+        r#"powershell"#,
+        r#"process.name:(cmd.exe or "power shell.exe")"#,
+        r#"process.name:cmd.exe or )"#,
+        r#"event.category:process and event.type:start"#,
+        r#"host.os.type:(windows or linux)"#,
+        r#"event.code >= "#,
+        r#"event.code >= 4624 and event.code < 4700"#,
+        r#"user.name:* and not user.name:SYSTEM"#,
+        r#"process.args:{ name:"-enc" and value:* }"#,
+        r#"destination.ip:"10.0.0.0/8" or destination.port:(22 or 3389)"#,
+        r#"file.path:C\:\\Windows\\* and file.extension:exe"#,
+        r#"a:1 and b:2 or c:3 and not d:4"#,
+        r#"title:alert^2 AND -status:[200 TO 299}"#,
+        r#"process.name:cmd* AND file.name:a?c"#,
+        r#"name:jon~1 OR /joh?n/"#,
+        r#"a:1 and"#,
+        r#"not"#,
+        r#"(a:1"#,
+    ];
+
+    /// The samples, each cut at every
     /// character: valid and broken queries alike.
     fn texts() -> Vec<String> {
-        let testdata = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
-        let mut out = Vec::new();
-        for dir in [
-            "corpus/kuery",
-            "conformance/external/kuery-opensearch-dashboards",
-        ] {
-            let mut dirs = vec![testdata.join(dir)];
-            while let Some(dir) = dirs.pop() {
-                for path in std::fs::read_dir(&dir)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .map(|e| e.path())
-                {
-                    if path.is_dir() {
-                        dirs.push(path);
-                    } else if let Ok(text) = std::fs::read_to_string(&path) {
-                        out.extend(text.lines().map(str::to_owned).take(200));
-                        out.push(text);
-                    }
-                }
-            }
-        }
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = out
             .iter()
             .filter(|t| t.len() < 400)
