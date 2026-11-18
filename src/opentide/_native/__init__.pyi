@@ -10,7 +10,20 @@ from opentide._native import models as models
 from opentide._native import sdk as sdk
 
 Severity = Literal["error", "warning", "information", "hint"]
-Language = Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "opentide-yaml"]
+Language = Literal[
+    "kql",
+    "spl",
+    "esql",
+    "eql",
+    "kuery",
+    "lucene",
+    "falco",
+    "cql",
+    "yara",
+    "exabeam",
+    "yaral",
+    "opentide-yaml",
+]
 
 #: The package's version (PEP 440), as its wheel's metadata carries it.
 __version__: Final[str]

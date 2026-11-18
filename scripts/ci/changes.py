@@ -231,6 +231,21 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         "xtask/src/main.rs",
         "xtask/Cargo.toml",
     ),
+    # xtask's language_wiring test (the `wiring` job): the files outside a
+    # crate it reads, so that a pull request that drops a language from one
+    # fails its gate. A crate's change runs it in `build` (xtask is in every
+    # crate's reverse closure); the workflows and this file are EVERYTHING.
+    "wiring": (
+        "scripts/engine/wasm-smoke.mjs",
+        "scripts/engine/fuzz.sh",
+        "scripts/engine/check-io-free.sh",
+        "packages/lsp-client/*",
+        "fuzz/*",
+        "editors/*",
+        "src/opentide/_native/__init__.pyi",
+        "tests/bench/instructions.toml",
+        "crates/testdata/corpus/*",
+    ),
     # opentide-schema's compile-fail cases (trybuild): the derive, the crate,
     # the cases (the lockfile and the toolchain are in EVERYTHING).
     "schema_ui": (
