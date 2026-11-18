@@ -56,7 +56,7 @@ on loopback, never a real host:
 
 | Piece | What |
 |-------|------|
-| `stand_ins` | `tests/cassettes/<name>/tenant.py` (standard library only), started with its `environment` (the credential it accepts); it prints its port first. Today SentinelOne (PowerQuery, `slow` polled, `fails` and `\| syntax` refused; STAR rules) and HarfangLab (telemetry rows with nested objects, mixed keys and an integer; Sigma rules) |
+| `stand_ins` | `tests/cassettes/<name>/tenant.py` (standard library only), started with its `environment` (the credential it accepts); it prints its port first. Today SentinelOne (PowerQuery, `slow` polled, `fails` and `\| syntax` refused; STAR rules) and HarfangLab (telemetry rows with nested objects, mixed keys and an integer; Sigma rules and YARA files, on one tenant) |
 | `tenants` | Each a `TenantConfig`: `platform`, `name`, `setup` (a `{<stand-in>}` in a value is that stand-in's URL) and the `environment` `Connection.open` is given, so no proxy of the process applies. `closed` is a loopback port nothing listens on (`tenant_unreachable`), `unset` a credential the environment lacks (`credential_unset`) |
 | operations | `call` the operation, `tenant` its tenant; `text` and `options` (`language`, `start`, `end`, `limit`, `index`, `data_view`, `timeout`) for a query or a check, `rule_id`, `operation` and `body` (sent as its UTF-8 bytes) for a deploy |
 

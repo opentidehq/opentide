@@ -68,7 +68,8 @@ export declare class Connection {
    * (the request `opentide deploy` compiles for this tenant) as its
    * bytes, and resolves to the platform's identifier of the rule. Rejects
    * with `tenant_refused` and the other codes of `query`. A `delete`
-   * takes no body (`null`); the
+   * takes no body (`null`), but on HarfangLab, whose body names the
+   * rule's kind (`{"kind": "Sigma"}`); the
    * other operations reject without one (`usage_invalid_value`).
    * `options.signal` aborts it.
    */

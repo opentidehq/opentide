@@ -2194,42 +2194,12 @@ impl Sender<'_, '_> {
             let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
                 continue;
             };
-            // A HarfangLab tenant takes one kind of rule, its `type`: unset
-            // (an unset `$VARIABLE`) or neither Sigma nor YARA, the tenant
-            // cannot deploy, as the SDK says (`Client::kind`).
-            let tenant_kind = if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
-                let cancel = self.cancel.clone();
-                let kind = opentide_connectors::harfanglab::Client::new(TenantContext {
-                    tenant: &connection.tenant,
-                    http: &connection.http,
-                    cancel: &cancel,
-                })
-                .kind();
-                match kind {
-                    Ok(opentide_connectors::harfanglab::Kind::Sigma) => "Sigma",
-                    Ok(opentide_connectors::harfanglab::Kind::Yara) => "YARA",
-                    Err(error) => {
-                        let failure = raised(&error).stopping(Stops::Tenant);
-                        self.tenant_failed(platform, &tenant, log, failure, false)?;
-                        continue;
-                    }
-                }
-            } else {
-                ""
-            };
             for sent in &batch.rules {
                 let rule = &sent.rule;
+                // A HarfangLab tenant takes both kinds: each rule goes to the
+                // endpoint of its own block's kind.
                 if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
                     let block = rule.block(platform);
-                    let kind = block.and_then(|block| {
-                        if block.get("sigma").is_some_and(|value| !value.is_null()) {
-                            Some("Sigma")
-                        } else if block.get("yara").is_some_and(|value| !value.is_null()) {
-                            Some("YARA")
-                        } else {
-                            None
-                        }
-                    });
                     if block.is_none() {
                         tracing::warn!(
                             detail = rule.name.as_str(),
@@ -2244,13 +2214,13 @@ impl Sender<'_, '_> {
                         );
                         continue;
                     }
-                    if kind != Some(tenant_kind) {
+                    if opentide_compile::harfanglab::Kind::of(rule).is_none() {
                         log.skipped(
                             platform,
                             &tenant,
                             &rule.uuid,
                             &rule.name,
-                            &format!("{} rule, {tenant_kind} tenant", kind.unwrap_or("unknown")),
+                            "neither a sigma nor a yara rule",
                         );
                         continue;
                     }
@@ -2426,11 +2396,10 @@ impl Sender<'_, '_> {
         ))
     }
 
-    /// The request a HarfangLab rule sends, compiled for the kind the tenant's
-    /// `type` names, a `$VARIABLE` resolved.
+    /// The request a HarfangLab rule sends: its own kind and the rule
+    /// compiled for it (`harfanglab::request_body`); a delete names the kind.
     fn harfanglab_request(
         &self,
-        connection: &Connection,
         batch: &Batch,
         rule: &opentide_compile::Rule,
         deletion: bool,
@@ -2438,31 +2407,25 @@ impl Sender<'_, '_> {
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
-        // The tenant's `type` as `by_uuid` read it, a `$VARIABLE`
-        // resolved: the compiler reads the setup as written.
-        let kind = match opentide_connectors::harfanglab::Client::new(self.context(connection))
-            .kind()
-            .map_err(|error| raised(&error))?
-        {
-            opentide_connectors::harfanglab::Kind::Sigma => "Sigma",
-            opentide_connectors::harfanglab::Kind::Yara => "YARA",
-        };
-        let mut table = batch.table.clone();
-        if let CJson::Object(fields) = &mut table
-            && let Some(CJson::Object(setup)) = fields.get_mut("setup")
-        {
-            setup.insert("type".into(), CJson::Str(kind.to_owned()));
-        }
-        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
-            .map_err(compile_error)?;
-        // `by_uuid` skipped a rule of the other kind: nothing to send
-        // is never a deploy.
-        let Some(write) = writes.first() else {
+        // The block's own kind picks the endpoint (platform-harfanglab 1.6).
+        let Some(kind) = opentide_compile::harfanglab::Kind::of(rule) else {
             return Err(Raised::new(format!(
-                "HarfangLab compiled no request for rule {} on a {kind} tenant",
+                "HarfangLab rule {} is neither a sigma nor a yara rule",
                 rule.uuid
             )));
         };
+        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &batch.table)
+            .map_err(compile_error)?;
+        let Some(write) = writes.first() else {
+            return Err(Raised::new(format!(
+                "HarfangLab compiled no request for rule {}",
+                rule.uuid
+            )));
+        };
+        let body = opentide_compile::harfanglab::request_body(
+            kind,
+            (!write.body.is_null()).then_some(&write.body),
+        );
         Ok(DeployRequest::new(
             rule.uuid.clone(),
             if deletion {
@@ -2470,11 +2433,7 @@ impl Sender<'_, '_> {
             } else {
                 Operation::Update
             },
-            if write.body.is_null() {
-                Vec::new()
-            } else {
-                serde_json::to_vec(&write.body).unwrap_or_default()
-            },
+            serde_json::to_vec(&body).unwrap_or_default(),
         ))
     }
 
@@ -2496,7 +2455,7 @@ impl Sender<'_, '_> {
                 Some(request) => request,
                 None => return Ok(()),
             },
-            _ => self.harfanglab_request(connection, batch, rule, deletion)?,
+            _ => self.harfanglab_request(batch, rule, deletion)?,
         };
         let deployer = self.deployer(platform)?;
         let context = self.context(connection);
