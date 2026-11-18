@@ -2752,7 +2752,13 @@ fn harfanglab_fails_a_tenant_whose_type_is_unset_or_unknown() {
                  category: process_creation\n        product: windows\n      selections:\n        \
                  - name: selection\n          field: Image\n          value: cmd.exe\n      \
                  condition: selection\n";
-    for kind in ["Sigmaa", "$HARFANGLAB_TYPE"] {
+    for (kind, said) in [
+        (
+            "Sigmaa",
+            "harfanglab tenant 'lab' setup: type is Sigma or YARA, got \"Sigmaa\"",
+        ),
+        ("$HARFANGLAB_TYPE", "HARFANGLAB_TYPE"),
+    ] {
         let ws = workspace(
             "harfanglab",
             "lab",
@@ -2785,9 +2791,44 @@ fn harfanglab_fails_a_tenant_whose_type_is_unset_or_unknown() {
             panic!("no failures")
         };
         let error = failures[0].get("error").and_then(Json::as_str).unwrap();
-        assert!(
-            error.contains("type") || error.contains("HARFANGLAB_TYPE"),
-            "{kind}: {error}"
-        );
+        assert!(error.contains(said), "{kind}: {error}");
     }
+}
+
+/// A HarfangLab `type` that names a set variable is resolved: the YARA file
+/// is deleted on the tenant, the request the Python client sent, never
+/// reported deployed with nothing sent.
+#[test]
+fn harfanglab_resolves_a_type_that_names_a_set_variable() {
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        "ssl = true\ntype = \"$HARFANGLAB_TYPE\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
+         \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
+        &[(
+            "a-loader.yaml",
+            rule(
+                "HarfangLab YARA Loader",
+                "00000000-0000-4000-8003-000000000007",
+                "Retired.",
+                "  harfanglab:\n    status: REMOVED\n    yara:\n      meta:\n        os: \
+                 Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n",
+            ),
+        )],
+    );
+    let (proxy, env, _ca) = replay("harfanglab/deploy", &[9], "HARFANGLAB_API_TOKEN");
+    let env = Env::from_pairs(
+        env.iter()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .chain([("HARFANGLAB_TYPE".to_owned(), "YARA".to_owned())]),
+    );
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new());
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
 }

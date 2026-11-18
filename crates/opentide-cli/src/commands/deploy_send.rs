@@ -2395,11 +2395,31 @@ impl Sender<'_, '_> {
                 }
             }
             _ => {
-                let writes =
-                    opentide_compile::harfanglab::compile(self.compile, rule, &batch.table)
-                        .map_err(compile_error)?;
+                // The tenant's `type` as `by_uuid` read it, a `$VARIABLE`
+                // resolved: the compiler reads the setup as written.
+                let kind =
+                    match opentide_connectors::harfanglab::Client::new(self.context(connection))
+                        .kind()
+                        .map_err(|error| raised(&error))?
+                    {
+                        opentide_connectors::harfanglab::Kind::Sigma => "Sigma",
+                        opentide_connectors::harfanglab::Kind::Yara => "YARA",
+                    };
+                let mut table = batch.table.clone();
+                if let CJson::Object(fields) = &mut table
+                    && let Some(CJson::Object(setup)) = fields.get_mut("setup")
+                {
+                    setup.insert("type".into(), CJson::Str(kind.to_owned()));
+                }
+                let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
+                    .map_err(compile_error)?;
+                // `by_uuid` skipped a rule of the other kind: nothing to send
+                // is never a deploy.
                 let Some(write) = writes.first() else {
-                    return Ok(());
+                    return Err(Raised::new(format!(
+                        "HarfangLab compiled no request for rule {} on a {kind} tenant",
+                        rule.uuid
+                    )));
                 };
                 let deployer = self.deployer(platform)?;
                 let request = DeployRequest::new(
