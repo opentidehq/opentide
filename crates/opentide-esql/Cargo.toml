@@ -20,9 +20,9 @@ opentide-lucene.workspace = true
 opentide-highlight.workspace = true
 opentide-parse.workspace = true
 serde.workspace = true
-toml.workspace = true
 logos.workspace = true
 rowan.workspace = true
 
 [dev-dependencies]
+toml.workspace = true
 insta.workspace = true

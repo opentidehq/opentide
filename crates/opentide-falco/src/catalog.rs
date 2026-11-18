@@ -233,16 +233,9 @@ pub enum Lookup<'c> {
     Unknown,
 }
 
-/// A catalog compiled in, read: a bad one fails the tests, never a user's
-/// document.
-#[expect(
-    clippy::expect_used,
-    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-)]
+/// A Falco catalog file compiled in, read.
 fn read<T>(file: &str, result: Result<T, catalog::CatalogError>) -> T {
-    result
-        .map_err(|err| format!("data/catalogs/falco/{file}: {err}"))
-        .expect("a catalog compiled in reads")
+    catalog::compiled_in(&format!("data/catalogs/falco/{file}"), result)
 }
 
 impl Catalog {

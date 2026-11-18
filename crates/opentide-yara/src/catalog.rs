@@ -2,8 +2,9 @@
 //! `cargo xtask codegen` from YARA-X's module reflection: the known modules,
 //! their members and why a refused module is refused) and the language data
 //! (`data/catalogs/yara/language.toml`): profiles and keywords.
-//! Each is parsed once per process.
+//! Each is read once per process, item by item ([`opentide_core::catalog`]).
 
+use opentide_core::catalog;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -55,7 +56,9 @@ pub struct Member {
     pub overloads: Vec<Overload>,
 }
 
-#[derive(Deserialize)]
+/// The whole of `modules.toml`, read as one document only by the test that
+/// holds the item-by-item read to it.
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct ModulesFile {
     meta: ModulesMeta,
     /// Module name to why opentide refuses it.
@@ -63,7 +66,14 @@ struct ModulesFile {
     member: Vec<Member>,
 }
 
+/// `modules.toml`'s preamble: `[meta]` and `[unsupported]`.
 #[derive(Deserialize)]
+struct ModulesPreamble {
+    meta: ModulesMeta,
+    unsupported: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct ModulesMeta {
     /// YARA-X's default modules, less the excluded ones.
     modules: Vec<String>,
@@ -84,7 +94,8 @@ pub struct ProfileData {
     pub context_values: Vec<String>,
 }
 
-#[derive(Deserialize)]
+/// `language.toml`: a preamble only (no arrays of tables).
+#[derive(Debug, Deserialize)]
 struct LanguageFile {
     keywords: Vec<String>,
     profile: BTreeMap<String, ProfileData>,
@@ -101,18 +112,25 @@ pub struct Catalog {
     pub profiles: BTreeMap<String, ProfileData>,
 }
 
+/// Reads the compiled-in files item by item.
+fn files() -> (ModulesFile, LanguageFile) {
+    const MODULES: &str = "data/catalogs/yara/modules.toml";
+    const LANGUAGE: &str = "data/catalogs/yara/language.toml";
+    let preamble: ModulesPreamble = catalog::compiled_in(MODULES, catalog::preamble(MODULES_TOML));
+    let modules = ModulesFile {
+        meta: preamble.meta,
+        unsupported: preamble.unsupported,
+        member: catalog::compiled_in(MODULES, catalog::array_items(MODULES_TOML, "member")),
+    };
+    let language = catalog::compiled_in(LANGUAGE, catalog::preamble(LANGUAGE_TOML));
+    (modules, language)
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "the catalogs are compiled in with include_str! and parsed by the tests"
-    )]
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let modules: ModulesFile =
-                toml::from_str(MODULES_TOML).expect("data/catalogs/yara/modules.toml");
-            let language: LanguageFile =
-                toml::from_str(LANGUAGE_TOML).expect("data/catalogs/yara/language.toml");
+            let (modules, language) = files();
             Catalog {
                 members: modules
                     .member
@@ -190,6 +208,17 @@ mod tests {
         assert!(c.children("pe", "").any(|m| m.path == "number_of_sections"));
         assert!(c.keywords.contains("condition"));
         assert_eq!(c.profiles["bitdefender"].max_characters, Some(30000));
+    }
+
+    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let (modules, language) = super::files();
+        let whole: super::ModulesFile = toml::from_str(super::MODULES_TOML).expect("modules.toml");
+        assert_eq!(format!("{modules:?}"), format!("{whole:?}"));
+        let whole: super::LanguageFile =
+            toml::from_str(super::LANGUAGE_TOML).expect("language.toml");
+        assert_eq!(format!("{language:?}"), format!("{whole:?}"));
     }
 
     /// `yara_x_syntax` is `allowed` or `refused`; a misspelt value is an

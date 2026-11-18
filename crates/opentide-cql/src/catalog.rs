@@ -7,7 +7,7 @@
 //! LogScale is schemaless, so fields are hover and completion data, never a
 //! reason for a finding.
 
-use opentide_core::suggest;
+use opentide_core::{catalog, suggest};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -182,21 +182,30 @@ pub struct Field {
     pub sources: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct FunctionsFile {
     functions: Vec<Function>,
 }
 
-#[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct EventsFile {
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     platforms: Vec<String>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     common_fields: Vec<String>,
     events: Vec<Event>,
 }
 
+/// `events.toml`'s preamble.
 #[derive(Deserialize)]
+struct EventsPreamble {
+    #[serde(default)]
+    platforms: Vec<String>,
+    #[serde(default)]
+    common_fields: Vec<String>,
+}
+
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct FieldsFile {
     fields: Vec<Field>,
 }
@@ -216,20 +225,39 @@ pub struct Catalog {
     by_field: HashMap<String, usize>,
 }
 
+/// The CQL catalog files compiled in, read item by item (ADR 0013).
+fn files() -> (FunctionsFile, EventsFile, FieldsFile) {
+    use catalog::{array_items, compiled_in, preamble};
+    let functions = FunctionsFile {
+        functions: compiled_in(
+            "data/catalogs/cql/functions.toml",
+            array_items(FUNCTIONS_TOML, "functions"),
+        ),
+    };
+    let first: EventsPreamble = compiled_in("data/catalogs/cql/events.toml", preamble(EVENTS_TOML));
+    let events = EventsFile {
+        platforms: first.platforms,
+        common_fields: first.common_fields,
+        events: compiled_in(
+            "data/catalogs/cql/events.toml",
+            array_items(EVENTS_TOML, "events"),
+        ),
+    };
+    let fields = FieldsFile {
+        fields: compiled_in(
+            "data/catalogs/cql/fields.toml",
+            array_items(FIELDS_TOML, "fields"),
+        ),
+    };
+    (functions, events, fields)
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "parses the catalogs compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-    )]
+    /// Every CQL catalog, read once per process and shared (ADR 0013).
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let functions: FunctionsFile =
-                toml::from_str(FUNCTIONS_TOML).expect("data/catalogs/cql/functions.toml");
-            let events: EventsFile =
-                toml::from_str(EVENTS_TOML).expect("data/catalogs/cql/events.toml");
-            let fields: FieldsFile =
-                toml::from_str(FIELDS_TOML).expect("data/catalogs/cql/fields.toml");
+            let (functions, events, fields) = files();
             let mut by_function = HashMap::new();
             for (i, f) in functions.functions.iter().enumerate() {
                 by_function.insert(f.name.to_ascii_lowercase(), i);
@@ -316,6 +344,20 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ADR 0013: the files read item by item are what `toml` reads from the
+    /// whole files, field for field.
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let (functions, events, fields) = files();
+        let whole_functions: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
+        let whole_events: EventsFile = toml::from_str(EVENTS_TOML).unwrap();
+        let whole_fields: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
+        assert_eq!(format!("{functions:?}"), format!("{whole_functions:?}"));
+        assert_eq!(format!("{events:?}"), format!("{whole_events:?}"));
+        assert_eq!(format!("{fields:?}"), format!("{whole_fields:?}"));
+        assert!(functions.functions.len() > 100 && events.events.len() > 100);
+    }
 
     #[test]
     fn catalogs_load_and_index() {
