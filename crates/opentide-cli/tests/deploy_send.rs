@@ -1617,6 +1617,29 @@ fn bitdefender_forgets_a_lost_rule_to_disable_and_stops_a_tenant_refusing_the_ke
         "{rows:?}"
     );
     assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_tenant_stopped(&sent, "lab");
+}
+
+/// The run of a platform whose only tenant, `tenant`, failed on a rule: the
+/// platform is not in `deployed`, and every rule after it says which tenant
+/// failed.
+fn assert_tenant_stopped(sent: &Sent, tenant: &str) {
+    assert_eq!(value(sent, "deployed"), &Json::Array(Vec::new()));
+    let Json::Array(results) = value(sent, "results") else {
+        panic!("no results")
+    };
+    let unsent: Vec<&Json> = results
+        .iter()
+        .filter(|row| row.get("status").and_then(Json::as_str) == Some("not_attempted"))
+        .collect();
+    assert!(!unsent.is_empty(), "{results:?}");
+    let reason = format!("not attempted: tenant {tenant} failed");
+    for row in unsent {
+        assert_eq!(
+            row.get("reason").and_then(Json::as_str),
+            Some(reason.as_str())
+        );
+    }
 }
 
 /// Runs `opentide <argv>` on the command line, in `ws`, with `env`: the
@@ -2666,6 +2689,58 @@ fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
         results[1].get("reason").and_then(Json::as_str),
         Some("not attempted: tenant lab failed")
     );
+}
+
+/// An Exabeam tenant that refuses the token on a rule fails there: its other
+/// rule is not attempted, naming the tenant, and Exabeam is not deployed.
+#[test]
+fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = exabeam_stand(&server, &rt);
+    rt.block_on(
+        wiremock::Mock::given(method("GET"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server),
+    );
+    let ws = workspace(
+        "exabeam",
+        "lab",
+        &setup,
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "First rule",
+                    "00000000-0000-4000-8099-000000000211",
+                    "A.",
+                    EXABEAM_BLOCK,
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Second rule",
+                    "00000000-0000-4000-8099-000000000212",
+                    "B.",
+                    EXABEAM_BLOCK,
+                ),
+            ),
+        ],
+    );
+    let (sent, _) = deploy(
+        ws.path(),
+        "exabeam",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent)[0].0, "failed", "{:?}", rows(&sent));
+    assert_tenant_stopped(&sent, "lab");
 }
 
 /// A HarfangLab tenant whose `type` is neither Sigma nor YARA, or names an

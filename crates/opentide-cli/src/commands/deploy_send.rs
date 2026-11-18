@@ -3119,7 +3119,6 @@ impl Sender<'_, '_> {
                 Some(CJson::Bool(false))
             );
             let mut warned_rules: Vec<String> = Vec::new();
-            let mut stopped: Option<String> = None;
             for sent in &batch.rules {
                 let rule = &sent.rule;
                 let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
@@ -3253,32 +3252,33 @@ impl Sender<'_, '_> {
                         return Err(Raised::new("interrupted").stopping(Stops::Run));
                     }
                     Err(error) => {
-                        match error.connector {
+                        let stopped = match error.connector {
                             // The tenant could not be reached.
                             Some(connector) => {
                                 result.fail(&raised(&connector).describe());
-                                stopped = Some(connector.to_string());
+                                connector.to_string()
                             }
                             // A key or privilege the tenant refuses.
                             None => {
                                 result.fail(&error.failure.message);
-                                stopped = Some(error.failure.message);
+                                error.failure.message
                             }
-                        }
+                        };
                         log.finished(result);
+                        tracing::error!(
+                            tenant = tenant.as_str(),
+                            error = stopped.as_str(),
+                            critical = true,
+                            "elastic_tenant_deployment_failed"
+                        );
+                        // An interrupt stops the run, not the tenant.
+                        if self.interrupted() {
+                            return Err(Raised::new("interrupted").stopping(Stops::Run));
+                        }
                         self.stop_tenant(PlatformId::Elastic.as_str(), &tenant, log);
                         break;
                     }
                 }
-            }
-            if let Some(error) = stopped {
-                self.failed = true;
-                tracing::error!(
-                    tenant = tenant.as_str(),
-                    error = error.as_str(),
-                    critical = true,
-                    "elastic_tenant_deployment_failed"
-                );
             }
         }
         Ok(())
@@ -3451,6 +3451,10 @@ impl Sender<'_, '_> {
                         self.failed = true;
                         result.fail(&text);
                         log.finished(result);
+                        // An interrupt stops the run, not the tenant.
+                        if self.interrupted() {
+                            return Err(Raised::new("interrupted").stopping(Stops::Run));
+                        }
                         self.stop_tenant(PlatformId::Sysdig.as_str(), &tenant, log);
                         break;
                     }
@@ -3653,6 +3657,10 @@ impl Sender<'_, '_> {
                         self.failed = true;
                         result.fail(&text);
                         log.finished(result);
+                        // An interrupt stops the run, not the tenant.
+                        if self.interrupted() {
+                            return Err(Raised::new("interrupted").stopping(Stops::Run));
+                        }
                         self.stop_tenant(PlatformId::Bitdefender.as_str(), &tenant, log);
                         break;
                     }
@@ -3898,6 +3906,10 @@ impl Sender<'_, '_> {
                         self.google_secops_tenant_failed(&tenant, &text);
                         result.fail(&text);
                         log.finished(result);
+                        // An interrupt stops the run, not the tenant.
+                        if self.interrupted() {
+                            return Err(Raised::new("interrupted").stopping(Stops::Run));
+                        }
                         self.stop_tenant(PlatformId::GoogleSecops.as_str(), &tenant, log);
                         break;
                     }
@@ -4201,6 +4213,10 @@ impl Sender<'_, '_> {
                         );
                         result.fail(&text);
                         log.finished(result);
+                        // An interrupt stops the run, not the tenant.
+                        if self.interrupted() {
+                            return Err(Raised::new("interrupted").stopping(Stops::Run));
+                        }
                         self.stop_tenant(PlatformId::Graylog.as_str(), &tenant, log);
                         break;
                     }
@@ -4408,6 +4424,10 @@ impl Sender<'_, '_> {
                         self.failed = true;
                         result.fail(&error.failure.message);
                         log.finished(result);
+                        // An interrupt stops the run, not the tenant.
+                        if self.interrupted() {
+                            return Err(Raised::new("interrupted").stopping(Stops::Run));
+                        }
                         self.stop_tenant(PlatformId::Exabeam.as_str(), &tenant, log);
                         break;
                     }

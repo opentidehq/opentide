@@ -364,8 +364,9 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
 
 /// One row per platform (per tenant in a dry run): its tenant or result,
 /// and its rule count. A platform the run reached is `partly deployed` when
-/// one of its rules failed and another was deployed, `not deployed` when
-/// none was.
+/// one of its rules failed and another was deployed (also when every
+/// tenant failed, one of them after deploying a rule, so the platform is not
+/// in `deployed`), `not deployed` when none was.
 fn platform_rows(
     result: &Json,
     plan: &Object,
@@ -408,6 +409,8 @@ fn platform_rows(
                     (true, false) => "deployed",
                     (true, true) if none_deployed(platform) => "not deployed",
                     (true, true) => "partly deployed",
+                    // Every tenant failed, some after deploying rules.
+                    (false, _) if !none_deployed(platform) => "partly deployed",
                     (false, _) => "not deployed",
                 };
                 rows.push(vec![
@@ -598,6 +601,23 @@ mod tests {
                  | `crowdstrike` | lab | every rule | Cannot reach crowdstrike |\n\
                  | `exabeam` | every tenant | every rule | no plugin |\n"
             ),
+            "{summary}"
+        );
+        // Every tenant failed, after one rule went out: the platform is not
+        // in `deployed`, and it was partly deployed.
+        let stopped = Json::parse(
+            r#"{"dry_run": false, "status": "failed", "plan": {"graylog": ["u6", "u7"]},
+                "deployed": [],
+                "results": [
+                  {"platform": "graylog", "id": "u6", "status": "deployed"},
+                  {"platform": "graylog", "id": "u7", "status": "failed"}
+                ],
+                "failures": [{"platform": "graylog", "tenant": "lab", "id": "u7", "error": "401"}]}"#,
+        )
+        .unwrap();
+        let summary = deploy_summary(&stopped, None, None);
+        assert!(
+            summary.contains("| `graylog` | partly deployed | 2 |"),
             "{summary}"
         );
         // A run without failures has no such section.
