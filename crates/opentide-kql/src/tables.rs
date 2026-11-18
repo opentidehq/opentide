@@ -36,16 +36,49 @@ pub fn kusto_type(name: &str) -> Arc<str> {
         .map_or_else(|| Arc::from(name), Arc::clone)
 }
 
+/// Reads a type name straight into [`kusto_type`]: through `visit_str`, so
+/// no `String` is made for it first.
+struct TypeName;
+
+impl serde::de::Visitor<'_> for TypeName {
+    type Value = Arc<str>;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a Kusto type name")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, name: &str) -> Result<Arc<str>, E> {
+        Ok(kusto_type(name))
+    }
+}
+
+/// An optional [`TypeName`].
+struct OptionalTypeName;
+
+impl<'de> serde::de::Visitor<'de> for OptionalTypeName {
+    type Value = Option<Arc<str>>;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a Kusto type name")
+    }
+
+    fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        d.deserialize_str(TypeName).map(Some)
+    }
+}
+
 fn interned_type<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Arc<str>, D::Error> {
-    let name = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
-    Ok(kusto_type(&name))
+    deserializer.deserialize_str(TypeName)
 }
 
 pub(crate) fn interned_optional_type<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Arc<str>>, D::Error> {
-    let name = <Option<std::borrow::Cow<'de, str>>>::deserialize(deserializer)?;
-    Ok(name.as_deref().map(kusto_type))
+    deserializer.deserialize_option(OptionalTypeName)
 }
 
 /// One table of the Azure Monitor Logs reference.

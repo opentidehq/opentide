@@ -2100,6 +2100,37 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 mod tests {
     use super::*;
 
+    /// A profile's rows share their names with the reference's columns, and
+    /// every column of a type shares that type's name (#1071): a row's own
+    /// copy would cost an allocation per column again, which the equality
+    /// tests, comparing texts, would not see.
+    #[test]
+    fn the_rows_share_the_reference_names_and_the_type_names() {
+        let catalog = Catalog::cached(Profile::Sentinel);
+        let reference = tables::azure_monitor();
+        let row = catalog
+            .columns
+            .iter()
+            .find(|c| c.from_reference)
+            .expect("a reference column");
+        let column = reference[&*row.table]
+            .columns
+            .iter()
+            .flatten()
+            .find(|c| c.name == row.name)
+            .expect("its reference column");
+        assert!(Arc::ptr_eq(&row.name, &column.name), "the name");
+        let strings: Vec<&Arc<str>> = catalog
+            .columns
+            .iter()
+            .filter_map(|c| c.type_name.as_ref())
+            .filter(|t| &***t == "string")
+            .take(2)
+            .collect();
+        assert!(Arc::ptr_eq(strings[0], strings[1]), "the type");
+        assert!(Arc::ptr_eq(strings[0], &tables::kusto_type("string")));
+    }
+
     /// The core and profile catalogs read item by item are field for field
     /// the whole files (ADR 0013).
     #[test]
