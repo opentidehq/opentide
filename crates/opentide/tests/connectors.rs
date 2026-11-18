@@ -26,7 +26,11 @@ fn options() -> ConnectOptions {
 
 /// A HarfangLab tenant: no kind, as every tenant takes Sigma and YARA.
 fn harfanglab(url: &str) -> TenantConfig {
-    TenantConfig::new("harfanglab", "lab", [("url", url), ("api_token", "$HL_TOKEN")])
+    TenantConfig::new(
+        "harfanglab",
+        "lab",
+        [("url", url), ("api_token", "$HL_TOKEN")],
+    )
 }
 
 fn sentinel_one(url: &str) -> TenantConfig {

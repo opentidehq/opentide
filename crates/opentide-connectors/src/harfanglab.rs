@@ -418,9 +418,7 @@ impl Deployer for HarfangLab {
 /// The kind a request's body names and the rule it carries, byte for byte
 /// as compiled: `{"kind": "Sigma" | "YARA", "rule": {...}}`, a delete's
 /// without `rule`. Any other body fails the rule ([`REQUEST_INVALID`]).
-fn read_request(
-    request: &DeployRequest,
-) -> Result<(Kind, Vec<u8>), crate::connector::DeployError> {
+fn read_request(request: &DeployRequest) -> Result<(Kind, Vec<u8>), crate::connector::DeployError> {
     let invalid = |reason: &str| {
         crate::connector::DeployError::rule(crate::connector::DeployFailure::new(
             REQUEST_INVALID,

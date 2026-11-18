@@ -436,8 +436,14 @@ fn harfanglab_deploys_sigma_and_yara_to_one_tenant() {
         &[
             ("a.yaml", rule("Sigma rule", SIGMA, "A.", &sigma("STAGING"))),
             ("b.yaml", rule("YARA file", YARA, "B.", &yara("STAGING"))),
-            ("c.yaml", rule("Gone Sigma", GONE_SIGMA, "C.", &sigma("REMOVED"))),
-            ("d.yaml", rule("Gone YARA", GONE_YARA, "D.", &yara("REMOVED"))),
+            (
+                "c.yaml",
+                rule("Gone Sigma", GONE_SIGMA, "C.", &sigma("REMOVED")),
+            ),
+            (
+                "d.yaml",
+                rule("Gone YARA", GONE_YARA, "D.", &yara("REMOVED")),
+            ),
         ],
     );
     let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
@@ -2796,4 +2802,3 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     assert_eq!(rows(&sent)[0].0, "failed", "{:?}", rows(&sent));
     assert_tenant_stopped(&sent, "lab");
 }
-

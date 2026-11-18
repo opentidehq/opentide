@@ -947,7 +947,9 @@ fn no_removed_harfanglab_keys(node: &Node, cx: &mut Context) -> bool {
             let Some(key) = entry.key.value.as_str() else {
                 continue;
             };
-            if let Some((_, message)) = REMOVED_HARFANGLAB_KEYS.iter().find(|(name, _)| *name == key)
+            if let Some((_, message)) = REMOVED_HARFANGLAB_KEYS
+                .iter()
+                .find(|(name, _)| *name == key)
             {
                 cx.at_key(key, |cx| value_error(cx, *message, &entry.value));
             }

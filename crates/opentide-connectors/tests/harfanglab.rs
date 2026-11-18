@@ -230,8 +230,16 @@ fn harfanglab_refuses_a_request_without_its_kind() {
         (Operation::Create, sigma("Bare", true), "no kind"),
         (Operation::Create, b"not json".to_vec(), "not JSON"),
         (Operation::Delete, Vec::new(), "not JSON"),
-        (Operation::Create, br#"{"kind": "sigma"}"#.to_vec(), "no kind"),
-        (Operation::Update, br#"{"kind": "YARA"}"#.to_vec(), "no rule"),
+        (
+            Operation::Create,
+            br#"{"kind": "sigma"}"#.to_vec(),
+            "no kind",
+        ),
+        (
+            Operation::Update,
+            br#"{"kind": "YARA"}"#.to_vec(),
+            "no rule",
+        ),
     ] {
         let request = DeployRequest::new(RULE_ID.to_owned(), operation, body);
         let error = block_on(async { deployer.deploy(cx, &request).await })
@@ -239,7 +247,11 @@ fn harfanglab_refuses_a_request_without_its_kind() {
             .unwrap_err();
         assert_eq!(error.scope, DeployScope::Rule, "{reason}");
         assert_eq!(error.failure.code, harfanglab::REQUEST_INVALID, "{reason}");
-        assert!(error.failure.message.ends_with(reason), "{}", error.failure.message);
+        assert!(
+            error.failure.message.ends_with(reason),
+            "{}",
+            error.failure.message
+        );
     }
 }
 
