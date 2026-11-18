@@ -59,6 +59,15 @@ impl Gate {
         self
     }
 
+    /// Whether a gate with `available` reports on `target`: exactly when
+    /// [`Gate::diagnostic`] returns a diagnostic.
+    pub fn fires(available: Availability, target: Option<StackTarget>) -> bool {
+        match target {
+            None => !available.is_all(),
+            Some(target) => !available.on(target),
+        }
+    }
+
     /// The diagnostic for this gate, or `None` when the stack accepts it.
     ///
     /// Without a target the query is checked against every supported line
@@ -71,11 +80,11 @@ impl Gate {
         range: impl Fn(ByteSpan) -> Range,
     ) -> Option<Diagnostic> {
         let available = self.available;
+        if !Self::fires(available, target) {
+            return None;
+        }
         let (message, severity) = match target {
             None => {
-                if available.is_all() {
-                    return None;
-                }
                 let severity = if available.on_newest() {
                     self.floor_severity.unwrap_or(Severity::Information)
                 } else {
@@ -87,9 +96,6 @@ impl Gate {
                 )
             }
             Some(target) => {
-                if available.on(target) {
-                    return None;
-                }
                 let works = if available.is_empty() {
                     "no release accepts it".to_string()
                 } else {
