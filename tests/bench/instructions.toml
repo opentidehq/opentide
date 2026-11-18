@@ -3,72 +3,72 @@
 # external public rules. Written by `cargo xtask throughput --record`; the
 # check fails a count more than 3% over. Record again when a change lowers
 # counts on purpose, or raises them on purpose with the reason in its PR.
-# Each is the highest of several runs. glibc's malloc is counted, so record
-# where CI checks (its `throughput` job's runner image).
+# Each is the highest of several runs, of the bench binary's own code
+# (glibc and the loader left out). CI checks on its `throughput` job's image.
 # Recorded on: valgrind-3.22.0, glibc 2.39, x86_64
 
 [cql]
-analyze_corpus = 12118558
-analyze_external = 46778762
-parse_corpus = 11638384
-parse_external = 42430503
+analyze_corpus = 7533345
+analyze_external = 31998672
+parse_corpus = 6879865
+parse_external = 27088338
 
 [eql]
-analyze_corpus = 4079631
-analyze_external = 3116058
-parse_corpus = 1475193
-parse_external = 1080844
+analyze_corpus = 2424108
+analyze_external = 1900877
+parse_corpus = 964671
+parse_external = 728120
 
 [esql]
-analyze_corpus = 23587863
-analyze_external = 4712700
-parse_corpus = 5374125
-parse_external = 1205932
+analyze_corpus = 14636439
+analyze_external = 2905448
+parse_corpus = 3494043
+parse_external = 879552
 
 [exabeam]
-analyze_corpus = 13150366
-analyze_external = 1533317
-parse_corpus = 7624603
-parse_external = 1285216
+analyze_corpus = 9168779
+analyze_external = 927241
+parse_corpus = 4126887
+parse_external = 732313
 
 [falco]
-analyze_corpus = 4022823
-analyze_external = 1225751028
-parse_corpus = 3147797
-parse_external = 21378604
+analyze_corpus = 2815203
+analyze_external = 515638703
+parse_corpus = 1688207
+parse_external = 12231371
 
 [kql]
-analyze_corpus = 18738030
-analyze_external = 76746296
-parse_corpus = 3065435
-parse_external = 12987854
+analyze_corpus = 11982879
+analyze_external = 50284548
+parse_corpus = 2067741
+parse_external = 10458021
 
 [kuery]
-analyze_corpus = 4112570
-analyze_external = 1708917
-parse_corpus = 1132930
-parse_external = 851149
+analyze_corpus = 2571592
+analyze_external = 1025090
+parse_corpus = 713929
+parse_external = 508448
 
 [lucene]
-analyze_corpus = 3522210
-analyze_external = 15503399
-parse_corpus = 972973
-parse_external = 5688751
+analyze_corpus = 1992616
+analyze_external = 8702587
+parse_corpus = 628991
+parse_external = 3530310
 
 [spl]
-analyze_corpus = 20747018
-analyze_external = 24752307
-parse_corpus = 7604523
-parse_external = 6304080
+analyze_corpus = 14787176
+analyze_external = 18101538
+parse_corpus = 4841650
+parse_external = 4136800
 
 [yara]
-analyze_corpus = 31987334
-analyze_external = 711288222
-parse_corpus = 23637240
-parse_external = 547185969
+analyze_corpus = 23322988
+analyze_external = 510465510
+parse_corpus = 17520989
+parse_external = 377197115
 
 [yaral]
-analyze_corpus = 15251411
-analyze_external = 206977516
-parse_corpus = 9092573
-parse_external = 99271110
+analyze_corpus = 9044938
+analyze_external = 127340211
+parse_corpus = 5180867
+parse_external = 61199480
