@@ -273,6 +273,14 @@ pub struct OperatorOption {
     pub parameter_index: Option<u32>,
 }
 
+/// A profile's KQL catalog: operators, functions, plugins, types, tables and
+/// columns.
+///
+/// Reading it builds indexes and schemas once and keeps them on it, for
+/// every thread ([`Catalog::for_workspace`]'s catalogs included). Its
+/// methods that change rows rebuild them; a caller that changes the public
+/// rows directly does so on a fresh copy ([`Clone`] keeps none of them),
+/// before any read.
 #[derive(Debug, Clone)]
 pub struct Catalog {
     /// The profile the tables and columns come from.
@@ -2065,6 +2073,20 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Giving a catalog a profile empties what reading it kept: Core's
+    /// prepared table names (none) are not the profile's.
+    #[test]
+    fn a_profile_given_after_a_read_reads_its_own_tables() {
+        let core = Catalog::core();
+        assert_eq!(core.suggest_table("SecurityEvnt"), None);
+        assert!(core.function("strlen").is_some());
+        let sentinel = core.with_profile(Profile::Sentinel);
+        assert_eq!(
+            sentinel.suggest_table("SecurityEvnt").as_deref(),
+            Some("SecurityEvent")
+        );
+    }
 
     /// A catalog's name indexes find what a scan of its rows finds, the same
     /// row: for every operator, function, scalar operator and plugin name, in
