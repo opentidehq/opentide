@@ -7,7 +7,7 @@ description: The architecture decision records (ADRs) of the unified core, one p
 
 An architecture decision record (ADR) writes down one decision: why it was needed, what was decided, what follows from it and the evidence behind it. Agents and people read these pages before changing what a decision covers. To change a decision, write a new ADR that supersedes it.
 
-The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#1-decisions) (PR [#789](https://github.com/opentidehq/opentide/pull/789), epic [#790](https://github.com/opentidehq/opentide/issues/790)). Until #789 merges, the plan exists only on the branch `docs/unified-core-plan`, so the ADRs link to it there. Every ADR of the plan is **Proposed** until a maintainer marks it **Accepted** when the plan is approved; an ADR outside the plan (0012, 0013) carries its own status.
+The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#1-decisions) (PR [#789](https://github.com/opentidehq/opentide/pull/789), epic [#790](https://github.com/opentidehq/opentide/issues/790)). Until #789 merges, the plan exists only on the branch `docs/unified-core-plan`, so the ADRs link to it there. Every ADR of the plan is **Proposed** until a maintainer marks it **Accepted** when the plan is approved; an ADR outside the plan (0012, 0013, 0014) carries its own status.
 
 ## Index
 
@@ -26,6 +26,7 @@ The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https:
 | [0011](./0011-python-models.md) | UC-1.9 | The Rust models in Python: frozen classes under their Pydantic names in `opentide._native.models`, the Pydantic methods SDK code calls, generated stubs, re-exported by `opentide.models` with deprecation shims and delegation helpers; the CLI keeps Pydantic in `opentide._models` ([#815](https://github.com/opentidehq/opentide/issues/815)) | Proposed |
 | [0012](./0012-pure-rust-parsing.md) | Epic #1219 | Pure-Rust parsing replaces tree-sitter: logos, rowan and hand-written parsers on `opentide-parse`, ungrammar typed ASTs, YARA-X's CST for YARA, a depth contract, the differential harness as the gate ([#1219](https://github.com/opentidehq/opentide/issues/1219)) | Accepted |
 | [0013](./0013-language-catalogs.md) | #1071 | How a language catalog is shipped, loaded and shared: generated TOML read item by item through `opentide_core::catalog`, built once per process in a `OnceLock`, interning, static tables where they pay ([#1071](https://github.com/opentidehq/opentide/issues/1071)) | Proposed |
+| [0014](./0014-analysis-performance.md) | #1571 | The analysis performance pattern: nothing shared copied per call, indexes and prepared data built once per catalog, memos keyed by what they read and bounded, cheap bounds before expensive measures, single-pass walks; measured with callgrind and wall time, held by work counts ([#1571](https://github.com/opentidehq/opentide/issues/1571)) | Proposed |
 
 No work item has an ADR to come. A work item that makes a decision adds one, taking the number after the highest one in the index when it is written.
 

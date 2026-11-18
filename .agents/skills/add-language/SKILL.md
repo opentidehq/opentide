@@ -22,6 +22,7 @@ SQL stays unsupported until a real dialect and grammar are chosen. A stub parser
 - `crates/testdata/conformance/external/<id>/` contains real public rules and a `.broken.` twin with one injected fault. The full valid file may still parse-error where the grammar does not cover the rule yet. The harness keeps that file, takes the longest prefix that parses, and requires the injected fault on that prefix to diagnose. The broken full file must produce at least one diagnostic. Copy `crates/opentide-analysis/tests/external_corpus.rs`.
 - Unsupported platforms still produce no fake validation.
 - The language has an oracle in `scripts/engine/oracles/` against its reference parser (pySigma for Sigma, yara-python for YARA), or `scripts/engine/oracles/README.md` says why none exists.
+- Analysis follows [ADR 0014](../../../docs/internal/adr/0014-analysis-performance.md): nothing shared copied per call (`HighlightSpec::shared()`, `Arc` for what stages pass along), catalog indexes and prepared suggestion candidates built once, memos keyed by the catalog's identity and bounded by it, cheap bounds before edit distances. Its corpus median in `cargo bench -p opentide-analysis --bench analyze` is in the range of the other languages, and a callgrind of the warm loop shows no setup repeated per call.
 - `cargo clippy --workspace --all-targets -- -D warnings` is clean.
 
 ## Steps
@@ -38,7 +39,8 @@ SQL stays unsupported until a real dialect and grammar are chosen. A stub parser
 10. Add `crates/testdata/conformance/external/<id>/`: unmodified public rules, plus `<name>.broken.<ext>` with one injected fault. Record the source and license in `SOURCES.md`. Follow `external_corpus.rs`: do not delete a public rule because the full text parse-errors; assert the fault on the longest prefix the grammar accepts, and assert the broken full file emits some diagnostic.
 11. Add an oracle: a `<lang>` mode in `scripts/engine/oracles/oracle.py` that runs the reference over the same corpus, `[[<lang>]]` entries in `crates/testdata/oracles/exceptions.toml`, a job in `.github/workflows/oracle.yml`, and the reference's package names in `scripts/engine/license-scan.sh`. The reference never ships.
 12. Extend `crates/opentide-lsp` only for host behaviour (language id from the URI suffix, e2e frame). The CLI `analyze` / `highlight` path must keep printing plain JSON.
-13. WASM: `highlight(language_id, bytes)` already goes through `LanguageId::parse` and `opentide_analysis::highlight`. Do not add a wasm-bindgen export per language, and do not link `opentide-wasm` into a WASI build.
+13. Measure, as ADR 0014 says: run the analysis benchmark, then callgrind the warm loop (`--toggle-collect` on the function that runs the calls after a warm-up) on a `develop` build with line tables. Remove any setup that repeats per call before tuning the parser. Hold each speed-up with a test that counts work and fails on the old path.
+14. WASM: `highlight(language_id, bytes)` already goes through `LanguageId::parse` and `opentide_analysis::highlight`. Do not add a wasm-bindgen export per language, and do not link `opentide-wasm` into a WASI build.
 
 ## Dispatch
 

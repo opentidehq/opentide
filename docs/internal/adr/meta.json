@@ -14,6 +14,7 @@
     "0010-one-diagnostic-model",
     "0011-python-models",
     "0012-pure-rust-parsing",
-    "0013-language-catalogs"
+    "0013-language-catalogs",
+    "0014-analysis-performance"
   ]
 }
