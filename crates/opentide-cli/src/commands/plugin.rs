@@ -177,7 +177,9 @@ fn on_tenant<T: Send>(
     interrupted: &(dyn Fn() -> bool + Sync),
     work: opentide_connectors::connector::BoxFuture<'_, Result<T, ConnectorError>>,
 ) -> Result<T, ConnectorError> {
-    let ran = opentide_connectors::runtime::block_on(watched(work, cancel, interrupted));
+    // A host (the Node SDK's `runJson`) may run the command inside its own
+    // runtime: `block_on_anywhere` serves it there (#1558).
+    let ran = opentide_connectors::runtime::block_on_anywhere(watched(work, cancel, interrupted));
     ran.map_err(|message| ConnectorError::Crashed {
         platform: tenant.label.platform.clone(),
         tenant: tenant.label.tenant.clone(),

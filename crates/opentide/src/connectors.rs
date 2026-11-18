@@ -501,14 +501,17 @@ impl Canceller {
     }
 }
 
-/// Runs `work` (a [`Connection`]'s operation) to completion on a tokio
-/// runtime of its own, for a synchronous caller. Call it outside any async
-/// runtime: tokio refuses to start one inside another.
+/// Runs `work` (a [`Connection`]'s operation) to completion on the
+/// process's tokio runtime, for a synchronous caller. Call it outside any
+/// async runtime, a `spawn_blocking` thread of one included (a thread that
+/// has a runtime's handle may be driving it, and blocking there would
+/// panic); inside one, await the operation instead.
 ///
 /// # Errors
 ///
 /// [`Error::Connector`] with the code `runtime_unavailable` when the runtime
-/// cannot start.
+/// cannot start, or when called from a thread that drives async work (inside
+/// a runtime), where blocking is refused rather than tokio's panic.
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, Error> {
     opentide_connectors::runtime::block_on(work).map_err(|message| Error::Connector {
         code: RUNTIME_UNAVAILABLE,

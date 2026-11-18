@@ -43,7 +43,7 @@ pub fn run(
     };
     let mut request = QueryRequest::new(query, language, window);
     request.limit = 10;
-    // A synchronous caller runs the async operation on a runtime of its own;
+    // A synchronous caller runs the async operation on the process's runtime;
     // in a tokio task, `connection.query(&request).await?` instead.
     let outcome = connectors::block_on(connection.query(&request))??;
     for row in &outcome.rows {
