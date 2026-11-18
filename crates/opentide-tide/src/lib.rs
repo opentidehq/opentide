@@ -91,11 +91,12 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
 }
 
 /// The language of the field at `field` (a path inside the platform's block,
-/// list items by index) of a `platform` block, if it holds a query. Every
-/// built-in platform says which of its fields does, so a new one cannot be
-/// left out: Elastic's query depends on the block's `type` and `language`
-/// ([`elastic_query_language`]) and SentinelOne's PowerQuery has no offline
-/// engine, so neither names a field here.
+/// list items by index) of a `platform` block, when the path alone says it.
+/// Every built-in platform answers, so a new one cannot be left out. The
+/// queries whose language depends on more than the path are not here:
+/// Elastic's (`type` and `language`, [`elastic_query_language`]), Sysdig's
+/// `output` and macro conditions, and HarfangLab's decomposed YARA rule
+/// ([`yara`]); SentinelOne's PowerQuery has no offline engine.
 pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<LanguageId> {
     match platform {
         PlatformId::Sentinel | PlatformId::DefenderForEndpoint => {
@@ -1802,6 +1803,89 @@ threat:
             language_for_field_path(&["configurations", "sysdig", "condition"]),
             Some(LanguageId::Falco)
         );
+    }
+
+    /// Every field of every built-in platform's block that holds a query,
+    /// and fields next to them that do not.
+    #[test]
+    fn every_platform_names_the_fields_that_hold_its_queries() {
+        use opentide_schema::platforms::PlatformId;
+        let accepted: &[(PlatformId, &[&str], LanguageId)] = &[
+            (PlatformId::Sentinel, &["query"], LanguageId::Kql),
+            (PlatformId::DefenderForEndpoint, &["query"], LanguageId::Kql),
+            (PlatformId::Splunk, &["query"], LanguageId::Spl),
+            (PlatformId::Splunk, &["search"], LanguageId::Spl),
+            (PlatformId::CarbonBlackCloud, &["query"], LanguageId::Lucene),
+            (PlatformId::Graylog, &["query"], LanguageId::Lucene),
+            (PlatformId::Sysdig, &["condition"], LanguageId::Falco),
+            (PlatformId::Crowdstrike, &["query"], LanguageId::Cql),
+            (
+                PlatformId::Harfanglab,
+                &["yara", "signature"],
+                LanguageId::Yara,
+            ),
+            (
+                PlatformId::Bitdefender,
+                &["yara", "signature"],
+                LanguageId::Yara,
+            ),
+            (PlatformId::GoogleSecops, &["setup"], LanguageId::Yaral),
+            (PlatformId::GoogleSecops, &["events"], LanguageId::Yaral),
+            (PlatformId::GoogleSecops, &["outcome"], LanguageId::Yaral),
+            (PlatformId::GoogleSecops, &["condition"], LanguageId::Yaral),
+            (PlatformId::GoogleSecops, &["export"], LanguageId::Yaral),
+            (
+                PlatformId::Exabeam,
+                &["sequences", "0", "query"],
+                LanguageId::Exabeam,
+            ),
+            (
+                PlatformId::Exabeam,
+                &["sequences", "12", "query"],
+                LanguageId::Exabeam,
+            ),
+        ];
+        for (platform, field, language) in accepted {
+            assert_eq!(
+                platform_field_language(*platform, field),
+                Some(*language),
+                "{platform:?} {field:?}"
+            );
+        }
+        let refused: &[(PlatformId, &[&str])] = &[
+            (PlatformId::Sentinel, &["search"]),
+            (PlatformId::Sentinel, &["query", "x"]),
+            (PlatformId::Sysdig, &["query"]),
+            (PlatformId::Harfanglab, &["yara", "strings"]),
+            (PlatformId::Bitdefender, &["yara"]),
+            (PlatformId::GoogleSecops, &["query"]),
+            (PlatformId::Exabeam, &["sequences", "", "query"]),
+            (PlatformId::Exabeam, &["sequences", "x", "query"]),
+            (PlatformId::Exabeam, &["query"]),
+            (PlatformId::Elastic, &["query"]),
+            (PlatformId::SentinelOne, &["query"]),
+        ];
+        for (platform, field) in refused {
+            assert_eq!(
+                platform_field_language(*platform, field),
+                None,
+                "{platform:?} {field:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_google_secops_export_section_is_extracted() {
+        let source = "configurations:\n  google_secops:\n    events: |\n      \
+                      $e.metadata.event_type = \"PROCESS_LAUNCH\"\n    export: |\n      \
+                      $ip = $e.principal.ip\n";
+        let injected = extract_injections(source);
+        let export = injected
+            .iter()
+            .find(|query| query.field_path == ["configurations", "google_secops", "export"])
+            .unwrap_or_else(|| panic!("no export in {injected:?}"));
+        assert_eq!(export.language, LanguageId::Yaral);
+        assert_eq!(export.platform, "google_secops");
     }
 
     /// Every built-in platform's hunt language, and a key that is no

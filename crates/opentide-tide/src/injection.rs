@@ -19,7 +19,7 @@
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
 //! (`sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`,
-//! `graylog`, `google_secops`, `exabeam`, or
+//! `graylog`, `crowdstrike`, `google_secops`, `exabeam`, or
 //! `elastic` with the entry's `language`). Any other `system` (`Sentinel`,
 //! `Splunk ES`, `MDE`) is not analysed: the language is never guessed
 //! (specifications#58).
@@ -101,19 +101,10 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
         ["configurations", "sysdig", "macros", item, "condition"] if is_index(item) => {
             Some((LanguageId::Falco, "sysdig".into()))
         }
-        [
-            "configurations",
-            platform @ ("harfanglab" | "bitdefender"),
-            "yara",
-            "signature",
-        ] => Some((LanguageId::Yara, (*platform).to_string())),
-        ["configurations", "google_secops", _] => {
-            language_for_field_path(&path).map(|language| (language, "google_secops".into()))
-        }
-        ["configurations", "exabeam", "sequences", item, "query"] if is_index(item) => {
-            Some((LanguageId::Exabeam, "exabeam".into()))
-        }
-        ["configurations", platform, "query" | "search"] => {
+        // Every other block field the platform table names
+        // (`platform_field_language`): a `query`, Splunk's `search`, a YARA
+        // `signature`, a Google SecOps section, an Exabeam sequence's `query`.
+        ["configurations", platform, ..] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))
         }
         ["response", "procedure", "searches", item, "query"] if is_index(item) => {
