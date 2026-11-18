@@ -5,30 +5,34 @@ description: The plan to move every opentide implementation into one Rust worksp
 
 # Unified core
 
-**Status:** the migration is complete on `integration/unified-core` (2026-11-18); proposed 2026-11-07. **Epic:** [#790](https://github.com/opentidehq/opentide/issues/790). **Companion page:** the "opentide Unified Core" artifact (benchmarks, figures).
+**Status:** the core migration (UC-0 to UC-4) is complete on `integration/unified-core` (2026-11-18); proposed 2026-11-07. **Epic:** [#790](https://github.com/opentidehq/opentide/issues/790). **Companion page:** the "opentide Unified Core" artifact (benchmarks, figures).
 
-opentide is implemented twice today. Python decides in the CLI, the SDK and MCP; the Rust engine from `opentidehq/language-server` decides in the editor, fed a catalog generated from the Pydantic models. This plan moves every implementation into one Rust workspace in this repository. The CLI, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are all built from that one core. Python becomes the SDK wrapper and the CLI launcher; it does no work of its own.
+When this plan was written, opentide was implemented twice. Python decided in the CLI, the SDK and MCP; the Rust engine from `opentidehq/language-server` decided in the editor, fed a catalog generated from the Pydantic models. This plan moves every implementation into one Rust workspace in this repository. The CLI, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are all built from that one core. Python becomes the SDK wrapper and the CLI launcher; it does no work of its own.
 
-The plan is written for agents implementing it to extreme correctness. Every step is a strangler step: the user-visible contract does not move, and each step is proven by differential tests against the current Python implementation, which stays the oracle until the step's default flips.
+The plan is written for agents implementing it to extreme correctness. Every step is a strangler step: the user-visible contract does not move, and each step was proven by differential tests against the Python implementation, which stayed the oracle until the step's default flipped.
 
 ## Status
 
-The migration is done on `integration/unified-core`: every implementation is in the Rust workspace, and the command line, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are built from it.
+The core migration is done on `integration/unified-core`: every implementation is in the Rust workspace, and the command line, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are built from it. Python only wraps the compiled core.
 
 - **Tree-sitter is gone** ([#1231](https://github.com/opentidehq/opentide/issues/1231)): every query parser is pure Rust on `opentide-parse` (ADR 0012), YARA's reads `yara-x-parser`.
-- **The Python oracle is retired** ([#1142](https://github.com/opentidehq/opentide/issues/1142)): the command line is held by its own snapshots (`tests/golden/README.md`), not by a comparison with the Python implementation.
-- **Phases.** UC-0 to UC-4 are closed (#791 to #795). UC-5, UC-6 and UC-X (#796, #797, #798) close with the release below.
+- **The Python oracle is retired** (#1496, #1512, #1522, #1525, under [#1142](https://github.com/opentidehq/opentide/issues/1142)): the command line is held by its own snapshots (`tests/golden/README.md`), not by a comparison with the Python implementation. Frozen artefacts of it remain as fixtures: `opentide-compile`'s `tests/oracle.rs` payloads and the benchmarks' 0.23.0 baselines.
+- **Phases.** UC-0 to UC-4 are closed (#791 to #795). UC-5, UC-6 and UC-X (#796, #797, #798) stay open on the items below.
 
 What remains is tracked in open issues, not in this plan:
 
 | Issue | What |
 |-------|------|
 | [#1511](https://github.com/opentidehq/opentide/issues/1511) | Land `integration/unified-core` in `development` and cut 1.0.0-rc.1 |
+| [#838](https://github.com/opentidehq/opentide/issues/838) | UC-5.3: the npm packages (`@opentide/opentide`, `@opentide/wasm`) and their trusted publishers |
+| [opentidehq/vscode-extension#75](https://github.com/opentidehq/vscode-extension/issues/75) | UC-6.1: the VS Code extension without its CPython bundle |
+| [#842](https://github.com/opentidehq/opentide/issues/842) | UC-6.3: archive language-server and publish the migration guide |
+| [#844](https://github.com/opentidehq/opentide/issues/844) | UC-X.2: the mutation-testing baseline |
 | [#1571](https://github.com/opentidehq/opentide/issues/1571) | Analysis faster than the vendors' analyzers, in every language (ADR 0014) |
 | [#1071](https://github.com/opentidehq/opentide/issues/1071) | `validate`'s peak memory against the plan's budget (catalog loading, ADR 0013) |
 | [#1513](https://github.com/opentidehq/opentide/issues/1513) | Supply chain: replace or drop `chrono` and `humantime` |
 
-The rest of this page is the plan as it was carried out, kept for its decisions and its evidence.
+The rest of this page is the plan as it was written, kept for its decisions and its evidence; parts changed as it was carried out (the repository layout of section 9, the golden capture of section 5.1).
 
 ### Phase 0 on `integration/unified-core`
 
@@ -66,7 +70,7 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 
 ### Maintainer steps outstanding
 
-Listed at the end of Phase 0; what the release still needs of them is tracked in [#1511](https://github.com/opentidehq/opentide/issues/1511).
+Listed at the end of Phase 0 and not checked again since; the release's own steps are in [#1511](https://github.com/opentidehq/opentide/issues/1511).
 
 - Freeze language-server `main`, and disable its opentide canary or accept that it fails.
 - Branch protection on `development` and `integration/unified-core`: exactly one required check, `PR gate` ([`.github/AGENTS.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/.github/AGENTS.md#required-checks)), which needs every job a pull request runs (`cargo deny`, the release build and its smoke tests on a release pull request among them). Remove any older required check (`Golden compare`, `Fuzz smoke (…)`, `Engine release (dry run) / SBOMs`, `Rust coverage gates`): those jobs are gone or run in the nightly, and a required check that no longer reports blocks every pull request.
