@@ -39,9 +39,9 @@ struct Language {
     parse: fn(&str),
 }
 
-/// Each parse is the language's cheapest whole parse; a language whose crate
-/// has none yet uses its `debug_kinds` (which also names the kinds: its owner
-/// replaces it with a plain parse).
+/// Each parse is the language's cheapest whole parse: its crate's hidden
+/// `parses`, which builds no kind names (`tests/plain_parses.rs` holds each to
+/// the verdict of its `debug_kinds`).
 const LANGUAGES: &[Language] = &[
     Language {
         name: "kql",
@@ -106,7 +106,7 @@ const LANGUAGES: &[Language] = &[
         external: &["spl"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_spl::debug_kinds(s));
+            std::hint::black_box(opentide_spl::parses(s));
         },
     },
     Language {
@@ -117,7 +117,7 @@ const LANGUAGES: &[Language] = &[
         external: &["cql"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_cql::debug_kinds(s));
+            std::hint::black_box(opentide_cql::parses(s));
         },
     },
     Language {
@@ -128,7 +128,7 @@ const LANGUAGES: &[Language] = &[
         external: &["falco"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_falco::debug_kinds(s));
+            std::hint::black_box(opentide_falco::parses(s));
         },
     },
     Language {
@@ -139,7 +139,7 @@ const LANGUAGES: &[Language] = &[
         external: &["yara"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_yara::debug_kinds(s));
+            std::hint::black_box(opentide_yara::parses(s));
         },
     },
     Language {
@@ -150,7 +150,7 @@ const LANGUAGES: &[Language] = &[
         external: &["exabeam"],
         skip: &[".rule."],
         parse: |s| {
-            std::hint::black_box(opentide_exabeam::debug_kinds(s));
+            std::hint::black_box(opentide_exabeam::parses(s));
         },
     },
     Language {
@@ -161,7 +161,7 @@ const LANGUAGES: &[Language] = &[
         external: &["yaral"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_yaral::debug_kinds(s));
+            std::hint::black_box(opentide_yaral::parses(s));
         },
     },
 ];
