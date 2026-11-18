@@ -316,9 +316,9 @@ Checks a query offline with the analysis engine, the same engine as `opentide va
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `query` | string | | The query to check offline. The live check reads catalogue rules, not this string |
-| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `defender_for_endpoint`, the Carbon Black dialect for `carbon_black_cloud`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`) |
+| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `defender_for_endpoint`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, a YARA-L rule for `google_secops`) |
 | `live` | boolean | `false` | `true` calls the tenant |
-| `language` | string | `""` | Elastic only: `esql`, `eql`, `kuery` (the default) or `lucene` |
+| `language` | string | `""` | Empty: the platform's language. Elastic, the one platform with several: `esql`, `eql`, `kuery` (the default) or `lucene` |
 | `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, such as `9.5` or `serverless`. Empty: every supported stack |
 
 Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and the `engine` versions. Warnings (slow query shapes) leave `valid` true. The offline check knows the tables, indexes and index patterns the workspace's [`visibility.toml`](../usage/configuration.md#the-datasets-a-log-source-fills) declares, read afresh on each call as `opentide validate` and `lint` read it, so a declared table is known and, once a platform declares one, an undeclared one is a warning (`kql_table_not_declared`). A server with no workspace declares nothing. `next_actions` names the first finding's `explain` page, then the live check, for a platform that has one (CrowdStrike's CQL and Sysdig's Falco are checked offline only, so `live: true` returns `supported: false` for them).
@@ -402,7 +402,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `google_secops`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported on the tenant: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 

@@ -28,14 +28,13 @@ pub(crate) struct Op {
 /// The checks over the pipelines of a query, in source order.
 pub(crate) fn check(
     pipelines: &[Pipeline],
-    source: &str,
+    lines: &LineIndex<'_>,
     columns: &Analysis,
     out: &mut Vec<Diagnostic>,
 ) {
-    let lines = LineIndex::new(source);
     let columns = Columns::new(columns);
     for pipeline in pipelines {
-        warn_pipeline(pipeline, &lines, &columns, out);
+        warn_pipeline(pipeline, lines, &columns, out);
     }
 }
 
@@ -69,8 +68,8 @@ impl<'a> Columns<'a> {
 
 /// The checks over the text of a query (`search`, `union *`, a wildcard
 /// table): a token scan that reads no tree, so it runs on broken input too.
-pub(crate) fn check_scope(source: &str, out: &mut Vec<Diagnostic>) {
-    warn_scope(source, &LineIndex::new(source), out);
+pub(crate) fn check_scope(source: &str, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
+    warn_scope(source, lines, out);
 }
 
 /// The pipeline starts from a table (or ASIM parser), not a `let`.
