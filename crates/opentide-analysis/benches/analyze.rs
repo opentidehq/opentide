@@ -5,8 +5,8 @@
 //! Each language runs its whole `crates/testdata/corpus/<lang>/` corpus; the line is
 //! the median time per file over the rounds. The workspace case is hover on a
 //! rule among 1,000 indexed objects, the index built once as the language
-//! server keeps it. CI runs this without gating (ci.yml, `bench`): the numbers
-//! are for comparing runs, not limits.
+//! server keeps it. Run by hand: the numbers are for comparing runs, not
+//! limits (the gated benchmarks are `cargo xtask bench`).
 
 #![expect(
     clippy::unwrap_used,

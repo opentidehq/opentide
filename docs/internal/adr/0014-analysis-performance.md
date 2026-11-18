@@ -20,38 +20,42 @@ a few hundred bytes, after the catalogs are loaded, not parsing speed on a large
 
 `cargo bench -p opentide-analysis --bench analyze` showed KQL and Falco costing 8 to 10 times the
 other languages on corpus queries under 100 bytes. Profiling the warm loop with callgrind showed the
-time was not in parsing. It went on setup repeated on every call:
+time was not in parsing. It went on setup repeated on every call. Each share is of the profile
+before the PR that removed it:
 
-| Language | Per-call cost found | Share of a short query |
-|---|---|---|
-| KQL | Every pipeline stage recorded deep copies of its input and output schemas (`Schema::clone`, a hundred-odd columns of `String`s) | 29% |
-| KQL | Each table reference rebuilt the table's schema from the catalog | 19% |
-| KQL | The semantic tokens hashed every column of the named tables, and scanned all 27k catalog columns for hand-written ones | 25% |
-| KQL | Operator, function and plugin names were found by scanning the catalog rows, once per name | 10% |
-| KQL | Each unknown table lower-cased and folded the catalog's table names again, then measured the edit distance to each | 30% (Sentinel set) |
-| KQL | A node's range without trivia walked every token of the node, for most nodes | 16% of allocations |
-| Falco | Every default list was expanded again for each condition | most of the call |
-| All | `HighlightSpec::load` cloned the spec's maps on every analysis | a few % |
+| Language | Per-call cost found | Share | Removed in |
+|---|---|---|---|
+| KQL | Every pipeline stage recorded deep copies of its input and output schemas (`Schema::clone`, a hundred-odd columns of `String`s) | 29% | #1570 |
+| KQL | Each table reference rebuilt the table's schema from the catalog | 19% | #1570 |
+| KQL | The semantic tokens hashed every column of the named tables, and scanned all 27k catalog columns for hand-written ones | 25% | #1570 |
+| KQL | Operator, function and plugin names were found by scanning the catalog rows, once per name | 10% | #1570 |
+| KQL | Each unknown table lower-cased and folded the catalog's table names again | 30% (Sentinel set) | #1570 |
+| KQL | Then measured the edit distance to each candidate of a near length | 17% (Sentinel set) | #1573 |
+| KQL | A node's range without trivia walked every token of the node, for most nodes | 16% of allocations | #1573 |
+| Falco | Every default list was expanded again for each condition | most of the call | #1570 |
+| All | `HighlightSpec::load` cloned the spec's maps on every analysis | a few % | #1570 |
 
 #1570 and #1573 removed these with no output change. Those PRs were held by the corpus gates, the
 snapshots, and differentials over the corpora, fuzz inputs and random mutants. The numbers below are
 release builds on one machine.
 
-| Measure | Before | After | Kusto.Language 12.4.1 |
-|---|---:|---:|---:|
-| KQL, analysis corpus, median per file | 339 µs | 42 µs | |
-| Falco, analysis corpus, median per file | 257 µs | 13 µs | |
-| Other languages, analysis corpus | | 10–30% faster | |
-| KQL, 20 Azure-Sentinel detections (708 characters), full analysis | 927 µs | ~270 µs | 287 µs |
-| KQL, same set, parse alone (unchanged by these PRs) | ~41 µs | ~41 µs | 50 µs |
-| KQL, 10,000 analyses in one process (the vendor harness: time, peak memory) | | 3.0 s, 27.6 MiB | 4.7 s, 207 MiB |
-| KQL, a one-line query (`SecurityEvent \| take 10`) | 292 µs | 9.3 µs | 8.7 µs |
+| Measure | Before #1570 | After #1570 | After #1573 | Kusto.Language 12.4.1 |
+|---|---:|---:|---:|---:|
+| KQL, analysis corpus, median per file | 339 µs | 42 µs | | |
+| Falco, analysis corpus, median per file | 257 µs | 13 µs | | |
+| Other languages, analysis corpus | | 21–33% faster | | |
+| KQL, 20 Azure-Sentinel detections averaging 708 characters, full analysis | 927 µs | 376 µs | ~270 µs | 287 µs |
+| KQL, same set, parse alone (these PRs do not change it) | 35.6 µs | 33.9 µs | ~41 µs (a busier machine) | 50 µs |
+| KQL, a one-line pair (`SecurityEvent \| take 10` and `take 11`, alternated) | 292 µs | 9.2 µs | 9.3 µs | 8.7 µs |
 
 Kusto's figures are ParseAndAnalyze with the schema, plus GetDiagnostics, plus classifications, on
 .NET 8. Ours are `opentide_analysis::analyze` with the Sentinel profile, which also runs the column
-pass, the performance checks and the semantic tokens.
+pass, the performance checks and the semantic tokens. The orchestrating session's vendor harness
+also ran 10,000 analyses of the Sentinel set in one process each: 3.0 s and 27.6 MiB peak for
+opentide, 4.7 s and 207 MiB for Kusto.Language. Those figures include each runtime's start-up (and
+.NET's JIT), which the per-call medians above do not.
 
-The one-line query is the remaining gap: 0.6 µs, mostly fixed cost per call.
+The one-line pair is the remaining gap: 0.6 µs a call. It is not profiled yet.
 
 ## Decision
 
@@ -84,7 +88,8 @@ exception.
   - A catalog that is not the bundled one (a workspace's declared columns) takes the plain path,
     until the catalog itself carries the index. That is ADR 0013's and #1071's area.
 - A lookup through the index returns exactly what the scan returned: the first row, the same case
-  rule. A test compares the two over every catalog name.
+  rule. A test compares the two over every name of the catalog, in each case
+  (`the_name_indexes_find_what_a_scan_finds` in `opentide-kql`).
 
 ### 3. Memos are keyed by what they read, and bounded
 
@@ -97,8 +102,9 @@ exception.
 - A memo of a whole computation keyed by its input keeps the last input only: the parse, the column
   pass for hover, a Falco block's lists. It holds what makes a key's identity safe, such as the
   `CatalogRef` it ran against, so a dropped catalog's address cannot be reused by another.
-- A memo reads no global state outside its key. Declared datasets, for example, are read by the
-  table check, which is not memoised.
+- A memo reads no mutable or scoped state outside its key. Immutable process statics (the bundled
+  catalog, ASIM's schemas) are fine; declared datasets (`opentide_core::datasets`, which a thread
+  can scope) are not, and the table check that reads them is not memoised.
 
 ### 4. A cheap bound before an expensive measure
 
@@ -106,8 +112,9 @@ exception.
   (`suggest::bag_distance`). It is a proven lower bound of both the OSA and the Levenshtein distance:
   an insertion or deletion changes it by one, a substitution by at most one, a transposition not at
   all.
-- Only a candidate within both bounds is measured. Of 1,000 table names, an unknown name now
-  measures a few.
+- Only a candidate within both bounds is measured: in the test, an unrelated name measures at most
+  20 of 1,000 candidates, where it measured all 1,000. The bound needs ASCII: `bag_distance` returns
+  `None` for any other text, and nothing is cut there.
 - A test holds the cut result to the uncut one, and a work count holds the number of distances
   measured.
 
@@ -117,18 +124,19 @@ exception.
   all its tokens. Where rowan's token steps stop (at an empty node, as broken input leaves), fall
   back to the full walk.
 - Gather what several checks need in one pass over the tree or the tokens. A scan of the source for
-  a byte uses `memchr`, as the lexers already do.
+  a byte uses `memchr` (`opentide_core::catalog` does).
 - No quadratic in the size of a query: a work count or a linear-growth test holds each loop that
   could be one (#1424, #1459).
 
 ### 6. How to measure
 
 - **Instructions.** callgrind on the warm loop only: `--toggle-collect` on a function that runs the
-  calls after a warm-up, so catalog loading is out. Use a build with symbols: the `develop` profile
+  calls after a warm-up, marked `#[inline(never)]` so the optimiser keeps it, so catalog loading
+  is out. Use a build with symbols: the `develop` profile
   with `CARGO_PROFILE_DEVELOP_DEBUG=line-tables-only`. Read `callgrind_annotate --inclusive=yes`
   first, then `--tree=caller` on `malloc` or the hot function to find who calls it. Instruction
   counts are deterministic: compare them before and after, with 1 thread.
-- **Wall time.** A release build with LTO (the release profile), 1 thread, the default case count:
+- **Wall time.** A release build with LTO (the release profile), on 1 thread:
   - warm up for at least 3 s;
   - run at least 15 rounds and at least 5 s;
   - alternate the inputs, so that no one-input memo serves a call;
@@ -154,13 +162,15 @@ exception.
   Its first benchmark run is checked for setup repeated per call, before any parser tuning.
 - **For the existing languages.** They apply the pattern one by one, worst first by profile (#1571,
   step 4).
-- **Throughput gate.** The throughput benchmark (#1571, step 3) gates per-language instruction
-  counts, parse-only and full analysis. A regression shows as instructions, not seconds.
+- **Throughput gate.** The throughput benchmark (#1571, step 3, to come) is to gate per-language
+  instruction counts, parse-only and full analysis, so that a regression shows as instructions, not
+  seconds.
 - **API changes.** A shared type changes the public API: `opentide_kql::schema::Schema::columns`
   and `Origin` (crates/CHANGELOG, Breaking). Engine crates other than the facade have no stability
   promise, but each such change is listed with its upgrade step.
 - **Memory.** Memos per thread cost memory per thread, bounded by the catalog: about 9 MB per
-  Sentinel thread if every table is referenced. A server with a rayon pool pays it per worker.
+  Sentinel thread if all 973 tables are referenced (measured in #1570's first review). A server with
+  a rayon pool pays it per worker.
 - **Not here.** Catalog loading and its memory are ADR 0013 (#1071). A catalog with declared columns
   still bypasses the bundled-only memos until it carries its own.
 
@@ -175,4 +185,4 @@ exception.
 - [#1424](https://github.com/opentidehq/opentide/issues/1424) and
   [#1459](https://github.com/opentidehq/opentide/pull/1459): quadratic and exponential loops found
   and held by work counts.
-- `crates/opentide-analysis/benches/analyze.rs`: the per-language corpus benchmark (CI, not gated).
+- `crates/opentide-analysis/benches/analyze.rs`: the per-language corpus benchmark, run by hand.

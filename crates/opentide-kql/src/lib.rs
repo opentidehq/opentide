@@ -2069,6 +2069,64 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 mod tests {
     use super::*;
 
+    /// The bundled catalog's name indexes find what a scan of its rows
+    /// finds, the same row: for every operator, function, scalar operator and
+    /// plugin name, in its case, upper and lower case, and names it does not
+    /// have (ADR 0014, rule 2). A clone is not the bundled catalog, so it
+    /// scans.
+    #[test]
+    fn the_name_indexes_find_what_a_scan_finds() {
+        // The row found, as its index: the clone's rows compare with the
+        // bundled catalog's.
+        fn index<T>(rows: &[T], found: Option<&T>) -> Option<usize> {
+            found.and_then(|f| rows.iter().position(|r| std::ptr::eq(r, f)))
+        }
+        for profile in [Profile::Core, Profile::Sentinel, Profile::Defender] {
+            let bundled = Catalog::cached(profile);
+            let scanned = bundled.clone();
+            let names: Vec<String> = bundled
+                .operators
+                .iter()
+                .map(|o| o.name.clone())
+                .chain(bundled.functions.iter().map(|f| f.name.clone()))
+                .chain(bundled.scalar_operators.iter().map(|o| o.name.clone()))
+                .chain(bundled.plugins.iter().map(|p| p.name.clone()))
+                .chain(["", "nope", "É", "strlÉn", "\u{212a}ind"].map(String::from))
+                .collect();
+            let mut checked = 0;
+            for name in &names {
+                for name in [
+                    name.clone(),
+                    name.to_ascii_uppercase(),
+                    name.to_ascii_lowercase(),
+                ] {
+                    assert_eq!(
+                        index(&bundled.functions, bundled.function(&name)),
+                        index(&scanned.functions, scanned.function(&name)),
+                        "function {name:?} in {profile:?}"
+                    );
+                    assert_eq!(
+                        index(&bundled.operators, bundled.operator(&name)),
+                        index(&scanned.operators, scanned.operator(&name)),
+                        "operator {name:?} in {profile:?}"
+                    );
+                    assert_eq!(
+                        index(&bundled.scalar_operators, bundled.scalar_operator(&name)),
+                        index(&scanned.scalar_operators, scanned.scalar_operator(&name)),
+                        "scalar operator {name:?} in {profile:?}"
+                    );
+                    assert_eq!(
+                        index(&bundled.plugins, bundled.plugin(&name)),
+                        index(&scanned.plugins, scanned.plugin(&name)),
+                        "plugin {name:?} in {profile:?}"
+                    );
+                    checked += 1;
+                }
+            }
+            assert!(checked > 1_000, "{checked} names in {profile:?}");
+        }
+    }
+
     thread_local! {
         /// The catalogs [`Recent::get_or_build`] built on this thread.
         pub(super) static BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

@@ -696,7 +696,7 @@ pub fn catalog_is_workspace() -> bool {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 pub fn legend() -> Vec<String> {
-    HighlightSpec::load().expect("spec").legend
+    HighlightSpec::shared().expect("spec").legend.clone()
 }
 
 pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
