@@ -7,7 +7,8 @@
 The layers and tiers are [`xtask/layers.toml`](../../../../xtask/layers.toml), the one copy of the
 table, which `cargo xtask check-layers` enforces; `crates/AGENTS.md` "Crates and layers" lists
 them. In short: `opentide-core`, then `opentide-parse` and `opentide-highlight`, then the language
-crates (`opentide-kql`, `opentide-spl`, ... one tier), then `opentide-tide`, `opentide-analysis`,
+crates (foundation tiers 2 to 4: Lucene above kuery, ES|QL and EQL above Lucene), then
+`opentide-schema`, then `opentide-tide`, `opentide-analysis`,
 the hosts and the facade.
 
 A language crate never depends on `opentide-tide` or `opentide-analysis`: Tide injects into it,

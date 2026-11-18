@@ -37,15 +37,15 @@ highlighter is not a language, and a platform whose language is unspecified gets
 
 | Rule | Where it is written |
 |------|---------------------|
-| Pure Rust: a logos lexer (or one by hand where the language lexes by context), a hand-written recursive-descent or Pratt grammar on `opentide-parse`, a lossless rowan tree. No C, no `cc` or `*-sys` crate, no `unsafe`, no generated parser. A `.ungram` and `cargo xtask codegen` for any language whose analysis navigates its tree (a tree that only highlights may go without, as Falco's and Exabeam's do) | [ADR 0012](../../../docs/internal/adr/0012-pure-rust-parsing.md), [`parser`](../parser/SKILL.md), [`crates/opentide-parse/AGENTS.md`](../../../crates/opentide-parse/AGENTS.md) |
+| Pure Rust: a logos lexer (or one by hand where the language lexes by context), a hand-written recursive-descent or Pratt grammar on `opentide-parse`, a lossless rowan tree. No C, no `cc` or `*-sys` crate, no `unsafe`, no generated parser. A new language has a `.ungram` and `cargo xtask codegen`, unless its tree only highlights (Falco's and Exabeam's, beside their verdict parsers); kuery and Lucene, whose trees have a few kinds, predate the rule | [ADR 0012](../../../docs/internal/adr/0012-pure-rust-parsing.md), [`parser`](../parser/SKILL.md), [`crates/opentide-parse/AGENTS.md`](../../../crates/opentide-parse/AGENTS.md) |
 | The depth contract: `Grammar::max_depth` (one `TooDeep`, the rest in one error node), `MAX_TREE_DEPTH` and `TreeTooDeep`; a new language's nesting floor is `NESTING_CEILING` (1 000 levels); every token class safe at 1 000 000 characters on a 1 MB stack; linear on broken input; recovery that never makes broken input noisier | ADR 0012 decision 4, [`parser`](../parser/SKILL.md) "Rules" |
 | Catalogs: generated TOML in ADR 0013's form, built and indexed once in a `OnceLock`, read item by item through `opentide_core::catalog` (`array_items`, `preamble`, `compiled_in`), never `toml::from_str` on a whole file; included with `concat!(env!("OPENTIDE_ASSETS"), ...)`, which the crate's `build.rs` sets | [ADR 0013](../../../docs/internal/adr/0013-language-catalogs.md), [`catalogs`](../catalogs/SKILL.md) |
 | Analysis: nothing shared copied per call (`HighlightSpec::shared()`, not `load()`); indexes and prepared suggestions built once per catalog; memos keyed by what they read and bounded; a cheap bound before an expensive measure; walk once, from where the answer is; measured with callgrind; held by work counts | [ADR 0014](../../../docs/internal/adr/0014-analysis-performance.md) §1 to §7 |
 | One walk for the checks and the highlight: one preorder walk over every element, held by a count of element visits equal to the tree's element count. There is no shared walk in `opentide-parse` yet: write the crate's own on Lucene's `tree::walk_once` | ADR 0014 §5a (#1588) |
-| Highlighting: HighlightSpec captures from the tree; a capture is appended, never renamed; the TextMate, Monaco and Helix grammars come from the `KEYWORDS` table | [`parser`](../parser/SKILL.md) "Highlighting", [`crates/opentide-highlight/AGENTS.md`](../../../crates/opentide-highlight/AGENTS.md) |
+| Highlighting: HighlightSpec captures from the tree; a capture is appended, never renamed (a minor bump of `highlights/spec.toml`'s `[meta].version`); the TextMate grammar's keywords come from the `KEYWORDS` table, the Monaco and Helix themes from the spec's captures | [`parser`](../parser/SKILL.md) "Highlighting", [`crates/opentide-highlight/AGENTS.md`](../../../crates/opentide-highlight/AGENTS.md) |
 | I/O and concurrency: no `std::fs` in an engine's `src/`; no `async` or tokio in the engine; CPU work on rayon, network I/O only on the one process runtime (#1558) | [`crates/AGENTS.md`](../../../crates/AGENTS.md) "Hard rules", [`rust-engine`](../rust-engine/SKILL.md) |
 | Errors, panics and lints: no panic on user input, `thiserror` in the engine, `#[expect(..., reason)]` on the narrowest item, `missing_docs` for every new crate | [`rust-engine`](../rust-engine/SKILL.md), [`crates/AGENTS.md`](../../../crates/AGENTS.md) "Lints", [`rust`](../rust/SKILL.md) |
-| The facade's semver: `LanguageId` is exhaustive and re-exported by `opentide`, so a new variant is a breaking change (a minor bump while 0.x, a **Breaking** entry; CI's `cargo semver-checks`) | [`crates/opentide/AGENTS.md`](../../../crates/opentide/AGENTS.md) |
+| The facade's semver: `LanguageId` is exhaustive and re-exported by `opentide` (its `analysis` feature), so a new variant is a breaking change (a minor bump while 0.x, a **Breaking** entry; CI's `cargo semver-checks --all-features`) | [`crates/opentide/AGENTS.md`](../../../crates/opentide/AGENTS.md) |
 
 ## Checklist
 
@@ -114,7 +114,7 @@ end of step 5: work them on one branch and check each crate as you go
 - [ ] The checks and the highlight in one walk (§5a), unless the highlight reads another text; say
   why in the crate's `AGENTS.md` if so.
 - [ ] HighlightSpec captures (the crate's `highlight`); new captures appended to
-  `highlights/spec.toml`'s `legend`.
+  `highlights/spec.toml`'s `legend`, with a minor bump of its `[meta].version`.
 - [ ] `crates/opentide-highlight/src/keywords/<id>.rs` (`KEYWORDS`), wired in `keywords.rs`
   (`mod`, `keywords()`, the test's language list); the comment pattern and TextMate scope in
   `crates/opentide-highlight/src/lib.rs`; the `tmLanguage` file `generate-highlights` writes
@@ -125,25 +125,30 @@ end of step 5: work them on one branch and check each crate as you go
 
 - [ ] **Analysis.** `crates/opentide-analysis`: the dependency, and `LanguageId::<Id>` in
   `src/lib.rs`'s `analyze`, `analyze_query` (the CLI's, with a platform profile), `hover`,
-  `completions` and `signature_help`. No second copy of them in `opentide-tide`.
+  `completions` and `signature_help`. `opentide-tide` holds no hover, completion or signature help
+  of its own: it only runs the engine on injected text and remaps the result.
 - [ ] **`ENGINE_REFERENCES`** in `crates/opentide-analysis/src/queries.rs`: the code prefix and its
   reference. It decides that `opentide lint` reports the language's findings, and the reference
   each `opentide explain` page and code frame cites; no test fails without it.
 - [ ] **Tide.** If a platform embeds the language: `crates/opentide-tide` (its dependency;
-  `platform_field_language` in `src/lib.rs` for the block's query fields; `hunt_query_language` in
-  `src/injection.rs` for a hunt's `system`; the docs table there), the injection table in
+  `platform_field_language` in `src/lib.rs` for the block's query fields; `analyze_injections` in
+  `src/lib.rs`, which runs the language on each injected query with its block or hunt context, the
+  one place Tide calls an engine; `hunt_query_language` in `src/injection.rs` for a hunt's
+  `system`; the docs table there), `crates/opentide-highlight`'s `EMBEDDED_QUERIES` (the TextMate
+  grammar's injections), the injection table in
   [`docs/engine/ARCHITECTURE.md`](../../../docs/engine/ARCHITECTURE.md), and tokens remapped onto
   YAML coordinates after the block-scalar indent is stripped.
 - [ ] **The registry**, [`platforms.rs`](../../../crates/opentide-schema/src/platforms.rs):
   `offline_languages` and `query_file_suffixes` (what `validate query` accepts), and its tests.
-  `validate`'s `queries` check, `validate query` and `opentide explain` read it.
-- [ ] **The command line and MCP.** `crates/opentide-cli/src/tree.rs`'s `SUFFIX_ORDER` (help
-  order); `src/mcp/queries.rs`'s `default_language` (it falls back to `kql`) and its tests;
+  `validate`'s `queries` check, `validate query` and MCP's `validate_query` read it.
+- [ ] **The command line and MCP.** In `crates/opentide-cli`: `src/tree.rs`'s `SUFFIX_ORDER`
+  (help order); `src/mcp/queries.rs`'s `default_language` (it falls back to `kql`) and its tests;
   `data/mcp/manifest.json`'s offline list; `data/output-schemas.json`'s `language` enum
   ([`mcp-server`](../mcp-server/SKILL.md), [`golden`](../golden/SKILL.md)).
 - [ ] **Hosts and editors.** The language server's `Session::language_for`
-  (`crates/opentide-lsp/src/session.rs`; its test in `src/server.rs`; an e2e frame in
-  `tests/e2e_stdio.rs`); `editors/helix/languages.toml`, `editors/nvim/opentide.lua`,
+  (`crates/opentide-lsp/src/session.rs`) needs no change, since it reads `LanguageId::parse` and
+  `from_extension`, but its test in `src/server.rs` and an e2e frame in `tests/e2e_stdio.rs` take
+  the language; `editors/helix/languages.toml`, `editors/nvim/opentide.lua`,
   `editors/zed/opentide.json`; `packages/lsp-client/src/index.ts` and its test
   ([`lsp-host`](../lsp-host/SKILL.md), [`wasm-hosts`](../wasm-hosts/SKILL.md)). The WASM build
   needs no export per language, but `scripts/engine/wasm-smoke.mjs` takes a sample.
@@ -153,7 +158,9 @@ end of step 5: work them on one branch and check each crate as you go
 ### 6. Proof
 
 - [ ] **Corpus gate.** Fixtures under `crates/testdata/corpus/<id>/`, each tagged on its first
-  line in the language's comment syntax (`// prod:<rule> valid`), a section in
+  line in the language's comment syntax (`// prod:<rule> valid`; a language without comments puts
+  it on a `#` first line the gate strips, as Kibana KQL and Lucene do; `<rule>` is the snake_case
+  of the `SyntaxKind`), a section in
   [`docs/engine/LANGUAGE.md`](../../../docs/engine/LANGUAGE.md), and the language in
   `crates/opentide-analysis/tests/corpus_gate.rs`: a `kind_names` arm, its tags, tokens and
   unlocated lists, and its own gate test with the structural kinds and their reasons. Every
@@ -206,7 +213,9 @@ end of step 5: work them on one branch and check each crate as you go
 
 - [ ] `docs/engine/<LANGUAGE>.md` (what is checked, and against which source; `FALCO.md` and
   `YARAL.md` are the models) and its page in `docs/engine/meta.json`.
-- [ ] The lists that name every language: `crates/AGENTS.md` "Product" and its layer table,
+- [ ] The lists that name every language: `src/opentide/_native/__init__.pyi`'s `Language`
+  literal, `docs/engine/EDITORS.md`, `docs/cli/lsp.md`, `crates/opentide-analysis/benches/analyze.rs`,
+  `crates/AGENTS.md` "Product" and its layer table,
   [`docs/engine/LANGUAGE-HARNESS.md`](../../../docs/engine/LANGUAGE-HARNESS.md)'s suffixes,
   `rust-engine`'s `LanguageId` list, `lsp-host`'s ids and suffixes, the `parser` skill's
   description, the oracles README.
@@ -219,7 +228,8 @@ end of step 5: work them on one branch and check each crate as you go
 - [ ] The new crate's name in [`docs/internal/publishing.md`](../../../docs/internal/publishing.md):
   its first publish to crates.io needs the maintainers' token.
 - [ ] A companion pull request on [opentidehq/skills](https://github.com/opentidehq/skills) (the
-  platform skill, `coverage.json`), linked from this one.
+  platform skill, `coverage.json`), and one on opentidehq/vscode-extension (the language's id,
+  suffixes and grammar), each linked from this one.
 
 ## Definition of done
 
@@ -231,7 +241,9 @@ end of step 5: work them on one branch and check each crate as you go
   `cargo run -p opentide-lsp -- generate-highlights --check` pass.
 - `cargo nextest run --workspace --profile ci` and `cargo test --workspace --doc` pass
   ([`rust`](../rust/SKILL.md)); `cargo xtask throughput --check` passes with the new budgets;
-  `cargo semver-checks -p opentide` reports the new variant, and the version and changelog say so.
+  `cargo semver-checks -p opentide --all-features` (as CI's `facade` job runs it: `LanguageId` is
+  re-exported under the `analysis` feature) reports the new variant, and `crates/CHANGELOG.md`
+  has its **Breaking** entry; the minor bump itself comes with the release.
 - `scripts/ci-local.sh --full` passes (the root `AGENTS.md`, "Definition of done").
 - The parser had an independent adversarial review before merging ([`parser`](../parser/SKILL.md),
   "Tests"): the reviews found the 1 MB-stack and quadratic-on-broken-input bugs the corpus did not.

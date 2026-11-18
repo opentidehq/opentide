@@ -92,8 +92,9 @@ never an unread `cargo insta accept`.
 ## Highlighting
 
 The analysis colours tokens from the tree (each crate's `highlight`), with HighlightSpec
-captures (`highlights/spec.toml`; a new capture is an append-only change). The TextMate, Monaco
-and Helix grammars are generated from the `KEYWORDS` tables:
+captures (`highlights/spec.toml`; a new capture is an append-only change and a minor bump of its
+`[meta].version`). The TextMate grammar's keywords are generated from the `KEYWORDS` tables, and
+the Monaco and Helix themes from the spec's captures:
 
 ```bash
 cargo run -p opentide-lsp -- generate-highlights          # write highlights/generated/
