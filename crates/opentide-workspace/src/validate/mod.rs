@@ -29,11 +29,12 @@ pub mod states;
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use indexmap::IndexMap;
 use opentide_schema::configuration::{self, Finding};
-use opentide_schema::node::{Node, Value};
+use opentide_schema::node::{Document, Node, Value};
 use opentide_schema::vocab::Vocabularies;
 use rayon::prelude::*;
 use serde::Serialize;
@@ -1092,12 +1093,72 @@ fn cve_findings(threat: &crate::index::Object, lookup: &dyn CveCheck) -> Vec<Dia
     found
 }
 
+/// The text of an object the queries check reads: its document's while the
+/// index holds it, a copy once the index is released
+/// ([`Workspace::validate_releasing`]).
+enum QueryText {
+    Shared(Arc<Document>),
+    Owned(String),
+}
+
+impl QueryText {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Shared(document) => document.source(),
+            Self::Owned(text) => text,
+        }
+    }
+}
+
+/// An object the queries check reads, owning what it needs.
+struct QueryJob {
+    path: PathBuf,
+    uuid: String,
+    family: String,
+    text: QueryText,
+}
+
+/// What [`prepare`] found: every check but the queries, which [`finish`]
+/// runs. It borrows nothing from the workspace, and holds of the index only
+/// the documents its findings point into (annotation reads them) and, until
+/// [`Prepared::release`], those the queries check reads.
+struct Prepared {
+    started: Option<Instant>,
+    checks: BTreeSet<Check>,
+    root: PathBuf,
+    scope_full: bool,
+    issues: Vec<Diagnostic>,
+    warnings: Vec<Diagnostic>,
+    stats: Stats,
+    queries: Vec<QueryJob>,
+    documents: HashMap<PathBuf, Option<Arc<Document>>>,
+}
+
+impl Prepared {
+    /// Copies the texts the queries check reads, so that the index's
+    /// documents (their node trees: the largest part of the heap) can be
+    /// freed before the query engines build their catalogs (#1071).
+    fn release(&mut self) {
+        for job in &mut self.queries {
+            if let QueryText::Shared(document) = &job.text {
+                job.text = QueryText::Owned(document.source().to_owned());
+            }
+        }
+    }
+}
+
 /// Runs `validate` over `ws`.
+pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
+    let prepared = prepare(ws, options);
+    finish(ws, options, prepared)
+}
+
+/// The checks of `validate` before the queries check, in the oracle's order.
 #[expect(
     clippy::too_many_lines,
     reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
 )]
-pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
+fn prepare(ws: &Workspace, options: &Options<'_>) -> Prepared {
     let started = clock_start();
     let fs = ws.fs().as_ref();
     let index = ws.index();
@@ -1348,7 +1409,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             issues.extend(compile_findings(ws, compile, &work, enabled));
         }
     }
-    let mut stats = Stats {
+    let stats = Stats {
         objects_checked: if object_checks || has(Check::Queries) {
             work.len()
         } else {
@@ -1361,15 +1422,67 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         queries_checked: None,
         wall_ms: 0.0,
     };
+    let queries = if has(Check::Queries) && options.query_check.is_some() {
+        work.iter()
+            .map(|subject| QueryJob {
+                path: subject.path.to_path_buf(),
+                uuid: subject.uuid.to_owned(),
+                family: subject.family.to_owned(),
+                text: QueryText::Shared(Arc::clone(subject.document)),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    // The documents annotation reads: those of the files with a finding so
+    // far. The queries check adds only findings the engine placed, which
+    // annotation leaves as they are, and the state scan files no object.
+    let named: BTreeSet<&Path> = issues
+        .iter()
+        .chain(&warnings)
+        .filter_map(|issue| issue.file_path.as_deref())
+        .collect();
+    let documents = annotate::documents(index, &|path| named.contains(path));
+    Prepared {
+        started,
+        checks,
+        root,
+        scope_full: scope.is_full(),
+        issues,
+        warnings,
+        stats,
+        queries,
+        documents,
+    }
+}
 
+/// The queries check, then the state scan, annotation and the summary.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the run's last phases in the oracle's order (session.py run_validation), read top to bottom"
+)]
+fn finish(ws: &Workspace, options: &Options<'_>, prepared: Prepared) -> Validation {
+    let Prepared {
+        started,
+        checks,
+        root,
+        scope_full,
+        mut issues,
+        mut warnings,
+        mut stats,
+        queries,
+        documents,
+    } = prepared;
+    let fs = ws.fs().as_ref();
+    let has = |check: Check| checks.contains(&check);
     if has(Check::Queries) {
-        let objects: Vec<QueryObject<'_>> = work
+        let objects: Vec<QueryObject<'_>> = queries
             .iter()
-            .map(|subject| QueryObject {
-                path: subject.path,
-                uuid: subject.uuid,
-                family: subject.family,
-                source: subject.document.source(),
+            .map(|job| QueryObject {
+                path: &job.path,
+                uuid: &job.uuid,
+                family: &job.family,
+                source: job.text.as_str(),
             })
             .collect();
         if let Some(query_check) = options.query_check {
@@ -1400,7 +1513,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         }
     }
 
-    if has(Check::Schema) && scope.is_full() {
+    if has(Check::Schema) && scope_full {
         for error in states::scan(fs, &root) {
             let shard = error
                 .path
@@ -1414,7 +1527,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
     }
 
     issues.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
-    let mut sources = annotate::Sources::new(fs, index);
+    let mut sources = annotate::Sources::with_documents(fs, documents);
     annotate::annotate(&mut issues, &mut sources, &root);
     annotate::annotate(&mut warnings, &mut sources, &root);
     stats.wall_ms = started.map_or(0.0, |started| {
@@ -1672,6 +1785,21 @@ impl Workspace {
     /// Runs `validate` ([`validate`]).
     pub fn validate(&self, options: &Options<'_>) -> Validation {
         validate(self, options)
+    }
+
+    /// Runs `validate` ([`validate`]) for a caller that reads no more of
+    /// the workspace's objects afterwards (the command line): the index and
+    /// the parsed files are released before the queries check, so the node
+    /// trees are freed before the query engines build their catalogs, where
+    /// the run's memory peaks (#1071). The findings are the same as
+    /// [`Workspace::validate`]'s; afterwards the workspace's index is empty
+    /// (its configuration and file system stay), so it is reloaded before it
+    /// is read again.
+    pub fn validate_releasing(&mut self, options: &Options<'_>) -> Validation {
+        let mut prepared = prepare(self, options);
+        prepared.release();
+        self.release_documents();
+        finish(self, options, prepared)
     }
 }
 

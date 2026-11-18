@@ -122,22 +122,44 @@ pub struct Sources<'a> {
     texts: HashMap<PathBuf, Option<String>>,
 }
 
+/// The documents the index holds for the files `keep` takes, by path (a
+/// replaced duplicate's over its object's, as `validate` reports it).
+pub fn documents(
+    index: &Index,
+    keep: &dyn Fn(&Path) -> bool,
+) -> HashMap<PathBuf, Option<Arc<Document>>> {
+    let mut by_path = HashMap::new();
+    let objects = index.objects.values().flat_map(|objects| objects.values());
+    for (path, document) in objects
+        .map(|object| (&object.path, &object.document))
+        .chain(
+            index
+                .duplicates
+                .iter()
+                .map(|duplicate| (&duplicate.path, &duplicate.document)),
+        )
+    {
+        if keep(path) {
+            by_path.insert(path.clone(), Some(Arc::clone(document)));
+        }
+    }
+    by_path
+}
+
 impl<'a> Sources<'a> {
     /// The documents the index holds, and `fs` for any other file.
     pub fn new(fs: &'a dyn FileSystem, index: &Index) -> Self {
-        let mut by_path = HashMap::new();
-        for object in index.objects.values().flat_map(|objects| objects.values()) {
-            by_path.insert(object.path.clone(), Some(Arc::clone(&object.document)));
-        }
-        for duplicate in &index.duplicates {
-            by_path.insert(
-                duplicate.path.clone(),
-                Some(Arc::clone(&duplicate.document)),
-            );
-        }
+        Self::with_documents(fs, documents(index, &|_| true))
+    }
+
+    /// `documents` ([`documents`]), and `fs` for any other file.
+    pub fn with_documents(
+        fs: &'a dyn FileSystem,
+        documents: HashMap<PathBuf, Option<Arc<Document>>>,
+    ) -> Self {
         Self {
             fs,
-            by_path,
+            by_path: documents,
             texts: HashMap::new(),
         }
     }

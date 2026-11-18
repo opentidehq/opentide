@@ -301,6 +301,16 @@ impl Workspace {
         &self.index
     }
 
+    /// Drops the index and the parsed files, the node trees with them, for a
+    /// run that reads nothing more of them ([`Workspace::validate_releasing`]).
+    /// A rayon worker frees them: freeing every object's nodes is a serial
+    /// step of its own (#817), and the run goes on meanwhile.
+    pub(crate) fn release_documents(&mut self) {
+        let parsed = std::mem::take(&mut self.parsed);
+        let index = std::mem::replace(&mut self.index, Arc::new(Index::default()));
+        rayon::spawn(move || drop((parsed, index)));
+    }
+
     /// What loading has done so far.
     pub fn stats(&self) -> Stats {
         self.stats

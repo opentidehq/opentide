@@ -340,7 +340,7 @@ fn online_cve(
 /// the configuration does not resolve.
 pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let ws = super::open(options)?;
+    let mut ws = super::open(options)?;
     let queries = args.queries.unwrap_or_default();
     let cve = online_cve(args, &ws, cx)?;
     let options = Options {
@@ -355,7 +355,7 @@ pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
         platform_configurations: crate::plugins::configurations(),
         compile_check: Some(&Compilers),
     };
-    let validation = ws.validate(&options);
+    let validation = ws.validate_releasing(&options);
     Ok(run_of(validation, ws.root()))
 }
 
@@ -462,6 +462,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let rerun_fix = fix_command(check_name, queries_flag(queries), &args.selection);
     // `--fix`: the plan of the first run, what was written, the second run.
     let mut fix_run = None;
+    let root = ws.root().to_path_buf();
     let validation = if args.fix {
         match ws.validate_fix(&OsFs, &options, args.dry_run) {
             Ok(run) => {
@@ -472,9 +473,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             Err(error) => return Report::error(COMMAND, error.to_string()),
         }
     } else {
-        ws.validate(&options)
+        // The run reads nothing more of the workspace's documents: they are
+        // freed before the query engines build their catalogs (#1071).
+        ws.validate_releasing(&options)
     };
-    let root = ws.root().to_path_buf();
     tracing::debug!(
         objects = validation.summary.objects,
         errors = validation.summary.errors,

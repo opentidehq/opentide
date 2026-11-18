@@ -1237,6 +1237,86 @@ mod validate {
         assert!(off.checks.iter().all(|(c, _)| *c != Check::Queries));
         assert_eq!(off.report.stats.queries_checked, None);
     }
+    /// Records what the queries check saw: whether the workspace still held
+    /// its index, and each object's text.
+    struct Watching {
+        seen: Mutex<Vec<(bool, Vec<String>)>>,
+        inner: StubQueries,
+    }
+
+    impl QueryCheck for Watching {
+        fn check(
+            &self,
+            ws: &Workspace,
+            objects: &[QueryObject<'_>],
+            as_warnings: bool,
+        ) -> QueryFindings {
+            self.seen.lock().unwrap().push((
+                ws.index().is_empty(),
+                objects.iter().map(|o| o.source.to_owned()).collect(),
+            ));
+            self.inner.check(ws, objects, as_warnings)
+        }
+    }
+
+    /// The command line's run frees the node trees before the queries check
+    /// (#1071) and reports what the library's run reports, finding for
+    /// finding: the queries read the same texts, and the other findings are
+    /// placed from the documents kept for them.
+    #[test]
+    fn a_releasing_run_frees_the_index_before_the_queries_and_reports_the_same() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  splunk:\n    query: 5\n",
+                rule(U1, "A")
+            ),
+        );
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "B"));
+        fs.write("/ws/objects/rules/c.yaml", rule("not-a-uuid", "C"));
+        fs.write("/ws/objects/rules/d.yaml", "name: [unclosed\n");
+        let watching = || Watching {
+            seen: Mutex::new(Vec::new()),
+            inner: stub(),
+        };
+        let shown = |validation: &Validation| {
+            format!(
+                "{:?} {:?} {:?} {:?} {} {}",
+                validation.report.issues,
+                validation.report.warnings,
+                validation.checks,
+                validation.summary,
+                validation.failed,
+                validation.warned
+            )
+        };
+        for queries in [QueriesMode::Error, QueriesMode::Warn] {
+            let kept = watching();
+            let options = Options {
+                queries,
+                query_check: Some(&kept),
+                ..Options::default()
+            };
+            let library = open(&fs).validate(&options);
+            let released = watching();
+            let options = Options {
+                query_check: Some(&released),
+                ..options
+            };
+            let mut ws = open(&fs);
+            let command_line = ws.validate_releasing(&options);
+            assert_eq!(shown(&command_line), shown(&library));
+            assert!(!library.report.issues.is_empty(), "findings to place");
+            let kept = kept.seen.into_inner().unwrap();
+            let released = released.seen.into_inner().unwrap();
+            assert!(!kept[0].0, "the library's run keeps its index");
+            assert!(released[0].0, "the index is released before the queries");
+            assert_eq!(released[0].1, kept[0].1, "the same texts");
+            assert!(ws.index().is_empty());
+        }
+    }
+
     mod cve {
         use super::*;
         use opentide_workspace::validate::{CveCheck, CveLookup, cve_identifiers, cve_non_strings};
