@@ -821,13 +821,61 @@ pub(crate) fn unknown_field_finding(
         level: compile::Level::Error,
         message,
         span,
-        suggestion: near_miss(name, catalog.field_names_for(source).into_iter()),
+        suggestion: field_near_miss(catalog, name, source),
     }
+}
+
+/// A source's field names, prepared once for suggestions ([`near_miss`]).
+struct SourceFields {
+    names: Vec<&'static str>,
+    prepared: opentide_core::suggest::Candidates,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Candidate sets prepared for a suggestion on this thread: a source's
+    /// field names, or any set `near_miss` prepares.
+    static FIELD_SETS_PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The field of `source` that `name` most likely means: [`near_miss`] over
+/// [`Catalog::field_names_for`]. A source the catalog lists has its names
+/// prepared once, on first use; each unknown field prepared all of them, most
+/// of the analysis of a rule with one (ADR 0014, rule 2). Another source
+/// keeps the call, so the table is bounded by the catalog.
+fn field_near_miss(catalog: &'static Catalog, name: &str, source: &str) -> Option<String> {
+    type Table = std::collections::HashMap<&'static str, std::sync::OnceLock<SourceFields>>;
+    static TABLE: std::sync::OnceLock<Table> = std::sync::OnceLock::new();
+    let unprepared = || near_miss(name, catalog.field_names_for(source).into_iter());
+    if !std::ptr::eq(catalog, Catalog::cached()) {
+        return unprepared();
+    }
+    let table = TABLE.get_or_init(|| compile::source_slots(catalog));
+    let Some(slot) = table.get(source) else {
+        return unprepared();
+    };
+    let fields = slot.get_or_init(|| {
+        #[cfg(test)]
+        FIELD_SETS_PREPARED.set(FIELD_SETS_PREPARED.get() + 1);
+        let names: Vec<&'static str> = catalog.field_names_for(source).into_iter().collect();
+        SourceFields {
+            prepared: opentide_core::suggest::Candidates::new(names.iter().copied()),
+            names,
+        }
+    });
+    // `closest` over the names is `Candidates::closest` over them prepared.
+    fields
+        .prepared
+        .closest(name)
+        .and_then(|i| fields.names.get(i))
+        .map(|s| (*s).to_owned())
 }
 
 /// The candidate `name` most likely means ([`opentide_core::suggest`]): a
 /// field, an event, a macro or a rule of the Falco default rules.
 pub fn near_miss<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<String> {
+    #[cfg(test)]
+    FIELD_SETS_PREPARED.set(FIELD_SETS_PREPARED.get() + 1);
     opentide_core::suggest::closest(name, candidates).map(str::to_string)
 }
 
@@ -1616,6 +1664,64 @@ pub fn debug_node_kinds() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The prepared names suggest what preparing them per call suggested,
+    /// for every source and a source the catalog does not list, over typos
+    /// of the fields, other names and unrelated ones.
+    #[test]
+    fn a_field_suggestion_is_the_one_preparing_per_call_gave() {
+        let catalog = Catalog::cached();
+        let mut sources: Vec<&str> = catalog.sources.iter().map(|s| s.name.as_str()).collect();
+        sources.extend(["no_such_source", ""]);
+        let mut probes: Vec<String> = Vec::new();
+        for f in catalog.fields.iter().step_by(7) {
+            let name = &f.name;
+            probes.push(name.clone());
+            probes.push(format!("{name}x"));
+            probes.push(name.chars().skip(1).collect());
+            probes.push(name.to_uppercase());
+        }
+        probes.extend(
+            [
+                "proc.nmae",
+                "fd.nmae",
+                "evt.tpye",
+                "ka.verbx",
+                "zzz",
+                "",
+                "é.name",
+            ]
+            .map(str::to_owned),
+        );
+        for source in sources {
+            for probe in &probes {
+                assert_eq!(
+                    field_near_miss(catalog, probe, source),
+                    near_miss(probe, catalog.field_names_for(source).into_iter()),
+                    "{source}: {probe}"
+                );
+            }
+        }
+    }
+
+    /// A source's field names are prepared once, not for each unknown field
+    /// (ADR 0014, rule 7).
+    #[test]
+    fn unknown_fields_prepare_their_source_names_once() {
+        let ctx = Context::default();
+        let _ = analyze_with("proc.nmae = bash", &ctx);
+        let prepared = FIELD_SETS_PREPARED.get();
+        let codes = codes_of("proc.nmae = bash and fd.nmae = x and evt.tpye = open", &ctx);
+        assert_eq!(
+            codes
+                .iter()
+                .filter(|c| *c == codes::FALCO_UNKNOWN_FIELD)
+                .count(),
+            3,
+            "{codes:?}"
+        );
+        assert_eq!(FIELD_SETS_PREPARED.get() - prepared, 0);
+    }
 
     fn codes_of(text: &str, ctx: &Context) -> Vec<String> {
         analyze_with(text, ctx)
