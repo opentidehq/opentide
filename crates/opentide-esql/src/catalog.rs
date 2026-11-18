@@ -301,8 +301,21 @@ impl Catalog {
         })
     }
 
+    /// Whether this is the bundled catalog, whose indexes are built once
+    /// (ADR 0014 §2); any other catalog is scanned.
+    fn is_bundled(&self) -> bool {
+        std::ptr::eq(self, Self::cached())
+    }
+
     /// A command by its canonical lower-case name (`stats`, `lookup join`).
     pub fn command(&self, name: &str) -> Option<&CommandRow> {
+        if self.is_bundled() {
+            static INDEX: OnceLock<NameIndex> = OnceLock::new();
+            let index = INDEX
+                .get_or_init(|| NameIndex::new(self.commands.iter().map(|c| [c.name.as_str()])));
+            return index.find(name).map(|i| &self.commands[i]);
+        }
+        count_scan();
         self.commands
             .iter()
             .find(|c| c.name.eq_ignore_ascii_case(name))
@@ -310,6 +323,16 @@ impl Catalog {
 
     /// Function names are case-insensitive; aliases resolve to their function.
     pub fn function(&self, name: &str) -> Option<&FunctionRow> {
+        if self.is_bundled() {
+            static INDEX: OnceLock<NameIndex> = OnceLock::new();
+            let index = INDEX.get_or_init(|| {
+                NameIndex::new(self.functions.iter().map(|f| {
+                    std::iter::once(f.name.as_str()).chain(f.aliases.iter().map(String::as_str))
+                }))
+            });
+            return index.find(name).map(|i| &self.functions[i]);
+        }
+        count_scan();
         self.functions.iter().find(|f| {
             f.name.eq_ignore_ascii_case(name)
                 || f.aliases.iter().any(|a| a.eq_ignore_ascii_case(name))
@@ -318,6 +341,13 @@ impl Catalog {
 
     /// A `::type` cast target; names are case-insensitive.
     pub fn cast_type(&self, name: &str) -> Option<&TypeRow> {
+        if self.is_bundled() {
+            static INDEX: OnceLock<NameIndex> = OnceLock::new();
+            let index =
+                INDEX.get_or_init(|| NameIndex::new(self.types.iter().map(|t| [t.name.as_str()])));
+            return index.find(name).map(|i| &self.types[i]);
+        }
+        count_scan();
         self.types
             .iter()
             .find(|t| t.name.eq_ignore_ascii_case(name))
@@ -325,7 +355,15 @@ impl Catalog {
 
     /// The cast type `name` most likely means ([`opentide_core::suggest`]).
     pub fn suggest_type(&self, name: &str) -> Option<String> {
-        suggest::closest(name, self.types.iter().map(|t| t.name.as_str())).map(str::to_string)
+        let names = || self.types.iter().map(|t| t.name.as_str());
+        if self.is_bundled() {
+            static SUGGESTED: OnceLock<Suggested> = OnceLock::new();
+            return SUGGESTED
+                .get_or_init(|| Suggested::new(names()))
+                .closest(name);
+        }
+        count_scan();
+        suggest::closest(name, names()).map(str::to_string)
     }
 
     pub fn operator(&self, symbol: &str) -> Option<&OperatorRow> {
@@ -337,27 +375,102 @@ impl Catalog {
     /// The command `name` most likely means, for `esql_unknown_command`
     /// ([`opentide_core::suggest`]).
     pub fn suggest_command(&self, name: &str) -> Option<String> {
-        suggest::closest(
-            name,
+        let names = || {
             self.commands
                 .iter()
                 .filter(|c| !c.snapshot_only && c.alias_of.is_none())
-                .map(|c| c.name.as_str()),
-        )
-        .map(str::to_string)
+                .map(|c| c.name.as_str())
+        };
+        if self.is_bundled() {
+            static SUGGESTED: OnceLock<Suggested> = OnceLock::new();
+            return SUGGESTED
+                .get_or_init(|| Suggested::new(names()))
+                .closest(name);
+        }
+        count_scan();
+        suggest::closest(name, names()).map(str::to_string)
     }
 
     /// The function `name` most likely means ([`opentide_core::suggest`]).
     pub fn suggest_function(&self, name: &str) -> Option<String> {
-        suggest::closest(
-            name,
+        let names = || {
             self.functions
                 .iter()
                 .filter(|f| !f.snapshot_only)
-                .map(|f| f.name.as_str()),
-        )
-        .map(str::to_string)
+                .map(|f| f.name.as_str())
+        };
+        if self.is_bundled() {
+            static SUGGESTED: OnceLock<Suggested> = OnceLock::new();
+            return SUGGESTED
+                .get_or_init(|| Suggested::new(names()))
+                .closest(name);
+        }
+        count_scan();
+        suggest::closest(name, names()).map(str::to_string)
     }
+}
+
+/// The rows of a catalog by name, ASCII case folded: what a scan with
+/// `eq_ignore_ascii_case` finds, the first row holding a name winning.
+struct NameIndex(std::collections::HashMap<String, usize>);
+
+impl NameIndex {
+    fn new<'a, N: IntoIterator<Item = &'a str>>(rows: impl Iterator<Item = N>) -> Self {
+        let mut index = std::collections::HashMap::new();
+        for (i, names) in rows.enumerate() {
+            for name in names {
+                index.entry(name.to_ascii_lowercase()).or_insert(i);
+            }
+        }
+        Self(index)
+    }
+
+    fn find(&self, name: &str) -> Option<usize> {
+        if name.bytes().any(|b| b.is_ascii_uppercase()) {
+            self.0.get(&name.to_ascii_lowercase()).copied()
+        } else {
+            self.0.get(name).copied()
+        }
+    }
+}
+
+/// Suggestion candidates prepared once ([`suggest::Candidates`]): what
+/// [`suggest::closest`] ranks, without preparing every candidate per call.
+struct Suggested {
+    names: Vec<String>,
+    candidates: suggest::Candidates,
+}
+
+impl Suggested {
+    fn new<'a>(names: impl Iterator<Item = &'a str>) -> Self {
+        let names: Vec<String> = names.map(str::to_owned).collect();
+        let candidates = suggest::Candidates::new(names.iter().map(String::as_str));
+        Self { names, candidates }
+    }
+
+    fn closest(&self, name: &str) -> Option<String> {
+        self.candidates.closest(name).map(|i| self.names[i].clone())
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The catalog scans on this thread: [`scans`].
+    static SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one scan of a catalog's rows by name, in tests (ADR 0014 §7).
+#[inline]
+fn count_scan() {
+    #[cfg(test)]
+    SCANS.set(SCANS.get() + 1);
+}
+
+/// How many times this thread scanned a catalog's rows for a name or a
+/// suggestion.
+#[cfg(test)]
+pub(crate) fn scans() -> usize {
+    SCANS.get()
 }
 
 /// A stack version such as `9.2`. Patch numbers are dropped.
@@ -472,6 +585,128 @@ impl Lifecycle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every name of the catalog, its aliases, in three cases, and near
+    /// misses of each: what a query may write.
+    fn probes(catalog: &Catalog) -> Vec<String> {
+        let mut names: Vec<String> = catalog.commands.iter().map(|c| c.name.clone()).collect();
+        for f in &catalog.functions {
+            names.push(f.name.clone());
+            names.extend(f.aliases.iter().cloned());
+        }
+        names.extend(catalog.types.iter().map(|t| t.name.clone()));
+        let mut out = Vec::new();
+        for name in names {
+            out.push(name.to_ascii_uppercase());
+            let mixed: String = name
+                .chars()
+                .enumerate()
+                .map(|(i, c)| {
+                    if i % 2 == 0 {
+                        c.to_ascii_uppercase()
+                    } else {
+                        c
+                    }
+                })
+                .collect();
+            out.push(mixed);
+            out.push(name[1..].to_owned());
+            out.push(format!("{name}x"));
+            out.push(format!("_{name}"));
+            out.push(name.replace('_', ""));
+            out.push(name.chars().rev().collect());
+            out.push(name);
+        }
+        out.extend(["", " ", "\u{e9}val", "EVAL\u{e9}", "to_\u{130}nteger"].map(str::to_owned));
+        out
+    }
+
+    /// The name indexes find what a scan finds, the same row (ADR 0014 §2).
+    #[test]
+    fn the_name_indexes_find_what_a_scan_finds() {
+        let catalog = Catalog::cached();
+        let mut found = 0;
+        for name in probes(catalog) {
+            let scanned = catalog
+                .commands
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(&name));
+            assert!(
+                std::ptr::eq(
+                    catalog
+                        .command(&name)
+                        .map_or(std::ptr::null(), std::ptr::from_ref),
+                    scanned.map_or(std::ptr::null(), std::ptr::from_ref)
+                ),
+                "command {name:?}"
+            );
+            let scanned = catalog.functions.iter().find(|f| {
+                f.name.eq_ignore_ascii_case(&name)
+                    || f.aliases.iter().any(|a| a.eq_ignore_ascii_case(&name))
+            });
+            assert!(
+                std::ptr::eq(
+                    catalog
+                        .function(&name)
+                        .map_or(std::ptr::null(), std::ptr::from_ref),
+                    scanned.map_or(std::ptr::null(), std::ptr::from_ref)
+                ),
+                "function {name:?}"
+            );
+            found += usize::from(scanned.is_some());
+            let scanned = catalog
+                .types
+                .iter()
+                .find(|t| t.name.eq_ignore_ascii_case(&name));
+            assert!(
+                std::ptr::eq(
+                    catalog
+                        .cast_type(&name)
+                        .map_or(std::ptr::null(), std::ptr::from_ref),
+                    scanned.map_or(std::ptr::null(), std::ptr::from_ref)
+                ),
+                "type {name:?}"
+            );
+        }
+        assert!(found > 500, "{found}");
+    }
+
+    /// The prepared suggestions are the scan's (ADR 0014 §2).
+    #[test]
+    fn the_prepared_suggestions_are_the_scans() {
+        let catalog = Catalog::cached();
+        let commands = || {
+            catalog
+                .commands
+                .iter()
+                .filter(|c| !c.snapshot_only && c.alias_of.is_none())
+                .map(|c| c.name.as_str())
+        };
+        let functions = || {
+            catalog
+                .functions
+                .iter()
+                .filter(|f| !f.snapshot_only)
+                .map(|f| f.name.as_str())
+        };
+        let types = || catalog.types.iter().map(|t| t.name.as_str());
+        let mut suggested = 0;
+        for name in probes(catalog) {
+            let scan = |names: &mut dyn Iterator<Item = &str>| {
+                suggest::closest(&name, names).map(str::to_owned)
+            };
+            assert_eq!(
+                catalog.suggest_command(&name),
+                scan(&mut commands()),
+                "{name:?}"
+            );
+            let function = catalog.suggest_function(&name);
+            assert_eq!(function, scan(&mut functions()), "{name:?}");
+            assert_eq!(catalog.suggest_type(&name), scan(&mut types()), "{name:?}");
+            suggested += usize::from(function.is_some());
+        }
+        assert!(suggested > 500, "{suggested}");
+    }
 
     /// A bundled row is read once; any other row, a changed clone included,
     /// is read as it is (ADR 0014 §2).

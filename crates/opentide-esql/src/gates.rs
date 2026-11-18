@@ -179,6 +179,17 @@ pub(crate) fn tree_children(node: &SyntaxNode) -> impl Iterator<Item = SyntaxEle
         .filter(|c| c.kind() != K::WHITESPACE)
 }
 
+/// The nodes of [`tree_children`], without visiting its tokens: a walk that
+/// reads nodes only allocates no cursor for each token (ADR 0014 §5).
+pub(crate) fn tree_child_nodes(node: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> + use<> {
+    let leaf = crate::tree::is_leaf(node.kind());
+    node.children().filter(move |_| !leaf).flat_map(|child| {
+        let inner = (child.kind() == K::NAMED_PARAMETERS).then(|| child.children());
+        let own = inner.is_none().then_some(child);
+        own.into_iter().chain(inner.into_iter().flatten())
+    })
+}
+
 /// [`tree_children`], collected.
 pub(crate) fn children_of(node: &SyntaxNode) -> Vec<SyntaxElement> {
     tree_children(node).collect()

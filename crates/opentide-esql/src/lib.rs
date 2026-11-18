@@ -461,6 +461,12 @@ fn pattern_problems(node: &SyntaxNode, source: &str) -> Vec<Diagnostic> {
     out
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The children [`expression_depth`] visited on this thread.
+    static DEPTH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Nesting depth of expressions, counted the way Elasticsearch's parser
 /// limit sees a chain of `AND`/`OR` terms: each logical, comparison,
 /// arithmetic, predicate, cast, call, or parenthesized node adds one. A flat
@@ -486,37 +492,34 @@ fn expression_depth(root: &SyntaxNode) -> (usize, Option<ByteSpan>) {
     let mut stack = vec![(root.clone(), 0usize)];
     let (mut max, mut deepest) = (0usize, None);
     while let Some((node, base)) = stack.pop() {
-        let kids: Vec<SyntaxNode> = children_of(&node)
-            .into_iter()
-            .filter_map(NodeOrToken::into_node)
-            .collect();
+        let kids: Vec<SyntaxNode> = gates::tree_child_nodes(&node).collect();
+        #[cfg(test)]
+        DEPTH_VISITS.set(DEPTH_VISITS.get() + kids.len());
         let flat = matches!(
             node.kind(),
             K::AND_EXPRESSION | K::OR_EXPRESSION | K::BINARY_EXPRESSION
         ) && kids.len() > 1;
-        let mut depths = vec![base; kids.len()];
-        if NESTING.contains(&node.kind()) {
-            let levels = if flat { kids.len() - 1 } else { 1 };
-            if base + levels > max {
-                max = base + levels;
-                deepest = Some(if flat {
-                    ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
-                } else {
-                    span_of(&node)
-                });
-            }
-            for (i, d) in depths.iter_mut().enumerate() {
-                *d = base
-                    + if !flat {
-                        1
-                    } else if i == 0 {
-                        levels
-                    } else {
-                        kids.len() - i
-                    };
-            }
+        let nesting = NESTING.contains(&node.kind());
+        let levels = if flat { kids.len() - 1 } else { 1 };
+        if nesting && base + levels > max {
+            max = base + levels;
+            deepest = Some(if flat {
+                ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
+            } else {
+                span_of(&node)
+            });
         }
-        for (kid, depth) in kids.into_iter().zip(depths).rev() {
+        let count = kids.len();
+        for (i, kid) in kids.into_iter().enumerate().rev() {
+            let depth = if !nesting {
+                base
+            } else if !flat {
+                base + 1
+            } else if i == 0 {
+                base + levels
+            } else {
+                base + count - i
+            };
             stack.push((kid, depth));
         }
     }
@@ -1588,6 +1591,175 @@ mod tests {
             }
         }
         assert_eq!(version::catalog_reads() - before, 0);
+    }
+
+    /// A name and a suggestion are found in the bundled catalog's indexes,
+    /// with no scan of its rows (ADR 0014 §2, §7): every command, function
+    /// and cast scanned the rows, and every unknown name prepared every
+    /// candidate again.
+    #[test]
+    fn names_and_suggestions_scan_no_rows() {
+        let queries = [
+            "FROM logs-* | EVAL x = TO_LOWR(a::keywrd) | STATZ c = COUNT(*) BY x | LIMIT 10",
+            "FROM logs-* | EVAL y = TO_UPER(b::kyword) | SORTT y | LIMIT 11",
+        ];
+        for q in queries {
+            analyze(q);
+        }
+        let before = catalog::scans();
+        for _ in 0..3 {
+            for q in queries {
+                assert!(!analyze(q).diagnostics.is_empty());
+            }
+        }
+        assert_eq!(catalog::scans() - before, 0);
+    }
+
+    /// [`expression_depth`] as it was: every child collected, tokens
+    /// included, then the nodes kept.
+    fn expression_depth_by_all_children(root: &SyntaxNode) -> (usize, Option<ByteSpan>) {
+        const NESTING: &[K] = &[
+            K::NOT_EXPRESSION,
+            K::AND_EXPRESSION,
+            K::OR_EXPRESSION,
+            K::IN_EXPRESSION,
+            K::IS_NULL_EXPRESSION,
+            K::LIKE_EXPRESSION,
+            K::MATCH_EXPRESSION,
+            K::COMPARISON,
+            K::UNARY_EXPRESSION,
+            K::BINARY_EXPRESSION,
+            K::PARENTHESIZED_EXPRESSION,
+            K::INLINE_CAST,
+            K::FUNCTION_CALL,
+        ];
+        // Iterative: a 10 000-term chain must not overflow the stack.
+        let mut stack = vec![(root.clone(), 0usize)];
+        let (mut max, mut deepest) = (0usize, None);
+        while let Some((node, base)) = stack.pop() {
+            let kids: Vec<SyntaxNode> = children_of(&node)
+                .into_iter()
+                .filter_map(NodeOrToken::into_node)
+                .collect();
+            let flat = matches!(
+                node.kind(),
+                K::AND_EXPRESSION | K::OR_EXPRESSION | K::BINARY_EXPRESSION
+            ) && kids.len() > 1;
+            let mut depths = vec![base; kids.len()];
+            if NESTING.contains(&node.kind()) {
+                let levels = if flat { kids.len() - 1 } else { 1 };
+                if base + levels > max {
+                    max = base + levels;
+                    deepest = Some(if flat {
+                        ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
+                    } else {
+                        span_of(&node)
+                    });
+                }
+                for (i, d) in depths.iter_mut().enumerate() {
+                    *d = base
+                        + if !flat {
+                            1
+                        } else if i == 0 {
+                            levels
+                        } else {
+                            kids.len() - i
+                        };
+                }
+            }
+            for (kid, depth) in kids.into_iter().zip(depths).rev() {
+                stack.push((kid, depth));
+            }
+        }
+        (max, deepest)
+    }
+
+    fn depth_probes() -> Vec<String> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
+        let mut out = Vec::new();
+        for sub in ["corpus/esql", "conformance/external/esql"] {
+            let mut dirs = vec![dir.join(sub)];
+            while let Some(d) = dirs.pop() {
+                for path in std::fs::read_dir(&d)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|e| e.path())
+                {
+                    if path.is_dir() {
+                        dirs.push(path);
+                    } else if let Ok(text) = std::fs::read_to_string(&path) {
+                        out.push(text);
+                    }
+                }
+            }
+        }
+        for n in [1, 2, 150, 299, 300, 301, 400, 401] {
+            let chain = vec!["a == 1"; n + 1].join(" AND ");
+            out.push(format!("FROM i | WHERE {chain}"));
+            out.push(format!(
+                "FROM i | WHERE {}a{}",
+                "(".repeat(n),
+                ")".repeat(n)
+            ));
+            out.push(format!(
+                "FROM i | EVAL x = {}1{}",
+                "ABS(".repeat(n),
+                ")".repeat(n)
+            ));
+            out.push(format!("FROM i | WHERE {}", vec!["NOT a"; n].join(" OR ")));
+            out.push(format!(
+                "FROM i | EVAL x = {}",
+                vec!["1 + 2"; n].join(" * ")
+            ));
+            out.push(format!(
+                "FROM i | WHERE MATCH(a, \"x\", {{\"boost\": {}1{}}}) AND b",
+                "(".repeat(n),
+                ")".repeat(n)
+            ));
+        }
+        let cut: Vec<String> = out
+            .iter()
+            .filter(|t| t.len() < 2_000)
+            .flat_map(|t| {
+                let ends: Vec<usize> = t.char_indices().map(|(i, _)| i).step_by(7).collect();
+                ends.into_iter()
+                    .map(|i| t[..i].to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// The node walk measures what the walk over every child measured (ADR 0014 §5).
+    #[test]
+    fn the_depth_walk_over_nodes_is_the_walk_over_every_child() {
+        let mut deep = 0;
+        for source in depth_probes() {
+            let root = tree::parse(&source).syntax;
+            let walked = expression_depth(&root);
+            assert_eq!(
+                walked,
+                expression_depth_by_all_children(&root),
+                "{source:?}"
+            );
+            deep += usize::from(walked.0 > 300);
+        }
+        assert!(deep >= 10, "{deep}");
+    }
+
+    /// The depth walk visits the nodes only, no token (ADR 0014 §5, §7): it
+    /// collected every token of the tree, each a cursor allocated.
+    #[test]
+    fn the_depth_walk_visits_no_token() {
+        let source = "FROM logs-* METADATA _id | WHERE (a == 1 AND b != \"x\") OR NOT c IN (1, 2, 3) | EVAL d = TO_LOWER(e::keyword) | STATS n = COUNT(*) BY d";
+        let root = tree::parse(source).syntax;
+        let nodes = root.descendants().count();
+        let before = DEPTH_VISITS.get();
+        expression_depth(&root);
+        let visits = DEPTH_VISITS.get() - before;
+        assert!(visits < nodes, "{visits} visits for {nodes} nodes");
     }
 
     #[test]
