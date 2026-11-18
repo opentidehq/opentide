@@ -28,8 +28,9 @@ fn default_language(platform: &str) -> &'static str {
         "exabeam" => "exabeam",
         // A whole YARA-L rule (a `.yaral` file's text), checked as a rule.
         "google_secops" => "yaral",
-        // A whole YARA text, under the HarfangLab profile (harfanglab-1.0 1.2).
-        "harfanglab" => "yara",
+        // A whole YARA text, under the platform's profile (harfanglab-1.0 1.2,
+        // bitdefender-1.0).
+        "harfanglab" | "bitdefender" => "yara",
         _ => "kql",
     }
 }
@@ -483,6 +484,24 @@ mod tests {
             version: "1",
             workspace_problem: None,
             interrupt: None,
+        }
+    }
+
+    /// A call that names no language is checked in one its platform checks
+    /// offline: Bitdefender's defaulted to KQL, which it then refused.
+    #[test]
+    fn every_offline_platform_defaults_to_one_of_its_languages() {
+        for platform in opentide_schema::platforms::PLATFORMS {
+            if platform.offline_languages.is_empty() {
+                continue;
+            }
+            let language = default_language(platform.id);
+            assert!(
+                platform.offline_languages.contains(&language),
+                "{}: default_language is {language:?}, not one of {:?}",
+                platform.id,
+                platform.offline_languages
+            );
         }
     }
 
