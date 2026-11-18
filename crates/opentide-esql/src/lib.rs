@@ -62,8 +62,7 @@ pub use ecs::{ecs_diagnostics, source_indices};
 pub use version::{Availability, RELEASES, StackTarget};
 
 use gates::{
-    SyntaxElement, children_of, element_span, first_token, is_named, nodes_after, parts, span_of,
-    text_of,
+    SyntaxElement, element_span, first_token, is_named, nodes_after, parts, span_of, text_of,
 };
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, Severity, SignatureHelp,
@@ -171,7 +170,9 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
         diagnostics.push(d);
     }
     let to_range = |span: ByteSpan| range(source, span);
-    for node in named_nodes(&tree.syntax) {
+    // One walk for the checks and the highlight (ADR 0014 §5a).
+    let walked = walk(&tree.syntax);
+    for node in walked.named {
         for gate in gates::syntax_gates(&node, source) {
             diagnostics.extend(gate.diagnostic(target, to_range));
         }
@@ -280,7 +281,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     // every one holds ECS documents.
     opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(&tree, source));
     // The tree the checks read: a second parse doubled the cost of a long query.
-    let tokens = highlight(spec, &tree, source, catalog);
+    let tokens = highlight_leaves(spec, walked.leaves, source, catalog);
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -1028,6 +1029,131 @@ fn metadata_id_advisory(root: &SyntaxNode, source: &str) -> Option<Diagnostic> {
     )
 }
 
+/// What [`analyze_for`] reads of a tree, from one walk over it (ADR 0014
+/// §5a).
+struct Walked {
+    /// The nodes the checks see, as [`named_nodes`] gives them.
+    named: Vec<SyntaxNode>,
+    /// The tree-sitter tree's leaves in document order, as the highlight
+    /// read them ([`tree_children`](gates::tree_children) down to a node
+    /// with none): tokens, comments, one-token nodes and empty nodes.
+    leaves: Vec<SyntaxElement>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Elements [`walk`] visited on this thread.
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Visits each element of `root` once, in preorder. Below a one-token node
+/// (`tree::is_leaf`) nothing is read, as neither walk it replaces read
+/// there. A node is a leaf of the highlight when none of its children is
+/// listed: whitespace is not, and a `WITH {…}` (`NamedParameters`) child
+/// lists its own children in its place, so it is never a leaf itself.
+fn walk(root: &SyntaxNode) -> Walked {
+    /// An open node: its depth, its place among the leaves while no child is
+    /// listed, and whether it is a `NamedParameters` read in place.
+    struct Open {
+        depth: usize,
+        leaf_at: Option<usize>,
+        in_place: bool,
+    }
+    let mut named = Vec::new();
+    let mut leaves: Vec<Option<SyntaxElement>> = Vec::new();
+    let mut open: Vec<Open> = Vec::new();
+    // The depth of the one-token node being skipped.
+    let mut skipping: Option<usize> = None;
+    opentide_parse::walk_once(root, |element, depth| {
+        #[cfg(test)]
+        VISITS.set(VISITS.get() + 1);
+        if let Some(at) = skipping {
+            if depth > at {
+                return;
+            }
+            skipping = None;
+        }
+        while open.last().is_some_and(|o| o.depth >= depth) {
+            open.pop();
+        }
+        let listed = match &element {
+            NodeOrToken::Token(t) => t.kind() != K::WHITESPACE,
+            NodeOrToken::Node(_) => true,
+        };
+        // The child is listed by the nearest node not read in place: a
+        // listed child makes it no leaf.
+        let in_place = matches!(&element, NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS)
+            && !open.last().is_some_and(|o| o.in_place);
+        if listed
+            && !in_place
+            && let Some(parent) = open.iter_mut().rev().find(|o| !o.in_place)
+            && let Some(at) = parent.leaf_at.take()
+        {
+            leaves[at] = None;
+        }
+        match element {
+            NodeOrToken::Token(token) => {
+                if listed {
+                    leaves.push(Some(NodeOrToken::Token(token)));
+                }
+            }
+            NodeOrToken::Node(node) => {
+                let one_token = tree::is_leaf(node.kind());
+                let leaf_at = (!in_place).then(|| {
+                    leaves.push(Some(NodeOrToken::Node(node.clone())));
+                    leaves.len() - 1
+                });
+                if one_token {
+                    skipping = Some(depth);
+                } else {
+                    open.push(Open {
+                        depth,
+                        leaf_at,
+                        in_place,
+                    });
+                }
+                named.push(node);
+            }
+        }
+    });
+    Walked {
+        named,
+        leaves: leaves.into_iter().flatten().collect(),
+    }
+}
+
+/// The highlight of the tree-sitter leaves `leaves` ([`walk`]).
+fn highlight_leaves(
+    spec: &HighlightSpec,
+    leaves: Vec<SyntaxElement>,
+    source: &str,
+    catalog: &Catalog,
+) -> Vec<HighlightToken> {
+    let mut spans: Vec<(ByteSpan, String)> = Vec::new();
+    for element in leaves {
+        let span = element_span(&element);
+        if span.end <= span.start {
+            continue;
+        }
+        let Some(capture) = tree::capture(&element) else {
+            continue;
+        };
+        let capture = if capture == "function"
+            && catalog
+                .function(source.get(span.start..span.end).unwrap_or(""))
+                .is_some()
+        {
+            "function.builtin"
+        } else {
+            capture
+        };
+        spans.push((span, capture.to_string()));
+    }
+    let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
+    tokens_from_spans(spec, source, &refs).unwrap_or_default()
+}
+
+#[cfg(test)]
 pub(crate) fn highlight(
     spec: &HighlightSpec,
     tree: &tree::Tree,
@@ -1040,7 +1166,7 @@ pub(crate) fn highlight(
     let mut stack = vec![NodeOrToken::Node(tree.syntax.clone())];
     while let Some(element) = stack.pop() {
         if let NodeOrToken::Node(node) = &element {
-            let kids = children_of(node);
+            let kids = gates::children_of(node);
             if !kids.is_empty() {
                 stack.extend(kids.into_iter().rev());
                 continue;
@@ -1629,7 +1755,7 @@ mod tests {
         let mut stack = vec![(root.clone(), 0usize)];
         let (mut max, mut deepest) = (0usize, None);
         while let Some((node, base)) = stack.pop() {
-            let kids: Vec<SyntaxNode> = children_of(&node)
+            let kids: Vec<SyntaxNode> = gates::children_of(&node)
                 .into_iter()
                 .filter_map(NodeOrToken::into_node)
                 .collect();
@@ -1749,6 +1875,66 @@ mod tests {
             deep += usize::from(walked.0 > 300);
         }
         assert!(deep >= 10, "{deep}");
+    }
+
+    /// Inputs for the single walk: the depth probes, and comments, empty and
+    /// blank `WITH {…}` maps, and empty texts.
+    fn walk_probes() -> Vec<String> {
+        let mut out = depth_probes();
+        out.extend(
+            [
+                "",
+                " ",
+                "// only a comment",
+                "FROM a /* c */ | WHERE b == 1 // end",
+                "FROM a | COMPLETION s = m WITH {}",
+                "FROM a | COMPLETION s = m WITH { }",
+                "FROM a | COMPLETION s = m WITH { /* c */ }",
+                "FROM a | RERANK \"q\" ON f WITH { \"inference_id\": \"x\", \"k\": {\"n\": 1} }",
+                "FROM a | WHERE MATCH(m, \"x\", {})",
+                "FROM a | EVAL x = \"\" | EVAL y = ``",
+                "|||",
+                "FROM",
+            ]
+            .map(str::to_owned),
+        );
+        out
+    }
+
+    /// One walk gives the checks the nodes [`named_nodes`] gives, in its
+    /// order, and the highlight the leaves of the walk over
+    /// [`gates::tree_children`] (ADR 0014 §5a).
+    #[test]
+    fn one_walk_gives_the_named_nodes_and_the_highlight() {
+        let spec = HighlightSpec::shared().unwrap();
+        let catalog = Catalog::cached();
+        for source in walk_probes() {
+            let tree = tree::parse(&source);
+            let walked = walk(&tree.syntax);
+            assert_eq!(
+                walked.named,
+                named_nodes(&tree.syntax).collect::<Vec<_>>(),
+                "{source:?}"
+            );
+            assert_eq!(
+                highlight_leaves(spec, walked.leaves, &source, catalog),
+                highlight(spec, &tree, &source, catalog),
+                "{source:?}"
+            );
+        }
+    }
+
+    /// An analysis visits each element of its tree once for its checks and
+    /// its highlight, where it walked the named nodes and then the tree
+    /// again (ADR 0014 §7).
+    #[test]
+    fn the_checks_and_the_highlight_visit_each_element_once() {
+        for source in walk_probes().iter().take(20) {
+            let elements = tree::parse(source).syntax.descendants_with_tokens().count();
+            VISITS.set(0);
+            let _ = analyze(source);
+            assert_eq!(VISITS.get(), elements, "{source:?}");
+        }
     }
 
     /// The depth walk visits the nodes only, no token (ADR 0014 §5, §7): it
