@@ -488,7 +488,7 @@ pub fn aliased_signature(root: &Node) -> Option<&Node> {
     };
     block
         .entry(signature)
-        .filter(|entry| entry.value.start.index < entry.key.start.index)
+        .filter(|entry| entry.value.start.index() < entry.key.start.index())
         .map(|entry| entry.value.as_ref())
 }
 

@@ -163,7 +163,7 @@ const BLOCK_CODES: [&str; 5] = [
 /// Whether `entry`'s value is a YAML alias: an alias resolves to the node its
 /// anchor names, which starts before the entry's own key ends.
 fn is_alias(entry: &Entry) -> bool {
-    entry.value.start.index < entry.key.end.index
+    entry.value.start.index() < entry.key.end.index()
 }
 
 /// The block as the engine reads it: its text sections that are YAML
@@ -221,8 +221,8 @@ fn node_range(node: &Node) -> Range {
     )]
     let position = |mark: opentide_core::node::Mark| {
         Position::new(
-            mark.line.saturating_sub(1) as u32,
-            mark.column.saturating_sub(1) as u32,
+            mark.line().saturating_sub(1) as u32,
+            mark.column().saturating_sub(1) as u32,
         )
     };
     Range::new(position(node.start), position(node.end))

@@ -700,7 +700,7 @@ impl HarfangLabAdvisories {
             (
                 code,
                 message,
-                entry.key.start.line.saturating_sub(1),
+                entry.key.start.line().saturating_sub(1),
                 &CONTEXT_PATH[..],
                 String::new(),
             )
@@ -766,7 +766,7 @@ fn signature_lines<'v>(
 ) -> impl Fn(usize) -> usize + 'v {
     // A block scalar's node starts at its content; its indicator (`|`, `|-`,
     // after any anchor or tag) ends the line before.
-    let before: String = text.chars().take(node.start.index).collect();
+    let before: String = text.chars().take(node.start.index()).collect();
     let header = before
         .trim_end_matches([' ', '\t'])
         .strip_suffix('\n')
@@ -777,7 +777,7 @@ fn signature_lines<'v>(
         .next()
         .and_then(|head| head.split_whitespace().last())
         .is_some_and(|token| token.starts_with('|'));
-    let first = node.start.line.saturating_sub(1);
+    let first = node.start.line().saturating_sub(1);
     move |offset: usize| {
         if literal {
             first + value[..offset.min(value.len())].matches('\n').count()
