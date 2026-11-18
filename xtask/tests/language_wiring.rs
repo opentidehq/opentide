@@ -125,6 +125,8 @@ fn every_query_language_is_wired() {
     let throughput = read("crates/opentide-analysis/benches/throughput.rs");
     let bench_rows = between(&throughput, "const LANGUAGES: &[Language] = &[", "\n];");
     let lsp_client = read("packages/lsp-client/src/index.ts");
+    let stub = read("src/opentide/_native/__init__.pyi");
+    let stub_languages = between(&stub, "Language = Literal[", "]");
 
     let mut missing = Vec::new();
     for language in LanguageId::QUERY_LANGUAGES {
@@ -194,6 +196,10 @@ fn every_query_language_is_wired() {
         check(
             lsp_client.contains(&format!("id: \"{id}\"")),
             "a language (packages/lsp-client/src/index.ts)",
+        );
+        check(
+            stub_languages.contains(&format!("\"{id}\"")),
+            "the Python stub's Language literal (src/opentide/_native/__init__.pyi)",
         );
     }
     assert!(

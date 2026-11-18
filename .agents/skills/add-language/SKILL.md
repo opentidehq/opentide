@@ -49,7 +49,12 @@ highlighter is not a language, and a platform whose language is unspecified gets
 
 ## Checklist
 
-`<id>` is the public language id (`kql`, `yaral`), `<Id>` its `LanguageId` variant. Steps 1 to 5
+`<id>` is the public language id (`kql`, `yaral`), `<Id>` its `LanguageId` variant.
+`cargo test -p xtask --test language_wiring` lists, with its file, every table a query language
+is missing from (its crate, codes, `ENGINE_REFERENCES`, the registry and its suffixes, the output
+schema, MCP's manifest, `PARSER_CRATES`, the fuzz target, matrix and script, the WASM smoke
+sample, the throughput row, the npm client, the Python stub); run it after step 1 and again at
+the end. The boxes below it cannot see are the ones to read with care. Steps 1 to 5
 add arms to exhaustive `match`es across the workspace, so the workspace builds again only at the
 end of step 5: work them on one branch and check each crate as you go
 (`cargo check -p <crate>`). Step 6's proofs run once it builds.
