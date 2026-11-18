@@ -146,8 +146,8 @@ the item-by-item heap is still a large share of a command's peak, not before.
 - **The format is checked.** A generator that writes a multi-line string, a commented header or an
   indented table fails the equality test.
 - **The rollout.** Falco is the reference (this ADR's PR). CQL, YARA, ES|QL and YARA-L followed,
-  then EQL, SPL, Exabeam and Lucene (Carbon Black). The KQL core and profile files follow with the
-  KQL compaction (§5), each measured.
+  then EQL, SPL, Exabeam and Lucene (Carbon Black), and the KQL core and profile files with the
+  KQL compaction (#1071 item 2), each measured.
 - **Not covered:** the Tide vocabularies (`src/opentide/data/vocabulary/`), read by opentide-schema
   with their own reader, follow separately (#1071 item 6). So does the ECS catalog, which is JSON
   read with `serde_json`, which streams and builds no document.

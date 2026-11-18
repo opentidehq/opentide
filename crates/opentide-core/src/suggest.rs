@@ -176,6 +176,9 @@ impl Candidates {
         let folded = fold(value);
         let lower = value.to_lowercase();
         let length = lower.chars().count();
+        // The value's letters, counted once for every candidate's bag
+        // distance (ADR 0014, rule 1).
+        let value_bag = Bag::new(&lower);
         let mut scored: Vec<Scored<'_>> = Vec::new();
         for item in &self.items {
             if item.text == value {
@@ -191,7 +194,10 @@ impl Candidates {
             // their shared prefix and suffix: measured first, as most
             // candidates of a near length stop here, before the distance
             // (most of what an unknown name cost).
-            let bag = bag_distance(&lower, &item.lower);
+            let bag = match &value_bag {
+                Some(value) => value.distance(&item.lower),
+                None => bag_distance(&lower, &item.lower),
+            };
             if !same_word && bag.is_some_and(|d| d > edits) {
                 continue;
             }
@@ -286,6 +292,8 @@ pub fn bag_distance(a: &str, b: &str) -> Option<usize> {
     if !a.is_ascii() || !b.is_ascii() {
         return None;
     }
+    #[cfg(test)]
+    tests::VALUES_COUNTED.with(|n| n.set(n.get() + 1));
     // The characters both share, counting repeats: `a` has `a.len() -
     // shared` the other lacks, and `b` has `b.len() - shared`. One pass over
     // each spelling, where summing all 128 counts cost more than the
@@ -303,6 +311,50 @@ pub fn bag_distance(a: &str, b: &str) -> Option<usize> {
         }
     }
     Some(a.len().max(b.len()) - shared)
+}
+
+/// One spelling's letters, counted once, for its [`bag_distance`] to many
+/// others: each measure copies the 128 counts instead of counting the
+/// spelling again. `None` for a spelling that is not ASCII, or too long for
+/// a count to fit a byte.
+struct Bag {
+    counts: [u8; 128],
+    len: usize,
+}
+
+impl Bag {
+    fn new(a: &str) -> Option<Self> {
+        if !a.is_ascii() || a.len() > usize::from(u8::MAX) {
+            return None;
+        }
+        #[cfg(test)]
+        tests::VALUES_COUNTED.with(|n| n.set(n.get() + 1));
+        let mut counts = [0u8; 128];
+        for byte in a.bytes() {
+            counts[usize::from(byte)] += 1;
+        }
+        Some(Self {
+            counts,
+            len: a.len(),
+        })
+    }
+
+    /// [`bag_distance`] from this spelling to `b`.
+    fn distance(&self, b: &str) -> Option<usize> {
+        if !b.is_ascii() {
+            return None;
+        }
+        let mut counts = self.counts;
+        let mut shared = 0usize;
+        for byte in b.bytes() {
+            let count = &mut counts[usize::from(byte)];
+            if *count > 0 {
+                *count -= 1;
+                shared += 1;
+            }
+        }
+        Some(self.len.max(b.len()) - shared)
+    }
 }
 
 struct Scored<'a> {
@@ -330,6 +382,8 @@ mod tests {
     thread_local! {
         /// The edit distances [`Candidates::ranked`] measured on this thread.
         pub(super) static DISTANCES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// The spellings whose letters a bag distance counted on this thread.
+        pub(super) static VALUES_COUNTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 
     /// [`Candidates::ranked`] without the bag-distance cut: what it must
@@ -731,7 +785,26 @@ mod tests {
                     bag_distance_by_counts(a, b),
                     "{a:?} {b:?}"
                 );
+                if let Some(bag) = Bag::new(a) {
+                    assert_eq!(bag.distance(b), bag_distance(a, b), "{a:?} {b:?}");
+                }
             }
         }
+        // A spelling too long for a byte's count is measured as before.
+        let long = "a".repeat(300);
+        assert!(Bag::new(&long).is_none());
+        assert!(Bag::new(&"a".repeat(255)).is_some());
+    }
+
+    /// A value's letters are counted once for all the candidates it is
+    /// measured against, not once for each (ADR 0014, rule 1).
+    #[test]
+    fn a_value_is_counted_once() {
+        let names: Vec<String> = (0..200).map(|i| format!("proc.field{i}")).collect();
+        let prepared = Candidates::new(names.iter().map(String::as_str));
+        VALUES_COUNTED.with(|n| n.set(0));
+        let _ = prepared.closest("proc.fielx");
+        let counted = VALUES_COUNTED.with(std::cell::Cell::get);
+        assert_eq!(counted, 1, "{counted} spellings counted");
     }
 }
