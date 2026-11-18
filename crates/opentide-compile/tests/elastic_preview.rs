@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use opentide_compile::{Json, Owned, Rule, deploy, elastic, preview};
+use opentide_compile::{Json, Owned, Rule, deploy, elastic, modifiers, preview};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -22,11 +22,13 @@ const RULE: &str = "name: Suppressed rule\nmetadata:\n  uuid: 00000000-0000-4000
      group_by: [host.name]\n";
 
 /// Two tenants: `basic` (a Basic licence: no suppression; its own tags and
-/// index), then `full`.
+/// index; a modifier that runs its rules hourly), then `full`.
 const PLATFORM: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"basic\"\nstrategies \
      = [\"PREVIEW\"]\n[tenants.setup]\nurl = \"https://kibana.invalid\"\ntags = [\"soc\"]\nindex \
      = [\"winlogbeat-*\"]\nsuppression = false\n\n[[tenants]]\nname = \"full\"\nstrategies = \
-     [\"PREVIEW\"]\n[tenants.setup]\nurl = \"https://kibana-full.invalid\"\n";
+     [\"PREVIEW\"]\n[tenants.setup]\nurl = \"https://kibana-full.invalid\"\n\n[[modifiers]]\nname \
+     = \"basic hourly\"\n[modifiers.conditions]\ntenants = [\"basic\"]\n[modifiers.modifications]\n\
+     \"scheduling.interval\" = \"1h\"\n";
 
 fn workspace() -> Workspace {
     let fs = Arc::new(MemoryFs::new());
@@ -65,13 +67,25 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
     let entry = preview::preview_on(&cx, "elastic", &rule, &tenants);
     assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("basic"));
     let shown = entry.get("api_request").unwrap().clone();
-    // The body `opentide deploy` sends to `basic`, byte for byte.
+    // The body `opentide deploy` sends to `basic`, byte for byte: the rule
+    // with `basic`'s modifiers, compiled with its setup.
     let table = deploy::tenant(&cx, "elastic", "basic").unwrap();
-    let sent = preview::elastic_request(
+    let modified = modifiers::rule_for_tenant(
+        &modifiers::of_platform(cx.config, "elastic"),
+        "elastic",
         &rule,
-        elastic::compile(&cx, &rule, &elastic::Setup::from_tenant(table)).unwrap(),
+        "basic",
+    );
+    let sent = preview::elastic_request(
+        &modified,
+        elastic::compile(&cx, &modified, &elastic::Setup::from_tenant(table)).unwrap(),
     );
     assert_eq!(shown.to_compact(), sent.to_compact());
+    // The modifier is in it: hourly, in the Kibana rule and the block.
+    assert!(
+        shown.to_compact().contains("\"interval\":\"1h\""),
+        "{shown:?}"
+    );
     // And the tenant's setup is in it.
     let payload = shown.get("payload").unwrap();
     let tags = payload.get("tags").unwrap().to_compact();
@@ -87,4 +101,8 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
     let offline = offline.get("api_request").unwrap().get("payload").unwrap();
     assert!(offline.get("alert_suppression").is_some(), "{offline:?}");
     assert!(offline.get("index").is_none(), "{offline:?}");
+    assert!(
+        offline.to_compact().contains("\"interval\":\"5m\""),
+        "{offline:?}"
+    );
 }

@@ -330,9 +330,8 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 /// entry the dry run's `payloads` lists. Sentinel, Sysdig, Graylog and Exabeam report
 /// a rule they cannot compile as a failure; Elastic shows its deploy body
 /// ([`elastic_request`]) or falls back to the block's dump, and every other
-/// platform shows the dump ([`config_dump`]).
-/// `tenants` are the tenants the run sends the rule to, which Graylog's
-/// and Exabeam's requests depend on.
+/// platform shows the dump ([`config_dump`]). It compiles for no tenant:
+/// [`preview_on`] compiles for the run's.
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
     match platform {
         "graylog" => graylog_preview(cx, rule, &[]),
@@ -378,8 +377,9 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
 
 /// The deploy body an Elastic deploy would send (`elastic_request`),
 /// compiled for the first tenant the run sends the rule to, as `opentide
-/// deploy` compiles it: the tenant's `tags`, `index` and `suppression` are
-/// in it, and the entry names the tenant. With no tenant, the rule is
+/// deploy` compiles it: the platform's `[[modifiers]]` for that tenant
+/// applied, the tenant's `tags`, `index` and `suppression` in it, and the
+/// entry naming the tenant. With no tenant, the rule is
 /// compiled without one. A rule that does not compile is shown as its
 /// block's dump.
 fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
@@ -389,6 +389,16 @@ fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let setup = first.map_or_else(elastic::Setup::none, |(_, table)| {
         elastic::Setup::from_tenant(table)
     });
+    // The rule as the deploy sends it to that tenant: its modifiers applied.
+    let sent = first.map(|(name, _)| {
+        crate::modifiers::rule_for_tenant(
+            &crate::modifiers::of_platform(cx.config, "elastic"),
+            "elastic",
+            rule,
+            name,
+        )
+    });
+    let rule = sent.as_ref().unwrap_or(rule);
     match elastic::compile(cx, rule, &setup) {
         Ok(body) => {
             let mut entry = compiled(rule, elastic_request(rule, body));
