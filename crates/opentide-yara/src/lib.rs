@@ -166,6 +166,40 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
+#[cfg(debug_assertions)]
+thread_local! {
+    /// How many ASTs this thread built: an analysis builds one (ADR 0014,
+    /// rule 7).
+    static ASTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many ASTs this thread has built ([`analyze_document`] builds one).
+/// Debug builds only, for the work-count tests; not API.
+#[doc(hidden)]
+#[cfg(debug_assertions)]
+pub fn asts_built() -> usize {
+    ASTS.get()
+}
+
+/// `source`'s AST, by `yara-x-parser`: every AST the crate builds is built
+/// here, so [`asts_built`] counts them all.
+pub(crate) fn ast(source: &str) -> AST<'_> {
+    #[cfg(debug_assertions)]
+    ASTS.set(ASTS.get() + 1);
+    AST::from(Parser::new(source.as_bytes()))
+}
+
+/// [`analyze`] and the document's outline ([`editor::symbols`]) from one
+/// parse: what an editor asks of a `.yar` file at each change.
+pub fn analyze_document(source: &str) -> (AnalyzeResult, Vec<editor::Symbol>) {
+    let ast = ast(source);
+    let result = AnalyzeResult {
+        diagnostics: diagnostics_of(source, &Context::default(), &ast),
+        tokens: highlight(source),
+    };
+    (result, editor::symbols_of(source, &ast))
+}
+
 /// Analyze a YARA signature on its own (a raw `.yar` file).
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
@@ -181,8 +215,12 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
 
 /// Every diagnostic of a signature, in source order.
 pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
+    diagnostics_of(source, ctx, &ast(source))
+}
+
+/// [`diagnostics`] on `source`'s AST.
+fn diagnostics_of(source: &str, ctx: &Context, ast: &AST<'_>) -> Vec<Diagnostic> {
     let mut findings = profile_findings(source, ctx);
-    let ast = AST::from(Parser::new(source.as_bytes()));
     let errors: Vec<(usize, usize)> = ast
         .errors()
         .iter()
@@ -231,7 +269,7 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
     };
     // The checker reads text (alphabets, jump bounds) from the source itself.
     let mut checker = check::Checker::new(source, ctx);
-    checker.signature(&ast, errors.is_empty(), &broken);
+    checker.signature(ast, errors.is_empty(), &broken);
     findings.extend(checker.findings);
     findings.sort_by_key(|f| (f.start, f.end));
     findings.dedup();
@@ -313,10 +351,7 @@ pub fn highlight(source: &str) -> Vec<HighlightToken> {
 /// Format a YARA signature with `yara-x-fmt`'s defaults. `None` when the text
 /// does not parse, so an editor never rewrites a broken buffer.
 pub fn format(source: &str) -> Option<String> {
-    if !AST::from(Parser::new(source.as_bytes()))
-        .errors()
-        .is_empty()
-    {
+    if !ast(source).errors().is_empty() {
         return None;
     }
     let mut out = Vec::with_capacity(source.len());
@@ -354,9 +389,7 @@ pub fn parses(source: &str) -> bool {
 #[must_use]
 pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     use yara_x_parser::cst::{CST, Event, SyntaxKind};
-    let rejected = !AST::from(Parser::new(source.as_bytes()))
-        .errors()
-        .is_empty();
+    let rejected = !ast(source).errors().is_empty();
     let mut open = Vec::new();
     let mut kinds = Vec::new();
     for event in CST::from(source).iter() {
@@ -520,5 +553,26 @@ rule Loader_Stage1 : loader {
     #[test]
     fn format_refuses_a_broken_signature() {
         assert_eq!(format("rule a { condition: }"), None);
+    }
+
+    /// An editor's analysis builds one AST for the diagnostics and the
+    /// outline, which built one each (ADR 0014, rule 7); both are what the
+    /// two calls give apart. The corpus is compared in
+    /// `tests/document.rs`.
+    #[test]
+    fn a_document_is_parsed_once_for_its_diagnostics_and_outline() {
+        for source in [
+            "rule a { strings: $s = \"x\" condition: $s }",
+            "import \"pe\"\nrule a : t { meta: k = 1 strings: $h = { 4D 5A } condition: $h at 0 and pe.number_of_sections > 1 }\nrule b { condition: a }",
+            "rule broken { condition: ( }",
+            "",
+        ] {
+            let before = ASTS.get();
+            let (result, symbols) = analyze_document(source);
+            assert_eq!(ASTS.get() - before, 1, "{source}");
+            assert_eq!(result.diagnostics, analyze(source).diagnostics);
+            assert_eq!(result.tokens, analyze(source).tokens);
+            assert_eq!(symbols, editor::symbols(source), "{source}");
+        }
     }
 }
