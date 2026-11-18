@@ -60,7 +60,7 @@ How to read the table:
 `cargo xtask throughput --check` builds the same bench with its symbols kept, then counts each
 language's instructions with callgrind (valgrind required). For every language, mode and input set
 it runs the bench's `--count`: two warm-up passes, then one pass inside a function of its own,
-which callgrind alone counts (`--toggle-collect`). Each pass is counted three times (`--runs`), and
+whose instructions callgrind alone counts (`--toggle-collect`). Each pass is counted three times (`--runs`), and
 the lowest is held to [`tests/bench/instructions.toml`](../../tests/bench/instructions.toml):
 
 - **Over budget.** An instruction count more than 3% over its budget fails, an allocator-call
@@ -77,10 +77,13 @@ order each process's hash seeds give: counted with them, one run of a pass diffe
 
 What an allocation costs inside malloc and free is then out of the instruction count, so each pass
 has a second budget, `<mode>_<set>_allocations`: the calls the bench's own code makes into `malloc`,
-`calloc`, `realloc` and the aligned allocators, read from the same callgrind profile. Callgrind
-counts calls over the whole run, outside the counted function too, so that number covers the two
-warm-up passes as well as the counted one: three analyses of each text, the first with what the
-warm-up builds once (one allocation more a call shows as three a text). It does not vary from run to run (16 runs, each with its own hash seeds, gave one count). From machine
+`calloc`, `realloc` and the aligned allocators, read from the same callgrind profile. Callgrind's
+call counts span the whole run, outside the counted function too, but a call arc is in the profile
+only if the counted pass also takes it. So that number is the two warm-up passes and the counted
+one, three passes over each text (one allocation more a call shows as three a text), plus only the
+part of the first pass's one-time work that goes through call sites the counted pass also uses: the
+input loading and most catalog building are not in it. It does not vary from run to run (16 runs,
+each with its own hash seeds, gave one count). From machine
 to machine it varied once by one call: Exabeam's corpus analysis made one call more on CI's runner
 than on a local machine with the same build inputs, valgrind and glibc, and an lld-linked build
 counted as the local one, which leaves the CPU. So it is held within 2 calls, not a percentage:

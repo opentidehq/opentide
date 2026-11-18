@@ -5,7 +5,7 @@
 //! The bench binary `crates/opentide-analysis/benches/throughput.rs` lists
 //! the languages (`--list`) and runs one counted pass of a language, mode
 //! (`parse`, `analyze`) and input set (`corpus`, `external`) after its
-//! warm-up (`--count`); callgrind counts that pass alone
+//! warm-up (`--count`); callgrind counts that pass's instructions alone
 //! (`--toggle-collect=throughput::counted`). Instructions are deterministic
 //! for a build and an input, where time is not, once the shared libraries are
 //! left out: only the bench binary's own code is counted. glibc's malloc and
@@ -21,12 +21,15 @@
 //!
 //! Leaving glibc out leaves out what malloc and free do, so each pass has a
 //! second budget, `<pass>_allocations`: the calls the bench's own code makes
-//! into the allocator ([`ALLOCATORS`]). Callgrind counts calls for the whole
-//! run, not only inside `--toggle-collect` (`--zero-before` does not reset
-//! them either), so this is the two warm-up passes and the counted one: three
-//! analyses a text, the first with what the warm-up builds once. It does not
-//! vary from run to run, so it is held within [`ALLOCATION_SLACK`] calls,
-//! with no percentage.
+//! into the allocator ([`ALLOCATORS`]). Callgrind's `calls=` counts span the
+//! whole run, not only `--toggle-collect` (nor would `--zero-before` reset
+//! them), but a call arc is in the profile only if the counted pass takes it
+//! too. So the count is the two warm-up passes and the counted one, three
+//! passes over each text, plus only the part of the first pass's one-time
+//! work that goes through call sites the counted pass also uses: the input
+//! loading and most catalog building are not in it. It does not vary from
+//! run to run, so it is held within [`ALLOCATION_SLACK`] calls, with no
+//! percentage.
 
 use anyhow::{Context, Result, bail};
 use clap::builder::TypedValueParser as _;
@@ -473,7 +476,7 @@ struct Own {
     /// Its calls into the allocator (`malloc`, `calloc`, `realloc` and the
     /// aligned ones), whose own instructions are left out with glibc's: the
     /// number of calls is exact, so an allocation more a token still shows.
-    /// Over the whole run (the warm-up passes too), as callgrind counts calls.
+    /// Over the three passes, as callgrind counts calls (the module doc).
     allocations: u64,
 }
 
@@ -490,8 +493,9 @@ pub const ALLOCATORS: [&str; 5] = [
 /// every cost line under an `ob=` (the object a function is in) that names
 /// it, but a call's inclusive cost (the line after `calls=`), which is the
 /// callee's. Its allocations: the calls (`calls=N`) it makes to an
-/// [`ALLOCATORS`] function, which callgrind counts over the whole run. Shared libraries (glibc's malloc and string
-/// routines, the loader) are left out of the instructions: their counts move
+/// [`ALLOCATORS`] function, over the three passes (the module doc). Shared
+/// libraries (glibc's malloc and string routines, the loader) are left out
+/// of the instructions: their counts move
 /// with the glibc version, the CPU it picks a routine for, and the allocation
 /// order, where the bench's own code counts the same on any x86-64 Linux.
 fn own_cost(profile: &str, binary: &Path) -> Own {
@@ -584,11 +588,12 @@ fn parse_budgets(text: &str, path: &Path) -> Result<Budgets> {
 
 fn budgets_toml(budgets: &Budgets, environment: &str) -> String {
     let mut out = String::from(
-        "# What each language's counted pass costs (`cargo xtask throughput`, ADR\n\
-         # 0014): parse alone and full analysis, over the short corpus and the\n\
-         # external public rules. `<pass>` is the bench binary's own instructions\n\
-         # (glibc and the loader left out), held within 3%; `<pass>_allocations`\n\
-         # its calls into the allocator, held within a few calls. Written by\n\
+        "# What each language's passes cost (`cargo xtask throughput`, ADR 0014):\n\
+         # parse alone and full analysis, over the short corpus and the external\n\
+         # public rules. `<pass>` is the bench binary's own instructions in the\n\
+         # counted pass (glibc and the loader left out), held within 3%;\n\
+         # `<pass>_allocations` its calls into the allocator over the warm-up and\n\
+         # counted passes, held within a few calls. Written by\n\
          # `cargo xtask throughput --record`, the highest of several runs. Record\n\
          # again when a change lowers counts on purpose, or raises them on purpose\n\
          # with the reason in its PR.\n",
