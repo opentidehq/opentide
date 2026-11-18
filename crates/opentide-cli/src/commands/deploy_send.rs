@@ -2293,6 +2293,191 @@ impl Sender<'_, '_> {
             .ok_or_else(|| Raised::new(format!("Cannot find a deployment engine for {platform}")))
     }
 
+    /// The request a Sentinel rule sends: the compiled analytic rule, or its
+    /// deletion (announced).
+    fn sentinel_request(
+        &mut self,
+        platform: &str,
+        batch: &Batch,
+        rule: &opentide_compile::Rule,
+        deletion: bool,
+    ) -> Result<DeployRequest, Raised> {
+        let tenant = batch.tenant.name.as_str();
+        let compile_error = |error: opentide_compile::rule::CompileError| {
+            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+        };
+        // The engine is found before the rule compiles, as before.
+        self.deployer(platform)?;
+        Ok(if deletion {
+            tracing::warn!(
+                arg0 = rule.name.as_str(),
+                "the_rule_will_be_removed_from_the_sentinel_workspace"
+            );
+            DeployRequest::delete(rule.uuid.clone())
+        } else {
+            let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
+                .map_err(compile_error)?;
+            DeployRequest::new(
+                rule.uuid.clone(),
+                Operation::Update,
+                body.to_compact().into_bytes(),
+            )
+        })
+    }
+
+    /// The request a Splunk rule sends: its saved search's settings under its
+    /// name (` - Rule` for a correlation search), or its deletion.
+    fn splunk_request(
+        &mut self,
+        platform: &str,
+        batch: &Batch,
+        rule: &opentide_compile::Rule,
+        deletion: bool,
+    ) -> Result<DeployRequest, Raised> {
+        let compile_error = |error: opentide_compile::rule::CompileError| {
+            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+        };
+        let splunk_cx = self.compile;
+        let bytes: [u8; 16] = *uuid::Uuid::new_v4().as_bytes();
+        let civil = jiff::tz::Offset::UTC.to_datetime(self.cx.now);
+        let clock = opentide_compile::splunk::Clock {
+            random: (u32::from(bytes[0]) % 60, u32::from(bytes[1]) % 24),
+            now: (
+                u32::try_from(civil.minute()).unwrap_or(0),
+                u32::try_from(civil.hour()).unwrap_or(0),
+            ),
+        };
+        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, clock)
+            .map_err(compile_error)?;
+        let mut name = rule.name.trim().to_owned();
+        let correlation = match rule
+            .block(platform)
+            .and_then(|block| block.get("correlation_search"))
+        {
+            Some(CJson::Bool(set)) => *set,
+            _ => opentide_compile::splunk::enterprise_security(&batch.table)
+                .map_err(compile_error)?,
+        };
+        if correlation {
+            name.push_str(" - Rule");
+        }
+        let mut settings = opentide_compile::json::Object::new();
+        for write in writes.iter().skip(1) {
+            if let CJson::Object(members) = &write.body {
+                for (key, value) in members {
+                    settings.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        Ok(DeployRequest::new(
+            name,
+            if deletion {
+                Operation::Delete
+            } else {
+                Operation::Update
+            },
+            if deletion {
+                Vec::new()
+            } else {
+                CJson::Object(settings).to_compact().into_bytes()
+            },
+        ))
+    }
+
+    /// The request a Carbon Black Cloud rule sends: its report, retired when
+    /// it is not deployed; `None` when the rule compiles to no report.
+    fn carbon_black_request(
+        &mut self,
+        batch: &Batch,
+        rule: &opentide_compile::Rule,
+    ) -> Result<Option<DeployRequest>, Raised> {
+        let compile_error = |error: opentide_compile::rule::CompileError| {
+            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+        };
+        let Some(report) = opentide_compile::carbon_black::report(self.compile, rule, &batch.table)
+            .map_err(compile_error)?
+        else {
+            return Ok(None);
+        };
+        // The report's fields, as the Deployer reads them; a rule that
+        // is not deployed retires its IOC.
+        let body = serde_json::json!({
+            "uuid": rule.uuid,
+            "name": report.name,
+            "description": report.description,
+            "query": report.query,
+            "tags": report.tags,
+            "severity": report.severity,
+            "watchlist": report.watchlist,
+            "report": report.report,
+        });
+        let operation = if report.deployment {
+            Operation::Update
+        } else {
+            Operation::Delete
+        };
+        Ok(Some(
+            DeployRequest::new(
+                rule.uuid.clone(),
+                operation,
+                serde_json::to_vec(&body).unwrap_or_default(),
+            )
+            .at(self.cx.now),
+        ))
+    }
+
+    /// The request a HarfangLab rule sends, compiled for the kind the tenant's
+    /// `type` names, a `$VARIABLE` resolved.
+    fn harfanglab_request(
+        &mut self,
+        connection: &Connection,
+        batch: &Batch,
+        rule: &opentide_compile::Rule,
+        deletion: bool,
+    ) -> Result<DeployRequest, Raised> {
+        let compile_error = |error: opentide_compile::rule::CompileError| {
+            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+        };
+        // The tenant's `type` as `by_uuid` read it, a `$VARIABLE`
+        // resolved: the compiler reads the setup as written.
+        let kind = match opentide_connectors::harfanglab::Client::new(self.context(connection))
+            .kind()
+            .map_err(|error| raised(&error))?
+        {
+            opentide_connectors::harfanglab::Kind::Sigma => "Sigma",
+            opentide_connectors::harfanglab::Kind::Yara => "YARA",
+        };
+        let mut table = batch.table.clone();
+        if let CJson::Object(fields) = &mut table
+            && let Some(CJson::Object(setup)) = fields.get_mut("setup")
+        {
+            setup.insert("type".into(), CJson::Str(kind.to_owned()));
+        }
+        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
+            .map_err(compile_error)?;
+        // `by_uuid` skipped a rule of the other kind: nothing to send
+        // is never a deploy.
+        let Some(write) = writes.first() else {
+            return Err(Raised::new(format!(
+                "HarfangLab compiled no request for rule {} on a {kind} tenant",
+                rule.uuid
+            )));
+        };
+        Ok(DeployRequest::new(
+            rule.uuid.clone(),
+            if deletion {
+                Operation::Delete
+            } else {
+                Operation::Update
+            },
+            if write.body.is_null() {
+                Vec::new()
+            } else {
+                serde_json::to_vec(&write.body).unwrap_or_default()
+            },
+        ))
+    }
+
     fn by_uuid_rule(
         &mut self,
         platform: &str,
@@ -2303,177 +2488,33 @@ impl Sender<'_, '_> {
     ) -> Result<(), Raised> {
         let strategy = self.strategy_of(rule, platform)?;
         let deletion = strategy == StatusStrategy::Deletion;
-        let tenant = batch.tenant.name.as_str();
-        let compile_error = |error: opentide_compile::rule::CompileError| {
-            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+        let id = PlatformId::parse(platform);
+        let request = match id {
+            Some(PlatformId::Sentinel) => self.sentinel_request(platform, batch, rule, deletion)?,
+            Some(PlatformId::Splunk) => self.splunk_request(platform, batch, rule, deletion)?,
+            Some(PlatformId::CarbonBlackCloud) => match self.carbon_black_request(batch, rule)? {
+                Some(request) => request,
+                None => return Ok(()),
+            },
+            _ => self.harfanglab_request(connection, batch, rule, deletion)?,
         };
-        match PlatformId::parse(platform) {
-            Some(PlatformId::Sentinel) => {
-                let deployer = self.deployer(platform)?;
-                let request = if deletion {
-                    tracing::warn!(
-                        arg0 = rule.name.as_str(),
-                        "the_rule_will_be_removed_from_the_sentinel_workspace"
-                    );
-                    DeployRequest::delete(rule.uuid.clone())
-                } else {
-                    let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
-                        .map_err(compile_error)?;
-                    DeployRequest::new(
-                        rule.uuid.clone(),
-                        Operation::Update,
-                        body.to_compact().into_bytes(),
-                    )
-                };
-                let context = self.context(connection);
-                self.block(async { Ok(deployer.deploy(context, &request).await) })
-                    .map_err(|error| raised(&error))?
-                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
-            }
-            Some(PlatformId::Splunk) => {
-                let splunk_cx = self.compile;
-                let bytes: [u8; 16] = *uuid::Uuid::new_v4().as_bytes();
-                let civil = jiff::tz::Offset::UTC.to_datetime(self.cx.now);
-                let clock = opentide_compile::splunk::Clock {
-                    random: (u32::from(bytes[0]) % 60, u32::from(bytes[1]) % 24),
-                    now: (
-                        u32::try_from(civil.minute()).unwrap_or(0),
-                        u32::try_from(civil.hour()).unwrap_or(0),
-                    ),
-                };
-                let writes =
-                    opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, clock)
-                        .map_err(compile_error)?;
-                let mut name = rule.name.trim().to_owned();
-                let correlation = match rule
-                    .block(platform)
-                    .and_then(|block| block.get("correlation_search"))
-                {
-                    Some(CJson::Bool(set)) => *set,
-                    _ => opentide_compile::splunk::enterprise_security(&batch.table)
-                        .map_err(compile_error)?,
-                };
-                if correlation {
-                    name.push_str(" - Rule");
-                }
-                let mut settings = opentide_compile::json::Object::new();
-                for write in writes.iter().skip(1) {
-                    if let CJson::Object(members) = &write.body {
-                        for (key, value) in members {
-                            settings.insert(key.clone(), value.clone());
-                        }
-                    }
-                }
-                let request = DeployRequest::new(
-                    name,
-                    if deletion {
-                        Operation::Delete
-                    } else {
-                        Operation::Update
-                    },
-                    if deletion {
-                        Vec::new()
-                    } else {
-                        CJson::Object(settings).to_compact().into_bytes()
-                    },
-                );
-                let deployer = self.deployer(platform)?;
-                let context = self.context(connection);
-                let outcome = self
-                    .block(async { Ok(deployer.deploy(context, &request).await) })
-                    .map_err(|error| raised(&error))?
-                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+        let deployer = self.deployer(platform)?;
+        let context = self.context(connection);
+        let outcome = self
+            .block(async { Ok(deployer.deploy(context, &request).await) })
+            .map_err(|error| raised(&error))?
+            .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+        for warning in &outcome.warnings {
+            match id {
                 // `splunk_alert_deleted`: the saved search the tenant had.
-                for warning in &outcome.warnings {
+                Some(PlatformId::Splunk) => {
                     tracing::warn!(name = warning.message.as_str(), "{}", warning.code);
                 }
-            }
-            Some(PlatformId::CarbonBlackCloud) => {
-                let Some(report) =
-                    opentide_compile::carbon_black::report(self.compile, rule, &batch.table)
-                        .map_err(compile_error)?
-                else {
-                    return Ok(());
-                };
-                // The report's fields, as the Deployer reads them; a rule that
-                // is not deployed retires its IOC.
-                let body = serde_json::json!({
-                    "uuid": rule.uuid,
-                    "name": report.name,
-                    "description": report.description,
-                    "query": report.query,
-                    "tags": report.tags,
-                    "severity": report.severity,
-                    "watchlist": report.watchlist,
-                    "report": report.report,
-                });
-                let operation = if report.deployment {
-                    Operation::Update
-                } else {
-                    Operation::Delete
-                };
-                let request = DeployRequest::new(
-                    rule.uuid.clone(),
-                    operation,
-                    serde_json::to_vec(&body).unwrap_or_default(),
-                )
-                .at(self.cx.now);
-                let deployer = self.deployer(platform)?;
-                let context = self.context(connection);
-                let outcome = self
-                    .block(async { Ok(deployer.deploy(context, &request).await) })
-                    .map_err(|error| raised(&error))?
-                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
                 // `report_deleted_with_rule`, `report_auto_deleted`: said, not raised.
-                for warning in &outcome.warnings {
+                Some(PlatformId::CarbonBlackCloud) => {
                     tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
                 }
-            }
-            _ => {
-                // The tenant's `type` as `by_uuid` read it, a `$VARIABLE`
-                // resolved: the compiler reads the setup as written.
-                let kind =
-                    match opentide_connectors::harfanglab::Client::new(self.context(connection))
-                        .kind()
-                        .map_err(|error| raised(&error))?
-                    {
-                        opentide_connectors::harfanglab::Kind::Sigma => "Sigma",
-                        opentide_connectors::harfanglab::Kind::Yara => "YARA",
-                    };
-                let mut table = batch.table.clone();
-                if let CJson::Object(fields) = &mut table
-                    && let Some(CJson::Object(setup)) = fields.get_mut("setup")
-                {
-                    setup.insert("type".into(), CJson::Str(kind.to_owned()));
-                }
-                let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
-                    .map_err(compile_error)?;
-                // `by_uuid` skipped a rule of the other kind: nothing to send
-                // is never a deploy.
-                let Some(write) = writes.first() else {
-                    return Err(Raised::new(format!(
-                        "HarfangLab compiled no request for rule {} on a {kind} tenant",
-                        rule.uuid
-                    )));
-                };
-                let deployer = self.deployer(platform)?;
-                let request = DeployRequest::new(
-                    rule.uuid.clone(),
-                    if deletion {
-                        Operation::Delete
-                    } else {
-                        Operation::Update
-                    },
-                    if write.body.is_null() {
-                        Vec::new()
-                    } else {
-                        serde_json::to_vec(&write.body).unwrap_or_default()
-                    },
-                );
-                let context = self.context(connection);
-                self.block(async { Ok(deployer.deploy(context, &request).await) })
-                    .map_err(|error| raised(&error))?
-                    .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+                _ => {}
             }
         }
         let _ = result;
