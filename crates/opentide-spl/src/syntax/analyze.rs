@@ -97,7 +97,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
                 .and_then(|i| merged.get(i))
                 .is_none_or(|&(_, to)| start > to)
     });
-    let tokens = highlight(&index, source, &lines, spec, catalog).unwrap_or_default();
+    let tokens = highlight(&index, &lines, spec, catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -742,7 +742,6 @@ fn looks_like_macro(text: &str) -> bool {
 /// refinements, as the tree-sitter path does them.
 fn highlight(
     index: &TreeIndex,
-    source: &str,
     lines: &LineIndex<'_>,
     spec: &HighlightSpec,
     catalog: &Catalog,
@@ -782,7 +781,6 @@ fn highlight(
         }
         spans.push((span(token.text_range()), capture));
     }
-    let _ = source;
     tokens_in(spec, lines, &spans)
 }
 

@@ -414,7 +414,8 @@ pub(crate) fn walk_pipelines<S>(
 ) {
     // The plan an analysis installed for this text and range, else one of
     // this walk's own (ADR 0014 §5: the analysis's walks that read the text
-    // alike, perf, CIM and declared datasets, each scanned it again).
+    // alike, perf, CIM, declared datasets and the search operators, each
+    // scanned it again).
     let installed = PLAN.with(|p| {
         p.borrow()
             .as_ref()
@@ -477,9 +478,9 @@ impl Plan {
             at: source.as_ptr() as usize,
             len: source.len(),
             range: (start, end),
-            // A function's address names it here: the two rules in use have
-            // distinct code, and a copy of one at another address would only
-            // miss the plan and scan again (the plan tests hold both).
+            // A function's address names it here: one rule is in use, and a
+            // copy of it at another address would only miss the plan and scan
+            // again, to the same result (the plan tests hold that).
             hidden: hidden as usize,
             pairs,
             frames,
@@ -549,11 +550,9 @@ thread_local! {
 #[must_use = "the plan is installed while the scope lives"]
 pub(crate) struct PlanScope<'a>(Option<std::rc::Rc<Plan>>, std::marker::PhantomData<&'a str>);
 
-/// Scans the whole of `source` once for the analysis's walks that read it
-/// alike (perf, CIM, declared datasets; the search operators skip other text
-/// and scan their own). The scope borrows `source`, so the plan, keyed by
-/// its address, cannot outlive it.
-/// operators, CIM, declared datasets), which read the same pipelines.
+/// Scans the whole of `source` once for the analysis's walks, which read it
+/// alike (perf, CIM, declared datasets and the search operators). The scope
+/// borrows `source`, so the plan, keyed by its address, cannot outlive it.
 pub(crate) fn plan_scope(source: &str) -> PlanScope<'_> {
     let plan = std::rc::Rc::new(Plan::new(source, (0, source.len()), skip_hidden));
     PlanScope(
@@ -829,6 +828,24 @@ mod plan_tests {
         let before = top_levels();
         crate::analyze(source);
         assert_eq!(top_levels() - before, once);
+    }
+
+    /// The rule finds hidden text only where [`next_stop`] stops: at a quote
+    /// or a backtick, `None` at every other byte, which a scan jumps over
+    /// (the [`Hidden`] contract).
+    #[test]
+    fn hidden_text_starts_only_at_a_stop() {
+        let text: String = (0u8..=127)
+            .map(char::from)
+            .chain(['é', '\u{1F600}'])
+            .collect();
+        for source in texts().iter().chain([&text]) {
+            for (i, byte) in source.bytes().enumerate() {
+                if !matches!(byte, b'"' | b'\'' | b'`') {
+                    assert_eq!(skip_hidden(source, i, source.len()), None, "{source:?} {i}");
+                }
+            }
+        }
     }
 
     /// The search operators' rule is the scan's: the same end of hidden text
