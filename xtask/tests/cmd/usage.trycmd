@@ -19,6 +19,7 @@ Commands:
   codegen       Write the artifacts generated from the Rust model (the platform templates); `--check` compares them (UC-1.8, #814)
   cassettes     The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
   bench         Run the benchmarks against their budgets (UC-0.8, #806)
+  throughput    Count each language's parse and analysis in instructions (callgrind) and hold them to tests/bench/instructions.toml (#1571, ADR 0014)
   vocab         The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
   spec-fields   Check every model field's description against its row in the field tables of the specifications checkout
   stubs         Generate src/opentide/_native/models.pyi and sdk.pyi from the extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
