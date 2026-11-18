@@ -114,9 +114,10 @@ baseline_s = 2.731
 baseline_rss_mib = 190.1
 target_s = 0.7
 # Plan section 11 asks <= 100 MB (95.4 MiB). #1071 met it and ratchets the target to
-# what CI measures plus the policy's RSS noise floor (2.0 MiB), so the gains are kept and
-# a regression fails: bench run 44410574033 (integration bc72123e, ubuntu-24.04,
-# AMD EPYC 9V45) measured 84.3 MiB, where the waiver allowed 103.5. What took it there:
+# the highest of three CI readings plus the policy's RSS noise floor (2.0 MiB), so the
+# gains are kept and a regression fails. On ubuntu-24.04 at integration bc72123e, the
+# waiver allowing 103.5: 84.3 MiB on an AMD EPYC 9V45 (bench run 44410574033), 84.0 on
+# a 7763 (44419588653) and 84.1 on a 9V74 (44419603322). What took it there:
 # the engine catalogs read item by item and built once (ADR 0013; #1568, #1569, #1572,
 # KQL's core files in #1609), smaller YAML nodes (Mark in u32s, #1583; short strings
 # inline, #1604), the KQL catalogs' shared names and types (#1609), and the bundled
