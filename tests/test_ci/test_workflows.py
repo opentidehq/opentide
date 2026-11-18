@@ -141,9 +141,9 @@ def test_the_changes_jobs_outputs_are_what_changes_py_writes() -> None:
     assert read <= set(outputs)
 
 
-#: Gate jobs pinned to one Linux image: `throughput` counts glibc's malloc, so its
-#: budgets (tests/bench/instructions.toml) hold on the image they were recorded on,
-#: as bench.yml's timings do on theirs.
+#: Gate jobs pinned to one Linux image: `throughput`'s instruction budgets
+#: (tests/bench/instructions.toml) are recorded under one valgrind and glibc, so
+#: they are checked on that image, as bench.yml's timings are on theirs.
 PINNED_RUNNERS = {"throughput": "ubuntu-24.04"}
 
 

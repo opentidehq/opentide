@@ -66,15 +66,17 @@ the lowest is held to [`tests/bench/instructions.toml`](../../tests/bench/instru
 - **Under budget.** A count more than 3% under is a warning that asks for the budgets to be
   recorded again (`cargo xtask throughput --record`), so that the gain is kept.
 
-Instruction counts do not depend on the machine's load, which time does. They still depend on the
-allocation order: each process seeds its hash maps, and glibc's malloc does more or less work with
-the order, so one run of a pass can differ from the next by 1.5%. A record writes the highest of
-its runs and a check takes the lowest, which keeps that noise inside the tolerance. glibc's malloc
-is counted, so budgets hold for one environment: the file names the valgrind, glibc and
+Instruction counts do not depend on the machine's load, which time does. Only the bench binary's
+own instructions are counted: glibc (malloc, the string routines) and the loader are left out. Their
+counts move with the glibc version, with the CPU glibc picks a routine for, and with the allocation
+order each process's hash seeds give: counted with them, one run of a pass differed from the next by
+1.5%, and CI's runner from a local run by up to 3.3%. Without them, runs differ by under 0.1%. An
+allocation still costs the bench's own code (growing, copying and dropping what it holds), so a
+change that allocates more still counts more. Each pass is counted three times (`--runs`): a record
+writes the highest, a check takes the lowest. The budgets file names the valgrind, glibc and
 architecture it was recorded on, and a check elsewhere warns. CI's `throughput` job is pinned to
-`ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded: on Ubuntu 26.04 (glibc
-2.43, valgrind 3.26) every count moved by 4 to 17%. Moving the job to another image means recording
-the budgets again there.
+`ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded, so that its valgrind
+counts as it did there.
 
 CI's `throughput` job runs the check when any crate the analysis is built from changes, when the
 bench, the budgets or the command change, and on every push; the table goes to the step summary. A

@@ -7,16 +7,17 @@
 //! (`parse`, `analyze`) and input set (`corpus`, `external`) after its
 //! warm-up (`--count`); callgrind counts that pass alone
 //! (`--toggle-collect=throughput::counted`). Instructions are deterministic
-//! for a build, an input and an allocation order, where time is not. The
-//! allocation order still varies (each process seeds its hash maps, and
-//! glibc's malloc does more or less work with the order): one pass can differ
-//! from the next by 1.5%. So each pass is counted [`RUNS`] times: the check
-//! holds the lowest to its budget within [`TOLERANCE`], and a record writes
-//! the highest. A count that falls further asks for the budgets to be recorded
-//! again (`--record`), so that the gain is kept. glibc's malloc is counted, so
-//! budgets hold for one environment: the file names it (valgrind, glibc, the
-//! architecture), and
-//! a check elsewhere warns.
+//! for a build and an input, where time is not, once the shared libraries are
+//! left out: only the bench binary's own code is counted. glibc's malloc and
+//! string routines move with the glibc version, the CPU a routine is chosen
+//! for and the allocation order (each process seeds its hash maps): with them,
+//! one pass differed from the next by 1.5% and from CI's by 3%; without them,
+//! by under 0.1%. Each pass is still counted [`RUNS`] times: the check holds
+//! the lowest to its budget within [`TOLERANCE`], and a record writes the
+//! highest. A count that falls further asks for the budgets to be recorded
+//! again (`--record`), so that the gain is kept. The budgets file names the
+//! environment it was recorded in (valgrind, glibc, the architecture), and a
+//! check elsewhere warns.
 
 use anyhow::{Context, Result, bail};
 use clap::builder::TypedValueParser as _;
@@ -175,7 +176,7 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
     if recorded.as_deref() != Some(environment) {
         println!(
             "::warning::throughput: the budgets were recorded on {}, this is {environment}: \
-             glibc's malloc is counted, so counts can differ",
+             the bench's own code should count the same, but compare with care",
             recorded.as_deref().unwrap_or("an unnamed environment")
         );
     }
@@ -371,18 +372,11 @@ fn count(
     }
     let profile =
         std::fs::read_to_string(&out).with_context(|| format!("reading {}", out.display()))?;
-    let instructions = profile
-        .lines()
-        .find_map(|l| {
-            l.strip_prefix("summary:")
-                .or_else(|| l.strip_prefix("totals:"))
-        })
-        .and_then(|n| n.trim().parse().ok())
-        .with_context(|| format!("no instruction total in {}", out.display()))?;
+    let instructions = own_instructions(&profile, binary);
     if instructions == 0 {
         bail!(
-            "{language} {mode} {set}: callgrind counted nothing in `throughput::counted` \
-             (were the bench binary's symbols stripped?)"
+            "{language} {mode} {set}: callgrind counted nothing of the bench binary in \
+             `throughput::counted` (were its symbols stripped?)"
         );
     }
     Ok(Count {
@@ -391,6 +385,59 @@ fn count(
         instructions,
         bytes,
     })
+}
+
+/// The instructions a callgrind profile counts in `binary`'s own code: every
+/// cost line under an `ob=` (the object a function is in) that names it, but
+/// a call's inclusive cost (the line after `calls=`), which is the callee's.
+/// Shared libraries (glibc's malloc and string routines, the loader) are left
+/// out: their counts move with the glibc version and the CPU it picks a
+/// routine for, and with the allocation order, where the bench's own code
+/// counts the same on any x86-64 Linux.
+fn own_instructions(profile: &str, binary: &Path) -> u64 {
+    let wanted = binary.file_name();
+    let mut names: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut own = false;
+    let mut after_call = false;
+    let mut total = 0;
+    for line in profile.lines() {
+        let object = line
+            .strip_prefix("ob=")
+            .map(|rest| (true, rest))
+            .or_else(|| line.strip_prefix("cob=").map(|rest| (false, rest)));
+        if let Some((current, rest)) = object {
+            // `(id) name` defines a compressed name, `(id)` reuses it.
+            let name = match rest.strip_prefix('(').and_then(|r| r.split_once(')')) {
+                Some((id, name)) if !name.trim().is_empty() => {
+                    names.insert(id, name.trim());
+                    name.trim()
+                }
+                Some((id, _)) => names.get(id).copied().unwrap_or_default(),
+                None => rest.trim(),
+            };
+            if current {
+                own = Path::new(name).file_name() == wanted;
+            }
+            continue;
+        }
+        if line.starts_with("calls=") {
+            after_call = true;
+            continue;
+        }
+        if line.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '*')) {
+            if std::mem::take(&mut after_call) {
+                continue;
+            }
+            if own {
+                total += line
+                    .split_whitespace()
+                    .last()
+                    .and_then(|n| n.parse::<u64>().ok())
+                    .unwrap_or(0);
+            }
+        }
+    }
+    total
 }
 
 fn output(command: &mut Command) -> Result<String> {
@@ -425,8 +472,8 @@ fn budgets_toml(budgets: &Budgets, environment: &str) -> String {
          # external public rules. Written by `cargo xtask throughput --record`; the\n\
          # check fails a count more than 3% over. Record again when a change lowers\n\
          # counts on purpose, or raises them on purpose with the reason in its PR.\n\
-         # Each is the highest of several runs. glibc's malloc is counted, so record\n\
-         # where CI checks (its `throughput` job's runner image).\n",
+         # Each is the highest of several runs, of the bench binary's own code\n\
+         # (glibc and the loader left out). CI checks on its `throughput` job's image.\n",
     );
     out.push_str(&format!("{ENVIRONMENT}{environment}\n"));
     for (language, counts) in budgets {
@@ -441,6 +488,35 @@ fn budgets_toml(budgets: &Budgets, environment: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_bench_binary_s_own_cost_is_counted() {
+        // A call's inclusive cost (after `calls=`) is the callee's, and a
+        // compressed object name, `(id)`, is the one its id was given.
+        let profile = "\
+events: Ir
+ob=(1) /usr/lib/x86_64-linux-gnu/libc.so.6
+fn=(1) malloc
+0 500
+ob=(2) /work/target/release/deps/throughput-abc
+fn=(2) throughput::counted
+0 7
++1 3
+cob=(1)
+cfn=(1)
+calls=2 0
++1 500
+ob=(1)
+fn=(1)
+-1 200
+ob=(2)
+fn=(3) opentide_kql::analyze
+* 11
+totals: 1221
+";
+        let binary = Path::new("/elsewhere/throughput-abc");
+        assert_eq!(own_instructions(profile, binary), 7 + 3 + 11);
+    }
 
     #[test]
     fn a_count_is_within_over_or_under_its_budget() {
