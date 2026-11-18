@@ -40,13 +40,13 @@ pub fn node_of(value: &Json) -> Node {
         )]
         Json::UInt(integer) => Value::Float(*integer as f64),
         Json::Float(float) => Value::Float(*float),
-        Json::Str(text) => Value::Str(text.clone()),
+        Json::Str(text) => Value::Str(text.as_str().into()),
         Json::Array(items) => Value::Seq(items.iter().map(|item| node_of(item).into()).collect()),
         Json::Object(map) => Value::Map(
             map.iter()
                 .map(|(key, item)| Entry {
                     key: Node {
-                        value: Value::Str(key.clone()),
+                        value: Value::Str(key.as_str().into()),
                         start: Mark::default(),
                         end: Mark::default(),
                         text: None,

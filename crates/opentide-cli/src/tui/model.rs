@@ -587,7 +587,7 @@ fn scalar_text(node: &Node) -> Option<String> {
 /// A reference field as UUIDs: `detection_model` may be a string or a list.
 fn uuids(node: Option<&Node>) -> Vec<String> {
     match node.map(|node| &node.value) {
-        Some(Value::Str(text)) if !text.is_empty() => vec![text.clone()],
+        Some(Value::Str(text)) if !text.is_empty() => vec![text.to_string()],
         Some(Value::Seq(items)) => items
             .iter()
             .filter_map(|item| item.value.as_str())

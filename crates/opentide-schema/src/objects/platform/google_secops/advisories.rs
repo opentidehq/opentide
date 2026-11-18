@@ -228,7 +228,7 @@ pub fn enabled_rule_name(rule: &Node) -> Option<String> {
         .and_then(|metadata| metadata.get("uuid"))
         .map(|uuid| match &uuid.value {
             Value::Str(uuid) => uuid.clone(),
-            _ => String::new(),
+            _ => String::new().into(),
         })
         .unwrap_or_default();
     Some(rule_name(title, block_name, &uuid)).filter(|name| !name.is_empty())

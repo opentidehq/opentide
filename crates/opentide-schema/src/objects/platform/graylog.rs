@@ -348,7 +348,7 @@ platform_block! {
 /// (`true`, `1`, `null`).
 fn py_str(node: &Node) -> String {
     match &node.value {
-        Value::Str(text) => text.clone(),
+        Value::Str(text) => text.to_string(),
         _ => repr::node(node),
     }
 }

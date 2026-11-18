@@ -69,7 +69,7 @@ const CHILD_RELATIONS: [ChildRelation; 3] = [
 /// The UUIDs a reference names: a string, or the strings of a list.
 fn referenced(node: Option<&Node>) -> Vec<String> {
     match node.map(|node| &node.value) {
-        Some(Value::Str(text)) => vec![text.clone()],
+        Some(Value::Str(text)) => vec![text.to_string()],
         Some(Value::Seq(items)) => items
             .iter()
             .filter_map(|item| item.value.as_str().map(str::to_owned))
@@ -284,7 +284,7 @@ fn listed(node: Option<&Node>) -> Vec<String> {
 /// `null`, `true`, `["x",1]`).
 pub fn node_text(node: &Node) -> String {
     match &node.value {
-        Value::Str(text) | Value::Datetime(text) => text.clone(),
+        Value::Str(text) | Value::Datetime(text) => text.to_string(),
         _ => crate::json::Json::from_node(node).to_compact(),
     }
 }
