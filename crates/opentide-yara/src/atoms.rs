@@ -59,9 +59,7 @@ pub fn best_quality(runs: &[Vec<MaskedByte>]) -> Option<i32> {
         .filter(|r| !r.is_empty())
         .flat_map(|run| {
             // libyara trims an atom's masked ends, so shorter atoms count too.
-            (1..=run.len().min(YR_MAX_ATOM_LENGTH))
-                .flat_map(|len| run.windows(len).map(quality).collect::<Vec<_>>())
-                .collect::<Vec<_>>()
+            (1..=run.len().min(YR_MAX_ATOM_LENGTH)).flat_map(|len| run.windows(len).map(quality))
         })
         .max()
 }
@@ -87,6 +85,49 @@ pub fn text_run(bytes: &[u8], wide: bool) -> Vec<MaskedByte> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`best_quality`] as first written, collecting each length's scores.
+    fn best_quality_collected(runs: &[Vec<MaskedByte>]) -> Option<i32> {
+        runs.iter()
+            .filter(|r| !r.is_empty())
+            .flat_map(|run| {
+                (1..=run.len().min(YR_MAX_ATOM_LENGTH))
+                    .flat_map(|len| run.windows(len).map(quality).collect::<Vec<_>>())
+                    .collect::<Vec<_>>()
+            })
+            .max()
+    }
+
+    /// The best quality, taken as the scores come, is the collected one.
+    #[test]
+    fn the_best_quality_is_the_collected_one() {
+        let masks = [0xFF, 0x00, 0x0F, 0xF0];
+        let mut seed: u32 = 11;
+        let mut next = || {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            seed >> 16
+        };
+        for _ in 0..2000 {
+            let runs: Vec<Vec<MaskedByte>> = (0..next() % 4)
+                .map(|_| {
+                    (0..next() % 9)
+                        .map(|_| {
+                            let byte = u8::try_from(next() % 256).unwrap_or(0);
+                            let mask = masks[usize::try_from(next() % 4).unwrap_or(0)];
+                            (byte, mask)
+                        })
+                        .collect()
+                })
+                .collect();
+            assert_eq!(
+                best_quality(&runs),
+                best_quality_collected(&runs),
+                "{runs:?}"
+            );
+        }
+        assert_eq!(best_quality(&[]), None);
+        assert_eq!(best_quality(&[Vec::new()]), None);
+    }
 
     fn fixed(bytes: &[u8]) -> Vec<MaskedByte> {
         bytes.iter().map(|&b| (b, 0xFF)).collect()

@@ -930,7 +930,7 @@ fn nearest_key_line(root: Option<&Node>, field_path: &[String]) -> Option<usize>
         else {
             break;
         };
-        line = entry.key.start.line.checked_sub(1);
+        line = entry.key.start.line().checked_sub(1);
         node = &entry.value;
     }
     line
