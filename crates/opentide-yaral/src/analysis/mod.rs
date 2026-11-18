@@ -48,21 +48,55 @@ pub(crate) fn diagnostics_of(
     parsed: &Parse,
     root: &SyntaxNode,
 ) -> Vec<Diagnostic> {
+    check(source, ctx, parsed, root, None)
+}
+
+/// [`diagnostics_of`] and the semantic tokens, from one walk over every
+/// element: the checks' walk gathers the highlight's spans (ADR 0014 §5a).
+pub(crate) fn analysis_of(
+    source: &str,
+    ctx: Context,
+    parsed: &Parse,
+    root: &SyntaxNode,
+) -> (Vec<Diagnostic>, Vec<opentide_highlight::HighlightToken>) {
+    let mut spans = Vec::new();
+    let diagnostics = check(source, ctx, parsed, root, Some(&mut spans));
+    (diagnostics, highlight::tokens(&spans, source))
+}
+
+fn check(
+    source: &str,
+    ctx: Context,
+    parsed: &Parse,
+    root: &SyntaxNode,
+    spans: Option<&mut Vec<(opentide_core::ByteSpan, &'static str)>>,
+) -> Vec<Diagnostic> {
     let profile = ctx.profile.unwrap_or_else(|| profile_of(source, root));
     let mut findings = Vec::new();
     let mut checker = checker::Checker::new(source, profile, ctx.meta_required);
+    let gather = spans.is_some();
+    if gather {
+        checker.spans = Some(Vec::new());
+    }
     if let Some(first) = parsed.errors.first() {
         findings.push(parse_error(source, root, first));
         // String escapes are lexical: still reported.
         for element in root.descendants_with_tokens() {
-            if let NodeOrToken::Token(t) = element
-                && t.kind() == K::STRING
-            {
-                checker.escapes(&t);
+            count_visit();
+            if let NodeOrToken::Token(t) = element {
+                if let Some(spans) = &mut checker.spans {
+                    spans.extend(highlight::span(&t));
+                }
+                if t.kind() == K::STRING {
+                    checker.escapes(&t);
+                }
             }
         }
     } else {
         checker.run(root);
+    }
+    if let (Some(out), Some(gathered)) = (spans, checker.spans.take()) {
+        *out = gathered;
     }
     findings.extend(checker.findings);
     findings.sort_by_key(|f| (f.start, f.end));
@@ -84,6 +118,25 @@ pub(crate) fn diagnostics_of(
             object_type: None,
         })
         .collect()
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The elements the walks over every element visited on this thread: [`visits`].
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one element a walk over every element visited, in tests (ADR 0014 §7).
+#[inline]
+pub(super) fn count_visit() {
+    #[cfg(test)]
+    VISITS.set(VISITS.get() + 1);
+}
+
+/// How many elements the walks over every element visited on this thread.
+#[cfg(test)]
+pub(crate) fn visits() -> usize {
+    VISITS.get()
 }
 
 /// The names an error message gives a kind: its text, or what it stands for.
@@ -196,4 +249,101 @@ fn parse_error(source: &str, root: &SyntaxNode, error: &SyntaxError) -> Finding 
         start,
         stop,
     )
+}
+
+#[cfg(test)]
+mod walk_tests {
+    use super::*;
+
+    /// Rules and searches like the corpus's and Google's, written here: an
+    /// engine crate reads no file, its tests in `src/` included
+    /// (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        r#"rule adfs_dkm_key_access {
+  meta:
+    author = "Google Cloud Security"
+    severity = "High"
+  events:
+    $object.metadata.event_type = "USER_RESOURCE_ACCESS"
+    any $object.security_result.detection_fields.value = "properties:{8d3b}"
+    $object.principal.labels["SubjectLogonId"] = $subject
+    $login.metadata.event_type = "USER_LOGIN"
+    $login.target.labels["TargetLogonId"] = $subject
+    $login.principal.hostname = $hostname
+  match:
+    $hostname over 5m
+  outcome:
+    $risk_score = 85
+    // a comment
+    $pids = array_distinct($object.principal.process.pid)
+    $n = count_distinct($login.metadata.id)
+  condition:
+    $object AND $login AND #subject > 1 OR NOT $x
+  options:
+    allow_zero_values = true
+}"#,
+        r#"rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    strings.to_lower($e.principal.hostname) = "web01"
+    re.regex($e.target.url, `login\.php`) nocase
+    $e.target.ip IN %allow_list
+    $e.principal.hostname = /web[0-9]+/ NOCASE
+  condition:
+    $e
+}"#,
+        "metadata.event_type = \"USER_LOGIN\"\nselect:\n  principal.ip, target.user.userid",
+        "cross join\noutcome:\n  $n = 1",
+        "rule broken {\n  events:\n    $e.metadata.event_type = \"A\\q\"\n  condition:\n    $e and\n",
+        "rule r { events: $e.principal.ip = \"1.2.3.4\" match: $e over 1h condition: $e and window_start > 0 }",
+    ];
+
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = SAMPLES
+            .iter()
+            .flat_map(|t| t.char_indices().step_by(3).map(|(i, _)| t[..i].to_owned()))
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// The diagnostics and tokens of one walk are those of the checks' walk
+    /// and the highlight's walk apart (ADR 0014 §5a).
+    #[test]
+    fn one_walk_gives_the_checks_and_the_highlight_of_two() {
+        for source in texts() {
+            for ctx in [Context::FILE, Context::SECTIONS, Context::SEARCH] {
+                let parsed = parse(&source);
+                let root = SyntaxNode::new_root(parsed.green.clone());
+                let (diagnostics, tokens) = analysis_of(&source, ctx, &parsed, &root);
+                assert_eq!(
+                    format!("{diagnostics:?}"),
+                    format!("{:?}", diagnostics_of(&source, ctx, &parsed, &root)),
+                    "{source:?}"
+                );
+                assert_eq!(
+                    format!("{tokens:?}"),
+                    format!("{:?}", highlight(&root, &source)),
+                    "{source:?}"
+                );
+            }
+        }
+    }
+
+    /// An analysis walks every element once, whether the text parses or not
+    /// (ADR 0014 §7): the checks' walk and the highlight's walked it twice.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for source in [SAMPLES[0], SAMPLES[4]] {
+            let elements = SyntaxNode::new_root(parse(source).green)
+                .descendants_with_tokens()
+                .count();
+            let before = visits();
+            crate::analyze(source);
+            assert_eq!(visits() - before, elements, "{source:?}");
+        }
+    }
 }

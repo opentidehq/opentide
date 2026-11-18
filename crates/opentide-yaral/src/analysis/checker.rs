@@ -78,6 +78,95 @@ pub(crate) struct Checker<'s> {
     meta_required: bool,
     pub findings: Vec<Finding>,
     pub(super) stages: BTreeSet<String>,
+    /// The highlight's spans, gathered by the walk over every element when
+    /// the caller wants them (ADR 0014 §5a).
+    pub(super) spans: Option<Vec<(opentide_core::ByteSpan, &'static str)>>,
+    /// Every node of the tree in preorder, read once by [`Checker::run`]:
+    /// the checks read a node's descendants from it, not from a walk of
+    /// their own (ADR 0014 §5).
+    nodes: Option<Descendants>,
+}
+
+/// The nodes of a tree in preorder, each with the end of its subtree: a
+/// node's descendants, itself first, are one slice, in the order rowan's
+/// `descendants` gives them.
+struct Descendants {
+    nodes: std::rc::Rc<Vec<SyntaxNode>>,
+    ends: Vec<usize>,
+}
+
+impl Descendants {
+    fn new(root: &SyntaxNode) -> Self {
+        let mut nodes = Vec::new();
+        let mut ends = Vec::new();
+        let mut open: Vec<usize> = Vec::new();
+        for event in root.preorder() {
+            match event {
+                rowan::WalkEvent::Enter(node) => {
+                    open.push(nodes.len());
+                    nodes.push(node);
+                    ends.push(0);
+                }
+                rowan::WalkEvent::Leave(_) => {
+                    if let Some(i) = open.pop() {
+                        ends[i] = nodes.len();
+                    }
+                }
+            }
+        }
+        Self {
+            nodes: std::rc::Rc::new(nodes),
+            ends,
+        }
+    }
+
+    /// Where `node` is: preorder sorts the nodes by where they start, so a
+    /// binary search finds the nodes starting where it does (a node and its
+    /// first descendants), and `node` is one of them.
+    fn place(&self, node: &SyntaxNode) -> Option<usize> {
+        let start = node.text_range().start();
+        let first = self
+            .nodes
+            .partition_point(|n| n.text_range().start() < start);
+        self.nodes[first..]
+            .iter()
+            .take_while(|n| n.text_range().start() == start)
+            .position(|n| n == node)
+            .map(|i| first + i)
+    }
+}
+
+/// A node's descendants from [`Descendants`], or from rowan for a node it
+/// does not hold.
+pub(super) enum Under {
+    Indexed {
+        nodes: std::rc::Rc<Vec<SyntaxNode>>,
+        next: usize,
+        end: usize,
+    },
+    Walked(Box<dyn Iterator<Item = SyntaxNode>>),
+}
+
+impl Iterator for Under {
+    type Item = SyntaxNode;
+
+    fn next(&mut self) -> Option<SyntaxNode> {
+        match self {
+            Under::Indexed { nodes, next, end } => {
+                let node = (*next < *end).then(|| nodes[*next].clone())?;
+                *next += 1;
+                #[cfg(test)]
+                INDEXED.set(INDEXED.get() + 1);
+                Some(node)
+            }
+            Under::Walked(walk) => {
+                let node = walk.next()?;
+                #[cfg(test)]
+                WALKED.set(WALKED.get() + 1);
+                Some(node)
+            }
+        }
+    }
 }
 
 impl<'s> Checker<'s> {
@@ -88,6 +177,8 @@ impl<'s> Checker<'s> {
             meta_required,
             findings: Vec::new(),
             stages: BTreeSet::new(),
+            spans: None,
+            nodes: None,
         }
     }
 
@@ -111,8 +202,25 @@ impl<'s> Checker<'s> {
         self.push(code, Severity::Warning, message, at);
     }
 
+    /// `node` and the nodes below it, in preorder: rowan's `descendants`,
+    /// read from the index [`Checker::run`] builds.
+    pub(super) fn under(&self, node: &SyntaxNode) -> Under {
+        match &self.nodes {
+            Some(index) => match index.place(node) {
+                Some(i) => Under::Indexed {
+                    nodes: std::rc::Rc::clone(&index.nodes),
+                    next: i,
+                    end: index.ends[i],
+                },
+                None => Under::Walked(Box::new(node.descendants())),
+            },
+            None => Under::Walked(Box::new(node.descendants())),
+        }
+    }
+
     /// Every check on a tree that parsed.
     pub(crate) fn run(&mut self, root: &SyntaxNode) {
+        self.nodes = Some(Descendants::new(root));
         let rules: Vec<SyntaxNode> = root
             .children()
             .filter(|n| n.kind() == K::RULE_DECLARATION)
@@ -368,7 +476,7 @@ impl<'s> Checker<'s> {
         if profile == Profile::Rule {
             let mut joins = Vec::new();
             for s in sections {
-                joins.extend(s.node.descendants().filter(|n| n.kind() == K::CROSS_JOIN));
+                joins.extend(self.under(&s.node).filter(|n| n.kind() == K::CROSS_JOIN));
             }
             for join in joins {
                 self.error(
@@ -389,7 +497,7 @@ impl<'s> Checker<'s> {
     fn reads_stages(&self, sections: &[Section]) -> bool {
         let mut reads = false;
         for s in sections {
-            for n in s.node.descendants() {
+            for n in self.under(&s.node) {
                 match n.kind() {
                     K::CROSS_JOIN => reads = true,
                     K::UDM_FIELD => reads |= self.stage_field(&n),
@@ -406,7 +514,7 @@ impl<'s> Checker<'s> {
         let mut cross = false;
         let mut events = false;
         for s in sections {
-            for n in s.node.descendants() {
+            for n in self.under(&s.node) {
                 match n.kind() {
                     K::CROSS_JOIN => cross = true,
                     K::BARE_FIELD => events = true,
@@ -437,7 +545,7 @@ impl<'s> Checker<'s> {
         let mut found: Vec<(SyntaxNode, bool)> = Vec::new();
         for s in sections {
             let predicates = matches!(s.name, "events" | "setup");
-            for n in s.node.descendants().filter(|n| n.kind() == K::WINDOW_BOUND) {
+            for n in self.under(&s.node).filter(|n| n.kind() == K::WINDOW_BOUND) {
                 found.push((n, predicates));
             }
         }
@@ -463,7 +571,7 @@ impl<'s> Checker<'s> {
     /// variable (data-tables: "You can only export outcome variables").
     fn export_values(&mut self, node: &SyntaxNode, scope: &Scope, matched: &BTreeSet<String>) {
         let mut values: Vec<SyntaxNode> = Vec::new();
-        for n in node.descendants() {
+        for n in self.under(node) {
             if n.kind() == K::NAMED_ARGUMENT
                 && n.ancestors().any(|a| a.kind() == K::TABLE_CALL)
                 && let Some(value) = crate::ast::NamedArgument::cast(n.clone())
@@ -550,7 +658,7 @@ impl<'s> Checker<'s> {
     /// Event variables (the root of a field path) and placeholders (a bare
     /// variable) of `events` and `setup`.
     fn collect_events(&self, node: &SyntaxNode, scope: &mut Scope) {
-        for n in node.descendants() {
+        for n in self.under(node) {
             match n.kind() {
                 K::UDM_FIELD => {
                     if let Some(var) = root_variable(&n) {
@@ -581,7 +689,7 @@ impl<'s> Checker<'s> {
         for statement in node.children() {
             let mut events = BTreeSet::new();
             let mut placeholders = BTreeSet::new();
-            for n in statement.descendants().filter(|n| n.kind() == K::VARIABLE) {
+            for n in self.under(&statement).filter(|n| n.kind() == K::VARIABLE) {
                 let name = self.text(&n).to_string();
                 if n.parent().map(|p| p.kind()) == Some(K::UDM_FIELD) {
                     events.insert(name);
@@ -779,7 +887,7 @@ impl<'s> Checker<'s> {
             let name = self.text(&left).to_string();
             if let Some(right) = comparison.right().map(|r| r.syntax().clone()) {
                 let mut read: BTreeSet<String> = BTreeSet::new();
-                for n in right.descendants().filter(|n| n.kind() == K::VARIABLE) {
+                for n in self.under(&right).filter(|n| n.kind() == K::VARIABLE) {
                     let v = self.text(&n).to_string();
                     if n.parent().map(|p| p.kind()) == Some(K::UDM_FIELD) {
                         read.insert(v);
@@ -912,7 +1020,7 @@ impl<'s> Checker<'s> {
     /// Variables a section reads that `events` and `outcome` do not define.
     fn references(&mut self, node: &SyntaxNode, scope: &Scope, section: &str) {
         let mut found: Vec<(SyntaxNode, String)> = Vec::new();
-        for n in node.descendants() {
+        for n in self.under(node) {
             if matches!(n.kind(), K::VARIABLE | K::COUNT_REF) {
                 let name = dollar_name(self.text(&n));
                 let parent = n.parent().map(|p| p.kind());
@@ -942,7 +1050,7 @@ impl<'s> Checker<'s> {
 
     /// The `$name`s a condition mentions, as `$name` (counts included).
     fn condition_names(&self, node: &SyntaxNode) -> BTreeSet<String> {
-        node.descendants()
+        self.under(node)
             .filter(|n| {
                 matches!(n.kind(), K::VARIABLE | K::COUNT_REF)
                     && n.parent().map(|p| p.kind()) != Some(K::UDM_FIELD)
@@ -1040,7 +1148,7 @@ impl<'s> Checker<'s> {
         let mut not_terms: Vec<SyntaxNode> = Vec::new();
         let mut or_groups: Vec<SyntaxNode> = Vec::new();
         for statement in &statements {
-            for n in statement.descendants() {
+            for n in self.under(statement) {
                 // `$e` under `!` is the `!$e` term, not a term of its own.
                 let negated = n.kind() == K::VARIABLE
                     && n.parent().is_some_and(|p| p.kind() == K::UNARY_EXPR);
@@ -1091,7 +1199,7 @@ impl<'s> Checker<'s> {
                 }
             }
             let mixed = operands.iter().any(|o| {
-                o.kind() == K::AND_EXPR && o.descendants().any(|n| self.term(&n, scope).is_some())
+                o.kind() == K::AND_EXPR && self.under(o).any(|n| self.term(&n, scope).is_some())
             });
             if !event_terms && !mixed {
                 continue;
@@ -1207,7 +1315,7 @@ impl<'s> Checker<'s> {
         let mut cidr = 0;
         let mut over: Vec<(SyntaxNode, String)> = Vec::new();
         for s in sections {
-            for n in s.node.descendants().filter(|n| n.kind() == K::IN_EXPR) {
+            for n in self.under(&s.node).filter(|n| n.kind() == K::IN_EXPR) {
                 all += 1;
                 let kind = n
                     .children_with_tokens()
@@ -1247,7 +1355,7 @@ impl<'s> Checker<'s> {
     fn unfiltered(&mut self, events: &SyntaxNode, scope: &Scope) {
         let mut filtered: BTreeSet<String> = BTreeSet::new();
         let mut detection: BTreeSet<String> = BTreeSet::new();
-        for n in events.descendants() {
+        for n in self.under(events) {
             if n.kind() == K::UDM_FIELD {
                 let segs = accessor_segments(&n);
                 if let (Some(var), Some(Segment::Name(first, _))) =
@@ -1325,6 +1433,84 @@ impl<'s> Checker<'s> {
                     *at,
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The descendants the checks read from the index on this thread.
+    static INDEXED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The descendants the checks walked to with rowan on this thread.
+    static WALKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+mod index_tests {
+    use super::*;
+    use crate::parser::parse;
+
+    /// Rules and searches like Google's and the corpus's, written here: an
+    /// engine crate reads no file (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        r#"rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $e.principal.hostname = $host
+    $f.target.ip IN %allow_list
+    not $e.target.user.userid = /admin.*/ nocase
+  match:
+    $host over 5m
+  outcome:
+    $n = count_distinct($e.metadata.id)
+    $risk_score = max(if($e.principal.ip = "1.2.3.4", 10, 0))
+  condition:
+    $e and #e > 2 and ($f or !$f)
+  options:
+    allow_zero_values = true
+}"#,
+        "metadata.event_type = \"USER_LOGIN\"\nselect:\n  principal.ip, target.user.userid",
+        "stage s { metadata.event_type = \"X\" match: principal.hostname } $s.hostname = \"a\" cross join outcome: $n = window_start",
+        "rule broken { events: $e.x = ( condition: $e and",
+    ];
+
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        out.extend(
+            SAMPLES
+                .iter()
+                .flat_map(|t| t.char_indices().step_by(2).map(|(i, _)| t[..i].to_owned())),
+        );
+        out
+    }
+
+    /// The index gives every node's descendants as rowan does: the same
+    /// nodes in the same order, the node itself first (ADR 0014 §5).
+    #[test]
+    fn the_index_gives_rowans_descendants() {
+        for source in texts() {
+            let root = SyntaxNode::new_root(parse(&source).green);
+            let mut checker = Checker::new(&source, Profile::Rule, false);
+            checker.nodes = Some(Descendants::new(&root));
+            for node in root.descendants() {
+                let indexed: Vec<SyntaxNode> = checker.under(&node).collect();
+                let walked: Vec<SyntaxNode> = node.descendants().collect();
+                assert_eq!(indexed, walked, "{source:?}");
+            }
+        }
+    }
+
+    /// The checks read every descendant from the index and walk to none
+    /// (ADR 0014 §7): each walked its sections' and statements' subtrees.
+    #[test]
+    fn the_checks_walk_no_subtree() {
+        for source in [SAMPLES[0], SAMPLES[1]] {
+            let (indexed, walked) = (INDEXED.get(), WALKED.get());
+            crate::analyze(source);
+            assert_eq!(WALKED.get() - walked, 0, "{source:?}");
+            assert!(INDEXED.get() - indexed > 0, "{source:?}");
         }
     }
 }
