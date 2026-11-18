@@ -451,7 +451,8 @@ enum KeyId {
     Bool(bool),
     Int(i64),
     Float(u64),
-    Str(String),
+    /// Kept inline as the key's own text is: no allocation for a short key.
+    Str(CompactString),
 }
 
 impl KeyId {
@@ -462,7 +463,7 @@ impl KeyId {
             Value::Bool(flag) => Self::Bool(*flag),
             Value::Int(integer) => Self::Int(*integer),
             Value::Float(float) => Self::Float(float.to_bits()),
-            Value::Str(text) => Self::Str(text.to_string()),
+            Value::Str(text) => Self::Str(text.clone()),
             Value::Seq(_) | Value::Map(_) | Value::Datetime(_) => return None,
         })
     }

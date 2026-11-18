@@ -343,7 +343,7 @@ pub fn fill_legacy_keys(model: &str, block: &Node) -> Node {
                 if !taken {
                     out.push(crate::node::Entry {
                         key: std::sync::Arc::new(Node {
-                            value: Value::Str((*target).to_owned().into()),
+                            value: Value::Str((*target).into()),
                             start: entry.key.start,
                             end: entry.key.end,
                             text: None,
