@@ -155,9 +155,6 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
     let (env, workspace_problem) = plugin::served(env, &cwd);
     std::io::stdout().flush()?;
     let rpc = stdio::reserve_stdout()?;
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
     let server = Server::new(
         env,
         launch.cwd.clone(),
@@ -165,19 +162,26 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
         version,
         workspace_problem,
     );
+    // The server's tasks run on the process's runtime's threads, not this
+    // one: they log to this command's subscriber (`--debug`) as the process
+    // default, the server being the process's one command until it exits.
+    let _ = tracing::dispatcher::set_global_default(tracing::dispatcher::get_default(Clone::clone));
     #[cfg(not(target_os = "wasi"))]
-    let outcome = runtime.block_on(server.run(tokio::io::stdin(), rpc.file()?));
+    // On the process's one runtime (#1558): a tool's network work, on one of
+    // its `spawn_blocking` threads, blocks on it there.
+    let outcome =
+        opentide_connectors::runtime::block_on(server.run(tokio::io::stdin(), rpc.file()?));
     // WASI: tokio has no standard streams and the module no threads, so the
     // client is read with blocking reads, a message at a time, each answered
     // before the next read (`interactive`).
     #[cfg(target_os = "wasi")]
-    let outcome = runtime.block_on(interactive::serve(
+    let outcome = opentide_connectors::runtime::block_on(interactive::serve(
         server,
         std::io::stdin().lock(),
         rpc.writer()?,
     ));
     rpc.restore()?;
-    outcome?;
+    outcome.map_err(std::io::Error::other)??;
     Ok(0)
 }
 

@@ -876,6 +876,8 @@ fn a_refused_rule_on_one_platform_leaves_the_next_platform_to_deploy() {
     );
     assert_eq!(splunk.seen.lock().unwrap().len(), 1);
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    // Both platforms' sends ran on the process's one runtime (#1558).
+    assert_eq!(opentide_connectors::runtime::started(), 1);
 }
 
 #[test]
