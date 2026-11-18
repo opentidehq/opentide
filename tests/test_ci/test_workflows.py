@@ -141,13 +141,19 @@ def test_the_changes_jobs_outputs_are_what_changes_py_writes() -> None:
     assert read <= set(outputs)
 
 
+#: Gate jobs pinned to one Linux image: `throughput`'s instruction budgets
+#: (tests/bench/instructions.toml) are recorded under one valgrind and glibc, so
+#: they are checked on that image, as bench.yml's timings are on theirs.
+PINNED_RUNNERS = {"throughput": "ubuntu-24.04"}
+
+
 def test_the_gates_jobs_run_on_linux_and_only_the_build_compiles() -> None:
     """A pull request's jobs run on Linux; `build` builds and runs the Rust tests and
     `native` builds the wheel the Python jobs install: no other job compiles again."""
     for job_id, job in ci_jobs().items():
         release_or_nightly = "release" in str(job.get("if", "")) or nightly_only(job)
         if not release_or_nightly and "runs-on" in job:
-            assert job["runs-on"] == "ubuntu-latest", job_id
+            assert job["runs-on"] == PINNED_RUNNERS.get(job_id, "ubuntu-latest"), job_id
     compiles = re.compile(
         r"\bcargo (?:build|test|nextest run)\b|\bmaturin\b|\buv (?:sync|build)\b(?!.*--no-install)"
     )
