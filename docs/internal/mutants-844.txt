@@ -1,0 +1,905 @@
+# The mutants that survived the #844 mutation-testing experiment: cargo-mutants 27.1.0 on
+# opentide-schema and opentide-workspace, each with its own tests only, in GitHub Actions run
+# 44336903971 (2026-11-18). One mutant a line: the crate, then cargo-mutants' description.
+# docs/internal/test-strength.md ("Mutation testing") has the scores and the triage.
+schema	crates/opentide-schema/src/configuration/bundled.rs:189:58: delete ! in tlp_names
+schema	crates/opentide-schema/src/configuration/bundled.rs:189:58: replace match guard !name.is_empty() with false in tlp_names
+schema	crates/opentide-schema/src/configuration/bundled.rs:189:58: replace match guard !name.is_empty() with true in tlp_names
+schema	crates/opentide-schema/src/configuration/bundled.rs:190:25: delete match arm crate::node::Value::Int(number) in tlp_names
+schema	crates/opentide-schema/src/configuration/checks.rs:104:22: replace - with / in file_key
+schema	crates/opentide-schema/src/configuration/checks.rs:111:34: replace - with / in file_key
+schema	crates/opentide-schema/src/configuration/checks.rs:190:5: replace bundled_status_names -> Vec<String> with vec!["xyzzy".into()]
+schema	crates/opentide-schema/src/configuration/checks.rs:190:5: replace bundled_status_names -> Vec<String> with vec![String::new()]
+schema	crates/opentide-schema/src/configuration/checks.rs:190:5: replace bundled_status_names -> Vec<String> with vec![]
+schema	crates/opentide-schema/src/configuration/checks.rs:319:9: delete match arm "platforms/bitdefender.toml" in validate
+schema	crates/opentide-schema/src/configuration/checks.rs:320:9: delete match arm "platforms/exabeam.toml" in validate
+schema	crates/opentide-schema/src/configuration/checks.rs:321:9: delete match arm "platforms/google_secops.toml" in validate
+schema	crates/opentide-schema/src/configuration/checks.rs:322:9: delete match arm "platforms/graylog.toml" in validate
+schema	crates/opentide-schema/src/configuration/checks.rs:549:37: replace == with != in configurations_directory
+schema	crates/opentide-schema/src/configuration/checks.rs:550:9: replace || with && in configurations_directory
+schema	crates/opentide-schema/src/configuration/checks.rs:561:36: replace - with + in configurations_directory
+schema	crates/opentide-schema/src/configuration/checks.rs:561:36: replace - with / in configurations_directory
+schema	crates/opentide-schema/src/configuration/checks.rs:642:21: replace == with != in workspace_issues
+schema	crates/opentide-schema/src/configuration/checks.rs:665:9: delete field file_path from struct Finding expression in named
+schema	crates/opentide-schema/src/configuration/checks.rs:80:45: replace && with || in parts
+schema	crates/opentide-schema/src/configuration/errors.rs:37:14: replace match guard message.is_empty() with false in describe_error
+schema	crates/opentide-schema/src/configuration/merge.rs:38:20: replace match guard matches!(existing.value.value, Value::Map(_)) && matches!(entry.value.value, Value::Map(_)) with true in deep_merge
+schema	crates/opentide-schema/src/configuration/merge.rs:39:21: replace && with || in deep_merge
+schema	crates/opentide-schema/src/configuration/merge.rs:63:5: replace get -> Option<&'n Node> with None
+schema	crates/opentide-schema/src/configuration/merge.rs:79:38: replace > with >= in to_json
+schema	crates/opentide-schema/src/configuration/models.rs:1096:5: replace tenant_targets -> Option<Option<BitdefenderTenantTargets>> with None
+schema	crates/opentide-schema/src/configuration/models.rs:1096:5: replace tenant_targets -> Option<Option<BitdefenderTenantTargets>> with Some(None)
+schema	crates/opentide-schema/src/configuration/models.rs:1098:40: replace == with != in tenant_targets
+schema	crates/opentide-schema/src/configuration/models.rs:1246:9: replace ExabeamRegion::as_str -> &'static str with ""
+schema	crates/opentide-schema/src/configuration/models.rs:1246:9: replace ExabeamRegion::as_str -> &'static str with "xyzzy"
+schema	crates/opentide-schema/src/configuration/models.rs:1262:61: replace == with != in ExabeamRegion::parse
+schema	crates/opentide-schema/src/configuration/models.rs:1262:9: replace ExabeamRegion::parse -> Option<Self> with None
+schema	crates/opentide-schema/src/configuration/models.rs:1269:32: delete ! in exabeam_base_url
+schema	crates/opentide-schema/src/configuration/models.rs:1269:5: replace exabeam_base_url -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/configuration/models.rs:1269:5: replace exabeam_base_url -> String with String::new()
+schema	crates/opentide-schema/src/configuration/models.rs:1278:9: replace ExabeamSetup::url -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/configuration/models.rs:1278:9: replace ExabeamSetup::url -> String with String::new()
+schema	crates/opentide-schema/src/configuration/models.rs:168:17: delete match arm "github" in <impl FromNode for Flavor>::from_node
+schema	crates/opentide-schema/src/configuration/models.rs:169:17: delete match arm "gitlab" in <impl FromNode for Flavor>::from_node
+schema	crates/opentide-schema/src/configuration/models.rs:1768:24: delete ! in <impl FromNode for VisibilityLogSource>::from_node
+schema	crates/opentide-schema/src/configuration/models.rs:1942:5: replace production_statuses -> Vec<NonEmptyString> with vec![]
+schema	crates/opentide-schema/src/configuration/models.rs:1996:5: replace only_connector_arrays -> bool with false
+schema	crates/opentide-schema/src/configuration/models.rs:1996:5: replace only_connector_arrays -> bool with true
+schema	crates/opentide-schema/src/configuration/models.rs:1999:20: replace != with == in only_connector_arrays
+schema	crates/opentide-schema/src/configuration/models.rs:1999:30: replace && with || in only_connector_arrays
+schema	crates/opentide-schema/src/configuration/models.rs:1999:33: delete ! in only_connector_arrays
+schema	crates/opentide-schema/src/configuration/models.rs:268:5: replace circl -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/configuration/models.rs:268:5: replace circl -> String with String::new()
+schema	crates/opentide-schema/src/configuration/models.rs:29:5: replace yes -> bool with false
+schema	crates/opentide-schema/src/configuration/models.rs:312:5: replace all_families -> Vec<ObjectFamily> with vec![]
+schema	crates/opentide-schema/src/configuration/models.rs:746:5: replace random -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/configuration/models.rs:746:5: replace random -> String with String::new()
+schema	crates/opentide-schema/src/configuration/models.rs:991:5: replace default_space -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/configuration/models.rs:991:5: replace default_space -> String with String::new()
+schema	crates/opentide-schema/src/configuration/resolve.rs:118:9: replace ResolveError::message -> &str with ""
+schema	crates/opentide-schema/src/configuration/resolve.rs:118:9: replace ResolveError::message -> &str with "xyzzy"
+schema	crates/opentide-schema/src/configuration/resolve.rs:238:38: replace && with || in fetch
+schema	crates/opentide-schema/src/configuration/resolve.rs:42:52: replace == with != in Folder::bundled
+schema	crates/opentide-schema/src/configuration/sharing.rs:247:62: replace == with != in merge_sharing
+schema	crates/opentide-schema/src/configuration/sharing.rs:250:16: delete ! in merge_sharing
+schema	crates/opentide-schema/src/configuration/sharing.rs:255:49: replace == with != in merge_sharing
+schema	crates/opentide-schema/src/configuration/sharing.rs:296:17: delete field occurrences from struct SharingIssue expression in reject_duplicate_names
+schema	crates/opentide-schema/src/configuration/toml.rs:142:65: replace + with * in table_entries
+schema	crates/opentide-schema/src/configuration/toml.rs:162:14: replace > with == in item_node
+schema	crates/opentide-schema/src/configuration/toml.rs:162:14: replace > with >= in item_node
+schema	crates/opentide-schema/src/configuration/toml.rs:175:90: replace + with * in item_node
+schema	crates/opentide-schema/src/configuration/toml.rs:175:90: replace + with - in item_node
+schema	crates/opentide-schema/src/configuration/toml.rs:198:14: replace > with == in value_node
+schema	crates/opentide-schema/src/configuration/toml.rs:198:14: replace > with >= in value_node
+schema	crates/opentide-schema/src/configuration/toml.rs:211:78: replace + with * in value_node
+schema	crates/opentide-schema/src/configuration/toml.rs:211:78: replace + with - in value_node
+schema	crates/opentide-schema/src/configuration/toml.rs:227:82: replace + with * in value_node
+schema	crates/opentide-schema/src/configuration/toml.rs:227:82: replace + with - in value_node
+schema	crates/opentide-schema/src/configuration/types.rs:119:9: replace <impl JsonSchema for PositiveFloat>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/configuration/types.rs:119:9: replace <impl JsonSchema for PositiveFloat>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/configuration/types.rs:119:9: replace <impl JsonSchema for PositiveFloat>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:119:9: replace <impl JsonSchema for PositiveFloat>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:123:9: replace <impl JsonSchema for PositiveFloat>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/configuration/types.rs:127:9: replace <impl JsonSchema for PositiveFloat>::json_schema -> Schema with Default::default()
+schema	crates/opentide-schema/src/configuration/types.rs:193:9: replace <impl JsonSchema for Matching<P>>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/configuration/types.rs:193:9: replace <impl JsonSchema for Matching<P>>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/configuration/types.rs:193:9: replace <impl JsonSchema for Matching<P>>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:193:9: replace <impl JsonSchema for Matching<P>>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:197:9: replace <impl JsonSchema for Matching<P>>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/configuration/types.rs:201:9: replace <impl JsonSchema for Matching<P>>::json_schema -> Schema with Default::default()
+schema	crates/opentide-schema/src/configuration/types.rs:412:9: replace <impl JsonSchema for StatusStrategyName>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/configuration/types.rs:412:9: replace <impl JsonSchema for StatusStrategyName>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/configuration/types.rs:412:9: replace <impl JsonSchema for StatusStrategyName>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:412:9: replace <impl JsonSchema for StatusStrategyName>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:416:9: replace <impl JsonSchema for StatusStrategyName>::json_schema -> Schema with Default::default()
+schema	crates/opentide-schema/src/configuration/types.rs:42:9: replace <impl JsonSchema for NonEmptyString>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/configuration/types.rs:42:9: replace <impl JsonSchema for NonEmptyString>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/configuration/types.rs:42:9: replace <impl JsonSchema for NonEmptyString>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:42:9: replace <impl JsonSchema for NonEmptyString>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:455:9: replace <impl JsonSchema for RunStrategyName>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/configuration/types.rs:455:9: replace <impl JsonSchema for RunStrategyName>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/configuration/types.rs:455:9: replace <impl JsonSchema for RunStrategyName>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:455:9: replace <impl JsonSchema for RunStrategyName>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:459:9: replace <impl JsonSchema for RunStrategyName>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/configuration/types.rs:465:9: replace <impl JsonSchema for RunStrategyName>::json_schema -> Schema with Default::default()
+schema	crates/opentide-schema/src/configuration/types.rs:46:9: replace <impl JsonSchema for NonEmptyString>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/configuration/types.rs:50:9: replace <impl JsonSchema for NonEmptyString>::json_schema -> Schema with Default::default()
+schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl JsonSchema for NonEmptyList<T>>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl JsonSchema for NonEmptyList<T>>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl JsonSchema for NonEmptyList<T>>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl JsonSchema for NonEmptyList<T>>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/configuration/types.rs:84:9: replace <impl JsonSchema for NonEmptyList<T>>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/from_node.rs:187:9: replace Context::error_count -> usize with 0
+schema	crates/opentide-schema/src/from_node.rs:580:29: delete ! in union_value
+schema	crates/opentide-schema/src/generate/annotate.rs:307:9: delete match arm Json::Array(items) in walk
+schema	crates/opentide-schema/src/generate/annotate.rs:334:43: replace match guard !title.is_empty() with true in annotate_editor_schema
+schema	crates/opentide-schema/src/generate/catalog.rs:250:5: replace closed -> bool with true
+schema	crates/opentide-schema/src/generate/catalog.rs:255:5: replace flag -> bool with true
+schema	crates/opentide-schema/src/generate/catalog.rs:341:36: replace || with && in single_model
+schema	crates/opentide-schema/src/generate/catalog.rs:394:5: replace definition_name -> Option<String> with None
+schema	crates/opentide-schema/src/generate/catalog.rs:432:26: replace || with && in object_in
+schema	crates/opentide-schema/src/generate/catalog.rs:432:35: replace > with == in object_in
+schema	crates/opentide-schema/src/generate/catalog.rs:432:35: replace > with >= in object_in
+schema	crates/opentide-schema/src/generate/catalog.rs:448:52: replace + with * in object_in
+schema	crates/opentide-schema/src/generate/catalog.rs:495:18: replace < with <= in collect_alternatives
+schema	crates/opentide-schema/src/generate/catalog.rs:496:59: replace + with * in collect_alternatives
+schema	crates/opentide-schema/src/generate/catalog.rs:505:32: replace && with || in is_union
+schema	crates/opentide-schema/src/generate/catalog.rs:61:5: replace catalog_texts -> Vec<(&'static str, String)> with vec![]
+schema	crates/opentide-schema/src/generate/catalog.rs:621:49: replace > with >= in field_row
+schema	crates/opentide-schema/src/generate/catalog.rs:821:31: replace || with && in holds_string
+schema	crates/opentide-schema/src/generate/catalog.rs:821:61: replace && with || in holds_string
+schema	crates/opentide-schema/src/generate/catalog.rs:821:64: delete ! in holds_string
+schema	crates/opentide-schema/src/generate/catalog.rs:875:19: replace += with *= in short_doc
+schema	crates/opentide-schema/src/generate/catalog.rs:875:19: replace += with -= in short_doc
+schema	crates/opentide-schema/src/generate/catalog.rs:906:17: replace || with && in type_name
+schema	crates/opentide-schema/src/generate/catalog.rs:911:9: replace || with && in type_name
+schema	crates/opentide-schema/src/generate/configuration.rs:180:5: replace render -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/generate/configuration.rs:180:5: replace render -> String with String::new()
+schema	crates/opentide-schema/src/generate/models.rs:32:9: replace <impl fmt::Display for Stop>::fmt -> fmt::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/generate/schema.rs:1010:37: delete ! in dropdown
+schema	crates/opentide-schema/src/generate/schema.rs:1023:8: delete ! in dropdown
+schema	crates/opentide-schema/src/generate/schema.rs:1026:8: delete ! in dropdown
+schema	crates/opentide-schema/src/generate/schema.rs:1034:8: delete ! in dropdown
+schema	crates/opentide-schema/src/generate/schema.rs:1048:5: replace stage_doc -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/generate/schema.rs:1048:5: replace stage_doc -> String with String::new()
+schema	crates/opentide-schema/src/generate/schema.rs:1051:67: replace == with != in stage_doc
+schema	crates/opentide-schema/src/generate/schema.rs:1062:40: replace > with < in stage_doc
+schema	crates/opentide-schema/src/generate/schema.rs:1062:40: replace > with == in stage_doc
+schema	crates/opentide-schema/src/generate/schema.rs:1062:40: replace > with >= in stage_doc
+schema	crates/opentide-schema/src/generate/schema.rs:1151:47: replace == with != in format_asset
+schema	crates/opentide-schema/src/generate/schema.rs:1164:12: delete ! in format_asset
+schema	crates/opentide-schema/src/generate/schema.rs:1204:12: delete ! in logsources
+schema	crates/opentide-schema/src/generate/schema.rs:1268:26: replace || with && in close
+schema	crates/opentide-schema/src/generate/schema.rs:1268:44: replace || with && in close
+schema	crates/opentide-schema/src/generate/schema.rs:1268:64: replace || with && in close
+schema	crates/opentide-schema/src/generate/schema.rs:214:9: delete match arm Value::Array(items) in strip
+schema	crates/opentide-schema/src/generate/schema.rs:242:13: delete match arm "objective" in <impl Transform for RootExtras<'_>>::transform
+schema	crates/opentide-schema/src/generate/schema.rs:479:12: delete ! in platform_property
+schema	crates/opentide-schema/src/generate/schema.rs:549:40: replace match guard branch.as_object().is_some_and(|map| map.len() == 1) with true in inline_unions_in
+schema	crates/opentide-schema/src/generate/schema.rs:558:35: replace && with || in inline_unions_in
+schema	crates/opentide-schema/src/generate/schema.rs:558:54: replace && with || in inline_unions_in
+schema	crates/opentide-schema/src/generate/schema.rs:563:9: delete match arm Value::Array(items) in inline_unions_in
+schema	crates/opentide-schema/src/generate/schema.rs:591:32: replace != with == in resolve_node
+schema	crates/opentide-schema/src/generate/schema.rs:591:42: replace && with || in resolve_node
+schema	crates/opentide-schema/src/generate/schema.rs:591:50: replace != with == in resolve_node
+schema	crates/opentide-schema/src/generate/schema.rs:591:61: replace && with || in resolve_node
+schema	crates/opentide-schema/src/generate/schema.rs:591:69: replace != with == in resolve_node
+schema	crates/opentide-schema/src/generate/schema.rs:596:9: delete match arm Value::Array(items) in resolve_node
+schema	crates/opentide-schema/src/generate/schema.rs:626:18: replace && with || in Offer::keywords
+schema	crates/opentide-schema/src/generate/schema.rs:673:9: delete match arm Value::Bool(true) in resolve_field
+schema	crates/opentide-schema/src/generate/schema.rs:675:9: delete match arm Value::Array(references) in resolve_field
+schema	crates/opentide-schema/src/generate/schema.rs:722:9: replace || with && in items_are_objects
+schema	crates/opentide-schema/src/generate/schema.rs:766:23: replace match guard has_type(kind, "array") with true in apply_enum
+schema	crates/opentide-schema/src/generate/schema.rs:825:23: replace && with || in vocabulary_offer
+schema	crates/opentide-schema/src/generate/schema.rs:849:63: replace && with || in vocabulary_offer
+schema	crates/opentide-schema/src/generate/schema.rs:925:28: replace && with || in plain
+schema	crates/opentide-schema/src/generate/schema.rs:955:32: replace << with >>
+schema	crates/opentide-schema/src/generate/snippets.rs:79:19: replace += with *= in with_tabstops
+schema	crates/opentide-schema/src/generate/snippets.rs:79:19: replace += with -= in with_tabstops
+schema	crates/opentide-schema/src/generate/template.rs:120:5: replace is_null -> bool with false
+schema	crates/opentide-schema/src/generate/template.rs:124:51: replace || with && in is_any
+schema	crates/opentide-schema/src/generate/template.rs:124:5: replace is_any -> bool with false
+schema	crates/opentide-schema/src/generate/template.rs:124:5: replace is_any -> bool with true
+schema	crates/opentide-schema/src/generate/template.rs:124:71: replace == with != in is_any
+schema	crates/opentide-schema/src/generate/template.rs:150:18: replace > with == in Walker<'s>::core
+schema	crates/opentide-schema/src/generate/template.rs:150:18: replace > with >= in Walker<'s>::core
+schema	crates/opentide-schema/src/generate/template.rs:160:53: replace + with * in Walker<'s>::core
+schema	crates/opentide-schema/src/generate/template.rs:173:52: replace + with * in Walker<'s>::core
+schema	crates/opentide-schema/src/generate/template.rs:187:67: delete ! in Walker<'s>::core
+schema	crates/opentide-schema/src/generate/template.rs:215:18: replace > with == in Walker<'s>::model
+schema	crates/opentide-schema/src/generate/template.rs:215:18: replace > with >= in Walker<'s>::model
+schema	crates/opentide-schema/src/generate/template.rs:330:80: replace + with * in Walker<'s>::value
+schema	crates/opentide-schema/src/generate/template.rs:383:84: replace + with * in Walker<'s>::list
+schema	crates/opentide-schema/src/generate/template.rs:391:21: delete match arm Some(Core::Scalar(schema, literal)) in Walker<'s>::list
+schema	crates/opentide-schema/src/generate/template.rs:446:86: replace + with * in Walker<'s>::dict
+schema	crates/opentide-schema/src/generate/workspace.rs:171:33: delete ! in Settings::of
+schema	crates/opentide-schema/src/generate/workspace.rs:175:33: delete ! in Settings::of
+schema	crates/opentide-schema/src/generate/workspace.rs:179:33: delete ! in Settings::of
+schema	crates/opentide-schema/src/generate/workspace.rs:203:5: replace templates_dir -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/generate/workspace.rs:203:5: replace templates_dir -> String with String::new()
+schema	crates/opentide-schema/src/generate/workspace.rs:209:5: replace schemas_dir -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/generate/workspace.rs:209:5: replace schemas_dir -> String with String::new()
+schema	crates/opentide-schema/src/generate/workspace.rs:215:5: replace join_path -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/generate/workspace.rs:215:5: replace join_path -> String with String::new()
+schema	crates/opentide-schema/src/generate/workspace.rs:321:48: replace && with || in schema_id_from_template_filename
+schema	crates/opentide-schema/src/generate/workspace.rs:322:45: replace || with && in schema_id_from_template_filename
+schema	crates/opentide-schema/src/generate/workspace.rs:339:53: replace == with != in snippets
+schema	crates/opentide-schema/src/generate/workspace.rs:350:34: replace == with != in snippets
+schema	crates/opentide-schema/src/generate/workspace.rs:379:30: replace == with != in router_artifact
+schema	crates/opentide-schema/src/generate/workspace.rs:392:5: replace schema_paths -> Vec<(SchemaId, String)> with vec![]
+schema	crates/opentide-schema/src/generate/workspace.rs:399:39: replace == with != in schema_paths
+schema	crates/opentide-schema/src/generate/workspace.rs:412:5: replace visibility_schema_path -> String with "xyzzy".into()
+schema	crates/opentide-schema/src/generate/workspace.rs:412:5: replace visibility_schema_path -> String with String::new()
+schema	crates/opentide-schema/src/generate/workspace.rs:416:30: replace == with != in visibility_schema_path
+schema	crates/opentide-schema/src/generate/workspace.rs:427:5: replace schema_artifacts -> Vec<Artifact> with vec![]
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:121:9: replace Outcome::is_resolved -> bool with true
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:124:11: replace && with || in Outcome::is_resolved
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:212:9: replace ScopeIndex::is_staged -> bool with true
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:332:30: replace match guard *head == ANY with true in walk
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:406:32: replace match guard original.len() > 1 && original.ends_with(quote) with true in rewrite
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:406:47: replace > with >= in rewrite
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:406:51: replace && with || in rewrite
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:491:44: replace match guard *head == ANY with true in strip
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:85:9: replace Status::as_str -> &'static str with ""
+schema	crates/opentide-schema/src/migration/vocab_scope.rs:85:9: replace Status::as_str -> &'static str with "xyzzy"
+schema	crates/opentide-schema/src/node/dump.rs:29:13: delete match arm '\0' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:30:13: delete match arm '\u{7}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:31:13: delete match arm '\u{8}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:32:13: delete match arm '\t' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:34:13: delete match arm '\u{b}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:35:13: delete match arm '\u{c}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:36:13: delete match arm '\r' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:37:13: delete match arm '\u{1b}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:38:13: delete match arm '\u{85}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:39:13: delete match arm '\u{2028}' in double_quoted
+schema	crates/opentide-schema/src/node/dump.rs:40:13: delete match arm '\u{2029}' in double_quoted
+schema	crates/opentide-schema/src/objects/any.rs:124:9: replace <impl Visitor<'de> for AnyVisitor>::expecting -> fmt::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/any.rs:60:9: replace <impl JsonSchema for Any>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/objects/any.rs:60:9: replace <impl JsonSchema for Any>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/objects/any.rs:60:9: replace <impl JsonSchema for Any>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/objects/any.rs:60:9: replace <impl JsonSchema for Any>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/objects/any.rs:64:9: replace <impl JsonSchema for Any>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/objects/any.rs:68:9: replace <impl JsonSchema for Any>::json_schema -> Schema with Default::default()
+schema	crates/opentide-schema/src/objects/checks.rs:183:27: replace < with > in check_reviewed
+schema	crates/opentide-schema/src/objects/checks.rs:215:69: replace * with + in check_reviewed
+schema	crates/opentide-schema/src/objects/checks.rs:215:69: replace * with / in check_reviewed
+schema	crates/opentide-schema/src/objects/checks.rs:215:86: replace * with + in check_reviewed
+schema	crates/opentide-schema/src/objects/fields.rs:121:14: replace > with == in find_property
+schema	crates/opentide-schema/src/objects/fields.rs:121:14: replace > with >= in find_property
+schema	crates/opentide-schema/src/objects/fields.rs:134:60: replace + with * in find_property
+schema	crates/opentide-schema/src/objects/fields.rs:139:78: replace + with * in find_property
+schema	crates/opentide-schema/src/objects/fields.rs:139:78: replace + with - in find_property
+schema	crates/opentide-schema/src/objects/fields.rs:147:66: replace + with * in find_property
+schema	crates/opentide-schema/src/objects/metadata.rs:159:9: replace RuleMetadata::schema -> &str with ""
+schema	crates/opentide-schema/src/objects/metadata.rs:159:9: replace RuleMetadata::schema -> &str with "xyzzy"
+schema	crates/opentide-schema/src/objects/platform/bitdefender/advisories.rs:105:30: replace match guard relation == "any" with true in strings
+schema	crates/opentide-schema/src/objects/platform/bitdefender/advisories.rs:128:55: replace == with != in criteria_advisories
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:126:9: replace Finding::field_path -> Vec<String> with vec!["xyzzy".into()]
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:126:9: replace Finding::field_path -> Vec<String> with vec![String::new()]
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:126:9: replace Finding::field_path -> Vec<String> with vec![]
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:184:9: delete match arm Value::Int(integer) in scalar_text
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:221:15: replace match guard relation == "any" with true in values
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:238:9: replace || with && in criterion_shape_ok
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:408:25: replace == with != in combination_ok
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:490:47: replace || with && in unknown_field_paths
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:502:17: replace && with || in unknown_field_paths
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:503:17: replace && with || in unknown_field_paths
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:520:67: replace == with != in action_scope_findings
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:574:5: replace targets_shape_ok_json -> bool with false
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:574:5: replace targets_shape_ok_json -> bool with true
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:647:5: replace block_codes -> BTreeSet<&'static str> with BTreeSet::from_iter([""])
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:647:5: replace block_codes -> BTreeSet<&'static str> with BTreeSet::from_iter(["xyzzy"])
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:647:5: replace block_codes -> BTreeSet<&'static str> with BTreeSet::new()
+schema	crates/opentide-schema/src/objects/platform/bitdefender/checks.rs:717:9: delete match arm Value::Seq(items) in first_paths
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:135:5: replace garde_criteria -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:323:9: replace <impl JsonSchema for ProcessAction>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:327:9: replace <impl JsonSchema for ProcessAction>::json_schema -> schemars::Schema with Default::default()
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:345:9: delete match arm Value::Null in literal_true
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:356:5: replace garde_true -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:357:9: delete match arm Some(false) in garde_true
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:366:9: delete match arm Value::Null in process_action
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:387:5: replace garde_process_action -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:388:9: delete match arm Some(ProcessAction::On(false)) in garde_process_action
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:419:9: replace Severity::level -> i64 with -1
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:419:9: replace Severity::level -> i64 with 0
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:419:9: replace Severity::level -> i64 with 1
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:49:9: replace CriterionValue::to_json -> serde_json::Value with Default::default()
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:526:9: replace Kind::name -> &'static str with ""
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:526:9: replace Kind::name -> &'static str with "xyzzy"
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:534:9: replace Kind::subtype -> i64 with -1
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:534:9: replace Kind::subtype -> i64 with 0
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:534:9: replace Kind::subtype -> i64 with 1
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:99:9: replace BitdefenderCriterion::relation -> Option<(&'static str, serde_json::Value)> with None
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:99:9: replace BitdefenderCriterion::relation -> Option<(&'static str, serde_json::Value)> with Some(("", Default::default()))
+schema	crates/opentide-schema/src/objects/platform/bitdefender/mod.rs:99:9: replace BitdefenderCriterion::relation -> Option<(&'static str, serde_json::Value)> with Some(("xyzzy", Default::default()))
+schema	crates/opentide-schema/src/objects/platform/deprecation.rs:55:20: replace != with == in resolved
+schema	crates/opentide-schema/src/objects/platform/elastic.rs:796:17: replace || with && in block_codes
+schema	crates/opentide-schema/src/objects/platform/elastic.rs:818:17: replace || with && in block_codes
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:1303:41: replace > with >= in name_findings
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:1370:9: delete match arm 'd' in minutes
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:1381:35: replace * with / in ordered_minutes
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:636:5: replace number -> bool with false
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:700:15: replace > with >= in ends_in_keyword
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:704:9: replace || with && in ends_in_keyword
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:705:9: replace || with && in ends_in_keyword
+schema	crates/opentide-schema/src/objects/platform/exabeam.rs:729:23: replace < with <= in uses_context_table
+schema	crates/opentide-schema/src/objects/platform/falco_text.rs:46:31: replace && with || in word_operator
+schema	crates/opentide-schema/src/objects/platform/falco_text.rs:46:5: replace word_operator -> bool with true
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:436:5: replace duration_seconds -> Option<u64> with Some(1)
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:438:9: delete match arm 's' in duration_seconds
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:440:9: delete match arm 'h' in duration_seconds
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:441:9: delete match arm 'd' in duration_seconds
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:468:24: delete ! in schedule_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:541:28: delete ! in block_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops.rs:565:50: replace == with != in block_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:117:54: replace && with || in advisories
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:132:9: replace && with || in advisories
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:194:51: replace < with <= in aliased_sections
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:223:23: replace match guard matches!(node.value, Value::Null) with false in enabled_rule_name
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:230:13: delete match arm Value::Str(uuid) in enabled_rule_name
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:266:9: replace NameDuplicate::field_path -> Vec<String> with vec!["xyzzy".into()]
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:266:9: replace NameDuplicate::field_path -> Vec<String> with vec![String::new()]
+schema	crates/opentide-schema/src/objects/platform/google_secops/advisories.rs:266:9: replace NameDuplicate::field_path -> Vec<String> with vec![]
+schema	crates/opentide-schema/src/objects/platform/google_secops/assemble.rs:138:31: replace && with || in meta_entries
+schema	crates/opentide-schema/src/objects/platform/google_secops/assemble.rs:144:28: delete ! in meta_entries
+schema	crates/opentide-schema/src/objects/platform/google_secops/assemble.rs:32:9: delete match arm "informational" in alert_severity
+schema	crates/opentide-schema/src/objects/platform/google_secops/assemble.rs:33:9: delete match arm "low" in alert_severity
+schema	crates/opentide-schema/src/objects/platform/google_secops/assemble.rs:34:9: delete match arm "medium" in alert_severity
+schema	crates/opentide-schema/src/objects/platform/google_secops/assemble.rs:36:9: delete match arm "critical" in alert_severity
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:150:5: replace is_variable -> bool with true
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:176:58: replace == with != in operand_expected
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:217:55: replace + with * in code_lines
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:217:55: replace + with - in code_lines
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:217:59: replace < with <= in code_lines
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:360:13: delete match arm Value::Null in section_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:474:30: replace match guard !items.is_empty() with true in match_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:510:38: replace == with != in match_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:540:42: replace * with + in match_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:540:42: replace * with / in match_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:540:59: replace * with + in match_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:541:24: replace > with >= in match_findings
+schema	crates/opentide-schema/src/objects/platform/google_secops/yaral.rs:604:9: delete match arm Value::Bool(flag) in scalar_text
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:254:5: replace garde_grace_period -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:423:26: replace match guard only(value, "lookup") with true in event_field_kind
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:599:22: replace && with || in event_findings
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:653:50: replace && with || in block_findings
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:686:5: replace block_codes -> BTreeSet<&'static str> with BTreeSet::from_iter([""])
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:686:5: replace block_codes -> BTreeSet<&'static str> with BTreeSet::from_iter(["xyzzy"])
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:686:5: replace block_codes -> BTreeSet<&'static str> with BTreeSet::new()
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:782:60: replace && with || in every_node
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:807:36: replace match guard !names.is_empty() with true in targeted
+schema	crates/opentide-schema/src/objects/platform/graylog.rs:825:26: replace || with && in all_streams
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:207:9: replace <impl std::fmt::Display for ConditionError>::fmt -> std::fmt::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:230:14: replace < with <= in tokenize
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:250:25: replace + with * in tokenize
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:250:25: replace + with - in tokenize
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:322:49: replace - with + in Parser<'a>::nest
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:322:49: replace - with / in Parser<'a>::nest
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:354:24: replace -= with += in Parser<'a>::not
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:354:24: replace -= with /= in Parser<'a>::not
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:366:24: replace -= with += in Parser<'a>::primary
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:366:24: replace -= with /= in Parser<'a>::primary
+schema	crates/opentide-schema/src/objects/platform/graylog/condition.rs:428:46: replace > with >= in Parser<'a>::call
+schema	crates/opentide-schema/src/objects/platform/graylog/cron.rs:128:45: replace && with || in zones
+schema	crates/opentide-schema/src/objects/platform/graylog/cron.rs:56:46: replace && with || in last_offset
+schema	crates/opentide-schema/src/objects/platform/harfanglab/mod.rs:340:5: replace garde_block -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/harfanglab/mod.rs:349:5: replace rule_name -> Option<String> with None
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:130:5: replace starts_word -> bool with true
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:133:47: replace || with && in starts_word
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:178:30: replace && with || in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:178:39: replace == with != in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:186:56: delete ! in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:188:23: replace < with <= in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:188:23: replace < with == in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:188:23: replace < with > in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:188:44: replace != with == in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:188:66: replace != with == in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:189:38: replace == with != in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:193:35: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:193:35: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:194:25: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:194:25: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:200:34: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:200:34: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:202:41: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:202:41: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:202:45: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:202:45: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:202:49: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:202:49: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:207:23: replace < with <= in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:207:23: replace < with == in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:207:23: replace < with > in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:207:44: replace != with == in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:207:66: replace != with == in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:208:38: replace == with != in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:211:35: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:211:35: replace + with - in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:212:25: replace + with * in blank
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:573:23: replace < with <= in advisories
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:573:23: replace < with == in advisories
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:573:23: replace < with > in advisories
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:573:51: replace != with == in advisories
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:573:73: replace != with == in advisories
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:574:38: replace == with != in advisories
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:610:5: replace decomposed_advisory -> Option<(&'static str, String)> with None
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:610:5: replace decomposed_advisory -> Option<(&'static str, String)> with Some(("", "xyzzy".into()))
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:610:5: replace decomposed_advisory -> Option<(&'static str, String)> with Some(("", String::new()))
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:610:5: replace decomposed_advisory -> Option<(&'static str, String)> with Some(("xyzzy", "xyzzy".into()))
+schema	crates/opentide-schema/src/objects/platform/harfanglab/yara.rs:610:5: replace decomposed_advisory -> Option<(&'static str, String)> with Some(("xyzzy", String::new()))
+schema	crates/opentide-schema/src/objects/platform/mod.rs:215:5: replace number_schema -> schemars::Schema with Default::default()
+schema	crates/opentide-schema/src/objects/platform/mod.rs:314:5: replace legacy_keys -> LegacyKeys with Default::default()
+schema	crates/opentide-schema/src/objects/platform/mod.rs:316:33: replace == with != in legacy_keys
+schema	crates/opentide-schema/src/objects/platform/mod.rs:336:60: replace == with != in fill_legacy_keys
+schema	crates/opentide-schema/src/objects/platform/mod.rs:342:59: replace == with != in fill_legacy_keys
+schema	crates/opentide-schema/src/objects/platform/mod.rs:343:20: delete ! in fill_legacy_keys
+schema	crates/opentide-schema/src/objects/platform/mod.rs:463:5: replace block_advisories -> Vec<Advisory> with vec![]
+schema	crates/opentide-schema/src/objects/platform/mod.rs:817:38: delete ! in filled
+schema	crates/opentide-schema/src/objects/platform/schema.rs:16:9: delete match arm "splunk" in required
+schema	crates/opentide-schema/src/objects/platform/sentinel.rs:221:5: replace garde_suppression -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/platform/sentinel.rs:400:9: replace <impl JsonSchema for SentinelTechnique>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/objects/platform/sentinel.rs:400:9: replace <impl JsonSchema for SentinelTechnique>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/objects/platform/sentinel.rs:400:9: replace <impl JsonSchema for SentinelTechnique>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/objects/platform/sentinel.rs:400:9: replace <impl JsonSchema for SentinelTechnique>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/objects/platform/sentinel.rs:404:9: replace <impl JsonSchema for SentinelTechnique>::inline_schema -> bool with false
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:218:33: replace match guard text == "Suspicious" with false in <impl FromNode for TreatAsThreat>::from_node
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:250:13: delete match arm Raw::Flag(false) in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:251:32: replace match guard text == "Malicious" with false in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:251:32: replace match guard text == "Malicious" with true in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:251:37: replace == with != in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:252:32: replace match guard text == "Suspicious" with false in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:252:32: replace match guard text == "Suspicious" with true in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:252:37: replace == with != in <impl Deserialize<'de> for TreatAsThreat>::deserialize
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:262:9: replace <impl JsonSchema for TreatAsThreat>::schema_name -> Cow<'static, str> with Cow::Borrowed("")
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:262:9: replace <impl JsonSchema for TreatAsThreat>::schema_name -> Cow<'static, str> with Cow::Borrowed("xyzzy")
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:262:9: replace <impl JsonSchema for TreatAsThreat>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
+schema	crates/opentide-schema/src/objects/platform/sentinel_one.rs:262:9: replace <impl JsonSchema for TreatAsThreat>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:174:9: delete match arm Value::Null in minimum_engine_version
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:199:24: replace match guard *value < 0 with true in garde_minimum_engine_version
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:199:31: replace < with <= in garde_minimum_engine_version
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:217:9: replace SysdigConfig::is_tuning -> bool with true
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:435:26: replace || with && in exception_shape_ok
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:552:31: replace > with < in Expander::macro_order_ok
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:552:31: replace > with == in Expander::macro_order_ok
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:552:31: replace > with >= in Expander::macro_order_ok
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:552:49: replace * with + in Expander::macro_order_ok
+schema	crates/opentide-schema/src/objects/platform/sysdig.rs:552:49: replace * with / in Expander::macro_order_ok
+schema	crates/opentide-schema/src/objects/role.rs:102:46: replace + with * in walk
+schema	crates/opentide-schema/src/objects/role.rs:102:46: replace + with - in walk
+schema	crates/opentide-schema/src/objects/role.rs:110:53: replace + with * in walk
+schema	crates/opentide-schema/src/objects/role.rs:39:9: replace <impl fmt::Display for FieldRole>::fmt -> fmt::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/objects/role.rs:83:14: replace > with == in walk
+schema	crates/opentide-schema/src/objects/role.rs:83:14: replace > with >= in walk
+schema	crates/opentide-schema/src/objects/role.rs:90:55: replace + with * in walk
+schema	crates/opentide-schema/src/objects/role.rs:90:55: replace + with - in walk
+schema	crates/opentide-schema/src/objects/role.rs:97:55: replace + with * in walk
+schema	crates/opentide-schema/src/objects/role.rs:97:55: replace + with - in walk
+schema	crates/opentide-schema/src/objects/rule.rs:247:9: replace <impl NamedRule for RuleV1_0>::name -> &str with ""
+schema	crates/opentide-schema/src/objects/rule.rs:247:9: replace <impl NamedRule for RuleV1_0>::name -> &str with "xyzzy"
+schema	crates/opentide-schema/src/objects/rule.rs:250:9: replace <impl NamedRule for RuleV1_0>::harfanglab -> Option<&HarfangLabConfig> with None
+schema	crates/opentide-schema/src/objects/rule.rs:256:9: replace <impl NamedRule for RuleV1_1>::name -> &str with ""
+schema	crates/opentide-schema/src/objects/rule.rs:256:9: replace <impl NamedRule for RuleV1_1>::name -> &str with "xyzzy"
+schema	crates/opentide-schema/src/objects/rule.rs:259:9: replace <impl NamedRule for RuleV1_1>::harfanglab -> Option<&HarfangLabConfig> with None
+schema	crates/opentide-schema/src/objects/rule.rs:271:5: replace harfanglab_yara_rule_name -> bool with true
+schema	crates/opentide-schema/src/objects/rule.rs:282:5: replace garde_harfanglab_yara_rule_name -> garde::Result with Ok(Default::default())
+schema	crates/opentide-schema/src/platforms.rs:377:10: delete ! in Platform::offline
+schema	crates/opentide-schema/src/platforms.rs:377:9: replace Platform::offline -> Option<&'static[&'static str]> with None
+schema	crates/opentide-schema/src/platforms.rs:377:9: replace Platform::offline -> Option<&'static[&'static str]> with Some(Vec::leak(Vec::new()))
+schema	crates/opentide-schema/src/platforms.rs:377:9: replace Platform::offline -> Option<&'static[&'static str]> with Some(Vec::leak(vec![""]))
+schema	crates/opentide-schema/src/platforms.rs:377:9: replace Platform::offline -> Option<&'static[&'static str]> with Some(Vec::leak(vec!["xyzzy"]))
+schema	crates/opentide-schema/src/platforms.rs:493:17: replace < with > in same
+schema	crates/opentide-schema/src/python.rs:1077:9: replace <impl IntoPyObject<'py> for &ProcessAction>::into_pyobject -> PyResult<Self::Output> with PyResult::from(Default::default())
+schema	crates/opentide-schema/src/python.rs:1077:9: replace <impl IntoPyObject<'py> for &ProcessAction>::into_pyobject -> PyResult<Self::Output> with PyResult::from_iter([Default::default()])
+schema	crates/opentide-schema/src/python.rs:1077:9: replace <impl IntoPyObject<'py> for &ProcessAction>::into_pyobject -> PyResult<Self::Output> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:1077:9: replace <impl IntoPyObject<'py> for &ProcessAction>::into_pyobject -> PyResult<Self::Output> with PyResult::new(Default::default())
+schema	crates/opentide-schema/src/python.rs:1099:9: replace <impl IntoPyObject<'py> for &GraylogEventField>::into_pyobject -> PyResult<Self::Output> with PyResult::from(Default::default())
+schema	crates/opentide-schema/src/python.rs:1099:9: replace <impl IntoPyObject<'py> for &GraylogEventField>::into_pyobject -> PyResult<Self::Output> with PyResult::from_iter([Default::default()])
+schema	crates/opentide-schema/src/python.rs:1099:9: replace <impl IntoPyObject<'py> for &GraylogEventField>::into_pyobject -> PyResult<Self::Output> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:1099:9: replace <impl IntoPyObject<'py> for &GraylogEventField>::into_pyobject -> PyResult<Self::Output> with PyResult::new(Default::default())
+schema	crates/opentide-schema/src/python.rs:1241:5: replace register -> PyResult<()> with PyResult::from(())
+schema	crates/opentide-schema/src/python.rs:1241:5: replace register -> PyResult<()> with PyResult::from_iter([()])
+schema	crates/opentide-schema/src/python.rs:1241:5: replace register -> PyResult<()> with PyResult::new(())
+schema	crates/opentide-schema/src/python.rs:1241:5: replace register -> PyResult<()> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:578:12: delete ! in copy
+schema	crates/opentide-schema/src/python.rs:578:62: replace == with != in copy
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from(Bound::from(Default::default()))
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from(Bound::from_iter([Default::default()]))
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from(Bound::new())
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from(Bound::new(Default::default()))
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from_iter([Bound::from(Default::default())])
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from_iter([Bound::from_iter([Default::default()])])
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from_iter([Bound::new()])
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::from_iter([Bound::new(Default::default())])
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::new(Bound::from(Default::default()))
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::new(Bound::from_iter([Default::default()]))
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::new(Bound::new())
+schema	crates/opentide-schema/src/python.rs:592:5: replace json_schema -> PyResult<Bound<'_, PyDict>> with PyResult::new(Bound::new(Default::default()))
+schema	crates/opentide-schema/src/python.rs:601:5: replace dump_mode -> PyResult<()> with PyResult::from(())
+schema	crates/opentide-schema/src/python.rs:601:5: replace dump_mode -> PyResult<()> with PyResult::from_iter([()])
+schema	crates/opentide-schema/src/python.rs:601:5: replace dump_mode -> PyResult<()> with PyResult::new(())
+schema	crates/opentide-schema/src/python.rs:601:5: replace dump_mode -> PyResult<()> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:614:5: replace json_schema_options -> PyResult<()> with PyResult::from(())
+schema	crates/opentide-schema/src/python.rs:614:5: replace json_schema_options -> PyResult<()> with PyResult::from_iter([()])
+schema	crates/opentide-schema/src/python.rs:614:5: replace json_schema_options -> PyResult<()> with PyResult::new(())
+schema	crates/opentide-schema/src/python.rs:614:5: replace json_schema_options -> PyResult<()> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:614:8: delete ! in json_schema_options
+schema	crates/opentide-schema/src/python.rs:631:5: replace deprecated -> PyResult<()> with PyResult::from(())
+schema	crates/opentide-schema/src/python.rs:631:5: replace deprecated -> PyResult<()> with PyResult::from_iter([()])
+schema	crates/opentide-schema/src/python.rs:631:5: replace deprecated -> PyResult<()> with PyResult::new(())
+schema	crates/opentide-schema/src/python.rs:631:5: replace deprecated -> PyResult<()> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from(Bound::from(Default::default()))
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from(Bound::from_iter([Default::default()]))
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from(Bound::new())
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from(Bound::new(Default::default()))
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from_iter([Bound::from(Default::default())])
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from_iter([Bound::from_iter([Default::default()])])
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from_iter([Bound::new()])
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::from_iter([Bound::new(Default::default())])
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::new()
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::new(Bound::from(Default::default()))
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::new(Bound::from_iter([Default::default()]))
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::new(Bound::new())
+schema	crates/opentide-schema/src/python.rs:667:9: replace DeprecatedModelFields::__get__ -> PyResult<Bound<'py, PyDict>> with PyResult::new(Bound::new(Default::default()))
+schema	crates/opentide-schema/src/vocab/document.rs:229:33: replace match guard number.fract() == 0.0 && number.is_finite() with true in text_of
+schema	crates/opentide-schema/src/vocab/document.rs:229:55: replace && with || in text_of
+schema	crates/opentide-schema/src/vocab/document.rs:254:5: replace take_text -> Result<String, ()> with Ok("xyzzy".into())
+schema	crates/opentide-schema/src/vocab/document.rs:254:5: replace take_text -> Result<String, ()> with Ok(String::new())
+schema	crates/opentide-schema/src/vocab/version.rs:34:32: replace || with && in <impl FromStr for Version>::from_str
+workspace	crates/opentide-workspace/src/catalogue.rs:189:9: replace Row::techniques -> &Techniques with Box::leak(Box::new(Default::default()))
+workspace	crates/opentide-workspace/src/catalogue.rs:296:21: replace < with <= in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:300:23: replace += with *= in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:306:52: replace + with * in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:306:52: replace + with - in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:306:56: replace < with <= in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:318:15: replace > with >= in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:319:22: replace - with / in scalar
+workspace	crates/opentide-workspace/src/catalogue.rs:339:32: replace || with && in text_fields
+workspace	crates/opentide-workspace/src/catalogue.rs:345:39: replace - with + in text_fields
+workspace	crates/opentide-workspace/src/catalogue.rs:345:39: replace - with / in text_fields
+workspace	crates/opentide-workspace/src/catalogue.rs:350:43: replace && with || in text_fields
+workspace	crates/opentide-workspace/src/catalogue.rs:350:70: replace && with || in text_fields
+workspace	crates/opentide-workspace/src/catalogue.rs:358:25: replace || with && in text_fields
+workspace	crates/opentide-workspace/src/catalogue.rs:462:43: replace == with != in attack_matrix
+workspace	crates/opentide-workspace/src/catalogue.rs:486:9: delete match arm "threat" in parent_threats
+workspace	crates/opentide-workspace/src/catalogue.rs:607:5: replace warm with ()
+workspace	crates/opentide-workspace/src/catalogue.rs:694:47: replace match guard object.path == *file with false in build_from
+workspace	crates/opentide-workspace/src/catalogue.rs:694:47: replace match guard object.path == *file with true in build_from
+workspace	crates/opentide-workspace/src/catalogue.rs:694:59: replace == with != in build_from
+workspace	crates/opentide-workspace/src/catalogue.rs:697:17: delete match arm (_, Some(file)) in build_from
+workspace	crates/opentide-workspace/src/catalogue.rs:857:9: delete match arm (YAML_PARSE, Some(text)) in load_error_row
+workspace	crates/opentide-workspace/src/catalogue.rs:874:35: delete ! in load_error_row
+workspace	crates/opentide-workspace/src/config.rs:130:9: delete field path from struct Folder expression in read_folder
+workspace	crates/opentide-workspace/src/config.rs:231:22: replace match guard !roots.tide_workspace with true in read
+workspace	crates/opentide-workspace/src/config.rs:59:5: replace resolve_message -> String with "xyzzy".into()
+workspace	crates/opentide-workspace/src/diagnostic.rs:276:9: replace Diagnostic::frame_message -> &str with ""
+workspace	crates/opentide-workspace/src/diagnostic.rs:276:9: replace Diagnostic::frame_message -> &str with "xyzzy"
+workspace	crates/opentide-workspace/src/diagnostic.rs:332:9: replace Diagnostic::is_error -> bool with true
+workspace	crates/opentide-workspace/src/diagnostic.rs:76:9: replace <impl fmt::Display for Severity>::fmt -> fmt::Result with Ok(Default::default())
+workspace	crates/opentide-workspace/src/discover.rs:83:23: replace match guard error.kind() == io::ErrorKind::NotFound with true in scan_with
+workspace	crates/opentide-workspace/src/discover.rs:98:26: replace < with <= in scan_with
+workspace	crates/opentide-workspace/src/fields.rs:26:35: replace match guard !text.trim().is_empty() with true in string
+workspace	crates/opentide-workspace/src/fields.rs:61:5: replace schema_id -> Option<String> with None
+workspace	crates/opentide-workspace/src/fields.rs:61:5: replace schema_id -> Option<String> with Some("xyzzy".into())
+workspace	crates/opentide-workspace/src/fields.rs:61:5: replace schema_id -> Option<String> with Some(String::new())
+workspace	crates/opentide-workspace/src/fields.rs:64:22: delete ! in schema_id
+workspace	crates/opentide-workspace/src/fields.rs:83:9: delete match arm Value::Seq(items) in resolve
+workspace	crates/opentide-workspace/src/fix.rs:103:9: replace FixPlan::is_empty -> bool with true
+workspace	crates/opentide-workspace/src/fix.rs:109:9: replace FixPlan::diff -> String with "xyzzy".into()
+workspace	crates/opentide-workspace/src/fix.rs:109:9: replace FixPlan::diff -> String with String::new()
+workspace	crates/opentide-workspace/src/fix.rs:355:30: replace < with <= in overlaps
+workspace	crates/opentide-workspace/src/fix.rs:356:39: replace < with <= in overlaps
+workspace	crates/opentide-workspace/src/fix.rs:369:5: replace folded -> String with "xyzzy".into()
+workspace	crates/opentide-workspace/src/fix.rs:369:5: replace folded -> String with String::new()
+workspace	crates/opentide-workspace/src/fix.rs:384:9: delete match arm (None, None) in changed_scalars
+workspace	crates/opentide-workspace/src/fix.rs:390:35: replace || with && in changed_scalars
+workspace	crates/opentide-workspace/src/fix.rs:406:59: replace && with || in changed_scalars
+workspace	crates/opentide-workspace/src/fix.rs:486:52: replace - with + in crate::Workspace::validate_fix
+workspace	crates/opentide-workspace/src/fix.rs:486:52: replace - with / in crate::Workspace::validate_fix
+workspace	crates/opentide-workspace/src/fs.rs:174:5: replace case_only_rename -> bool with false
+workspace	crates/opentide-workspace/src/fs.rs:178:13: replace == with != in case_only_rename
+workspace	crates/opentide-workspace/src/fs.rs:178:19: replace || with && in case_only_rename
+workspace	crates/opentide-workspace/src/fs.rs:178:42: replace != with == in case_only_rename
+workspace	crates/opentide-workspace/src/fs.rs:182:27: replace && with || in case_only_rename
+workspace	crates/opentide-workspace/src/fs.rs:270:12: delete ! in <impl WriteFs for OsFs>::rename_file
+workspace	crates/opentide-workspace/src/fs.rs:287:54: replace && with || in <impl WriteFs for OsFs>::same_file
+workspace	crates/opentide-workspace/src/fs.rs:294:17: delete match arm (Ok(a), Ok(b)) in <impl WriteFs for OsFs>::same_file
+workspace	crates/opentide-workspace/src/fs.rs:294:37: replace == with != in <impl WriteFs for OsFs>::same_file
+workspace	crates/opentide-workspace/src/fs.rs:320:23: replace match guard error.kind() == io::ErrorKind::NotFound with true in write_atomically
+workspace	crates/opentide-workspace/src/fs.rs:325:23: replace match guard error.kind() == io::ErrorKind::NotFound with true in write_atomically
+workspace	crates/opentide-workspace/src/fs.rs:330:33: delete ! in write_atomically
+workspace	crates/opentide-workspace/src/fs.rs:336:26: delete ! in write_atomically
+workspace	crates/opentide-workspace/src/fs.rs:387:50: replace + with * in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:387:50: replace + with - in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:393:24: replace match guard replace_may_succeed_later(&failed.error, target) && std::time::Instant::now() < deadline with false in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:393:24: replace match guard replace_may_succeed_later(&failed.error, target) && std::time::Instant::now() < deadline with true in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:394:25: replace && with || in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:394:54: replace < with <= in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:394:54: replace < with == in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:394:54: replace < with > in persist_over
+workspace	crates/opentide-workspace/src/fs.rs:408:5: replace replace_may_succeed_later -> bool with false
+workspace	crates/opentide-workspace/src/fs.rs:408:5: replace replace_may_succeed_later -> bool with true
+workspace	crates/opentide-workspace/src/fs.rs:409:12: delete ! in replace_may_succeed_later
+workspace	crates/opentide-workspace/src/fs.rs:409:9: replace && with || in replace_may_succeed_later
+workspace	crates/opentide-workspace/src/fs.rs:416:5: replace clears_by_itself -> bool with false
+workspace	crates/opentide-workspace/src/fs.rs:416:5: replace clears_by_itself -> bool with true
+workspace	crates/opentide-workspace/src/fs.rs:433:50: replace + with * in settled
+workspace	crates/opentide-workspace/src/fs.rs:433:50: replace + with - in settled
+workspace	crates/opentide-workspace/src/fs.rs:436:31: replace match guard clears_by_itself(&error) && std::time::Instant::now() < deadline with false in settled
+workspace	crates/opentide-workspace/src/fs.rs:436:31: replace match guard clears_by_itself(&error) && std::time::Instant::now() < deadline with true in settled
+workspace	crates/opentide-workspace/src/fs.rs:436:56: replace && with || in settled
+workspace	crates/opentide-workspace/src/fs.rs:436:85: replace < with <= in settled
+workspace	crates/opentide-workspace/src/fs.rs:436:85: replace < with == in settled
+workspace	crates/opentide-workspace/src/fs.rs:436:85: replace < with > in settled
+workspace	crates/opentide-workspace/src/index.rs:259:9: delete match arm Value::Str(text) in identifier
+workspace	crates/opentide-workspace/src/index.rs:260:9: delete match arm Value::Seq(items) in identifier
+workspace	crates/opentide-workspace/src/index.rs:261:32: delete ! in identifier
+workspace	crates/opentide-workspace/src/index.rs:261:9: delete match arm Value::Map(entries) in identifier
+workspace	crates/opentide-workspace/src/index.rs:310:9: delete field families from struct Index expression in assemble
+workspace	crates/opentide-workspace/src/index.rs:593:9: replace Index::overlay -> bool with false
+workspace	crates/opentide-workspace/src/index.rs:593:9: replace Index::overlay -> bool with true
+workspace	crates/opentide-workspace/src/index.rs:616:9: replace Index::reindex_signals with ()
+workspace	crates/opentide-workspace/src/index.rs:617:33: delete ! in Index::reindex_signals
+workspace	crates/opentide-workspace/src/index.rs:636:9: replace Index::refresh_references with ()
+workspace	crates/opentide-workspace/src/info.rs:266:5: replace admitted -> usize with 0
+workspace	crates/opentide-workspace/src/info.rs:266:5: replace admitted -> usize with 1
+workspace	crates/opentide-workspace/src/info.rs:274:5: replace revisions -> Vec<Revision> with vec![]
+workspace	crates/opentide-workspace/src/info.rs:276:52: replace += with *= in revisions
+workspace	crates/opentide-workspace/src/info.rs:278:50: replace += with *= in revisions
+workspace	crates/opentide-workspace/src/info.rs:278:50: replace += with -= in revisions
+workspace	crates/opentide-workspace/src/info.rs:293:5: replace stages -> Vec<String> with vec!["xyzzy".into()]
+workspace	crates/opentide-workspace/src/info.rs:293:5: replace stages -> Vec<String> with vec![String::new()]
+workspace	crates/opentide-workspace/src/info.rs:293:5: replace stages -> Vec<String> with vec![]
+workspace	crates/opentide-workspace/src/info.rs:301:30: delete ! in stages
+workspace	crates/opentide-workspace/src/info.rs:320:17: delete ! in overview
+workspace	crates/opentide-workspace/src/info.rs:327:5: replace scoped -> Option<bool> with Some(true)
+workspace	crates/opentide-workspace/src/info.rs:366:62: replace == with != in detail
+workspace	crates/opentide-workspace/src/lint/mod.rs:1050:32: replace || with && in list_item_label
+workspace	crates/opentide-workspace/src/lint/mod.rs:1054:30: replace && with || in list_item_label
+workspace	crates/opentide-workspace/src/lint/mod.rs:1058:20: replace < with <= in list_item_label
+workspace	crates/opentide-workspace/src/lint/mod.rs:1109:23: replace - with + in placeholder_lines
+workspace	crates/opentide-workspace/src/lint/mod.rs:1109:23: replace - with / in placeholder_lines
+workspace	crates/opentide-workspace/src/lint/mod.rs:1118:39: replace + with * in placeholder_lines
+workspace	crates/opentide-workspace/src/lint/mod.rs:1257:22: replace == with != in Draft::diagnostic
+workspace	crates/opentide-workspace/src/lint/mod.rs:1294:64: replace != with == in Draft::diagnostic
+workspace	crates/opentide-workspace/src/lint/mod.rs:1312:25: replace && with || in has_metadata
+workspace	crates/opentide-workspace/src/lint/mod.rs:1534:25: replace += with *= in assign_expected_stems
+workspace	crates/opentide-workspace/src/lint/mod.rs:1534:25: replace += with -= in assign_expected_stems
+workspace	crates/opentide-workspace/src/lint/mod.rs:1709:13: replace == with != in shown
+workspace	crates/opentide-workspace/src/lint/mod.rs:1760:20: replace > with < in outcome_line
+workspace	crates/opentide-workspace/src/lint/mod.rs:1763:20: replace > with < in outcome_line
+workspace	crates/opentide-workspace/src/lint/mod.rs:1811:24: replace && with || in report
+workspace	crates/opentide-workspace/src/lint/mod.rs:1820:9: replace && with || in report
+workspace	crates/opentide-workspace/src/lint/mod.rs:1821:9: replace && with || in report
+workspace	crates/opentide-workspace/src/lint/mod.rs:1823:20: replace && with || in report
+workspace	crates/opentide-workspace/src/lint/mod.rs:1823:39: replace && with || in report
+workspace	crates/opentide-workspace/src/lint/mod.rs:199:9: replace LintQueryCheck::check_parsed -> Result<Vec<LintFinding>, String> with Ok(vec![])
+workspace	crates/opentide-workspace/src/lint/mod.rs:226:9: replace <impl std::fmt::Debug for LintOptions<'_>>::fmt -> std::fmt::Result with Ok(Default::default())
+workspace	crates/opentide-workspace/src/lint/mod.rs:730:9: delete field checks from struct LintOptions expression in editor_findings
+workspace	crates/opentide-workspace/src/lint/mod.rs:736:9: delete field cwd from struct LintOptions expression in editor_findings
+workspace	crates/opentide-workspace/src/lint/mod.rs:819:16: replace != with == in narrow
+workspace	crates/opentide-workspace/src/lint/mod.rs:914:34: replace && with || in load_record
+workspace	crates/opentide-workspace/src/review.rs:140:35: replace == with != in review_instant
+workspace	crates/opentide-workspace/src/review.rs:161:9: delete match arm Value::Null in reviewed_text
+workspace	crates/opentide-workspace/src/review.rs:179:17: replace && with || in rule_files
+workspace	crates/opentide-workspace/src/review.rs:46:30: replace || with && in Window::parse
+workspace	crates/opentide-workspace/src/review.rs:60:13: delete match arm 'm' in Window::duration
+workspace	crates/opentide-workspace/src/review.rs:71:9: replace Window::text -> String with "xyzzy".into()
+workspace	crates/opentide-workspace/src/review.rs:71:9: replace Window::text -> String with String::new()
+workspace	crates/opentide-workspace/src/review.rs:72:13: delete match arm 'h' in Window::text
+workspace	crates/opentide-workspace/src/review.rs:73:13: delete match arm 'm' in Window::text
+workspace	crates/opentide-workspace/src/review.rs:76:23: replace == with != in Window::text
+workspace	crates/opentide-workspace/src/root.rs:35:5: replace env_path -> Option<PathBuf> with None
+workspace	crates/opentide-workspace/src/root.rs:36:25: delete ! in env_path
+workspace	crates/opentide-workspace/src/session.rs:207:35: replace match guard !entry.symlink with false in take_fingerprint
+workspace	crates/opentide-workspace/src/session.rs:75:9: replace <impl std::fmt::Debug for Session>::fmt -> std::fmt::Result with Ok(Default::default())
+workspace	crates/opentide-workspace/src/state.rs:152:42: replace || with && in bindings
+workspace	crates/opentide-workspace/src/state.rs:20:5: replace state_platforms -> Vec<&'static str> with vec![""]
+workspace	crates/opentide-workspace/src/state.rs:20:5: replace state_platforms -> Vec<&'static str> with vec!["xyzzy"]
+workspace	crates/opentide-workspace/src/state.rs:20:5: replace state_platforms -> Vec<&'static str> with vec![]
+workspace	crates/opentide-workspace/src/state.rs:72:9: replace || with && in parse
+workspace	crates/opentide-workspace/src/validate/annotate.rs:250:48: replace + with * in Sources<'a>::alias_anchor
+workspace	crates/opentide-workspace/src/validate/annotate.rs:250:48: replace + with - in Sources<'a>::alias_anchor
+workspace	crates/opentide-workspace/src/validate/annotate.rs:273:51: replace + with * in Sources<'a>::yaml_problem
+workspace	crates/opentide-workspace/src/validate/annotate.rs:273:51: replace + with - in Sources<'a>::yaml_problem
+workspace	crates/opentide-workspace/src/validate/annotate.rs:306:13: delete match arm Value::Seq(items) in walk
+workspace	crates/opentide-workspace/src/validate/annotate.rs:350:37: replace + with * in annotate
+workspace	crates/opentide-workspace/src/validate/annotate.rs:369:57: replace + with * in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:380:42: replace == with != in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:381:17: replace && with || in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:400:24: replace == with != in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:403:12: delete ! in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:405:50: replace > with < in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:405:50: replace > with == in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:405:50: replace > with >= in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:40:9: delete match arm "missing_uuid" in default_help
+workspace	crates/opentide-workspace/src/validate/annotate.rs:416:24: replace == with != in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:419:20: replace == with != in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:41:9: delete match arm "duplicate_id" in default_help
+workspace	crates/opentide-workspace/src/validate/annotate.rs:453:45: replace && with || in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:453:69: replace && with || in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:466:48: replace && with || in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:49:9: delete match arm "schema_validation" in default_help
+workspace	crates/opentide-workspace/src/validate/annotate.rs:501:24: replace == with != in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:503:12: delete ! in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:523:36: replace != with == in annotate_one
+workspace	crates/opentide-workspace/src/validate/annotate.rs:80:9: delete match arm "detection_model" in reference_listing
+workspace	crates/opentide-workspace/src/validate/mod.rs:103:57: replace == with != in Check::parse
+workspace	crates/opentide-workspace/src/validate/mod.rs:103:9: replace Check::parse -> Option<Self> with None
+workspace	crates/opentide-workspace/src/validate/mod.rs:1141:37: replace + with * in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1149:42: replace || with && in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1183:29: replace && with || in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1236:41: replace && with || in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1236:44: delete ! in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1239:42: replace && with || in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1276:31: replace && with || in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1345:16: delete ! in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:34: replace > with < in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:34: replace > with == in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:34: replace > with >= in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:38: replace || with && in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:52: replace > with < in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:52: replace > with == in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1357:52: replace > with >= in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1380:81: replace == with != in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1421:42: replace * with + in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1421:42: replace * with / in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1421:63: replace / with % in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1421:63: replace / with * in validate
+workspace	crates/opentide-workspace/src/validate/mod.rs:1523:5: replace is_yara_code -> bool with false
+workspace	crates/opentide-workspace/src/validate/mod.rs:1523:5: replace is_yara_code -> bool with true
+workspace	crates/opentide-workspace/src/validate/mod.rs:1531:5: replace model_codes -> Vec<&str> with vec![""]
+workspace	crates/opentide-workspace/src/validate/mod.rs:1531:5: replace model_codes -> Vec<&str> with vec!["xyzzy"]
+workspace	crates/opentide-workspace/src/validate/mod.rs:1531:5: replace model_codes -> Vec<&str> with vec![]
+workspace	crates/opentide-workspace/src/validate/mod.rs:1534:19: replace != with == in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:13: delete ! in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:38: replace || with && in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:60: replace || with && in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:65: replace == with != in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:72: replace || with && in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:77: replace == with != in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:84: replace || with && in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1542:89: replace == with != in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1550:13: delete ! in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1551:17: replace && with || in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1553:53: replace || with && in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1553:75: replace || with && in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1553:80: replace == with != in model_codes
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (None, vec!["xyzzy".into()], "xyzzy".into())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (None, vec!["xyzzy".into()], String::new())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (None, vec![String::new()], "xyzzy".into())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (None, vec![String::new()], String::new())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (None, vec![], "xyzzy".into())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (None, vec![], String::new())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (Some(Default::default()), vec!["xyzzy".into()], "xyzzy".into())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (Some(Default::default()), vec!["xyzzy".into()], String::new())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (Some(Default::default()), vec![String::new()], "xyzzy".into())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (Some(Default::default()), vec![String::new()], String::new())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (Some(Default::default()), vec![], "xyzzy".into())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1560:5: replace yara_place -> (Option<PathBuf>, Vec<String>, String) with (Some(Default::default()), vec![], String::new())
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(None, vec!["xyzzy".into()], "xyzzy".into())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(None, vec!["xyzzy".into()], String::new())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(None, vec![String::new()], "xyzzy".into())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(None, vec![String::new()], String::new())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(None, vec![], "xyzzy".into())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(None, vec![], String::new())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(Some(Default::default()), vec!["xyzzy".into()], "xyzzy".into())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(Some(Default::default()), vec!["xyzzy".into()], String::new())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(Some(Default::default()), vec![String::new()], "xyzzy".into())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(Some(Default::default()), vec![String::new()], String::new())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(Some(Default::default()), vec![], "xyzzy".into())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::from_iter([(Some(Default::default()), vec![], String::new())])
+workspace	crates/opentide-workspace/src/validate/mod.rs:1566:5: replace model_yara_codes -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> with BTreeSet::new()
+workspace	crates/opentide-workspace/src/validate/mod.rs:1599:17: replace || with && in without_engine_reported_yara
+workspace	crates/opentide-workspace/src/validate/mod.rs:1599:20: delete ! in without_engine_reported_yara
+workspace	crates/opentide-workspace/src/validate/mod.rs:1601:52: replace && with || in without_engine_reported_yara
+workspace	crates/opentide-workspace/src/validate/mod.rs:1608:19: replace == with != in query_place
+workspace	crates/opentide-workspace/src/validate/mod.rs:1608:24: replace && with || in query_place
+workspace	crates/opentide-workspace/src/validate/mod.rs:1608:35: replace == with != in query_place
+workspace	crates/opentide-workspace/src/validate/mod.rs:372:9: replace <impl std::fmt::Debug for Options<'_>>::fmt -> std::fmt::Result with Ok(Default::default())
+workspace	crates/opentide-workspace/src/validate/mod.rs:464:9: replace Validation::exit_code -> i32 with 1
+workspace	crates/opentide-workspace/src/validate/mod.rs:469:9: replace Validation::checks_json -> serde_json::Value with Default::default()
+workspace	crates/opentide-workspace/src/validate/mod.rs:485:14: replace < with <= in workers
+workspace	crates/opentide-workspace/src/validate/mod.rs:485:14: replace < with == in workers
+workspace	crates/opentide-workspace/src/validate/mod.rs:567:5: replace title_duplicates -> Vec<Diagnostic> with vec![]
+workspace	crates/opentide-workspace/src/validate/mod.rs:578:42: replace == with != in title_duplicates
+workspace	crates/opentide-workspace/src/validate/mod.rs:580:63: replace == with != in title_duplicates
+workspace	crates/opentide-workspace/src/validate/mod.rs:605:5: replace exabeam_names -> Vec<Diagnostic> with vec![]
+workspace	crates/opentide-workspace/src/validate/mod.rs:608:26: replace != with == in exabeam_names
+workspace	crates/opentide-workspace/src/validate/mod.rs:631:42: replace == with != in exabeam_names
+workspace	crates/opentide-workspace/src/validate/mod.rs:636:73: replace == with != in exabeam_names
+workspace	crates/opentide-workspace/src/validate/mod.rs:679:58: replace && with || in name_duplicates
+workspace	crates/opentide-workspace/src/validate/mod.rs:679:74: replace == with != in name_duplicates
+workspace	crates/opentide-workspace/src/validate/mod.rs:711:41: replace || with && in id_uniqueness
+workspace	crates/opentide-workspace/src/validate/mod.rs:835:43: replace || with && in plugin_blocks
+workspace	crates/opentide-workspace/src/validate/mod.rs:841:21: replace && with || in plugin_blocks
+workspace	crates/opentide-workspace/src/validate/mod.rs:842:21: replace && with || in plugin_blocks
+workspace	crates/opentide-workspace/src/validate/mod.rs:877:5: replace compile_findings -> Vec<Diagnostic> with vec![]
+workspace	crates/opentide-workspace/src/validate/mod.rs:879:42: replace == with != in compile_findings
+workspace	crates/opentide-workspace/src/validate/mod.rs:90:9: replace Check::name -> &'static str with ""
+workspace	crates/opentide-workspace/src/validate/mod.rs:90:9: replace Check::name -> &'static str with "xyzzy"
+workspace	crates/opentide-workspace/src/validate/mod.rs:915:5: replace root_of -> Option<&'d Node> with None
+workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with None
+workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with Some(0)
+workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with Some(1)
+workspace	crates/opentide-workspace/src/validate/mod.rs:929:52: replace == with != in nearest_key_line
+workspace	crates/opentide-workspace/src/validate/mod.rs:950:21: delete - in sort_key
+workspace	crates/opentide-workspace/src/validate/mod.rs:975:5: replace clock_start -> Option<Instant> with None
+workspace	crates/opentide-workspace/src/validate/mod.rs:981:5: replace clock_start -> Option<Instant> with Some(Default::default())
+workspace	crates/opentide-workspace/src/validate/objects.rs:1022:9: delete match arm "rule" in references
+workspace	crates/opentide-workspace/src/validate/objects.rs:1028:20: delete ! in references
+workspace	crates/opentide-workspace/src/validate/objects.rs:1028:53: replace && with || in references
+workspace	crates/opentide-workspace/src/validate/objects.rs:1028:56: delete ! in references
+workspace	crates/opentide-workspace/src/validate/objects.rs:1068:9: delete match arm "threat" in references
+workspace	crates/opentide-workspace/src/validate/objects.rs:1072:24: delete ! in references
+workspace	crates/opentide-workspace/src/validate/objects.rs:1094:5: replace chain_links -> Vec<(usize, &Node)> with vec![]
+workspace	crates/opentide-workspace/src/validate/objects.rs:1112:5: replace chaining -> Vec<Diagnostic> with vec![]
+workspace	crates/opentide-workspace/src/validate/objects.rs:140:19: replace == with != in Graph<'a>::has
+workspace	crates/opentide-workspace/src/validate/objects.rs:140:9: replace Graph<'a>::has -> bool with false
+workspace	crates/opentide-workspace/src/validate/objects.rs:152:9: replace Graph<'a>::suggest_ref -> Option<String> with None
+workspace	crates/opentide-workspace/src/validate/objects.rs:155:44: replace == with != in Graph<'a>::suggest_ref
+workspace	crates/opentide-workspace/src/validate/objects.rs:162:47: replace == with != in Graph<'a>::suggest_ref
+workspace	crates/opentide-workspace/src/validate/objects.rs:186:5: replace responder_names -> Vec<String> with vec!["xyzzy".into()]
+workspace	crates/opentide-workspace/src/validate/objects.rs:186:5: replace responder_names -> Vec<String> with vec![String::new()]
+workspace	crates/opentide-workspace/src/validate/objects.rs:186:5: replace responder_names -> Vec<String> with vec![]
+workspace	crates/opentide-workspace/src/validate/objects.rs:200:5: replace object_vocabulary -> Option<Vocabulary> with None
+workspace	crates/opentide-workspace/src/validate/objects.rs:224:5: replace warm_up with ()
+workspace	crates/opentide-workspace/src/validate/objects.rs:255:25: delete match arm ("$defs" | "definitions", _) in vocabulary_fields::walk
+workspace	crates/opentide-workspace/src/validate/objects.rs:260:13: delete match arm Json::Array(list) in vocabulary_fields::walk
+workspace	crates/opentide-workspace/src/validate/objects.rs:422:41: delete ! in check_object
+workspace	crates/opentide-workspace/src/validate/objects.rs:541:27: replace == with != in check_object
+workspace	crates/opentide-workspace/src/validate/objects.rs:592:5: replace without_indexes -> Vec<String> with vec!["xyzzy".into()]
+workspace	crates/opentide-workspace/src/validate/objects.rs:592:5: replace without_indexes -> Vec<String> with vec![String::new()]
+workspace	crates/opentide-workspace/src/validate/objects.rs:592:5: replace without_indexes -> Vec<String> with vec![]
+workspace	crates/opentide-workspace/src/validate/objects.rs:593:66: replace || with && in without_indexes
+workspace	crates/opentide-workspace/src/validate/objects.rs:599:5: replace leaf -> Option<&str> with None
+workspace	crates/opentide-workspace/src/validate/objects.rs:599:5: replace leaf -> Option<&str> with Some("")
+workspace	crates/opentide-workspace/src/validate/objects.rs:599:5: replace leaf -> Option<&str> with Some("xyzzy")
+workspace	crates/opentide-workspace/src/validate/objects.rs:601:22: delete ! in leaf
+workspace	crates/opentide-workspace/src/validate/objects.rs:635:33: replace && with || in schema_issue
+workspace	crates/opentide-workspace/src/validate/objects.rs:635:36: delete ! in schema_issue
+workspace	crates/opentide-workspace/src/validate/objects.rs:64:5: replace object_name -> String with "xyzzy".into()
+workspace	crates/opentide-workspace/src/validate/objects.rs:64:5: replace object_name -> String with String::new()
+workspace	crates/opentide-workspace/src/validate/objects.rs:654:28: replace == with != in schema_issue
+workspace	crates/opentide-workspace/src/validate/objects.rs:685:12: delete ! in branches
+workspace	crates/opentide-workspace/src/validate/objects.rs:802:9: delete match arm Some(Json::Bool(true)) in vocab_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:804:9: delete match arm Some(Json::Array(list)) in vocab_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:814:9: delete match arm Some(Json::String(stage)) in vocab_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:815:9: delete match arm Some(Json::Array(list)) in vocab_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:824:58: delete ! in vocab_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:851:5: replace config_keyword -> Option<&'static str> with None
+workspace	crates/opentide-workspace/src/validate/objects.rs:851:5: replace config_keyword -> Option<&'static str> with Some("")
+workspace	crates/opentide-workspace/src/validate/objects.rs:851:5: replace config_keyword -> Option<&'static str> with Some("xyzzy")
+workspace	crates/opentide-workspace/src/validate/objects.rs:856:42: replace != with == in config_keyword
+workspace	crates/opentide-workspace/src/validate/objects.rs:856:64: replace && with || in config_keyword
+workspace	crates/opentide-workspace/src/validate/objects.rs:856:67: delete ! in config_keyword
+workspace	crates/opentide-workspace/src/validate/objects.rs:868:44: delete ! in config_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:868:5: replace config_values -> Vec<Located> with vec![]
+workspace	crates/opentide-workspace/src/validate/objects.rs:881:32: delete ! in config_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:904:24: delete ! in config_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:904:63: replace == with != in config_values
+workspace	crates/opentide-workspace/src/validate/objects.rs:930:5: replace platform_status_issues -> Vec<Located> with vec![]
+workspace	crates/opentide-workspace/src/validate/objects.rs:961:57: replace && with || in platform_not_enabled
+workspace	crates/opentide-workspace/src/validate/scope.rs:113:9: replace Scope::object_types -> Vec<String> with vec![]
+workspace	crates/opentide-workspace/src/validate/scope.rs:196:23: replace || with && in variants
+workspace	crates/opentide-workspace/src/validate/scope.rs:52:9: replace Scope::full -> Self with Default::default()
+workspace	crates/opentide-workspace/src/validate/scope.rs:93:21: replace && with || in Scope::has_filter
+workspace	crates/opentide-workspace/src/validate/scope.rs:93:9: replace Scope::has_filter -> bool with true
+workspace	crates/opentide-workspace/src/validate/scope.rs:98:9: replace Scope::has_file_targets -> bool with true
+workspace	crates/opentide-workspace/src/validate/states.rs:153:31: replace || with && in check_shard
+workspace	crates/opentide-workspace/src/validate/states.rs:200:24: replace > with < in scan
+workspace	crates/opentide-workspace/src/validate/states.rs:228:31: replace match guard !entry.symlink with true in walk
+workspace	crates/opentide-workspace/src/views/chains.rs:113:9: delete match arm ("support", "enabling") in inverse
+workspace	crates/opentide-workspace/src/views/chains.rs:188:38: replace && with || in chain_edges
+workspace	crates/opentide-workspace/src/views/chains.rs:204:38: replace > with >= in chain_edges
+workspace	crates/opentide-workspace/src/views/chains.rs:227:49: replace && with || in flow_layers
+workspace	crates/opentide-workspace/src/views/chains.rs:230:13: replace && with || in flow_layers
+workspace	crates/opentide-workspace/src/views/chains.rs:231:13: replace && with || in flow_layers
+workspace	crates/opentide-workspace/src/views/chains.rs:234:56: replace += with *= in flow_layers
+workspace	crates/opentide-workspace/src/views/chains.rs:247:11: delete ! in flow_layers
+workspace	crates/opentide-workspace/src/views/chains.rs:247:43: replace < with <= in flow_layers
+workspace	crates/opentide-workspace/src/views/object.rs:389:31: replace + with * in Builder<'_>::rows
+workspace	crates/opentide-workspace/src/views/object.rs:423:92: replace + with * in Builder<'_>::rows
+workspace	crates/opentide-workspace/src/views/object.rs:423:92: replace + with - in Builder<'_>::rows
+workspace	crates/opentide-workspace/src/views/object.rs:482:9: delete match arm Value::Seq(items) in present
+workspace	crates/opentide-workspace/src/views/object.rs:555:29: delete ! in build_object_view
+workspace	crates/opentide-workspace/src/views/object.rs:642:5: replace catalogue_links -> BTreeMap<String, LinkTarget> with BTreeMap::new()
+workspace	crates/opentide-workspace/src/vocabularies.rs:57:49: replace && with || in object_vocabularies
+workspace	crates/opentide-workspace/src/vocabularies.rs:87:17: delete match arm "threat" in object_vocabularies
+workspace	crates/opentide-workspace/src/vocabularies.rs:92:17: delete match arm "rule" in object_vocabularies
+workspace	crates/opentide-workspace/src/watch/events.rs:25:9: replace <impl std::fmt::Debug for Events>::fmt -> std::fmt::Result with Ok(Default::default())
+workspace	crates/opentide-workspace/src/watch/events.rs:57:36: replace + with - in Events::wait
+workspace	crates/opentide-workspace/src/watch/events.rs:81:9: replace super::Watcher<'_, V>::run -> notify::Result<()> with Ok(())
+workspace	crates/opentide-workspace/src/watch/events.rs:83:15: delete ! in super::Watcher<'_, V>::run
+workspace	crates/opentide-workspace/src/watch/mod.rs:185:13: replace || with && in select_pass
+workspace	crates/opentide-workspace/src/watch/mod.rs:288:9: replace Watcher<'_, V>::run -> std::io::Result<()> with Ok(())
+workspace	crates/opentide-workspace/src/watch/mod.rs:289:15: delete ! in Watcher<'_, V>::run
+workspace	crates/opentide-workspace/src/watch/mod.rs:346:9: replace Watcher<'fs, V>::roots -> &[PathBuf] with Vec::leak(Vec::new())
+workspace	crates/opentide-workspace/src/watch/mod.rs:346:9: replace Watcher<'fs, V>::roots -> &[PathBuf] with Vec::leak(vec![Default::default()])
+workspace	crates/opentide-workspace/src/watch/mod.rs:533:9: replace <impl Validate for WorkspaceValidate<'_>>::reload with ()
+workspace	crates/opentide-workspace/src/watch/mod.rs:538:13: delete field files from struct crate::validate::Selection expression in <impl Validate for WorkspaceValidate<'_>>::validate
+workspace	crates/opentide-workspace/src/workspace.rs:386:43: replace + with * in Workspace::invalidate
+workspace	crates/opentide-workspace/src/workspace.rs:387:67: replace + with * in Workspace::invalidate
+workspace	crates/opentide-workspace/src/workspace.rs:388:65: replace + with * in Workspace::invalidate
+workspace	crates/opentide-workspace/src/workspace.rs:388:65: replace + with - in Workspace::invalidate
+workspace	crates/opentide-workspace/src/workspace.rs:407:42: replace += with *= in Workspace::invalidate
