@@ -18,9 +18,7 @@ exit: 1
     }
   ],
   "command": "deploy",
-  "deployed": [
-    "elastic"
-  ],
+  "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
   "error": "Deployment to elastic failed on Elastic KQL Rule: elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset",

@@ -2592,3 +2592,78 @@ fn sentinel_one_stops_a_tenant_refusing_the_key() {
     assert_eq!(rows[1], ("not_attempted".to_owned(), None), "{rows:?}");
     assert_eq!(value(&sent, "status"), &Json::str("failed"));
 }
+
+/// A platform none of whose tenants deployed is not in `deployed`, even when
+/// its tenant failed mid-batch, on a rule (here Graylog's refused token
+/// after its version was read): a failed deploy never looks deployed. The
+/// tenant's other rules are not attempted, naming the tenant.
+#[test]
+fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/system"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"version": "7.2.1"})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/search/validate"))
+            .respond_with(wiremock::ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let setup = format!("url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\n", server.uri());
+    let block = graylog_block("STAGING", "EventID:1");
+    let ws = workspace(
+        "graylog",
+        "lab",
+        &setup,
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "First rule",
+                    "00000000-0000-4000-8099-000000000191",
+                    "A.",
+                    &block,
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Second rule",
+                    "00000000-0000-4000-8099-000000000192",
+                    "B.",
+                    &block,
+                ),
+            ),
+        ],
+    );
+    let env = Env::from_pairs([("GRAYLOG_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "graylog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()));
+    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    let rows = rows(&sent);
+    assert_eq!(rows[0].0, "failed", "{rows:?}");
+    assert_eq!(rows[1].0, "not_attempted", "{rows:?}");
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(
+        results[1].get("reason").and_then(Json::as_str),
+        Some("not attempted: tenant lab failed")
+    );
+}

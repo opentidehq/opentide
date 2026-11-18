@@ -17,7 +17,7 @@ error: Sysdig tenant deployment failed · tenant: *** · error: Cannot reach sys
                                                             https://sysdig-tenant.invalid: error
                                                             sending request: client error (Connect):
                                                             tunnel error: failed to create…␛[0m
-  ␛[2m[2/3]␛[0m ␛[2m· skipped   ␛[0mSysdig rule the tenant lost             ␛[2mnot attempted after a failure␛[0m
-  ␛[2m[3/3]␛[0m ␛[2m· skipped   ␛[0mSysdig rule to disable the tenant lost  ␛[2mnot attempted after a failure␛[0m
+  ␛[2m[2/3]␛[0m ␛[2m· skipped   ␛[0mSysdig rule the tenant lost             ␛[2mnot attempted: tenant lab failed␛[0m
+  ␛[2m[3/3]␛[0m ␛[2m· skipped   ␛[0mSysdig rule to disable the tenant lost  ␛[2mnot attempted: tenant lab failed␛[0m
   ␛[1m␛[31m✗␛[0m  ␛[1msysdig␛[0m  ␛[2m0 deployed, 1 failed, 2 not attempted␛[0m ␛[2m<SECONDS>␛[0m
 ␛[1m␛[31m✗␛[0m Deployment failed · 1 failed, 2 not attempted · <SECONDS>
