@@ -8,6 +8,11 @@
 //! is missing from, with its file. The add-language skill's checklist says
 //! where each one is; this test says which ones a change forgot.
 
+#![expect(
+    clippy::expect_used,
+    reason = "test helpers: a panic naming the missing file or table is how the test fails"
+)]
+
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -80,6 +85,10 @@ fn query_languages_lists_every_variant_but_the_documents() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one check per table, each with the file it names: read top to bottom"
+)]
 fn every_query_language_is_wired() {
     let codes: Vec<&str> = opentide_core::codes::ALL.to_vec();
     let references: Vec<&str> = opentide_analysis::queries::ENGINE_REFERENCES
