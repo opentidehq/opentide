@@ -227,7 +227,8 @@ fn depth_walk(root: &SyntaxNode) -> Option<ByteSpan> {
 mod tests {
     use super::*;
 
-    /// Texts with every mix of nesting and prefix runs around the limit, and the corpus.
+    /// Texts with every mix of nesting and prefix runs around the limit, and queries like the
+    /// corpus's.
     fn texts() -> Vec<String> {
         let limit = usize::try_from(lexical::MAX_EXPRESSION_DEPTH).unwrap_or(250);
         let mut out = Vec::new();
@@ -249,16 +250,27 @@ mod tests {
             out.push(format!("process where /* {} */ a", "(".repeat(n + 5)));
             out.push(format!("process where {}a", "NOT ".repeat(n)));
         }
-        let corpus =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/corpus/eql");
-        for path in std::fs::read_dir(corpus)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-        {
-            out.extend(std::fs::read_to_string(path));
-        }
+        // Queries like the corpus's, written here: an engine crate reads no
+        // file, its tests in `src/` included (`check-io-free.sh`).
+        out.extend(
+            [
+            r#"sequence with maxspan=5w [a where true] [b where true]"#,
+            r#"process where process.name in ()"#,
+            r#"process where process.pid =="#,
+            r#"process where ?process.parent.name == null and `odd field` != "x""#,
+            r#"process where /* unterminated true"#,
+            r#"sample by host.id [process where true] [file where true]"#,
+            r#"sequence [process where true] ![file where true] [network where true] | head 1"#,
+            r#"process where a == 0x10"#,
+            r#"process where file.path == 'C:\Windows'"#,
+            r#"process where not (a == 1 or -b == +2) and not c"#,
+            r#"process where length(process.args) > -(3 + -4)"#,
+            r#"network where destination.port in (22, 3389) and not cidrMatch(destination.ip, "10.0.0.0/8")"#,
+            r#"process where process.name : "cmd*" // a comment ( ( ("#,
+            r#"any where true | tail 5 | filter not x"#,
+            ]
+            .map(str::to_owned),
+        );
         out
     }
 
