@@ -53,20 +53,20 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     let index = TreeIndex::new(&root);
     parse_errors(&root, &index, &parsed.errors, &lines, &mut diagnostics);
     let broken = broken_regions(&root, &index, &parsed.errors);
-    unknown_commands(&index.nodes, catalog, &lines, &mut diagnostics);
+    unknown_commands(&index, catalog, &lines, &mut diagnostics);
     crate::perf::collect(source, catalog, &lines, &mut diagnostics);
     crate::search_operators::collect(source, catalog, &lines, &mut diagnostics);
     crate::parens::refine(source, &lines, &mut diagnostics);
     stages(
         &root,
-        &index.nodes,
+        &index,
         source,
         &parsed.errors,
         catalog,
         &lines,
         &mut diagnostics,
     );
-    rejects(&index.nodes, &lines, &mut diagnostics);
+    rejects(&index, &lines, &mut diagnostics);
     crate::cim::collect(source, &lines, &mut diagnostics);
     crate::declared::collect(source, catalog, &lines, &mut diagnostics);
     // No hint in a broken stage at or after its syntax error, nor over it:
@@ -97,7 +97,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
                 .and_then(|i| merged.get(i))
                 .is_none_or(|&(_, to)| start > to)
     });
-    let tokens = highlight(&index.all_tokens, source, spec, catalog).unwrap_or_default();
+    let tokens = highlight(&index, source, spec, catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -378,7 +378,7 @@ fn first_token_text(node: &SyntaxNode) -> String {
 /// know. An app on the search head can add commands, so it is a warning; one
 /// edit from a known command it is almost certainly a typo, an error.
 fn unknown_commands(
-    nodes: &[SyntaxNode],
+    index: &TreeIndex,
     catalog: &Catalog,
     lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
@@ -386,7 +386,11 @@ fn unknown_commands(
     // The finding of each name, made once: its typo check and "did you mean"
     // scan the whole catalog, and a query can repeat one unknown command.
     let mut made: std::collections::HashMap<String, Diagnostic> = std::collections::HashMap::new();
-    for node in nodes.iter().filter(|n| n.kind() == K::UNKNOWN_COMMAND) {
+    for node in index
+        .nodes
+        .iter()
+        .filter(|n| n.kind() == K::UNKNOWN_COMMAND)
+    {
         let name = first_token_text(node);
         if catalog.command(&name).is_none() {
             let range = lines.range(shown(node.text_range()));
@@ -460,7 +464,7 @@ fn in_broken_pipeline(node: &SyntaxNode, errors: &[SyntaxError]) -> bool {
 
 fn stages(
     root: &SyntaxNode,
-    nodes: &[SyntaxNode],
+    index: &TreeIndex,
     source: &str,
     errors: &[SyntaxError],
     catalog: &Catalog,
@@ -471,10 +475,18 @@ fn stages(
         return;
     };
     command_without_pipe(&pipeline, source, errors, catalog, lines, out);
-    if !has_error(root, errors) {
+    // `has_error` of the root, from the index: its error nodes are all of the
+    // tree's, and a walk of every node found none in a query without one.
+    let root_range = root.text_range();
+    let root_error = !index.errors.is_empty()
+        || errors.iter().any(|e| {
+            root_range.contains_inclusive(e.gap.start())
+                && root_range.contains_inclusive(e.gap.end())
+        });
+    if !root_error {
         empty_stage(&pipeline, lines, out);
     }
-    for node in nodes {
+    for node in &index.nodes {
         if let Some((name, what, error)) = empty_command(node)
             && !in_broken_pipeline(node, errors)
         {
@@ -562,8 +574,8 @@ fn command_without_pipe(
 /// Forms the grammar shares with valid ones that Splunk's parser rejects:
 /// a loose comparison in `tstats ... where`, and `geostats by` with no
 /// aggregate.
-fn rejects(nodes: &[SyntaxNode], lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
-    for node in nodes {
+fn rejects(index: &TreeIndex, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
+    for node in &index.nodes {
         if node.kind() == K::TSTATS_COMMAND
             && let Some(clause) = node.children().find(|n| n.kind() == K::SEARCH_EXPRESSION)
         {
@@ -729,13 +741,13 @@ fn looks_like_macro(text: &str) -> bool {
 /// The highlight tokens: each token's capture, then the catalog's
 /// refinements, as the tree-sitter path does them.
 fn highlight(
-    tokens: &[SyntaxToken],
+    index: &TreeIndex,
     source: &str,
     spec: &HighlightSpec,
     catalog: &Catalog,
 ) -> Result<Vec<opentide_highlight::HighlightToken>, opentide_highlight::HighlightError> {
     let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
-    for token in tokens {
+    for token in &index.all_tokens {
         if token.kind() == K::WHITESPACE || token.text().is_empty() {
             continue;
         }
@@ -899,6 +911,9 @@ mod walk_tests {
 
     /// An analysis walks the tree once (ADR 0014 §7): the index, the unknown
     /// commands, the stages, the rejects and the highlight each walked it.
+    /// The count is the index's walk; the checks and the highlight take the
+    /// index, not the tree, so no other walk of the whole tree is left to
+    /// count (`stages` reads the root's children for its pipeline).
     #[test]
     fn an_analysis_visits_each_element_once() {
         for source in [SAMPLES[1], SAMPLES[3]] {

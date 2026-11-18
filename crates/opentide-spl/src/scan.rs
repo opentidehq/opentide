@@ -373,8 +373,8 @@ pub(crate) fn walk_pipelines<S>(
     stage: impl FnMut(&mut S, usize, (usize, usize)),
 ) {
     // The plan an analysis installed for this text and range, else one of
-    // this walk's own (ADR 0014 §5: the analysis's four walks scanned the
-    // same text four times).
+    // this walk's own (ADR 0014 §5: the analysis's walks that read the text
+    // alike, perf, CIM and declared datasets, each scanned it again).
     let installed = PLAN.with(|p| {
         p.borrow()
             .as_ref()
@@ -437,6 +437,9 @@ impl Plan {
             at: source.as_ptr() as usize,
             len: source.len(),
             range: (start, end),
+            // A function's address names it here: the two rules in use have
+            // distinct code, and a copy of one at another address would only
+            // miss the plan and scan again (the plan tests hold both).
             hidden: hidden as usize,
             pairs,
             frames,
@@ -503,16 +506,23 @@ thread_local! {
 
 /// A plan installed for the walks of one analysis of `source`, and the one
 /// before it put back on drop.
-pub(crate) struct PlanScope(Option<std::rc::Rc<Plan>>);
+#[must_use = "the plan is installed while the scope lives"]
+pub(crate) struct PlanScope<'a>(Option<std::rc::Rc<Plan>>, std::marker::PhantomData<&'a str>);
 
-/// Scans the whole of `source` once for the analysis's walks (perf, search
+/// Scans the whole of `source` once for the analysis's walks that read it
+/// alike (perf, CIM, declared datasets; the search operators skip other text
+/// and scan their own). The scope borrows `source`, so the plan, keyed by
+/// its address, cannot outlive it.
 /// operators, CIM, declared datasets), which read the same pipelines.
-pub(crate) fn plan_scope(source: &str) -> PlanScope {
+pub(crate) fn plan_scope(source: &str) -> PlanScope<'_> {
     let plan = std::rc::Rc::new(Plan::new(source, (0, source.len()), skip_hidden));
-    PlanScope(PLAN.with(|p| p.replace(Some(plan))))
+    PlanScope(
+        PLAN.with(|p| p.replace(Some(plan))),
+        std::marker::PhantomData,
+    )
 }
 
-impl Drop for PlanScope {
+impl Drop for PlanScope<'_> {
     fn drop(&mut self) {
         let before = self.0.take();
         PLAN.with(|p| *p.borrow_mut() = before);
@@ -669,20 +679,25 @@ mod plan_tests {
     /// order, with the same subsearch brackets installed (ADR 0014 §5).
     #[test]
     fn a_plan_walks_as_the_scanning_walk() {
+        let rules: [Hidden; 2] = [skip_hidden, crate::search_operators::skip_hidden];
         for source in texts() {
-            for order in [Order::StageFirst, Order::SubsearchesFirst] {
-                let scanned = record(&source, order, |s, o, e, st| {
-                    walk_scanning(s, (0, s.len()), skip_hidden, o, e, st);
-                });
-                let planned = record(&source, order, |s, o, e, st| {
-                    Plan::new(s, (0, s.len()), skip_hidden).walk(s, o, e, st);
-                });
-                assert_eq!(planned, scanned, "{source:?}");
-                let _scope = plan_scope(&source);
-                let installed = record(&source, order, |s, o, e, st| {
-                    walk_pipelines(s, (0, s.len()), skip_hidden, o, e, st);
-                });
-                assert_eq!(installed, scanned, "{source:?}");
+            for hidden in rules {
+                for order in [Order::StageFirst, Order::SubsearchesFirst] {
+                    let scanned = record(&source, order, |s, o, e, st| {
+                        walk_scanning(s, (0, s.len()), hidden, o, e, st);
+                    });
+                    let planned = record(&source, order, |s, o, e, st| {
+                        Plan::new(s, (0, s.len()), hidden).walk(s, o, e, st);
+                    });
+                    assert_eq!(planned, scanned, "{source:?}");
+                    // Installed for the analysis's rule: the other rule's walk
+                    // misses it and scans its own, to the same result.
+                    let _scope = plan_scope(&source);
+                    let installed = record(&source, order, |s, o, e, st| {
+                        walk_pipelines(s, (0, s.len()), hidden, o, e, st);
+                    });
+                    assert_eq!(installed, scanned, "{source:?}");
+                }
             }
         }
     }
