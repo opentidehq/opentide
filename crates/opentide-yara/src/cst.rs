@@ -50,8 +50,10 @@ fn parsed_leaves(source: &str) -> Rc<[Tok]> {
 }
 
 /// The CST of `source`: the last one parsed on this thread when the text is
-/// the same, else a new parse, which replaces it. One tree is kept, so the
-/// memo holds at most the size of the last buffer.
+/// the same, else a new parse, which replaces it. One text is kept: its
+/// tree, and once read its tokens ([`parsed_leaves`]) with the nodes above
+/// them, a few times the size of the last buffer, freed when the next text
+/// replaces it.
 fn parsed(source: &str) -> Rc<CST> {
     if let Some(cst) = LAST.with_borrow(|last| {
         last.as_ref()
@@ -403,6 +405,7 @@ pub(crate) fn folding(source: &str) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentide_core::LanguageId;
 
     /// An analysis collects the tree's tokens once for the parentheses, the
     /// highlighting and a broken signature's end, which collected them each
@@ -428,7 +431,6 @@ mod tests {
             );
         }
     }
-    use opentide_core::LanguageId;
 
     fn spans(source: &str) -> Vec<(usize, usize, &'static str)> {
         highlight_spans(source)
