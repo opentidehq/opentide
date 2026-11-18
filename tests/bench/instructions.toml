@@ -3,69 +3,72 @@
 # external public rules. Written by `cargo xtask throughput --record`; the
 # check fails a count more than 3% over. Record again when a change lowers
 # counts on purpose, or raises them on purpose with the reason in its PR.
+# Each is the highest of several runs. glibc's malloc is counted, so record
+# where CI checks (its `throughput` job's runner image).
+# Recorded on: valgrind-3.22.0, glibc 2.39, x86_64
 
 [cql]
-analyze_corpus = 12117347
-analyze_external = 46772310
-parse_corpus = 11638340
-parse_external = 42430361
+analyze_corpus = 12118558
+analyze_external = 46778762
+parse_corpus = 11638384
+parse_external = 42430503
 
 [eql]
-analyze_corpus = 4049875
-analyze_external = 3116829
-parse_corpus = 1475157
-parse_external = 1080761
+analyze_corpus = 4079631
+analyze_external = 3116058
+parse_corpus = 1475193
+parse_external = 1080844
 
 [esql]
-analyze_corpus = 23613073
-analyze_external = 4713155
-parse_corpus = 5374034
-parse_external = 1205836
+analyze_corpus = 23587863
+analyze_external = 4712700
+parse_corpus = 5374125
+parse_external = 1205932
 
 [exabeam]
-analyze_corpus = 13064360
-analyze_external = 1525610
+analyze_corpus = 13150366
+analyze_external = 1533317
 parse_corpus = 7624603
 parse_external = 1285216
 
 [falco]
-analyze_corpus = 4023039
-analyze_external = 1225861152
+analyze_corpus = 4022823
+analyze_external = 1225751028
 parse_corpus = 3147797
-parse_external = 21378485
+parse_external = 21378604
 
 [kql]
-analyze_corpus = 18552823
-analyze_external = 75956323
-parse_corpus = 3065182
-parse_external = 12986449
+analyze_corpus = 18738030
+analyze_external = 76746296
+parse_corpus = 3065435
+parse_external = 12987854
 
 [kuery]
-analyze_corpus = 4112242
-analyze_external = 1708931
+analyze_corpus = 4112570
+analyze_external = 1708917
 parse_corpus = 1132930
 parse_external = 851149
 
 [lucene]
-analyze_corpus = 3522197
-analyze_external = 15575493
+analyze_corpus = 3522210
+analyze_external = 15503399
 parse_corpus = 972973
-parse_external = 5688781
+parse_external = 5688751
 
 [spl]
-analyze_corpus = 20289656
-analyze_external = 24773383
-parse_corpus = 7604394
-parse_external = 6304154
+analyze_corpus = 20747018
+analyze_external = 24752307
+parse_corpus = 7604523
+parse_external = 6304080
 
 [yara]
-analyze_corpus = 31987872
-analyze_external = 711042627
-parse_corpus = 23637171
-parse_external = 547185682
+analyze_corpus = 31987334
+analyze_external = 711288222
+parse_corpus = 23637240
+parse_external = 547185969
 
 [yaral]
-analyze_corpus = 15254652
-analyze_external = 206971541
+analyze_corpus = 15251411
+analyze_external = 206977516
 parse_corpus = 9092573
 parse_external = 99271110
