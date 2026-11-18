@@ -29,7 +29,7 @@ pub(crate) fn diagnostics(
     diagnostics_with(root, errors, source, ctx, |_| {})
 }
 
-/// [`diagnostics`], handing every token to `token` in document order from
+/// The checks' diagnostics, handing every token to `token` in document order from
 /// the same walk: the highlight reads them there, not in a walk of its own
 /// (ADR 0014 §5a).
 pub(crate) fn diagnostics_with(
