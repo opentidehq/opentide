@@ -857,7 +857,7 @@ fn load_error_row(
         (YAML_PARSE, Some(text)) => node::load(text)
             .err()
             .and_then(|error| error.mark)
-            .map(|mark| mark.line),
+            .map(|mark| mark.line()),
         _ => None,
     };
     let fields = text.map(text_fields).unwrap_or_default();

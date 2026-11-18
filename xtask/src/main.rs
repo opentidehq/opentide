@@ -70,6 +70,9 @@ enum Cmd {
     },
     /// Run the benchmarks against their budgets (UC-0.8, #806)
     Bench(xtask::bench::BenchArgs),
+    /// Count each language's parse and analysis in instructions (callgrind) and
+    /// hold them to tests/bench/instructions.toml (#1571, ADR 0014)
+    Throughput(xtask::throughput::ThroughputArgs),
     /// The vocabularies: sync, generate and ingest (UC-1.6, #812);
     /// `vocab --help` lists the commands
     Vocab {
@@ -170,6 +173,7 @@ fn main() -> ExitCode {
         Cmd::Codegen(args) => status("codegen", xtask::codegen::run(&args)),
         Cmd::Cassettes { command } => status("cassettes", xtask::cassettes::run(&command)),
         Cmd::Bench(args) => xtask::bench::main(args),
+        Cmd::Throughput(args) => xtask::throughput::main(&args),
         Cmd::Vocab { command } => xtask::vocab::main(&command),
         Cmd::SpecFields(args) => xtask::spec_fields::main(&args),
         Cmd::Stubs(args) => xtask::stubs::main(&args),
