@@ -20,12 +20,33 @@ use yara_x_parser::cst::{CST, Immutable, Node, NodeOrToken, SyntaxKind, Token};
 struct Memo {
     source: Box<str>,
     cst: Rc<CST>,
+    /// The tree's tokens ([`leaves`]), collected on first use: the
+    /// parentheses, the highlighting and the end of the signature read them,
+    /// and each collected them again (ADR 0014, rule 5).
+    leaves: Rc<std::cell::OnceCell<Rc<[Tok]>>>,
 }
 
 thread_local! {
     static LAST: RefCell<Option<Memo>> = const { RefCell::new(None) };
     #[cfg(test)]
     static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    #[cfg(test)]
+    static LEAF_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The tokens of `source`'s tree, in source order, trivia included: the
+/// memo's ([`parsed`]).
+fn parsed_leaves(source: &str) -> Rc<[Tok]> {
+    let cst = parsed(source);
+    let cell = LAST.with_borrow(|last| {
+        last.as_ref()
+            .filter(|m| &*m.source == source)
+            .map(|m| Rc::clone(&m.leaves))
+    });
+    match cell {
+        Some(cell) => Rc::clone(cell.get_or_init(|| leaves(&cst).into())),
+        None => leaves(&cst).into(),
+    }
 }
 
 /// The CST of `source`: the last one parsed on this thread when the text is
@@ -45,6 +66,7 @@ fn parsed(source: &str) -> Rc<CST> {
     LAST.set(Some(Memo {
         source: source.into(),
         cst: Rc::clone(&cst),
+        leaves: Rc::default(),
     }));
     cst
 }
@@ -148,6 +170,8 @@ const fn capture(kind: SyntaxKind) -> Option<Capture> {
 
 /// Every token of the tree, in source order, trivia included.
 fn leaves(cst: &CST) -> Vec<Tok> {
+    #[cfg(test)]
+    LEAF_WALKS.set(LEAF_WALKS.get() + 1);
     let mut out = Vec::new();
     let mut stack = vec![cst.root().children_with_tokens()];
     while let Some(top) = stack.last_mut() {
@@ -165,7 +189,7 @@ fn leaves(cst: &CST) -> Vec<Tok> {
 /// The end of the last token of `source` that is not a blank or a comment:
 /// where a signature that stops too early stops.
 pub(crate) fn significant_end(source: &str) -> usize {
-    leaves(&parsed(source))
+    parsed_leaves(source)
         .iter()
         .rev()
         .find(|t| !is_trivia(t.kind()))
@@ -276,8 +300,7 @@ fn adjacent(a: &Tok, b: &Tok) -> bool {
 /// The highlight spans of `source`, sorted and not overlapping: the token
 /// spans with their capture names.
 pub(crate) fn highlight_spans(source: &str) -> Vec<(ByteSpan, &'static str)> {
-    let cst = parsed(source);
-    let leaves = leaves(&cst);
+    let leaves = parsed_leaves(source);
     let mut out = Vec::new();
     let mut i = 0;
     while i < leaves.len() {
@@ -323,10 +346,9 @@ pub(crate) fn highlight_spans(source: &str) -> Vec<(ByteSpan, &'static str)> {
 /// parentheses. They are its tokens, so a parenthesis inside a string, a
 /// regexp or a comment is none; pairs are matched in order.
 pub(crate) fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
-    let cst = parsed(source);
     let mut pairs = Vec::new();
     let mut open = Vec::new();
-    for t in leaves(&cst) {
+    for t in parsed_leaves(source).iter() {
         match t.kind() {
             SyntaxKind::L_PAREN => open.push(t.span().start()),
             SyntaxKind::R_PAREN => {
@@ -381,6 +403,31 @@ pub(crate) fn folding(source: &str) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An analysis collects the tree's tokens once for the parentheses, the
+    /// highlighting and a broken signature's end, which collected them each
+    /// (ADR 0014, rule 7).
+    #[test]
+    fn an_analysis_walks_the_tokens_once() {
+        for source in [
+            "rule a { strings: $s = \"x\" condition: ($s and (1 == 1)) }",
+            "rule broken { condition: ( } // trailing\n",
+        ] {
+            let walks = LEAF_WALKS.get();
+            let _ = crate::analyze_document(source);
+            assert_eq!(LEAF_WALKS.get() - walks, 1, "{source}");
+            let shape = |tokens: &[Tok]| -> Vec<(SyntaxKind, usize, usize)> {
+                tokens
+                    .iter()
+                    .map(|t| (t.kind(), t.span().start(), t.span().end()))
+                    .collect()
+            };
+            assert_eq!(
+                shape(&parsed_leaves(source)),
+                shape(&leaves(&CST::from(source)))
+            );
+        }
+    }
     use opentide_core::LanguageId;
 
     fn spans(source: &str) -> Vec<(usize, usize, &'static str)> {
