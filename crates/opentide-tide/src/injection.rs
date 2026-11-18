@@ -19,7 +19,7 @@
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
 //! (`sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`,
-//! `graylog`, `google_secops`, `exabeam`, or
+//! `graylog`, `crowdstrike`, `google_secops`, `exabeam`, or
 //! `elastic` with the entry's `language`). Any other `system` (`Sentinel`,
 //! `Splunk ES`, `MDE`) is not analysed: the language is never guessed
 //! (specifications#58).
@@ -31,8 +31,9 @@
 
 use crate::elastic::{elastic_query_language, elastic_search_language};
 use crate::yaml_scalar::{YamlKey, mapping_keys, scalar_at, scalar_text};
-use crate::{InjectedQuery, language_for_field_path};
+use crate::{InjectedQuery, language_for_field_path, platform_field_language};
 use opentide_core::{ByteSpan, LanguageId};
+use opentide_schema::platforms::PlatformId;
 
 /// Every query a Tide object carries, in source order.
 pub(crate) fn extract_injections(source: &str) -> Vec<InjectedQuery> {
@@ -59,19 +60,15 @@ pub(crate) fn extract_injections(source: &str) -> Vec<InjectedQuery> {
 /// from the entry's `system` and, for Elastic, its `language`. `None` when
 /// `system` is not a platform identifier whose queries are checked.
 pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<LanguageId> {
-    if system == "elastic" {
-        return elastic_search_language(language);
+    match PlatformId::parse(system)? {
+        PlatformId::Elastic => elastic_search_language(language),
+        // Google SecOps searches are YARA-L (a block's `query` is not a key).
+        PlatformId::GoogleSecops => Some(LanguageId::Yaral),
+        // Exabeam searches are the Exabeam Query Language, profile `search`
+        // (a block's queries are its sequences' filters).
+        PlatformId::Exabeam => Some(LanguageId::Exabeam),
+        platform => platform_field_language(platform, &["query"]),
     }
-    // Google SecOps searches are YARA-L (a block's `query` is not a key).
-    if system == "google_secops" {
-        return Some(LanguageId::Yaral);
-    }
-    // Exabeam searches are the Exabeam Query Language, profile `search` (a
-    // block's queries are its sequences' filters).
-    if system == "exabeam" {
-        return Some(LanguageId::Exabeam);
-    }
-    language_for_field_path(&["configurations", system, "query"])
 }
 
 /// The language and platform of the query `key` holds, if it holds one.
@@ -104,19 +101,10 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
         ["configurations", "sysdig", "macros", item, "condition"] if is_index(item) => {
             Some((LanguageId::Falco, "sysdig".into()))
         }
-        [
-            "configurations",
-            platform @ ("harfanglab" | "bitdefender"),
-            "yara",
-            "signature",
-        ] => Some((LanguageId::Yara, (*platform).to_string())),
-        ["configurations", "google_secops", _] => {
-            language_for_field_path(&path).map(|language| (language, "google_secops".into()))
-        }
-        ["configurations", "exabeam", "sequences", item, "query"] if is_index(item) => {
-            Some((LanguageId::Exabeam, "exabeam".into()))
-        }
-        ["configurations", platform, "query" | "search"] => {
+        // Every other block field the platform table names
+        // (`platform_field_language`): a `query`, Splunk's `search`, a YARA
+        // `signature`, a Google SecOps section, an Exabeam sequence's `query`.
+        ["configurations", platform, ..] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))
         }
         ["response", "procedure", "searches", item, "query"] if is_index(item) => {
