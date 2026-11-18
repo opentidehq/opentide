@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// *work* on a runtime of its own.
+/// *work* on the process's runtime.
 fn wait<F: Future>(work: F) -> F::Output {
     block_on(work).unwrap()
 }

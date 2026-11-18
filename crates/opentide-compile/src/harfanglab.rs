@@ -398,24 +398,75 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     lines.join("\n")
 }
 
+/// The kind of a HarfangLab rule, which its block's `sigma` or `yara` key
+/// names: it picks the compiler and the endpoint (`SigmaRule` or
+/// `YaraFile`) of a create, an update and a delete. Every tenant takes both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// A Sigma rule.
+    Sigma,
+    /// A YARA file.
+    Yara,
+}
+
+impl Kind {
+    /// `Sigma` or `YARA`, as a deploy request names it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Sigma => "Sigma",
+            Self::Yara => "YARA",
+        }
+    }
+
+    /// The kind `Sigma` or `YARA` names.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "Sigma" => Some(Self::Sigma),
+            "YARA" => Some(Self::Yara),
+            _ => None,
+        }
+    }
+
+    /// The kind of `rule`'s HarfangLab block: `sigma` first, then `yara`;
+    /// `None` when it has neither.
+    pub fn of(rule: &Rule) -> Option<Self> {
+        let block = rule.block(PLATFORM).filter(|block| block.is_filled())?;
+        if block.get("sigma").is_some_and(|value| !value.is_null()) {
+            Some(Self::Sigma)
+        } else if block.get("yara").is_some_and(|value| !value.is_null()) {
+            Some(Self::Yara)
+        } else {
+            None
+        }
+    }
+}
+
+/// The body of a HarfangLab deploy request: the rule's `kind` and, unless it
+/// is a delete, the compiled `rule` (`{"kind": "Sigma", "rule": {...}}`). The
+/// `Deployer` sends `rule` to the endpoint of `kind`.
+pub fn request_body(kind: Kind, rule: Option<&Json>) -> Json {
+    let mut body = Object::new();
+    body.insert("kind".into(), kind.as_str().into());
+    if let Some(rule) = rule {
+        body.insert("rule".into(), rule.clone());
+    }
+    Json::Object(body)
+}
+
 /// The writes a deploy sends for `rule` to `tenant`: the Sigma rule
-/// (`PUT .../SigmaRule/<uuid>/`) or the YARA file (`POST .../YaraFile/`), a
-/// delete for a DELETION status, or none when the rule's kind is not the
-/// tenant's `type`.
+/// (`PUT .../SigmaRule/<uuid>/`) or the YARA file (`POST .../YaraFile/`), by
+/// the block's own kind, a delete for a DELETION status, or none when the
+/// block has neither kind.
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Vec<Write>, CompileError> {
     let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
     let sigma_block = block.get("sigma").filter(|value| !value.is_null());
     let yara_block = block.get("yara").filter(|value| !value.is_null());
-    let kind = match (sigma_block, yara_block) {
-        (Some(_), _) => "Sigma",
-        (None, Some(_)) => "YARA",
-        (None, None) => return Ok(Vec::new()),
-    };
-    if deploy::setup(tenant, "type").and_then(Json::as_str) != Some(kind) {
+    let Some(kind) = Kind::of(rule) else {
         return Ok(Vec::new());
-    }
+    };
+    let kind = kind.as_str();
     let base = deploy::setup_text(tenant, "url");
     let base = base.trim_end_matches('/');
     let endpoint = if kind == "Sigma" {

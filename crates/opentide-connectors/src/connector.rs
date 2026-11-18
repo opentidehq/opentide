@@ -98,9 +98,11 @@ impl DeployRequest {
         }
     }
 
-    /// The deletion of the rule `rule_id`: no body, which no platform reads
-    /// for a delete (Sysdig reads the rule's name from the tenant to take it
-    /// out of its policies).
+    /// The deletion of the rule `rule_id`: no body, which no platform but
+    /// HarfangLab reads for a delete (Sysdig reads the rule's name from the
+    /// tenant to take it out of its policies). A HarfangLab delete names the
+    /// rule's kind: build it with `new(rule_id, Operation::Delete,
+    /// br#"{"kind": "YARA"}"#.to_vec())`.
     pub fn delete(rule_id: impl Into<String>) -> Self {
         Self::new(rule_id, Operation::Delete, Vec::new())
     }
