@@ -142,7 +142,7 @@ fn table_entries(
         let value = item_node(item, positions, key_start, depth + 1)?;
         entries.push(Entry {
             key: Arc::new(Node {
-                value: Value::Str(key.to_owned()),
+                value: Value::Str(key.into()),
                 start: key_start,
                 end: key_end,
                 text: None,
@@ -200,11 +200,13 @@ fn value_node(
     }
     let (start, end) = span_marks(value.span(), positions, at);
     let converted = match value {
-        toml_edit::Value::String(text) => Value::Str(text.value().clone()),
+        toml_edit::Value::String(text) => Value::Str(text.value().as_str().into()),
         toml_edit::Value::Integer(integer) => Value::Int(*integer.value()),
         toml_edit::Value::Float(float) => Value::Float(*float.value()),
         toml_edit::Value::Boolean(flag) => Value::Bool(*flag.value()),
-        toml_edit::Value::Datetime(datetime) => Value::Datetime(datetime.value().to_string()),
+        toml_edit::Value::Datetime(datetime) => {
+            Value::Datetime(datetime.value().to_string().into())
+        }
         toml_edit::Value::Array(array) => {
             let mut items = Vec::with_capacity(array.len());
             for item in array {
@@ -219,7 +221,7 @@ fn value_node(
                 let (key_start, key_end) = span_marks(key_span, positions, start);
                 entries.push(Entry {
                     key: Arc::new(Node {
-                        value: Value::Str(key.to_owned()),
+                        value: Value::Str(key.into()),
                         start: key_start,
                         end: key_end,
                         text: None,

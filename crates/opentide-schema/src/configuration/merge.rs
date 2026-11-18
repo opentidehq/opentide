@@ -86,7 +86,7 @@ pub fn to_json(node: &Node) -> Json {
             },
             Json::Number,
         ),
-        Value::Str(text) | Value::Datetime(text) => Json::String(text.clone()),
+        Value::Str(text) | Value::Datetime(text) => Json::String(text.to_string()),
         Value::Seq(items) => Json::Array(items.iter().map(|item| to_json(item)).collect()),
         Value::Map(entries) => {
             let mut map = Map::new();

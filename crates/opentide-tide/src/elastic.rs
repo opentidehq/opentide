@@ -247,7 +247,7 @@ fn names(value: Option<&Arc<Node>>) -> Vec<String> {
             .iter()
             .filter_map(|v| v.as_str().map(str::to_string))
             .collect(),
-        Some(Value::Str(s)) => vec![s.clone()],
+        Some(Value::Str(s)) => vec![s.to_string()],
         _ => Vec::new(),
     }
 }
