@@ -329,6 +329,10 @@ pub fn format(source: &str) -> Option<String> {
 /// Whether `source` parses without an error: the parse alone, with no
 /// analysis, for the throughput benchmark (`cargo bench --bench throughput`, ADR
 /// 0014). Not part of the API.
+///
+/// The parser's own errors: the AST's builder adds a few (an integer out of
+/// range, an invalid escape, too deep a nesting), so a text can parse here
+/// and still be refused by [`debug_kinds`] and [`analyze`].
 #[doc(hidden)]
 #[must_use]
 pub fn parses(source: &str) -> bool {

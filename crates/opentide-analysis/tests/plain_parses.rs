@@ -29,7 +29,11 @@ fn texts(language: &str) -> Vec<(PathBuf, String)> {
     paths.sort();
     paths
         .into_iter()
-        .filter_map(|p| std::fs::read_to_string(&p).ok().map(|t| (p, t)))
+        .map(|p| {
+            let text = std::fs::read_to_string(&p)
+                .unwrap_or_else(|error| panic!("{}: {error}", p.display()));
+            (p, text)
+        })
         .collect()
 }
 
@@ -59,7 +63,14 @@ fn a_plain_parse_gives_the_verdict_of_debug_kinds() {
         assert!(texts.len() > 20, "{language}: {} files", texts.len());
         for (path, text) in texts {
             let (error, _) = debug_kinds(&text);
-            assert_eq!(parses(&text), !error, "{language}: {}", path.display());
+            if language == "yara" {
+                // YARA's verdict is the AST's, whose builder adds errors the
+                // parser does not emit (an integer out of range, a bad
+                // escape): a text the parser fails, the AST fails too.
+                assert!(parses(&text) || error, "{language}: {}", path.display());
+            } else {
+                assert_eq!(parses(&text), !error, "{language}: {}", path.display());
+            }
         }
     }
 }
