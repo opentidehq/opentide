@@ -286,22 +286,23 @@ pub fn bag_distance(a: &str, b: &str) -> Option<usize> {
     if !a.is_ascii() || !b.is_ascii() {
         return None;
     }
-    let mut counts = [0i32; 128];
+    // The characters both share, counting repeats: `a` has `a.len() -
+    // shared` the other lacks, and `b` has `b.len() - shared`. One pass over
+    // each spelling, where summing all 128 counts cost more than the
+    // spellings themselves on the short names it measures (ADR 0014).
+    let mut counts = [0u32; 128];
     for byte in a.bytes() {
         counts[usize::from(byte)] += 1;
     }
+    let mut shared = 0usize;
     for byte in b.bytes() {
-        counts[usize::from(byte)] -= 1;
-    }
-    let (mut more, mut fewer) = (0usize, 0usize);
-    for count in counts {
-        match count.cmp(&0) {
-            Ordering::Greater => more += count.unsigned_abs() as usize,
-            Ordering::Less => fewer += count.unsigned_abs() as usize,
-            Ordering::Equal => {}
+        let count = &mut counts[usize::from(byte)];
+        if *count > 0 {
+            *count -= 1;
+            shared += 1;
         }
     }
-    Some(more.max(fewer))
+    Some(a.len().max(b.len()) - shared)
 }
 
 struct Scored<'a> {
@@ -659,5 +660,78 @@ mod tests {
         assert_eq!(Candidates::new(["xöüßéy"]).closest("äöüßé"), None);
         assert_eq!(Candidates::new(["xöüßé"]).closest("äöüßé"), Some(0));
         assert_eq!(fold("Straße-Nord"), "straßenord");
+    }
+
+    /// The bag distance as first written: the 128 counts summed each way.
+    fn bag_distance_by_counts(a: &str, b: &str) -> Option<usize> {
+        if !a.is_ascii() || !b.is_ascii() {
+            return None;
+        }
+        let mut counts = [0i32; 128];
+        for byte in a.bytes() {
+            counts[usize::from(byte)] += 1;
+        }
+        for byte in b.bytes() {
+            counts[usize::from(byte)] -= 1;
+        }
+        let (mut more, mut fewer) = (0usize, 0usize);
+        for count in counts {
+            match count.cmp(&0) {
+                Ordering::Greater => more += count.unsigned_abs() as usize,
+                Ordering::Less => fewer += count.unsigned_abs() as usize,
+                Ordering::Equal => {}
+            }
+        }
+        Some(more.max(fewer))
+    }
+
+    /// The one-pass bag distance is the counted one, over every pair of a
+    /// set of spellings and of generated ones (repeats, empties, non-ASCII).
+    #[test]
+    fn the_bag_distance_is_the_counted_one() {
+        let mut words: Vec<String> = [
+            "",
+            "a",
+            "aa",
+            "ab",
+            "ba",
+            "aab",
+            "abb",
+            "SecurityEvent",
+            "securityevent",
+            "SecurityEvnt",
+            "DeviceProcessEvents",
+            "Événement",
+            "src_ip",
+            "dest_ip",
+            "process.name",
+            "AAAAAAAA",
+            "~!@#$%^&*()",
+            "zzz zzz",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        // A fixed linear congruential sequence over printable ASCII.
+        let mut seed: u32 = 7;
+        for _ in 0..400 {
+            let mut word = String::new();
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            for _ in 0..(seed >> 16) % 14 {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                word.push(char::from(
+                    b'a' + u8::try_from((seed >> 16) % 6).unwrap_or(0),
+                ));
+            }
+            words.push(word);
+        }
+        for a in &words {
+            for b in &words {
+                assert_eq!(
+                    bag_distance(a, b),
+                    bag_distance_by_counts(a, b),
+                    "{a:?} {b:?}"
+                );
+            }
+        }
     }
 }
