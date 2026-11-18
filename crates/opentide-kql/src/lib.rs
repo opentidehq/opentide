@@ -47,9 +47,8 @@ pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[doc(hidden)]
 pub mod inspect;
 
-use foldhash::{HashMap, HashMapExt, HashSet};
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 const OPERATORS_TOML: &str = include_str!(concat!(
