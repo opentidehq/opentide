@@ -170,6 +170,7 @@ const LANGUAGES: &[Language] = &[
 /// file with one of `extensions` whose name holds none of `skip` (nor
 /// `.broken.`), and each accepted query of a `cases.tsv`.
 fn files(dir: &Path, extensions: &[&str], skip: &[&str]) -> Vec<String> {
+    assert!(dir.is_dir(), "{} is not a directory", dir.display());
     let mut paths = Vec::new();
     let mut dirs = vec![dir.to_path_buf()];
     while let Some(dir) = dirs.pop() {

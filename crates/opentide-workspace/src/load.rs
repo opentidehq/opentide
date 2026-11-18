@@ -88,7 +88,11 @@ pub fn parse(bytes: &[u8]) -> Parsed {
         Err(error) => {
             let mut text = error.problem.clone();
             if let Some(mark) = error.mark {
-                text.push_str(&format!(" at line {}, column {}", mark.line, mark.column));
+                text.push_str(&format!(
+                    " at line {}, column {}",
+                    mark.line(),
+                    mark.column()
+                ));
             }
             Parsed::Failed(Failure {
                 kind: FailureKind::Yaml(error.kind),

@@ -475,7 +475,7 @@ pub fn check_object(
                 )
                 .at(path.map(str::to_owned));
                 // Where the aliased text is written: the anchor's node.
-                issue.yaml_line = anchored.start.line.checked_sub(1);
+                issue.yaml_line = anchored.start.line().checked_sub(1);
                 issues.push(issue);
             }
             for (platform, key) in states::legacy_external_id_keys(root) {
@@ -521,7 +521,7 @@ pub fn check_object(
                 ));
                 // Where the aliased text is written: the anchor's node, as
                 // HarfangLab's above.
-                issue.yaml_line = anchored.start.line.checked_sub(1);
+                issue.yaml_line = anchored.start.line().checked_sub(1);
                 issues.push(issue);
             }
         }

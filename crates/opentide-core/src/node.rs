@@ -50,27 +50,62 @@ pub use locate::{Locator, Span};
 /// the stack's limit.
 pub const MAX_DEPTH: usize = 512;
 
-/// A position in the document: lines and columns from 1, columns in Unicode
-/// code points, as the CLI prints them.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Mark {
-    /// Offset in the text, in code points.
-    pub index: usize,
-    /// Line, from 1.
-    pub line: usize,
-    /// Column, from 1, in code points.
-    pub column: usize,
-}
+pub use mark::Mark;
 
-impl Mark {
-    fn from_saphyr(marker: saphyr::Marker) -> Self {
-        Self {
-            index: marker.index(),
-            line: marker.line(),
-            column: marker.col() + 1,
+/// [`Mark`], in a module of its own: its fields are private to the rest of
+/// `node` too.
+mod mark {
+    /// A position in the document: lines and columns from 1, columns in Unicode
+    /// code points, as the CLI prints them.
+    ///
+    /// Kept as three `u32`s, 12 bytes where `usize`s took 24: every node holds
+    /// two, and a workspace holds a hundred thousand nodes (#1071). A document
+    /// past 4 Gi code points or lines is far beyond what opentide reads; its
+    /// positions there would read as the last one.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+    pub struct Mark {
+        index: u32,
+        line: u32,
+        column: u32,
+    }
+
+    impl Mark {
+        /// The position at `index` (in code points), on `line` (from 1), in
+        /// `column` (from 1, in code points).
+        pub fn new(index: usize, line: usize, column: usize) -> Self {
+            let small = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+            Self {
+                index: small(index),
+                line: small(line),
+                column: small(column),
+            }
+        }
+
+        /// Offset in the text, in code points.
+        pub fn index(self) -> usize {
+            self.index as usize
+        }
+
+        /// Line, from 1.
+        pub fn line(self) -> usize {
+            self.line as usize
+        }
+
+        /// Column, from 1, in code points.
+        pub fn column(self) -> usize {
+            self.column as usize
+        }
+
+        pub(super) fn from_saphyr(marker: saphyr::Marker) -> Self {
+            Self::new(marker.index(), marker.line(), marker.col() + 1)
         }
     }
 }
+
+// A node's size is what a workspace's trees cost per node (#1071): a field
+// added to `Node` or a larger `Value` variant shows here first.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<Node>() == 72);
 
 /// One node of the tree, where it starts and ends.
 #[derive(Debug, Clone, PartialEq)]
@@ -639,14 +674,7 @@ fn non_printable(source: &str) -> Option<(char, Mark)> {
             || ('\u{e000}'..='\u{fffd}').contains(&character)
             || character >= '\u{10000}';
         if !printable {
-            return Some((
-                character,
-                Mark {
-                    index,
-                    line,
-                    column,
-                },
-            ));
+            return Some((character, Mark::new(index, line, column)));
         }
         match character {
             // The `\n` of a `\r\n`: the `\r` broke the line already.
@@ -717,7 +745,7 @@ impl Builder {
                         })?;
                     if matches!(style, ScalarStyle::Literal | ScalarStyle::Folded)
                         && unterminated_content
-                        && end.index == length
+                        && end.index() == length
                         && let Value::Str(text) = &mut value
                         && text.ends_with('\n')
                     {
@@ -875,7 +903,7 @@ impl Builder {
                             ));
                         }
                         std::collections::hash_map::Entry::Vacant(slot) => {
-                            slot.insert(node.start.line);
+                            slot.insert(node.start.line());
                         }
                     }
                     *key = Some(node);
@@ -918,6 +946,17 @@ mod tests {
 
     use super::*;
 
+    /// A position past what three `u32`s hold reads as the last one; any
+    /// other reads back as made.
+    #[test]
+    fn a_mark_keeps_its_position_and_saturates_past_u32() {
+        let mark = Mark::new(16, 3, 5);
+        assert_eq!((mark.index(), mark.line(), mark.column()), (16, 3, 5));
+        let last = u32::MAX as usize;
+        let far = Mark::new(usize::MAX, last + 1, 1);
+        assert_eq!((far.index(), far.line(), far.column()), (last, last, 1));
+    }
+
     #[test]
     fn deep_nesting_is_refused_without_recursion() {
         // saphyr-parser stops flow collections at 256 levels itself.
@@ -955,7 +994,7 @@ mod tests {
         assert!(!same_key(&Value::Seq(Vec::new()), &Value::Seq(Vec::new())));
         let error = load("true: 1\nTrue: 2\n").unwrap_err();
         assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
-        assert_eq!(error.mark.map(|m| (m.line, m.column)), Some((2, 1)));
+        assert_eq!(error.mark.map(|m| (m.line(), m.column())), Some((2, 1)));
         assert!(error.problem.contains("first written on line 1"), "{error}");
     }
 
@@ -1023,10 +1062,10 @@ mod tests {
         let Value::Seq(items) = &b.value else {
             panic!("{b:?}")
         };
-        assert_eq!((items[1].start.line, items[1].start.column), (2, 8));
-        assert_eq!((items[1].end.line, items[1].end.column), (2, 11));
+        assert_eq!((items[1].start.line(), items[1].start.column()), (2, 8));
+        assert_eq!((items[1].end.line(), items[1].end.column()), (2, 11));
         let one = root.get("é").unwrap();
-        assert_eq!((one.start.line, one.start.column), (1, 4));
+        assert_eq!((one.start.line(), one.start.column()), (1, 4));
     }
 
     fn value_of(text: &str) -> Value {
@@ -1076,7 +1115,7 @@ mod tests {
             let error = load(text).unwrap_err();
             assert_eq!(error.kind, LoadErrorKind::OutOfRange, "{text}");
             assert_eq!(error.problem, OUT_OF_RANGE);
-            assert_eq!(error.mark.map(|m| (m.line, m.column)), Some((1, 4)));
+            assert_eq!(error.mark.map(|m| (m.line(), m.column())), Some((1, 4)));
         }
     }
 
@@ -1085,10 +1124,10 @@ mod tests {
         let error = load("a: 1\r\nb: 2\r\nc: x\u{1}\r\n").unwrap_err();
         assert_eq!(error.kind, LoadErrorKind::Syntax);
         let mark = error.mark.unwrap();
-        assert_eq!((mark.line, mark.column, mark.index), (3, 5, 16));
+        assert_eq!((mark.line(), mark.column(), mark.index()), (3, 5, 16));
         let error = load("a: 1\rb: \u{7f}\n").unwrap_err();
         let mark = error.mark.unwrap();
-        assert_eq!((mark.line, mark.column), (2, 4));
+        assert_eq!((mark.line(), mark.column()), (2, 4));
     }
 
     #[test]
