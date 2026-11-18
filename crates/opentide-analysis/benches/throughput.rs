@@ -295,8 +295,9 @@ fn measure(language: &Language, mode: &str, host: &MemoryWorkspace, texts: &[Str
     }
 }
 
-/// The pass an instruction counter counts (callgrind's `--toggle-collect` on
-/// this function): the warm-up passes do not go through it.
+/// The pass whose instructions callgrind counts (`--toggle-collect` on this
+/// function): the warm-up passes do not go through it. Callgrind's call
+/// counts, which the allocation budget reads, span the warm-up passes too.
 #[inline(never)]
 fn counted(language: &Language, mode: &str, host: &MemoryWorkspace, texts: &[String]) {
     measure(language, mode, host, texts);

@@ -238,9 +238,10 @@ label = "opentide --version (the console script's start)"
 # (and explain, above, whose 30 ms target is the other startup budget) through the
 # launcher of `uv sync`; the oracle's start is not measured.
 target_s = 0.02
-# Missed on the EPYC 7763 (0.016 s on the 9V45): what is left is Python's own start.
-# Measured 0.021 s, run 43450448595 (PR #1055).
-time_waiver = "#1072, whether --version skips the engine"
+# Missed on the EPYC 7763 (0.016 s on the 9V45): what is left is Python's own start
+# and the engine's import, which #1072 keeps (its version is the cheapest to read; the
+# command line answers --version first thing). Measured 0.021 s, run 43450448595 (PR #1055).
+time_waiver = "#1072: Python's start and the engine's import"
 waived_s = 0.021
 
 [commands.lsp_first_diagnostics]

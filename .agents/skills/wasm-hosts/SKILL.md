@@ -24,7 +24,7 @@ Guide: <https://wasm-bindgen.github.io/wasm-bindgen/reference/rust-targets.html>
 
 `crates/opentide-wasm` is `crate-type = ["cdylib", "rlib"]`. Exports:
 
-- `legend() -> js_sys::Array` of capture names from `HighlightSpec::load`
+- `legend() -> js_sys::Array` of capture names from the shared HighlightSpec
 - `highlight(language_id: &str, bytes: &[u8]) -> Result<JsValue, JsValue>`
 - `version() -> String`, the workspace version
 - `LanguageServer`: `new LanguageServer()`, `handle(message: &str) -> Vec<String>`, and the `closed` getter. It wraps `opentide_lsp::MessageSession`, the server `run_stdio` drives, so the browser gets the native server's answers with no second implementation. One JSON-RPC message (JSON text, no `Content-Length` header) goes in; the messages the server sends back come out in order. `opentide-wasm` links the `opentide-lsp` library for it; the rule below still holds, because `opentide-lsp` has no `#[wasm_bindgen]`.

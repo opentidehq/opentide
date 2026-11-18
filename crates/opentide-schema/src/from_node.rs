@@ -624,7 +624,7 @@ pub fn union_value<T>(node: &Node, cx: &mut Context, members: &[Member<T>]) -> O
 impl FromNode for String {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
         if let Value::Str(text) = &node.value {
-            return Some(text.clone());
+            return Some(text.to_string());
         }
         cx.error(
             ErrorKind::InvalidType("string_type"),

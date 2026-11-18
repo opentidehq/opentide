@@ -121,7 +121,7 @@ pub fn deploy_rule(
             .and_then(|root| root.get("name"))
             .map(|node| match &node.value {
                 Value::Str(text) => text.clone(),
-                other => other.to_string(),
+                other => other.to_string().into(),
             })
             .unwrap_or_default();
         return Ok(error(
