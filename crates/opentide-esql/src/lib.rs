@@ -195,7 +195,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
                     &display_name(&name),
                     "command",
                     row.snapshot_only,
-                    &Lifecycle::parse(&row.stack),
+                    &row.lifecycle(),
                     row.availability(),
                     keyword_span(&node),
                     &to_range,
@@ -829,7 +829,7 @@ fn function_diagnostic(
             &format!("{}()", name.to_ascii_uppercase()),
             "function",
             row.snapshot_only,
-            &Lifecycle::parse(&row.stack),
+            &row.lifecycle(),
             row.availability(),
             span,
             &|s| range(source, s),
@@ -865,6 +865,8 @@ fn cast_diagnostic(
     }
     let span = span_of(&type_node);
     match catalog.cast_type(name) {
+        // The gate's text is built only when it fires (ADR 0014 §4).
+        Some(row) if !gates::Gate::fires(row.availability(), target) => None,
         Some(row) => {
             let mut gate = gates_for_type(row, span);
             if !row.function.is_empty() {
@@ -934,18 +936,22 @@ fn availability(
             range(),
         ));
     }
-    let described = lifecycle.describe();
     if let Some(available) = available {
-        let gate = gates::Gate {
-            subject: format!("{what} `{name}`"),
-            available,
-            note: (!described.is_empty()).then(|| described.clone()),
-            suggestion: None,
-            floor_severity: None,
-            span,
-        };
-        if let Some(d) = gate.diagnostic(target, to_range) {
-            return Some(d);
+        // The gate's text is built only when it fires: most names are
+        // available everywhere (ADR 0014 §4).
+        if gates::Gate::fires(available, target) {
+            let described = lifecycle.describe();
+            let gate = gates::Gate {
+                subject: format!("{what} `{name}`"),
+                available,
+                note: (!described.is_empty()).then_some(described),
+                suggestion: None,
+                floor_severity: None,
+                span,
+            };
+            if let Some(d) = gate.diagnostic(target, to_range) {
+                return Some(d);
+            }
         }
         let ga_on_target = match (target, lifecycle.ga) {
             (Some(StackTarget::Serverless), _) => true,
@@ -1170,7 +1176,7 @@ fn command_hover(row: &CommandRow) -> String {
     if !row.docs.is_empty() {
         md.push_str(&format!("\n\n{}", row.docs));
     }
-    md.push_str(&lifecycle_line(row.snapshot_only, &row.stack));
+    md.push_str(&lifecycle_line(row.snapshot_only, row.lifecycle()));
     md.push_str(&releases_line(row.snapshot_only, row.availability()));
     if let Some(alias) = &row.alias_of {
         md.push_str(&format!("\n\nSame as `{}`.", display_name(alias)));
@@ -1205,7 +1211,7 @@ fn function_hover(row: &FunctionRow) -> String {
     if !row.returns.is_empty() {
         md.push_str(&format!("\n\n**Returns** _{}_", row.returns.join(" | ")));
     }
-    md.push_str(&lifecycle_line(row.snapshot_only, &row.stack));
+    md.push_str(&lifecycle_line(row.snapshot_only, row.lifecycle()));
     md.push_str(&releases_line(row.snapshot_only, row.availability()));
     if let Some(license) = &row.license {
         md.push_str(&format!("\n\nLicence: {license}."));
@@ -1224,11 +1230,10 @@ fn operator_hover(row: &catalog::OperatorRow) -> String {
     md
 }
 
-fn lifecycle_line(snapshot_only: bool, stack: &str) -> String {
+fn lifecycle_line(snapshot_only: bool, lifecycle: Lifecycle) -> String {
     if snapshot_only {
         return "\n\nAvailability: snapshot builds only.".into();
     }
-    let lifecycle = Lifecycle::parse(stack);
     let described = lifecycle.describe();
     if described.is_empty() {
         String::new()
@@ -1562,6 +1567,27 @@ mod tests {
                 .contains(&codes::ESQL_METADATA_ID.to_string())
         );
         assert!(!codes_of("ROW a = 1").contains(&codes::ESQL_METADATA_ID.to_string()));
+    }
+
+    /// A catalog row's `versions` and `stack` are read once, not on each
+    /// lookup (ADR 0014 §2, §7): every lookup formatted the eight release
+    /// lines and parsed the lifecycle again.
+    #[test]
+    fn a_rows_versions_are_read_once_not_per_lookup() {
+        let queries = [
+            "FROM logs-* | EVAL x = TO_LOWER(a::keyword) | STATS c = COUNT(*) BY x | LIMIT 10",
+            "FROM logs-* | EVAL y = TO_UPPER(b::keyword) | STATS d = COUNT(*) BY y | LIMIT 11",
+        ];
+        for q in queries {
+            analyze(q);
+        }
+        let before = version::catalog_reads();
+        for _ in 0..3 {
+            for q in queries {
+                analyze(q);
+            }
+        }
+        assert_eq!(version::catalog_reads() - before, 0);
     }
 
     #[test]

@@ -575,8 +575,8 @@ fn unreadable_rule(
         Ok(_) => None,
         Err(error) => Some((
             error.problem,
-            error.mark.map(|mark| mark.line),
-            error.mark.map(|mark| mark.column),
+            error.mark.map(|mark| mark.line()),
+            error.mark.map(|mark| mark.column()),
         )),
     }
 }

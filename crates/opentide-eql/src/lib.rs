@@ -333,7 +333,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     check_comments(&prepared.comments, source, &mut out);
-    if let Some(span) = highlight::expression_depth_exceeded(&parsed.syntax) {
+    if let Some(span) = highlight::expression_depth_exceeded(&parsed.syntax, source) {
         out.push(Diagnostic::warning(
             codes::EQL_EXPRESSION_DEPTH,
             format!(

@@ -100,7 +100,7 @@ When more than one severity is left, the count splits them. Notes alone are no w
 | `check` | `filenames`, `metadata`, `recommended`, `placeholders` or `queries` |
 | `severity` | `error`, `warning` or `info` (table below) |
 | `path` | Object file, relative to the workspace |
-| `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
+| `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`: for a block value (a mapping or a list) the line of its first child, where `line` is the key's. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
 | `code` | `filename_mismatch`, `filename_pattern`, `name_missing`, `metadata_recommended`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
