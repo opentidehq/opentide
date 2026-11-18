@@ -107,6 +107,8 @@ fn main() {
         println!("{name:<10} {:>6} {:>14?}", texts.len(), median(times));
     }
 
+    kql_with_declared_columns(&host);
+
     // Hover in a 1,000-object workspace.
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
     let rule = std::fs::read_to_string(root.join("objects/rules/rule-1.0.yaml")).unwrap();
@@ -147,6 +149,49 @@ fn main() {
         "{:<10} {:>6} {:>14?}",
         "hover",
         host.index.len(),
+        median(times)
+    );
+}
+
+/// KQL in a workspace that declares columns for two of the tables the
+/// corpus reads (`visibility.toml`): its own catalog, memoised as the
+/// bundled one is (#1071).
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a handful of benchmark texts"
+)]
+fn kql_with_declared_columns(host: &MemoryWorkspace) {
+    let declared = opentide_core::datasets::DeclaredDatasets::from_visibility(
+        "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\nsystem = \"sentinel\"\n\
+         [logsources.columns]\nContoso_s = { type = \"string\" }\n\n\
+         [[logsources]]\nname = \"SigninLogs\"\ndescription = \"x\"\nsystem = \"sentinel\"\n\
+         [logsources.columns]\nContoso_s = { type = \"string\" }\n",
+    )
+    .unwrap();
+    let scope = opentide_core::datasets::scope_thread(Some(declared));
+    let texts = corpus("kql");
+    let mut times = Vec::new();
+    for round in 0..=ROUNDS {
+        let start = Instant::now();
+        for text in &texts {
+            analyze(
+                host,
+                AnalyzeRequest {
+                    uri: "/w/q.kql".to_owned(),
+                    language: LanguageId::Kql,
+                    text: text.clone(),
+                },
+            );
+        }
+        if round > 0 {
+            times.push(start.elapsed() / texts.len() as u32);
+        }
+    }
+    drop(scope);
+    println!(
+        "{:<10} {:>6} {:>14?}",
+        "kql+cols",
+        texts.len(),
         median(times)
     );
 }

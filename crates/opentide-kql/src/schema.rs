@@ -485,14 +485,14 @@ pub(crate) fn source_schema(
     table_schema(catalog, word).or_else(|| asim_schema(catalog, word))
 }
 
-/// [`build_table_schema`], built once per table and thread for a profile's
-/// bundled catalog: a query names a few tables, and building one copies its
-/// hundred-odd columns from the catalog (a fifth of a short query's
-/// analysis). A copy of the built schema shares its columns
-/// ([`Schema::columns`] is copied on write). Only tables are kept, so the
-/// memo is bounded by the catalog: a name that is not a table (each prefix
-/// typed in an editor) is looked up each time. A workspace catalog with
-/// declared columns is built each time.
+/// [`build_table_schema`], built once per table and catalog, and kept on
+/// the catalog for every thread: a query names a few tables, and building
+/// one copies its hundred-odd columns from the catalog (a fifth of a short
+/// query's analysis). A workspace's catalog with declared columns keeps its
+/// own, built from its columns. A copy of the built schema shares its
+/// columns ([`Schema::columns`] is copied on write). Only tables are kept,
+/// so the memo is bounded by the catalog: a name that is not a table (each
+/// prefix typed in an editor) is looked up each time.
 fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     memoised(catalog, name, 0, build_table_schema)
 }
@@ -503,31 +503,30 @@ pub(crate) fn asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     memoised(catalog, name, 1, build_asim_schema)
 }
 
-/// `build(catalog, name)`, kept per thread for a bundled catalog when it is
-/// a schema, by `kind` (0: tables, 1: ASIM parsers), profile and name.
+/// `build(catalog, name)`, kept in `catalog`'s memo when it is a schema, by
+/// `kind` (0: tables, 1: ASIM parsers) and name. Two threads that build the
+/// same one at once keep the first.
 fn memoised(
     catalog: &Catalog,
     name: &str,
     kind: usize,
     build: fn(&Catalog, &str) -> Option<Schema>,
 ) -> Option<Schema> {
-    type Built = [[HashMap<String, Schema>; 3]; 2];
-    thread_local! {
-        static BUILT: std::cell::RefCell<Built> = std::cell::RefCell::new(Default::default());
-    }
-    if !std::ptr::eq(catalog, Catalog::cached(catalog.profile)) {
+    let Some(memo) = catalog.memo.schemas.get(kind) else {
         return build(catalog, name);
-    }
-    let slot = match catalog.profile {
-        crate::Profile::Core => 0,
-        crate::Profile::Sentinel => 1,
-        crate::Profile::Defender => 2,
     };
-    if let Some(hit) = BUILT.with(|built| built.borrow()[kind][slot].get(name).cloned()) {
-        return Some(hit);
+    let read = memo
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(hit) = read.get(name) {
+        return Some(hit.clone());
     }
+    drop(read);
     let schema = build(catalog, name)?;
-    BUILT.with(|built| built.borrow_mut()[kind][slot].insert(name.to_string(), schema.clone()));
+    memo.write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .entry(name.to_string())
+        .or_insert_with(|| schema.clone());
     Some(schema)
 }
 
@@ -921,6 +920,43 @@ pub(crate) fn unknown_column(
 pub(crate) mod tests {
     use super::glob_matches;
     use super::{Column, Schema};
+
+    /// A workspace's catalog with declared columns keeps the schemas it
+    /// builds, as a bundled catalog does: the second lookup of a table shares
+    /// the first's columns, where it was built again on every call. Its
+    /// schemas are its own (a declared column is in its table's, not in the
+    /// bundled catalog's), and a copy of it builds its own again.
+    #[test]
+    fn a_declared_catalog_keeps_its_own_schemas() {
+        use crate::{Catalog, Profile};
+        use std::sync::Arc;
+        let declared = opentide_core::datasets::DeclaredDatasets::from_visibility(
+            "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\n\
+             system = \"sentinel\"\n\n[logsources.columns]\nContoso_s = { type = \"string\" }\n",
+        )
+        .expect("visibility.toml");
+        let sources: Vec<_> = declared.sources_with_columns("sentinel").cloned().collect();
+        let bundled = Catalog::cached(Profile::Sentinel);
+        let catalog = bundled.with_declared_columns(&sources, &[]);
+        let has = |schema: &Schema, name: &str| schema.columns.iter().any(|c| c.name == name);
+
+        let first = super::table_schema(&catalog, "SecurityEvent").expect("a table");
+        let again = super::table_schema(&catalog, "SecurityEvent").expect("a table");
+        assert!(Arc::ptr_eq(&first.columns, &again.columns), "kept");
+        assert!(has(&first, "Contoso_s"), "the declared column");
+
+        let plain = super::table_schema(bundled, "SecurityEvent").expect("a table");
+        assert!(!has(&plain, "Contoso_s"), "the bundled catalog's own");
+        assert!(!Arc::ptr_eq(&plain.columns, &first.columns));
+
+        let copy = catalog.clone();
+        let copied = super::table_schema(&copy, "SecurityEvent").expect("a table");
+        assert!(
+            !Arc::ptr_eq(&copied.columns, &first.columns),
+            "a copy builds its own"
+        );
+        assert!(has(&copied, "Contoso_s"));
+    }
 
     /// The names the scan per column gave, before #1424.
     fn naive(start: &[&str], added: &[&str]) -> Vec<String> {
