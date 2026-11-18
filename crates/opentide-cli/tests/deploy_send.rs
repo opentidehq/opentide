@@ -2667,3 +2667,52 @@ fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
         Some("not attempted: tenant lab failed")
     );
 }
+
+/// A HarfangLab tenant whose `type` is neither Sigma nor YARA, or names an
+/// unset variable, fails before any rule is sent, as the SDK fails it: its
+/// rules are not attempted, never skipped as if of the other kind.
+#[test]
+fn harfanglab_fails_a_tenant_whose_type_is_unset_or_unknown() {
+    let sigma = "  harfanglab:\n    status: STAGING\n    sigma:\n      logsource:\n        \
+                 category: process_creation\n        product: windows\n      selections:\n        \
+                 - name: selection\n          field: Image\n          value: cmd.exe\n      \
+                 condition: selection\n";
+    for kind in ["Sigmaa", "$HARFANGLAB_TYPE"] {
+        let ws = workspace(
+            "harfanglab",
+            "lab",
+            &format!(
+                "ssl = true\ntype = \"{kind}\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
+                 \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n"
+            ),
+            &[(
+                "a.yaml",
+                rule(
+                    "HarfangLab Sigma",
+                    "00000000-0000-4000-8099-000000000201",
+                    "A.",
+                    sigma,
+                ),
+            )],
+        );
+        let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+        let (sent, _) = deploy(
+            ws.path(),
+            "harfanglab",
+            &env,
+            &opentide_connectors::builtin(),
+            0,
+        );
+        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{kind}");
+        assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()), "{kind}");
+        assert_eq!(rows(&sent), [("not_attempted".to_owned(), None)], "{kind}");
+        let Json::Array(failures) = value(&sent, "failures") else {
+            panic!("no failures")
+        };
+        let error = failures[0].get("error").and_then(Json::as_str).unwrap();
+        assert!(
+            error.contains("type") || error.contains("HARFANGLAB_TYPE"),
+            "{kind}: {error}"
+        );
+    }
+}

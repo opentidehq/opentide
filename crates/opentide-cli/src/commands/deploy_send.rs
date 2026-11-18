@@ -2158,6 +2158,29 @@ impl Sender<'_, '_> {
             let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
                 continue;
             };
+            // A HarfangLab tenant takes one kind of rule, its `type`: unset
+            // (an unset `$VARIABLE`) or neither Sigma nor YARA, the tenant
+            // cannot deploy, as the SDK says (`Client::kind`).
+            let tenant_kind = if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
+                let cancel = self.cancel.clone();
+                let kind = opentide_connectors::harfanglab::Client::new(TenantContext {
+                    tenant: &connection.tenant,
+                    http: &connection.http,
+                    cancel: &cancel,
+                })
+                .kind();
+                match kind {
+                    Ok(opentide_connectors::harfanglab::Kind::Sigma) => "Sigma",
+                    Ok(opentide_connectors::harfanglab::Kind::Yara) => "YARA",
+                    Err(error) => {
+                        let failure = raised(&error).stopping(Stops::Tenant);
+                        self.tenant_failed(platform, &tenant, log, failure, false)?;
+                        continue;
+                    }
+                }
+            } else {
+                ""
+            };
             for sent in &batch.rules {
                 let rule = &sent.rule;
                 if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
@@ -2171,7 +2194,6 @@ impl Sender<'_, '_> {
                             None
                         }
                     });
-                    let tenant_kind = opentide_compile::deploy::setup_text(&batch.table, "type");
                     if block.is_none() {
                         tracing::warn!(
                             detail = rule.name.as_str(),
@@ -2186,7 +2208,7 @@ impl Sender<'_, '_> {
                         );
                         continue;
                     }
-                    if kind != Some(tenant_kind.as_str()) {
+                    if kind != Some(tenant_kind) {
                         log.skipped(
                             platform,
                             &tenant,
