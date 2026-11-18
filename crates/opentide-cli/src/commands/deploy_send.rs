@@ -863,7 +863,7 @@ fn deploy(
         warned: false,
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
-        runtime: opentide_connectors::runtime::start(),
+        runtime: opentide_connectors::runtime::shared(),
     };
     let total = deployment.len();
     let mut deployed: Vec<String> = Vec::new();
@@ -1905,9 +1905,9 @@ struct Sender<'s, 'c> {
     warned: bool,
     environment: Environment,
     cancel: CancellationToken,
-    /// The run's network runtime, or why it could not start (on WASI inside
-    /// the MCP server's: blocking on another there would panic).
-    runtime: Result<tokio::runtime::Runtime, String>,
+    /// The process's network runtime, or why it could not start: a run
+    /// whose runtime does not start fails each tenant with that reason.
+    runtime: Result<&'static tokio::runtime::Runtime, String>,
 }
 
 /// A tenant's connection.
@@ -1924,24 +1924,30 @@ enum Planned {
 }
 
 impl Sender<'_, '_> {
-    /// Runs *work* on the run's runtime, with Ctrl-C watched.
+    /// Runs *work* on the process's runtime, with Ctrl-C watched.
     fn block<T>(
         &self,
         work: impl std::future::Future<Output = Result<T, ConnectorError>>,
     ) -> Result<T, ConnectorError> {
-        let runtime = match &self.runtime {
-            Ok(runtime) => runtime,
-            Err(message) => {
-                return Err(ConnectorError::Crashed {
-                    platform: String::new(),
-                    tenant: String::new(),
-                    message: message.clone(),
-                });
-            }
-        };
+        if let Err(message) = &self.runtime {
+            return Err(ConnectorError::Crashed {
+                platform: String::new(),
+                tenant: String::new(),
+                message: message.clone(),
+            });
+        }
         let cancel = &self.cancel;
         let interrupted = self.cx.interrupted;
-        runtime.block_on(watched(work, cancel, interrupted))
+        // The process's runtime (#1558), driven from this thread.
+        opentide_connectors::runtime::block_on(watched(work, cancel, interrupted)).unwrap_or_else(
+            |message| {
+                Err(ConnectorError::Crashed {
+                    platform: String::new(),
+                    tenant: String::new(),
+                    message,
+                })
+            },
+        )
     }
 
     fn context<'a>(&'a self, connection: &'a Connection) -> TenantContext<'a> {

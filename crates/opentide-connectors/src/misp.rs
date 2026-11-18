@@ -220,7 +220,6 @@ pub struct MispClient {
     root: String,
     key: String,
     user_agent: String,
-    runtime: tokio::runtime::Runtime,
     clusters: Mutex<HashMap<String, Vec<GalaxyCluster>>>,
 }
 
@@ -263,10 +262,6 @@ impl MispClient {
             explicit_proxy,
         )
         .map_err(|_| connectivity())?;
-        let runtime = crate::runtime::builder()
-            .enable_all()
-            .build()
-            .map_err(|_| connectivity())?;
         let root = if url.ends_with('/') {
             url.to_owned()
         } else {
@@ -277,7 +272,6 @@ impl MispClient {
             root,
             key: api_key.trim().to_owned(),
             user_agent: format!("opentide/{version}"),
-            runtime,
             clusters: Mutex::new(HashMap::new()),
         })
     }
@@ -315,21 +309,22 @@ impl MispClient {
         let request = builder
             .build()
             .map_err(|error| connectivity().with_detail(error.describe()))?;
-        let (status, body) = self
-            .runtime
-            .block_on(async {
-                let cancel = CancellationToken::new();
-                let response = self.http.send(request, &cancel).await?;
-                let status = response.status().as_u16();
-                let body = self.http.bytes(response, &cancel).await?;
-                Ok::<_, crate::ConnectorError>((status, body))
-            })
-            .map_err(|error| {
-                // The transport's reason is kept, not swallowed (#1142).
-                let detail = error.to_string();
-                tracing::debug!(detail = detail.as_str(), "misp_request_failed");
-                connectivity().with_detail(detail)
-            })?;
+        // The process's runtime (#1558); a call it refuses is a connectivity
+        // failure with its reason.
+        let (status, body) = crate::runtime::block_on(async {
+            let cancel = CancellationToken::new();
+            let response = self.http.send(request, &cancel).await?;
+            let status = response.status().as_u16();
+            let body = self.http.bytes(response, &cancel).await?;
+            Ok::<_, crate::ConnectorError>((status, body))
+        })
+        .map_err(|refused| connectivity().with_detail(refused))?
+        .map_err(|error| {
+            // The transport's reason is kept, not swallowed (#1142).
+            let detail = error.to_string();
+            tracing::debug!(detail = detail.as_str(), "misp_request_failed");
+            connectivity().with_detail(detail)
+        })?;
         decode(status, &body)
     }
 
