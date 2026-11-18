@@ -96,7 +96,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
 /// queries whose language depends on more than the path are not here:
 /// Elastic's (`type` and `language`, [`elastic_query_language`]), Sysdig's
 /// `output` and macro conditions, and HarfangLab's decomposed YARA rule
-/// ([`yara`]); SentinelOne's PowerQuery has no offline engine.
+/// (the `yara` module); SentinelOne's PowerQuery has no offline engine.
 pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<LanguageId> {
     match platform {
         PlatformId::Sentinel | PlatformId::DefenderForEndpoint => {
