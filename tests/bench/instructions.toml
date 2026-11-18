@@ -8,67 +8,111 @@
 # Recorded on: valgrind-3.22.0, glibc 2.39, x86_64
 
 [cql]
-analyze_corpus = 7533345
-analyze_external = 31998672
+analyze_corpus = 7533445
+analyze_corpus_allocations = 57054
+analyze_external = 31999607
+analyze_external_allocations = 195312
 parse_corpus = 6879865
+parse_corpus_allocations = 57517
 parse_external = 27088338
+parse_external_allocations = 186112
 
 [eql]
-analyze_corpus = 2424108
-analyze_external = 1900877
+analyze_corpus = 2424094
+analyze_corpus_allocations = 26035
+analyze_external = 1900893
+analyze_external_allocations = 18765
 parse_corpus = 964671
+parse_corpus_allocations = 6168
 parse_external = 728120
+parse_external_allocations = 3237
 
 [esql]
-analyze_corpus = 14636439
-analyze_external = 2905448
+analyze_corpus = 14636672
+analyze_corpus_allocations = 144085
+analyze_external = 2904700
+analyze_external_allocations = 33511
 parse_corpus = 3494043
+parse_corpus_allocations = 21738
 parse_external = 879552
+parse_external_allocations = 3546
 
 [exabeam]
-analyze_corpus = 9168779
-analyze_external = 927241
+analyze_corpus = 9169364
+analyze_corpus_allocations = 50760
+analyze_external = 927302
+analyze_external_allocations = 16346
 parse_corpus = 4126887
+parse_corpus_allocations = 34059
 parse_external = 732313
+parse_external_allocations = 5511
 
 [falco]
 analyze_corpus = 2815203
-analyze_external = 515638703
+analyze_corpus_allocations = 15384
+analyze_external = 353791556
+analyze_external_allocations = 5417898
 parse_corpus = 1688207
+parse_corpus_allocations = 15314
 parse_external = 12231371
+parse_external_allocations = 102605
 
 [kql]
-analyze_corpus = 11982879
-analyze_external = 50284548
-parse_corpus = 2067741
-parse_external = 10458021
+analyze_corpus = 11953764
+analyze_corpus_allocations = 219819
+analyze_external = 50077383
+analyze_external_allocations = 454665
+parse_corpus = 2067884
+parse_corpus_allocations = 12336
+parse_external = 10463288
+parse_external_allocations = 15096
 
 [kuery]
 analyze_corpus = 2571592
+analyze_corpus_allocations = 20653
 analyze_external = 1025090
+analyze_external_allocations = 9951
 parse_corpus = 713929
+parse_corpus_allocations = 5118
 parse_external = 508448
+parse_external_allocations = 4473
 
 [lucene]
 analyze_corpus = 1992616
-analyze_external = 8702587
+analyze_corpus_allocations = 25519
+analyze_external = 8702509
+analyze_external_allocations = 114592
 parse_corpus = 628991
+parse_corpus_allocations = 4023
 parse_external = 3530310
+parse_external_allocations = 28740
 
 [spl]
-analyze_corpus = 14787176
+analyze_corpus = 14787164
+analyze_corpus_allocations = 86149
 analyze_external = 18101538
+analyze_external_allocations = 66080
 parse_corpus = 4841650
+parse_corpus_allocations = 35848
 parse_external = 4136800
+parse_external_allocations = 22396
 
 [yara]
-analyze_corpus = 23322988
-analyze_external = 510465510
-parse_corpus = 17520989
-parse_external = 377197115
+analyze_corpus = 23323115
+analyze_corpus_allocations = 104709
+analyze_external = 510464257
+analyze_external_allocations = 1479218
+parse_corpus = 17520935
+parse_corpus_allocations = 83554
+parse_external = 377197175
+parse_external_allocations = 1593450
 
 [yaral]
-analyze_corpus = 9044938
+analyze_corpus = 9044917
+analyze_corpus_allocations = 101792
 analyze_external = 127340211
+analyze_external_allocations = 1287482
 parse_corpus = 5180867
+parse_corpus_allocations = 43235
 parse_external = 61199480
+parse_external_allocations = 386589
