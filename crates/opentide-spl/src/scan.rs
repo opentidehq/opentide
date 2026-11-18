@@ -262,6 +262,8 @@ fn top_level(
     pairs: &std::collections::HashMap<usize, usize>,
     inner: bool,
 ) -> Vec<(usize, usize)> {
+    #[cfg(test)]
+    TOP_LEVELS.set(TOP_LEVELS.get() + 1);
     let bytes = source.as_bytes();
     let (mut out, mut stage_start, mut i) = (Vec::new(), start, start);
     while i < end {
@@ -357,27 +359,6 @@ pub(crate) fn closing_bracket(source: &str, open: usize) -> Option<usize> {
     })
 }
 
-/// One pipeline [`walk_pipelines`] is walking.
-struct Frame<S> {
-    stages: Vec<(usize, usize)>,
-    state: S,
-    /// The stage being walked, and its subsearches not walked yet.
-    next: usize,
-    inner: Option<std::vec::IntoIter<(usize, usize)>>,
-}
-
-impl<S> Frame<S> {
-    fn open(stages: Vec<(usize, usize)>, enter: &mut impl FnMut(&[(usize, usize)]) -> S) -> Self {
-        let opened = enter(&stages);
-        Frame {
-            stages,
-            state: opened,
-            next: 0,
-            inner: None,
-        }
-    }
-}
-
 /// Walks the pipeline `start..end` and every subsearch in it, depth first and
 /// in order, as a recursion over the subsearches would, but on a stack of its
 /// own: a recursion per `[` overflowed a 1 MB stack on a query nested 1,000
@@ -388,41 +369,341 @@ pub(crate) fn walk_pipelines<S>(
     (start, end): (usize, usize),
     hidden: Hidden,
     order: Order,
-    mut enter: impl FnMut(&[(usize, usize)]) -> S,
-    mut stage: impl FnMut(&mut S, usize, (usize, usize)),
+    enter: impl FnMut(&[(usize, usize)]) -> S,
+    stage: impl FnMut(&mut S, usize, (usize, usize)),
 ) {
-    let pairs = std::rc::Rc::new(bracket_pairs(source, (start, end), hidden));
-    // The stages' own scans jump over a subsearch by it too ([`closing_bracket`]).
-    let _installed = Installed::new(source, std::rc::Rc::clone(&pairs));
-    let stages = |range| top_level(source, range, hidden, &pairs, false);
-    let mut frames = vec![Frame::open(stages((start, end)), &mut enter)];
-    while let Some(top) = frames.len().checked_sub(1) {
-        let depth = frames.len();
-        let frame = &mut frames[top];
-        let Some(&range) = frame.stages.get(frame.next) else {
-            frames.pop();
-            continue;
+    // The plan an analysis installed for this text and range, else one of
+    // this walk's own (ADR 0014 §5: the analysis's four walks scanned the
+    // same text four times).
+    let installed = PLAN.with(|p| {
+        p.borrow()
+            .as_ref()
+            .filter(|plan| plan.serves(source, (start, end), hidden))
+            .map(std::rc::Rc::clone)
+    });
+    let plan =
+        installed.unwrap_or_else(|| std::rc::Rc::new(Plan::new(source, (start, end), hidden)));
+    plan.walk(source, order, enter, stage);
+}
+
+/// The pipelines of a text, its stages and their subsearches, scanned once:
+/// what [`walk_pipelines`] walks, in either [`Order`].
+pub(crate) struct Plan {
+    at: usize,
+    len: usize,
+    range: (usize, usize),
+    hidden: usize,
+    pairs: std::rc::Rc<std::collections::HashMap<usize, usize>>,
+    /// Each pipeline: its stages, and for each stage the pipelines of its
+    /// subsearches (indices into `frames`). The first is the outer one.
+    frames: Vec<Pipeline>,
+}
+
+/// A pipeline of a [`Plan`]: its stages, and for each stage the pipelines of
+/// its subsearches.
+type Pipeline = (Vec<(usize, usize)>, Vec<Vec<usize>>);
+
+impl Plan {
+    /// Scans `start..end` of `source` as [`walk_pipelines`] does, every
+    /// subsearch to [`MAX_SUBSEARCH_DEPTH`].
+    fn new(source: &str, (start, end): (usize, usize), hidden: Hidden) -> Self {
+        let pairs = std::rc::Rc::new(bracket_pairs(source, (start, end), hidden));
+        let mut frames = vec![(
+            top_level(source, (start, end), hidden, &pairs, false),
+            Vec::new(),
+        )];
+        // Each pipeline and its depth, the outer one at 1.
+        let mut todo = vec![(0usize, 1usize)];
+        while let Some((at, depth)) = todo.pop() {
+            let mut subs = Vec::with_capacity(frames[at].0.len());
+            for index in 0..frames[at].0.len() {
+                let range = frames[at].0[index];
+                let inner = if depth > MAX_SUBSEARCH_DEPTH {
+                    Vec::new()
+                } else {
+                    top_level(source, range, hidden, &pairs, true)
+                };
+                let mut ids = Vec::with_capacity(inner.len());
+                for sub in inner {
+                    ids.push(frames.len());
+                    todo.push((frames.len(), depth + 1));
+                    frames.push((top_level(source, sub, hidden, &pairs, false), Vec::new()));
+                }
+                subs.push(ids);
+            }
+            frames[at].1 = subs;
+        }
+        Self {
+            at: source.as_ptr() as usize,
+            len: source.len(),
+            range: (start, end),
+            hidden: hidden as usize,
+            pairs,
+            frames,
+        }
+    }
+
+    /// Whether this plan is of `range` of this very `source` (its address
+    /// and length, while the analysis that installed it borrows it).
+    fn serves(&self, source: &str, range: (usize, usize), hidden: Hidden) -> bool {
+        self.at == source.as_ptr() as usize
+            && self.len == source.len()
+            && self.range == range
+            && self.hidden == hidden as usize
+    }
+
+    /// The walk: `enter` opens a pipeline, `stage` checks a stage, depth
+    /// first and in order, the subsearches before or after their stage.
+    fn walk<S>(
+        &self,
+        source: &str,
+        order: Order,
+        mut enter: impl FnMut(&[(usize, usize)]) -> S,
+        mut stage: impl FnMut(&mut S, usize, (usize, usize)),
+    ) {
+        // The stages' own scans jump over a subsearch by it too ([`closing_bracket`]).
+        let _installed = Installed::new(source, std::rc::Rc::clone(&self.pairs));
+        // Each open pipeline: its plan, its state, the stage being walked and
+        // how many of that stage's subsearches are open already.
+        let mut frames: Vec<(usize, S, usize, Option<usize>)> =
+            vec![(0, enter(&self.frames[0].0), 0, None)];
+        while let Some(top) = frames.len().checked_sub(1) {
+            let (id, walked, next, inner) = &mut frames[top];
+            let (stages, subs) = &self.frames[*id];
+            let Some(&range) = stages.get(*next) else {
+                frames.pop();
+                continue;
+            };
+            let at = *next;
+            let opened = inner.get_or_insert_with(|| {
+                if order == Order::StageFirst {
+                    stage(walked, at, range);
+                }
+                0
+            });
+            if let Some(&child) = subs[at].get(*opened) {
+                *opened += 1;
+                let entered = enter(&self.frames[child].0);
+                frames.push((child, entered, 0, None));
+                continue;
+            }
+            *inner = None;
+            if order == Order::SubsearchesFirst {
+                stage(walked, at, range);
+            }
+            *next += 1;
+        }
+    }
+}
+
+thread_local! {
+    static PLAN: std::cell::RefCell<Option<std::rc::Rc<Plan>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// A plan installed for the walks of one analysis of `source`, and the one
+/// before it put back on drop.
+pub(crate) struct PlanScope(Option<std::rc::Rc<Plan>>);
+
+/// Scans the whole of `source` once for the analysis's walks (perf, search
+/// operators, CIM, declared datasets), which read the same pipelines.
+pub(crate) fn plan_scope(source: &str) -> PlanScope {
+    let plan = std::rc::Rc::new(Plan::new(source, (0, source.len()), skip_hidden));
+    PlanScope(PLAN.with(|p| p.replace(Some(plan))))
+}
+
+impl Drop for PlanScope {
+    fn drop(&mut self) {
+        let before = self.0.take();
+        PLAN.with(|p| *p.borrow_mut() = before);
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The pipeline scans on this thread: [`top_levels`].
+    static TOP_LEVELS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread split a pipeline's text into stages or
+/// subsearches (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn top_levels() -> usize {
+    TOP_LEVELS.get()
+}
+
+#[cfg(test)]
+mod plan_tests {
+    use super::*;
+
+    /// [`walk_pipelines`] as it was before plans: every pipeline scanned as
+    /// the walk reaches it.
+    fn walk_scanning<S>(
+        source: &str,
+        (start, end): (usize, usize),
+        hidden: Hidden,
+        order: Order,
+        mut enter: impl FnMut(&[(usize, usize)]) -> S,
+        mut stage: impl FnMut(&mut S, usize, (usize, usize)),
+    ) {
+        struct Frame<S> {
+            stages: Vec<(usize, usize)>,
+            state: S,
+            next: usize,
+            inner: Option<std::vec::IntoIter<(usize, usize)>>,
+        }
+        let pairs = std::rc::Rc::new(bracket_pairs(source, (start, end), hidden));
+        let _installed = Installed::new(source, std::rc::Rc::clone(&pairs));
+        let stages = |range| top_level(source, range, hidden, &pairs, false);
+        let mut open = |stages: Vec<(usize, usize)>| {
+            let entered = enter(&stages);
+            Frame {
+                stages,
+                state: entered,
+                next: 0,
+                inner: None,
+            }
         };
-        let at = frame.next;
-        let inner = frame.inner.get_or_insert_with(|| {
-            if order == Order::StageFirst {
+        let mut frames = vec![open(stages((start, end)))];
+        while let Some(top) = frames.len().checked_sub(1) {
+            let depth = frames.len();
+            let frame = &mut frames[top];
+            let Some(&range) = frame.stages.get(frame.next) else {
+                frames.pop();
+                continue;
+            };
+            let at = frame.next;
+            let inner = frame.inner.get_or_insert_with(|| {
+                if order == Order::StageFirst {
+                    stage(&mut frame.state, at, range);
+                }
+                if depth > MAX_SUBSEARCH_DEPTH {
+                    Vec::new().into_iter()
+                } else {
+                    top_level(source, range, hidden, &pairs, true).into_iter()
+                }
+            });
+            if let Some(sub) = inner.next() {
+                let child = open(stages(sub));
+                frames.push(child);
+                continue;
+            }
+            frame.inner = None;
+            if order == Order::SubsearchesFirst {
                 stage(&mut frame.state, at, range);
             }
-            if depth > MAX_SUBSEARCH_DEPTH {
-                Vec::new().into_iter()
-            } else {
-                top_level(source, range, hidden, &pairs, true).into_iter()
+            frame.next += 1;
+        }
+    }
+
+    /// Searches like the corpus's, written here: an engine crate reads no file
+    /// (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        "index=main sourcetype=access_combined status>=500 | stats count by host | where count > 10 | sort - count",
+        "index=web [search index=threat | fields src_ip | rename src_ip as clientip] | table _time clientip uri",
+        "search index=a \"quoted | pipe\" `macro(arg)` | eval x=if(a==\"[\", 1, 2) | append [| makeresults | eval y=1 [inner]]",
+        "| tstats count from datamodel=Endpoint.Processes where Processes.process_name=cmd.exe by Processes.dest | `drop_dm_object_name(Processes)`",
+        "index=main | join type=left host [search index=other | stats latest(_time) as t by host] | lookup assets ip as src",
+        "index=x ``` a comment | with pipes [ ] ``` | stats count",
+        "index=x [search index=y [search index=z [search index=w | head 1] | head 2] | head 3]",
+        "index=main | eval a=\"unclosed [ | stats count",
+        "index=main [search index=b | ",
+        "",
+    ];
+
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = SAMPLES
+            .iter()
+            .flat_map(|t| t.char_indices().step_by(2).map(|(i, _)| t[..i].to_owned()))
+            .collect();
+        out.extend(cut);
+        let depth = MAX_SUBSEARCH_DEPTH + 3;
+        out.push(format!(
+            "index=a {}index=b{}",
+            "[search ".repeat(depth),
+            "]".repeat(depth)
+        ));
+        out
+    }
+
+    type Event = (char, usize, (usize, usize), Vec<(usize, usize)>);
+
+    fn record(
+        source: &str,
+        order: Order,
+        walk: impl Fn(
+            &str,
+            Order,
+            &mut dyn FnMut(&[(usize, usize)]) -> usize,
+            &mut dyn FnMut(&mut usize, usize, (usize, usize)),
+        ),
+    ) -> Vec<Event> {
+        let events = std::cell::RefCell::new(Vec::new());
+        let opened = std::cell::Cell::new(0);
+        walk(
+            source,
+            order,
+            &mut |stages| {
+                opened.set(opened.get() + 1);
+                events
+                    .borrow_mut()
+                    .push(('e', opened.get(), (0, 0), stages.to_vec()));
+                opened.get()
+            },
+            &mut |pipeline, index, range| {
+                let bracket = closing_bracket(source, range.0);
+                events.borrow_mut().push((
+                    's',
+                    *pipeline,
+                    range,
+                    vec![(index, bracket.unwrap_or(0))],
+                ));
+            },
+        );
+        events.into_inner()
+    }
+
+    /// A plan walks the pipelines, in each order, exactly as the scanning walk
+    /// did: the same pipelines opened, the same stages checked, in the same
+    /// order, with the same subsearch brackets installed (ADR 0014 §5).
+    #[test]
+    fn a_plan_walks_as_the_scanning_walk() {
+        for source in texts() {
+            for order in [Order::StageFirst, Order::SubsearchesFirst] {
+                let scanned = record(&source, order, |s, o, e, st| {
+                    walk_scanning(s, (0, s.len()), skip_hidden, o, e, st);
+                });
+                let planned = record(&source, order, |s, o, e, st| {
+                    Plan::new(s, (0, s.len()), skip_hidden).walk(s, o, e, st);
+                });
+                assert_eq!(planned, scanned, "{source:?}");
+                let _scope = plan_scope(&source);
+                let installed = record(&source, order, |s, o, e, st| {
+                    walk_pipelines(s, (0, s.len()), skip_hidden, o, e, st);
+                });
+                assert_eq!(installed, scanned, "{source:?}");
             }
-        });
-        if let Some(sub) = inner.next() {
-            let child = Frame::open(stages(sub), &mut enter);
-            frames.push(child);
-            continue;
         }
-        frame.inner = None;
-        if order == Order::SubsearchesFirst {
-            stage(&mut frame.state, at, range);
-        }
-        frame.next += 1;
+    }
+
+    /// An analysis scans its pipelines once for its walks that read them
+    /// alike (perf, CIM, declared datasets), and once for the search
+    /// operators', which skip other text (ADR 0014 §7): each walk scanned
+    /// them again.
+    #[test]
+    fn an_analysis_scans_its_pipelines_once() {
+        let source = SAMPLES[1];
+        let before = top_levels();
+        let _ = Plan::new(source, (0, source.len()), skip_hidden);
+        let _ = Plan::new(
+            source,
+            (0, source.len()),
+            crate::search_operators::skip_hidden,
+        );
+        let once = top_levels() - before;
+        let before = top_levels();
+        crate::analyze(source);
+        assert_eq!(top_levels() - before, once);
     }
 }
