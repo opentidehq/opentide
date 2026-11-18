@@ -31,7 +31,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md), [`opentide-cassette`](opentide-cassette/AGENTS.md) (the recorded-HTTP harness, UC-4.1, not published) |
 | foundation 1 | [`opentide-parse`](opentide-parse/AGENTS.md) (the pure-Rust parsers' toolkit, ADR 0012), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
-| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
+| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md), [`opentide-yara`](opentide-yara/AGENTS.md), [`opentide-yaral`](opentide-yaral/AGENTS.md), [`opentide-exabeam`](opentide-exabeam/AGENTS.md) (a new query language goes here) |
 | foundation 3 | [`opentide-lucene`](opentide-lucene/AGENTS.md) (above kuery: each tells the other's rules by the other's grammar) |
 | foundation 4 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | foundation 5 | [`opentide-schema`](opentide-schema/AGENTS.md) |

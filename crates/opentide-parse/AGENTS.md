@@ -52,8 +52,10 @@ stood: it depends on no workspace crate, and the query engines (tier 2 and up) b
 
 - One `SyntaxKind` enum: token kinds first (below `TokenSet::CAPACITY`, 512), then node kinds.
   A `const` `TokenSet` built from a kind past the capacity fails to compile.
-- `max_depth` at or above the language's floor in `crates/opentide-analysis/tests/deep_queries.rs`
-  (what its tree-sitter engine accepted, capped at 1 000 levels; KQL's is above it, 254).
+- `max_depth` at or above the language's floor in `crates/opentide-analysis/tests/deep_queries.rs`:
+  `NESTING_CEILING`, 1 000 levels, for a new language. The older languages' floors are what their
+  former engines accepted, capped at the ceiling: KQL's is 254, Falco's 18, Exabeam's 199,
+  YARA's 495 (ADR 0012 decision 4).
 - Messages: the language maps `SyntaxError::kind` to its diagnostic codes and renders
   `SyntaxError::expected` with `describe_expected`.
 
