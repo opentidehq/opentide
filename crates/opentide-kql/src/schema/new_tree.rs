@@ -21,16 +21,29 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 /// Runs the pass over a parsed query; diagnostics only when it parsed
-/// without an error (`clean`).
-pub(crate) fn analyze(root: &SyntaxNode, source: &str, catalog: &Catalog, clean: bool) -> Analysis {
-    run(root, source, catalog, clean).out
+/// without an error (`clean`). `lines` is `source`'s line index, which the
+/// caller has built once for every pass of its analysis.
+pub(crate) fn analyze(
+    root: &SyntaxNode,
+    source: &str,
+    lines: &LineIndex<'_>,
+    catalog: &Catalog,
+    clean: bool,
+) -> Analysis {
+    run(root, source, lines, catalog, clean).out
 }
 
-fn run<'a>(root: &SyntaxNode, source: &'a str, catalog: &'a Catalog, clean: bool) -> Pass<'a> {
+fn run<'a>(
+    root: &SyntaxNode,
+    source: &'a str,
+    lines: &'a LineIndex<'a>,
+    catalog: &'a Catalog,
+    clean: bool,
+) -> Pass<'a> {
     let mut pass = Pass {
         source,
         catalog,
-        lines: LineIndex::new(source),
+        lines,
         out: Analysis::default(),
         diagnose: clean,
         depth: 0,
@@ -99,8 +112,8 @@ impl<'p> Scope<'p> {
 struct Pass<'a> {
     source: &'a str,
     catalog: &'a Catalog,
-    /// One line index for every range of the analysis.
-    lines: LineIndex<'a>,
+    /// One line index for every range of the analysis (the caller's).
+    lines: &'a LineIndex<'a>,
     out: Analysis,
     diagnose: bool,
     /// What the walk down the tree has spent of [`BUDGET`].
@@ -1457,7 +1470,13 @@ mod tests {
         let parsed = crate::parser::parse(source);
         let root = SyntaxNode::new_root(parsed.green);
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
-        check(&run(&root, source, &catalog, parsed.errors.is_empty()));
+        check(&run(
+            &root,
+            source,
+            &LineIndex::new(source),
+            &catalog,
+            parsed.errors.is_empty(),
+        ));
     }
 
     /// `n` functions, each calling the one before `calls` times.
