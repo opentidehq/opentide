@@ -49,7 +49,8 @@ pub(crate) fn range(node: &SyntaxNode) -> TextRange {
 }
 
 /// [`range`] by walking every token of the node, in order: what [`range`]
-/// falls back to, and what the tests hold it to.
+/// falls back to, and what the tests hold it to
+/// (`crate::inspect::ranges_disagree`).
 pub(crate) fn range_by_walking(node: &SyntaxNode) -> TextRange {
     let mut tokens = node
         .descendants_with_tokens()
@@ -237,59 +238,5 @@ pub(crate) fn token_at(
         None
     } else {
         last.filter(|t| t.text_range().end() == offset)
-    }
-}
-
-#[cfg(test)]
-mod range_tests {
-    use super::*;
-
-    fn sources() -> Vec<String> {
-        let mut out = vec![
-            String::new(),
-            "   ".into(),
-            "// only a comment".into(),
-            "T | where a == 1 // trailing comment\n".into(),
-            "  T\n| where (  a == 1 /* c */ )  \n| project b , c ".into(),
-            "let x = (\n  // c\n);\nT".into(),
-            "T | where".into(),
-            "T | join ( U | where x == 1 ) on a".into(),
-            "T | summarize count() by bin(TimeGenerated, 1h) // x".into(),
-        ];
-        let mut dirs = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata")];
-        while let Some(dir) = dirs.pop() {
-            let Ok(entries) = std::fs::read_dir(&dir) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    dirs.push(path);
-                } else if path.extension().is_some_and(|e| e == "kql") {
-                    out.extend(std::fs::read_to_string(&path).ok());
-                }
-            }
-        }
-        out
-    }
-
-    /// From each end inward gives the range that walking every token gave,
-    /// for every node of every KQL file under `crates/testdata`, broken ones
-    /// and ones with trivia at either end among them.
-    #[test]
-    fn range_from_the_ends_is_range_by_walking() {
-        let mut nodes = 0;
-        for source in sources() {
-            let root = SyntaxNode::new_root(crate::parser::parse(&source).green);
-            for node in root.descendants() {
-                assert_eq!(
-                    range(&node),
-                    range_by_walking(&node),
-                    "{node:?} in {source:?}"
-                );
-                nodes += 1;
-            }
-        }
-        assert!(nodes > 5_000, "{nodes} nodes");
     }
 }
