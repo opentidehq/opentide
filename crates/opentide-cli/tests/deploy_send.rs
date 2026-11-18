@@ -2742,3 +2742,93 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     assert_eq!(rows(&sent)[0].0, "failed", "{:?}", rows(&sent));
     assert_tenant_stopped(&sent, "lab");
 }
+
+/// A HarfangLab tenant whose `type` is neither Sigma nor YARA, or names an
+/// unset variable, fails before any rule is sent, as the SDK fails it: its
+/// rules are not attempted, never skipped as if of the other kind.
+#[test]
+fn harfanglab_fails_a_tenant_whose_type_is_unset_or_unknown() {
+    let sigma = "  harfanglab:\n    status: STAGING\n    sigma:\n      logsource:\n        \
+                 category: process_creation\n        product: windows\n      selections:\n        \
+                 - name: selection\n          field: Image\n          value: cmd.exe\n      \
+                 condition: selection\n";
+    for (kind, said) in [
+        (
+            "Sigmaa",
+            "harfanglab tenant 'lab' setup: type is Sigma or YARA, got \"Sigmaa\"",
+        ),
+        ("$HARFANGLAB_TYPE", "HARFANGLAB_TYPE"),
+    ] {
+        let ws = workspace(
+            "harfanglab",
+            "lab",
+            &format!(
+                "ssl = true\ntype = \"{kind}\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
+                 \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n"
+            ),
+            &[(
+                "a.yaml",
+                rule(
+                    "HarfangLab Sigma",
+                    "00000000-0000-4000-8099-000000000201",
+                    "A.",
+                    sigma,
+                ),
+            )],
+        );
+        let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+        let (sent, _) = deploy(
+            ws.path(),
+            "harfanglab",
+            &env,
+            &opentide_connectors::builtin(),
+            0,
+        );
+        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{kind}");
+        assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()), "{kind}");
+        assert_eq!(rows(&sent), [("not_attempted".to_owned(), None)], "{kind}");
+        let Json::Array(failures) = value(&sent, "failures") else {
+            panic!("no failures")
+        };
+        let error = failures[0].get("error").and_then(Json::as_str).unwrap();
+        assert!(error.contains(said), "{kind}: {error}");
+    }
+}
+
+/// A HarfangLab `type` that names a set variable is resolved: the YARA file
+/// is deleted on the tenant, the request the Python client sent, never
+/// reported deployed with nothing sent.
+#[test]
+fn harfanglab_resolves_a_type_that_names_a_set_variable() {
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        "ssl = true\ntype = \"$HARFANGLAB_TYPE\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
+         \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
+        &[(
+            "a-loader.yaml",
+            rule(
+                "HarfangLab YARA Loader",
+                "00000000-0000-4000-8003-000000000007",
+                "Retired.",
+                "  harfanglab:\n    status: REMOVED\n    yara:\n      meta:\n        os: \
+                 Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n",
+            ),
+        )],
+    );
+    let (proxy, env, _ca) = replay("harfanglab/deploy", &[9], "HARFANGLAB_API_TOKEN");
+    let env = Env::from_pairs(
+        env.iter()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .chain([("HARFANGLAB_TYPE".to_owned(), "YARA".to_owned())]),
+    );
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new());
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
+}

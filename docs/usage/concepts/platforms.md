@@ -31,7 +31,7 @@ CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_
 
 CrowdStrike stores a Next-Gen SIEM correlation rule, whose `query` is CrowdStrike Query Language (CQL, Falcon LogScale's language). The analysis engine checks it offline; opentide calls no CrowdStrike query check, so `validate query --platform crowdstrike --live` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as YARA-X 1.x compiles it (the HarfangLab profile also refuses syntax only YARA-X has), and Sigma is not; `--live` reports `supported: false`.
 
-A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
+A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A tenant takes one kind too, its `[tenants.setup] type`: exactly `Sigma` or `YARA` (case matters), or a `$VARIABLE` set to one of them. `opentide deploy` skips a rule of the other kind, and fails a tenant whose `type` is unset or anything else before sending it a rule. A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
 
 ```yaml
 configurations:

@@ -2158,6 +2158,29 @@ impl Sender<'_, '_> {
             let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
                 continue;
             };
+            // A HarfangLab tenant takes one kind of rule, its `type`: unset
+            // (an unset `$VARIABLE`) or neither Sigma nor YARA, the tenant
+            // cannot deploy, as the SDK says (`Client::kind`).
+            let tenant_kind = if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
+                let cancel = self.cancel.clone();
+                let kind = opentide_connectors::harfanglab::Client::new(TenantContext {
+                    tenant: &connection.tenant,
+                    http: &connection.http,
+                    cancel: &cancel,
+                })
+                .kind();
+                match kind {
+                    Ok(opentide_connectors::harfanglab::Kind::Sigma) => "Sigma",
+                    Ok(opentide_connectors::harfanglab::Kind::Yara) => "YARA",
+                    Err(error) => {
+                        let failure = raised(&error).stopping(Stops::Tenant);
+                        self.tenant_failed(platform, &tenant, log, failure, false)?;
+                        continue;
+                    }
+                }
+            } else {
+                ""
+            };
             for sent in &batch.rules {
                 let rule = &sent.rule;
                 if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
@@ -2171,7 +2194,6 @@ impl Sender<'_, '_> {
                             None
                         }
                     });
-                    let tenant_kind = opentide_compile::deploy::setup_text(&batch.table, "type");
                     if block.is_none() {
                         tracing::warn!(
                             detail = rule.name.as_str(),
@@ -2186,7 +2208,7 @@ impl Sender<'_, '_> {
                         );
                         continue;
                     }
-                    if kind != Some(tenant_kind.as_str()) {
+                    if kind != Some(tenant_kind) {
                         log.skipped(
                             platform,
                             &tenant,
@@ -2373,11 +2395,31 @@ impl Sender<'_, '_> {
                 }
             }
             _ => {
-                let writes =
-                    opentide_compile::harfanglab::compile(self.compile, rule, &batch.table)
-                        .map_err(compile_error)?;
+                // The tenant's `type` as `by_uuid` read it, a `$VARIABLE`
+                // resolved: the compiler reads the setup as written.
+                let kind =
+                    match opentide_connectors::harfanglab::Client::new(self.context(connection))
+                        .kind()
+                        .map_err(|error| raised(&error))?
+                    {
+                        opentide_connectors::harfanglab::Kind::Sigma => "Sigma",
+                        opentide_connectors::harfanglab::Kind::Yara => "YARA",
+                    };
+                let mut table = batch.table.clone();
+                if let CJson::Object(fields) = &mut table
+                    && let Some(CJson::Object(setup)) = fields.get_mut("setup")
+                {
+                    setup.insert("type".into(), CJson::Str(kind.to_owned()));
+                }
+                let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
+                    .map_err(compile_error)?;
+                // `by_uuid` skipped a rule of the other kind: nothing to send
+                // is never a deploy.
                 let Some(write) = writes.first() else {
-                    return Ok(());
+                    return Err(Raised::new(format!(
+                        "HarfangLab compiled no request for rule {} on a {kind} tenant",
+                        rule.uuid
+                    )));
                 };
                 let deployer = self.deployer(platform)?;
                 let request = DeployRequest::new(
