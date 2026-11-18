@@ -225,26 +225,29 @@ impl<'a> Sources<'a> {
         let node =
             opentide_schema::objects::platform::aliased_yara_signature(document.root()?, platform)?;
         let start = node.start;
-        let line = document.source().lines().nth(start.line.checked_sub(1)?)?;
+        let line = document
+            .source()
+            .lines()
+            .nth(start.line().checked_sub(1)?)?;
         let chars: Vec<char> = line.chars().collect();
-        let end = if node.end.line == start.line {
-            node.end.column
+        let end = if node.end.line() == start.line() {
+            node.end.column()
         } else {
             chars
                 .iter()
                 .rposition(|c| !c.is_whitespace())
-                .map_or(start.column, |at| at + 2)
+                .map_or(start.column(), |at| at + 2)
         };
-        let from = start.column.checked_sub(1)?;
+        let from = start.column().checked_sub(1)?;
         let text: String = chars
             .get(from..end.checked_sub(1)?.max(from))?
             .iter()
             .collect();
         Some(Span {
-            line: start.line,
-            column: start.column,
-            end_line: start.line,
-            end_column: end.max(start.column + 1),
+            line: start.line(),
+            column: start.column(),
+            end_line: start.line(),
+            end_column: end.max(start.column() + 1),
             text,
             found: true,
         })
@@ -259,13 +262,15 @@ impl<'a> Sources<'a> {
                 Some((
                     format!(
                         "Could not parse object YAML: {} at line {}, column {}",
-                        error.problem, mark.line, mark.column
+                        error.problem,
+                        mark.line(),
+                        mark.column()
                     ),
                     Span {
-                        line: mark.line,
-                        column: mark.column,
-                        end_line: mark.line,
-                        end_column: mark.column + 1,
+                        line: mark.line(),
+                        column: mark.column(),
+                        end_line: mark.line(),
+                        end_column: mark.column() + 1,
                         text: String::new(),
                         found: true,
                     },

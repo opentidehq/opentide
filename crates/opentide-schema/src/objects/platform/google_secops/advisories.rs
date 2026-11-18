@@ -191,7 +191,7 @@ pub fn aliased_sections(rule: &Node) -> Vec<SectionAlias> {
     };
     entries
         .iter()
-        .filter(|entry| entry.value.start.index < entry.key.end.index)
+        .filter(|entry| entry.value.start.index() < entry.key.end.index())
         .filter_map(|entry| {
             let Value::Str(key) = &entry.key.value else {
                 return None;
@@ -201,7 +201,7 @@ pub fn aliased_sections(rule: &Node) -> Vec<SectionAlias> {
                 .find(|section| **section == key)
                 .map(|key| SectionAlias {
                     key,
-                    yaml_line: entry.value.start.line.saturating_sub(1),
+                    yaml_line: entry.value.start.line().saturating_sub(1),
                 })
         })
         .collect()

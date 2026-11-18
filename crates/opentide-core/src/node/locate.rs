@@ -154,11 +154,11 @@ impl Document {
     /// The span from `start` to `end` when both are on one line and it is not
     /// empty; quotes around a scalar are left out.
     fn one_line(&self, start: Mark, end: Mark, unquote: bool, found: bool) -> Option<Span> {
-        if start.line != end.line || end.column <= start.column {
+        if start.line() != end.line() || end.column() <= start.column() {
             return None;
         }
-        let text = self.line_chars(start.line)?;
-        let (mut first, mut last) = (start.column - 1, (end.column - 1).min(text.len()));
+        let text = self.line_chars(start.line())?;
+        let (mut first, mut last) = (start.column() - 1, (end.column() - 1).min(text.len()));
         // saphyr ends a flow collection that is a block sequence's item, and
         // a quoted scalar, after the blanks that follow it (`- {k: v}   `).
         // Only YAML's blanks: a plain scalar may end in a space YAML does not
@@ -177,9 +177,9 @@ impl Document {
             return None;
         }
         Some(Span {
-            line: start.line,
+            line: start.line(),
             column: first + 1,
-            end_line: start.line,
+            end_line: start.line(),
             end_column: last + 1,
             text: text[first..last].iter().collect(),
             found,
@@ -198,19 +198,15 @@ impl Document {
             return Some(span);
         }
         let mut start = item.start;
-        if item.end.index <= item.start.index {
+        if item.end.index() <= item.start.index() {
             // An empty item: the parser marks where its value would be.
-            let text = self.line_chars(start.line)?;
-            let dash = text[..(start.column - 1).min(text.len())]
+            let text = self.line_chars(start.line())?;
+            let dash = text[..(start.column() - 1).min(text.len())]
                 .iter()
                 .rposition(|&c| c == '-')?;
-            start.column = dash + 1;
+            start = Mark::new(start.index(), start.line(), dash + 1);
         }
-        let end = Mark {
-            index: start.index + 1,
-            line: start.line,
-            column: start.column + 1,
-        };
+        let end = Mark::new(start.index() + 1, start.line(), start.column() + 1);
         self.one_line(start, end, false, found)
     }
 
@@ -279,8 +275,8 @@ impl Document {
             node = next.child;
         }
         let line = match key {
-            Some(key) if is_scalar(node) => key.start.line,
-            _ => node.start.line,
+            Some(key) if is_scalar(node) => key.start.line(),
+            _ => node.start.line(),
         };
         line.checked_sub(1)
     }

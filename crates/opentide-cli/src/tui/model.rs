@@ -140,14 +140,32 @@ fn number_at(value: &serde_json::Value, key: &str) -> Option<usize> {
         .and_then(|number| usize::try_from(number).ok())
 }
 
+/// A 1-based `line` or `column`: a 0 is no place (the detail view counts
+/// from 1), so it reads as absent.
+fn position_at(value: &serde_json::Value, key: &str) -> Option<usize> {
+    number_at(value, key).filter(|&number| number > 0)
+}
+
+/// What an absent `context` or `position` reads as.
+static NONE: serde_json::Value = serde_json::Value::Null;
+
 impl Finding {
     /// From one entry of `report.issues` or `report.warnings` in the
     /// validate document.
     pub fn from_issue(issue: &serde_json::Value) -> Self {
-        let context = issue.get("context").cloned().unwrap_or_default();
-        let position = context.get("position").cloned().unwrap_or_default();
-        let end_column = if position.get("end_line") == position.get("line") {
-            number_at(&position, "end_column")
+        let context = issue.get("context").unwrap_or(&NONE);
+        // Where the finding points: the entry's own `line` and `column`
+        // (validate's and lint's, the block's key for a block, #922), else
+        // the engine's `context.position`; `yaml_line + 1` is the line a
+        // block's value starts on, one below its key, so it is the last
+        // resort.
+        let place = if position_at(issue, "line").is_some() {
+            issue
+        } else {
+            context.get("position").unwrap_or(&NONE)
+        };
+        let end_column = if place.get("end_line") == place.get("line") {
+            number_at(place, "end_column")
         } else {
             None
         };
@@ -159,7 +177,8 @@ impl Finding {
             path: text_at(issue, "file_path")
                 .filter(|path| !path.is_empty())
                 .map(PathBuf::from),
-            line: number_at(issue, "yaml_line").map(|line| line + 1),
+            line: position_at(place, "line")
+                .or_else(|| number_at(issue, "yaml_line").map(|line| line + 1)),
             field_path: issue
                 .get("field_path")
                 .and_then(serde_json::Value::as_array)
@@ -176,9 +195,9 @@ impl Finding {
             help: text_at(issue, "suggestion")
                 .filter(|text| !text.is_empty())
                 .map(str::to_owned),
-            column: number_at(&position, "column"),
+            column: position_at(place, "column"),
             end_column,
-            source: if text_at(&context, "source") == Some("engine") {
+            source: if text_at(context, "source") == Some("engine") {
                 Source::Engine
             } else {
                 Source::Validate
@@ -900,5 +919,95 @@ fn check_files(
         advice: None,
         host: Some(host),
         catalog: Some(catalog.clone()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A block's finding is shown on the block's key, where `validate` and
+    /// `lint` point it, not on `yaml_line + 1`, the line its value starts on
+    /// (#922): the entry `opentide --json validate` writes for the Bitdefender
+    /// fixture's `bitdefender_severity_collapsed`.
+    #[test]
+    fn a_block_finding_is_on_its_key_line() {
+        let entry = serde_json::json!({
+            "code": "bitdefender_severity_collapsed",
+            "severity": "warning",
+            "message": "GravityZone has three severities",
+            "object_uuid": "00000000-0000-4000-8003-000000000052",
+            "file_path": "/w/objects/rules/rule-bitdefender-yara-1.0.yaml",
+            "yaml_line": 18,
+            "field_path": ["configurations", "bitdefender"],
+            "line": 18,
+            "column": 3,
+            "end_line": 18,
+            "end_column": 14,
+        });
+        let finding = Finding::from_issue(&entry);
+        assert_eq!(
+            (finding.line, finding.column, finding.end_column),
+            (Some(18), Some(3), Some(14))
+        );
+    }
+
+    /// An engine finding is placed where it says, as the engine writes it: a
+    /// top-level place and the same one in `context.position`.
+    #[test]
+    fn an_engine_finding_keeps_its_position() {
+        let engine = serde_json::json!({
+            "code": "kql_unknown_table",
+            "yaml_line": 32,
+            "line": 33,
+            "column": 7,
+            "end_line": 33,
+            "end_column": 12,
+            "context": {
+                "source": "engine",
+                "position": {"line": 33, "column": 7, "end_line": 33, "end_column": 12},
+            },
+        });
+        let finding = Finding::from_issue(&engine);
+        assert_eq!(
+            (
+                finding.line,
+                finding.column,
+                finding.end_column,
+                finding.source
+            ),
+            (Some(33), Some(7), Some(12), Source::Engine)
+        );
+    }
+
+    /// A `null` place, or a 0, is no place: the position, then the line after
+    /// `yaml_line`, stand in.
+    #[test]
+    fn a_null_or_zero_place_falls_back() {
+        let nulls = serde_json::json!({
+            "code": "invalid",
+            "yaml_line": 4,
+            "line": null,
+            "column": null,
+            "end_line": null,
+            "end_column": null,
+        });
+        let finding = Finding::from_issue(&nulls);
+        assert_eq!(
+            (finding.line, finding.column, finding.end_column),
+            (Some(5), None, None)
+        );
+        let zero = serde_json::json!({
+            "code": "invalid",
+            "yaml_line": 4,
+            "line": 0,
+            "column": 0,
+            "context": {"position": {"line": 9, "column": 2}},
+        });
+        let finding = Finding::from_issue(&zero);
+        assert_eq!((finding.line, finding.column), (Some(9), Some(2)));
+        let bare = serde_json::json!({"code": "invalid", "yaml_line": 4, "line": 0});
+        let finding = Finding::from_issue(&bare);
+        assert_eq!((finding.line, finding.column), (Some(5), None));
     }
 }

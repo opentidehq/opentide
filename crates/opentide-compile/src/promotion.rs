@@ -185,8 +185,8 @@ fn byte(offsets: &[usize], index: usize) -> usize {
 }
 
 fn span<'s>(source: &'s str, offsets: &[usize], node: &Node) -> &'s str {
-    let start = byte(offsets, node.start.index);
-    let end = byte(offsets, node.end.index).max(start);
+    let start = byte(offsets, node.start.index());
+    let end = byte(offsets, node.end.index()).max(start);
     source.get(start..end).unwrap_or_default()
 }
 
@@ -313,15 +313,15 @@ pub fn promote_block_statuses(
                     // starts at its `&name`: rewriting either changes another
                     // value or breaks the alias.
                     let first = source
-                        .get(byte(&offsets, value.start.index)..)
+                        .get(byte(&offsets, value.start.index())..)
                         .and_then(|rest| rest.chars().next());
                     if !seen.insert(Arc::as_ptr(value)) || matches!(first, Some('&' | '*')) {
                         return Err(Error::Refused(format!(
                             "configurations.{name}.status is an anchor or an alias"
                         )));
                     }
-                    let start = byte(&offsets, value.start.index);
-                    let end = scalar_end(source, start, byte(&offsets, value.end.index));
+                    let start = byte(&offsets, value.start.index());
+                    let end = scalar_end(source, start, byte(&offsets, value.end.index()));
                     spans.push((start, end, name.clone(), string_key));
                 }
             }
@@ -392,7 +392,7 @@ pub fn replacement(target: &str) -> Result<String, Error> {
 /// A load error and where it is (`… (line 3, column 27)`).
 pub fn placed(error: &node::LoadError) -> String {
     match &error.mark {
-        Some(mark) => format!("{error} (line {}, column {})", mark.line, mark.column),
+        Some(mark) => format!("{error} (line {}, column {})", mark.line(), mark.column()),
         None => error.to_string(),
     }
 }

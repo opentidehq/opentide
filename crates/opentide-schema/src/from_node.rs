@@ -240,11 +240,7 @@ pub fn from_document<T: FromNode>(document: &Document) -> Result<T, Vec<SchemaEr
     let root: &Node = match document.root() {
         Some(root) => root,
         None => {
-            null = Node::null_at(Mark {
-                index: 0,
-                line: 1,
-                column: 1,
-            });
+            null = Node::null_at(Mark::new(0, 1, 1));
             &null
         }
     };

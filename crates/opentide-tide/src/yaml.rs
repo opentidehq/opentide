@@ -126,8 +126,8 @@ pub(crate) fn written_text(source: &str, node: &Node) -> Option<String> {
         Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) => {
             let written: String = source
                 .chars()
-                .skip(node.start.index)
-                .take(node.end.index.saturating_sub(node.start.index))
+                .skip(node.start.index())
+                .take(node.end.index().saturating_sub(node.start.index()))
                 .collect();
             // A number, boolean or null is one word; an anchor and a tag
             // (`&a !!int 12`) come before it. A tagged one may be quoted

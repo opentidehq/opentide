@@ -67,11 +67,11 @@ impl<'t> Positions<'t> {
         let before = self.text[start..byte].chars().count();
         #[cfg(test)]
         self.scanned.set(self.scanned.get() + (byte - start));
-        Mark {
-            index: self.line_chars[line.saturating_sub(1)] + before,
+        Mark::new(
+            self.line_chars[line.saturating_sub(1)] + before,
             line,
-            column: before + 1,
-        }
+            before + 1,
+        )
     }
 }
 
@@ -93,8 +93,8 @@ pub fn parse(text: &str) -> Result<Node, ParseError> {
                 .next()
                 .unwrap_or("")
                 .to_owned(),
-            line: mark.map(|mark| mark.line),
-            column: mark.map(|mark| mark.column),
+            line: mark.map(|mark| mark.line()),
+            column: mark.map(|mark| mark.column()),
             too_deep: false,
         }
     })?;
@@ -251,7 +251,7 @@ mod tests {
         let b = node.get("b").unwrap();
         let c = b.get("c").unwrap();
         assert_eq!(c.value, Value::Str("x".into()));
-        assert_eq!((c.start.line, c.start.column), (3, 5));
+        assert_eq!((c.start.line(), c.start.column()), (3, 5));
         assert_eq!(
             b.get("d").unwrap().value,
             Value::Datetime("1979-05-27".into())
@@ -321,19 +321,22 @@ mod tests {
             text.len()
         );
         let last = marks.last().unwrap();
-        assert_eq!((last.line, last.column), (2_000, 7));
+        assert_eq!((last.line(), last.column()), (2_000, 7));
         let expected = text[..text.rfind('=').unwrap()].chars().count();
-        assert_eq!(last.index, expected);
+        assert_eq!(last.index(), expected);
         let node = parse(&text).unwrap();
         let value = node.get("k1999").unwrap();
-        assert_eq!((value.start.line, value.start.column), (2_000, 9));
-        assert_eq!(value.start.index, expected + 2);
+        assert_eq!((value.start.line(), value.start.column()), (2_000, 9));
+        assert_eq!(value.start.index(), expected + 2);
     }
 
     #[test]
     fn a_position_after_a_multibyte_character_counts_code_points() {
         let node = parse("a = \"é\"\nb = 1\n").unwrap();
         let b = node.get("b").unwrap();
-        assert_eq!((b.start.line, b.start.column, b.start.index), (2, 5, 12));
+        assert_eq!(
+            (b.start.line(), b.start.column(), b.start.index()),
+            (2, 5, 12)
+        );
     }
 }

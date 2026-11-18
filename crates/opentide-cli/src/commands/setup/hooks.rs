@@ -313,7 +313,7 @@ fn byte_offset(text: &str, index: usize) -> usize {
 /// Whether the node at `index` opens a flow collection.
 fn is_flow(text: &str, node: &Node) -> bool {
     matches!(
-        text[byte_offset(text, node.start.index)..].chars().next(),
+        text[byte_offset(text, node.start.index())..].chars().next(),
         Some('{' | '[')
     )
 }
@@ -376,7 +376,7 @@ fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
     else {
         return Some(format!(
             "{text}repos:\n{}",
-            indented_hook(relative, root.start.column - 1 + 2)
+            indented_hook(relative, root.start.column() - 1 + 2)
         ));
     };
     let repos: &Arc<Node> = &entry.value;
@@ -385,11 +385,11 @@ fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
         && !is_flow(&text, repos)
     {
         let mut lines: Vec<&str> = text.split('\n').collect();
-        let last_item_line = items.last().map_or(0, |item| item.start.line - 1);
+        let last_item_line = items.last().map_or(0, |item| item.start.line() - 1);
         // The sequence ends where the next token starts, after any comments
         // and blank lines; those stay below the new entry.
-        let mut end = repos.end.line - 1;
-        if repos.end.index >= text.chars().count() {
+        let mut end = repos.end.line() - 1;
+        if repos.end.index() >= text.chars().count() {
             end = lines.len() - 1;
         }
         let mut insert_at = end.min(lines.len() - 1);
@@ -398,7 +398,7 @@ fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
         }
         // The `-` of the first entry: its line's indent.
         let dash = lines
-            .get(items[0].start.line - 1)
+            .get(items[0].start.line() - 1)
             .map_or(0, |line| line.len() - line.trim_start_matches(' ').len());
         let block = indented_hook(relative, dash);
         let block = block.trim_end_matches('\n').to_owned();
@@ -413,10 +413,10 @@ fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
     if !empty {
         return None;
     }
-    let start = byte_offset(&text, repos.start.index);
-    let end = byte_offset(&text, repos.end.index);
+    let start = byte_offset(&text, repos.start.index());
+    let end = byte_offset(&text, repos.end.index());
     let head = text[..start].trim_end_matches([' ', '\t']);
-    let block = indented_hook(relative, entry.key.start.column - 1 + 2);
+    let block = indented_hook(relative, entry.key.start.column() - 1 + 2);
     Some(format!(
         "{head}\n{}{}",
         block.trim_end_matches('\n'),
