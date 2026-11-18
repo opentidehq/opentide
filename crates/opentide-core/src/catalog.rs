@@ -4,8 +4,9 @@
 //! `toml` builds a whole document (every key, span and string) before it
 //! deserialises, which costs several times the catalog it holds: the Falco
 //! field table's took 5 to 6 MiB at `opentide validate`'s peak, and the
-//! Azure Monitor reference's tens of MiB. Here only one item's document is
-//! alive at a time, and only the catalog's own values are kept.
+//! Azure Monitor reference's tens of MiB. Here the items are parsed a few at
+//! a time (about 4 KiB of text), so only a small document is alive, and
+//! only the catalog's own values are kept.
 //!
 //! The text must be in the form the sync scripts write:
 //!
@@ -35,8 +36,14 @@ pub struct CatalogError {
     pub why: String,
 }
 
-/// The items of the array of tables `[[key]]` in the catalog `text`, each
-/// deserialised on its own; items of another array are skipped.
+/// How much catalog text one parse reads, at most (plus one item): a few
+/// items at a time, so that a parser is not set up per item, and the
+/// document `toml` builds stays small.
+const BATCH_BYTES: usize = 4 * 1024;
+
+/// The items of the array of tables `[[key]]` in the catalog `text`, read a
+/// few at a time (never the whole file); items of another array are
+/// skipped.
 ///
 /// # Errors
 ///
@@ -44,50 +51,51 @@ pub struct CatalogError {
 /// describes.
 pub fn array_items<T: DeserializeOwned>(text: &str, key: &str) -> Result<Vec<T>, CatalogError> {
     let mut items = Vec::new();
-    // The item being read and the line it starts at: `Some` while in one of
-    // `key`'s, `None` in another array's or before the first.
-    let mut item: Option<(String, usize)> = None;
+    // The items of `key` read but not yet parsed, verbatim, and the line the
+    // first starts at.
+    let mut batch = String::new();
+    let mut batch_at = 0;
+    // Whether the current item is one of `key`'s.
+    let mut in_item = false;
     each_line(text, |line, at, kind| {
         match kind {
             Line::Item(name) => {
-                if let Some((done, start)) = item.take() {
-                    items.push(item_of(&done, key, start)?);
+                if batch.len() >= BATCH_BYTES {
+                    items.extend(batch_of::<T>(&batch, key, batch_at)?);
+                    batch.clear();
                 }
-                if name == key {
-                    item = Some((String::new(), at));
-                }
-            }
-            Line::Sub { array, name, sub } => {
-                if let Some((body, _)) = item.as_mut().filter(|_| name == key) {
-                    // `[[key.columns]]` is the item's own `[[columns]]`.
-                    let (open, close) = if array { ("[[", "]]") } else { ("[", "]") };
-                    body.push_str(open);
-                    body.push_str(sub);
-                    body.push_str(close);
-                    body.push('\n');
+                in_item = name == key;
+                if in_item {
+                    if batch.is_empty() {
+                        batch_at = at;
+                    }
+                    batch.push_str(line);
                 }
             }
-            Line::Value => {
-                if let Some((body, _)) = item.as_mut() {
-                    body.push_str(line);
+            Line::Sub | Line::Value => {
+                if in_item {
+                    batch.push_str(line);
                 }
             }
             Line::Preamble | Line::Blank => {}
         }
         Ok(())
     })?;
-    if let Some((done, start)) = item {
-        items.push(item_of(&done, key, start)?);
+    if !batch.is_empty() {
+        items.extend(batch_of::<T>(&batch, key, batch_at)?);
     }
     Ok(items)
 }
 
-/// One item of `[[key]]`, whose text (from its first line, `at`) is `body`.
-fn item_of<T: DeserializeOwned>(body: &str, key: &str, at: usize) -> Result<T, CatalogError> {
-    toml::from_str(body).map_err(|err| CatalogError {
-        line: at,
-        why: format!("[[{key}]]: {err}"),
-    })
+/// The items of `[[key]]` in `body`, a run of them as the catalog writes
+/// them, from line `at`.
+fn batch_of<T: DeserializeOwned>(body: &str, key: &str, at: usize) -> Result<Vec<T>, CatalogError> {
+    let mut parsed: std::collections::BTreeMap<String, Vec<T>> =
+        toml::from_str(body).map_err(|err| CatalogError {
+            line: at,
+            why: format!("[[{key}]] (from this line): {err}"),
+        })?;
+    Ok(parsed.remove(key).unwrap_or_default())
 }
 
 /// The catalog's preamble, the `key = value` lines before its first array,
@@ -119,13 +127,8 @@ enum Line<'a> {
     Preamble,
     /// `[[name]]`: an item of the top-level array `name` starts.
     Item(&'a str),
-    /// `[name.sub]` or `[[name.sub]]` (`array`): a sub-table of the current
-    /// item of `name`.
-    Sub {
-        array: bool,
-        name: &'a str,
-        sub: &'a str,
-    },
+    /// `[name.sub]` or `[[name.sub]]`: a sub-table of the current item.
+    Sub,
     /// A line of the current item.
     Value,
 }
@@ -136,10 +139,29 @@ fn each_line<'t>(
     text: &'t str,
     mut each: impl FnMut(&'t str, usize, Line<'t>) -> Result<(), CatalogError>,
 ) -> Result<(), CatalogError> {
+    // One search over the whole text, not two per line: no value of a
+    // catalog is a multi-line string.
+    for marker in ["\"\"\"", "'''"] {
+        if let Some(found) = text.find(marker) {
+            let line = text[..found].matches('\n').count() + 1;
+            let shown = text[found..].lines().next().unwrap_or_default();
+            return Err(CatalogError {
+                line,
+                why: format!("a multi-line string: {shown:?}"),
+            });
+        }
+    }
     // The top-level array the last header opened, if any.
     let mut array: Option<&str> = None;
     for (index, line) in text.split_inclusive('\n').enumerate() {
         let at = index + 1;
+        // Most lines are an item's values: only their first non-blank byte
+        // is looked at.
+        let first = line.bytes().find(|byte| !matches!(byte, b' ' | b'\t'));
+        if array.is_some() && first != Some(b'[') {
+            each(line, at, Line::Value)?;
+            continue;
+        }
         let trimmed = line.trim_end();
         let refuse = |why: &str| {
             Err(CatalogError {
@@ -147,19 +169,15 @@ fn each_line<'t>(
                 why: format!("{why}: {trimmed:?}"),
             })
         };
-        if trimmed.contains("\"\"\"") || trimmed.contains("'''") {
-            return refuse("a multi-line string");
-        }
         let rest = trimmed.trim_start();
         if !rest.starts_with('[') {
-            let blank = rest.is_empty() || rest.starts_with('#');
-            let kind = match (array, blank) {
-                (_, true) if array.is_none() => Line::Blank,
-                (None, false) if rest.len() == trimmed.len() && rest.contains('=') => {
-                    Line::Preamble
-                }
-                (None, false) => return refuse("not a `key = value` line before the first array"),
-                _ => Line::Value,
+            // Before the first array: comments, blank lines and the preamble.
+            let kind = if rest.is_empty() || rest.starts_with('#') {
+                Line::Blank
+            } else if rest.len() == trimmed.len() && rest.contains('=') {
+                Line::Preamble
+            } else {
+                return refuse("not a `key = value` line before the first array");
             };
             each(line, at, kind)?;
             continue;
@@ -178,18 +196,12 @@ fn each_line<'t>(
             }
             Header { sub: None, .. } => return refuse("a top-level table, not an array item"),
             Header {
-                array: nested,
-                top,
-                sub: Some(sub),
+                top, sub: Some(_), ..
             } => {
                 if array != Some(top) {
                     return refuse("a sub-table outside its array's last item");
                 }
-                Line::Sub {
-                    array: nested,
-                    name: top,
-                    sub,
-                }
+                Line::Sub
             }
         };
         each(line, at, kind)?;

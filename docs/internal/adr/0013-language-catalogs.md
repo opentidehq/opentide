@@ -24,7 +24,7 @@ times the catalog it holds:
 | Catalog | File | Whole-document parse | Catalog kept |
 |---|---:|---:|---:|
 | KQL Azure Monitor reference | 3.4 MB | ~25 MiB transient (#1503) | ~6 MiB |
-| Falco `fields.toml` | 244 KB | 5–6 MiB transient, `validate`'s peak (#1071) | < 1 MiB |
+| Falco `fields.toml` | 244 KB | 5–6 MiB transient, `validate`'s peak (#1071) | under 1 MiB |
 
 The document is freed as soon as the catalog is built. But catalogs build lazily, the first time a
 query of their language is analysed, so on a busy run the build lands at the run's peak. On a rayon
