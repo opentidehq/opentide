@@ -136,9 +136,11 @@ Lucene's short queries that, and the per-node vectors around it, was most of the
 
 - **One preorder walk over every element.** Nodes and tokens, in document order, from one stack
   and a scratch vector reused for each node's children. The walk hands each named element to the
-  checks, with its ancestors, and each token to the highlight. Lucene's `tree::walk_once` is the
-  model: it calls the checks exactly as the named-only walk did, and meets the tokens exactly as
-  `descendants_with_tokens` did, which a test holds over the corpus and every prefix.
+  checks, with its ancestors, and each token to the highlight. The walk is
+  `opentide_parse::walk_once`, with `opentide_parse::Ancestors` for a language that keeps the
+  ancestors in its own type; Lucene's `tree::walk_once` shows the use: it calls the checks exactly
+  as the named-only walk did, and meets the tokens exactly as `descendants_with_tokens` did, which
+  a test holds over the short samples and every prefix of them. A new language's single walk uses it, not a copy.
 - **Only where the highlight reads the same text.** A dialect that checks a rewritten text
   (Carbon Black's joined lines) keeps its own highlight pass.
 - **Find one child without collecting all.** A search for the first child of a kind is a lazy
