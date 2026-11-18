@@ -503,3 +503,48 @@ fn the_live_check_fails_every_rule_when_credentials_cannot_be_read() {
         found.result
     );
 }
+
+/// A tenant that refuses the token on a rule (a 401 on the create) fails
+/// there: the other rule is not attempted, naming the tenant, and Google
+/// SecOps is not deployed.
+#[test]
+fn a_tenant_refusing_the_token_on_a_rule_stops_and_is_not_deployed() {
+    let runtime = runtime();
+    let server = runtime.block_on(async {
+        let server = MockServer::start().await;
+        mount_token(&server).await;
+        mount_verify(
+            &server,
+            serde_json::json!({"success": true, "allowedRunFrequencies": ["LIVE", "HOURLY", "DAILY"]}),
+        )
+        .await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/{}/rules", resource())))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server)
+            .await;
+        server
+    });
+    let (ws, env) = workspace(&server.uri(), "STAGING");
+    let second = process_rule("STAGING")
+        .replace(UUID, "00000000-0000-4000-8099-000000000221")
+        .replacen("name: ", "name: Second ", 1);
+    std::fs::write(ws.path().join("objects/rules/second.yaml"), second).unwrap();
+    let (sent, stderr) = deploy(ws.path(), &env);
+    runtime.block_on(server.verify());
+    assert_eq!(
+        value(&sent.result, "deployed"),
+        &Json::Array(Vec::new()),
+        "{stderr}"
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["failed", "not_attempted"], "{stderr}");
+    let Json::Array(results) = value(&sent.result, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(
+        results[1].get("reason").and_then(Json::as_str),
+        Some("not attempted: tenant secops-eu failed")
+    );
+}
