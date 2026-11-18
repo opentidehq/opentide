@@ -16,7 +16,7 @@ CQL is closed source. There is no reference parser to port (Falco has libsinsp) 
 | Data | LogScale built-in fields and tags; Falcon sensor events and fields from redistributable sources only; CrowdStrike Parsing Standard (CPS, ECS-based) fields | `data/catalogs/cql/events.toml`, `data/catalogs/cql/fields.toml` |
 | Correlation rules | the Next-Gen SIEM correlation-rule API (FalconPy, gofalcon, the CrowdStrike Terraform provider) and the `correlate()` reference | `crates/opentide-cql/src/check.rs` (`correlation_rule`) |
 
-CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `grammar.js`, and catalog summaries are written for this repository. Facts (names, parameter names, types, defaults, enums) are generated.
+CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `crates/opentide-cql/src/parser.rs` and `src/cql.ungram`, and catalog summaries are written for this repository. Facts (names, parameter names, types, defaults, enums) are generated.
 
 ## Conformance results
 

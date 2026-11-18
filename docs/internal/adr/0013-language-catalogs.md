@@ -133,7 +133,7 @@ the item-by-item heap is still a large share of a command's peak, not before.
      catalog that does not read is a bug the tests catch, never a user's input);
    - indexes it (by name, by class) once, in the same build.
 3. **Tests.** The equality test of §2, and a test that `cached()` loads with the expected counts.
-4. **The add-language skill** lists these steps (`.agents/skills/add-language/SKILL.md`, step 6), and
+4. **The add-language skill** lists these steps (`.agents/skills/add-language/SKILL.md`, step 3), and
    `catalogs` describes the format.
 
 ## Consequences
