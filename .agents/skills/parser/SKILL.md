@@ -78,7 +78,8 @@ first line (`// prod:take_operator valid`). `crates/opentide-analysis/tests/corp
 reads each language through its crate's hidden `debug_kinds` / `debug_node_kinds` (KQL,
 CQL and ES|QL through their own names): every node kind is tagged or listed as structural, each
 `<rule>__valid` fixture parses and contains its rule, and each required rule has a valid and an
-invalid fixture. Tags are the tree-sitter rule names the fixtures were written for; a kind spelt
+invalid fixture. A new language tags its fixtures with its own `SyntaxKind` names. The older
+languages' tags are the rule names their fixtures were first written for; a kind spelt
 otherwise is translated in the gate's table (`EQL_TAGS`, `YARAL_TAGS`, `YARA_TAGS`), and a token
 counts only as a production the language lists in its `*_TOKENS`. A new node kind gets a fixture
 or a structural entry with the reason.
