@@ -113,21 +113,17 @@ plan_rss_mib = 171.0
 baseline_s = 2.731
 baseline_rss_mib = 190.1
 target_s = 0.7
-# Plan section 11: <= 100 MB, enforced as MiB (100e6 bytes).
-target_rss_mib = 95.4
-# Missed. The peak was the KQL catalogs parsed through a whole toml_edit document
-# (massif; 140.3 MiB on the EPYC 7763, run 43450448595, PR #1055). #1071 parses the
-# Azure Monitor and ASIM catalogs one array item at a time and shares the reference's
-# column strings (description, table, profile, citation) between the catalogs.
-# `cargo xtask bench`, one 4-vCPU Xeon @ 2.30 GHz: 143.8/144.7 MiB before; 111.3/109.9
-# after the item-by-item read; 107.2/103.5/103.5 after the sharing (lint 149.5/147.5 to
-# 110.5/109.5/109.1). The rest is structural, not a transient: the binary's touched
-# pages (about 30 MiB, the catalogs compiled in), the workspace's parsed objects (about
-# 20 MiB of node trees for 4.5 MB of YAML, alive for the run), the engines' catalogs
-# and the allocator's six thread arenas. Meeting 95.4 MiB needs a lighter workspace
-# tree or catalogs that are not resident (#1071).
-rss_waiver = "#1071, the parsed workspace and the resident catalogs"
-waived_rss_mib = 103.5
+# Plan section 11 asks <= 100 MB (95.4 MiB). #1071 met it and ratchets the target to
+# what CI measures plus the policy's RSS noise floor (2.0 MiB), so the gains are kept and
+# a regression fails: bench run 44410574033 (integration bc72123e, ubuntu-24.04,
+# AMD EPYC 9V45) measured 84.3 MiB, where the waiver allowed 103.5. What took it there:
+# the engine catalogs read item by item and built once (ADR 0013; #1568, #1569, #1572,
+# KQL's core files in #1609), smaller YAML nodes (Mark in u32s, #1583; short strings
+# inline, #1604), the KQL catalogs' shared names and types (#1609), and the bundled
+# vocabularies read item by item with their descriptions left until asked for (#1619).
+# The rest is the binary's touched pages, the workspace's node trees (#1595 holds the
+# arena that would shrink them) and the engines' resident catalogs.
+target_rss_mib = 86.3
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
