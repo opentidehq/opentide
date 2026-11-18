@@ -78,7 +78,7 @@ Listed at the end of Phase 0 and not checked again since; the release's own step
 - The engine release-candidate tag, and the `opentidehq/vscode-extension` pull request that pins it.
 - The `.claude/settings.json` allow-list.
 - Transfer language-server's 9 open issues to this repository.
-- Run `mutants.yml` once to record the mutation baseline (#855).
+- Mutation testing was a time-boxed experiment, not a recurring job (#844): its results and how to rerun it by hand are in [test-strength.md](test-strength.md#mutation-testing).
 - Optional: set the repository variable `PARITY_COMMIT` (#855).
 - [#788](https://github.com/opentidehq/opentide/pull/788) (CrowdStrike offline checks) needs a repin to engine 0.12.0 when it is scheduled.
 
@@ -221,7 +221,7 @@ For every command path in `opentide --json commands`, every output mode (`human`
 | HTTP | recorded cassettes | Connectors: method, URL, headers (secrets redacted) and body byte-equal to the Python client's; replayed with wiremock |
 | Payload | byte-equality | Deploy compile output per platform and rule |
 | Conformance | cross-SDK | The same corpus through Rust, Python and Node: identical documents |
-| Strength | cargo-llvm-cov, cargo-mutants | Coverage gates per crate (90% for schema and workspace); mutation score tracked for schema and workspace |
+| Strength | cargo-llvm-cov, cargo-mutants | Coverage gates per crate (90% for schema and workspace); mutation testing of schema and workspace once, as a time-boxed experiment (#844), rerun by hand |
 | API | cargo-semver-checks | The facade |
 | Performance | xtask bench | Budgets in [Metrics](#11-metrics); a regression over 10% fails |
 

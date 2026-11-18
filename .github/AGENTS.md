@@ -289,10 +289,6 @@ Where each of language-server's workflow jobs went (or why it was dropped):
 - [`coverage.yml`](workflows/coverage.yml), in the nightly (nightly.yml calls it) and on demand: job **Rust coverage gates**. One cargo-llvm-cov build measured by the workspace's Rust tests and by the whole Python
   suite, which drives `opentide._native`; `cargo xtask coverage gate` checks each crate against
   `xtask/coverage.toml`. Read-only.
-- [`mutants.yml`](workflows/mutants.yml), weekly and on demand: cargo-mutants on the crates of
-  `xtask/mutants.toml` in eight shards, a report against `xtask/mutants-baseline.toml`, and on the
-  schedule only a job with `issues: write` (no checkout, no repository code) that opens or updates
-  one issue per crate above its threshold.
 - The parity dashboard (`parity.yml`) was retired with the Python implementation (UC-6.2, #841): every command runs on Rust.
 
 ## Releases
