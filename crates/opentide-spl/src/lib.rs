@@ -1185,6 +1185,15 @@ fn push_param(out: &mut Vec<ParameterInformation>, raw: &str) {
     });
 }
 
+/// Whether `source` parses without an error: the parse alone, with no
+/// analysis, for the throughput benchmark (`cargo bench --bench throughput`, ADR
+/// 0014). Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn parses(source: &str) -> bool {
+    syntax::parse(source).1.errors.is_empty()
+}
+
 /// Whether the grammar reports an error in `source`, and the `Debug` names of
 /// the kinds of its tree, nodes and tokens in preorder: what the corpus gate of
 /// `opentide-analysis` reads. Not part of the API.

@@ -7,10 +7,11 @@ use opentide_core::{ByteSpan, LanguageId};
 use opentide_tide::{DocumentSymbol, InjectedQuery, injection_at_offset, remap_span};
 use opentide_yara::editor;
 
-/// Rules and strings of a `.yar` file, for the document outline.
-pub(crate) fn symbols(text: &str) -> Vec<DocumentSymbol> {
+/// Rules and strings of a `.yar` file, for the document outline: the
+/// engine's `symbols`, in `text`'s document coordinates.
+pub(crate) fn outline(text: &str, symbols: Vec<editor::Symbol>) -> Vec<DocumentSymbol> {
     let lines = opentide_core::LineIndex::new(text);
-    editor::symbols(text)
+    symbols
         .into_iter()
         .map(|s| DocumentSymbol {
             name: s.name,
