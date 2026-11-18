@@ -2863,7 +2863,6 @@ dependencies = [
  "opentide-parse",
  "rowan",
  "serde",
- "toml",
 ]
 
 [[package]]
@@ -2892,7 +2891,6 @@ dependencies = [
  "regex-syntax",
  "rowan",
  "serde",
- "toml",
 ]
 
 [[package]]
@@ -2996,7 +2994,6 @@ dependencies = [
  "rowan",
  "serde",
  "strsim",
- "toml",
 ]
 
 [[package]]
@@ -3049,7 +3046,6 @@ dependencies = [
  "rowan",
  "serde",
  "strsim",
- "toml",
 ]
 
 [[package]]

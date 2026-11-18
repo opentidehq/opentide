@@ -87,21 +87,23 @@ pub struct ActivityType {
     pub outcomes: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Deserialize))]
 struct FieldsFile {
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     prefixes: Vec<Prefix>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     fields: Vec<Field>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Deserialize))]
 struct ValuesFile {
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     outcomes: Vec<String>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     subjects: Vec<Subject>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     activity_types: Vec<ActivityType>,
 }
 
@@ -117,18 +119,35 @@ pub struct Catalog {
     names: Candidates,
 }
 
+/// `values.toml`'s preamble: the outcomes.
+#[derive(Deserialize)]
+struct ValuesPreamble {
+    #[serde(default)]
+    outcomes: Vec<String>,
+}
+
+/// Reads the compiled-in files item by item ([`opentide_core::catalog`]).
+fn files() -> (FieldsFile, ValuesFile) {
+    use opentide_core::catalog::{array_items, compiled_in, preamble};
+    const FIELDS: &str = "data/catalogs/exabeam/fields.toml";
+    const VALUES: &str = "data/catalogs/exabeam/values.toml";
+    let fields = FieldsFile {
+        prefixes: compiled_in(FIELDS, array_items(FIELDS_TOML, "prefixes")),
+        fields: compiled_in(FIELDS, array_items(FIELDS_TOML, "fields")),
+    };
+    let values = ValuesFile {
+        outcomes: compiled_in(VALUES, preamble::<ValuesPreamble>(VALUES_TOML)).outcomes,
+        subjects: compiled_in(VALUES, array_items(VALUES_TOML, "subjects")),
+        activity_types: compiled_in(VALUES, array_items(VALUES_TOML, "activity_types")),
+    };
+    (fields, values)
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "the catalogs are compiled in with include_str! and parsed by the tests"
-    )]
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let fields: FieldsFile =
-                toml::from_str(FIELDS_TOML).expect("data/catalogs/exabeam/fields.toml");
-            let values: ValuesFile =
-                toml::from_str(VALUES_TOML).expect("data/catalogs/exabeam/values.toml");
+            let (fields, values) = files();
             let by_name = fields
                 .fields
                 .iter()
@@ -293,6 +312,16 @@ fn suggestion_limit(text: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let (fields, values) = files();
+        let whole: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
+        assert_eq!(format!("{fields:?}"), format!("{whole:?}"));
+        let whole: ValuesFile = toml::from_str(VALUES_TOML).unwrap();
+        assert_eq!(format!("{values:?}"), format!("{whole:?}"));
+    }
 
     #[test]
     fn catalogue_loads_the_cim_and_the_platform_fields() {

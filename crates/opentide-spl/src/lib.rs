@@ -63,10 +63,11 @@ const OPTIONS_TOML: &str = include_str!(concat!(
     "/data/catalogs/spl/command-options.toml"
 ));
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Deserialize))]
 struct CommandsFile {
     commands: Vec<CommandRow>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     functions: Vec<FunctionRow>,
 }
 
@@ -93,7 +94,8 @@ pub struct FunctionRow {
     pub citation: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Deserialize))]
 struct FieldsFile {
     fields: Vec<FieldRow>,
 }
@@ -108,10 +110,11 @@ pub struct FieldRow {
     pub citation: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Deserialize))]
 struct DatamodelsFile {
     /// Data models known by name only (no dataset rows).
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     models: Vec<String>,
     datamodels: Vec<DatamodelRow>,
 }
@@ -162,7 +165,8 @@ impl DatamodelRow {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Deserialize))]
 struct MacrosFile {
     macros: Vec<MacroRow>,
 }
@@ -175,7 +179,8 @@ pub struct MacroRow {
     pub citation: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Deserialize))]
 struct OptionsFile {
     options: Vec<CommandOption>,
 }
@@ -202,17 +207,51 @@ pub struct Catalog {
     pub options: Vec<CommandOption>,
 }
 
+/// `datamodels.toml`'s preamble: the data models known by name only.
+#[derive(Deserialize)]
+struct DatamodelsPreamble {
+    #[serde(default)]
+    models: Vec<String>,
+}
+
+/// Reads the compiled-in files item by item ([`opentide_core::catalog`]).
+fn files() -> (
+    CommandsFile,
+    FieldsFile,
+    DatamodelsFile,
+    MacrosFile,
+    OptionsFile,
+) {
+    use opentide_core::catalog::{CatalogError, array_items, compiled_in, preamble};
+    fn read<T>(file: &str, result: Result<T, CatalogError>) -> T {
+        compiled_in(&format!("data/catalogs/spl/{file}"), result)
+    }
+    let commands = CommandsFile {
+        commands: read("commands.toml", array_items(COMMANDS_TOML, "commands")),
+        functions: read("commands.toml", array_items(COMMANDS_TOML, "functions")),
+    };
+    let fields = FieldsFile {
+        fields: read("fields.toml", array_items(FIELDS_TOML, "fields")),
+    };
+    let datamodels = DatamodelsFile {
+        models: read::<DatamodelsPreamble>("datamodels.toml", preamble(DATAMODELS_TOML)).models,
+        datamodels: read(
+            "datamodels.toml",
+            array_items(DATAMODELS_TOML, "datamodels"),
+        ),
+    };
+    let macros = MacrosFile {
+        macros: read("macros.toml", array_items(MACROS_TOML, "macros")),
+    };
+    let options = OptionsFile {
+        options: read("command-options.toml", array_items(OPTIONS_TOML, "options")),
+    };
+    (commands, fields, datamodels, macros, options)
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-    )]
     pub fn load() -> Self {
-        let file: CommandsFile = toml::from_str(COMMANDS_TOML).expect("commands.toml");
-        let fields: FieldsFile = toml::from_str(FIELDS_TOML).expect("fields.toml");
-        let datamodels: DatamodelsFile = toml::from_str(DATAMODELS_TOML).expect("datamodels.toml");
-        let macros: MacrosFile = toml::from_str(MACROS_TOML).expect("macros.toml");
-        let options: OptionsFile = toml::from_str(OPTIONS_TOML).expect("command-options.toml");
+        let (file, fields, datamodels, macros, options) = files();
         Self {
             commands: file.commands,
             functions: file.functions,
@@ -1116,6 +1155,26 @@ pub fn debug_node_kinds() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        fn whole<T: serde::de::DeserializeOwned + std::fmt::Debug>(text: &str) -> String {
+            format!("{:?}", toml::from_str::<T>(text).unwrap())
+        }
+        let (commands, fields, datamodels, macros, options) = files();
+        assert_eq!(
+            format!("{commands:?}"),
+            whole::<CommandsFile>(COMMANDS_TOML)
+        );
+        assert_eq!(format!("{fields:?}"), whole::<FieldsFile>(FIELDS_TOML));
+        assert_eq!(
+            format!("{datamodels:?}"),
+            whole::<DatamodelsFile>(DATAMODELS_TOML)
+        );
+        assert_eq!(format!("{macros:?}"), whole::<MacrosFile>(MACROS_TOML));
+        assert_eq!(format!("{options:?}"), whole::<OptionsFile>(OPTIONS_TOML));
+    }
 
     /// #179: tree-sitter's `prev_sibling()` cycled between a MISSING `)` and a
     /// zero-width node, so `analyze` never returned on this query.
