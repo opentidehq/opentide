@@ -53,7 +53,8 @@ never by hand. The script writes it in the form the loader reads:
 
 Headers are bare names, at the start of the line, with nothing after them. No value is a `"""` or
 `'''` string; a script writes strings with JSON escaping (`json.dumps`), which TOML reads as basic
-strings.
+strings. A key written after a preamble table belongs to that table, as in any TOML, so a script
+writes its top-level keys before its first table.
 
 TOML stays because the files are reviewed in pull requests and diffed when upstream changes;
 JSON or a binary form would lose that. The engine crates `include_str!` the files (they stay I/O-free).
@@ -70,8 +71,9 @@ A crate reads a catalog with two functions:
 No engine crate calls `toml::from_str` on a whole catalog file.
 
 **What the loader checks, and what the test must.** The loader checks every line's form, and
-refuses, with the line, a header it cannot read, a multi-line string, or a line outside the items
-it reads that does not even look like `key = value`. It parses only the items of the array asked for:
+refuses, with the line, a header it cannot read, a multi-line string, or a line it does not parse
+where it reads it (the preamble, another array's item) that does not even look like TOML
+(`key = value`, a value's continuation, a comment). It parses only the items of the array asked for:
 the other arrays' items and the preamble are not parsed by that call (that is what keeps a read
 cheap). So on its own it does not catch everything `toml` would, such as a duplicate key in another
 array or a preamble key named like an array.
@@ -126,7 +128,9 @@ the item-by-item heap is still a large share of a command's peak, not before.
 2. **Code.** The crate's `catalog.rs`:
    - `include_str!`s the files;
    - defines the row types (`#[derive(Debug, Deserialize)]`);
-   - builds `Catalog` in `Catalog::cached()` with `array_items` and `preamble`;
+   - builds `Catalog` in `Catalog::cached()` with `array_items` and `preamble`, each result
+     through `opentide_core::catalog::compiled_in` (which panics naming the file: a compiled-in
+     catalog that does not read is a bug the tests catch, never a user's input);
    - indexes it (by name, by class) once, in the same build.
 3. **Tests.** The equality test of §2, and a test that `cached()` loads with the expected counts.
 4. **The add-language skill** lists these steps (`.agents/skills/add-language/SKILL.md`, step 6), and
@@ -141,8 +145,8 @@ the item-by-item heap is still a large share of a command's peak, not before.
   ADR's PR).
 - **The format is checked.** A generator that writes a multi-line string, a commented header or an
   indented table fails the equality test.
-- **The rollout.** Falco is the reference (this ADR's PR). CQL, YARA, ES|QL, YARA-L, EQL, SPL,
-  Exabeam, Lucene (Carbon Black) and the KQL core files follow, one PR at a time, each measured.
+- **The rollout.** Falco is the reference (this ADR's PR). CQL, YARA, ES|QL and YARA-L followed;
+  EQL, SPL, Exabeam, Lucene (Carbon Black) and the KQL core files follow, each measured.
 - **Not covered:** the Tide vocabularies (`src/opentide/data/vocabulary/`), read by opentide-schema
   with their own reader, follow separately (#1071 item 6). So does the ECS catalog, which is JSON
   read with `serde_json`, which streams and builds no document.

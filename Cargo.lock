@@ -3383,6 +3383,7 @@ name = "opentide-core"
 version = "0.12.0"
 dependencies = [
  "indexmap",
+ "memchr",
  "regex",
  "saphyr",
  "saphyr-parser",

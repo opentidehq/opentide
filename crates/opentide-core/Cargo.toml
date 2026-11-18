@@ -21,6 +21,9 @@ serde.workspace = true
 # by serde_json, without its `preserve_order` feature (see the module).
 serde_json.workspace = true
 indexmap = "2"
+# `catalog`: one SIMD search of a catalog's text for a multi-line string
+# marker (already in the tree through regex).
+memchr = "2"
 toml.workspace = true
 thiserror.workspace = true
 strsim.workspace = true

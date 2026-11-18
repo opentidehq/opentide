@@ -20,10 +20,14 @@
 //!
 //! Every header is written exactly so (bare names, at the start of the line,
 //! nothing after it), and no value is a `"""` or `'''` string (one inside a
-//! `"..."` string or a comment is fine).
+//! `"..."` or `'...'` string, or in a comment, is fine). A key written after a
+//! preamble table belongs to that table, as in any TOML: a top-level key goes
+//! before the first table.
 //!
 //! What this checks, and what it does not: every line's form is checked, and
-//! a line outside the items read must at least look like `key = value`; the
+//! a line that is not parsed where it is read (the preamble, another array's
+//! item) must at least look like TOML (`key = value`, a value's
+//! continuation, a comment); the
 //! items of the array asked for are parsed, the other arrays' items and the
 //! preamble are not (that is what keeps a read cheap). So a duplicate key in
 //! another array, or a preamble key named like an array, is not caught here.
@@ -88,21 +92,8 @@ pub fn array_items<T: DeserializeOwned>(text: &str, key: &str) -> Result<Vec<T>,
                 if in_item {
                     batch.push_str(line);
                 } else {
-                    // Another array's line, not parsed here: it must at least
-                    // look like a value, a value's continuation (indented, or
-                    // its closing `]`), a comment or nothing.
-                    let rest = line.trim();
-                    let continued = line.starts_with([' ', '\t']) || rest.starts_with(']');
-                    if !(rest.is_empty()
-                        || rest.starts_with('#')
-                        || rest.contains('=')
-                        || continued)
-                    {
-                        return Err(CatalogError {
-                            line: at,
-                            why: format!("not a `key = value` line: {rest:?}"),
-                        });
-                    }
+                    // Another array's line, not parsed here.
+                    looks_like_toml(line, at)?;
                 }
             }
             Line::Preamble | Line::Blank => {}
@@ -148,16 +139,22 @@ fn batch_of<T: DeserializeOwned>(
     })
 }
 
-/// The catalog's preamble, the `key = value` lines before its first array,
-/// deserialised as `T`.
+/// The catalog's preamble, the values and tables before its first array,
+/// deserialised as `T`. Only the text before the first array is read.
 ///
 /// # Errors
 ///
 /// The preamble does not deserialise as `T`, or the text is not in the form
 /// the module describes.
 pub fn preamble<T: DeserializeOwned>(text: &str) -> Result<T, CatalogError> {
+    // Headers start their line: the preamble ends at the first `[[`.
+    let end = if text.starts_with("[[") {
+        0
+    } else {
+        text.find("\n[[").map_or(text.len(), |at| at + 1)
+    };
     let mut body = String::new();
-    each_line(text, |line, _, kind| {
+    each_line(&text[..end], |line, _, kind| {
         if matches!(kind, Line::Preamble) {
             body.push_str(line);
         }
@@ -240,6 +237,7 @@ fn each_line<'t>(
             let kind = if rest.is_empty() || rest.starts_with('#') {
                 Line::Blank
             } else {
+                looks_like_toml(line, at)?;
                 Line::Preamble
             };
             each(line, at, kind)?;
@@ -283,30 +281,40 @@ fn each_line<'t>(
     Ok(())
 }
 
+/// Refuses a line that is not parsed where it is read (the preamble, another
+/// array's item) unless it at least looks like TOML: `key = value`, a
+/// value's continuation (indented and starting like a value, or the closing
+/// `]` or `}`), a comment or nothing.
+fn looks_like_toml(line: &str, at: usize) -> Result<(), CatalogError> {
+    let rest = line.trim();
+    let continued = line.starts_with([' ', '\t'])
+        && (rest.starts_with(['"', '\'', '[', '{', '+', '-'])
+            || rest.starts_with(|c: char| c.is_ascii_digit())
+            || rest.starts_with("true")
+            || rest.starts_with("false"));
+    if rest.is_empty()
+        || rest.starts_with('#')
+        || rest.contains('=')
+        || rest.starts_with([']', '}'])
+        || continued
+    {
+        return Ok(());
+    }
+    Err(CatalogError {
+        line: at,
+        why: format!("not a `key = value` line: {rest:?}"),
+    })
+}
+
 /// Where `text` has a `"""` or `'''` that could start a multi-line string:
-/// not in a comment line, and not inside a `"..."` string on its line (the
-/// scripts write strings with JSON escaping, so `'''` may be in one). One
-/// search over the whole text, not a check per line.
+/// not in a comment, and not inside a `"..."` or `'...'` string on its line
+/// (the scripts write strings with JSON escaping, so `'''` may be in one).
+/// One search over the whole text, not a check per line.
 fn multi_line_string(text: &str) -> Option<CatalogError> {
     for marker in ["\"\"\"", "'''"] {
-        for (found, _) in text.match_indices(marker) {
+        for found in memchr::memmem::find_iter(text.as_bytes(), marker) {
             let start = text[..found].rfind('\n').map_or(0, |at| at + 1);
-            let before = &text[start..found];
-            if before.trim_start().starts_with('#') {
-                continue;
-            }
-            // Inside a basic string: an odd number of unescaped `"` before.
-            let mut quotes = 0;
-            let mut escaped = false;
-            for byte in before.bytes() {
-                match (escaped, byte) {
-                    (true, _) => escaped = false,
-                    (false, b'\\') => escaped = true,
-                    (false, b'"') => quotes += 1,
-                    _ => {}
-                }
-            }
-            if quotes % 2 == 1 {
+            if in_string_or_comment(&text[start..found]) {
                 continue;
             }
             let shown = text[start..].lines().next().unwrap_or_default();
@@ -317,6 +325,30 @@ fn multi_line_string(text: &str) -> Option<CatalogError> {
         }
     }
     None
+}
+
+/// Whether the end of `before`, the start of a line, is inside a basic or
+/// literal string, or a comment.
+fn in_string_or_comment(before: &str) -> bool {
+    #[derive(Clone, Copy, PartialEq)]
+    enum At {
+        Code,
+        Basic,
+        Escaped,
+        Literal,
+    }
+    let mut at = At::Code;
+    for byte in before.bytes() {
+        at = match (at, byte) {
+            (At::Code, b'#') => return true,
+            (At::Code, b'"') | (At::Escaped, _) => At::Basic,
+            (At::Code, b'\'') => At::Literal,
+            (At::Basic, b'\\') => At::Escaped,
+            (At::Basic, b'"') | (At::Literal, b'\'') => At::Code,
+            (state, _) => state,
+        };
+    }
+    at != At::Code
 }
 
 /// A table header as the sync scripts write it: `[[top]]`, `[[top.sub]]` or
@@ -448,8 +480,16 @@ mod tests {
                 "a literal multi-line string on one line",
             ),
             (
-                "[[t]]\ndoc = \"a\" # '''\n",
-                "a marker after a string, outside it",
+                "[[t]]\nk = '\"'\nv = '''\nx\n'''\n",
+                "a marker after a literal string holding a quote",
+            ),
+            (
+                "garbage\n[[t]]\nk = 1\n",
+                "a preamble line that is not TOML",
+            ),
+            (
+                "[[u]]\n  stray words\n[[t]]\nk = 1\n",
+                "an indented stray line",
             ),
             ("[[t]]\nname = \n", "an item that does not parse"),
         ] {
@@ -458,6 +498,9 @@ mod tests {
         let error =
             array_items::<toml::Value>("[[t]]\nname = \"a\"\n[[t]] # c\n", "t").unwrap_err();
         assert_eq!(error.line, 3);
+        // A marker in a comment after a value is no multi-line string.
+        let commented: Vec<toml::Value> = array_items("[[t]]\ndoc = \"a\" # '''\n", "t").unwrap();
+        assert_eq!(commented.len(), 1);
         // Another array's line that is not even `key = value`.
         assert!(
             array_items::<toml::Value>("[[u]]\nthis is not toml\n[[t]]\nk = 1\n", "t").is_err()
