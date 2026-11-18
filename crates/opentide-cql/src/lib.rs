@@ -54,6 +54,15 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
+/// Whether `source` parses without an error: the parse alone, with no
+/// analysis, for the throughput benchmark (`cargo bench --bench throughput`, ADR
+/// 0014). Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn parses(source: &str) -> bool {
+    parser::parse(source).1.errors.is_empty()
+}
+
 /// The node and token kinds of a parse of `source`, by their `snake_case` names, and
 /// whether it has a syntax error: what the corpus gate reads
 /// (`crates/opentide-analysis/tests/corpus_gate.rs`). Not part of the API.
