@@ -503,7 +503,7 @@ impl Canceller {
 
 /// Runs `work` (a [`Connection`]'s operation) to completion on the
 /// process's tokio runtime, for a synchronous caller. Call it outside any
-/// async runtime, a `spawn_blocking` thread of one included (a thread that
+/// async runtime, a `spawn_blocking` thread of one of yours included (a thread that
 /// has a runtime's handle may be driving it, and blocking there would
 /// panic); inside one, await the operation instead.
 ///
@@ -514,6 +514,26 @@ impl Canceller {
 /// a runtime), where blocking is refused rather than tokio's panic.
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, Error> {
     opentide_connectors::runtime::block_on(work).map_err(|message| Error::Connector {
+        code: RUNTIME_UNAVAILABLE,
+        platform: String::new(),
+        tenant: String::new(),
+        message,
+        detail: None,
+    })
+}
+
+/// The process's tokio runtime, the one [`block_on`] drives: started by its
+/// first caller and never dropped. For the language bindings, which await
+/// the operations on it (Node's promises, Python's awaitables), so that a
+/// process starts one runtime whichever way it reaches a tenant (#1558).
+///
+/// # Errors
+///
+/// [`Error::Connector`] with the code `runtime_unavailable`: the runtime
+/// cannot start.
+#[doc(hidden)]
+pub fn runtime() -> Result<&'static tokio::runtime::Runtime, Error> {
+    opentide_connectors::runtime::shared().map_err(|message| Error::Connector {
         code: RUNTIME_UNAVAILABLE,
         platform: String::new(),
         tenant: String::new(),

@@ -8,7 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
-- If you call `opentide::connectors::block_on` (or `opentide_connectors::runtime::block_on`) on a thread of your own tokio runtime, a `spawn_blocking` thread included, await the operation there instead: the call now runs on the process's one runtime and answers the code `runtime_unavailable` on a thread that has a runtime's handle, where it used to start a runtime of its own.
+- If you call `opentide::connectors::block_on` (or `opentide_connectors::runtime::block_on`) on a thread of a tokio runtime of your own, a `spawn_blocking` thread included, await the operation there instead: the call now runs on the process's one runtime and answers the code `runtime_unavailable` on a thread that has a runtime's handle, where it used to start a runtime of its own.
 - If you read `opentide_schema::configuration::models::HarfangLabSetup::r#type` or call `opentide_connectors::harfanglab::Client::kind`, drop it: a HarfangLab tenant takes both kinds (platform-harfanglab 1.6), and each rule's block names its own (`opentide_compile::harfanglab::Kind::of`). `opentide_connectors::harfanglab::Kind` is now a re-export of `opentide_compile::harfanglab::Kind`.
 - If you build a HarfangLab `DeployRequest`, send the body `opentide_compile::harfanglab::request_body(kind, Some(&rule))` (`{"kind": .., "rule": ..}`), and `request_body(kind, None)` for a delete: the HarfangLab `Deployer` reads the kind from it and fails a body without one with `harfanglab::REQUEST_INVALID`.
 - If you call `opentide_connectors::plugin::with_plugins(host)`, pass the environment the built-in connectors read too: `with_plugins(host, &environment)` (`&Environment::process()` for the process's).

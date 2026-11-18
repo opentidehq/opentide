@@ -349,13 +349,9 @@ fn runtime() -> PyResult<()> {
     static READY: OnceLock<Result<(), String>> = OnceLock::new();
     READY
         .get_or_init(|| {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("opentide-sdk")
-                .build()
-                .map_err(|error| format!("cannot start the network runtime: {error}"))?;
-            // The runtime lives as long as the process, as the module does.
-            pyo3_async_runtimes::tokio::init_with_runtime(Box::leak(Box::new(runtime)))
+            // The process's one runtime (#1558), never dropped.
+            let runtime = opentide::connectors::runtime().map_err(|error| error.to_string())?;
+            pyo3_async_runtimes::tokio::init_with_runtime(runtime)
                 .map_err(|()| "the network runtime was already started elsewhere".to_owned())
         })
         .clone()
