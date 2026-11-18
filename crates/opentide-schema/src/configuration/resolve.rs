@@ -152,7 +152,7 @@ impl Resolved {
 
 fn key_node(key: &str) -> Arc<Node> {
     Arc::new(Node {
-        value: Value::Str(key.to_owned()),
+        value: Value::Str(key.into()),
         start: Mark::default(),
         end: Mark::default(),
         text: None,

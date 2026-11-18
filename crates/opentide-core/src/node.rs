@@ -43,6 +43,9 @@ use std::sync::{Arc, OnceLock};
 use saphyr::{Scalar, ScalarStyle, Tag};
 use saphyr_parser::{Event, Parser, ScanError};
 
+/// The string a [`Value::Str`] and a [`Value::Datetime`] hold: a `String`
+/// that keeps up to 24 bytes inline ([`compact_str`]).
+pub use compact_str::CompactString;
 pub use locate::{Locator, Span};
 
 /// How deeply collections may nest. A Tide object nests a dozen levels; the
@@ -145,12 +148,15 @@ pub enum Value {
     /// A floating-point number, `.inf` and `.nan` included.
     Float(f64),
     /// A string: quoted, or plain text no other type takes (dates included).
-    Str(String),
+    /// Kept inline up to 24 bytes, where most of a document's strings fit:
+    /// one allocation fewer per scalar, of a workspace's hundred thousand
+    /// (#1071).
+    Str(CompactString),
     /// A TOML offset date-time, local date-time, local date or local time, as
     /// written (`1979-05-27T07:32:00Z`). YAML 1.2's core schema has no such
     /// type, so only a configuration file (opentide-schema's `configuration`) holds
     /// one; a field that takes a string does not take it.
-    Datetime(String),
+    Datetime(CompactString),
     /// A sequence.
     Seq(Vec<Arc<Node>>),
     /// A mapping, in the document's order, keys unique.
@@ -480,7 +486,8 @@ enum KeyId {
     Bool(bool),
     Int(i64),
     Float(u64),
-    Str(String),
+    /// Kept inline as the key's own text is: no allocation for a short key.
+    Str(CompactString),
 }
 
 impl KeyId {
@@ -585,13 +592,13 @@ fn scalar_value(
         return Ok(value);
     };
     if is_non_specific(tag) {
-        return Ok(Value::Str(text.into_owned()));
+        return Ok(Value::Str(text.into()));
     }
     let Some(suffix) = core_suffix(tag) else {
         return Err(format!("the tag {} is not supported", tag_text(tag)));
     };
     if suffix == "str" {
-        return Ok(Value::Str(text.into_owned()));
+        return Ok(Value::Str(text.into()));
     }
     let shown = text.clone().into_owned();
     let resolved = resolve_plain(text);
@@ -626,7 +633,7 @@ fn resolve_plain(text: Cow<'_, str>) -> Value {
         return from_scalar(Scalar::parse_from_cow(text));
     }
     match from_scalar(Scalar::parse_from_cow(Cow::Borrowed(text.as_ref()))) {
-        Value::Int(_) => Value::Str(text.into_owned()),
+        Value::Int(_) => Value::Str(text.into()),
         value => value,
     }
 }
@@ -656,7 +663,7 @@ fn from_scalar(scalar: Scalar<'_>) -> Value {
         Scalar::Boolean(flag) => Value::Bool(flag),
         Scalar::Integer(integer) => Value::Int(integer),
         Scalar::FloatingPoint(float) => Value::Float(float.into_inner()),
-        Scalar::String(text) => Value::Str(text.into_owned()),
+        Scalar::String(text) => Value::Str(text.into()),
     }
 }
 
@@ -1091,7 +1098,7 @@ mod tests {
         ] {
             assert_eq!(
                 value_of(&format!("a: {text}\n")),
-                Value::Str(text.to_owned()),
+                Value::Str(text.into()),
                 "{text}"
             );
         }
@@ -1144,13 +1151,13 @@ mod tests {
             ("a: |\n  x\n  y", "x\ny"),
             ("a: >\n  x\n  y", "x y"),
         ] {
-            assert_eq!(value_of(text), Value::Str(expected.to_owned()), "{text:?}");
+            assert_eq!(value_of(text), Value::Str(expected.into()), "{text:?}");
         }
         let document = load("- |\n  x\n ").unwrap();
         let Value::Seq(items) = &document.root().unwrap().value else {
             panic!()
         };
-        assert_eq!(items[0].value, Value::Str("x\n".to_owned()));
+        assert_eq!(items[0].value, Value::Str("x\n".into()));
     }
 
     #[test]

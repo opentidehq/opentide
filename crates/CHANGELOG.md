@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you build or match `opentide_core::node::Value::Str` or `Value::Datetime` (also through `opentide_schema::node`), they hold an `opentide_core::node::CompactString` where they held a `String`: build one with `.into()` from a `&str` or a `String`, read it as a `&str` (it derefs; `as_str()`), and call `.to_string()` where you need an owned `String`.
 - If you read or build an `opentide_core::node::Mark` (or `opentide_schema::node::Mark`), call `mark.index()`, `mark.line()` and `mark.column()` where you read its fields, and `Mark::new(index, line, column)` where you wrote a struct literal: its fields are private `u32`s.
 - If you read `opentide_kql::schema::Schema::columns` (from `opentide_kql::columns`), it is an `Arc<Vec<Arc<Column>>>`: iterate it with `.iter()` (each item derefs to a `Column`), or take the columns with `Arc::unwrap_or_clone` and `Arc::unwrap_or_clone` again on each. If you match `opentide_kql::schema::Origin`, `Table`'s name and `Asim`'s `schema` and `class` are `Arc<str>`: compare them through `&*`.
 - If you call `opentide::connectors::block_on` (or `opentide_connectors::runtime::block_on`) on a thread of a tokio runtime of your own, a `spawn_blocking` thread included, await the operation there instead: the call now runs on the process's one runtime and answers the code `runtime_unavailable` on a thread that has a runtime's handle, where it used to start a runtime of its own.
@@ -43,6 +44,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Breaking
 
+- **`opentide_core::node::Value::Str` and `Value::Datetime` hold a `CompactString`.** It keeps a string of up to 24 bytes inline (12 on 32-bit targets) in the space a `String` takes, so most of a document's scalars allocate nothing (#1071).
 - **`opentide_core::node::Mark`'s fields are private.** A position is three `u32`s, read through `index()`, `line()` and `column()` and made with `Mark::new`, which saturates past 4 Gi: every YAML node holds two, and a `Node` is 72 bytes where it was 96 (#1071).
 - **`opentide_kql::schema::Schema::columns` is an `Arc<Vec<Arc<Column>>>`, and `Origin`'s names are `Arc<str>`.** They were a `Vec<Column>` and `String`s: the stages of a pipeline share their columns until one changes them, and a change copies the list, not each column's strings. Code that moved the columns out, changed them in place, or matched an `Origin` name as a `String` no longer compiles.
 - **A HarfangLab deploy body names its kind** ([opentidehq/specifications#95](https://github.com/opentidehq/specifications/pull/95)). The HarfangLab `Deployer` (and `opentide::connectors::Connection::deploy`) reads `{"kind": "Sigma" | "YARA", "rule": ..}` and sends the rule to that kind's endpoint; a bare compiled rule, or an empty delete, fails the rule with `harfanglab_request_invalid`. `HarfangLabSetup::r#type` and `Client::kind` are removed, and `Tenant::from_setup` fails a HarfangLab tenant that sets `type`. See Upgrade.

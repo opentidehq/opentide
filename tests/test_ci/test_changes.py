@@ -259,8 +259,17 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
         ("xtask/src/codegen.rs", set()),
         ("src/opentide/data/vocabulary/README.md", set()),
         # Shared configuration runs every check, as a push does.
-        ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs"}),
-        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui", "stubs"}),
+        ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs", "wiring"}),
+        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui", "stubs", "wiring"}),
+        # The files outside a crate that the language wiring test reads.
+        ("scripts/engine/wasm-smoke.mjs", {"wiring"}),
+        ("scripts/engine/fuzz.sh", {"wiring"}),
+        ("packages/lsp-client/src/index.ts", {"wiring"}),
+        ("fuzz/fuzz_targets/kql.rs", {"wiring"}),
+        ("editors/zed/opentide.json", {"wiring"}),
+        ("src/opentide/_native/__init__.pyi", {"wiring", "stubs"}),
+        ("tests/bench/instructions.toml", {"wiring"}),
+        ("crates/testdata/corpus/kql/take.kql", {"wiring"}),
     ],
 )
 def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]) -> None:
@@ -299,7 +308,8 @@ def test_the_throughput_gate_runs_when_the_analysis_or_its_counts_change(
     assert plan(path)["throughput"] == str(runs).lower()
 
 
-def test_a_budgets_only_change_runs_the_throughput_gate_alone() -> None:
+def test_a_budgets_only_change_runs_the_throughput_gate_and_the_wiring_test_alone() -> None:
+    """The budgets are the gate's, and the wiring test holds a section per language."""
     outputs = plan("tests/bench/instructions.toml")
-    assert on(outputs) == {"throughput"}
+    assert on(outputs) == {"throughput", "wiring"}
     assert outputs["crates"] == ""
