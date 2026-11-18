@@ -15,6 +15,43 @@ pub(crate) fn is_trivia(token: &SyntaxToken) -> bool {
 /// from its first significant token to its last; empty at its start when it
 /// has none.
 pub(crate) fn range(node: &SyntaxNode) -> TextRange {
+    // From each end inward past the trivia only: walking every token of the
+    // node to find its last was most of the column pass on a long query,
+    // and `range` is asked of most nodes. rowan's token steps stop at an
+    // empty node (as broken input leaves), so a walk that runs out without
+    // a significant token, or a node of trivia only, takes the long way.
+    let inside = |t: &SyntaxToken| t.parent_ancestors().any(|a| a == *node);
+    let significant = |mut at: Option<SyntaxToken>, forward: bool| {
+        while let Some(t) = at {
+            if !inside(&t) {
+                return None;
+            }
+            if !is_trivia(&t) {
+                return Some(t);
+            }
+            at = if forward {
+                t.next_token()
+            } else {
+                t.prev_token()
+            };
+        }
+        None
+    };
+    match (
+        significant(node.first_token(), true),
+        significant(node.last_token(), false),
+    ) {
+        (Some(first), Some(last)) => {
+            TextRange::new(first.text_range().start(), last.text_range().end())
+        }
+        _ => range_by_walking(node),
+    }
+}
+
+/// [`range`] by walking every token of the node, in order: what [`range`]
+/// falls back to, and what the tests hold it to
+/// (`crate::inspect::ranges_disagree`).
+pub(crate) fn range_by_walking(node: &SyntaxNode) -> TextRange {
     let mut tokens = node
         .descendants_with_tokens()
         .filter_map(NodeOrToken::into_token)

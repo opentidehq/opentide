@@ -68,8 +68,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let spec = HighlightSpec::shared().expect("highlight spec");
     let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
-    let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    let tokens = tokens_from_spans(spec, source, &refs).unwrap_or_default();
+    let tokens = tokens_from_spans(spec, source, &spans).unwrap_or_default();
     Analysis {
         diagnostics,
         hir,
@@ -489,8 +488,9 @@ fn functions(
             );
         } else if function.is_none() && catalog.operator(&name).is_none() {
             // Only a likely typo of a known function: within two edits. The
-            // distance is at least the difference in length: a name more than
-            // two characters longer or shorter is not measured.
+            // distance is at least the difference in length, and at least the
+            // characters one has that the other lacks: a name too far by
+            // either is not measured.
             let length = name.chars().count();
             if let Some(suggestion) = suggest::best(
                 &name,
@@ -500,6 +500,7 @@ fn functions(
                     .filter(|f| f.deprecated.is_none())
                     .map(|f| f.name.as_str())
                     .filter(|f| f.chars().count().abs_diff(length) <= 2)
+                    .filter(|f| suggest::bag_distance(f, &name).is_none_or(|d| d <= 2))
                     .filter(|f| (1..=2).contains(&strsim::levenshtein(f, &name))),
             ) {
                 out.push(

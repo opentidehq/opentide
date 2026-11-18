@@ -26,6 +26,30 @@ pub(crate) fn count_column_measured() {
     COLUMNS_MEASURED.with(|n| n.set(n.get() + 1));
 }
 
+/// A node whose two ranges differ ([`ranges_disagree`]): its kind, and the
+/// inward and the walked byte range.
+pub type RangeDisagreement = (String, (u32, u32), (u32, u32));
+
+/// The nodes of `source`'s tree, and those whose range without trivia found
+/// from their ends inward differs from walking every token, as `(kind,
+/// inward, walked)` byte ranges: a corpus test holds the second list empty.
+#[must_use]
+pub fn ranges_disagree(source: &str) -> (usize, Vec<RangeDisagreement>) {
+    let root = SyntaxNode::new_root(parse(source).green);
+    let mut nodes = 0;
+    let mut differ = Vec::new();
+    for node in root.descendants() {
+        nodes += 1;
+        let inward = crate::syntax_util::range(&node);
+        let walked = crate::syntax_util::range_by_walking(&node);
+        if inward != walked {
+            let pair = |r: rowan::TextRange| (u32::from(r.start()), u32::from(r.end()));
+            differ.push((format!("{:?}", node.kind()), pair(inward), pair(walked)));
+        }
+    }
+    (nodes, differ)
+}
+
 /// The lexemes of `source` as `(start, end, is_trivia)`: whitespace and
 /// comments are trivia.
 #[must_use]

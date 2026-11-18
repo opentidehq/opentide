@@ -739,9 +739,13 @@ impl Catalog {
                 }
                 by_name
             });
-            return index
-                .get(&name.to_ascii_lowercase())
-                .and_then(|&i| rows.get(i));
+            // Most names are lower case already: no copy to look them up.
+            let found = if name.bytes().any(|b| b.is_ascii_uppercase()) {
+                index.get(&name.to_ascii_lowercase())
+            } else {
+                index.get(name)
+            };
+            return found.and_then(|&i| rows.get(i));
         }
         rows.iter()
             .find(|row| name_of(row).eq_ignore_ascii_case(name))
@@ -752,9 +756,8 @@ impl Catalog {
     }
 
     pub fn scalar_operator(&self, name: &str) -> Option<&ScalarOperatorRow> {
-        self.scalar_operators
-            .iter()
-            .find(|o| o.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.scalar_operators, |o| &o.name, name)
     }
 
     pub fn plugin(&self, name: &str) -> Option<&PluginRow> {
@@ -1049,7 +1052,11 @@ fn check_table_named(
         || catalog.asim_parser(table).is_some()
         || (catalog.profile == Profile::Sentinel && asim_shaped(table))
         || catalog.operator(table).is_some()
-        || catalog.functions.iter().any(|f| f.name == table)
+        // A function of exactly this name: the first of any case, else a scan
+        // for one of another case (the catalog has none).
+        || catalog.function(table).is_some_and(|f| {
+            f.name == table || catalog.functions.iter().any(|f| f.name == table)
+        })
     {
         return;
     }
@@ -1130,7 +1137,11 @@ fn check_table_named(
     out.push(d);
 }
 
-fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], catalog: &Catalog) {
+fn overlay_catalog_captures(
+    source: &str,
+    spans: &mut [(ByteSpan, &'static str)],
+    catalog: &Catalog,
+) {
     // Once per query, not once per name: a long query has thousands of names,
     // and each scan reads the whole query (quadratic on the old engine).
     let mentioned = catalog.mentioned_tables(source);
@@ -1148,23 +1159,18 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
         if matches!(text, "dynamic" | "datatable" | "timespan" | "datetime")
             && (*capture == "function" || *capture == "function.builtin" || *capture == "variable")
         {
-            *capture = "type".into();
+            *capture = "type";
         } else if (catalog.function(text).is_some() || catalog.plugin(text).is_some())
             && (*capture == "variable" || *capture == "function")
         {
-            *capture = "function.builtin".into();
+            *capture = "function.builtin";
         } else if (catalog.operator(text).is_some()
             && (*capture == "variable" || *capture == "error"))
             || (catalog.is_join_kind(text) && *capture == "variable")
         {
-            *capture = "keyword".into();
-        } else if catalog
-            .scalar_operators
-            .iter()
-            .any(|o| o.name.eq_ignore_ascii_case(text))
-            && *capture == "variable"
-        {
-            *capture = "operator".into();
+            *capture = "keyword";
+        } else if *capture == "variable" && catalog.scalar_operator(text).is_some() {
+            *capture = "operator";
         } else if *capture == "variable" {
             maybe_columns.push((i, *span));
         }
@@ -1189,7 +1195,7 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
     }
     for (i, span) in maybe_columns {
         if columns.contains(text(span)) {
-            spans[i].1 = "property".into();
+            spans[i].1 = "property";
         }
     }
 }

@@ -186,6 +186,15 @@ impl Candidates {
             if !same_word && item.length.abs_diff(length) > edits {
                 continue;
             }
+            // Nor fewer than the characters one has that the other lacks,
+            // the same over the whole spellings as over what lies between
+            // their shared prefix and suffix: measured first, as most
+            // candidates of a near length stop here, before the distance
+            // (most of what an unknown name cost).
+            let bag = bag_distance(&lower, &item.lower);
+            if !same_word && bag.is_some_and(|d| d > edits) {
+                continue;
+            }
             // A common prefix and suffix cost no edit: measure what lies
             // between, against a third of the words it falls in.
             let (a, b) = middles(&lower, &item.lower);
@@ -195,6 +204,11 @@ impl Candidates {
             if !same_word && a.chars().count().abs_diff(b.chars().count()) > bound {
                 continue;
             }
+            if !same_word && bag.is_some_and(|d| d > bound) {
+                continue;
+            }
+            #[cfg(test)]
+            tests::DISTANCES.with(|n| n.set(n.get() + 1));
             let distance = strsim::osa_distance(a, b);
             if !same_word && distance > bound {
                 continue;
@@ -262,6 +276,34 @@ fn words<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
     (&a[start..a.len() - end], &b[start..b.len() - end])
 }
 
+/// The characters `a` has that `b` lacks, or the reverse, whichever is more,
+/// counting repeats: a lower bound of the edit distance, Levenshtein's or
+/// the optimal string alignment's (an insertion or a deletion changes it by
+/// one, a substitution by at most one, a transposition not at all), and far
+/// cheaper to measure. `None` when either is not ASCII.
+#[must_use]
+pub fn bag_distance(a: &str, b: &str) -> Option<usize> {
+    if !a.is_ascii() || !b.is_ascii() {
+        return None;
+    }
+    let mut counts = [0i32; 128];
+    for byte in a.bytes() {
+        counts[usize::from(byte)] += 1;
+    }
+    for byte in b.bytes() {
+        counts[usize::from(byte)] -= 1;
+    }
+    let (mut more, mut fewer) = (0usize, 0usize);
+    for count in counts {
+        match count.cmp(&0) {
+            Ordering::Greater => more += count.unsigned_abs() as usize,
+            Ordering::Less => fewer += count.unsigned_abs() as usize,
+            Ordering::Equal => {}
+        }
+    }
+    Some(more.max(fewer))
+}
+
 struct Scored<'a> {
     candidate: &'a str,
     index: usize,
@@ -283,6 +325,129 @@ impl Scored<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// The edit distances [`Candidates::ranked`] measured on this thread.
+        pub(super) static DISTANCES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// [`Candidates::ranked`] without the bag-distance cut: what it must
+    /// equal.
+    fn ranked_by_distance(candidates: &[&str], value: &str, edits: usize) -> Vec<usize> {
+        let folded = fold(value);
+        let lower = value.to_lowercase();
+        let mut scored = Vec::new();
+        for (index, text) in candidates.iter().enumerate() {
+            let other = text.to_lowercase();
+            let same_word = fold(text) == folded;
+            if *text == value {
+                continue;
+            }
+            let (a, b) = middles(&lower, &other);
+            let (wa, wb) = words(&lower, &other);
+            let bound = edits.min(max_edits(wa.chars().count().max(wb.chars().count())));
+            let distance = strsim::osa_distance(a, b);
+            if !same_word
+                && (other.chars().count().abs_diff(lower.chars().count()) > edits
+                    || distance > bound)
+            {
+                continue;
+            }
+            scored.push(Scored {
+                candidate: text,
+                index,
+                same_word,
+                distance,
+                prefix: strsim::jaro_winkler(&lower, &other),
+            });
+        }
+        scored.sort_by(Scored::order);
+        scored.into_iter().map(|s| s.index).collect()
+    }
+
+    /// The cut changes no result: over typos, swaps, words and unrelated
+    /// names of the KQL tables, ranked against every table name.
+    #[test]
+    fn the_bag_distance_cut_keeps_every_result() {
+        let names = [
+            "SecurityEvent",
+            "SigninLogs",
+            "AuditLogs",
+            "DeviceProcessEvents",
+            "Syslog",
+            "CommonSecurityLog",
+            "AADNonInteractiveUserSignInLogs",
+            "Heartbeat",
+            "Event",
+            "AzureActivity",
+            "OfficeActivity",
+            "DnsEvents",
+            "W3CIISLog",
+            "SecurityAlert",
+            "SecurityIncident",
+            "ThreatIntelligenceIndicator",
+            "Device_Events",
+            "device events",
+            "Événement",
+            "Usage",
+            "Update",
+            "Perf",
+            "Alert",
+            "AlertEvidence",
+        ];
+        let probes = [
+            "SecurityEvnt",
+            "SecuirtyEvent",
+            "SignInLogs",
+            "signinlog",
+            "Syslgo",
+            "Hearbteat",
+            "AzureActivty",
+            "Cisco_Umbrella",
+            "imAuthentication",
+            "Evnet",
+            "Alrt",
+            "DeviceEvents",
+            "device-events",
+            "Evenement",
+            "Événemnt",
+            "xyz",
+            "",
+            "Perf",
+            "Updtae",
+            "ThreatIntel",
+        ];
+        let prepared = Candidates::new(names);
+        for probe in probes {
+            for edits in [0, 1, 2, 3, 4, max_edits(probe.chars().count())] {
+                assert_eq!(
+                    prepared.ranked(probe, edits, names.len()),
+                    ranked_by_distance(&names, probe, edits),
+                    "{probe:?} within {edits}"
+                );
+            }
+        }
+    }
+
+    /// A name near none of a thousand candidates measures the distance to a
+    /// few of them, not to each of a near length.
+    #[test]
+    fn an_unrelated_name_measures_few_distances() {
+        let names: Vec<String> = (0..1000)
+            .map(|i| {
+                format!(
+                    "Table{}Logs{}",
+                    ["Signin", "Audit", "Device", "Security"][i % 4],
+                    i
+                )
+            })
+            .collect();
+        let prepared = Candidates::new(names.iter().map(String::as_str));
+        DISTANCES.with(|n| n.set(0));
+        assert_eq!(prepared.closest("Cisco_Umbrella_Proxy"), None);
+        let measured = DISTANCES.with(std::cell::Cell::get);
+        assert!(measured <= 20, "{measured} distances measured");
+    }
 
     const TLP: [&str; 4] = ["clear", "green", "amber", "red"];
 

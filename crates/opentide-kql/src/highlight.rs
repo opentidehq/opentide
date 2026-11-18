@@ -196,8 +196,10 @@ pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
     }
 }
 
-/// The `(span, capture)` of every coloured token of the tree, in order.
-pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, String)> {
+/// The `(span, capture)` of every coloured token of the tree, in order. The
+/// captures are the spec's names, borrowed: a copy per token was a few
+/// percent of a query's analysis.
+pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
     let mut out = Vec::new();
     for element in root.descendants_with_tokens() {
         match element {
@@ -205,7 +207,7 @@ pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, String)> {
                 let range = node.text_range();
                 out.push((
                     ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                    "variable".to_owned(),
+                    "variable",
                 ));
             }
             NodeOrToken::Token(token) => {
@@ -220,7 +222,7 @@ pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, String)> {
                     if !range.is_empty() {
                         out.push((
                             ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                            capture.to_owned(),
+                            capture,
                         ));
                     }
                 }
@@ -236,7 +238,7 @@ mod tests {
     use super::*;
     use crate::parser::parse;
 
-    fn captures(source: &str) -> Vec<(&str, String)> {
+    fn captures(source: &str) -> Vec<(&str, &'static str)> {
         let root = SyntaxNode::new_root(parse(source).green);
         highlight_spans(&root)
             .into_iter()
@@ -250,7 +252,7 @@ mod tests {
         let find = |text: &str| {
             got.iter()
                 .filter(|(t, _)| *t == text)
-                .map(|(_, c)| c.as_str())
+                .map(|(_, c)| *c)
                 .collect::<Vec<_>>()
         };
         assert_eq!(find("T"), ["type"]);
@@ -269,11 +271,7 @@ mod tests {
         let got = captures(
             "let f = (t: (*), n: int) { t };\nf(T, 1) | extend x = d.k, y = strlen(\"a\") | union U",
         );
-        let find = |text: &str| {
-            got.iter()
-                .find(|(t, _)| *t == text)
-                .map(|(_, c)| c.as_str())
-        };
+        let find = |text: &str| got.iter().find(|(t, _)| *t == text).map(|(_, c)| *c);
         assert_eq!(find("int"), Some("type"));
         assert_eq!(find("strlen"), Some("function"));
         assert_eq!(find("k"), Some("property"));
