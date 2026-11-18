@@ -117,7 +117,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     # The engine's scripts (the invariants, the WASI build, the release).
     ("scripts/engine/build-wasm.sh", ("wasm",), ()),
     # What the `wasm` job runs besides the build: its smoke tests and packs.
-    ("scripts/engine/wasm-smoke.mjs", ("wasm",), ()),
+    # xtask's language_wiring test reads it, and packages/ and fuzz/.
+    ("scripts/engine/wasm-smoke.mjs", ("wasm",), ("xtask",)),
     ("scripts/engine/wasi-run.mjs", ("wasm",), ()),
     ("scripts/engine/check-npm-packs.mjs", ("wasm",), ()),
     ("scripts/engine/*.py", ("pylint",), ALL),
@@ -129,13 +130,13 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("highlights/test/*", ("textmate",), ()),
     ("highlights/*", ("textmate", "wasm"), ALL),
     ("editors/*", ("textmate",), ()),
-    ("packages/*", ("wasm", "ts_packages"), ()),
+    ("packages/*", ("wasm", "ts_packages"), ("xtask",)),
     ("data/*", (), ALL),
     # The WASI shims of memmap2 and filetime (vendor/README.md).
     ("vendor/*", ("deny", "wasm"), ALL),
     ("crates/testdata/*", (), ALL),
     ("crates/*.md", ("docs",), ()),
-    ("fuzz/*", ("deny",), ()),
+    ("fuzz/*", ("deny",), ("xtask",)),
     ("deny.toml", ("deny",), ()),
     ("publishing/*", ("deny", "python"), ()),
     ("about.toml", ("deny",), ()),

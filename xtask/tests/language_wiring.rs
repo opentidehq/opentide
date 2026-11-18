@@ -42,15 +42,43 @@ fn declared_variants() -> BTreeSet<String> {
         .expect("opentide-core declares LanguageId");
     let body = &source[start..];
     let body = &body[..body.find("\n}").expect("the enum closes")];
+    // A variant's line, without a trailing comment: `Name,`, `Name = 3,`,
+    // `Name(T),` or `Name { .. },` (attributes and doc comments are skipped).
     body.lines()
-        .map(str::trim)
-        .filter_map(|line| line.strip_suffix(','))
-        .filter(|name| {
-            name.chars().next().is_some_and(char::is_uppercase)
-                && name.chars().all(char::is_alphanumeric)
+        .map(|line| line.split("//").next().unwrap_or_default().trim())
+        .filter(|line| !line.starts_with('#') && !line.starts_with("pub enum"))
+        .filter_map(|line| {
+            let name: String = line
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            name.chars()
+                .next()
+                .is_some_and(char::is_uppercase)
+                .then_some(name)
         })
-        .map(str::to_owned)
         .collect()
+}
+
+/// Whether a variant is a query language. The `match` has no wildcard, so a
+/// new variant does not compile until it is classified here; a query
+/// language then belongs in `LanguageId::QUERY_LANGUAGES`, which the test
+/// below holds to this.
+const fn is_query_language(id: LanguageId) -> bool {
+    match id {
+        LanguageId::TideYaml | LanguageId::Config => false,
+        LanguageId::Kql
+        | LanguageId::Spl
+        | LanguageId::Esql
+        | LanguageId::Eql
+        | LanguageId::Kuery
+        | LanguageId::Lucene
+        | LanguageId::Falco
+        | LanguageId::Cql
+        | LanguageId::Yara
+        | LanguageId::Exabeam
+        | LanguageId::Yaral => true,
+    }
 }
 
 /// The text between `open` and the next `close` after it in `text`.
@@ -76,6 +104,12 @@ fn query_languages_lists_every_variant_but_the_documents() {
                 .map(|(name, _)| (*name).to_owned()),
         )
         .collect();
+    assert!(
+        LanguageId::QUERY_LANGUAGES
+            .iter()
+            .all(|id| is_query_language(*id)),
+        "QUERY_LANGUAGES holds a variant is_query_language says is not a query language"
+    );
     assert_eq!(
         listed,
         declared_variants(),
@@ -126,6 +160,11 @@ fn every_query_language_is_wired() {
     let bench_rows = between(&throughput, "const LANGUAGES: &[Language] = &[", "\n];");
     let lsp_client = read("packages/lsp-client/src/index.ts");
     let stub = read("src/opentide/_native/__init__.pyi");
+    let io_free = read("scripts/engine/check-io-free.sh");
+    let budgets = read("tests/bench/instructions.toml");
+    let helix = read("editors/helix/languages.toml");
+    let nvim = read("editors/nvim/opentide.lua");
+    let zed = read("editors/zed/opentide.json");
     let stub_languages = between(&stub, "Language = Literal[", "]");
 
     let mut missing = Vec::new();
@@ -201,6 +240,39 @@ fn every_query_language_is_wired() {
             stub_languages.contains(&format!("\"{id}\"")),
             "the Python stub's Language literal (src/opentide/_native/__init__.pyi)",
         );
+        check(
+            io_free
+                .split_whitespace()
+                .any(|word| word == krate.as_str()),
+            "the I/O-free crates (scripts/engine/check-io-free.sh)",
+        );
+        check(
+            root().join("crates/testdata/corpus").join(id).is_dir(),
+            "its corpus (crates/testdata/corpus/<id>/)",
+        );
+        check(
+            root()
+                .join("crates/opentide-highlight/src/keywords")
+                .join(format!("{id}.rs"))
+                .is_file(),
+            "its KEYWORDS table (crates/opentide-highlight/src/keywords/<id>.rs)",
+        );
+        check(
+            budgets.lines().any(|line| line.trim() == format!("[{id}]")),
+            "its budgets (tests/bench/instructions.toml: cargo xtask throughput --record)",
+        );
+        check(
+            helix.contains(&format!("name = \"{id}\"")),
+            "a language (editors/helix/languages.toml)",
+        );
+        check(
+            nvim.contains(&format!("\"{id}\"")),
+            "a filetype (editors/nvim/opentide.lua)",
+        );
+        check(
+            zed.contains(&format!("\"{id}\": {{")),
+            "a language (editors/zed/opentide.json)",
+        );
     }
     assert!(
         missing.is_empty(),
@@ -238,20 +310,33 @@ fn the_registry_s_suffixes_match_its_offline_languages() {
 }
 
 /// The MCP manifest's `validate_query` says which platforms it checks
-/// offline; that list is the registry's.
+/// offline and which on the tenant; those lists are the registry's.
 #[test]
-fn the_mcp_manifest_names_every_offline_platform() {
+fn the_mcp_manifest_names_the_registry_s_platforms() {
     let manifest = read("crates/opentide-cli/data/mcp/manifest.json");
-    let offline = between(&manifest, "Offline: ", ".");
-    let named: BTreeSet<&str> = offline.split(", ").map(str::trim).collect();
-    let registry: BTreeSet<&str> = PLATFORMS
-        .iter()
-        .filter(|platform| !platform.offline_languages.is_empty())
-        .map(|platform| platform.id)
-        .collect();
+    let listed = |open: &str, close: &str| -> BTreeSet<String> {
+        between(&manifest, open, close)
+            .split(", ")
+            .map(|id| id.trim().to_owned())
+            .collect()
+    };
+    let registry = |keep: fn(&opentide_schema::platforms::Platform) -> bool| -> BTreeSet<String> {
+        PLATFORMS
+            .iter()
+            .filter(|platform| keep(platform))
+            .map(|platform| platform.id.to_owned())
+            .collect()
+    };
     assert_eq!(
-        named, registry,
+        listed("Offline: ", "."),
+        registry(|platform| !platform.offline_languages.is_empty()),
         "validate_query's \"Offline:\" list (crates/opentide-cli/data/mcp/manifest.json) is the \
          registry's platforms with offline_languages"
+    );
+    assert_eq!(
+        listed("Platforms: ", ";"),
+        registry(|platform| platform.live_check),
+        "validate_query's \"Platforms:\" list (crates/opentide-cli/data/mcp/manifest.json) is the \
+         registry's platforms with live_check"
     );
 }

@@ -51,10 +51,14 @@ highlighter is not a language, and a platform whose language is unspecified gets
 
 `<id>` is the public language id (`kql`, `yaral`), `<Id>` its `LanguageId` variant.
 `cargo test -p xtask --test language_wiring` lists, with its file, every table a query language
-is missing from (its crate, codes, `ENGINE_REFERENCES`, the registry and its suffixes, the output
-schema, MCP's manifest, `PARSER_CRATES`, the fuzz target, matrix and script, the WASM smoke
-sample, the throughput row, the npm client, the Python stub); run it after step 1 and again at
-the end. The boxes below it cannot see are the ones to read with care. Steps 1 to 5
+is missing from: its crate, codes, `ENGINE_REFERENCES`, the registry (its offline languages and
+suffixes, and MCP's manifest lists), the output schema, `PARSER_CRATES`, `check-io-free.sh`, the
+corpus directory, the `KEYWORDS` file, the throughput row and budgets, the fuzz target, matrix and
+script, the WASM smoke sample, the npm client, the editors and the Python stub; MCP's
+`default_language` has its own test. Run it after step 1 and again at the end. It does not see
+the depth floors, the corpus gate's arms and lists, the external and oracle tests, the Tide and
+highlight injection tables, `analyze_query`, the docs and changelogs, or the companions: read
+those boxes with care. Steps 1 to 5
 add arms to exhaustive `match`es across the workspace, so the workspace builds again only at the
 end of step 5: work them on one branch and check each crate as you go
 (`cargo check -p <crate>`). Step 6's proofs run once it builds.
