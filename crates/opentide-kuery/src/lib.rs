@@ -722,6 +722,8 @@ fn text(r: TextRange, source: &str) -> &str {
     reason = "regex literals: an invalid pattern fails every test that reaches it"
 )]
 fn capture(token: &SyntaxToken) -> Option<&'static str> {
+    #[cfg(test)]
+    CAPTURES.set(CAPTURES.get() + 1);
     static NUMBER: OnceLock<Regex> = OnceLock::new();
     let in_field = |levels: usize| {
         token
@@ -777,6 +779,9 @@ struct Walked {
 thread_local! {
     /// Elements [`walk`] visited on this thread.
     static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tokens [`capture`] read on this thread: every highlight, by a walk of
+    /// its own or not, reads each token there.
+    static CAPTURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Visits each element of `root` once, in preorder.
@@ -1184,10 +1189,19 @@ mod tests {
             ")",
             "",
         ] {
-            let elements = parser::parse_memo(src).0.descendants_with_tokens().count();
+            let root = parser::parse_memo(src).0.clone();
+            let elements = root.descendants_with_tokens().count();
+            let tokens = root
+                .descendants_with_tokens()
+                .filter(|e| e.as_token().is_some())
+                .count();
             VISITS.set(0);
+            CAPTURES.set(0);
             let _ = analyze(src);
+            // No other walk: the walk visits every element, and the
+            // highlight reads each token once, from it.
             assert_eq!(VISITS.get(), elements, "{src:?}");
+            assert_eq!(CAPTURES.get(), tokens, "{src:?}");
         }
     }
 
