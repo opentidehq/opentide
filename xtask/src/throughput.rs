@@ -473,7 +473,7 @@ struct Own {
 }
 
 /// The allocator's entry points a call into counts as an allocation.
-const ALLOCATORS: [&str; 5] = [
+pub const ALLOCATORS: [&str; 5] = [
     "malloc",
     "calloc",
     "realloc",
