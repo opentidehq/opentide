@@ -408,7 +408,7 @@ fn is_field(source: &str, at: usize, end: usize) -> bool {
 }
 
 /// The end of a comment, quoted string or macro starting at `i`.
-fn skip_hidden(source: &str, i: usize, end: usize) -> Option<usize> {
+pub(crate) fn skip_hidden(source: &str, i: usize, end: usize) -> Option<usize> {
     let bytes = source.as_bytes();
     if i >= end {
         return None;

@@ -5,7 +5,7 @@
 //! tenant's fields, saved searches, lookup files or repositories.
 
 use crate::catalog::{Catalog, Function, Parameter};
-use crate::syntax::{SyntaxKind as K, SyntaxNode};
+use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use crate::{Context, child, nth, range, text};
 use opentide_core::{Diagnostic, codes};
 use opentide_parse::SyntaxError;
@@ -19,18 +19,36 @@ pub const REGEX_FLAGS: &str = "dgimF";
 /// example relies on (`"\x1b[93;41mColor"` becomes `Color`).
 const STRING_ESCAPES: &[char] = &['"', '\\', 'n', 't', 'u', 'x'];
 
+#[cfg(test)]
 pub(crate) fn diagnostics(
     root: &SyntaxNode,
     errors: &[SyntaxError],
     source: &str,
     ctx: Context,
 ) -> Vec<Diagnostic> {
+    diagnostics_with(root, errors, source, ctx, |_| {})
+}
+
+/// The checks' diagnostics, handing every token to `token` in document order from
+/// the same walk: the highlight reads them there, not in a walk of its own
+/// (ADR 0014 §5a).
+pub(crate) fn diagnostics_with(
+    root: &SyntaxNode,
+    errors: &[SyntaxError],
+    source: &str,
+    ctx: Context,
+    token: impl FnMut(&SyntaxToken),
+) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
     let broken = Broken::new(errors);
     let mut out = Vec::new();
+    let mut correlation = Correlation::default();
     // Checks that look upward read `ancestors` and `above`: a scan of
     // `ancestors` at every node makes a deeply nested query quadratic.
-    walk_with_above(root, source, catalog, |node, ancestors, above| {
+    let checks = |node: &SyntaxNode, ancestors: &[SyntaxNode], above: Above| {
+        if ctx.correlation_rule {
+            correlation.see(node, above, source, catalog);
+        }
         const CHECKED: &[K] = &[
             K::FUNCTION_CALL,
             K::REGEX,
@@ -53,14 +71,15 @@ pub(crate) fn diagnostics(
             K::OR_FILTER => regex_group_under_or(node, source, &mut out),
             _ => {}
         }
-    });
+    };
+    walk_with_above(root, source, catalog, checks, token);
     // Step order is only known in a tree without errors: after recovery the
     // text past a syntax error is a guess at steps, not what was written.
     if errors.is_empty() {
         free_text_after_aggregate(root, source, catalog, &mut out);
     }
     if ctx.correlation_rule {
-        correlation_rule(root, source, catalog, &mut out);
+        correlation.report(source, &mut out);
     }
     out
 }
@@ -128,13 +147,17 @@ fn walk_with_above(
     source: &str,
     catalog: &Catalog,
     mut f: impl FnMut(&SyntaxNode, &[SyntaxNode], Above),
+    mut token: impl FnMut(&SyntaxToken),
 ) {
     let mut ancestors: Vec<SyntaxNode> = Vec::new();
     // `summary[i]` covers `ancestors[..=i]`.
     let mut summary: Vec<Above> = Vec::new();
-    for event in root.preorder() {
+    for event in root.preorder_with_tokens() {
+        count_visit();
         match event {
-            WalkEvent::Enter(node) => {
+            WalkEvent::Enter(rowan::NodeOrToken::Token(t)) => token(&t),
+            WalkEvent::Leave(rowan::NodeOrToken::Token(_)) => {}
+            WalkEvent::Enter(rowan::NodeOrToken::Node(node)) => {
                 let prev = summary.last().copied().unwrap_or_default();
                 f(&node, &ancestors, prev);
                 let i = ancestors.len();
@@ -152,7 +175,7 @@ fn walk_with_above(
                 });
                 ancestors.push(node);
             }
-            WalkEvent::Leave(_) => {
+            WalkEvent::Leave(rowan::NodeOrToken::Node(_)) => {
                 ancestors.pop();
                 summary.pop();
             }
@@ -909,15 +932,20 @@ fn is_correlate(node: &SyntaxNode, source: &str) -> bool {
 }
 
 /// Next-Gen SIEM: `correlate()` takes no other aggregate in the same query.
-fn correlation_rule(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let mut has_correlate = false;
-    let mut outside: Vec<(SyntaxNode, &str)> = Vec::new();
-    walk_with_above(root, source, catalog, |n, _, above| {
+/// Gathered by the analysis's walk, node by node, and reported after it.
+#[derive(Default)]
+struct Correlation {
+    has_correlate: bool,
+    outside: Vec<(SyntaxNode, String)>,
+}
+
+impl Correlation {
+    fn see(&mut self, n: &SyntaxNode, above: Above, source: &str, catalog: &Catalog) {
         if n.kind() != K::FUNCTION_CALL {
             return;
         }
         if is_correlate(n, source) {
-            has_correlate = true;
+            self.has_correlate = true;
             return;
         }
         // Aggregates inside correlate()'s own arguments follow its rules, and
@@ -930,19 +958,44 @@ fn correlation_rule(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mu
             .function(call_name(n, source))
             .filter(|f| f.aggregate)
         {
-            outside.push((n.clone(), function.name.as_str()));
+            self.outside.push((n.clone(), function.name.clone()));
         }
-    });
-    if !has_correlate {
-        return;
     }
-    for (n, name) in outside {
-        out.push(Diagnostic::error(
-            codes::CQL_CORRELATE_AGGREGATE,
-            format!("a correlation rule cannot combine correlate() with the aggregate `{name}`"),
-            name_range(&n, source),
-        ));
+
+    fn report(self, source: &str, out: &mut Vec<Diagnostic>) {
+        if !self.has_correlate {
+            return;
+        }
+        for (n, name) in self.outside {
+            out.push(Diagnostic::error(
+                codes::CQL_CORRELATE_AGGREGATE,
+                format!(
+                    "a correlation rule cannot combine correlate() with the aggregate `{name}`"
+                ),
+                name_range(&n, source),
+            ));
+        }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The walk events the analysis's walk read on this thread: [`visits`].
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one walk event, in tests (ADR 0014 §7).
+#[inline]
+pub(crate) fn count_visit() {
+    #[cfg(test)]
+    VISITS.set(VISITS.get() + 1);
+}
+
+/// How many walk events (an enter and a leave per element) the analysis's
+/// walks read on this thread.
+#[cfg(test)]
+pub(crate) fn visits() -> usize {
+    VISITS.get()
 }
 
 #[cfg(test)]
@@ -1016,5 +1069,128 @@ mod tests {
         let bounded = param("integer", &[], false, Some(1), Some(1500));
         assert!(value_problem(&bounded, "0").is_some());
         assert_eq!(value_problem(&bounded, "12"), None);
+    }
+}
+
+#[cfg(test)]
+mod walk_tests {
+    use super::*;
+    use crate::{highlight, parser};
+
+    /// Queries like the corpus's and CrowdStrike's rules, written here: an
+    /// engine crate reads no file (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        "#event_simpleName=ProcessRollup2 FileName=/cmd\\.exe/i | groupBy([ComputerName], function=count())",
+        "#repo=base_sensor event_platform=Win | regex(\"(?<user>\\w+)\", field=UserName) | table([user, ComputerName])",
+        "correlate(a: { #event_simpleName=ProcessRollup2 }, b: { #event_simpleName=NetworkConnectIP4 } , sequence=false, within=5m) | count()",
+        "correlate(a: { x=1 }) | groupBy(y, function=count()) | sum(z)",
+        "$saved_query(arg=1) | case { a=1 | b := 2; * } | match(file=\"x.csv\", field=y) | \"free text\" | x <=> y",
+        "// comment\nFileName = \"a\\qb\" | lower(FileName) | test(len(x) > 3) | concat([a, b], as=c)",
+        "groupBy([a], function=[count(), max(b)]) | head(",
+        "x = | y",
+    ];
+
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = SAMPLES
+            .iter()
+            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// The correlation rule's own walk, as it was before the analysis's walk
+    /// gathered it.
+    fn correlation_rule_walk(root: &SyntaxNode, source: &str, out: &mut Vec<Diagnostic>) {
+        let catalog = Catalog::cached();
+        let mut has_correlate = false;
+        let mut outside: Vec<(SyntaxNode, &str)> = Vec::new();
+        walk_with_above(
+            root,
+            source,
+            catalog,
+            |n, _, above| {
+                if n.kind() != K::FUNCTION_CALL {
+                    return;
+                }
+                if is_correlate(n, source) {
+                    has_correlate = true;
+                    return;
+                }
+                if above.correlate_or_aggregate {
+                    return;
+                }
+                if let Some(function) = catalog
+                    .function(call_name(n, source))
+                    .filter(|f| f.aggregate)
+                {
+                    outside.push((n.clone(), function.name.as_str()));
+                }
+            },
+            |_| {},
+        );
+        if !has_correlate {
+            return;
+        }
+        for (n, name) in outside {
+            out.push(Diagnostic::error(
+                codes::CQL_CORRELATE_AGGREGATE,
+                format!(
+                    "a correlation rule cannot combine correlate() with the aggregate `{name}`"
+                ),
+                name_range(&n, source),
+            ));
+        }
+    }
+
+    /// The one walk gives the diagnostics and the highlight's spans of the two
+    /// walks, the correlation rule's included (ADR 0014 §5a).
+    #[test]
+    fn one_walk_gives_the_checks_and_the_highlight_of_two() {
+        let spec = opentide_highlight::HighlightSpec::shared().expect("highlight spec");
+        let mut correlated = 0;
+        for source in texts() {
+            let (root, parse) = parser::parse(&source);
+            for ctx in [Context::default(), Context::CORRELATION_RULE] {
+                let mut spans = Vec::new();
+                let one = diagnostics_with(&root, &parse.errors, &source, ctx, |t| {
+                    spans.extend(highlight::span(t, &source));
+                });
+                // The correlation rule's findings came last, from a walk of their own.
+                let mut two = diagnostics(&root, &parse.errors, &source, Context::default());
+                if ctx.correlation_rule {
+                    correlation_rule_walk(&root, &source, &mut two);
+                }
+                assert_eq!(format!("{one:?}"), format!("{two:?}"), "{source:?}");
+                correlated += one
+                    .iter()
+                    .filter(|d| d.code == codes::CQL_CORRELATE_AGGREGATE)
+                    .count();
+                assert_eq!(
+                    format!("{:?}", highlight::from_spans(spec, &source, &spans)),
+                    format!("{:?}", highlight::tokens(spec, &root, &source)),
+                    "{source:?}"
+                );
+            }
+        }
+        assert!(correlated > 10, "{correlated} correlation findings");
+    }
+
+    /// The checks, the correlation rule and the highlight share one walk over
+    /// every element, a correlation rule's included (ADR 0014 §7): each walked
+    /// it. A walk reads an enter and a leave per element. The count is of
+    /// those whole-tree walks; `free_text_after_aggregate` walks each
+    /// pipeline step on its own, before and after this change, and is not
+    /// counted.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for source in [SAMPLES[2], SAMPLES[6]] {
+            let (root, _) = parser::parse(source);
+            let elements = root.descendants_with_tokens().count();
+            let before = visits();
+            crate::analyze_with(source, &Context::CORRELATION_RULE);
+            assert_eq!(visits() - before, 2 * elements, "{source:?}");
+        }
     }
 }
