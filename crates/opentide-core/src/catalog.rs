@@ -11,14 +11,16 @@
 //! The text must be in the form the sync scripts write:
 //!
 //! - comments and blank lines anywhere outside an item;
-//! - before the first array, an optional preamble of `key = value` lines,
-//!   each on one line ([`preamble`]);
+//! - before the first array, an optional preamble ([`preamble`]): `key =
+//!   value` lines (a value may span lines there) and tables (`[meta]`);
 //! - then top-level arrays of tables: each item starts at a line `[[name]]`,
-//!   its sub-tables are `[name.<sub>]` or `[[name.<sub>]]`, and its values
-//!   fit on their line.
+//!   and its sub-tables are `[name.<sub>]` or `[[name.<sub>]]`. A value may
+//!   span lines (a long array), but no line of it starts with `[`, which
+//!   would read as a header (and is refused as one).
 //!
 //! Every header is written exactly so (bare names, at the start of the line,
-//! nothing after it), and no value is a `"""` or `'''` string.
+//! nothing after it), and no value is a `"""` or `'''` string (one inside a
+//! `"..."` string or a comment is fine).
 //!
 //! What this checks, and what it does not: every line's form is checked, and
 //! a line outside the items read must at least look like `key = value`; the
@@ -87,9 +89,15 @@ pub fn array_items<T: DeserializeOwned>(text: &str, key: &str) -> Result<Vec<T>,
                     batch.push_str(line);
                 } else {
                     // Another array's line, not parsed here: it must at least
-                    // look like a value, a comment or nothing.
+                    // look like a value, a value's continuation (indented, or
+                    // its closing `]`), a comment or nothing.
                     let rest = line.trim();
-                    if !(rest.is_empty() || rest.starts_with('#') || rest.contains('=')) {
+                    let continued = line.starts_with([' ', '\t']) || rest.starts_with(']');
+                    if !(rest.is_empty()
+                        || rest.starts_with('#')
+                        || rest.contains('=')
+                        || continued)
+                    {
                         return Err(CatalogError {
                             line: at,
                             why: format!("not a `key = value` line: {rest:?}"),
@@ -161,11 +169,31 @@ pub fn preamble<T: DeserializeOwned>(text: &str) -> Result<T, CatalogError> {
     })
 }
 
+/// `result`, the reading of the catalog file `file` compiled into the
+/// engine: a bad one fails the crate's tests, never a user's document, so it
+/// is a bug, and panics with the file and the line.
+///
+/// # Panics
+///
+/// `result` is an error.
+#[track_caller]
+#[expect(
+    clippy::panic,
+    reason = "a catalog compiled in with include_str!: a bad one fails the tests, never a user's document"
+)]
+pub fn compiled_in<T>(file: &str, result: Result<T, CatalogError>) -> T {
+    match result {
+        Ok(read) => read,
+        Err(err) => panic!("{file}: {err}"),
+    }
+}
+
 /// What a line of a catalog is.
 enum Line<'a> {
     /// A comment or a blank line outside an item.
     Blank,
-    /// A `key = value` line before the first array.
+    /// A line before the first array that is not a comment: a `key = value`
+    /// line, a value's continuation, or a table (`[meta]`) and its lines.
     Preamble,
     /// `[[name]]`: an item of the top-level array `name` starts.
     Item(&'a str),
@@ -181,20 +209,14 @@ fn each_line<'t>(
     text: &'t str,
     mut each: impl FnMut(&'t str, usize, Line<'t>) -> Result<(), CatalogError>,
 ) -> Result<(), CatalogError> {
-    // One search over the whole text, not two per line: no value of a
-    // catalog is a multi-line string.
-    for marker in ["\"\"\"", "'''"] {
-        if let Some(found) = text.find(marker) {
-            let line = text[..found].matches('\n').count() + 1;
-            let shown = text[found..].lines().next().unwrap_or_default();
-            return Err(CatalogError {
-                line,
-                why: format!("a multi-line string: {shown:?}"),
-            });
-        }
+    if let Some(error) = multi_line_string(text) {
+        return Err(error);
     }
     // The top-level array the last header opened, if any.
     let mut array: Option<&str> = None;
+    // The preamble's tables (`meta` of `[meta]`): no array may share a name
+    // with one, which `toml` refuses in the whole file.
+    let mut tables: Vec<&str> = Vec::new();
     for (index, line) in text.split_inclusive('\n').enumerate() {
         let at = index + 1;
         // Most lines are an item's values: only their first non-blank byte
@@ -213,13 +235,12 @@ fn each_line<'t>(
         };
         let rest = trimmed.trim_start();
         if !rest.starts_with('[') {
-            // Before the first array: comments, blank lines and the preamble.
+            // Before the first array: comments, blank lines and the preamble
+            // (its values may span lines; `preamble` parses them).
             let kind = if rest.is_empty() || rest.starts_with('#') {
                 Line::Blank
-            } else if rest.len() == trimmed.len() && rest.contains('=') {
-                Line::Preamble
             } else {
-                return refuse("not a `key = value` line before the first array");
+                Line::Preamble
             };
             each(line, at, kind)?;
             continue;
@@ -228,11 +249,22 @@ fn each_line<'t>(
             return refuse("not a header of the form the sync scripts write");
         };
         let kind = match header {
+            // A table before the first array (`[meta]`, `[profile.x]`) is
+            // part of the preamble.
+            Header {
+                array: false, top, ..
+            } if array.is_none() => {
+                tables.push(top);
+                Line::Preamble
+            }
             Header {
                 array: true,
                 top,
                 sub: None,
             } => {
+                if tables.contains(&top) {
+                    return refuse("an array named like a table of the preamble");
+                }
                 array = Some(top);
                 Line::Item(top)
             }
@@ -249,6 +281,42 @@ fn each_line<'t>(
         each(line, at, kind)?;
     }
     Ok(())
+}
+
+/// Where `text` has a `"""` or `'''` that could start a multi-line string:
+/// not in a comment line, and not inside a `"..."` string on its line (the
+/// scripts write strings with JSON escaping, so `'''` may be in one). One
+/// search over the whole text, not a check per line.
+fn multi_line_string(text: &str) -> Option<CatalogError> {
+    for marker in ["\"\"\"", "'''"] {
+        for (found, _) in text.match_indices(marker) {
+            let start = text[..found].rfind('\n').map_or(0, |at| at + 1);
+            let before = &text[start..found];
+            if before.trim_start().starts_with('#') {
+                continue;
+            }
+            // Inside a basic string: an odd number of unescaped `"` before.
+            let mut quotes = 0;
+            let mut escaped = false;
+            for byte in before.bytes() {
+                match (escaped, byte) {
+                    (true, _) => escaped = false,
+                    (false, b'\\') => escaped = true,
+                    (false, b'"') => quotes += 1,
+                    _ => {}
+                }
+            }
+            if quotes % 2 == 1 {
+                continue;
+            }
+            let shown = text[start..].lines().next().unwrap_or_default();
+            return Some(CatalogError {
+                line: text[..found].matches('\n').count() + 1,
+                why: format!("a multi-line string: {shown:?}"),
+            });
+        }
+    }
+    None
 }
 
 /// A table header as the sync scripts write it: `[[top]]`, `[[top.sub]]` or
@@ -318,6 +386,36 @@ mod tests {
         );
     }
 
+    /// The preamble may hold values over several lines and tables before
+    /// the first array; a `'''` inside a `"..."` string or a comment is no
+    /// multi-line string.
+    #[test]
+    fn a_preamble_with_tables_and_long_values_reads_as_the_whole_file() {
+        let text = "# a `\"\"\"` in a comment\ntypes = [\n    \"a\", \"b\",\n    \"c\",\n]\n\
+                    [meta]\nfetched = \"x\"\n[profile.one]\nk = 1\n\n[[t]]\n\
+                    doc = \"and=''') ok\"\n[[t]]\ndoc = \"b\"\n";
+        #[derive(Debug, serde::Deserialize, PartialEq)]
+        struct Whole {
+            types: Vec<String>,
+            meta: toml::Value,
+            profile: toml::Value,
+            t: Vec<toml::Value>,
+        }
+        #[derive(Debug, serde::Deserialize, PartialEq)]
+        struct Preamble {
+            types: Vec<String>,
+            meta: toml::Value,
+            profile: toml::Value,
+        }
+        let whole: Whole = toml::from_str(text).unwrap();
+        let first: Preamble = preamble(text).unwrap();
+        let t: Vec<toml::Value> = array_items(text, "t").unwrap();
+        assert_eq!(
+            (first.types, first.meta, first.profile, t),
+            (whole.types, whole.meta, whole.profile, whole.t)
+        );
+    }
+
     #[test]
     fn what_the_scripts_never_write_is_refused_not_read_otherwise() {
         for (text, why) in [
@@ -341,9 +439,18 @@ mod tests {
             ),
             ("[t.x]\nk = 1\n[[t]]\nname = \"a\"\n", "sub before item"),
             ("[[t]]\nname = \"a\"\n[t.x.y]\nk = 1\n", "deep sub"),
-            ("[[t]]\nname = \"a\"\n[x]\nk = 1\n", "top-level table"),
-            ("  k = 1\n[[t]]\nname = \"a\"\n", "indented preamble"),
-            ("words\n[[t]]\nname = \"a\"\n", "not a key = value"),
+            (
+                "[[t]]\nname = \"a\"\n[x]\nk = 1\n",
+                "top-level table after an array",
+            ),
+            (
+                "[[t]]\ndoc = '''x'''\n",
+                "a literal multi-line string on one line",
+            ),
+            (
+                "[[t]]\ndoc = \"a\" # '''\n",
+                "a marker after a string, outside it",
+            ),
             ("[[t]]\nname = \n", "an item that does not parse"),
         ] {
             assert!(array_items::<toml::Value>(text, "t").is_err(), "{why}");

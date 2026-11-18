@@ -43,12 +43,13 @@ A catalog is a TOML file under `data/catalogs/<language>/`, written by the langu
 never by hand. The script writes it in the form the loader reads:
 
 - comments and blank lines anywhere outside an item;
-- an optional **preamble** before the first array: `key = value` lines, each on one line (Falco's
-  `classes = [...]`, `syscalls = [...]`);
+- an optional **preamble** before the first array: `key = value` lines (Falco's `classes = [...]`,
+  CQL's `common_fields = [...]` over several lines) and tables (`[meta]`, `[profile.x]`);
 - then **top-level arrays of tables**:
   - each item starts at a line `[[name]]`;
   - its sub-tables are `[name.<sub>]` or `[[name.<sub>]]`;
-  - its values fit on their line.
+  - a value may span lines (a long array), but no line of it starts with `[`, which would read as a
+    header (the loader refuses such a line).
 
 Headers are bare names, at the start of the line, with nothing after them. No value is a `"""` or
 `'''` string; a script writes strings with JSON escaping (`json.dumps`), which TOML reads as basic
