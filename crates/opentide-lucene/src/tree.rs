@@ -303,6 +303,9 @@ pub(crate) fn walk_once(
     mut f: impl FnMut(&Node, &[Node]),
     mut token: impl FnMut(&rowan::SyntaxToken<crate::syntax::Lucene>),
 ) {
+    // Every caller passes `Tree::root`, a node; a token has nothing below it
+    // to walk.
+    debug_assert!(root.0.as_node().is_some(), "walk_once starts from a node");
     let NodeOrToken::Node(root) = &root.0 else {
         return;
     };

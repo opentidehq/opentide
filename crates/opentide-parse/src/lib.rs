@@ -59,7 +59,7 @@ mod input;
 mod parser;
 mod token_set;
 mod tree;
-pub mod walk;
+mod walk;
 
 pub use debug::{debug_error_kinds, debug_errors, debug_kinds, debug_tree, describe_expected};
 pub use input::{Grammar, Input, Lexeme, lex};

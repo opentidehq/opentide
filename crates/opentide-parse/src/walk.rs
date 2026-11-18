@@ -11,8 +11,9 @@ use rowan::{Language, NodeOrToken, SyntaxElement, SyntaxNode};
 
 /// Visits every element of `root`, `root` first, in preorder: a node before
 /// its children, the children in order, so the tokens come in document
-/// order. `visit` gets each element and its depth, the number of nodes
-/// above it (`root` is at 0). A caller that needs the ancestors keeps them
+/// order. `root` can be any node of a tree, not only its root: the walk
+/// stays below it. `visit` gets each element and its depth, the number of
+/// nodes above it (`root` is at 0). A caller that needs the ancestors keeps them
 /// in an [`Ancestors`], cut to the depth at each element.
 pub fn walk_once<L: Language>(
     root: &SyntaxNode<L>,
@@ -31,7 +32,10 @@ pub fn walk_once<L: Language>(
 
 /// The nodes above the element a [`walk_once`] visits, in a caller's own
 /// type: [`Ancestors::at`] cuts the stack to the element's depth and gives
-/// it, root first; [`Ancestors::push`] adds a node the walk enters.
+/// it, root first; [`Ancestors::push`] adds a node the walk enters. The
+/// caller pushes every node it meets, after reading its ancestors: a node
+/// left out would shift the depths, and an element below it would get too
+/// few ancestors.
 #[derive(Debug)]
 pub struct Ancestors<T>(Vec<T>);
 
@@ -43,7 +47,15 @@ impl<T> Default for Ancestors<T> {
 
 impl<T> Ancestors<T> {
     /// The ancestors of an element at `depth`, root first.
+    ///
+    /// Debug builds panic when fewer than `depth` nodes were pushed: the
+    /// caller skipped a node the walk entered.
     pub fn at(&mut self, depth: usize) -> &[T] {
+        debug_assert!(
+            depth <= self.0.len(),
+            "Ancestors::at({depth}) with {} pushed: push every node the walk enters",
+            self.0.len()
+        );
         self.0.truncate(depth);
         &self.0
     }
@@ -124,5 +136,16 @@ mod tests {
         }
         assert_eq!(walked, entered);
         assert_eq!(walked.len(), root.descendants_with_tokens().count());
+    }
+
+    /// A caller that skips a node it enters is caught in debug builds.
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "push every node the walk enters")]
+    fn skipping_a_node_is_caught() {
+        let mut ancestors: Ancestors<SyntaxNode<Lang>> = Ancestors::default();
+        walk_once(&tree(), |_, depth| {
+            ancestors.at(depth);
+        });
     }
 }
