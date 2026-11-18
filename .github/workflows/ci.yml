@@ -445,8 +445,9 @@ jobs:
           key: ${{ steps.sccache.outputs.key }}
           save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
-  # Each language's parse and full analysis, counted in instructions with
-  # callgrind and held to tests/bench/instructions.toml within 3% (#1571,
+  # Each language's parse and full analysis, counted with callgrind in the
+  # bench's own instructions (within 3%) and its allocator calls (within 2),
+  # and held to tests/bench/instructions.toml (#1571,
   # ADR 0014, docs/engine/THROUGHPUT.md): when a crate the analysis depends on,
   # the bench, the budgets or the command change. Instructions, not time: a
   # shared runner's time varies by more than any regression worth catching.
@@ -492,6 +493,16 @@ jobs:
       # runs (its valgrind and glibc are counted: the file names them).
       - name: Instruction counts within their budgets
         run: cargo xtask throughput --check
+
+      # The callgrind profiles, to trace a count that moved to a function
+      # (`callgrind_annotate --inclusive=yes`).
+      - name: Upload the callgrind profiles
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: throughput-profiles
+          path: target/throughput/
+          retention-days: 7
 
       - name: Save the compiler cache
         if: ${{ !cancelled() }}

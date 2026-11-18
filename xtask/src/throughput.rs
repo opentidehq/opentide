@@ -1,6 +1,6 @@
-//! `cargo xtask throughput`: each language's parse and analysis, counted in
-//! instructions with callgrind and held to `tests/bench/instructions.toml`
-//! (#1571, ADR 0014).
+//! `cargo xtask throughput`: each language's parse and analysis, counted with
+//! callgrind in instructions and in allocator calls, and held to
+//! `tests/bench/instructions.toml` (#1571, ADR 0014).
 //!
 //! The bench binary `crates/opentide-analysis/benches/throughput.rs` lists
 //! the languages (`--list`) and runs one counted pass of a language, mode
@@ -18,6 +18,11 @@
 //! again (`--record`), so that the gain is kept. The budgets file names the
 //! environment it was recorded in (valgrind, glibc, the architecture), and a
 //! check elsewhere warns.
+//!
+//! Leaving glibc out leaves out what malloc and free do, so each pass has a
+//! second budget, `<pass>_allocations`: the calls the bench's own code makes
+//! into the allocator ([`ALLOCATORS`]). It does not vary from run to run, so
+//! it is held within [`ALLOCATION_SLACK`] calls, with no percentage.
 
 use anyhow::{Context, Result, bail};
 use clap::builder::TypedValueParser as _;
@@ -29,6 +34,17 @@ use std::process::{Command, ExitCode};
 /// below it before the check asks for the budgets to be recorded again.
 pub const TOLERANCE: f64 = 0.03;
 
+/// How many allocator calls a count may differ from its budget by. The count
+/// does not vary from run to run, but it can by one from machine to machine:
+/// on CI's runner Exabeam's corpus analysis made one call more than here,
+/// on the same build inputs, valgrind and glibc (a CPU-dependent choice in a
+/// dependency; #1581). Below the smallest input set's number of analyses, so
+/// one allocation more a call still fails.
+pub const ALLOCATION_SLACK: u64 = 2;
+
+/// Where the callgrind profiles of the last run are kept.
+pub const PROFILES: &str = "target/throughput";
+
 /// How many times each pass is counted (the default of `--runs`).
 pub const RUNS: usize = 3;
 
@@ -38,7 +54,8 @@ const SETS: [&str; 2] = ["corpus", "external"];
 /// `cargo xtask throughput` arguments.
 #[derive(Debug, clap::Args)]
 pub struct ThroughputArgs {
-    /// Hold the counts to the budgets: exit 1 when one rises more than 3%.
+    /// Hold the counts to the budgets: exit 1 when an instruction count rises
+    /// more than 3%, or an allocator-call count rises more than its slack.
     #[arg(long, conflicts_with = "record")]
     pub check: bool,
     /// Write the counts as the new budgets.
@@ -116,9 +133,17 @@ fn counts(args: &ThroughputArgs) -> Result<Vec<Count>> {
             })
         })
         .collect();
-    let scratch = tempfile::tempdir()?;
+    // The profiles are kept, to trace a count that moved (CI uploads them
+    // when the check fails); each run starts the directory afresh.
+    let profiles = Path::new(PROFILES);
+    if profiles.exists() {
+        std::fs::remove_dir_all(profiles)
+            .with_context(|| format!("clearing {}", profiles.display()))?;
+    }
+    std::fs::create_dir_all(profiles)
+        .with_context(|| format!("creating {}", profiles.display()))?;
     let runs = crate::parallel::in_order(&cases, |&(language, mode, set, run)| {
-        count(&binary, scratch.path(), language, mode, set, run)
+        count(&binary, profiles, language, mode, set, run)
     })
     .into_iter()
     .collect::<Result<Vec<_>>>()?;
@@ -195,13 +220,17 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
             .copied();
         let (shown, verdict) = match budget {
             None => ("—".to_owned(), Verdict::Missing),
-            Some(b) => (b.to_string(), verdict(c.instructions, b, tolerance(&c.key))),
+            Some(b) => (b.to_string(), judge(&c.key, c.instructions, b)),
         };
         #[expect(clippy::cast_precision_loss, reason = "a ratio for the report")]
-        let per_byte = c.instructions as f64 / c.bytes.max(1) as f64;
+        let per_byte = if c.key.ends_with("_allocations") {
+            String::new()
+        } else {
+            format!("{:.0}", c.instructions as f64 / c.bytes.max(1) as f64)
+        };
         let change = budget.map_or_else(String::new, |b| change(&c.key, c.instructions, b));
         report.push_str(&format!(
-            "| {} | {} | {} | {per_byte:.0} | {shown} | {change} {} |\n",
+            "| {} | {} | {} | {per_byte} | {shown} | {change} {} |\n",
             c.language,
             c.key,
             c.instructions,
@@ -241,7 +270,7 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
     if !ok {
         eprintln!(
             "throughput: an instruction count is over its budget by more than {:.0}%, an \
-             allocator-call count is over its budget at all, a count has no budget, or a \
+             allocator-call count is over its budget by more than {ALLOCATION_SLACK}, a count has no budget, or a \
              budget is stale; fix the regression, or record the budgets again on purpose \
              (`cargo xtask throughput --record`, ADR 0014)",
             TOLERANCE * 100.0
@@ -314,14 +343,19 @@ fn verdict(count: u64, budget: u64, tolerance: f64) -> Verdict {
     }
 }
 
-/// The tolerance of a budget: [`TOLERANCE`] for instructions, none for
-/// allocator calls, whose count is exact from run to run and machine to
-/// machine.
-fn tolerance(key: &str) -> f64 {
+/// A count against its budget: an instruction count within [`TOLERANCE`],
+/// an allocator-call count within [`ALLOCATION_SLACK`] calls.
+fn judge(key: &str, count: u64, budget: u64) -> Verdict {
     if key.ends_with("_allocations") {
-        0.0
+        if count > budget + ALLOCATION_SLACK {
+            Verdict::Over
+        } else if count + ALLOCATION_SLACK < budget {
+            Verdict::Under
+        } else {
+            Verdict::Within
+        }
     } else {
-        TOLERANCE
+        verdict(count, budget, TOLERANCE)
     }
 }
 
@@ -397,6 +431,14 @@ fn count(
         instructions,
         allocations,
     } = own_cost(&profile, binary);
+    if allocations == 0 {
+        // Every pass allocates: none counted means the allocator's symbols no
+        // longer match ALLOCATORS (another global allocator, another libc).
+        bail!(
+            "{language} {mode} {set}: callgrind counted no call into {ALLOCATORS:?} \
+             from the bench binary"
+        );
+    }
     if instructions == 0 {
         bail!(
             "{language} {mode} {set}: callgrind counted nothing of the bench binary in \
@@ -537,13 +579,14 @@ fn parse_budgets(text: &str, path: &Path) -> Result<Budgets> {
 
 fn budgets_toml(budgets: &Budgets, environment: &str) -> String {
     let mut out = String::from(
-        "# Instructions each language's counted pass takes (`cargo xtask throughput`,\n\
-         # ADR 0014): parse alone and full analysis, over the short corpus and the\n\
-         # external public rules. Written by `cargo xtask throughput --record`; the\n\
-         # check fails a count more than 3% over. Record again when a change lowers\n\
-         # counts on purpose, or raises them on purpose with the reason in its PR.\n\
-         # Each is the highest of several runs, of the bench binary's own code\n\
-         # (glibc and the loader left out). CI checks on its `throughput` job's image.\n",
+        "# What each language's counted pass costs (`cargo xtask throughput`, ADR\n\
+         # 0014): parse alone and full analysis, over the short corpus and the\n\
+         # external public rules. `<pass>` is the bench binary's own instructions\n\
+         # (glibc and the loader left out), held within 3%; `<pass>_allocations`\n\
+         # its calls into the allocator, held within a few calls. Written by\n\
+         # `cargo xtask throughput --record`, the highest of several runs. Record\n\
+         # again when a change lowers counts on purpose, or raises them on purpose\n\
+         # with the reason in its PR.\n",
     );
     out.push_str(&format!("{ENVIRONMENT}{environment}\n"));
     for (language, counts) in budgets {
@@ -616,12 +659,16 @@ totals: 1300
         assert_eq!(verdict(1_029, 1_000, TOLERANCE), Verdict::Within);
         assert_eq!(verdict(1_031, 1_000, TOLERANCE), Verdict::Over);
         assert_eq!(verdict(969, 1_000, TOLERANCE), Verdict::Under);
-        // An allocator call more is over its budget; one fewer, under.
-        let exact = tolerance("parse_corpus_allocations");
-        assert_eq!(verdict(1_000, 1_000, exact), Verdict::Within);
-        assert_eq!(verdict(1_001, 1_000, exact), Verdict::Over);
-        assert_eq!(verdict(999, 1_000, exact), Verdict::Under);
-        assert!((tolerance("parse_corpus") - TOLERANCE).abs() < f64::EPSILON);
+        // Allocator calls: within ALLOCATION_SLACK calls, whatever the size.
+        let allocations = "parse_corpus_allocations";
+        assert_eq!(judge(allocations, 1_002, 1_000), Verdict::Within);
+        assert_eq!(judge(allocations, 1_003, 1_000), Verdict::Over);
+        assert_eq!(judge(allocations, 998, 1_000), Verdict::Within);
+        assert_eq!(judge(allocations, 997, 1_000), Verdict::Under);
+        assert_eq!(judge(allocations, 1_000_003, 1_000_000), Verdict::Over);
+        // Instructions: within TOLERANCE.
+        assert_eq!(judge("parse_corpus", 1_029, 1_000), Verdict::Within);
+        assert_eq!(judge("parse_corpus", 1_031, 1_000), Verdict::Over);
         assert_eq!(change("parse_corpus_allocations", 220_053, 219_819), "+234");
         assert_eq!(change("parse_corpus", 1_050, 1_000), "+5.0%");
     }
