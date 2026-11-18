@@ -409,6 +409,19 @@ struct Line {
     column: usize,
 }
 
+/// The live text lines of the block scalar `entries[at]` opens (`key: |`):
+/// the lines below it, before the next line at its indent or less, that are
+/// its text, as (line index, column of the text).
+fn block_text(entries: &[Line], at: usize) -> Vec<(usize, usize)> {
+    let entry = &entries[at];
+    entries[at + 1..]
+        .iter()
+        .take_while(|other| other.indent > entry.indent)
+        .filter(|other| other.role == Role::Text && !other.commented && other.path == entry.path)
+        .map(|other| (other.index, other.column))
+        .collect()
+}
+
 /// Each non-blank line of `lines` with its YAML path (`index_template`).
 /// Template comments hug the key (`  #author:`), so a commented line has the
 /// indentation it would have uncommented.
@@ -535,6 +548,9 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
     let mut placeholders: Vec<String> = Vec::new();
     let mut replacements: HashMap<usize, String> = HashMap::new();
     let mut marked_lines: BTreeSet<usize> = BTreeSet::new();
+    // Text written after a line: a block scalar's text, where the template
+    // shows its key with none.
+    let mut appended: HashMap<usize, String> = HashMap::new();
     let fields = fill.fields;
 
     let live = |entry: &Line| match entry.role {
@@ -646,38 +662,18 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
         let entry = &entries[at];
         let head = &lines[entry.index][..entry.column];
         if entry.role == Role::Key {
-            // A key the template writes as a block scalar (`key: |` over its
-            // text lines) keeps that form: a text value is the block's text,
-            // and the template's other text lines go. A scalar on the key's
-            // line with the text lines left below it is not YAML.
-            let text_lines: Vec<&Line> = entries
-                .iter()
-                .filter(|other| {
-                    other.role == Role::Text
-                        && other.path == entry.path
-                        && other.index > entry.index
-                })
-                .collect();
-            if entry.value == "|"
-                && let (Scalar::Text(body), Some(first)) = (value, text_lines.first())
-                && !body.contains('\n')
-            {
-                let indent = &lines[first.index][..first.column];
-                replacements.insert(first.index, format!("{indent}{body}"));
-                for other in &text_lines[1..] {
-                    replacements.insert(other.index, String::new());
-                }
-                return;
-            }
-            for other in &text_lines {
-                replacements.insert(other.index, String::new());
-            }
             let leaf = entry.path.last().map_or("", String::as_str);
             replacements.insert(entry.index, format!("{head}{leaf}: {}", scalar_text(value)));
             // A scalar replaces the list form the template shows for a
-            // `str | list[str]` key: drop its item lines.
+            // `str | list[str]` key: drop its item lines; and the block form
+            // of a `key: |`: drop its text lines.
             for item in items_of(entries, at) {
                 replacements.insert(entries[item].index, String::new());
+            }
+            if entry.value == "|" {
+                for (index, _) in block_text(entries, at) {
+                    replacements.insert(index, String::new());
+                }
             }
         } else {
             replacements.insert(entry.index, format!("{head}{}", scalar_text(value)));
@@ -837,6 +833,35 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
             continue;
         }
         if let Some(given) = given {
+            if entries[at].value == "|"
+                && let Scalar::Text(body) = given
+            {
+                // A block scalar keeps its `|`: the text replaces its lines,
+                // one block line per line of the text (`_fill_template`).
+                let text = block_text(&entries, at);
+                let head = text.first().map_or_else(
+                    || " ".repeat(entries[at].column + 2),
+                    |(index, column)| lines[*index][..*column].to_owned(),
+                );
+                let rendered = body
+                    .lines()
+                    .map(|line| format!("{head}{line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if let Some(((first, _), rest)) = text.split_first() {
+                    replacements.insert(*first, rendered);
+                    for (index, _) in rest {
+                        replacements.insert(*index, String::new());
+                    }
+                } else {
+                    appended.insert(entries[at].index, rendered);
+                }
+                if fill.marked.contains(&path) {
+                    placeholders.push(path.join("."));
+                    marked_lines.insert(entries[at].index);
+                }
+                continue;
+            }
             set_value(&lines, &entries, &mut replacements, at, given);
             if fill.marked.contains(&path) {
                 placeholders.push(path.join("."));
@@ -878,6 +903,9 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
         if marked_lines.contains(&index) {
             output.push(format!("{}  {PLACEHOLDER_MARKER}", text.trim_end()));
         } else {
+            output.push(text.clone());
+        }
+        if let Some(text) = appended.get(&index) {
             output.push(text.clone());
         }
     }

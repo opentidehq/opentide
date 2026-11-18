@@ -269,21 +269,16 @@ fn dropping_adjacent_blocks_leaves_one_blank_line() {
     assert!(!kept.contains("\n\n\n"), "{kept}");
 }
 
-/// A value for a key the template writes as a block scalar is the block's
-/// text: `new rule --platform google_secops` wrote `outcome: "$risk_score =
-/// 40"` over the template's `...` line, which no YAML reader accepts.
-#[test]
-fn a_block_scalar_key_keeps_its_block_and_takes_the_value_as_its_text() {
+/// `fill_template` over `template` with `value` given for `body.description`
+/// (a block scalar in the template) and marked.
+fn with_description(template: &str, value: Scalar) -> String {
     let root = model();
     let model = Model::new(&root);
     let fields = collect_fields(&model, &root, &[], &[]);
-    let values = HashMap::from([(
-        path(&["body", "description"]),
-        Scalar::Text("$risk_score = 40".into()),
-    )]);
+    let values = HashMap::from([(path(&["body", "description"]), value)]);
     let marked = HashSet::from([path(&["body", "description"])]);
-    let filled = fill_template(
-        TEMPLATE,
+    fill_template(
+        template,
         &Fill {
             fields: &fields,
             values: &values,
@@ -292,15 +287,51 @@ fn a_block_scalar_key_keeps_its_block_and_takes_the_value_as_its_text() {
             marked: &marked,
             make_uuid: &|| "fresh".to_owned(),
         },
+    )
+    .text
+}
+
+/// A value for a key the template writes as a block scalar is the block's
+/// text, one block line per line, as `_fill_template` writes it: `new rule
+/// --platform google_secops` wrote `outcome: "$risk_score = 40"` over the
+/// template's `...` line, which no YAML reader accepts. The key and its text
+/// are commented in the template, as a platform block's are.
+#[test]
+fn a_block_scalar_key_keeps_its_block_and_takes_the_value_as_its_text() {
+    let template = TEMPLATE.replace(
+        "  description: |\n    ...\n",
+        "  #description: |\n    #...\n",
     );
-    let text = &filled.text;
+    let one = with_description(&template, Scalar::Text("$risk_score = 40".into()));
     assert!(
-        text.contains("\n  description: |  # opentide:placeholder\n    $risk_score = 40\n  tags:"),
+        one.contains("\n  description: |  # opentide:placeholder\n    $risk_score = 40\n  tags:"),
+        "{one}"
+    );
+    assert!(opentide_schema::node::load(&one).is_ok(), "{one}");
+    let two = with_description(&template, Scalar::Text("first\nsecond".into()));
+    assert!(
+        two.contains("\n  description: |  # opentide:placeholder\n    first\n    second\n  tags:"),
+        "{two}"
+    );
+    assert!(opentide_schema::node::load(&two).is_ok(), "{two}");
+}
+
+/// A block key the template shows without text gets its text two columns
+/// in, after the key's line (and its marker); a value that is not text
+/// replaces the block, and its text lines go.
+#[test]
+fn a_block_key_without_text_gets_its_text_and_a_scalar_replaces_the_block() {
+    let bare = TEMPLATE.replace("  description: |\n    ...\n", "  description: |\n");
+    let text = with_description(&bare, Scalar::Text("$x".into()));
+    assert!(
+        text.contains("\n  description: |  # opentide:placeholder\n    $x\n  tags:"),
         "{text}"
     );
+    assert!(opentide_schema::node::load(&text).is_ok(), "{text}");
+    let flag = with_description(TEMPLATE, Scalar::Bool(false));
     assert!(
-        !text.contains("40\n    ..."),
-        "the template's text line stays: {text}"
+        flag.contains("\n  description: false  # opentide:placeholder\n  tags:"),
+        "{flag}"
     );
-    assert!(opentide_schema::node::load(text).is_ok(), "{text}");
+    assert!(opentide_schema::node::load(&flag).is_ok(), "{flag}");
 }
