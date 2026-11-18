@@ -2087,10 +2087,6 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// A tenant that failed on a rule, whose failed row and log line already
-    /// report it: the run fails, the tenant counts as stopped (a platform
-    /// none of whose tenants deployed is not in `deployed`), and its rules
-    /// not sent yet are not attempted.
     /// A deploy the tenant failed on: the rule fails with the connector's
     /// text, an interrupt stops the run, and otherwise the tenant's other
     /// rules are not attempted.
@@ -2116,6 +2112,10 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
+    /// A tenant that failed on a rule, whose failed row and log line already
+    /// report it: the run fails, the tenant counts as stopped (a platform
+    /// none of whose tenants deployed is not in `deployed`), and its rules
+    /// not sent yet are not attempted.
     fn stop_tenant(&mut self, platform: &str, tenant: &str, log: &mut DeployLog<'_>) {
         self.failed = true;
         self.stopped_tenants
@@ -2296,7 +2296,7 @@ impl Sender<'_, '_> {
     /// The request a Sentinel rule sends: the compiled analytic rule, or its
     /// deletion (announced).
     fn sentinel_request(
-        &mut self,
+        &self,
         platform: &str,
         batch: &Batch,
         rule: &opentide_compile::Rule,
@@ -2328,7 +2328,7 @@ impl Sender<'_, '_> {
     /// The request a Splunk rule sends: its saved search's settings under its
     /// name (` - Rule` for a correlation search), or its deletion.
     fn splunk_request(
-        &mut self,
+        &self,
         platform: &str,
         batch: &Batch,
         rule: &opentide_compile::Rule,
@@ -2387,7 +2387,7 @@ impl Sender<'_, '_> {
     /// The request a Carbon Black Cloud rule sends: its report, retired when
     /// it is not deployed; `None` when the rule compiles to no report.
     fn carbon_black_request(
-        &mut self,
+        &self,
         batch: &Batch,
         rule: &opentide_compile::Rule,
     ) -> Result<Option<DeployRequest>, Raised> {
@@ -2429,7 +2429,7 @@ impl Sender<'_, '_> {
     /// The request a HarfangLab rule sends, compiled for the kind the tenant's
     /// `type` names, a `$VARIABLE` resolved.
     fn harfanglab_request(
-        &mut self,
+        &self,
         connection: &Connection,
         batch: &Batch,
         rule: &opentide_compile::Rule,
@@ -2549,7 +2549,6 @@ impl Sender<'_, '_> {
         );
     }
 
-    /// `unpersisted_error`: a create in CI whose id nobody would commit.
     /// Why a rule whose remote copy is gone must not be created again: the
     /// deployment state is ignored by git, or this run does not persist it.
     fn recreate_refusal(&self, uuid: &str, platform: &str, tenant: &str) -> Option<StateError> {
@@ -2562,6 +2561,7 @@ impl Sender<'_, '_> {
         }
     }
 
+    /// `unpersisted_error`: a create in CI whose id nobody would commit.
     fn unpersisted(&self, uuid: &str, platform: &str, tenant: &str) -> Option<StateError> {
         if self.persist {
             return None;
@@ -3243,9 +3243,6 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// One Elastic rule: screened by its status, compiled, sent, and its
-    /// result logged. `true` when the tenant failed and the rest of its rules
-    /// are left out.
     /// An Elastic deploy the tenant failed on (unreachable, or a key or
     /// privilege it refuses): the rule fails, an interrupt stops the run, and
     /// otherwise the tenant's other rules are not attempted.
@@ -3283,6 +3280,9 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
+    /// One Elastic rule: screened by its status, compiled, sent, and its
+    /// result logged. `true` when the tenant failed and the rest of its rules
+    /// are left out.
     fn elastic_rule(
         &mut self,
         connection: &Connection,
@@ -3691,8 +3691,6 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// One Bitdefender rule: compiled, sent, and its result logged. `true` when
-    /// the tenant failed and the rest of its rules are left out.
     /// The request a Bitdefender rule sends: a delete names the recorded id
     /// alone; anything else sends the compiled rule's `params`, and says when
     /// the tenant runs no automatic actions while the rule has some.
@@ -3729,6 +3727,8 @@ impl Sender<'_, '_> {
         ))
     }
 
+    /// One Bitdefender rule: compiled, sent, and its result logged. `true` when
+    /// the tenant failed and the rest of its rules are left out.
     fn bitdefender_rule(
         &mut self,
         connection: &Connection,
@@ -3960,8 +3960,6 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// One Google SecOps rule: compiled, sent, and its result logged. `true`
-    /// when the tenant failed and the rest of its rules are left out.
     /// A Google SecOps rule the tenant refused: what the deploy did before
     /// the failure, then each failure, a refused re-creation as its own.
     fn google_secops_rule_failed(
@@ -4008,6 +4006,8 @@ impl Sender<'_, '_> {
         }
     }
 
+    /// One Google SecOps rule: compiled, sent, and its result logged. `true`
+    /// when the tenant failed and the rest of its rules are left out.
     fn google_secops_rule(
         &mut self,
         connection: &Connection,
@@ -4242,9 +4242,6 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// One Graylog rule: compiled for the tenant's version, sent, and its
-    /// result logged. `true` when the tenant failed and the rest of its rules
-    /// are left out.
     /// A Graylog rule the tenant refused: what the deploy did before the
     /// failure, then the failure; a refused re-creation is logged as the
     /// request it stopped.
@@ -4348,6 +4345,9 @@ impl Sender<'_, '_> {
             .map_err(|error| format!("the compiled definition is not JSON: {error}"))
     }
 
+    /// One Graylog rule: compiled for the tenant's version, sent, and its
+    /// result logged. `true` when the tenant failed and the rest of its rules
+    /// are left out.
     fn graylog_rule(
         &mut self,
         connection: &Connection,
@@ -4518,8 +4518,6 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// One Exabeam rule: compiled, sent, and its result logged. `true` when
-    /// the tenant failed and the rest of its rules are left out.
     /// An Exabeam rule the tenant refused: what the deploy did before the
     /// failure, then the failure, a refused re-creation as its own.
     fn exabeam_rule_failed(
@@ -4560,6 +4558,8 @@ impl Sender<'_, '_> {
         }
     }
 
+    /// One Exabeam rule: compiled, sent, and its result logged. `true` when
+    /// the tenant failed and the rest of its rules are left out.
     fn exabeam_rule(
         &mut self,
         connection: &Connection,

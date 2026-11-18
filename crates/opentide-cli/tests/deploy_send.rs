@@ -1159,6 +1159,7 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
     };
     let lost = "00000000-0000-4000-8099-000000000081";
     let denied = "00000000-0000-4000-8099-000000000082";
+    let after = "00000000-0000-4000-8099-000000000084";
     let ws = stated(
         "sysdig",
         "ssl = true\nurl = \"https://sysdig-tenant.invalid/\"\napi_token = \
@@ -1166,9 +1167,11 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
         &[
             ("a.yaml", lost, block("DISABLED"), "42"),
             ("b.yaml", denied, block("STAGING"), "401"),
+            ("c.yaml", after, block("STAGING"), "402"),
         ],
     );
-    // Rule 42 is gone (404); the token may not read rule 401 (403).
+    // Rule 42 is gone (404); the token may not read rule 401 (403), which
+    // stops the tenant: rule 402 is never sent.
     let (proxy, env, _ca) = replay("sysdig/deploy", &[17, 25], "SYSDIG_SECURE_API_TOKEN");
     let (sent, _) = deploy(
         ws.path(),
@@ -1181,6 +1184,8 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
     let rows = rows(&sent);
     assert_eq!(rows[0], ("deployed".to_owned(), None));
     assert_eq!(rows[1].0, "failed");
+    assert_eq!(rows[2].0, "not_attempted", "{rows:?}");
+    assert_eq!(rows.len(), 3, "{rows:?}");
     assert!(
         !ws.path()
             .join(format!(".opentide/states/deployment/{lost}.json"))
