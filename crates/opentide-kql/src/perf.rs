@@ -6,8 +6,8 @@
 //! cannot know which side is larger.
 
 use crate::schema::{self, Analysis, Known};
+use foldhash::{HashMap, HashMapExt};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
-use std::collections::HashMap;
 
 const CITE: &str = "https://learn.microsoft.com/en-us/kusto/query/best-practices";
 
