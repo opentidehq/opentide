@@ -36,11 +36,22 @@ const YARA_CONTENT: &str = "import \"pe\"\n\nrule harfanglab_yara_loader {\n    
 id = \"00000000-0000-4000-8003-000000000008\"\n    strings:\n        $a = \"loader\"\n    \
 condition:\n        $a\n}";
 
-fn setup(kind: &str) -> String {
-    format!(
-        "ssl = true\ntype = \"{kind}\"\nurl = \"https://hl-tenant.invalid/\"\n\
-         api_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n"
-    )
+/// One tenant's setup: no kind, as every tenant takes Sigma and YARA.
+fn setup() -> String {
+    "ssl = true\nurl = \"https://hl-tenant.invalid/\"\n\
+     api_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n"
+        .to_owned()
+}
+
+/// A deploy request's body: the rule's `kind` and, unless empty, the
+/// compiled `rule` (`opentide_compile::harfanglab::request_body`).
+fn envelope(kind: &str, rule: &[u8]) -> Vec<u8> {
+    if rule.is_empty() {
+        format!("{{\"kind\": \"{kind}\"}}").into_bytes()
+    } else {
+        let rule = std::str::from_utf8(rule).unwrap();
+        format!("{{\"kind\": \"{kind}\", \"rule\": {rule}}}").into_bytes()
+    }
 }
 
 fn object(pairs: Vec<(&str, Json)>) -> Json {
@@ -122,7 +133,7 @@ fn harfanglab_deploys_as_the_python_client_does() {
             &replay,
             "harfanglab",
             "hl",
-            &setup(kind),
+            &setup(),
             &harfanglab::http_defaults(),
         );
         let cx = TenantContext {
@@ -130,7 +141,8 @@ fn harfanglab_deploys_as_the_python_client_does() {
             http: &http,
             cancel: &cancel,
         };
-        let request = DeployRequest::new(rule_id.to_owned(), operation, body);
+        // One tenant, both kinds: the request's kind picks the endpoint.
+        let request = DeployRequest::new(rule_id.to_owned(), operation, envelope(kind, &body));
         block_on(async { deployer.deploy(cx, &request).await })
             .unwrap()
             .map(|outcome| outcome.remote_id)
@@ -174,7 +186,8 @@ fn harfanglab_deploys_as_the_python_client_does() {
         deploy_refusal(&missing).0,
         "Could not delete rule sigma-missing on HarfangLab tenant hl (HTTP 404)"
     );
-    // A YARA tenant takes YARA files: posted, then deleted by the rule's UUID.
+    // The same tenant takes YARA files: posted, then deleted by the rule's
+    // UUID from the YaraFile endpoint.
     run(
         "YARA",
         Operation::Create,
@@ -190,6 +203,60 @@ fn harfanglab_deploys_as_the_python_client_does() {
     );
     run("YARA", Operation::Delete, "yara-missing", Vec::new()).unwrap_err();
     assert_eq!(replay.proxy.verify(), Vec::new());
+}
+
+/// A request whose body does not name the rule's kind fails that rule, with
+/// its own code, before any call: the kind is the rule's, never the
+/// tenant's.
+#[test]
+fn harfanglab_refuses_a_request_without_its_kind() {
+    let replay = replay_cassette(cassette_support::cassette("harfanglab/deploy"), &[TOKEN]);
+    let registry = registry();
+    let deployer = registry.get("harfanglab").unwrap().deployer().unwrap();
+    let cancel = CancellationToken::new();
+    let (tenant, http) = tenant(
+        &replay,
+        "harfanglab",
+        "hl",
+        &setup(),
+        &harfanglab::http_defaults(),
+    );
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    for (operation, body, reason) in [
+        (Operation::Create, sigma("Bare", true), "no kind"),
+        (Operation::Create, b"not json".to_vec(), "not JSON"),
+        (
+            Operation::Delete,
+            Vec::new(),
+            "a HarfangLab delete names its kind too: {\"kind\": \"Sigma\" or \"YARA\"}",
+        ),
+        (
+            Operation::Create,
+            br#"{"kind": "sigma"}"#.to_vec(),
+            "kind is not \"Sigma\" or \"YARA\"",
+        ),
+        (
+            Operation::Update,
+            br#"{"kind": "YARA"}"#.to_vec(),
+            "no rule",
+        ),
+    ] {
+        let request = DeployRequest::new(RULE_ID.to_owned(), operation, body);
+        let error = block_on(async { deployer.deploy(cx, &request).await })
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.scope, DeployScope::Rule, "{reason}");
+        assert_eq!(error.failure.code, harfanglab::REQUEST_INVALID, "{reason}");
+        assert!(
+            error.failure.message.ends_with(reason),
+            "{}",
+            error.failure.message
+        );
+    }
 }
 
 fn query(text: &str, limit: usize, timeout: Duration) -> QueryRequest {
@@ -229,7 +296,7 @@ fn harfanglab_searches_telemetry_as_the_python_runner_does() {
         &replay,
         "harfanglab",
         "hl",
-        &setup("Sigma"),
+        &setup(),
         &harfanglab::http_defaults(),
     );
     let registry = registry();
