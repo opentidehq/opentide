@@ -34,9 +34,7 @@ exit: 1
     }
   ],
   "command": "deploy",
-  "deployed": [
-    "sysdig"
-  ],
+  "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
   "error": "Deployment to sysdig failed on Sysdig create rule: Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
@@ -85,7 +83,7 @@ exit: 1
       "id": "00000000-0000-4000-8047-000000000032",
       "name": "Sysdig rule the tenant lost",
       "platform": "sysdig",
-      "reason": "not attempted after a failure",
+      "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
       "tenant": "lab"
@@ -96,7 +94,7 @@ exit: 1
       "id": "00000000-0000-4000-8047-000000000033",
       "name": "Sysdig rule to disable the tenant lost",
       "platform": "sysdig",
-      "reason": "not attempted after a failure",
+      "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
       "tenant": "lab"
