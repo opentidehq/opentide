@@ -27,6 +27,8 @@ if (mode === 'imports') {
     falco: 'spawned_process and container and proc.name in (shell_binaries)',
     cql: '#event_simpleName=ProcessRollup2 | groupBy([aid, ComputerName], function=count())',
     exabeam: 'activity_type:"process-create" AND process_name:("powershell.exe", "pwsh.exe")',
+    yara: 'rule demo { strings: $a = "cmd.exe" condition: $a }',
+    yaral: 'rule demo { events: $e.metadata.event_type = "PROCESS_LAUNCH" condition: $e }',
   };
   for (const [id, text] of Object.entries(samples)) {
     const result = wasm.highlight(id, new TextEncoder().encode(text));
