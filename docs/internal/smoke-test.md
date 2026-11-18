@@ -43,6 +43,7 @@ of a run on this commit (wheels, `npm-packages`, the binaries; development versi
   ```bash
   (cd "$REPO" && pipx run maturin==1.16.0 build --locked --out "$OUT/dist")
   ```
+  `uvx maturin==1.16.0` does the same where `pipx` is not installed (`uv` is the dev setup's).
   Expected: `$OUT/dist/opentide-$V-cp310-abi3-<platform>.whl`.
 - [ ] **npm packages** (this machine's native package, with its addon):
   ```bash
@@ -59,7 +60,8 @@ of a run on this commit (wheels, `npm-packages`, the binaries; development versi
   - it checks that npm chose this machine's native package, that `npx opentide --version` prints
     `$V-dev.1`, that the SDK loads from CommonJS and ESM, and that `tsc` resolves its types.
 
-  Expected: it ends without an error.
+  Expected: its last lines are `PASS: @opentide/opentide@$V-dev.1 installs from a local registry and
+  runs on <platform>` and `kept $OUT/npm-work`, and it exits 0.
 - [ ] **Binaries:**
   ```bash
   (cd "$REPO" && cargo build --locked --release -p opentide --features cli --bin opentide && cargo build --locked --release -p opentide-lsp)
@@ -90,7 +92,7 @@ of a run on this commit (wheels, `npm-packages`, the binaries; development versi
   "$REPO/target/release/opentide" --version
   "$REPO/target/release/opentide-lsp" --version
   ```
-  Expected: `$V` from both.
+  Expected: `opentide $V` and `opentide-lsp $V`.
 
 ```bash
 export PATH="$OUT/py/bin:$REPO/target/release:$PATH"
@@ -187,7 +189,8 @@ printf '%s\n' \
 ## 6. Editors
 
 - [ ] **Neovim, headless:** `nvim --headless --clean -l "$REPO/scripts/engine/nvim-smoke.lua" "$REPO/target/release/opentide-lsp"`.
-  Expected: exit 0. The nightly runs it on a debug build; this is the release build. It attaches
+  Neovim comes from the system's packages (`apt-get install neovim`, as the nightly does) or a
+  Neovim release. Expected: exit 0 and a line `nvim-smoke: ..., one diagnostic (kql_unknown_operator), ...`. The nightly runs it on a debug build; this is the release build. It attaches
   Neovim's own client and requires one `kql_unknown_operator` diagnostic.
 - [ ] **Neovim, by hand:**
   1. Source `$REPO/editors/nvim/opentide.lua`. It starts `opentide-lsp --stdio` for rules and
@@ -196,7 +199,7 @@ printf '%s\n' \
   3. Expected: a diagnostic on that line, hover on `SecurityEvent`, and completion after `| `.
   4. Write `SecurityEvent | wherre x` to `$SMOKE/q.kql` and open it. Expected: the same diagnostic.
   5. Misspell a key in `.opentide/configurations/platforms/splunk.toml`. Expected: a diagnostic.
-- [ ] **VS Code:**
+- [ ] **VS Code** (by hand, in a desktop session: an agent's container skips it and says so):
   1. Install the opentide extension built from opentidehq/vscode-extension (its README: package a
      `.vsix`, then **Extensions: Install from VSIX…**), with its server pointed at this build's
      `opentide-lsp`.
@@ -216,9 +219,16 @@ printf '%s\n' \
   ```bash
   node -e "const {Workspace}=require('$OUT/npm-tree/bindings/node'); Workspace.open('$SMOKE').then(ws => console.log(ws.validate({}).summary))"
   ```
-  Expected: `objects: 30`, `errors: 0`.
+  Expected: `objects: 30`, `errors: 0`, `warnings: 1` (the Bitdefender fixture's
+  `bitdefender_severity_collapsed`).
 - [ ] The snippets of [the Python SDK pages](../sdk/workspace.md) and
-  [TypeScript](../sdk/typescript.md) run as written against `$SMOKE`.
+  [TypeScript](../sdk/typescript.md) run as written against a copy of `$SMOKE`, each fence from that
+  directory (the TypeScript ones with `@opentide/opentide` resolving to `$OUT/npm-tree/bindings/node`).
+  Expected:
+  - every fence runs, except the tenant operations (`Connection`): they need a configured tenant and
+    stop with `credential_unset`, naming `S1_API_TOKEN` (`$SMOKE`'s SentinelOne tenant has no
+    credentials). The test suite runs them against the SentinelOne stand-in of `tests/cassettes/`;
+  - the `strict: true` validation exits 1: strict fails the Bitdefender fixture's one warning.
 
 ## 8. Clean up
 
