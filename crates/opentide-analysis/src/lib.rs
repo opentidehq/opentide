@@ -216,11 +216,12 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
             }
         }
         LanguageId::Yara => {
-            let r = opentide_yara::analyze(&request.text);
+            // One parse for the diagnostics and the outline (ADR 0014).
+            let (r, symbols) = opentide_yara::analyze_document(&request.text);
             AnalyzeResponse {
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
-                symbols: yara::symbols(&request.text),
+                symbols: yara::outline(&request.text, symbols),
             }
         }
         // A `.exabeam` file is a search (exabeam-1.0, "Defaults").
