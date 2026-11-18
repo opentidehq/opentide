@@ -84,7 +84,7 @@ const LANGUAGES: &[Language] = &[
         external: &["kuery-opensearch-dashboards"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_kuery::parses(s));
+            std::hint::black_box(opentide_kuery::parse_tree(s));
         },
     },
     Language {
@@ -95,7 +95,7 @@ const LANGUAGES: &[Language] = &[
         external: &["lucene", "lucene-queryparser"],
         skip: &[],
         parse: |s| {
-            std::hint::black_box(opentide_lucene::parses(s));
+            std::hint::black_box(opentide_lucene::parse_tree(s));
         },
     },
     Language {

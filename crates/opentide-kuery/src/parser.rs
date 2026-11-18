@@ -4,7 +4,9 @@
 //! flat node, so a 20 000-term chain is not 20 000 levels deep.
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
-use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree};
+use opentide_parse::{
+    Event, Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -56,6 +58,41 @@ pub(crate) const MEMO_MAX: usize = 64 * 1024;
 
 /// Parses `source` (with Kibana's trailing-keyword masking when `mask`).
 pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {
+    let parse = with_events(source, mask, built);
+    (SyntaxNode::new_root(parse.green.clone()), parse)
+}
+
+/// Whether [`parse`] reports no error. Every error the grammar records is
+/// one of the tree's, so a text with one is rejected without building the
+/// tree (ADR 0014 §4); the tree is built only to rule out the errors the
+/// build itself finds (a tree too deep).
+pub(crate) fn accepts(source: &str, mask: bool) -> bool {
+    with_events(source, mask, |input, events| {
+        !events.iter().any(|e| matches!(e, Event::Error { .. }))
+            && built(input, events).errors.is_empty()
+    })
+}
+
+thread_local! {
+    /// The trees built on this thread: [`trees_built`].
+    static TREES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many trees this thread has built (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn trees_built() -> usize {
+    TREES_BUILT.get()
+}
+
+#[inline]
+fn built(input: &Input<'_>, events: Vec<Event>) -> Parse {
+    TREES_BUILT.set(TREES_BUILT.get() + 1);
+    build(input, events)
+}
+
+/// `f` of the grammar's events over `source`, before the tree is built.
+#[inline]
+fn with_events<R>(source: &str, mask: bool, f: impl FnOnce(&Input<'_>, Vec<Event>) -> R) -> R {
     let grammar = Grammar {
         eof: K::Eof.raw(),
         error: K::Error.raw(),
@@ -79,8 +116,8 @@ pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {
         }
     }
     root.complete(&mut p, K::SourceFile.raw());
-    let parse = build(&input, p.finish());
-    (SyntaxNode::new_root(parse.green.clone()), parse)
+    let events = p.finish();
+    f(&input, events)
 }
 
 fn at(p: &mut Parser<'_>, kind: K) -> bool {
@@ -272,6 +309,81 @@ mod tests {
     use super::*;
     use crate::syntax::Kuery;
     use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
+
+    /// The texts of the corpus and the external sets, each cut at every
+    /// character: valid and broken queries alike.
+    fn texts() -> Vec<String> {
+        let testdata = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
+        let mut out = Vec::new();
+        for dir in [
+            "corpus/kuery",
+            "conformance/external/kuery-opensearch-dashboards",
+        ] {
+            let mut dirs = vec![testdata.join(dir)];
+            while let Some(dir) = dirs.pop() {
+                for path in std::fs::read_dir(&dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|e| e.path())
+                {
+                    if path.is_dir() {
+                        dirs.push(path);
+                    } else if let Ok(text) = std::fs::read_to_string(&path) {
+                        out.extend(text.lines().map(str::to_owned).take(200));
+                        out.push(text);
+                    }
+                }
+            }
+        }
+        let cut: Vec<String> = out
+            .iter()
+            .filter(|t| t.len() < 400)
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t[..i].to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// `accepts` is `parse`'s verdict, on every text and at the nesting
+    /// limits, where the build itself reports a tree too deep.
+    #[test]
+    fn accepts_is_the_parse_without_errors() {
+        let mut sources = texts();
+        for depth in [MAX_DEPTH - 1, MAX_DEPTH, MAX_DEPTH + 1] {
+            let depth = depth as usize;
+            sources.push(format!("{}a:1{}", "(".repeat(depth), ")".repeat(depth)));
+        }
+        let (mut accepted, mut rejected) = (0, 0);
+        for source in &sources {
+            let expected = parse(source, false).1.errors.is_empty();
+            assert_eq!(accepts(source, false), expected, "{source:?}");
+            if expected {
+                accepted += 1;
+            } else {
+                rejected += 1;
+            }
+        }
+        assert!(
+            accepted > 100 && rejected > 100,
+            "{accepted} accepted, {rejected} rejected"
+        );
+    }
+
+    /// A rejected text builds no tree (ADR 0014 §7): the other engine asks
+    /// it of every query its own grammar rejects.
+    #[test]
+    fn a_rejected_text_builds_no_tree() {
+        let before = trees_built();
+        assert!(!accepts("a:1 and (b or c", false));
+        assert_eq!(trees_built() - before, 0);
+        assert!(accepts("a:1 and (b or c)", false));
+        assert_eq!(trees_built() - before, 1);
+    }
 
     #[test]
     fn every_tree_is_lossless() {

@@ -88,7 +88,16 @@ pub struct AnalyzeResult {
 /// was written for `language: lucene`); pass it to `opentide_kuery::analyze`.
 #[must_use]
 pub fn parses(source: &str) -> bool {
-    !Tree::parse(source).has_error()
+    parser::accepts(source)
+}
+
+/// The parse [`analyze`] runs, tree included, and its error count: the
+/// throughput benchmark's parse (`cargo bench --bench throughput`, ADR 0014).
+/// Not API.
+#[doc(hidden)]
+#[must_use]
+pub fn parse_tree(source: &str) -> usize {
+    Tree::parse(source).errors.len()
 }
 
 pub fn analyze(source: &str) -> AnalyzeResult {
