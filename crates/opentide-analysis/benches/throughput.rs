@@ -1,7 +1,6 @@
 //! Throughput of each language's parse and analysis (#1571, ADR 0014).
 //!
-//!     cargo bench -p opentide-analysis --bench throughput            # wall time
-//!     cargo xtask throughput [--check | --record]                    # instructions
+//!     cargo bench -p opentide-analysis --bench throughput
 //!
 //! Two input sets per language:
 //! - `corpus`: `crates/testdata/corpus/<lang>/`, short queries: the per-call
@@ -9,37 +8,34 @@
 //! - `external`: `crates/testdata/conformance/external/<dirs>/`, real public
 //!   rules, in subdirectories too (the `.broken.` twins left out), and the
 //!   accepted queries of a reference parser's `cases.tsv`: bytes a second on
-//!   realistic input.
+//!   realistic input. A text is a file or one `cases.tsv` row.
 //!
 //! Each in two modes: `parse` (the parse alone, through the language's own
 //! entry point) and `analyze` (`opentide_analysis::analyze`, all of it).
 //!
 //! With no arguments it prints the wall-time table: release build, 1 thread,
-//! a warm-up, then rounds until at least 15 and 1 s, the median. With
-//! `--count LANG MODE SET` it runs two warm-up passes, then one pass inside
-//! `counted`, which `cargo xtask throughput` counts with callgrind
-//! (`--toggle-collect`): instructions are deterministic where time is not.
-//! `--list` prints the languages, one a line, for `cargo xtask throughput`.
+//! ADR 0014 §6's method (a 3 s warm-up, then at least 15 rounds and 5 s, the
+//! median). With `--count LANG MODE SET` it runs two warm-up passes, then one
+//! pass inside `counted`, for an instruction counter such as callgrind's
+//! `--toggle-collect=throughput::counted`: instructions are deterministic
+//! where time is not. `--list` prints the languages, one a line.
 //!
 //! A language plugs in with one row of `LANGUAGES`.
-
-#![expect(
-    clippy::unwrap_used,
-    reason = "a benchmark binary: a fixture it cannot read stops it"
-)]
 
 use opentide_analysis::{AnalyzeRequest, LanguageId, MemoryWorkspace, analyze};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-/// A language: its id, its file extension, the corpus directory, the
-/// external directories, and its parse-only entry point.
+/// A language: its id, its file extensions, the corpus directory, the
+/// external directories, the file names an external directory holds for
+/// another profile or dialect (left out), and its parse-only entry point.
 struct Language {
     name: &'static str,
     id: LanguageId,
     extensions: &'static [&'static str],
     corpus: &'static str,
     external: &'static [&'static str],
+    skip: &'static [&'static str],
     parse: fn(&str),
 }
 
@@ -53,6 +49,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["kql"],
         corpus: "kql",
         external: &["kql"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_kql::inspect::parse_error_count(s));
         },
@@ -63,6 +60,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["esql"],
         corpus: "esql",
         external: &["esql"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_esql::syntax_tree(s));
         },
@@ -73,6 +71,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["eql"],
         corpus: "eql",
         external: &["eql"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_eql::parses(s));
         },
@@ -83,6 +82,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["kuery"],
         corpus: "kuery",
         external: &["kuery-opensearch-dashboards"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_kuery::parses(s));
         },
@@ -93,6 +93,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["lucene"],
         corpus: "lucene",
         external: &["lucene", "lucene-queryparser"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_lucene::parses(s));
         },
@@ -103,6 +104,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["spl"],
         corpus: "spl",
         external: &["spl"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_spl::debug_kinds(s));
         },
@@ -113,6 +115,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["cql"],
         corpus: "cql",
         external: &["cql"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_cql::debug_kinds(s));
         },
@@ -123,6 +126,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["falco"],
         corpus: "falco",
         external: &["falco"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_falco::debug_kinds(s));
         },
@@ -133,6 +137,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["yar", "yara"],
         corpus: "yara",
         external: &["yara"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_yara::debug_kinds(s));
         },
@@ -143,6 +148,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["exabeam"],
         corpus: "exabeam",
         external: &["exabeam"],
+        skip: &[".rule."],
         parse: |s| {
             std::hint::black_box(opentide_exabeam::debug_kinds(s));
         },
@@ -153,6 +159,7 @@ const LANGUAGES: &[Language] = &[
         extensions: &["yaral", "yl2"],
         corpus: "yaral",
         external: &["yaral"],
+        skip: &[],
         parse: |s| {
             std::hint::black_box(opentide_yaral::debug_kinds(s));
         },
@@ -160,9 +167,9 @@ const LANGUAGES: &[Language] = &[
 ];
 
 /// The texts under `dir`, its subdirectories included, in path order: each
-/// file with one of `extensions` but a `.broken.` twin, and each accepted
-/// query of a `cases.tsv` (`accept`, then the query as a JSON string).
-fn files(dir: &Path, extensions: &[&str]) -> Vec<String> {
+/// file with one of `extensions` whose name holds none of `skip` (nor
+/// `.broken.`), and each accepted query of a `cases.tsv`.
+fn files(dir: &Path, extensions: &[&str], skip: &[&str]) -> Vec<String> {
     let mut paths = Vec::new();
     let mut dirs = vec![dir.to_path_buf()];
     while let Some(dir) = dirs.pop() {
@@ -185,14 +192,11 @@ fn files(dir: &Path, extensions: &[&str]) -> Vec<String> {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
-        if path.file_name().is_some_and(|n| n == "cases.tsv") {
-            out.extend(text.lines().filter_map(|line| {
-                let mut cells = line.split('\t');
-                (cells.next() == Some("accept"))
-                    .then(|| serde_json::from_str::<String>(cells.next()?).ok())
-                    .flatten()
-            }));
-        } else if !path.to_string_lossy().contains(".broken.")
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        if name == "cases.tsv" {
+            out.extend(cases(&text));
+        } else if !name.contains(".broken.")
+            && !skip.iter().any(|s| name.contains(s))
             && path
                 .extension()
                 .is_some_and(|e| extensions.iter().any(|x| e == *x))
@@ -203,27 +207,66 @@ fn files(dir: &Path, extensions: &[&str]) -> Vec<String> {
     out
 }
 
+/// The accepted queries of a `cases.tsv`. Its header's second cell says how
+/// a query is written: as a JSON string, or with `\t`, `\n`, `\r` and `\\`
+/// escaped (any other `\X` is `X`, as the reference parser's own test reads it).
+fn cases(text: &str) -> Vec<String> {
+    let json = text
+        .lines()
+        .next()
+        .and_then(|header| header.split('\t').nth(1))
+        .is_some_and(|cell| cell.contains("JSON"));
+    text.lines()
+        .filter_map(|line| {
+            let mut cells = line.split('\t');
+            if cells.next() != Some("accept") {
+                return None;
+            }
+            let query = cells.next()?;
+            if json {
+                return serde_json::from_str::<String>(query).ok();
+            }
+            let mut out = String::with_capacity(query.len());
+            let mut chars = query.chars();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    match chars.next() {
+                        Some('t') => out.push('\t'),
+                        Some('n') => out.push('\n'),
+                        Some('r') => out.push('\r'),
+                        Some(other) => out.push(other),
+                        None => out.push('\\'),
+                    }
+                } else {
+                    out.push(c);
+                }
+            }
+            Some(out)
+        })
+        .collect()
+}
+
 /// The texts of `set` (`corpus` or `external`) for `language`.
 fn inputs(language: &Language, set: &str) -> Vec<String> {
     let testdata = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
     match set {
         "corpus" => files(
             &testdata.join("corpus").join(language.corpus),
-            &[
-                "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yar", "yara",
-                "yaral", "yl2", "exabeam", "txt",
-            ],
+            language.extensions,
+            &[],
         ),
-        _ => language
+        "external" => language
             .external
             .iter()
             .flat_map(|dir| {
                 files(
                     &testdata.join("conformance/external").join(dir),
                     language.extensions,
+                    language.skip,
                 )
             })
             .collect(),
+        _ => panic!("unknown set {set:?}: corpus or external"),
     }
 }
 
@@ -251,22 +294,23 @@ fn measure(language: &Language, mode: &str, host: &MemoryWorkspace, texts: &[Str
     }
 }
 
-/// The pass `cargo xtask throughput` counts (`--toggle-collect` on this
-/// function): the warm-up passes do not go through it.
+/// The pass an instruction counter counts (callgrind's `--toggle-collect` on
+/// this function): the warm-up passes do not go through it.
 #[inline(never)]
 fn counted(language: &Language, mode: &str, host: &MemoryWorkspace, texts: &[String]) {
     measure(language, mode, host, texts);
 }
 
-/// The median time of one pass over `texts`, after a warm-up.
+/// The median time of one pass over `texts`, by ADR 0014 §6: a 3 s warm-up,
+/// then at least 15 rounds and 5 s.
 fn pass(language: &Language, mode: &str, host: &MemoryWorkspace, texts: &[String]) -> Duration {
     let warm = Instant::now();
-    while warm.elapsed() < Duration::from_millis(300) {
+    while warm.elapsed() < Duration::from_secs(3) {
         measure(language, mode, host, texts);
     }
     let mut rounds = Vec::new();
     let started = Instant::now();
-    while rounds.len() < 15 || started.elapsed() < Duration::from_secs(1) {
+    while rounds.len() < 15 || started.elapsed() < Duration::from_secs(5) {
         let round = Instant::now();
         measure(language, mode, host, texts);
         rounds.push(round.elapsed());
@@ -294,8 +338,16 @@ fn main() {
     if let [flag, name, mode, set] = args.as_slice()
         && flag == "--count"
     {
-        let language = LANGUAGES.iter().find(|l| l.name == name).unwrap();
+        let language = LANGUAGES
+            .iter()
+            .find(|l| l.name == name)
+            .unwrap_or_else(|| panic!("unknown language {name:?}: see --list"));
+        assert!(
+            mode == "parse" || mode == "analyze",
+            "unknown mode {mode:?}: parse or analyze"
+        );
         let texts = inputs(language, set);
+        assert!(!texts.is_empty(), "{name} has no {set} texts");
         // The warm-up: catalogs, compiled queries and memos, outside the count.
         measure(language, mode, &host, &texts);
         measure(language, mode, &host, &texts);
@@ -305,7 +357,7 @@ fn main() {
         return;
     }
     println!(
-        "| language | corpus parse µs/call | corpus analyze µs/call | external MB/s parse | external MB/s analyze | external files, bytes |"
+        "| language | corpus parse µs/call | corpus analyze µs/call | external MB/s parse | external MB/s analyze | external texts, bytes |"
     );
     println!("|---|---:|---:|---:|---:|---|");
     for language in LANGUAGES {

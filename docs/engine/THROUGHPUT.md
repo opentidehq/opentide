@@ -1,6 +1,6 @@
 ---
 title: "Throughput"
-description: "How fast each language's parse and analysis run, in wall time and in instructions, how that is measured and held (cargo xtask throughput, ADR 0014), and how it compares with the vendors' own libraries."
+description: "How fast each language's parse and analysis run, how that is measured (the throughput bench, ADR 0014), and how it compares with the vendors' own libraries."
 ---
 
 # Throughput
@@ -13,18 +13,20 @@ Each language is measured in two modes, on two input sets:
   editor pays on every keystroke.
 - **`external`:** the real public rules under `crates/testdata/conformance/external/`, plus the
   accepted queries of a reference parser's `cases.tsv`. These give bytes a second on realistic input.
+  A text is a file or one `cases.tsv` row. Exabeam's external set leaves out its `.rule.exabeam`
+  files, which belong to the Correlation Rule profile, not the Search profile the bench analyses.
 
 [ADR 0014](../internal/adr/0014-analysis-performance.md) is the pattern that keeps these numbers
 down, and says how to measure them.
 
 ## Wall time
 
-`cargo bench -p opentide-analysis --bench throughput`: a release build with LTO, 1 thread, a
-warm-up, then at least 15 rounds and 1 s, the median. The numbers below come from one 4-vCPU Linux
+`cargo bench -p opentide-analysis --bench throughput`: a release build with LTO, 1 thread, and
+ADR 0014 §6's method: a 3 s warm-up, then at least 15 rounds and 5 s, the median. The numbers below come from one 4-vCPU Linux
 machine on 2026-11-18. Time varies with the machine and its load, so compare runs on one machine
 only.
 
-| Language | Corpus, parse µs/call | Corpus, analyze µs/call | External, parse MB/s | External, analyze MB/s | External files, bytes |
+| Language | Corpus, parse µs/call | Corpus, analyze µs/call | External, parse MB/s | External, analyze MB/s | External texts, bytes |
 |---|---:|---:|---:|---:|---|
 | KQL | 5.8 | 40.1 | 21.4 | 3.7 | 15, 39,092 |
 | ES\|QL | 6.2 | 28.0 | 21.6 | 5.6 | 12, 2,844 |
@@ -41,11 +43,13 @@ only.
 How to read the table:
 
 - **Two-column ratio.** Where the external parse rate is high and the analyze rate low, the time
-  goes on analysis, not parsing. Most of it is per-call setup, which ADR 0014 removes. Falco's
-  analysis of its external rules (0.2 MB/s) is the outlier to look at next.
-- **Parse entry points.** SPL, CQL, Falco, YARA, Exabeam and YARA-L are measured through their
-  crates' `debug_kinds`, which also names every kind. Their parse figure is an upper bound until
-  each crate gives the benchmark a plain parse.
+  goes on analysis, not parsing. That cost grows with the input: KQL spends about 700 µs on an
+  external rule against a 40 µs floor on a corpus query, Falco about 640 µs a rule. It is the
+  analysis's own work on long input, not per-call setup, and it is what step 4 of #1571 goes after.
+- **Parse entry points (marked †).** SPL, CQL, Falco, YARA, Exabeam and YARA-L are measured through
+  their crates' `debug_kinds`, which also formats every kind's name (a quarter to two fifths of its
+  time) and, for YARA, parses twice. Their parse figure is a lower bound on speed until each crate
+  gives the benchmark a plain parse.
 - **Small inputs.** Kibana KQL's external queries are short (650 bytes in all), so its MB/s is
   dominated by the per-call floor.
 
@@ -62,12 +66,20 @@ The vendors' own libraries, on the same inputs, through the same calls where a l
 Release builds on one machine. The method is in
 [ADR 0014](../internal/adr/0014-analysis-performance.md) §6.
 
-| KQL: 20 Azure-Sentinel detections averaging 708 characters | opentide | Kusto.Language 12.4.1 (.NET 8) |
+| KQL: 20 Azure-Sentinel detections averaging 708 characters (not this bench's input set) | opentide | Kusto.Language 12.4.1 (.NET 8) |
 |---|---:|---:|
 | Parse alone | 41 µs | 50 µs |
 | Full analysis (Kusto: ParseAndAnalyze with the schema, plus GetDiagnostics, plus classifications) | ~270 µs | 287 µs |
 | One-line query pair (`SecurityEvent \| take 10` and `take 11`) | 9.3 µs | 8.7 µs |
 | 10,000 analyses in one process, time and peak memory, runtime start-up included | 3.0 s, 27.6 MiB | 4.7 s, 207 MiB |
+
+Caveats, from ADR 0014:
+
+- opentide's parse figure (~41 µs) was taken on a busier machine; before #1573, on a quieter one, it
+  was 34 µs. None of these rows can be set against the wall-time table above, which is another
+  machine and another input set.
+- The 10,000-analysis row comes from the orchestrating session's vendor harness and includes each
+  runtime's start-up (and .NET's JIT), which the per-call rows do not.
 
 The other languages' vendor comparisons follow as each is measured (#1571).
 
@@ -76,10 +88,10 @@ The other languages' vendor comparisons follow as each is measured (#1571).
 What the numbers mean against other parsers, as rough orders of magnitude, not as measurements.
 None of these parsers was run here.
 
-- **Hand-written parsers** (rust-analyzer's, Ruff's) parse tens of MB/s, building lossless trees as
-  `opentide-parse` does. The parse rates above (4 to 30 MB/s, most around 20) are in that range for
-  languages whose tokens are short.
-- **ANTLR-generated parsers** (the JVM and .NET runtimes most vendor tools embed) usually run an
-  order of magnitude slower, and pay a fixed cost per call: building the lexer, the parser and their
-  caches. The per-call floors above (5 to 30 µs to parse a short query) are what that cost is set
-  against.
+- **Measured here:** only Kusto.Language, above. Kusto.Language is hand-written C#, not generated,
+  and opentide's KQL parse is about a fifth faster on the same detections.
+- **Not measured here:** the other vendors' parsers. They are a mix: Lucene's classic query parser
+  is JavaCC-generated, Elastic's ES|QL and EQL parsers are ANTLR-generated, and others are closed.
+  Whether a generated parser's fixed cost per call (building the lexer, the parser and their caches)
+  outweighs opentide's per-call floor (5 to 30 µs to parse a short query) is a hypothesis each
+  language's comparison tests, not a result.

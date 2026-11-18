@@ -850,7 +850,7 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
 }
 
 /// Whether `source` parses without an error: the parse alone, with no
-/// analysis, for the throughput benchmark (`cargo xtask throughput`, ADR
+/// analysis, for the throughput benchmark (`cargo bench --bench throughput`, ADR
 /// 0014). Not part of the API.
 #[doc(hidden)]
 #[must_use]
