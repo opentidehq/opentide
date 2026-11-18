@@ -683,3 +683,41 @@ fn splunk_schedule_offset_is_an_integer_and_never_a_placeholder() {
         assert!(shown.contains("schedule_offset"), "{value}: {shown}");
     }
 }
+
+#[test]
+fn harfanglab_type_is_sigma_yara_or_a_placeholder() {
+    // `deploy` fails a tenant whose `type` is neither `Sigma` nor `YARA`
+    // (case matters) once a `$NAME` is resolved, so `validate` refuses any
+    // other value, at the key's path, before a deploy finds it.
+    let path = "/w/.opentide/configurations/platforms/harfanglab.toml";
+    let harfanglab = |value: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\ntype = {value}\nurl = \"u\"\n\
+             api_token = \"$HL_TOKEN\"\nsource_id = \"s\"\n"
+        )
+    };
+    for value in ["\"Sigma\"", "\"YARA\"", "\"$HL_TYPE\""] {
+        let issues =
+            checks::buffer_issues(path, &harfanglab(value), &checks::BufferContext::default());
+        assert!(issues.is_empty(), "{value}: {issues:?}");
+    }
+    let kinds = "Input should be \"Sigma\" or \"YARA\"";
+    for (value, said) in [
+        ("\"Sigmaa\"", kinds),
+        ("\"sigma\"", kinds),
+        ("\"yara\"", kinds),
+        ("\"\"", kinds),
+        ("1", "expected a string"),
+        ("[\"Sigma\"]", "expected a string"),
+    ] {
+        let issues =
+            checks::buffer_issues(path, &harfanglab(value), &checks::BufferContext::default());
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        assert_eq!(
+            issues[0].field_path,
+            ["tenants", "0", "setup", "type"],
+            "{value}"
+        );
+        assert_eq!(issues[0].message, said, "{value}");
+    }
+}

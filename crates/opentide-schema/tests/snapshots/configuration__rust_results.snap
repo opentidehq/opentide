@@ -54,7 +54,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "type"
       ],
       "file_path": "/w/.opentide/configurations/platforms/harfanglab.toml",
-      "message": "Input should be a valid string",
+      "message": "expected a string",
       "severity": "error"
     },
     {
