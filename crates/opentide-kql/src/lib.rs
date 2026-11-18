@@ -295,8 +295,10 @@ pub struct Catalog {
 
 /// What reading a catalog builds once and keeps on it, shared by every
 /// thread: the lower-cased name indexes of its operators, functions, scalar
-/// operators and plugins ([`Catalog::by_name`]), and the schemas of its
-/// tables and ASIM parsers (`schema::table_schema`). Each is built on first
+/// operators and plugins ([`Catalog::by_name`]), the schemas of its tables
+/// and ASIM parsers (`schema::table_schema`), its table names prepared for
+/// [`Catalog::suggest_table`] and the names of its hand-written columns.
+/// Each is built on first
 /// use, for a profile's bundled catalog and a workspace's catalog with
 /// declared columns alike, so a workspace that declares columns analyses as
 /// fast as one that does not, and a declared catalog's memo goes with it
@@ -310,6 +312,10 @@ struct Memo {
     names: [OnceLock<HashMap<String, usize>>; 4],
     /// Tables, then ASIM parsers: the schema built for each name.
     schemas: [RwLock<HashMap<String, schema::Schema>>; 2],
+    /// The table names, lower-cased and folded ([`Catalog::suggest_table`]).
+    table_names: OnceLock<suggest::Candidates>,
+    /// The names of the hand-written columns.
+    hand_written: OnceLock<HashSet<Box<str>>>,
 }
 
 impl Clone for Memo {
@@ -780,25 +786,17 @@ impl Catalog {
     /// The catalogued table `name` most likely means
     /// ([`opentide_core::suggest`]).
     pub fn suggest_table(&self, name: &str) -> Option<String> {
-        // The table names, lower-cased and folded once per bundled profile:
+        // The table names, lower-cased and folded once per catalog:
         // preparing the catalog's hundreds of names for each unknown table
         // was a third of a Sentinel query's analysis.
-        static PREPARED: [OnceLock<suggest::Candidates>; 3] =
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-        let names = || self.tables.iter().map(|t| t.name.as_str());
-        if std::ptr::eq(self, Self::cached(self.profile)) {
-            let slot = match self.profile {
-                Profile::Core => 0,
-                Profile::Sentinel => 1,
-                Profile::Defender => 2,
-            };
-            let prepared = PREPARED[slot].get_or_init(|| suggest::Candidates::new(names()));
-            return prepared
-                .closest(name)
-                .and_then(|i| self.tables.get(i))
-                .map(|t| t.name.clone());
-        }
-        suggest::closest(name, names()).map(str::to_string)
+        let prepared = self
+            .memo
+            .table_names
+            .get_or_init(|| suggest::Candidates::new(self.tables.iter().map(|t| t.name.as_str())));
+        prepared
+            .closest(name)
+            .and_then(|i| self.tables.get(i))
+            .map(|t| t.name.clone())
     }
 
     pub fn operator_names(&self) -> Vec<String> {
@@ -848,29 +846,16 @@ impl Catalog {
 
     /// The names of the hand-written catalog's columns. Finding them reads
     /// every column of the catalog, tens of thousands with the reference's:
-    /// for a profile's bundled catalog they are found once per process, not
-    /// once per query (a quarter of a short query's analysis).
-    fn hand_written_column_names(&self) -> std::borrow::Cow<'_, HashSet<&str>> {
-        static NAMES: [OnceLock<HashSet<&'static str>>; 3] =
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-        fn names(catalog: &Catalog) -> HashSet<&str> {
-            catalog
-                .columns
+    /// they are found once per catalog (its memo), not once per query (a
+    /// quarter of a short query's analysis).
+    fn hand_written_column_names(&self) -> &HashSet<Box<str>> {
+        self.memo.hand_written.get_or_init(|| {
+            self.columns
                 .iter()
                 .filter(|c| c.hand_written())
-                .map(|c| c.name.as_str())
+                .map(|c| Box::from(c.name.as_str()))
                 .collect()
-        }
-        let bundled = Self::cached(self.profile);
-        if std::ptr::eq(self, bundled) {
-            let slot = match self.profile {
-                Profile::Core => 0,
-                Profile::Sentinel => 1,
-                Profile::Defender => 2,
-            };
-            return std::borrow::Cow::Borrowed(NAMES[slot].get_or_init(|| names(bundled)));
-        }
-        std::borrow::Cow::Owned(names(self))
+        })
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -1196,7 +1181,7 @@ fn overlay_catalog_captures(
     let mut columns: HashSet<&str> = wanted
         .iter()
         .copied()
-        .filter(|name| hand_written.contains(name))
+        .filter(|name| hand_written.contains(*name))
         .collect();
     for table in &mentioned {
         for column in catalog.columns_for_table(&table.name) {
