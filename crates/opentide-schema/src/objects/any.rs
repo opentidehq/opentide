@@ -155,11 +155,11 @@ impl<'de> Visitor<'de> for AnyVisitor {
     }
 
     fn visit_str<E: de::Error>(self, text: &str) -> Result<Self::Value, E> {
-        Ok(node(Value::Str(text.to_owned())))
+        Ok(node(Value::Str(text.into())))
     }
 
     fn visit_string<E: de::Error>(self, text: String) -> Result<Self::Value, E> {
-        Ok(node(Value::Str(text)))
+        Ok(node(Value::Str(text.into())))
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {

@@ -108,7 +108,7 @@ impl Merged {
                     .iter()
                     .map(|(key, value)| crate::node::Entry {
                         key: Arc::new(Node {
-                            value: Value::Str(key.clone()),
+                            value: Value::Str(key.as_str().into()),
                             start: value.start,
                             end: value.start,
                             text: None,
@@ -408,7 +408,7 @@ fn misp_block(
         for status in statuses {
             if let Value::Str(text) = &status.value
                 && !text.is_empty()
-                && !status_names.contains(text)
+                && !status_names.iter().any(|known| known == text)
             {
                 found.push((
                     codes::RULE_STATUS_UNKNOWN,

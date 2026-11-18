@@ -93,7 +93,7 @@ fn collect(value: &Node, path: &mut Vec<Step>, own: &str, out: &mut Vec<(Vec<Ste
                         Step::Index(i) => Step::Index(*i),
                     })
                     .collect();
-                out.push((steps, text.clone()));
+                out.push((steps, text.to_string()));
             }
         }
         Value::Seq(items) => {
@@ -108,12 +108,12 @@ fn collect(value: &Node, path: &mut Vec<Step>, own: &str, out: &mut Vec<(Vec<Ste
                 let key = match &entry.key.value {
                     Value::Str(k) => k.clone(),
                     number @ (Value::Int(_) | Value::Float(_)) => {
-                        crate::yaml::number_text(number).unwrap_or_default()
+                        crate::yaml::number_text(number).unwrap_or_default().into()
                     }
-                    Value::Bool(b) => b.to_string(),
+                    Value::Bool(b) => b.to_string().into(),
                     _ => continue,
                 };
-                path.push(Step::Key(key));
+                path.push(Step::Key(key.into()));
                 collect(&entry.value, path, own, out);
                 path.pop();
             }

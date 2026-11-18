@@ -34,8 +34,8 @@ fn tagged(node: &Node) -> Json {
         Value::Bool(flag) => json!({ "bool": flag }),
         Value::Int(integer) => json!({ "int": integer.to_string() }),
         Value::Float(float) => json!({ "float": float_text(*float) }),
-        Value::Str(text) => json!({ "str": text }),
-        Value::Datetime(text) => json!({ "datetime": text }),
+        Value::Str(text) => json!({ "str": text.as_str() }),
+        Value::Datetime(text) => json!({ "datetime": text.as_str() }),
         Value::Seq(items) => {
             json!({ "seq": items.iter().map(|item| tagged(item)).collect::<Vec<_>>() })
         }

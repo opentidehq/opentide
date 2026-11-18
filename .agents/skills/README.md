@@ -11,7 +11,7 @@ The engine's skills came from opentidehq/language-server with its history (#800)
 | `lsp-host` | The stdio server, editor samples, or protocol tests |
 | `wasm-hosts` | `wasm-bindgen`, WASI, the TypeScript client, or packaging |
 | `catalogs` | Compiled catalogs, HighlightSpec, or conformance corpora |
-| `add-language` | Adding S1QL, Lucene, Sigma, or YARA |
+| `add-language` | Adding a query language (S1QL, Sigma): the checklist and its definition of done |
 | `engine-release-notes` | Writing a `crates/CHANGELOG.md` entry or an engine release's notes |
 
 `engine-release-notes` was language-server's `release-notes`: opentide's own `release-notes` keeps that name. Its `release` skill, imported as `engine-release`, was retired with the engine's own `engine-v*` releases: every release, the engine crates' included, is the release train's ([`release-management`](release-management/SKILL.md)).

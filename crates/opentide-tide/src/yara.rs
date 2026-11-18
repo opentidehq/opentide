@@ -238,11 +238,11 @@ pub(crate) fn items(
         .filter_map(|(i, v)| {
             let text = match &v.value {
                 Value::Str(s) | Value::Datetime(s) => s.clone(),
-                Value::Int(_) | Value::Float(_) => number_text(&v.value)?,
-                Value::Bool(_) => raw.get(i)?.0.clone(),
+                Value::Int(_) | Value::Float(_) => (number_text(&v.value)?).into(),
+                Value::Bool(_) => (raw.get(i)?.0.clone()).into(),
                 Value::Null | Value::Seq(_) | Value::Map(_) => return None,
             };
-            Some(item(i, text))
+            Some(item(i, text.into()))
         })
         .collect()
 }
