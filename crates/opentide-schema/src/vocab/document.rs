@@ -240,7 +240,9 @@ impl Vocabulary {
         let mut table: Table = preamble(text).map_err(toml_error)?;
         // Most documents have no `[[stages]]` (theirs, if any, is a preamble
         // list): no pass over the whole text to find none.
-        if !table.contains_key("stages") && text.contains("\n[[stages]]") {
+        if !table.contains_key("stages")
+            && (text.starts_with("[[stages]]") || text.contains("\n[[stages]]"))
+        {
             let stages: Vec<Value> = array_items(text, "stages").map_err(toml_error)?;
             table.insert("stages".to_owned(), Value::Array(stages));
         }
@@ -348,7 +350,11 @@ impl Vocabulary {
         for (index, raw) in entries_raw.into_iter().enumerate() {
             match entry_of(raw, key) {
                 Ok(mut entry) => {
-                    if let Some(&item) = items.and_then(|items| items.get(index)) {
+                    // Only a description the read left out: one written
+                    // otherwise was parsed, and keeps its text.
+                    if entry.description.is_empty()
+                        && let Some(&item) = items.and_then(|items| items.get(index))
+                    {
                         entry.description = Description::bundled(item);
                     }
                     if entries.contains_key(&entry.key) {
