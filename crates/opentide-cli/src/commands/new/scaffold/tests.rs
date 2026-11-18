@@ -268,3 +268,39 @@ fn dropping_adjacent_blocks_leaves_one_blank_line() {
     );
     assert!(!kept.contains("\n\n\n"), "{kept}");
 }
+
+/// A value for a key the template writes as a block scalar is the block's
+/// text: `new rule --platform google_secops` wrote `outcome: "$risk_score =
+/// 40"` over the template's `...` line, which no YAML reader accepts.
+#[test]
+fn a_block_scalar_key_keeps_its_block_and_takes_the_value_as_its_text() {
+    let root = model();
+    let model = Model::new(&root);
+    let fields = collect_fields(&model, &root, &[], &[]);
+    let values = HashMap::from([(
+        path(&["body", "description"]),
+        Scalar::Text("$risk_score = 40".into()),
+    )]);
+    let marked = HashSet::from([path(&["body", "description"])]);
+    let filled = fill_template(
+        TEMPLATE,
+        &Fill {
+            fields: &fields,
+            values: &values,
+            schema: &json!({}),
+            model: &model,
+            marked: &marked,
+            make_uuid: &|| "fresh".to_owned(),
+        },
+    );
+    let text = &filled.text;
+    assert!(
+        text.contains("\n  description: |  # opentide:placeholder\n    $risk_score = 40\n  tags:"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("40\n    ..."),
+        "the template's text line stays: {text}"
+    );
+    assert!(opentide_schema::node::load(text).is_ok(), "{text}");
+}

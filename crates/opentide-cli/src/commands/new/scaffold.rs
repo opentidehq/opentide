@@ -646,6 +646,32 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
         let entry = &entries[at];
         let head = &lines[entry.index][..entry.column];
         if entry.role == Role::Key {
+            // A key the template writes as a block scalar (`key: |` over its
+            // text lines) keeps that form: a text value is the block's text,
+            // and the template's other text lines go. A scalar on the key's
+            // line with the text lines left below it is not YAML.
+            let text_lines: Vec<&Line> = entries
+                .iter()
+                .filter(|other| {
+                    other.role == Role::Text
+                        && other.path == entry.path
+                        && other.index > entry.index
+                })
+                .collect();
+            if entry.value == "|"
+                && let (Scalar::Text(body), Some(first)) = (value, text_lines.first())
+                && !body.contains('\n')
+            {
+                let indent = &lines[first.index][..first.column];
+                replacements.insert(first.index, format!("{indent}{body}"));
+                for other in &text_lines[1..] {
+                    replacements.insert(other.index, String::new());
+                }
+                return;
+            }
+            for other in &text_lines {
+                replacements.insert(other.index, String::new());
+            }
             let leaf = entry.path.last().map_or("", String::as_str);
             replacements.insert(entry.index, format!("{head}{leaf}: {}", scalar_text(value)));
             // A scalar replaces the list form the template shows for a
