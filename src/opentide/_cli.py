@@ -9,7 +9,10 @@ other implementation to fall back on, and nothing in between, so Ctrl-C
 
 When the engine does not load (a damaged install, a platform whose wheel's
 module fails to load), :func:`main` says so on stderr and exits 1, as any
-other error does: no command can run without it.
+other error does: no command can run without it. ``opentide --version`` is
+not a command: it checks nothing (#1072), so without the engine it answers
+from the package's metadata, and the first command, or ``opentide doctor``,
+reports the engine.
 
 The command line loads the platform plugins installed in this environment
 (``opentide.plugins``, the ``opentide.platforms`` entry points) itself.
@@ -41,6 +44,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         # hidden) is seen as such.
         native = importlib.import_module("opentide._native")
     except ImportError as exc:
+        if args in (["--version"], ["-V"]):
+            # Slower than the engine's, but only where the engine is broken.
+            from importlib.metadata import version
+
+            sys.stdout.write(f"opentide {version('opentide')}\n")
+            return 0
         cause = str(exc) or type(exc).__name__
         # As the engine_unavailable page (opentide explain) shows it.
         sys.stderr.write(

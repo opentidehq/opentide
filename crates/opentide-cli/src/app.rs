@@ -2475,6 +2475,16 @@ fn release_when<T>(value: T, process_ends: bool) {
 /// `opentide` in this process: the process's environment and streams.
 pub fn main(argv: &[String], version: &str) -> i32 {
     use std::io::IsTerminal;
+    // `opentide --version` alone answers before anything else: no
+    // environment, working directory, workspace search or command tree, as
+    // it checks nothing (#1072; `opentide doctor` does).
+    if let Some(line) = version_only(argv, version) {
+        let mut out = std::io::stdout().lock();
+        return match out.write_all(line.as_bytes()).and_then(|()| out.flush()) {
+            Ok(()) => 0,
+            Err(_) => 1,
+        };
+    }
     adopt_working_directory();
     let env = Env::from_process();
     let cwd = std::env::current_dir().ok();
@@ -2501,6 +2511,17 @@ pub fn main(argv: &[String], version: &str) -> i32 {
     let mut out = anstream::AutoStream::always(std::io::stdout()).lock();
     let mut err = anstream::AutoStream::always(std::io::stderr());
     run(argv, &env, &host, &mut out, &mut err)
+}
+
+/// What `opentide --version` (or `-V`) prints when it is the only argument:
+/// the line `dispatch` prints for it in any mode.
+fn version_only(argv: &[String], version: &str) -> Option<String> {
+    match argv {
+        [flag] if flag == "--version" || flag == "-V" => {
+            Some(format!("{} {version}\n", catalog::PROGRAM))
+        }
+        _ => None,
+    }
 }
 
 /// A command path of the tree that no handler answers: a bug in opentide

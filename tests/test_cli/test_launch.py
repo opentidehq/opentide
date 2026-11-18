@@ -59,11 +59,25 @@ def test_without_arguments_it_reads_sys_argv(monkeypatch: pytest.MonkeyPatch) ->
     assert native.calls == [(["info", "--json"], "9.9.9.dev1")]
 
 
+def test_the_version_answers_from_the_metadata_without_the_engine(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--version`` checks nothing (#1072): a broken engine is reported by the
+    first command, not by it."""
+    import opentide
+
+    _with_native(monkeypatch, ImportError("cannot load it (test)"))
+    for flag in ("--version", "-V"):
+        assert _cli.main([flag]) == 0
+        captured = capsys.readouterr()
+        assert (captured.out, captured.err) == (f"opentide {opentide.__version__}\n", "")
+
+
 def test_an_engine_that_does_not_load_is_an_error(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _with_native(monkeypatch, ImportError("cannot load it (test)"))
-    assert _cli.main(["--version"]) == _cli.ENGINE_UNAVAILABLE_EXIT == 1
+    assert _cli.main(["info"]) == _cli.ENGINE_UNAVAILABLE_EXIT == 1
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == (

@@ -31,7 +31,7 @@ A word that starts with `-` is an option, never the value of the option before i
 
 ## Version
 
-`opentide --version` (or `-V`) prints the installed package version as `opentide <version>` and exits 0. It runs before the repository root is resolved and before any command, so it works outside a detection workspace and is cheap enough to log at the start of a pipeline job:
+`opentide --version` (or `-V`) prints the installed package version as `opentide <version>` and exits 0. It checks nothing: it reads no file, looks for no workspace and touches no network, so it works anywhere and is cheap enough to log at the start of a pipeline job. Even when the analysis engine of a damaged install does not load, it prints the version (from the package's metadata); the first command reports the engine, and [`opentide doctor`](./doctor.md) checks the install.
 
 ```bash
 opentide --version
