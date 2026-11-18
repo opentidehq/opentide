@@ -927,15 +927,7 @@ pub(crate) fn batches(
         .iter()
         .map(|table| PlanTenant::from_json(table))
         .collect();
-    let modifiers: Vec<CJson> = match cx
-        .config
-        .get("platforms")
-        .and_then(|platforms| platforms.get(platform))
-        .and_then(|table| table.get("modifiers"))
-    {
-        Some(CJson::Array(items)) => items.clone(),
-        _ => Vec::new(),
-    };
+    let modifiers = opentide_compile::modifiers::of_platform(cx.config, platform);
     let mut out: IndexMap<String, Batch> = IndexMap::new();
     for uuid in uuids {
         let Some(rule) = rule_of(workspace, uuid) else {
@@ -943,14 +935,12 @@ pub(crate) fn batches(
         };
         let (block, strategy) = block_strategy(&rule, platform, cx)?;
         for tenant in opentide_compile::plan::rule_tenants(&tenants, &block, strategy, runs, wide) {
-            let modified =
-                opentide_compile::modifiers::apply(&modifiers, platform, &block, &tenant.name);
-            let mut sent = rule.clone();
-            if let CJson::Object(document) = &mut sent.data
-                && let Some(CJson::Object(configurations)) = document.get_mut("configurations")
-            {
-                configurations.insert(platform.to_owned(), modified);
-            }
+            let sent = opentide_compile::modifiers::rule_for_tenant(
+                &modifiers,
+                platform,
+                &rule,
+                &tenant.name,
+            );
             let entry = out.entry(tenant.name.clone()).or_insert_with(|| {
                 let position = tenants
                     .iter()

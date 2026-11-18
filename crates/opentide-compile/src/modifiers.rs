@@ -227,6 +227,38 @@ pub fn apply(modifiers: &[Json], platform: &str, block: &Json, tenant: &str) -> 
     Json::Object(raw)
 }
 
+/// The platform's `[[modifiers]]` in the resolved configuration `config`.
+pub fn of_platform(config: &Json, platform: &str) -> Vec<Json> {
+    match config
+        .get("platforms")
+        .and_then(|platforms| platforms.get(platform))
+        .and_then(|table| table.get("modifiers"))
+    {
+        Some(Json::Array(items)) => items.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// `rule` as a deploy to `tenant` sends it: its `platform` block with the
+/// platform's `modifiers` applied for that tenant ([`apply`]), which the
+/// deploy's batches and a dry run's tenant-compiled entries both take.
+pub fn rule_for_tenant(
+    modifiers: &[Json],
+    platform: &str,
+    rule: &crate::Rule,
+    tenant: &str,
+) -> crate::Rule {
+    let block = rule.block(platform).cloned().unwrap_or(Json::Null);
+    let modified = apply(modifiers, platform, &block, tenant);
+    let mut sent = rule.clone();
+    if let Json::Object(document) = &mut sent.data
+        && let Some(Json::Object(configurations)) = document.get_mut("configurations")
+    {
+        configurations.insert(platform.to_owned(), modified);
+    }
+    sent
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
