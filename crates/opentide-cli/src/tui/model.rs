@@ -140,22 +140,32 @@ fn number_at(value: &serde_json::Value, key: &str) -> Option<usize> {
         .and_then(|number| usize::try_from(number).ok())
 }
 
+/// A 1-based `line` or `column`: a 0 is no place (the detail view counts
+/// from 1), so it reads as absent.
+fn position_at(value: &serde_json::Value, key: &str) -> Option<usize> {
+    number_at(value, key).filter(|&number| number > 0)
+}
+
+/// What an absent `context` or `position` reads as.
+static NONE: serde_json::Value = serde_json::Value::Null;
+
 impl Finding {
     /// From one entry of `report.issues` or `report.warnings` in the
     /// validate document.
     pub fn from_issue(issue: &serde_json::Value) -> Self {
-        let context = issue.get("context").cloned().unwrap_or_default();
+        let context = issue.get("context").unwrap_or(&NONE);
         // Where the finding points: the entry's own `line` and `column`
-        // (validate's, the block's key for a block, #922), else the engine's
-        // `context.position`; `yaml_line + 1` is the line a block's value
-        // starts on, one below its key, so it is the last resort.
-        let place = if number_at(issue, "line").is_some() {
-            issue.clone()
+        // (validate's and lint's, the block's key for a block, #922), else
+        // the engine's `context.position`; `yaml_line + 1` is the line a
+        // block's value starts on, one below its key, so it is the last
+        // resort.
+        let place = if position_at(issue, "line").is_some() {
+            issue
         } else {
-            context.get("position").cloned().unwrap_or_default()
+            context.get("position").unwrap_or(&NONE)
         };
         let end_column = if place.get("end_line") == place.get("line") {
-            number_at(&place, "end_column")
+            number_at(place, "end_column")
         } else {
             None
         };
@@ -167,7 +177,7 @@ impl Finding {
             path: text_at(issue, "file_path")
                 .filter(|path| !path.is_empty())
                 .map(PathBuf::from),
-            line: number_at(&place, "line")
+            line: position_at(place, "line")
                 .or_else(|| number_at(issue, "yaml_line").map(|line| line + 1)),
             field_path: issue
                 .get("field_path")
@@ -185,9 +195,9 @@ impl Finding {
             help: text_at(issue, "suggestion")
                 .filter(|text| !text.is_empty())
                 .map(str::to_owned),
-            column: number_at(&place, "column"),
+            column: position_at(place, "column"),
             end_column,
-            source: if text_at(&context, "source") == Some("engine") {
+            source: if text_at(context, "source") == Some("engine") {
                 Source::Engine
             } else {
                 Source::Validate
@@ -942,13 +952,17 @@ mod tests {
         );
     }
 
-    /// An engine finding is placed by its `context.position`; an entry with
-    /// only a `yaml_line` keeps the line after it.
+    /// An engine finding is placed where it says, as the engine writes it: a
+    /// top-level place and the same one in `context.position`.
     #[test]
-    fn an_engine_finding_keeps_its_position_and_a_bare_one_its_yaml_line() {
+    fn an_engine_finding_keeps_its_position() {
         let engine = serde_json::json!({
             "code": "kql_unknown_table",
-            "yaml_line": 30,
+            "yaml_line": 32,
+            "line": 33,
+            "column": 7,
+            "end_line": 33,
+            "end_column": 12,
             "context": {
                 "source": "engine",
                 "position": {"line": 33, "column": 7, "end_line": 33, "end_column": 12},
@@ -956,10 +970,43 @@ mod tests {
         });
         let finding = Finding::from_issue(&engine);
         assert_eq!(
-            (finding.line, finding.column, finding.end_column),
-            (Some(33), Some(7), Some(12))
+            (
+                finding.line,
+                finding.column,
+                finding.end_column,
+                finding.source
+            ),
+            (Some(33), Some(7), Some(12), Source::Engine)
         );
-        let bare = serde_json::json!({"code": "invalid", "yaml_line": 4});
+    }
+
+    /// A `null` place, or a 0, is no place: the position, then the line after
+    /// `yaml_line`, stand in.
+    #[test]
+    fn a_null_or_zero_place_falls_back() {
+        let nulls = serde_json::json!({
+            "code": "invalid",
+            "yaml_line": 4,
+            "line": null,
+            "column": null,
+            "end_line": null,
+            "end_column": null,
+        });
+        let finding = Finding::from_issue(&nulls);
+        assert_eq!(
+            (finding.line, finding.column, finding.end_column),
+            (Some(5), None, None)
+        );
+        let zero = serde_json::json!({
+            "code": "invalid",
+            "yaml_line": 4,
+            "line": 0,
+            "column": 0,
+            "context": {"position": {"line": 9, "column": 2}},
+        });
+        let finding = Finding::from_issue(&zero);
+        assert_eq!((finding.line, finding.column), (Some(9), Some(2)));
+        let bare = serde_json::json!({"code": "invalid", "yaml_line": 4, "line": 0});
         let finding = Finding::from_issue(&bare);
         assert_eq!((finding.line, finding.column), (Some(5), None));
     }
