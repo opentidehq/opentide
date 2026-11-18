@@ -122,19 +122,23 @@ fn counts(args: &ThroughputArgs) -> Result<Vec<Count>> {
     })
     .into_iter()
     .collect::<Result<Vec<_>>>()?;
-    // Each pass's runs, in order: the lowest for a check, the highest for a record.
-    let counts: Vec<Count> = runs
-        .chunks(args.runs)
-        .map(|chunk| {
-            let pick = if args.record {
-                chunk.iter().max_by_key(|c| c.instructions)
-            } else {
-                chunk.iter().min_by_key(|c| c.instructions)
-            };
-            pick.cloned()
-        })
-        .collect::<Option<_>>()
-        .context("no counts")?;
+    // Each pass's runs (its instructions, then its allocations, a run after
+    // the other): the lowest for a check, the highest for a record.
+    let mut counts: Vec<Count> = Vec::new();
+    for run in runs.into_iter().flatten() {
+        match counts
+            .iter_mut()
+            .find(|c| c.language == run.language && c.key == run.key)
+        {
+            Some(kept) if args.record => {
+                kept.instructions = kept.instructions.max(run.instructions);
+            }
+            Some(kept) => {
+                kept.instructions = kept.instructions.min(run.instructions);
+            }
+            None => counts.push(run),
+        }
+    }
     if counts.is_empty() {
         bail!("no language to count");
     }
@@ -352,7 +356,7 @@ fn count(
     mode: &str,
     set: &str,
     run: usize,
-) -> Result<Count> {
+) -> Result<[Count; 2]> {
     let out = scratch.join(format!("{language}.{mode}.{set}.{run}.callgrind"));
     let printed = output(
         Command::new("valgrind")
@@ -372,72 +376,121 @@ fn count(
     }
     let profile =
         std::fs::read_to_string(&out).with_context(|| format!("reading {}", out.display()))?;
-    let instructions = own_instructions(&profile, binary);
+    let Own {
+        instructions,
+        allocations,
+    } = own_cost(&profile, binary);
     if instructions == 0 {
         bail!(
             "{language} {mode} {set}: callgrind counted nothing of the bench binary in \
              `throughput::counted` (were its symbols stripped?)"
         );
     }
-    Ok(Count {
-        language: language.to_owned(),
-        key: format!("{mode}_{set}"),
-        instructions,
-        bytes,
-    })
+    Ok([
+        Count {
+            language: language.to_owned(),
+            key: format!("{mode}_{set}"),
+            instructions,
+            bytes,
+        },
+        Count {
+            language: language.to_owned(),
+            key: format!("{mode}_{set}_allocations"),
+            instructions: allocations,
+            bytes,
+        },
+    ])
 }
 
-/// The instructions a callgrind profile counts in `binary`'s own code: every
-/// cost line under an `ob=` (the object a function is in) that names it, but
-/// a call's inclusive cost (the line after `calls=`), which is the callee's.
-/// Shared libraries (glibc's malloc and string routines, the loader) are left
-/// out: their counts move with the glibc version and the CPU it picks a
-/// routine for, and with the allocation order, where the bench's own code
-/// counts the same on any x86-64 Linux.
-fn own_instructions(profile: &str, binary: &Path) -> u64 {
+/// What a pass costs in the bench binary's own code.
+#[derive(Debug, PartialEq, Eq)]
+struct Own {
+    /// Its instructions.
+    instructions: u64,
+    /// Its calls into the allocator (`malloc`, `calloc`, `realloc` and the
+    /// aligned ones), whose own instructions are left out with glibc's: the
+    /// number of calls is exact, so an allocation more a token still shows.
+    allocations: u64,
+}
+
+/// The allocator's entry points a call into counts as an allocation.
+const ALLOCATORS: [&str; 5] = [
+    "malloc",
+    "calloc",
+    "realloc",
+    "posix_memalign",
+    "aligned_alloc",
+];
+
+/// What a callgrind profile counts in `binary`'s own code. Its instructions:
+/// every cost line under an `ob=` (the object a function is in) that names
+/// it, but a call's inclusive cost (the line after `calls=`), which is the
+/// callee's. Its allocations: the calls (`calls=N`) it makes to an
+/// [`ALLOCATORS`] function. Shared libraries (glibc's malloc and string
+/// routines, the loader) are left out of the instructions: their counts move
+/// with the glibc version, the CPU it picks a routine for, and the allocation
+/// order, where the bench's own code counts the same on any x86-64 Linux.
+fn own_cost(profile: &str, binary: &Path) -> Own {
     let wanted = binary.file_name();
-    let mut names: BTreeMap<&str, &str> = BTreeMap::new();
+    // Compressed names: objects and functions each have their own ids.
+    let mut objects: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut functions: BTreeMap<&str, &str> = BTreeMap::new();
     let mut own = false;
+    let mut callee = "";
     let mut after_call = false;
-    let mut total = 0;
+    let mut cost = Own {
+        instructions: 0,
+        allocations: 0,
+    };
     for line in profile.lines() {
-        let object = line
-            .strip_prefix("ob=")
-            .map(|rest| (true, rest))
-            .or_else(|| line.strip_prefix("cob=").map(|rest| (false, rest)));
-        if let Some((current, rest)) = object {
-            // `(id) name` defines a compressed name, `(id)` reuses it.
-            let name = match rest.strip_prefix('(').and_then(|r| r.split_once(')')) {
-                Some((id, name)) if !name.trim().is_empty() => {
-                    names.insert(id, name.trim());
-                    name.trim()
+        let Some((key, rest)) = line.split_once('=').filter(|(key, _)| {
+            matches!(
+                *key,
+                "ob" | "cob" | "fn" | "cfn" | "fl" | "fi" | "fe" | "cfi" | "cfl"
+            )
+        }) else {
+            if let Some(calls) = line.strip_prefix("calls=") {
+                after_call = true;
+                if own && ALLOCATORS.contains(&callee) {
+                    cost.allocations += calls
+                        .split_whitespace()
+                        .next()
+                        .and_then(|n| n.parse::<u64>().ok())
+                        .unwrap_or(0);
                 }
-                Some((id, _)) => names.get(id).copied().unwrap_or_default(),
-                None => rest.trim(),
-            };
-            if current {
-                own = Path::new(name).file_name() == wanted;
-            }
-            continue;
-        }
-        if line.starts_with("calls=") {
-            after_call = true;
-            continue;
-        }
-        if line.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '*')) {
-            if std::mem::take(&mut after_call) {
-                continue;
-            }
-            if own {
-                total += line
+            } else if line.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '*'))
+                && !std::mem::take(&mut after_call)
+                && own
+            {
+                cost.instructions += line
                     .split_whitespace()
                     .last()
                     .and_then(|n| n.parse::<u64>().ok())
                     .unwrap_or(0);
             }
+            continue;
+        };
+        let names = match key {
+            "ob" | "cob" => &mut objects,
+            "fn" | "cfn" => &mut functions,
+            _ => continue,
+        };
+        // `(id) name` defines a compressed name, `(id)` reuses it.
+        let name = match rest.strip_prefix('(').and_then(|r| r.split_once(')')) {
+            Some((id, name)) if !name.trim().is_empty() => {
+                names.insert(id, name.trim());
+                name.trim()
+            }
+            Some((id, _)) => names.get(id).copied().unwrap_or_default(),
+            None => rest.trim(),
+        };
+        match key {
+            "ob" => own = Path::new(name).file_name() == wanted,
+            "cfn" => callee = name,
+            _ => {}
         }
     }
-    total
+    cost
 }
 
 fn output(command: &mut Command) -> Result<String> {
@@ -512,10 +565,32 @@ fn=(1)
 ob=(2)
 fn=(3) opentide_kql::analyze
 * 11
-totals: 1221
+cob=(1)
+cfn=(4) realloc
+calls=5 0
+* 40
+cob=(1)
+cfn=(1)
+calls=1 0
+* 9
+ob=(1)
+fn=(1)
+cob=(1)
+cfn=(1)
+calls=3 0
+* 30
+totals: 1300
 ";
         let binary = Path::new("/elsewhere/throughput-abc");
-        assert_eq!(own_instructions(profile, binary), 7 + 3 + 11);
+        // The bench's own code calls malloc 2 + 1 times and realloc 5 times;
+        // glibc's own call to malloc is not the bench's.
+        assert_eq!(
+            own_cost(profile, binary),
+            Own {
+                instructions: 7 + 3 + 11,
+                allocations: 2 + 5 + 1
+            }
+        );
     }
 
     #[test]
