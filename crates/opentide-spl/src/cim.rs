@@ -25,7 +25,7 @@ use super::scan::{
 };
 use super::{Catalog, DatamodelRow};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
 
 /// Fields every dataset has: the CIM base event's, and the default fields a
@@ -55,6 +55,24 @@ pub(crate) struct Model {
     /// Every dataset row is `complete`: its datasets and fields are checked.
     pub complete: bool,
     pub datasets: Vec<&'static DatamodelRow>,
+    /// [`Model::tree_fields`] for each root, built on first use: a search
+    /// checks each prefixed field against it, and it depends on the catalog
+    /// alone (ADR 0014, rule 2).
+    trees: OnceLock<Trees>,
+}
+
+/// The field sets of a model's dataset trees.
+struct Trees {
+    /// A root's set, by the root (a dataset's `prefix`).
+    by_root: HashMap<&'static str, BTreeSet<&'static str>>,
+    /// The set of a root no dataset has: the base fields.
+    base: BTreeSet<&'static str>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Field sets built on this thread ([`Model::tree_fields`]).
+    pub(crate) static TREE_SETS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 impl Model {
@@ -77,7 +95,26 @@ impl Model {
     }
 
     /// Every field the datasets under `root` define, with the base fields.
-    fn tree_fields(&self, root: &str) -> BTreeSet<&'static str> {
+    fn tree_fields(&self, root: &str) -> &BTreeSet<&'static str> {
+        let trees = self.trees.get_or_init(|| {
+            let mut by_root = HashMap::new();
+            for d in &self.datasets {
+                by_root
+                    .entry(d.prefix.as_str())
+                    .or_insert_with(|| self.build_tree_fields(&d.prefix));
+            }
+            Trees {
+                by_root,
+                base: BASE_FIELDS.iter().copied().collect(),
+            }
+        });
+        trees.by_root.get(root).unwrap_or(&trees.base)
+    }
+
+    /// [`Model::tree_fields`], built.
+    fn build_tree_fields(&self, root: &str) -> BTreeSet<&'static str> {
+        #[cfg(test)]
+        TREE_SETS_BUILT.set(TREE_SETS_BUILT.get() + 1);
         let mut out: BTreeSet<&'static str> = BASE_FIELDS.iter().copied().collect();
         for d in &self.datasets {
             if d.prefix == root {
@@ -107,6 +144,7 @@ impl Cim {
                     name: name.to_string(),
                     complete: row.complete,
                     datasets: vec![row],
+                    trees: OnceLock::new(),
                 }),
             }
         }
@@ -116,6 +154,7 @@ impl Cim {
                     name: name.clone(),
                     complete: false,
                     datasets: Vec::new(),
+                    trees: OnceLock::new(),
                 });
             }
         }
@@ -756,6 +795,34 @@ mod tests {
 
     fn field_errors(src: &str) -> Vec<Diagnostic> {
         diags(src, codes::SPL_UNKNOWN_DATAMODEL_FIELD)
+    }
+
+    /// A dataset tree's fields are gathered once per model, not for each
+    /// field a search names (ADR 0014, rule 7), and they are what gathering
+    /// them per field gave.
+    #[test]
+    fn tree_fields_are_built_once_per_model() {
+        let search = "| tstats count from datamodel=Endpoint.Processes where \
+                      Processes.process_name=cmd.exe Processes.user=x Processes.dest=y \
+                      Processes.parent_process_nam=z by Processes.process Processes.dest";
+        let first = field_errors(search);
+        assert_eq!(first.len(), 1, "{first:?}");
+        let built = TREE_SETS_BUILT.get();
+        let again = field_errors(search);
+        assert_eq!(TREE_SETS_BUILT.get() - built, 0);
+        assert_eq!(first, again);
+        for model in &Cim::cached().models {
+            for d in &model.datasets {
+                assert_eq!(
+                    model.tree_fields(&d.prefix),
+                    &model.build_tree_fields(&d.prefix)
+                );
+            }
+            assert_eq!(
+                model.tree_fields("NoSuchRoot"),
+                &model.build_tree_fields("NoSuchRoot")
+            );
+        }
     }
 
     #[test]
