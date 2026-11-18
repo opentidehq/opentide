@@ -256,6 +256,13 @@ impl Server {
         Ok(())
     }
 
+    /// The turn the calls take, which the running call holds until its work
+    /// has returned.
+    #[cfg(test)]
+    pub(crate) fn turn(&self) -> Arc<tokio::sync::Mutex<()>> {
+        Arc::clone(&self.turn)
+    }
+
     /// The answer to `tools/call`.
     pub fn call(&self, name: &str, arguments: &serde_json::Map<String, Value>) -> Answer {
         Answer::Result(tools::call(name, arguments, &self.state.context(None)))

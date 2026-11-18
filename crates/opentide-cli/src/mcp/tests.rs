@@ -549,6 +549,7 @@ fn the_session_ending_stops_the_running_call_and_waits_for_it() {
     )
     .unwrap();
     let server = server(&ws);
+    let turn = server.turn();
     let (mut client, input) = tokio::io::duplex(1 << 16);
     let patience = std::time::Duration::from_secs(60);
     let finished = opentide_connectors::runtime::block_on(async move {
@@ -584,10 +585,19 @@ fn the_session_ending_stops_the_running_call_and_waits_for_it() {
             .expect("the server returned")
             .unwrap()
             .unwrap();
-        // By the time the server returned, the call had stopped: its request
-        // to the tenant was dropped.
-        reached.1.try_recv()
+        // The server returned once the call had stopped: the call's work has
+        // returned and given its turn back (else the process would exit with
+        // it mid-work).
+        assert!(
+            turn.try_lock().is_ok(),
+            "the server returned while the call was still running"
+        );
+        reached.1
     })
     .unwrap();
-    assert_eq!(finished, Ok("closed"));
+    // The call was interrupted: its request to the tenant is dropped, which
+    // the stand-in sees once the closed socket reaches it. Without the
+    // interrupt the request stays open past the bound (the query's own
+    // timeout is 120 s).
+    assert_eq!(finished.recv_timeout(patience), Ok("closed"));
 }
