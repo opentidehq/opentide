@@ -32,7 +32,9 @@
 use crate::catalog::{ArgRule, Catalog, Field};
 use crate::parser::{Expr, Parser, Span, TRANSFORMERS};
 use opentide_core::codes;
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::OnceLock;
 
 /// How bad a finding is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -399,6 +401,65 @@ fn classes_for(catalog: &Catalog, source: &str) -> Vec<String> {
     }
 }
 
+/// Each class [`classes_for`] gives *source*, in its order, with the fields
+/// of that class that apply to *source*, in catalog order: what [`resolve`]
+/// tries. For a source the bundled catalog lists, it is built once, on first
+/// use; each field a condition named scanned every field for each class
+/// (ADR 0014, rule 2). Another source, or another catalog, is scanned.
+fn class_fields(catalog: &Catalog, source: &str) -> std::borrow::Cow<'static, Classes> {
+    type Table = HashMap<&'static str, OnceLock<Classes>>;
+    static TABLE: OnceLock<Table> = OnceLock::new();
+    let scan = || scan_classes(catalog, source);
+    let bundled = Catalog::cached();
+    if !std::ptr::eq(catalog, bundled) {
+        return std::borrow::Cow::Owned(scan());
+    }
+    let table = TABLE.get_or_init(|| {
+        let mut sources: Vec<&'static str> =
+            bundled.sources.iter().map(|s| s.name.as_str()).collect();
+        sources.extend(
+            bundled
+                .fields
+                .iter()
+                .flat_map(|f| f.sources.iter().map(String::as_str))
+                .filter(|s| *s != "*"),
+        );
+        sources.into_iter().map(|s| (s, OnceLock::new())).collect()
+    });
+    match table.get(source) {
+        Some(slot) => std::borrow::Cow::Borrowed(slot.get_or_init(scan)),
+        None => std::borrow::Cow::Owned(scan()),
+    }
+}
+
+/// [`class_fields`], from a scan of every field for each class.
+fn scan_classes(catalog: &Catalog, source: &str) -> Classes {
+    #[cfg(test)]
+    FIELD_SCANS.set(FIELD_SCANS.get() + 1);
+    classes_for(catalog, source)
+        .into_iter()
+        .map(|class| {
+            let fields = catalog
+                .fields
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.class == class && f.applies_to(source))
+                .map(|(i, _)| i)
+                .collect();
+            (class, fields)
+        })
+        .collect()
+}
+
+/// A source's classes and, for each, the indices of its fields that apply.
+type Classes = Vec<(String, Vec<usize>)>;
+
+#[cfg(test)]
+thread_local! {
+    /// Scans of the catalog's fields for a source's classes ([`class_fields`]).
+    pub(crate) static FIELD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// What one class's `parse_field_name` returns for *full*: `-1` as `None`, a
 /// length, or an exception.
 enum ClassParse<'c> {
@@ -669,16 +730,15 @@ pub fn resolve<'c>(
         Some(a) => format!("{name}[{a}]"),
         None => name.to_string(),
     };
-    for class in classes_for(catalog, source) {
-        let fields: Vec<&Field> = catalog
-            .fields
+    for (class, fields) in class_fields(catalog, source).iter() {
+        let fields: Vec<&Field> = fields
             .iter()
-            .filter(|f| f.class == class && f.applies_to(source))
+            .filter_map(|&i| catalog.fields.get(i))
             .collect();
         if fields.is_empty() {
             continue;
         }
-        match class_parse(catalog, &fields, &class, &full) {
+        match class_parse(catalog, &fields, class, &full) {
             ClassParse::NoMatch => {}
             ClassParse::Throw(message) => return Err(FieldError::Argument(message)),
             ClassParse::Len(len, field, ty) => {
@@ -1408,6 +1468,41 @@ pub fn output_prefixes(rest: &str) -> Vec<(Expr, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A source's classes and fields, kept from their first use, are what a
+    /// scan gives: for every source the catalog lists, and one it does not.
+    #[test]
+    fn the_kept_classes_are_what_a_scan_gives() {
+        let catalog = Catalog::cached();
+        let mut sources: Vec<&str> = catalog.sources.iter().map(|s| s.name.as_str()).collect();
+        sources.extend(["no_such_source", "*", ""]);
+        for source in sources {
+            assert_eq!(
+                *class_fields(catalog, source),
+                scan_classes(catalog, source),
+                "{source}"
+            );
+            assert_eq!(
+                *class_fields(catalog, source),
+                scan_classes(catalog, source),
+                "{source}"
+            );
+        }
+    }
+
+    /// A field a condition names is resolved against its source's classes,
+    /// kept: the catalog's fields are scanned once per source, not for each
+    /// field (ADR 0014, rule 7).
+    #[test]
+    fn resolving_fields_scans_the_catalog_once_per_source() {
+        let catalog = Catalog::cached();
+        let _ = resolve(catalog, "syscall", "proc.name", None);
+        let scans = FIELD_SCANS.get();
+        for name in ["proc.name", "fd.name", "evt.type", "proc.nmae", "user.name"] {
+            let _ = resolve(catalog, "syscall", name, None);
+        }
+        assert_eq!(FIELD_SCANS.get() - scans, 0);
+    }
     use crate::parser::parse;
 
     fn codes(text: &str, source: &str) -> Vec<&'static str> {
