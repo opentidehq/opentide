@@ -31,7 +31,7 @@ use opentide_core::suggest::Candidates;
 
 use indexmap::{IndexMap, IndexSet};
 
-pub use document::{Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary};
+pub use document::{Description, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary};
 pub use version::{Contract, Version, VocabRef};
 
 /// The object families whose workspace objects form vocabularies of their

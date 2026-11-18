@@ -62,6 +62,42 @@ const BATCH_BYTES: usize = 4 * 1024;
 /// An item does not deserialise, or the text is not in the form the module
 /// describes.
 pub fn array_items<T: DeserializeOwned>(text: &str, key: &str) -> Result<Vec<T>, CatalogError> {
+    Ok(read_items(text, key, None)?.0)
+}
+
+/// The items of `[[key]]`, as [`array_items`] reads them, each with its own
+/// text in `text` (its header to its last line), leaving out of the parse
+/// the item lines `keep` refuses: a caller reads what it left out from an
+/// item's text when it needs it, so a large value it rarely reads is
+/// neither parsed nor kept (a vocabulary's descriptions, #1071). A parse
+/// error's line, within an item, does not count the lines left out.
+///
+/// # Errors
+///
+/// As [`array_items`].
+pub fn array_items_keeping<'t, T: DeserializeOwned>(
+    text: &'t str,
+    key: &str,
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<Vec<(T, &'t str)>, CatalogError> {
+    let (items, spans) = read_items(text, key, Some(keep))?;
+    Ok(items
+        .into_iter()
+        .zip(spans)
+        .map(|(item, span)| (item, text.get(span).unwrap_or_default()))
+        .collect())
+}
+
+/// The items of `[[key]]` in `text`; with a `keep`, [`array_items_keeping`]'s
+/// reading and the items' byte ranges in `text`.
+fn read_items<T: DeserializeOwned>(
+    text: &str,
+    key: &str,
+    keep: Option<&dyn Fn(&str) -> bool>,
+) -> Result<(Vec<T>, Vec<std::ops::Range<usize>>), CatalogError> {
+    // Where `line`, a line of `text`, starts in it.
+    let offset = |line: &str| line.as_ptr() as usize - text.as_ptr() as usize;
+    let mut ranges: Vec<std::ops::Range<usize>> = Vec::new();
     let mut items = Vec::new();
     // The items of `key` read but not yet parsed, verbatim, and where each
     // starts: its line in the file and its offset in `batch`.
@@ -81,21 +117,26 @@ pub fn array_items<T: DeserializeOwned>(text: &str, key: &str) -> Result<Vec<T>,
                 if in_item {
                     starts.push((at, batch.len()));
                     batch.push_str(line);
+                    if keep.is_some() {
+                        let start = offset(line);
+                        ranges.push(start..start + line.len());
+                    }
                 }
             }
-            Line::Sub => {
-                if in_item {
-                    batch.push_str(line);
+            Line::Sub | Line::Value if in_item => match keep {
+                None => batch.push_str(line),
+                Some(keep) => {
+                    if keep(line) {
+                        batch.push_str(line);
+                    }
+                    if let Some(range) = ranges.last_mut() {
+                        range.end = offset(line) + line.len();
+                    }
                 }
-            }
-            Line::Value => {
-                if in_item {
-                    batch.push_str(line);
-                } else {
-                    // Another array's line, not parsed here.
-                    looks_like_toml(line, at)?;
-                }
-            }
+            },
+            Line::Sub => {}
+            // Another array's line, not parsed here.
+            Line::Value => looks_like_toml(line, at)?,
             Line::Preamble | Line::Blank => {}
         }
         Ok(())
@@ -103,7 +144,7 @@ pub fn array_items<T: DeserializeOwned>(text: &str, key: &str) -> Result<Vec<T>,
     if !batch.is_empty() {
         items.extend(batch_of::<T>(&batch, &starts, key)?);
     }
-    Ok(items)
+    Ok((items, ranges))
 }
 
 /// The items of `[[key]]` in `body`, a run of them as the catalog writes
