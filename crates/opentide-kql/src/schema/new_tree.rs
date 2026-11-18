@@ -15,9 +15,10 @@ use crate::syntax_util::{
     child as child_of, ident, legacy_kind, literal_kind, name, simple_call, simple_ident,
     simple_primary, span, text, token_span, tokens,
 };
+use foldhash::{HashMap, HashMapExt};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 use rowan::TextRange;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 /// Runs the pass over a parsed query; diagnostics only when it parsed

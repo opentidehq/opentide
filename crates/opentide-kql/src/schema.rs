@@ -23,8 +23,9 @@
 //! The pass never reports on a query that does not parse.
 
 use crate::{Catalog, Profile, tables};
+use foldhash::{HashMap, HashMapExt, HashSet};
 use opentide_core::{ByteSpan, Diagnostic, codes};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 pub(crate) mod new_tree;
