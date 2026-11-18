@@ -47,11 +47,12 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     functions(&root, &lines, catalog, &lets, &mut diagnostics);
     scalar_operators(&root, &lines, catalog, &mut diagnostics);
     let _ = tables(&root, &lines, catalog, &lets, &mut diagnostics);
-    let columns = schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty());
+    let columns =
+        schema::new_tree::analyze(&root, source, &lines, catalog, parsed.errors.is_empty());
     diagnostics.extend(columns.diagnostics.iter().cloned());
     perf::check(
         &pipelines(&root, parsed.errors.is_empty()),
-        source,
+        &lines,
         &columns,
         &mut diagnostics,
     );
@@ -64,7 +65,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     // The scope checks scan tokens, not the tree: the old engine gave them on
     // broken input too, and `union *` and `search *`, which both engines
     // reject, are the shapes they exist for.
-    perf::check_scope(source, &mut diagnostics);
+    perf::check_scope(source, &lines, &mut diagnostics);
     let spec = HighlightSpec::shared().expect("highlight spec");
     let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
@@ -223,6 +224,7 @@ pub(crate) fn columns(source: &str, catalog: &CatalogRef) -> Rc<schema::Analysis
     let analysis = Rc::new(schema::new_tree::analyze(
         &root,
         source,
+        &LineIndex::new(source),
         catalog,
         parsed.errors.is_empty(),
     ));

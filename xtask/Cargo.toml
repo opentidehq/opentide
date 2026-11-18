@@ -38,7 +38,7 @@ opentide-cli.workspace = true
 # `lsp parity` (UC-2.6): the language server in this process, and the
 # engine's own analysis it adds to validate's findings.
 opentide-lsp.workspace = true
-opentide-analysis.workspace = true
+opentide-analysis = { workspace = true, features = ["queries"] }
 opentide-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
