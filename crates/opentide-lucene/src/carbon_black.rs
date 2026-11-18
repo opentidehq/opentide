@@ -26,23 +26,27 @@ pub struct Field {
     pub values: Vec<String>,
 }
 
+/// The whole of `fields.toml`; only the test reads it as one document.
+#[cfg(test)]
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Catalog {
     field: Vec<Field>,
 }
 
+/// Reads the compiled-in file item by item ([`opentide_core::catalog`]).
+fn read_fields() -> Vec<Field> {
+    use opentide_core::catalog::{array_items, compiled_in};
+    compiled_in(
+        "data/catalogs/carbon_black/fields.toml",
+        array_items(FIELDS_TOML, "field"),
+    )
+}
+
 /// The process search fields, read once.
-#[expect(
-    clippy::expect_used,
-    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-)]
 pub fn fields() -> &'static [Field] {
     static FIELDS: OnceLock<Vec<Field>> = OnceLock::new();
-    FIELDS.get_or_init(|| {
-        toml::from_str::<Catalog>(FIELDS_TOML)
-            .expect("data/catalogs/carbon_black/fields.toml")
-            .field
-    })
+    FIELDS.get_or_init(read_fields)
 }
 
 pub fn field(name: &str) -> Option<&'static Field> {
@@ -135,6 +139,13 @@ pub fn completions(before: &str) -> Vec<CompletionItem> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let whole: Catalog = toml::from_str(FIELDS_TOML).unwrap();
+        assert_eq!(format!("{:?}", read_fields()), format!("{:?}", whole.field));
+    }
 
     #[test]
     fn the_catalog_loads_and_names_each_field_once() {

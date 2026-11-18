@@ -81,7 +81,8 @@ const KEYWORD_WORDS: &[&str] = &[
 ];
 const MAX_SAMPLE_QUERIES: usize = 5;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct FunctionsFile {
     functions: Vec<FunctionRow>,
 }
@@ -118,7 +119,8 @@ pub struct ParamRow {
     pub required: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct PipesFile {
     pipes: Vec<PipeRow>,
 }
@@ -139,16 +141,29 @@ pub struct Catalog {
     pub pipes: Vec<PipeRow>,
 }
 
+/// Reads the compiled-in files item by item ([`opentide_core::catalog`]).
+fn files() -> (FunctionsFile, PipesFile) {
+    use opentide_core::catalog::{array_items, compiled_in};
+    let functions = FunctionsFile {
+        functions: compiled_in(
+            "data/catalogs/eql/functions.toml",
+            array_items(FUNCTIONS_TOML, "functions"),
+        ),
+    };
+    let pipes = PipesFile {
+        pipes: compiled_in(
+            "data/catalogs/eql/pipes.toml",
+            array_items(PIPES_TOML, "pipes"),
+        ),
+    };
+    (functions, pipes)
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-    )]
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let functions: FunctionsFile = toml::from_str(FUNCTIONS_TOML).expect("eql functions");
-            let pipes: PipesFile = toml::from_str(PIPES_TOML).expect("eql pipes");
+            let (functions, pipes) = files();
             Catalog {
                 functions: functions.functions,
                 pipes: pipes.pipes,
@@ -864,7 +879,18 @@ pub fn debug_node_kinds() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use opentide_core::Severity;
+
+    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let (functions, pipes) = files();
+        let whole: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
+        assert_eq!(format!("{functions:?}"), format!("{whole:?}"));
+        let whole: PipesFile = toml::from_str(PIPES_TOML).unwrap();
+        assert_eq!(format!("{pipes:?}"), format!("{whole:?}"));
+    }
 
     /// Codes of errors, warnings, and information; hints are left out.
     fn codes_of(src: &str) -> Vec<String> {
