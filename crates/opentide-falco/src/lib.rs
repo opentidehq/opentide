@@ -256,16 +256,42 @@ fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
 /// The lists Falco would expand, items expanded through other lists, the
 /// block's after the default rules' (a later definition replaces). Without
 /// lists of the block's own they are the default rules' alone, expanded once
-/// per process: expanding the default lists for each condition was most of
-/// a short condition's analysis.
+/// per process; with them, the last block's are kept per thread. Expanding
+/// every default list for each condition was most of its analysis.
 fn lists_in_order(ctx: &Context) -> std::sync::Arc<Lists> {
     static DEFAULTS: std::sync::OnceLock<std::sync::Arc<Lists>> = std::sync::OnceLock::new();
+    type Last = Option<(
+        BTreeMap<String, Vec<String>>,
+        Vec<String>,
+        std::sync::Arc<Lists>,
+    )>;
+    thread_local! {
+        /// The last block's lists and their order, and what they expand to:
+        /// a block's conditions, exceptions and tunings expand them in turn.
+        static LAST: std::cell::RefCell<Last> = const { std::cell::RefCell::new(None) };
+    }
     if ctx.lists.is_empty() {
         return std::sync::Arc::clone(
             DEFAULTS.get_or_init(|| std::sync::Arc::new(expand_lists_in_order(ctx))),
         );
     }
-    std::sync::Arc::new(expand_lists_in_order(ctx))
+    if let Some(hit) = LAST.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(lists, order, _)| *lists == ctx.lists && *order == ctx.list_order)
+            .map(|(_, _, expanded)| std::sync::Arc::clone(expanded))
+    }) {
+        return hit;
+    }
+    let expanded = std::sync::Arc::new(expand_lists_in_order(ctx));
+    LAST.with(|last| {
+        *last.borrow_mut() = Some((
+            ctx.lists.clone(),
+            ctx.list_order.clone(),
+            std::sync::Arc::clone(&expanded),
+        ));
+    });
+    expanded
 }
 
 /// Each list's name and items, in Falco's load order.

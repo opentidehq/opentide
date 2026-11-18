@@ -831,9 +831,6 @@ impl Catalog {
             .find(|c| c.name == name && c.hand_written())
     }
 
-    /// The names [`Catalog::resolve_column_among`] resolves, as a set: what a
-    /// caller that asks about every name of a query looks up, once each
-    /// (the hand-written columns are a scan of the whole catalog).
     /// The names of the hand-written catalog's columns. Finding them reads
     /// every column of the catalog, tens of thousands with the reference's:
     /// for a profile's bundled catalog they are found once per process, not

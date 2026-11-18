@@ -219,7 +219,10 @@ impl Schema {
     }
 
     fn remove(&mut self, name: &str, by: &'static str) {
-        Arc::make_mut(&mut self.columns).retain(|c| c.name != name);
+        // Copied on write only when there is a column to remove.
+        if self.has(name) {
+            Arc::make_mut(&mut self.columns).retain(|c| c.name != name);
+        }
         self.removed.insert(name.to_string(), by);
     }
 
@@ -482,12 +485,14 @@ pub(crate) fn source_schema(
 /// bundled catalog: a query names a few tables, and building one copies its
 /// hundred-odd columns from the catalog (a fifth of a short query's
 /// analysis). A copy of the built schema shares its columns
-/// ([`Schema::columns`] is copied on write). A workspace catalog with
+/// ([`Schema::columns`] is copied on write). Only tables are kept, so the
+/// memo is bounded by the catalog: a name that is not a table (each prefix
+/// typed in an editor) is looked up each time. A workspace catalog with
 /// declared columns is built each time.
 fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
-    type Built = HashMap<(u8, String), Option<Schema>>;
+    type Built = [HashMap<String, Schema>; 3];
     thread_local! {
-        static BUILT: std::cell::RefCell<Built> = std::cell::RefCell::new(HashMap::new());
+        static BUILT: std::cell::RefCell<Built> = std::cell::RefCell::new(Default::default());
     }
     if !std::ptr::eq(catalog, Catalog::cached(catalog.profile)) {
         return build_table_schema(catalog, name);
@@ -497,13 +502,12 @@ fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
         crate::Profile::Sentinel => 1,
         crate::Profile::Defender => 2,
     };
-    let key = (slot, name.to_string());
-    if let Some(hit) = BUILT.with(|built| built.borrow().get(&key).cloned()) {
-        return hit;
+    if let Some(hit) = BUILT.with(|built| built.borrow()[slot].get(name).cloned()) {
+        return Some(hit);
     }
-    let schema = build_table_schema(catalog, name);
-    BUILT.with(|built| built.borrow_mut().insert(key, schema.clone()));
-    schema
+    let schema = build_table_schema(catalog, name)?;
+    BUILT.with(|built| built.borrow_mut()[slot].insert(name.to_string(), schema.clone()));
+    Some(schema)
 }
 
 fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
