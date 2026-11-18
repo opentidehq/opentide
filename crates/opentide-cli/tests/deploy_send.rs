@@ -383,6 +383,52 @@ fn harfanglab_deletes_a_yara_file_as_the_python_client_did() {
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
 }
 
+/// A HarfangLab tenant that still sets the removed `type` fails before
+/// anything is sent or resolved, with the message `validate` reports: an
+/// unset `$NAME` there is not looked up.
+#[test]
+fn harfanglab_refuses_a_tenant_that_still_sets_type() {
+    let removed = "harfanglab tenant 'lab' setup: type: `type` is removed: a HarfangLab tenant \
+                   takes both Sigma and YARA rules, and each rule's own `sigma` or `yara` block \
+                   picks its kind; delete this key";
+    for kind in ["Sigma", "$HARFANGLAB_TYPE"] {
+        let ws = workspace(
+            "harfanglab",
+            "lab",
+            &format!(
+                "ssl = true\ntype = \"{kind}\"\nurl = \"https://hl-tenant.invalid/\"\napi_token = \
+                 \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n"
+            ),
+            &[(
+                "a.yaml",
+                rule(
+                    "HarfangLab YARA Loader",
+                    "00000000-0000-4000-8003-000000000007",
+                    "Retired.",
+                    "  harfanglab:\n    status: REMOVED\n    yara:\n      meta:\n        os: \
+                     Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n",
+                ),
+            )],
+        );
+        let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+        let (sent, stderr) = deploy(
+            ws.path(),
+            "harfanglab",
+            &env,
+            &opentide_connectors::builtin(),
+            0,
+        );
+        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{kind}");
+        assert_eq!(rows(&sent), [("not_attempted".to_owned(), None)], "{kind}");
+        let Json::Array(failures) = value(&sent, "failures") else {
+            panic!("no failures")
+        };
+        let error = failures[0].get("error").and_then(Json::as_str).unwrap();
+        assert_eq!(error, removed, "{kind}");
+        assert!(!stderr.contains("HARFANGLAB_TYPE"), "{kind}: {stderr}");
+    }
+}
+
 /// One HarfangLab tenant deploys Sigma rules and YARA files in one run
 /// (platform-harfanglab 1.6): each rule goes to the endpoint of its own
 /// block's kind, created, updated or deleted there; nothing is skipped for

@@ -428,13 +428,20 @@ fn read_request(request: &DeployRequest) -> Result<(Kind, Vec<u8>), crate::conne
             ),
         ))
     };
+    if request.body.is_empty() {
+        return Err(invalid(
+            "it is empty; a HarfangLab delete names its kind too: {\"kind\": \"Sigma\" or \"YARA\"}",
+        ));
+    }
     let fields: std::collections::BTreeMap<String, &serde_json::value::RawValue> =
         serde_json::from_slice(&request.body).map_err(|_| invalid("not JSON"))?;
-    let kind = fields
-        .get("kind")
-        .and_then(|kind| serde_json::from_str::<String>(kind.get()).ok())
-        .and_then(|kind| Kind::parse(&kind))
-        .ok_or_else(|| invalid("no kind"))?;
+    let kind = match fields.get("kind") {
+        None => return Err(invalid("no kind")),
+        Some(kind) => serde_json::from_str::<String>(kind.get())
+            .ok()
+            .and_then(|kind| Kind::parse(&kind))
+            .ok_or_else(|| invalid("kind is not \"Sigma\" or \"YARA\""))?,
+    };
     let rule = match fields.get("rule").map(|rule| rule.get()) {
         Some(rule) if rule != "null" => rule.as_bytes().to_vec(),
         _ if request.operation == Operation::Delete => Vec::new(),

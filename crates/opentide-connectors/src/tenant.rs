@@ -77,6 +77,17 @@ impl Tenant {
             tenant: name.to_owned(),
             message,
         };
+        // A setup key a platform removed (HarfangLab's `type`,
+        // platform-harfanglab 1.6) fails the tenant before anything is
+        // resolved, with the message `validate` reports at the key.
+        if platform == "harfanglab"
+            && let Some((key, message)) =
+                opentide_schema::configuration::models::REMOVED_HARFANGLAB_KEYS
+                    .iter()
+                    .find(|(key, _)| setup.contains_key(*key))
+        {
+            return Err(setup_error(format!("{key}: {message}")));
+        }
         let mut http = defaults.clone();
         if let Some(value) = setup.get("ssl") {
             http.tls.verify = ssl(value, env, mode).map_err(setup_error)?;

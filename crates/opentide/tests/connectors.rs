@@ -283,6 +283,30 @@ async fn a_deploy_sends_the_compiled_body() {
     }
 }
 
+/// A HarfangLab tenant that still sets the removed `type` does not open,
+/// even when it names an unset variable: the SDKs refuse it as `validate`
+/// does.
+#[test]
+fn a_harfanglab_tenant_with_type_does_not_open() {
+    for kind in ["Sigma", "$HL_TYPE"] {
+        let tenant = TenantConfig::new(
+            "harfanglab",
+            "lab",
+            [
+                ("url", "https://hl.example"),
+                ("api_token", "$HL_TOKEN"),
+                ("type", kind),
+            ],
+        );
+        let error = Connection::open(&tenant, &options()).unwrap_err();
+        assert!(
+            error.to_string().contains("`type` is removed"),
+            "{kind}: {error}"
+        );
+        assert!(!error.to_string().contains("unset"), "{kind}: {error}");
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_platform_without_the_operation_says_so() {
     let sysdig = TenantConfig::new("sysdig", "falco", [("url", "https://sysdig.example")]);

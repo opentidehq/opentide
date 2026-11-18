@@ -229,11 +229,15 @@ fn harfanglab_refuses_a_request_without_its_kind() {
     for (operation, body, reason) in [
         (Operation::Create, sigma("Bare", true), "no kind"),
         (Operation::Create, b"not json".to_vec(), "not JSON"),
-        (Operation::Delete, Vec::new(), "not JSON"),
+        (
+            Operation::Delete,
+            Vec::new(),
+            "a HarfangLab delete names its kind too: {\"kind\": \"Sigma\" or \"YARA\"}",
+        ),
         (
             Operation::Create,
             br#"{"kind": "sigma"}"#.to_vec(),
-            "no kind",
+            "kind is not \"Sigma\" or \"YARA\"",
         ),
         (
             Operation::Update,

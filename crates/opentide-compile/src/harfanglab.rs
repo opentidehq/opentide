@@ -463,11 +463,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Vec<Write
     };
     let sigma_block = block.get("sigma").filter(|value| !value.is_null());
     let yara_block = block.get("yara").filter(|value| !value.is_null());
-    let kind = match (sigma_block, yara_block) {
-        (Some(_), _) => "Sigma",
-        (None, Some(_)) => "YARA",
-        (None, None) => return Ok(Vec::new()),
+    let Some(kind) = Kind::of(rule) else {
+        return Ok(Vec::new());
     };
+    let kind = kind.as_str();
     let base = deploy::setup_text(tenant, "url");
     let base = base.trim_end_matches('/');
     let endpoint = if kind == "Sigma" {
