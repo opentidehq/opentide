@@ -388,7 +388,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`, `.yaral`, `.yl2`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -411,7 +411,9 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `harfanglab` | YARA, HarfangLab profile: the block's `yara.signature` or the rule its decomposed form assembles, and `.yar` and `.yara` files |
 | `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
+| `graylog` | Lucene, Graylog dialect: the block's query |
 | `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
 

@@ -329,3 +329,31 @@ fn an_unanswered_question_stops_the_run() {
     assert!(asked.is_empty());
     assert_eq!(report.outcome.failure.unwrap().code, USAGE_NEEDS_INPUT);
 }
+
+/// A rule with a block for every platform loads as YAML: the pre-RC smoke run found `--platform google_secops` writing a
+/// file `validate` could not parse (#1617).
+#[test]
+fn a_rule_with_every_platform_block_is_valid() {
+    let dir = prompted_workspace();
+    let every: Vec<&str> = opentide_schema::platforms::PLATFORMS
+        .iter()
+        .map(|platform| platform.id)
+        .collect();
+    let (report, _) = prompted(
+        dir.path(),
+        "rule",
+        &every,
+        vec![Reply::Text(Some("Every Platform"))],
+        true,
+    );
+    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
+    let text = written(&report, dir.path());
+    for platform in &every {
+        assert!(
+            text.contains(&format!("\n  {platform}:\n")),
+            "{platform}: {text}"
+        );
+    }
+    let document = opentide_schema::node::load(&text);
+    assert!(document.is_ok(), "{text}");
+}

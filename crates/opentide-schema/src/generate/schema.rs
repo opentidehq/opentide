@@ -1036,7 +1036,7 @@ fn dropdown(vocabulary: &Vocabulary, entry: &Entry, stages: &[String]) -> String
     }
     parts.push("---".to_owned());
     if !entry.description.is_empty() {
-        parts.push(entry.description.clone());
+        parts.push(entry.description.to_string());
     }
     let mut text = parts.join("\n\n");
     text.push('\n');
