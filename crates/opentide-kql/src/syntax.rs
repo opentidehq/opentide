@@ -466,8 +466,6 @@ impl rowan::Language for Lang {
 pub type SyntaxNode = rowan::SyntaxNode<Lang>;
 /// A token of the KQL tree.
 pub type SyntaxToken = rowan::SyntaxToken<Lang>;
-/// A node or a token of a KQL tree.
-pub type SyntaxElement = rowan::SyntaxElement<Lang>;
 
 /// The kind of each token of `kql.ungram` (the typed AST's `T!`).
 #[macro_export]

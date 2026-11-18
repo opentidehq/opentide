@@ -7,7 +7,7 @@
 //! words anywhere ([`global`]), and a name by where it stands: a call, a
 //! type, a member, a table, a variable.
 
-use crate::syntax::{SyntaxElement, SyntaxKind as K, SyntaxToken};
+use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use opentide_core::ByteSpan;
 use rowan::NodeOrToken;
 
@@ -199,18 +199,9 @@ pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
 /// The `(span, capture)` of every coloured token of the tree, in order. The
 /// captures are the spec's names, borrowed: a copy per token was a few
 /// percent of a query's analysis.
-#[cfg(test)]
-pub(crate) fn highlight_spans(root: &crate::syntax::SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
-    let elements: Vec<SyntaxElement> = root.descendants_with_tokens().collect();
-    highlight_spans_of(&elements)
-}
-
-/// [`highlight_spans`] of a tree's elements in preorder, as
-/// `opentide_parse::walk_once` gives them (ADR 0014 §5a: the analysis walks
-/// its tree once, and the highlight reads that walk).
-pub(crate) fn highlight_spans_of(elements: &[SyntaxElement]) -> Vec<(ByteSpan, &'static str)> {
+pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
     let mut out = Vec::new();
-    for element in elements {
+    for element in root.descendants_with_tokens() {
         match element {
             NodeOrToken::Node(node) if node.kind() == K::COLUMN_PATTERN => {
                 let range = node.text_range();
@@ -226,7 +217,7 @@ pub(crate) fn highlight_spans_of(elements: &[SyntaxElement]) -> Vec<(ByteSpan, &
                 if parent.kind() == K::COLUMN_PATTERN {
                     continue;
                 }
-                if let Some(capture) = capture(token, parent.kind()) {
+                if let Some(capture) = capture(&token, parent.kind()) {
                     let range = token.text_range();
                     if !range.is_empty() {
                         out.push((
@@ -246,7 +237,6 @@ pub(crate) fn highlight_spans_of(elements: &[SyntaxElement]) -> Vec<(ByteSpan, &
 mod tests {
     use super::*;
     use crate::parser::parse;
-    use crate::syntax::SyntaxNode;
 
     fn captures(source: &str) -> Vec<(&str, &'static str)> {
         let root = SyntaxNode::new_root(parse(source).green);
