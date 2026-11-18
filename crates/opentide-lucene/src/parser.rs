@@ -6,7 +6,7 @@
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
 use opentide_parse::{
-    Grammar, Input, Marker, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
+    Event, Grammar, Input, Marker, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
 };
 
 /// Nesting (`(`) deeper than this is one error. The tree-sitter engine took
@@ -58,6 +58,25 @@ const CLOSERS: TokenSet = K::set(&[K::RBracket, K::RBrace]);
 
 /// Parses `source`.
 pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
+    let parse = with_events(source, built);
+    (SyntaxNode::new_root(parse.green.clone()), parse)
+}
+
+/// Whether [`parse`] reports no error. Every error the grammar records is
+/// one of the tree's, so a text with one is rejected without building the
+/// tree (ADR 0014 §4). A text with none is built, as a backstop for the
+/// errors only the build finds (a tree too deep, unbalanced events); the
+/// grammar's own depth limit fires before either today.
+pub(crate) fn accepts(source: &str) -> bool {
+    with_events(source, |input, events| {
+        !events.iter().any(|e| matches!(e, Event::Error { .. }))
+            && built(input, events).errors.is_empty()
+    })
+}
+
+/// `f` of the grammar's events over `source`, before the tree is built.
+#[inline]
+fn with_events<R>(source: &str, f: impl FnOnce(&Input<'_>, Vec<Event>) -> R) -> R {
     let grammar = Grammar {
         eof: K::Eof.raw(),
         error: K::Error.raw(),
@@ -69,8 +88,27 @@ pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
     let root = p.start();
     query(&mut p);
     root.complete(&mut p, K::SourceFile.raw());
-    let parse = build(&input, p.finish());
-    (SyntaxNode::new_root(parse.green.clone()), parse)
+    let events = p.finish();
+    f(&input, events)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The trees built on this thread: [`trees_built`].
+    static TREES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many trees this thread has built (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn trees_built() -> usize {
+    TREES_BUILT.get()
+}
+
+#[inline]
+fn built(input: &Input<'_>, events: Vec<Event>) -> Parse {
+    #[cfg(test)]
+    TREES_BUILT.set(TREES_BUILT.get() + 1);
+    build(input, events)
 }
 
 fn at(p: &mut Parser<'_>, kind: K) -> bool {
@@ -343,6 +381,89 @@ pub(crate) fn debug(source: &str) -> String {
 mod tests {
     use super::*;
     use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
+
+    /// Queries of the corpus and the external sets, written here: an engine
+    /// crate reads no file, its tests in `src/` included (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        r#"(a OR b) AND c"#,
+        r#"process.name:AND"#,
+        r#"message:"failed login"#,
+        r#"title:alert^2"#,
+        r#"book.*:x"#,
+        r#"bytes:[100 TO 200} AND @timestamp:[now-1d/d TO now]"#,
+        r#"process.name:"#,
+        r#"title:alert^"#,
+        r#"name:jon~1 AND name:bob~AUTO"#,
+        r#"process.name:cmd* AND file.name:a?c"#,
+        r#"bytes:[100 TO]"#,
+        r#"process.name:cmd.exe AND _exists_:host.name"#,
+        r#"*:"#,
+        r#"process.name:/cmd\.exe/"#,
+        r#"+title:quick -body:"brown fox"~3 NOT status:500"#,
+        r#"a && b || !c"#,
+        r#"field:(one two "three four")^1.5"#,
+        r#"port:>=1024 AND port:<49152"#,
+        r#"path:C\:\\Windows\\System32\\*"#,
+        r#"user.name:"SYSTEM" OR user.name:LOCAL\ SERVICE"#,
+        r#"(a:1 or b:2) and c:3"#,
+        r#"event.code >= 4624"#,
+        r#"title:{a TO *]"#,
+        r#"/re[gx]+p/ AND x"#,
+    ];
+
+    /// The samples, each cut at every
+    /// character: valid and broken queries alike.
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = out
+            .iter()
+            .filter(|t| t.len() < 400)
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t[..i].to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// `accepts` is `parse`'s verdict, on every text and at the grammar's
+    /// nesting limit (its own depth error, an error event, fires there before
+    /// the build could find a tree too deep).
+    #[test]
+    fn accepts_is_the_parse_without_errors() {
+        let mut sources = texts();
+        for depth in [MAX_DEPTH - 1, MAX_DEPTH, MAX_DEPTH + 1] {
+            let depth = depth as usize;
+            sources.push(format!("{}a{}", "(".repeat(depth), ")".repeat(depth)));
+        }
+        let (mut accepted, mut rejected) = (0, 0);
+        for source in &sources {
+            let expected = parse(source).1.errors.is_empty();
+            assert_eq!(accepts(source), expected, "{source:?}");
+            if expected {
+                accepted += 1;
+            } else {
+                rejected += 1;
+            }
+        }
+        assert!(
+            accepted > 100 && rejected > 100,
+            "{accepted} accepted, {rejected} rejected"
+        );
+    }
+
+    /// A rejected text builds no tree through the public `parses` (ADR 0014
+    /// §7): the other engine asks it of every query its own grammar rejects.
+    #[test]
+    fn a_rejected_text_builds_no_tree() {
+        let before = trees_built();
+        assert!(!crate::parses("a AND (b OR c"));
+        assert_eq!(trees_built() - before, 0);
+        assert!(crate::parses("a AND (b OR c)"));
+        assert_eq!(trees_built() - before, 1);
+    }
 
     #[test]
     fn every_tree_is_lossless() {
