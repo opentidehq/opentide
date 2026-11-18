@@ -91,6 +91,7 @@ env:
 #   build           `build`: the tests, xtask and the language server
 #   native          `native`: the `_native` extension
 #   stubs           `stubs`: the extension with PyO3's introspection, xtask
+#   throughput      `throughput`: the throughput bench (bench profile), xtask
 #   engine-check    `engine-lint`: clippy (native and wasm32) and rustdoc
 #   wasm            `wasm`: the browser module, the WASI server and command line
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
@@ -138,6 +139,7 @@ jobs:
       fields: ${{ steps.plan.outputs.fields }}
       schema_ui: ${{ steps.plan.outputs.schema_ui }}
       stubs: ${{ steps.plan.outputs.stubs }}
+      throughput: ${{ steps.plan.outputs.throughput }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -435,6 +437,52 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.python310.outputs.python-path }}
         run: cargo xtask stubs --check
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # Each language's parse and full analysis, counted in instructions with
+  # callgrind and held to tests/bench/instructions.toml within 3% (#1571,
+  # ADR 0014, docs/engine/THROUGHPUT.md): when a crate the analysis depends on,
+  # the bench, the budgets or the command change. Instructions, not time: a
+  # shared runner's time varies by more than any regression worth catching.
+  throughput:
+    name: Throughput (instructions)
+    needs: changes
+    if: needs.changes.outputs.throughput == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: throughput
+
+      - name: Install mold and valgrind
+        run: sudo apt-get install -y -q --no-install-recommends mold valgrind || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold valgrind; }
+
+      - name: Instruction counts within their budgets
+        run: cargo xtask throughput --check
 
       - name: Save the compiler cache
         if: ${{ !cancelled() }}
@@ -1482,6 +1530,7 @@ jobs:
     name: PR gate
     needs:
       - stubs
+      - throughput
       - changes
       - lint
       - engine-lint

@@ -1,6 +1,6 @@
 ---
 title: "Throughput"
-description: "How fast each language's parse and analysis run, how that is measured (the throughput bench, ADR 0014), and how it compares with the vendors' own libraries."
+description: "How fast each language's parse and analysis run, in wall time and in instructions, how that is measured and held (the throughput bench, cargo xtask throughput, ADR 0014), and how it compares with the vendors' own libraries."
 ---
 
 # Throughput
@@ -53,12 +53,29 @@ How to read the table:
 - **Small inputs.** Kibana KQL's and Lucene's external queries are short (12 and 20 bytes on
   average), and Exabeam's set is 794 bytes, so their MB/s is dominated by the per-call floor.
 
+## Instructions: the gate
+
+`cargo xtask throughput --check` builds the same bench with its symbols kept, then counts each
+language's instructions with callgrind (valgrind required). For every language, mode and input set
+it runs the bench's `--count`: two warm-up passes, then one pass inside a function of its own,
+which callgrind alone counts (`--toggle-collect`). Each count is held to
+[`tests/bench/instructions.toml`](../../tests/bench/instructions.toml):
+
+- **Over budget.** A count more than 3% over its budget fails, and so does a count with no budget.
+- **Under budget.** A count more than 3% under is reported, with a request to record the budgets
+  again (`cargo xtask throughput --record`), so that the gain is kept.
+
+Instruction counts are deterministic for a build and an input, which time is not: two runs of one
+build differ by under 1% (hash seeds, the routine chosen by CPU feature). CI's `throughput` job runs
+the check when any crate the analysis is built from changes, and on every push. A change that
+raises a count on purpose records the budgets again and gives the reason in its pull request.
+
 ## Adding a language
 
-A language joins the benchmark with one row in the bench's `LANGUAGES` table: its id, extensions,
-corpus, external directories and parse entry point. The bench's `--count LANG MODE SET` runs one
-pass after its warm-up, inside a function of its own, for an instruction count with callgrind
-(ADR 0014 §6).
+A language joins the bench and the gate with one row in the bench's `LANGUAGES` table: its id,
+extensions, corpus, external directories, the file names to leave out, and its parse entry point.
+Then `cargo xtask throughput --record --language <name>` adds its budgets: a record merges into
+the file, so the other languages' budgets stay as they are.
 
 ## Against the vendors
 

@@ -1,0 +1,71 @@
+# Instructions each language's counted pass takes (`cargo xtask throughput`,
+# ADR 0014): parse alone and full analysis, over the short corpus and the
+# external public rules. Written by `cargo xtask throughput --record`; the
+# check fails a count more than 3% over. Record again when a change lowers
+# counts on purpose, or raises them on purpose with the reason in its PR.
+
+[cql]
+analyze_corpus = 12117347
+analyze_external = 46772310
+parse_corpus = 11638340
+parse_external = 42430361
+
+[eql]
+analyze_corpus = 4049875
+analyze_external = 3116829
+parse_corpus = 1475157
+parse_external = 1080761
+
+[esql]
+analyze_corpus = 23613073
+analyze_external = 4713155
+parse_corpus = 5374034
+parse_external = 1205836
+
+[exabeam]
+analyze_corpus = 13064360
+analyze_external = 1525610
+parse_corpus = 7624603
+parse_external = 1285216
+
+[falco]
+analyze_corpus = 4023039
+analyze_external = 1225861152
+parse_corpus = 3147797
+parse_external = 21378485
+
+[kql]
+analyze_corpus = 18552823
+analyze_external = 75956323
+parse_corpus = 3065182
+parse_external = 12986449
+
+[kuery]
+analyze_corpus = 4112242
+analyze_external = 1708931
+parse_corpus = 1132930
+parse_external = 851149
+
+[lucene]
+analyze_corpus = 3522197
+analyze_external = 15575493
+parse_corpus = 972973
+parse_external = 5688781
+
+[spl]
+analyze_corpus = 20289656
+analyze_external = 24773383
+parse_corpus = 7604394
+parse_external = 6304154
+
+[yara]
+analyze_corpus = 31987872
+analyze_external = 711042627
+parse_corpus = 23637171
+parse_external = 547185682
+
+[yaral]
+analyze_corpus = 15254652
+analyze_external = 206971541
+parse_corpus = 9092573
+parse_external = 99271110

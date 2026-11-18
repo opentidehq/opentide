@@ -261,6 +261,18 @@ FEATURES: Mapping[str, str] = {
 #: pull request's packages.
 ANCHORS = ("opentide-connectors", "opentide-workspace")
 
+#: `cargo xtask throughput --check` (the `throughput` job) runs when the crate
+#: the bench measures is affected (any crate the analysis is built from), or
+#: when one of these, the bench, its budgets and the command, changes.
+THROUGHPUT_CRATE = "opentide-analysis"
+THROUGHPUT_PATHS = (
+    "crates/opentide-analysis/benches/*",
+    "tests/bench/instructions.toml",
+    "xtask/src/throughput.rs",
+    "xtask/src/main.rs",
+    "xtask/Cargo.toml",
+)
+
 
 @dataclass
 class Plan:
@@ -304,6 +316,9 @@ class Plan:
                 out[area] = _bool(area in self.areas)
         for check in CHECKS:
             out[check] = _bool(check in self.checks)
+        # The instruction counts change with any crate the analysis is built
+        # from: opentide-analysis is in the reverse closure of each of them.
+        out["throughput"] = _bool("throughput" in self.checks or THROUGHPUT_CRATE in crates)
         return out
 
 
@@ -375,6 +390,7 @@ def everything(plan: Plan, members: Iterable[str], reason: str) -> Plan:
     plan.areas.update(AREAS)
     plan.crates.update(members)
     plan.checks.update(CHECKS)
+    plan.checks.add("throughput")
     plan.reasons.append(reason)
     return plan
 
@@ -392,6 +408,8 @@ def plan_for_paths(
         for check, patterns in CHECKS.items():
             if any(_matches(path, pattern) for pattern in patterns):
                 plan.checks.add(check)
+        if any(_matches(path, pattern) for pattern in THROUGHPUT_PATHS):
+            plan.checks.add("throughput")
         crate = owning_crate(path, dirs)
         if crate is not None:
             changed.add(crate)
