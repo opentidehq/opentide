@@ -18,7 +18,7 @@ use opentide_core::{ByteSpan, CompletionItem, Diagnostic, LineIndex, Range, Seve
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::TokenSet;
 use regex::Regex;
-use rowan::{NodeOrToken, TextRange, TextSize, WalkEvent};
+use rowan::{NodeOrToken, TextRange, TextSize};
 use std::sync::OnceLock;
 use syntax::{SyntaxElement, SyntaxKind as K, SyntaxNode, SyntaxToken};
 
@@ -41,7 +41,16 @@ pub use ecs::ecs_diagnostics;
 /// was written for `language: kuery`).
 #[must_use]
 pub fn parses(source: &str) -> bool {
-    parser::parse(source, false).1.errors.is_empty()
+    parser::accepts(source, false)
+}
+
+/// The parse [`analyze`] runs, tree included, and its error count: the
+/// throughput benchmark's parse (`cargo bench --bench throughput`, ADR 0014).
+/// Not API.
+#[doc(hidden)]
+#[must_use]
+pub fn parse_tree(source: &str) -> usize {
+    parser::parse(source, true).1.errors.len()
 }
 
 const KQL_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/kql";
@@ -75,16 +84,13 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     // reads: the advice about text and Lucene shapes is for what Kibana
     // parsed, so a node past the first error gets none.
     let first_error = parse.errors.iter().map(|e| e.gap.start()).min();
+    // One walk over the tree (ADR 0014 §5a): it gathers the highlight, the
+    // characters no token takes and the elements the checks read, which
+    // run after it, in the walk's order, as they need every error token.
+    let walked = walk(root);
     // The characters no token takes (a lone `\`), sorted: a node glued to
     // one (`process\-name`) is part of the same broken word.
-    let error_tokens: Vec<TextRange> = if first_error.is_some() {
-        root.descendants_with_tokens()
-            .filter(|e| e.kind() == K::ErrorToken)
-            .map(|e| e.text_range())
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let error_tokens = &walked.error_tokens;
     let error_starts_at = |at: TextSize| {
         error_tokens
             .binary_search_by_key(&at, |r| r.start())
@@ -102,13 +108,10 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     let glued = |node: &SyntaxNode| error_ends_at(node.text_range().start());
     let mut lucene_signals = Vec::new();
     let mut diagnostics = Vec::new();
-    if let Some(d) = parse_error(root, parse, source, &lines) {
+    if let Some(d) = parse_error(root, parse, source, &lines, &walked.error_nodes) {
         diagnostics.push(d);
     }
-    for event in root.preorder_with_tokens() {
-        let WalkEvent::Enter(element) = event else {
-            continue;
-        };
+    for element in walked.checked {
         match element {
             NodeOrToken::Node(node) => match node.kind() {
                 K::UnquotedLiteral => {
@@ -144,7 +147,7 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     if let Some(d) = looks_like_lucene(lucene_only, source, &lines, &lucene_signals) {
         diagnostics.push(d);
     }
-    let tokens = highlight(spec, root, source);
+    let tokens = tokens_from_spans(spec, source, &walked.spans).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -159,6 +162,7 @@ fn parse_error(
     parse: &opentide_parse::Parse,
     source: &str,
     lines: &LineIndex<'_>,
+    error_nodes: &[SyntaxNode],
 ) -> Option<Diagnostic> {
     let err = parse.errors.first()?;
     let at = usize::from(err.gap.start());
@@ -186,9 +190,9 @@ fn parse_error(
         parser::MISSING_VALUE => (missing_after(before), point(at)),
         other => {
             // An error node starts where the gap ends.
-            let node = root
-                .descendants()
-                .find(|n| n.kind() == K::Error && n.text_range().start() >= err.gap.end());
+            let node = error_nodes
+                .iter()
+                .find(|n| n.text_range().start() >= err.gap.end());
             let span = node.map_or(point(usize::from(err.gap.end())), |n| {
                 node_span(n.text_range())
             });
@@ -727,6 +731,8 @@ fn text(r: TextRange, source: &str) -> &str {
     reason = "regex literals: an invalid pattern fails every test that reaches it"
 )]
 fn capture(token: &SyntaxToken) -> Option<&'static str> {
+    #[cfg(test)]
+    CAPTURES.set(CAPTURES.get() + 1);
     static NUMBER: OnceLock<Regex> = OnceLock::new();
     let in_field = |levels: usize| {
         token
@@ -766,16 +772,62 @@ fn capture(token: &SyntaxToken) -> Option<&'static str> {
     })
 }
 
-fn highlight(spec: &HighlightSpec, root: &SyntaxNode, source: &str) -> Vec<HighlightToken> {
-    let spans: Vec<(ByteSpan, &str)> = root
-        .descendants_with_tokens()
-        .filter_map(|e| e.into_token())
-        .filter_map(|t| {
-            let (start, end) = bounds(t.text_range());
-            Some((ByteSpan::new(start, end), capture(&t)?))
-        })
-        .collect();
-    tokens_from_spans(spec, source, &spans).unwrap_or_default()
+/// What [`analyze`] reads of a tree, from one walk over it (ADR 0014 §5a).
+struct Walked {
+    /// Each token's highlight capture, in document order.
+    spans: Vec<(ByteSpan, &'static str)>,
+    /// The characters no token takes, in document order.
+    error_tokens: Vec<TextRange>,
+    /// The error nodes, in preorder.
+    error_nodes: Vec<SyntaxNode>,
+    /// The nodes and tokens a check reads, in preorder.
+    checked: Vec<SyntaxElement>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Elements [`walk`] visited on this thread.
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tokens [`capture`] read on this thread: every highlight, by a walk of
+    /// its own or not, reads each token there.
+    static CAPTURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Visits each element of `root` once, in preorder.
+fn walk(root: &SyntaxNode) -> Walked {
+    let mut walked = Walked {
+        spans: Vec::new(),
+        error_tokens: Vec::new(),
+        error_nodes: Vec::new(),
+        checked: Vec::new(),
+    };
+    opentide_parse::walk_once(root, |element, _| {
+        #[cfg(test)]
+        VISITS.set(VISITS.get() + 1);
+        match element {
+            NodeOrToken::Node(node) => match node.kind() {
+                K::UnquotedLiteral | K::NestedQuery | K::RangeExpression | K::ValueExpression => {
+                    walked.checked.push(NodeOrToken::Node(node));
+                }
+                K::Error => walked.error_nodes.push(node),
+                _ => {}
+            },
+            NodeOrToken::Token(token) => {
+                if let Some(capture) = capture(&token) {
+                    let (start, end) = bounds(token.text_range());
+                    walked.spans.push((ByteSpan::new(start, end), capture));
+                }
+                match token.kind() {
+                    K::ErrorToken => walked.error_tokens.push(token.text_range()),
+                    K::OrKw | K::AndKw | K::NotKw | K::QuotedString => {
+                        walked.checked.push(NodeOrToken::Token(token));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+    walked
 }
 
 /// Field names a query mentions, for completion and for Tide checks.
@@ -1130,6 +1182,35 @@ mod tests {
                 "{n} diagnostics took {:?}",
                 started.elapsed()
             );
+        }
+    }
+
+    /// An analysis visits each element of its tree once: the checks, the
+    /// error tokens and the highlight read one walk (ADR 0014 §5a), where
+    /// they walked it two or three times.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for src in [
+            "source.port:80 and process.name:x",
+            "a:{ b:c } and not d < 5",
+            "process\\-name:x or (a:\"b\" and c:d*",
+            "a: (1 or 2) and",
+            ")",
+            "",
+        ] {
+            let root = parser::parse_memo(src).0.clone();
+            let elements = root.descendants_with_tokens().count();
+            let tokens = root
+                .descendants_with_tokens()
+                .filter(|e| e.as_token().is_some())
+                .count();
+            VISITS.set(0);
+            CAPTURES.set(0);
+            let _ = analyze(src);
+            // No other walk: the walk visits every element, and the
+            // highlight reads each token once, from it.
+            assert_eq!(VISITS.get(), elements, "{src:?}");
+            assert_eq!(CAPTURES.get(), tokens, "{src:?}");
         }
     }
 

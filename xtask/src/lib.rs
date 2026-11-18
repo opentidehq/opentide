@@ -14,7 +14,6 @@ pub mod coverage;
 pub mod files;
 pub mod layers;
 pub mod lsp;
-pub mod mutants;
 pub mod parallel;
 pub(crate) mod recorded;
 #[cfg(unix)]

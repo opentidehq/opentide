@@ -113,6 +113,10 @@ titlecase = { version = "3.6", default-features = false }
 regex-syntax = "0.8"
 # "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
 strsim = "0.11"
+# A fast hasher seeded per process for the engine's hot-path maps, keyed by
+# query text among others (ADR 0014 §5b): SipHash cost about a seventh of a
+# KQL analysis.
+foldhash = { version = "0.2", default-features = false, features = ["std"] }
 # Unicode general categories (opentide-schema `vocab::quote`: which characters a
 # message escapes). unicode-rs, as unicode-normalization and unicode-width.
 unicode-properties = { version = "0.1", default-features = false, features = ["general-category"] }
