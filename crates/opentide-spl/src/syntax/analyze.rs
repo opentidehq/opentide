@@ -364,14 +364,20 @@ fn has_error(node: &SyntaxNode, errors: &[SyntaxError]) -> bool {
 
 // ---------------------------------------------------------------- commands
 
-fn first_token_text(node: &SyntaxNode) -> String {
-    node.children_with_tokens()
-        .find_map(|e| match e {
-            NodeOrToken::Token(t) if !trivia(t.kind()) => Some(t.text().to_owned()),
-            NodeOrToken::Node(n) => n.first_token().map(|t| t.text().to_owned()),
-            NodeOrToken::Token(_) => None,
-        })
-        .unwrap_or_default()
+/// The first token of `node` that is not trivia: a command's name. Its
+/// text is borrowed from it; a caller copies it only to keep it (ADR 0014
+/// §1: every command's name was copied to be compared).
+fn first_token(node: &SyntaxNode) -> Option<SyntaxToken> {
+    node.children_with_tokens().find_map(|e| match e {
+        NodeOrToken::Token(t) if !trivia(t.kind()) => Some(t),
+        NodeOrToken::Node(n) => n.first_token(),
+        NodeOrToken::Token(_) => None,
+    })
+}
+
+/// [`first_token`]'s text, or `""`.
+fn token_text(token: Option<&SyntaxToken>) -> &str {
+    token.map_or("", SyntaxToken::text)
 }
 
 /// `spl_unknown_command`: a name in command position the catalog does not
@@ -391,11 +397,12 @@ fn unknown_commands(
         .iter()
         .filter(|n| n.kind() == K::UNKNOWN_COMMAND)
     {
-        let name = first_token_text(node);
-        if catalog.command(&name).is_none() {
+        let token = first_token(node);
+        let name = token_text(token.as_ref());
+        if catalog.command(name).is_none() {
             let range = lines.range(shown(node.text_range()));
             let mut finding = made
-                .entry(name)
+                .entry(name.to_owned())
                 .or_insert_with_key(|name| crate::unknown_command(name, range, catalog))
                 .clone();
             finding.range = range;
@@ -417,7 +424,8 @@ fn has_child(node: &SyntaxNode, kinds: &[K]) -> bool {
 /// What an argumentless command does, or `None` when it has arguments or
 /// none are needed.
 fn empty_command(node: &SyntaxNode) -> Option<(String, &'static str, bool)> {
-    let name = first_token_text(node);
+    let token = first_token(node);
+    let name = token_text(token.as_ref());
     let empty = match node.kind() {
         K::WHERE_COMMAND => child_nodes(node).next().is_none(),
         K::SEARCH_COMMAND => !has_child(node, &[K::SEARCH_EXPRESSION]),
@@ -427,23 +435,20 @@ fn empty_command(node: &SyntaxNode) -> Option<(String, &'static str, bool)> {
         }
         K::STATS_COMMAND => {
             !has_child(node, &[K::AGGREGATE_ITEM, K::MACRO_CALL])
-                && matches!(
-                    name.as_str(),
-                    "stats" | "eventstats" | "streamstats" | "sistats"
-                )
+                && matches!(name, "stats" | "eventstats" | "streamstats" | "sistats")
         }
         _ => false,
     };
     if !empty {
         return None;
     }
-    let (what, error) = match name.as_str() {
+    let (what, error) = match name {
         "stats" => ("returns no results", true),
         "inputlookup" => ("fails at run time: Splunk needs a lookup table", true),
         "sistats" => ("computes nothing to summarize", false),
         _ => ("does nothing", false),
     };
-    Some((name, what, error))
+    Some((name.to_owned(), what, error))
 }
 
 /// In a pipeline whose query or subsearch has a syntax error.
@@ -581,7 +586,7 @@ fn rejects(index: &TreeIndex, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) 
         {
             loose_operators(&clause, lines, out);
         }
-        if node.kind() == K::STATS_COMMAND && first_token_text(node) == "geostats" {
+        if node.kind() == K::STATS_COMMAND && token_text(first_token(node).as_ref()) == "geostats" {
             let first = node.children().find(|n| {
                 matches!(
                     n.kind(),

@@ -6,8 +6,11 @@
 //! not the bundled one keeps the scan.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::OnceLock;
+
+// foldhash, not SipHash: each command, function, field and data model a
+// query names is hashed here (ADR 0014 §5b).
+use foldhash::{HashMap, HashMapExt};
 
 use opentide_core::suggest::Candidates;
 
@@ -35,6 +38,8 @@ thread_local! {
     /// Catalog rows compared by a lookup that scanned (the work the index
     /// saves).
     pub(crate) static ROWS_SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Field names looked up in the index.
+    pub(crate) static FIELD_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Counts `rows` rows compared by a scan, in tests.
@@ -112,7 +117,15 @@ impl Index {
 
     /// The first row named `name` or `bare`.
     pub(crate) fn field(&self, name: &str, bare: &str) -> Option<usize> {
+        #[cfg(test)]
+        FIELD_LOOKUPS.set(FIELD_LOOKUPS.get() + 1);
         let a = self.fields.get(name).copied();
+        // A name with no `.` is its own bare name: one lookup, not two.
+        if bare.len() == name.len() {
+            return a;
+        }
+        #[cfg(test)]
+        FIELD_LOOKUPS.set(FIELD_LOOKUPS.get() + 1);
         let b = self.fields.get(bare).copied();
         match (a, b) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -196,7 +209,9 @@ mod tests {
         let index = Index {
             commands: HashMap::new(),
             functions: HashMap::new(),
-            fields: HashMap::from([("a.b", 3), ("b", 1), ("c", 0), ("a.c", 2)]),
+            fields: [("a.b", 3), ("b", 1), ("c", 0), ("a.c", 2)]
+                .into_iter()
+                .collect(),
             datamodels: HashMap::new(),
             command_names: Candidates::new([]),
             lowered_commands: Vec::new(),
@@ -211,6 +226,18 @@ mod tests {
 
     /// A lookup through the index finds the row a scan finds, and a typo or
     /// a suggestion is the scan's, over every name of the catalog.
+    /// A field name with no `.` is looked up once: it is its own bare name,
+    /// which was looked up a second time (ADR 0014 §7).
+    #[test]
+    fn a_plain_field_name_is_looked_up_once() {
+        let catalog = Catalog::cached();
+        for (name, lookups) in [("src_ip", 1), ("All_Traffic.src_ip", 2), ("nosuchfield", 1)] {
+            FIELD_LOOKUPS.set(0);
+            let _ = catalog.field(name);
+            assert_eq!(FIELD_LOOKUPS.get(), lookups, "{name}");
+        }
+    }
+
     #[test]
     fn the_indexes_find_what_a_scan_finds() {
         let bundled = Catalog::cached();

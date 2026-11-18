@@ -128,7 +128,10 @@ impl<'i> Parser<'i> {
         Self {
             input,
             pos: 0,
-            events: Vec::new(),
+            // An event per significant token and two per node: a tree with
+            // about a node per token fits without growing the vector one
+            // push at a time (ADR 0014 §1).
+            events: Vec::with_capacity(input.significant.len() * 3 + 4),
             expected: TokenSet::EMPTY,
             fuel: Cell::new(fuel),
             full_fuel: fuel,
@@ -644,6 +647,27 @@ mod tests {
         stuck(&mut p);
         root.complete(&mut p, ROOT);
         let _ = p.finish();
+    }
+
+    /// A parse whose tree has a node per token fills the events it reserved
+    /// and grows none (ADR 0014 §7): the vector grew from empty, a
+    /// reallocation each time it doubled.
+    #[test]
+    fn the_events_are_reserved_from_the_tokens() {
+        for n in [0, 1, 7, 100, 1_000] {
+            let (source, lexemes) = words(n);
+            let input = Input::new(&source, lexemes, GRAMMAR);
+            let mut p = Parser::new(&input);
+            let reserved = p.events.capacity();
+            let root = p.start();
+            while !p.at_eof() {
+                let m = p.start();
+                p.bump();
+                m.complete(&mut p, ROOT);
+            }
+            root.complete(&mut p, ROOT);
+            assert_eq!(p.events.capacity(), reserved, "{n} tokens");
+        }
     }
 
     #[test]
