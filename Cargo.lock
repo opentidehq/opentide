@@ -3645,6 +3645,7 @@ dependencies = [
 name = "opentide-spl"
 version = "0.12.0"
 dependencies = [
+ "foldhash",
  "insta",
  "logos",
  "opentide-core",
