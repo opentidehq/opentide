@@ -14,7 +14,8 @@
 //! holds the lowest to its budget within [`TOLERANCE`], and a record writes
 //! the highest. A count that falls further asks for the budgets to be recorded
 //! again (`--record`), so that the gain is kept. glibc's malloc is counted, so
-//! budgets hold for one environment: the file names it ([`environment`]), and
+//! budgets hold for one environment: the file names it (valgrind, glibc, the
+//! architecture), and
 //! a check elsewhere warns.
 
 use anyhow::{Context, Result, bail};

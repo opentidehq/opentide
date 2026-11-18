@@ -71,8 +71,10 @@ allocation order: each process seeds its hash maps, and glibc's malloc does more
 the order, so one run of a pass can differ from the next by 1.5%. A record writes the highest of
 its runs and a check takes the lowest, which keeps that noise inside the tolerance. glibc's malloc
 is counted, so budgets hold for one environment: the file names the valgrind, glibc and
-architecture it was recorded on, and a check elsewhere warns. Record where CI checks (the
-`throughput` job's runner image).
+architecture it was recorded on, and a check elsewhere warns. CI's `throughput` job is pinned to
+`ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded: on Ubuntu 26.04 (glibc
+2.43, valgrind 3.26) every count moved by 4 to 17%. Moving the job to another image means recording
+the budgets again there.
 
 CI's `throughput` job runs the check when any crate the analysis is built from changes, when the
 bench, the budgets or the command change, and on every push; the table goes to the step summary. A

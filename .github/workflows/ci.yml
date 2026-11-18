@@ -454,7 +454,11 @@ jobs:
     name: Throughput (instructions)
     needs: changes
     if: needs.changes.outputs.throughput == 'true'
-    runs-on: ubuntu-latest
+    # Pinned: glibc's malloc and valgrind are in the count, so the budgets hold
+    # on the image they were recorded on (Ubuntu 24.04: glibc 2.39, valgrind
+    # 3.22; ubuntu-latest moved to glibc 2.43, valgrind 3.26, and every count
+    # moved 4-17%). Moving the image is recording the budgets again.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
