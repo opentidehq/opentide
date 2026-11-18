@@ -224,8 +224,6 @@ mod tests {
         assert_eq!(index.field("x.y", "y"), None);
     }
 
-    /// A lookup through the index finds the row a scan finds, and a typo or
-    /// a suggestion is the scan's, over every name of the catalog.
     /// A field name with no `.` is looked up once: it is its own bare name,
     /// which was looked up a second time (ADR 0014 §7).
     #[test]
@@ -238,6 +236,8 @@ mod tests {
         }
     }
 
+    /// A lookup through the index finds the row a scan finds, and a typo or
+    /// a suggestion is the scan's, over every name of the catalog.
     #[test]
     fn the_indexes_find_what_a_scan_finds() {
         let bundled = Catalog::cached();
