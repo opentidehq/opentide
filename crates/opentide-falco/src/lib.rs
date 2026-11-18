@@ -846,23 +846,13 @@ thread_local! {
 fn field_near_miss(catalog: &'static Catalog, name: &str, source: &str) -> Option<String> {
     type Table = std::collections::HashMap<&'static str, std::sync::OnceLock<SourceFields>>;
     static TABLE: std::sync::OnceLock<Table> = std::sync::OnceLock::new();
-    let table = TABLE.get_or_init(|| {
-        let mut sources: Vec<&'static str> =
-            catalog.sources.iter().map(|s| s.name.as_str()).collect();
-        sources.extend(
-            catalog
-                .fields
-                .iter()
-                .flat_map(|f| f.sources.iter().map(String::as_str))
-                .filter(|s| *s != "*"),
-        );
-        sources
-            .into_iter()
-            .map(|s| (s, std::sync::OnceLock::new()))
-            .collect()
-    });
+    let unprepared = || near_miss(name, catalog.field_names_for(source).into_iter());
+    if !std::ptr::eq(catalog, Catalog::cached()) {
+        return unprepared();
+    }
+    let table = TABLE.get_or_init(|| compile::source_slots(catalog));
     let Some(slot) = table.get(source) else {
-        return near_miss(name, catalog.field_names_for(source).into_iter());
+        return unprepared();
     };
     let fields = slot.get_or_init(|| {
         #[cfg(test)]

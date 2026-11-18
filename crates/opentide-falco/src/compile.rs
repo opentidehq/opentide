@@ -381,6 +381,8 @@ fn is_hex(value: &str) -> bool {
 
 /// The libsinsp check classes a source resolves names through, in order.
 fn classes_for(catalog: &Catalog, source: &str) -> Vec<String> {
+    #[cfg(test)]
+    FIELD_SCANS.set(FIELD_SCANS.get() + 1);
     let plugin_classes = || {
         let mut seen: Vec<String> = Vec::new();
         for f in &catalog.fields {
@@ -414,28 +416,26 @@ fn class_fields(catalog: &Catalog, source: &str) -> std::borrow::Cow<'static, Cl
     if !std::ptr::eq(catalog, bundled) {
         return std::borrow::Cow::Owned(scan());
     }
-    let table = TABLE.get_or_init(|| {
-        let mut sources: Vec<&'static str> =
-            bundled.sources.iter().map(|s| s.name.as_str()).collect();
-        sources.extend(
-            bundled
-                .fields
-                .iter()
-                .flat_map(|f| f.sources.iter().map(String::as_str))
-                .filter(|s| *s != "*"),
-        );
-        sources.into_iter().map(|s| (s, OnceLock::new())).collect()
-    });
+    let table = TABLE.get_or_init(|| source_slots(bundled));
     match table.get(source) {
         Some(slot) => std::borrow::Cow::Borrowed(slot.get_or_init(scan)),
         None => std::borrow::Cow::Owned(scan()),
     }
 }
 
+/// An empty slot for each source *catalog* lists (every source its fields
+/// apply to is one): the keys of the per-source tables, so that a source
+/// from a user's rule never adds one.
+pub(crate) fn source_slots<T>(catalog: &'static Catalog) -> HashMap<&'static str, OnceLock<T>> {
+    catalog
+        .sources
+        .iter()
+        .map(|s| (s.name.as_str(), OnceLock::new()))
+        .collect()
+}
+
 /// [`class_fields`], from a scan of every field for each class.
 fn scan_classes(catalog: &Catalog, source: &str) -> Classes {
-    #[cfg(test)]
-    FIELD_SCANS.set(FIELD_SCANS.get() + 1);
     classes_for(catalog, source)
         .into_iter()
         .map(|class| {
@@ -456,7 +456,7 @@ type Classes = Vec<(String, Vec<usize>)>;
 
 #[cfg(test)]
 thread_local! {
-    /// Scans of the catalog's fields for a source's classes ([`class_fields`]).
+    /// Scans of the catalog's fields for a source's classes ([`classes_for`]).
     pub(crate) static FIELD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -1487,6 +1487,19 @@ mod tests {
                 scan_classes(catalog, source),
                 "{source}"
             );
+        }
+    }
+
+    /// Every source a field applies to is one the catalog lists: the
+    /// per-source tables have a slot for each.
+    #[test]
+    fn every_field_source_has_a_slot() {
+        let catalog = Catalog::cached();
+        let slots = source_slots::<()>(catalog);
+        for f in &catalog.fields {
+            for s in f.sources.iter().filter(|s| *s != "*") {
+                assert!(slots.contains_key(s.as_str()), "{}: {s}", f.name);
+            }
         }
     }
 
