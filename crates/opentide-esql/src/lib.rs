@@ -1667,25 +1667,35 @@ mod tests {
     }
 
     fn depth_probes() -> Vec<String> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
-        let mut out = Vec::new();
-        for sub in ["corpus/esql", "conformance/external/esql"] {
-            let mut dirs = vec![dir.join(sub)];
-            while let Some(d) = dirs.pop() {
-                for path in std::fs::read_dir(&d)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .map(|e| e.path())
-                {
-                    if path.is_dir() {
-                        dirs.push(path);
-                    } else if let Ok(text) = std::fs::read_to_string(&path) {
-                        out.push(text);
-                    }
-                }
-            }
-        }
+        // Queries like the corpus's and Elastic's rules, written here: an
+        // engine crate reads no file, its tests in `src/` included
+        // (`check-io-free.sh`).
+        let mut out: Vec<String> = [
+            r#"FROM logs-* METADATA _id
+| WHERE process.name == "cmd.exe" AND NOT host.os.type == "linux"
+| KEEP @timestamp, host.*, `process.name`"#,
+            r#"FROM logs-endpoint.events.process-* METADATA _id, _index, _version
+| WHERE event.category == "process" AND (process.name IN ("powershell.exe", "pwsh.exe") OR process.args RLIKE ".*-enc.*")
+| EVAL cmd = TO_LOWER(process.command_line), len = LENGTH(cmd)
+| STATS n = COUNT(*), hosts = COUNT_DISTINCT(host.id) BY user.name, cmd
+| WHERE n > 5 AND len >= 20
+| SORT n DESC
+| LIMIT 100"#,
+            r#"FROM logs-* METADATA _id
+| COMPLETION summary = message WITH { "inference_id": "my-llm" }"#,
+            r#"FROM logs-*
+| WHERE MATCH(message, "failed login", {"operator": "AND", "boost": (1 + (2 * 3))}) AND @timestamp > NOW() - 1 day"#,
+            r#"FROM logs-* | EVAL port = destination.port::integer, ok = port BETWEEN 1 AND 1024 | WHERE NOT ok IS NULL"#,
+            r#"TS metrics-* | STATS avg = AVG(RATE(bytes)) BY TBUCKET(1 hour)"#,
+            r#"FROM logs-* | RENAME a AS b, new = old | DISSECT message "%{a} %{b}" | GROK message "%{IP:ip}""#,
+            r#"FROM a, b:c::data | LOOKUP JOIN threat_intel ON source.ip | ENRICH policy ON host WITH x = y"#,
+            r#"ROW a = [1, 2, 3], b = CASE(a > 1, "x", a < -1, "y", "z") | MV_EXPAND a | FORK (WHERE a > 1) (WHERE a < 1)"#,
+            r#"FROM logs-* | WHERE (a == 1 AND (b == 2 OR (c == 3 AND NOT (d == 4)))) | EVAL x = ABS(ABS(ABS(-1)))"#,
+            r#"FROM logs-* | WHERE a LIKE ("x*", "y*") OR b RLIKE "z.*" | EVAL d = DATE_TRUNC(1 hour, @timestamp) | EVAL"#,
+            r#"FROM logs-* | WHERE a == | STATS BY"#,
+        ]
+        .map(str::to_owned)
+        .to_vec();
         for n in [1, 2, 150, 299, 300, 301, 400, 401] {
             let chain = vec!["a == 1"; n + 1].join(" AND ");
             out.push(format!("FROM i | WHERE {chain}"));
