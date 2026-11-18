@@ -72,7 +72,9 @@ closed). Then:
   `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
-  manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides);
+  manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides),
+  `throughput` (any crate opentide-analysis is built from, the throughput bench,
+  `tests/bench/instructions.toml`, `xtask throughput`);
 - a docs-only pull request runs `docs` alone; a skills-only one, `lint`'s skills step alone.
 
 The push to the base branch runs everything, so what a pull request's filter leaves out is still
@@ -94,6 +96,7 @@ checked before the next pull request builds on it.
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, and `npm test`; it compiles its own addon, so it starts beside `build`. Node's parity with the Python and Rust SDKs, byte for byte, is the conformance suite's (nightly and release pull requests) |
 | `wasm` | Every WebAssembly artifact, one compiler cache (`wasm`): `build-wasm.sh browser wasi cli` (the browser module and the WASI language server, pure Rust, smoke-tested; wasi-sdk only for the command line's C, `ring`; the WASI command line the VS Code extension runs, its size held to the .vsix's 15 MiB), tenant commands through `@opentide/wasi-host` in the WASI module, the npm packs; when `packages/` changes (`ts_packages`) and on every push and nightly also the native language server and command line and the TypeScript client against the native, worker and WASI servers. The WebAssembly targets' clippy is `engine-lint`'s |
+| `throughput` | `cargo xtask throughput --check`: each language's parse and full analysis, counted with callgrind (valgrind from apt) on the bench profile in the bench binary's own instructions (within 3%) and its allocator calls (within 2), held to `tests/bench/instructions.toml` (#1571, ADR 0014, `docs/engine/THROUGHPUT.md`). When a crate the analysis is built from is affected, or the bench, the budgets or the command change; every push. Uploads the callgrind profiles when it fails. Sccache family `throughput`. Counts the bench binary's own code (glibc and the loader left out). Pinned to `ubuntu-24.04`, the image its budgets are recorded on |
 | `textmate` | The TextMate grammars as VS Code reads them |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) for the workspace, `fuzz/` and the `publishing/` placeholder crate ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `gate` (**`PR gate`**) | The one required check (below) |
@@ -177,7 +180,7 @@ composite cannot see whether the job's steps passed; `rust-setup`'s `save` outpu
 policy below. sccache is
 content-addressed, so a copy a few days old still serves every crate that did not change; a key
 on the sources or `Cargo.lock` saved every family on each merge and evicted what pull requests
-restore. The families: `build` (the tests' build), `native` (the extension), `stubs` (the `stubs` job) and `engine-check` (`engine-lint`), saved
+restore. The families: `build` (the tests' build), `native` (the extension), `stubs` (the `stubs` job), `throughput` (the `throughput` job) and `engine-check` (`engine-lint`), saved
 from a push to each base branch and from Run workflow (a pull request reads its base branch's
 caches and `development`'s), and from a pull request only when it restored no copy of the family
 at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
