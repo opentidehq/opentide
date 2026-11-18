@@ -130,10 +130,10 @@ pub fn analyze_with(text: &str, ctx: &Context) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 fn analyze_lines(text: &str, ctx: &Context) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     AnalyzeResult {
         diagnostics: condition_diagnostics(text, ctx),
-        tokens: highlight(&spec, text, ctx),
+        tokens: highlight(spec, text, ctx),
     }
 }
 
@@ -254,8 +254,50 @@ fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
 }
 
 /// The lists Falco would expand, items expanded through other lists, the
-/// block's after the default rules' (a later definition replaces).
-fn lists_in_order(ctx: &Context) -> Vec<(String, Vec<String>)> {
+/// block's after the default rules' (a later definition replaces). Without
+/// lists of the block's own they are the default rules' alone, expanded once
+/// per process; with them, the last block's are kept per thread. Expanding
+/// every default list for each condition was most of its analysis.
+fn lists_in_order(ctx: &Context) -> std::sync::Arc<Lists> {
+    static DEFAULTS: std::sync::OnceLock<std::sync::Arc<Lists>> = std::sync::OnceLock::new();
+    type Last = Option<(
+        BTreeMap<String, Vec<String>>,
+        Vec<String>,
+        std::sync::Arc<Lists>,
+    )>;
+    thread_local! {
+        /// The last block's lists and their order, and what they expand to:
+        /// a block's conditions, exceptions and tunings expand them in turn.
+        static LAST: std::cell::RefCell<Last> = const { std::cell::RefCell::new(None) };
+    }
+    if ctx.lists.is_empty() {
+        return std::sync::Arc::clone(
+            DEFAULTS.get_or_init(|| std::sync::Arc::new(expand_lists_in_order(ctx))),
+        );
+    }
+    if let Some(hit) = LAST.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(lists, order, _)| *lists == ctx.lists && *order == ctx.list_order)
+            .map(|(_, _, expanded)| std::sync::Arc::clone(expanded))
+    }) {
+        return hit;
+    }
+    let expanded = std::sync::Arc::new(expand_lists_in_order(ctx));
+    LAST.with(|last| {
+        *last.borrow_mut() = Some((
+            ctx.lists.clone(),
+            ctx.list_order.clone(),
+            std::sync::Arc::clone(&expanded),
+        ));
+    });
+    expanded
+}
+
+/// Each list's name and items, in Falco's load order.
+type Lists = Vec<(String, Vec<String>)>;
+
+fn expand_lists_in_order(ctx: &Context) -> Lists {
     // Falco's rule loader (`compile_list_infos`, then `resolve_list` in load
     // order): the default lists in their load order, then the block's in block
     // order (a block list of a default's name replaces it in place). An item
@@ -302,9 +344,9 @@ fn lists_in_order(ctx: &Context) -> Vec<(String, Vec<String>)> {
 
 pub(crate) fn expand_lists(text: &str, ctx: &Context) -> Expanded {
     let mut t = Expanded::new(text);
-    for (name, items) in lists_in_order(ctx) {
+    for (name, items) in lists_in_order(ctx).iter() {
         if t.text.contains(name.as_str()) {
-            resolve_list(&mut t, &name, &items);
+            resolve_list(&mut t, name, items);
         }
     }
     t
@@ -559,7 +601,7 @@ fn misplaced_lists(full: &str, ctx: &Context) -> Option<Vec<(parser::Span, Strin
 
 fn list_len(ctx: &Context, name: &str) -> usize {
     lists_in_order(ctx)
-        .into_iter()
+        .iter()
         .find(|(n, _)| n == name)
         .map_or(0, |(_, items)| items.len())
 }
@@ -833,7 +875,7 @@ pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 fn analyze_output_lines(text: &str, ctx: &Context) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     let catalog = Catalog::cached();
     let mut diagnostics = Vec::new();
     let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
@@ -952,7 +994,7 @@ fn analyze_output_lines(text: &str, ctx: &Context) -> AnalyzeResult {
     }
     AnalyzeResult {
         diagnostics,
-        tokens: tokens_from_spans(&spec, text, &spans).unwrap_or_default(),
+        tokens: tokens_from_spans(spec, text, &spans).unwrap_or_default(),
     }
 }
 

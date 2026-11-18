@@ -153,7 +153,7 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     let catalog = Catalog::cached();
     let mut suggestions = Suggestions::new(catalog);
     let Some(tree) = tree::parse_tree(source) else {
@@ -280,7 +280,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     // every one holds ECS documents.
     opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(&tree, source));
     // The tree the checks read: a second parse doubled the cost of a long query.
-    let tokens = highlight(&spec, &tree, source, catalog);
+    let tokens = highlight(spec, &tree, source, catalog);
     AnalyzeResult {
         diagnostics,
         tokens,

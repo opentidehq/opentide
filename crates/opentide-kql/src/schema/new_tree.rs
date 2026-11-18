@@ -18,6 +18,7 @@ use crate::syntax_util::{
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 use rowan::TextRange;
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 
 /// Runs the pass over a parsed query; diagnostics only when it parsed
 /// without an error (`clean`).
@@ -635,9 +636,9 @@ impl<'a> Pass<'a> {
                     let mut inner = out.clone();
                     inner.make_open();
                     let result = self.subquery(&sub, inner, scope);
-                    for column in result.columns {
+                    for column in Arc::unwrap_or_clone(result.columns) {
                         if !out.has(&column.name) {
-                            out.columns.push(column);
+                            Arc::make_mut(&mut out.columns).push(column);
                         }
                     }
                 }
@@ -698,7 +699,7 @@ impl<'a> Pass<'a> {
                     plugin.as_str(),
                     "bag_unpack" | "ipv4_lookup" | "ipv6_lookup" | "geoip_lookup"
                 ) {
-                    out.columns.clear();
+                    Arc::make_mut(&mut out.columns).clear();
                     out.narrowed = true;
                 }
                 out.make_open();
@@ -764,7 +765,7 @@ impl<'a> Pass<'a> {
             return input;
         }
         let mut out = Schema {
-            columns: Vec::new(),
+            columns: Arc::default(),
             known: reshaped(input.known),
             narrowed: true,
             custom_columns: false,
@@ -800,7 +801,7 @@ impl<'a> Pass<'a> {
     ) -> Schema {
         let op_span = made_by.span;
         let mut out = Schema {
-            columns: Vec::new(),
+            columns: Arc::default(),
             known: reshaped(input.known),
             narrowed: true,
             custom_columns: false,
@@ -851,7 +852,7 @@ impl<'a> Pass<'a> {
         let op_span = made_by.span;
         let ctx_input = input.clone();
         let mut out = Schema {
-            columns: Vec::new(),
+            columns: Arc::default(),
             known: reshaped(input.known),
             narrowed: true,
             custom_columns: false,
@@ -1113,8 +1114,9 @@ impl<'a> Pass<'a> {
                         match simple_ident(&first) {
                             Some(ident) => {
                                 let name = self.text(&ident);
-                                if let Some(column) =
-                                    out.columns.iter_mut().find(|c| c.name == name)
+                                if let Some(column) = Arc::make_mut(&mut out.columns)
+                                    .iter_mut()
+                                    .find(|c| c.name == name)
                                 {
                                     column.type_name = Some(to_type.clone());
                                     column.made_by = Some(made_by);
