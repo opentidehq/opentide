@@ -78,7 +78,7 @@ impl YamlNode for Node {
 
     fn scalar_text(&self) -> Option<String> {
         match &self.value {
-            Value::Str(text) | Value::Datetime(text) => Some(text.clone()),
+            Value::Str(text) | Value::Datetime(text) => Some(text.to_string()),
             // A boolean or a number as written (`True`, `1.50`), as Falco reads it.
             Value::Bool(flag) => Some(
                 self.text
@@ -121,7 +121,7 @@ pub(crate) fn number_text(value: &Value) -> Option<String> {
 /// keeps. `None` for a collection.
 pub(crate) fn written_text(source: &str, node: &Node) -> Option<String> {
     match &node.value {
-        Value::Str(text) | Value::Datetime(text) => Some(text.clone()),
+        Value::Str(text) | Value::Datetime(text) => Some(text.to_string()),
         Value::Seq(_) | Value::Map(_) => None,
         Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) => {
             let written: String = source

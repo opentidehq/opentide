@@ -186,7 +186,7 @@ pub fn tlp_names() -> Vec<String> {
             Some(
                 keys.iter()
                     .filter_map(|key| match &key.get("name")?.value {
-                        crate::node::Value::Str(name) if !name.is_empty() => Some(name.clone()),
+                        crate::node::Value::Str(name) if !name.is_empty() => Some(name.to_string()),
                         crate::node::Value::Int(number) => Some(number.to_string()),
                         _ => None,
                     })
