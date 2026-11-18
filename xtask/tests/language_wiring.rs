@@ -65,7 +65,11 @@ fn query_languages_lists_every_variant_but_the_documents() {
     let listed: BTreeSet<String> = LanguageId::QUERY_LANGUAGES
         .iter()
         .map(|id| format!("{id:?}"))
-        .chain(NOT_QUERY_LANGUAGES.iter().map(|(name, _)| (*name).to_owned()))
+        .chain(
+            NOT_QUERY_LANGUAGES
+                .iter()
+                .map(|(name, _)| (*name).to_owned()),
+        )
         .collect();
     assert_eq!(
         listed,
@@ -124,7 +128,11 @@ fn every_query_language_is_wired() {
             }
         };
         check(
-            root().join("crates").join(&krate).join("Cargo.toml").is_file(),
+            root()
+                .join("crates")
+                .join(&krate)
+                .join("Cargo.toml")
+                .is_file(),
             &format!("its crate, crates/{krate}"),
         );
         check(
