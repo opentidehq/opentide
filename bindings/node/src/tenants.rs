@@ -1397,11 +1397,15 @@ mod tests {
             runtime().unwrap(),
             opentide::connectors::runtime().unwrap()
         ));
-        let spawned = runtime()
+        // `runJson`'s thread, a `spawn_blocking` one, blocks on it: a
+        // command's network work runs there, not refused.
+        let blocked = runtime()
             .unwrap()
-            .block_on(async { tokio::task::spawn_blocking(|| 1).await })
+            .block_on(async {
+                tokio::task::spawn_blocking(|| opentide::connectors::block_on(async { 1 })).await
+            })
             .unwrap();
-        assert_eq!(spawned, 1);
+        assert_eq!(blocked.ok(), Some(1));
     }
 
     #[test]

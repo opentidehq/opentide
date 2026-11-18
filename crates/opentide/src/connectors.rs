@@ -503,7 +503,7 @@ impl Canceller {
 
 /// Runs `work` (a [`Connection`]'s operation) to completion on the
 /// process's tokio runtime, for a synchronous caller. Call it outside any
-/// async runtime, a `spawn_blocking` thread of one included (a thread that
+/// async runtime, a `spawn_blocking` thread of one of yours included (a thread that
 /// has a runtime's handle may be driving it, and blocking there would
 /// panic); inside one, await the operation instead.
 ///

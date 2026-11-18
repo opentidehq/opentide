@@ -29,7 +29,7 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 | `src/plugins.rs` | `plugins` feature: the platform plugin host, `set_host`, `configurations` and the connectors' traits a plugin implements (the Python binding's plugin host, UC-4.5) |
 | `src/python.rs` | `python` feature: `register` and `models`, the Tide models as Python classes (opentide-schema's `python`; `stubs` adds its introspection data) |
 | `src/lsp.rs` | `lsp` feature: `run_stdio`, `serve`, `MessageSession` |
-| `src/connectors.rs` | `connectors` feature: `Workspace::tenants`, `TenantConfig`, `ConnectOptions`, `Connection` (`query`, `validate_query`, `deploy`: async, on tokio, over `opentide-connectors`' traits), `Canceller`, `block_on`, `Error::Connector`'s codes |
+| `src/connectors.rs` | `connectors` feature: `Workspace::tenants`, `TenantConfig`, `ConnectOptions`, `Connection` (`query`, `validate_query`, `deploy`: async, on tokio, over `opentide-connectors`' traits), `Canceller`, `block_on`, `runtime` (doc-hidden: the process's runtime, for the bindings), `Error::Connector`'s codes |
 | `src/bin/opentide.rs` | The `opentide` binary (`required-features = ["cli"]`) |
 | `examples/` | `validate`, `catalog`, `deploy_plan`, `query` (`connectors`): the four examples of `docs/sdk/rust.md`; the page shows `query`'s `docs:start`..`docs:end` part verbatim, which `tests/examples.rs` checks |
 | `tests/api.rs` | The API on `tests/fixtures/tide_corpus` laid out under a temporary folder |
