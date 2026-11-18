@@ -41,7 +41,16 @@ pub use ecs::ecs_diagnostics;
 /// was written for `language: kuery`).
 #[must_use]
 pub fn parses(source: &str) -> bool {
-    parser::parse(source, false).1.errors.is_empty()
+    parser::accepts(source, false)
+}
+
+/// The parse [`analyze`] runs, tree included, and its error count: the
+/// throughput benchmark's parse (`cargo bench --bench throughput`, ADR 0014).
+/// Not API.
+#[doc(hidden)]
+#[must_use]
+pub fn parse_tree(source: &str) -> usize {
+    parser::parse(source, true).1.errors.len()
 }
 
 const KQL_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/kql";
