@@ -812,9 +812,18 @@ fn block_advisories(
                     .at(advisory.field_path);
             diagnostic.yaml_line = locator.yaml_line(&diagnostic.field_path);
             diagnostic.path = Some(relative.to_owned());
-            diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
-            // One line, as `_finding` places a finding with a `yaml_line`.
-            diagnostic.end_line = diagnostic.line;
+            // Where `validate` points the same finding (its annotate): the
+            // block's key, not the line its value starts on (`yaml_line`,
+            // from 0), which was a line below it (#922).
+            if let Some(span) = locator.span(&diagnostic.field_path, false) {
+                diagnostic.line = Some(span.line);
+                diagnostic.column = Some(span.column);
+                diagnostic.end_line = Some(span.end_line);
+                diagnostic.end_column = Some(span.end_column);
+            } else {
+                diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
+                diagnostic.end_line = diagnostic.line;
+            }
             opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
         })
         .collect()
