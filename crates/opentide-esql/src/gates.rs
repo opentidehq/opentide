@@ -177,17 +177,40 @@ pub(crate) fn tree_children(node: &SyntaxNode) -> impl Iterator<Item = SyntaxEle
             own.into_iter().chain(inner.into_iter().flatten())
         })
         .filter(|c| c.kind() != K::WHITESPACE)
+        .inspect(|_| count_child())
 }
 
 /// The nodes of [`tree_children`], without visiting its tokens: a walk that
 /// reads nodes only allocates no cursor for each token (ADR 0014 §5).
 pub(crate) fn tree_child_nodes(node: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> + use<> {
     let leaf = crate::tree::is_leaf(node.kind());
-    node.children().filter(move |_| !leaf).flat_map(|child| {
-        let inner = (child.kind() == K::NAMED_PARAMETERS).then(|| child.children());
-        let own = inner.is_none().then_some(child);
-        own.into_iter().chain(inner.into_iter().flatten())
-    })
+    node.children()
+        .filter(move |_| !leaf)
+        .flat_map(|child| {
+            let inner = (child.kind() == K::NAMED_PARAMETERS).then(|| child.children());
+            let own = inner.is_none().then_some(child);
+            own.into_iter().chain(inner.into_iter().flatten())
+        })
+        .inspect(|_| count_child())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The children [`tree_children`] and [`tree_child_nodes`] yielded on this thread.
+    static CHILDREN_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one child read, in tests (ADR 0014 §7).
+#[inline]
+fn count_child() {
+    #[cfg(test)]
+    CHILDREN_READ.set(CHILDREN_READ.get() + 1);
+}
+
+/// How many children [`tree_children`] and [`tree_child_nodes`] yielded on this thread.
+#[cfg(test)]
+pub(crate) fn children_read() -> usize {
+    CHILDREN_READ.get()
 }
 
 /// [`tree_children`], collected.

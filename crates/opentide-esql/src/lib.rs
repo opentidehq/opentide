@@ -461,12 +461,6 @@ fn pattern_problems(node: &SyntaxNode, source: &str) -> Vec<Diagnostic> {
     out
 }
 
-#[cfg(test)]
-thread_local! {
-    /// The children [`expression_depth`] visited on this thread.
-    static DEPTH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// Nesting depth of expressions, counted the way Elasticsearch's parser
 /// limit sees a chain of `AND`/`OR` terms: each logical, comparison,
 /// arithmetic, predicate, cast, call, or parenthesized node adds one. A flat
@@ -493,8 +487,6 @@ fn expression_depth(root: &SyntaxNode) -> (usize, Option<ByteSpan>) {
     let (mut max, mut deepest) = (0usize, None);
     while let Some((node, base)) = stack.pop() {
         let kids: Vec<SyntaxNode> = gates::tree_child_nodes(&node).collect();
-        #[cfg(test)]
-        DEPTH_VISITS.set(DEPTH_VISITS.get() + kids.len());
         let flat = matches!(
             node.kind(),
             K::AND_EXPRESSION | K::OR_EXPRESSION | K::BINARY_EXPRESSION
@@ -1756,10 +1748,11 @@ mod tests {
         let source = "FROM logs-* METADATA _id | WHERE (a == 1 AND b != \"x\") OR NOT c IN (1, 2, 3) | EVAL d = TO_LOWER(e::keyword) | STATS n = COUNT(*) BY d";
         let root = tree::parse(source).syntax;
         let nodes = root.descendants().count();
-        let before = DEPTH_VISITS.get();
+        let before = gates::children_read();
         expression_depth(&root);
-        let visits = DEPTH_VISITS.get() - before;
-        assert!(visits < nodes, "{visits} visits for {nodes} nodes");
+        let visits = gates::children_read() - before;
+        // Each node but the root is read once, as a child of its parent.
+        assert!(visits < nodes, "{visits} children read for {nodes} nodes");
     }
 
     #[test]
