@@ -217,7 +217,7 @@ pub(crate) fn checked(source: &str) -> bool {
 fn node_range(node: &Node) -> Range {
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a line and a column fit the position's u32"
+        reason = "a Mark keeps its line and column in u32s: the cast loses nothing"
     )]
     let position = |mark: opentide_core::node::Mark| {
         Position::new(

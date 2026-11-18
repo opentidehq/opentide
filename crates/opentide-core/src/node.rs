@@ -102,6 +102,11 @@ mod mark {
     }
 }
 
+// A node's size is what a workspace's trees cost per node (#1071): a field
+// added to `Node` or a larger `Value` variant shows here first.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<Node>() == 72);
+
 /// One node of the tree, where it starts and ends.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node {
@@ -940,6 +945,17 @@ mod tests {
     }
 
     use super::*;
+
+    /// A position past what three `u32`s hold reads as the last one; any
+    /// other reads back as made.
+    #[test]
+    fn a_mark_keeps_its_position_and_saturates_past_u32() {
+        let mark = Mark::new(16, 3, 5);
+        assert_eq!((mark.index(), mark.line(), mark.column()), (16, 3, 5));
+        let last = u32::MAX as usize;
+        let far = Mark::new(usize::MAX, last + 1, 1);
+        assert_eq!((far.index(), far.line(), far.column()), (last, last, 1));
+    }
 
     #[test]
     fn deep_nesting_is_refused_without_recursion() {
