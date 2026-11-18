@@ -76,21 +76,20 @@ order each process's hash seeds give: counted with them, one run of a pass diffe
 1.5%, and CI's runner from a local run by up to 3.3%. Without them, runs differ by under 0.1%.
 
 What an allocation costs inside malloc and free is then out of the instruction count, so each pass
-has a second budget, `<mode>_<set>_allocations`: the calls the bench's own code makes into `malloc`,
-`calloc`, `realloc` and the aligned allocators, read from the same callgrind profile. Callgrind's
-call counts span the whole run, outside the counted function too, but a call arc is in the profile
-only if the counted pass also takes it. So that number is the two warm-up passes and the counted
-one, three passes over each text (one allocation more a call shows as three a text), plus only the
-part of the first pass's one-time work that goes through call sites the counted pass also uses: the
-input loading and most catalog building are not in it. It does not vary from run to run (16 runs,
-each with its own hash seeds, gave one count). From machine
-to machine it varied once by one call: Exabeam's corpus analysis made one call more on CI's runner
-than on a local machine with the same build inputs, valgrind and glibc, and an lld-linked build
-counted as the local one, which leaves the CPU. So it is held within 2 calls, not a percentage:
-every input set has more analyses than that, and one allocation more a call fails the check. When
-the check fails, CI uploads the callgrind profiles (`target/throughput/`), which
-`callgrind_annotate --inclusive=yes` traces to a function. Each pass is counted three times (`--runs`): a record
-writes the highest, a check takes the lowest. The budgets file names the valgrind, glibc and
+has a second budget, `<mode>_<set>_allocations`: how many times the counted pass enters `malloc`,
+`calloc`, `realloc` or the aligned allocators, whoever called them. Callgrind counts it as the
+number of times each allocator's first instruction runs (`--dump-instr=yes`), not from its call
+arcs: whether callgrind records `__rust_alloc`'s tail jump into `malloc` as a call of its own
+depends on where the code lies, so on #1624 the arcs added about 11,000 calls to CQL's and
+Falco's analyses while their allocations fell. An instruction runs as often however it is
+reached, and the count covers the counted pass alone, as the instructions do. On #1624's base and head, this count is the same for every CQL and Falco
+parse and falls by 96 to 741 for each analysis, as #1624's own change does; the arcs rose by
+7,312 and 10,049 on the corpus analyses. The count does not vary from run to run. From machine
+to machine the earlier arc count varied once by one call (Exabeam's corpus analysis, on CI's
+runner), so it is held within 2 calls, not a percentage: every input set has more analyses than
+that, and one allocation more a call fails the check. When the check fails, CI uploads the
+callgrind profiles (`target/throughput/`), which `callgrind_annotate --inclusive=yes` traces to a
+function. Each pass is counted three times (`--runs`): a record writes the highest, a check takes the lowest. The budgets file names the valgrind, glibc and
 architecture it was recorded on, and a check elsewhere warns. CI's `throughput` job is pinned to
 `ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded, so that its valgrind
 counts as it did there.
