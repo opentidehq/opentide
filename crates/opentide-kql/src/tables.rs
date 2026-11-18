@@ -17,6 +17,37 @@ const ASIM_TOML: &str = include_str!(concat!(
     "/data/catalogs/kql/asim/asim.toml"
 ));
 
+/// The Kusto scalar types a catalog column has, each made once: tens of
+/// thousands of reference columns name one of these, and a `String` each
+/// was an allocation each (#1071).
+const KUSTO_TYPES: [&str; 10] = [
+    "bool", "datetime", "decimal", "dynamic", "guid", "int", "long", "real", "string", "timespan",
+];
+
+/// The Kusto type `name`, shared with every column of that type when it is
+/// one of [`KUSTO_TYPES`]; any other is made for its column.
+pub fn kusto_type(name: &str) -> Arc<str> {
+    static SHARED: OnceLock<Vec<Arc<str>>> = OnceLock::new();
+    let shared = SHARED.get_or_init(|| KUSTO_TYPES.iter().map(|&t| Arc::from(t)).collect());
+    KUSTO_TYPES
+        .iter()
+        .position(|&t| t == name)
+        .and_then(|i| shared.get(i))
+        .map_or_else(|| Arc::from(name), Arc::clone)
+}
+
+fn interned_type<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Arc<str>, D::Error> {
+    let name = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+    Ok(kusto_type(&name))
+}
+
+pub(crate) fn interned_optional_type<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Arc<str>>, D::Error> {
+    let name = <Option<std::borrow::Cow<'de, str>>>::deserialize(deserializer)?;
+    Ok(name.as_deref().map(kusto_type))
+}
+
 /// One table of the Azure Monitor Logs reference.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AzureMonitorTable {
@@ -36,10 +67,12 @@ pub struct AzureMonitorTable {
 /// One column of an Azure Monitor Logs table.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AzureMonitorColumn {
-    pub name: String,
-    /// The Kusto scalar type.
-    #[serde(rename = "type")]
-    pub type_name: String,
+    /// Shared with the column rows each profile builds from it (#1071).
+    pub name: Arc<str>,
+    /// The Kusto scalar type, one of a handful shared by every column
+    /// ([`kusto_type`]).
+    #[serde(rename = "type", deserialize_with = "interned_type")]
+    pub type_name: Arc<str>,
     /// The first sentence of the reference's description (Markdown); `None`
     /// where the reference has none or the column comes from Azure-Sentinel's
     /// validation schemas.
@@ -93,9 +126,9 @@ pub fn is_custom_column(name: &str) -> bool {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AsimColumn {
     pub name: String,
-    /// The Kusto scalar type.
-    #[serde(rename = "type")]
-    pub type_name: String,
+    /// The Kusto scalar type ([`kusto_type`]).
+    #[serde(rename = "type", deserialize_with = "interned_type")]
+    pub type_name: Arc<str>,
     /// `Mandatory`, `Recommended`, `Optional`, `Conditional` or `Alias`.
     pub class: String,
 }
@@ -238,7 +271,7 @@ mod tests {
         }
         let (_, ns) = a.schema_of("_Im_NetworkSession").unwrap();
         let dst = ns.columns.iter().find(|c| c.name == "DstPortNumber");
-        assert_eq!(dst.map(|c| c.type_name.as_str()), Some("int"));
+        assert_eq!(dst.map(|c| &*c.type_name), Some("int"));
         // Common fields are part of every schema.
         let product = ns.columns.iter().find(|c| c.name == "EventProduct");
         assert_eq!(product.map(|c| c.class.as_str()), Some("Mandatory"));

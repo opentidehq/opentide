@@ -2944,7 +2944,6 @@ dependencies = [
  "rowan",
  "serde",
  "strsim",
- "toml",
 ]
 
 [[package]]

@@ -99,7 +99,9 @@ pub enum Profile {
     Defender,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct OperatorsFile {
     operators: Vec<OperatorRow>,
 }
@@ -127,7 +129,9 @@ pub struct OperatorRow {
     pub alias_of: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct FunctionsFile {
     functions: Vec<FunctionRow>,
 }
@@ -146,7 +150,9 @@ pub struct FunctionRow {
     pub deprecated: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct ScalarOperatorsFile {
     scalar_operators: Vec<ScalarOperatorRow>,
 }
@@ -161,7 +167,9 @@ pub struct ScalarOperatorRow {
     pub deprecated: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct PluginsFile {
     plugins: Vec<PluginRow>,
 }
@@ -177,7 +185,9 @@ pub struct PluginRow {
     pub parameters: Vec<ParamRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct TypesFile {
     types: Vec<TypeRow>,
 }
@@ -187,7 +197,9 @@ struct TypeRow {
     name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct TablesFile {
     tables: Vec<TableRow>,
 }
@@ -209,7 +221,9 @@ pub struct TableRow {
     pub declared: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct ColumnsFile {
     columns: Vec<ColumnRow>,
 }
@@ -220,9 +234,16 @@ pub struct ColumnRow {
     pub table: Arc<str>,
     /// `sentinel` or `defender`, shared by the profile's columns.
     pub profile: Option<Arc<str>>,
-    pub name: String,
-    #[serde(default, rename = "type")]
-    pub type_name: Option<String>,
+    /// The column's name, shared with the reference's column it comes from.
+    pub name: Arc<str>,
+    /// Its Kusto type, shared by every column of that type
+    /// ([`tables::kusto_type`]).
+    #[serde(
+        default,
+        rename = "type",
+        deserialize_with = "tables::interned_optional_type"
+    )]
+    pub type_name: Option<Arc<str>>,
     /// The column's description (Markdown): hand-written, or the first
     /// sentence of the Azure Monitor Logs reference's, shared with the
     /// reference ([`tables::azure_monitor`]) and every profile (#1071).
@@ -248,7 +269,9 @@ impl ColumnRow {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
 struct OptionsFile {
     options: Vec<OperatorOption>,
 }
@@ -358,32 +381,32 @@ impl std::ops::Deref for CatalogRef {
     }
 }
 
+/// The items of the array `key` of the compiled-in catalog `text`
+/// (`data/catalogs/kql/<file>`), read item by item (ADR 0013).
+fn rows<T: serde::de::DeserializeOwned>(file: &str, text: &str, key: &str) -> Vec<T> {
+    opentide_core::catalog::compiled_in(
+        &format!("data/catalogs/kql/{file}"),
+        opentide_core::catalog::array_items(text, key),
+    )
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-    )]
     pub fn core() -> Self {
-        let operators: OperatorsFile = toml::from_str(OPERATORS_TOML).expect("operators.toml");
-        let functions: FunctionsFile = toml::from_str(FUNCTIONS_TOML).expect("functions.toml");
-        let types: TypesFile = toml::from_str(TYPES_TOML).expect("types.toml");
-        let scalar: ScalarOperatorsFile =
-            toml::from_str(SCALAR_OPERATORS_TOML).expect("operators-scalar.toml");
-        let plugins: PluginsFile = toml::from_str(PLUGINS_TOML).expect("evaluate-plugins.toml");
+        let types: Vec<TypeRow> = rows("core/types.toml", TYPES_TOML, "types");
         Self {
             profile: Profile::Core,
-            operators: operators.operators,
-            functions: functions.functions,
-            scalar_operators: scalar.scalar_operators,
-            plugins: plugins.plugins,
-            types: types.types.into_iter().map(|t| t.name).collect(),
+            operators: rows("core/operators.toml", OPERATORS_TOML, "operators"),
+            functions: rows("core/functions.toml", FUNCTIONS_TOML, "functions"),
+            scalar_operators: rows(
+                "core/operators-scalar.toml",
+                SCALAR_OPERATORS_TOML,
+                "scalar_operators",
+            ),
+            plugins: rows("core/evaluate-plugins.toml", PLUGINS_TOML, "plugins"),
+            types: types.into_iter().map(|t| t.name).collect(),
             tables: Vec::new(),
             columns: Vec::new(),
-            options: {
-                let file: OptionsFile =
-                    toml::from_str(OPERATOR_OPTIONS).expect("operator-options.toml");
-                file.options
-            },
+            options: rows("core/operator-options.toml", OPERATOR_OPTIONS, "options"),
             table_index: HashMap::new(),
             column_index: HashMap::new(),
             memo: Memo::default(),
@@ -401,34 +424,34 @@ impl Catalog {
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
     /// never removed: a column either lists is known.
-    #[expect(
-        clippy::expect_used,
-        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-    )]
     pub fn with_profile(mut self, profile: Profile) -> Self {
         if profile == Profile::Core {
             return self;
         }
         self.profile = profile;
-        let defender: TablesFile = toml::from_str(DEFENDER_TABLES).expect("defender tables.toml");
-        let defender_columns: ColumnsFile =
-            toml::from_str(DEFENDER_COLUMNS).expect("defender columns");
+        let defender: Vec<TableRow> = rows("defender/tables.toml", DEFENDER_TABLES, "tables");
+        let defender_columns: Vec<ColumnRow> =
+            rows("defender/columns.toml", DEFENDER_COLUMNS, "columns");
         let mut tables = Vec::new();
         let mut columns = Vec::new();
         if profile == Profile::Sentinel {
-            let sentinel: TablesFile =
-                toml::from_str(SENTINEL_TABLES).expect("sentinel tables.toml");
-            let sentinel_columns: ColumnsFile =
-                toml::from_str(SENTINEL_COLUMNS).expect("sentinel columns");
-            tables.extend(sentinel.tables);
-            columns.extend(sentinel_columns.columns);
+            tables.extend(rows::<TableRow>(
+                "sentinel/tables.toml",
+                SENTINEL_TABLES,
+                "tables",
+            ));
+            columns.extend(rows::<ColumnRow>(
+                "sentinel/columns.toml",
+                SENTINEL_COLUMNS,
+                "columns",
+            ));
         }
-        for table in defender.tables {
+        for table in defender {
             if !tables.iter().any(|t: &TableRow| t.name == table.name) {
                 tables.push(table);
             }
         }
-        columns.extend(defender_columns.columns);
+        columns.extend(defender_columns);
         let reference = tables::azure_monitor();
         if profile == Profile::Sentinel {
             for (name, table) in reference {
@@ -450,10 +473,11 @@ impl Catalog {
             _ => "sentinel",
         };
         let profile_shared: Arc<str> = Arc::from(profile_name);
-        let mut hand: HashMap<(String, String), usize> = columns
+        // Keyed on the rows' own shared names: no copy of either per column.
+        let mut hand: HashMap<(Arc<str>, Arc<str>), usize> = columns
             .iter()
             .enumerate()
-            .map(|(i, c)| ((c.table.to_string(), c.name.clone()), i))
+            .map(|(i, c)| ((Arc::clone(&c.table), Arc::clone(&c.name)), i))
             .collect();
         for row in &mut tables {
             let Some(reference) = reference.get(&row.name) else {
@@ -469,11 +493,11 @@ impl Catalog {
             // One allocation each, shared by the table's columns (#1071).
             let table: Arc<str> = Arc::from(row.name.as_str());
             for column in listed {
-                let key = (row.name.clone(), column.name.clone());
+                let key = (Arc::clone(&table), Arc::clone(&column.name));
                 if let Some(&i) = hand.get(&key) {
                     // Where the hand-written type disagrees with the
                     // reference, neither is trusted for type checks.
-                    if columns[i].type_name.as_deref() != Some(column.type_name.as_str()) {
+                    if columns[i].type_name.as_deref() != Some(&*column.type_name) {
                         columns[i].type_name = None;
                     }
                     continue;
@@ -495,14 +519,15 @@ impl Catalog {
         // reference describes do not list it, yet queries over them use it.
         for row in &tables {
             if row.profile.as_deref() == Some("defender")
-                && !hand.contains_key(&(row.name.clone(), "Timestamp".to_string()))
+                && !hand.contains_key(&(Arc::from(row.name.as_str()), Arc::from("Timestamp")))
             {
-                hand.insert((row.name.clone(), "Timestamp".into()), columns.len());
+                let table: Arc<str> = Arc::from(row.name.as_str());
+                hand.insert((Arc::clone(&table), Arc::from("Timestamp")), columns.len());
                 columns.push(ColumnRow {
-                    table: Arc::from(row.name.as_str()),
+                    table,
                     profile: Some(Arc::from("defender")),
                     name: "Timestamp".into(),
-                    type_name: Some("datetime".into()),
+                    type_name: Some(tables::kusto_type("datetime")),
                     docs: Some(Arc::from("Event time in advanced hunting.")),
                     citation: row.citation.as_deref().map(Arc::from),
                     from_reference: false,
@@ -706,7 +731,8 @@ impl Catalog {
                     .get(&table.to_ascii_lowercase())
                     .and_then(|ids| {
                         ids.iter().copied().find(|&i| {
-                            *self.columns[i].table == *table && self.columns[i].name == column.name
+                            *self.columns[i].table == *table
+                                && *self.columns[i].name == *column.name
                         })
                     });
                 match existing {
@@ -714,7 +740,7 @@ impl Catalog {
                     Some(i) if self.columns[i].declared => {}
                     Some(i) => {
                         let row = &mut self.columns[i];
-                        row.type_name.clone_from(&column.type_name);
+                        row.type_name = column.type_name.as_deref().map(tables::kusto_type);
                         if let Some(description) = &column.description {
                             row.docs = Some(Arc::from(description.as_str()));
                             row.citation = None;
@@ -729,8 +755,8 @@ impl Catalog {
                         self.columns.push(ColumnRow {
                             table: Arc::from(table),
                             profile: Some(Arc::from(profile_name)),
-                            name: column.name.clone(),
-                            type_name: column.type_name.clone(),
+                            name: Arc::from(column.name.as_str()),
+                            type_name: column.type_name.as_deref().map(tables::kusto_type),
                             docs: column.description.as_deref().map(Arc::from),
                             citation: None,
                             from_reference: false,
@@ -841,7 +867,7 @@ impl Catalog {
         if let Some(col) = mentioned.iter().find_map(|table| {
             self.columns_for_table(&table.name)
                 .into_iter()
-                .find(|c| c.name == name)
+                .find(|c| *c.name == *name)
         }) {
             return Some(col);
         }
@@ -849,7 +875,7 @@ impl Catalog {
         // catalog's, not every column of every table in the reference.
         self.columns
             .iter()
-            .find(|c| c.name == name && c.hand_written())
+            .find(|c| *c.name == *name && c.hand_written())
     }
 
     /// The names of the hand-written catalog's columns. Finding them reads
@@ -861,7 +887,7 @@ impl Catalog {
             self.columns
                 .iter()
                 .filter(|c| c.hand_written())
-                .map(|c| Box::from(c.name.as_str()))
+                .map(|c| Box::from(&*c.name))
                 .collect()
         })
     }
@@ -1193,7 +1219,7 @@ fn overlay_catalog_captures(
         .collect();
     for table in &mentioned {
         for column in catalog.columns_for_table(&table.name) {
-            if let Some(name) = wanted.get(column.name.as_str()) {
+            if let Some(name) = wanted.get(&*column.name) {
                 columns.insert(name);
             }
         }
@@ -1411,7 +1437,7 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
                     col.type_name.as_deref().unwrap_or("column")
                 );
                 items.push(complete_item(
-                    col.name.clone(),
+                    col.name.to_string(),
                     "column",
                     Some(detail),
                     col.docs.as_deref().map(str::to_owned),
@@ -1748,7 +1774,7 @@ fn column_hover(source: &str, offset: usize, catalog: &CatalogRef) -> Option<Str
                     Some(schema::Origin::Table(table)) => catalog
                         .columns_for_table(table)
                         .into_iter()
-                        .find(|c| *c.table == **table && c.name == column.name),
+                        .find(|c| *c.table == **table && *c.name == *column.name),
                     _ => None,
                 }
                 .or_else(|| catalog.resolve_column(source, &column.name));
@@ -2074,6 +2100,58 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 mod tests {
     use super::*;
 
+    /// The core and profile catalogs read item by item are field for field
+    /// the whole files (ADR 0013).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        fn same<T: std::fmt::Debug>(read: &[T], whole: &[T], file: &str) {
+            assert_eq!(format!("{read:?}"), format!("{whole:?}"), "{file}");
+        }
+        let o: OperatorsFile = toml::from_str(OPERATORS_TOML).unwrap();
+        same(
+            &rows::<OperatorRow>("", OPERATORS_TOML, "operators"),
+            &o.operators,
+            "operators",
+        );
+        let f: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
+        same(
+            &rows::<FunctionRow>("", FUNCTIONS_TOML, "functions"),
+            &f.functions,
+            "functions",
+        );
+        let t: TypesFile = toml::from_str(TYPES_TOML).unwrap();
+        same(&rows::<TypeRow>("", TYPES_TOML, "types"), &t.types, "types");
+        let so: ScalarOperatorsFile = toml::from_str(SCALAR_OPERATORS_TOML).unwrap();
+        same(
+            &rows::<ScalarOperatorRow>("", SCALAR_OPERATORS_TOML, "scalar_operators"),
+            &so.scalar_operators,
+            "operators-scalar",
+        );
+        let p: PluginsFile = toml::from_str(PLUGINS_TOML).unwrap();
+        same(
+            &rows::<PluginRow>("", PLUGINS_TOML, "plugins"),
+            &p.plugins,
+            "plugins",
+        );
+        let op: OptionsFile = toml::from_str(OPERATOR_OPTIONS).unwrap();
+        same(
+            &rows::<OperatorOption>("", OPERATOR_OPTIONS, "options"),
+            &op.options,
+            "options",
+        );
+        for (text, name) in [(SENTINEL_TABLES, "sentinel"), (DEFENDER_TABLES, "defender")] {
+            let file: TablesFile = toml::from_str(text).unwrap();
+            same(&rows::<TableRow>("", text, "tables"), &file.tables, name);
+        }
+        for (text, name) in [
+            (SENTINEL_COLUMNS, "sentinel"),
+            (DEFENDER_COLUMNS, "defender"),
+        ] {
+            let file: ColumnsFile = toml::from_str(text).unwrap();
+            same(&rows::<ColumnRow>("", text, "columns"), &file.columns, name);
+        }
+    }
+
     /// Giving a catalog a profile empties what reading it kept: Core's
     /// prepared table names (none) are not the profile's.
     #[test]
@@ -2182,7 +2260,7 @@ mod tests {
                     catalog
                         .columns_for_table(table)
                         .iter()
-                        .any(|column| column.name == "Field_s"),
+                        .any(|column| &*column.name == "Field_s"),
                     "{table}"
                 );
             }
@@ -2431,7 +2509,7 @@ mod tests {
         let docs = c
             .columns_for_table("DeviceProcessEvents")
             .into_iter()
-            .find(|col| col.name == "DeviceId")
+            .find(|col| &*col.name == "DeviceId")
             .and_then(|col| col.docs.clone());
         assert!(docs.is_some());
         let d = Catalog::cached(Profile::Defender);
