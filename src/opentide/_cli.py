@@ -46,10 +46,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ImportError as exc:
         if args in (["--version"], ["-V"]):
             # Slower than the engine's, but only where the engine is broken.
-            from importlib.metadata import version
+            from importlib.metadata import PackageNotFoundError, version
 
-            sys.stdout.write(f"opentide {version('opentide')}\n")
-            return 0
+            try:
+                sys.stdout.write(f"opentide {version('opentide')}\n")
+            except PackageNotFoundError:
+                pass  # No metadata either: the engine's error below.
+            else:
+                return 0
         cause = str(exc) or type(exc).__name__
         # As the engine_unavailable page (opentide explain) shows it.
         sys.stderr.write(

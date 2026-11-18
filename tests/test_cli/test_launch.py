@@ -73,6 +73,23 @@ def test_the_version_answers_from_the_metadata_without_the_engine(
         assert (captured.out, captured.err) == (f"opentide {opentide.__version__}\n", "")
 
 
+def test_the_version_without_the_engine_or_metadata_is_the_engines_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With no metadata to read either, ``--version`` reports the engine."""
+    import importlib.metadata
+
+    def missing(name: str) -> str:
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    _with_native(monkeypatch, ImportError("cannot load it (test)"))
+    monkeypatch.setattr(importlib.metadata, "version", missing)
+    assert _cli.main(["--version"]) == _cli.ENGINE_UNAVAILABLE_EXIT
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.startswith("error: The opentide analysis engine does not load")
+
+
 def test_an_engine_that_does_not_load_is_an_error(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

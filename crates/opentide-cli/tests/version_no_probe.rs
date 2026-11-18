@@ -36,7 +36,17 @@ fn the_version_touches_no_file_and_no_network() {
     let log = dir.path().join("trace.log");
     for flag in ["--version", "-V"] {
         let out = Command::new("strace")
-            .args(["-f", "-qq", "-e", "trace=%file,%network", "-o"])
+            // Whole strings (strace cuts them at 32 bytes), and the working
+            // directory's lookup, which is no `%file` call.
+            .args([
+                "-f",
+                "-qq",
+                "-s",
+                "4096",
+                "-e",
+                "trace=%file,%network,getcwd",
+                "-o",
+            ])
             .arg(&log)
             .arg(binary)
             .arg(flag)
@@ -46,6 +56,10 @@ fn the_version_touches_no_file_and_no_network() {
             .env("PWD", dir.path())
             .output()
             .unwrap();
+        if !out.status.success() && String::from_utf8_lossy(&out.stderr).contains("ptrace") {
+            eprintln!("skipped: strace may not trace here (ptrace is denied)");
+            return;
+        }
         assert!(out.status.success(), "{out:?}");
         let stdout = String::from_utf8(out.stdout).unwrap();
         assert!(
@@ -53,12 +67,14 @@ fn the_version_touches_no_file_and_no_network() {
             "{stdout}"
         );
         let trace = std::fs::read_to_string(&log).unwrap();
+        // The trace is the binary's: its start, at least, is in it.
+        assert!(trace.contains("execve("), "an empty trace: {trace:?}");
         let probes: Vec<&str> = trace
             .lines()
             .filter(|line| !line.contains("execve("))
             .filter(|line| {
                 let quoted = line.split('"').nth(1).unwrap_or_default();
-                let network = ["socket(", "connect(", "bind(", "sendto("]
+                let network = ["socket(", "connect(", "bind(", "sendto(", "getcwd("]
                     .iter()
                     .any(|call| line.contains(call));
                 network || !(quoted.is_empty() || runtime_path(quoted) || quoted == binary)

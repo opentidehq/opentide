@@ -2482,7 +2482,15 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         let mut out = std::io::stdout().lock();
         return match out.write_all(line.as_bytes()).and_then(|()| out.flush()) {
             Ok(()) => 0,
-            Err(_) => 1,
+            // A reader that went away reads no report either (as `run`).
+            Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => 1,
+            Err(error) => {
+                let _ignored = writeln!(
+                    std::io::stderr(),
+                    "error: the version could not be written: {error}"
+                );
+                1
+            }
         };
     }
     adopt_working_directory();
@@ -3193,6 +3201,28 @@ mod tests {
         ran(line, &[], false, |run, out, err| {
             Ok(run.emit(&unhandled("query"), &[], out, err)?)
         })
+    }
+
+    #[test]
+    fn the_version_answers_alone_as_dispatch_answers_it() {
+        for flag in ["--version", "-V"] {
+            let dispatched = dispatched(flag, &[], false);
+            assert_eq!(dispatched.code, 0);
+            assert_eq!(
+                version_only(&[flag.to_owned()], "9.9.9").as_deref(),
+                Some(dispatched.stdout.as_str()),
+                "{flag}"
+            );
+        }
+        assert_eq!(
+            version_only(&["--version".into(), "info".into()], "9.9.9"),
+            None
+        );
+        assert_eq!(
+            version_only(&["--json".into(), "--version".into()], "9.9.9"),
+            None
+        );
+        assert_eq!(version_only(&[], "9.9.9"), None);
     }
 
     #[test]
