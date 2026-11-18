@@ -77,7 +77,7 @@ def without_engine(tmp_path: Path):
 
 
 @pytest.mark.parametrize("launcher", sorted(LAUNCHERS))
-@pytest.mark.parametrize("argv", [["--version"], ["--json", "info"], ["--json", "validate"]])
+@pytest.mark.parametrize("argv", [["--json", "info"], ["--json", "validate"]])
 def test_no_command_runs_without_the_engine(
     without_engine, tide_corpus_repo: Path, launcher: str, argv: list[str]
 ) -> None:
@@ -87,3 +87,16 @@ def test_no_command_runs_without_the_engine(
         "error: The opentide analysis engine does not load: the engine does not load (test)\n"
         "  help: reinstall opentide: pip install --force-reinstall opentide\n"
     )
+
+
+@pytest.mark.parametrize("launcher", sorted(LAUNCHERS))
+@pytest.mark.parametrize("flag", ["--version", "-V"])
+def test_the_version_answers_without_the_engine(
+    without_engine, tide_corpus_repo: Path, launcher: str, flag: str
+) -> None:
+    """``--version`` checks nothing (#1072): without the engine it answers from
+    the package's metadata, and a command reports the engine."""
+    import opentide
+
+    code, out, err = without_engine(launcher, flag, cwd=tide_corpus_repo)
+    assert (code, out, err) == (0, f"opentide {opentide.__version__}\n", "")

@@ -48,7 +48,7 @@ fn block(root: &Node) -> &Node {
 
 fn text(node: Option<&std::sync::Arc<Node>>) -> Option<String> {
     node.and_then(|node| match &node.value {
-        Value::Str(text) => Some(text.clone()),
+        Value::Str(text) => Some(text.to_string()),
         Value::Int(integer) => Some(integer.to_string()),
         _ => None,
     })

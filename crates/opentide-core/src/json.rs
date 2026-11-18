@@ -259,7 +259,7 @@ impl Json {
             NodeValue::Bool(flag) => Json::Bool(*flag),
             NodeValue::Int(integer) => Json::Int(*integer),
             NodeValue::Float(float) => Json::Float(*float),
-            NodeValue::Str(text) | NodeValue::Datetime(text) => Json::Str(text.clone()),
+            NodeValue::Str(text) | NodeValue::Datetime(text) => Json::Str(text.to_string()),
             NodeValue::Seq(items) => {
                 Json::Array(items.iter().map(|item| Json::from_node(item)).collect())
             }
@@ -328,7 +328,7 @@ impl Json {
 /// boolean as its text.
 fn key_text(node: &Node) -> String {
     match &node.value {
-        NodeValue::Str(text) | NodeValue::Datetime(text) => text.clone(),
+        NodeValue::Str(text) | NodeValue::Datetime(text) => text.to_string(),
         NodeValue::Int(integer) => integer.to_string(),
         NodeValue::Float(float) => float_key(*float),
         NodeValue::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),

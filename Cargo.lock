@@ -3382,6 +3382,7 @@ dependencies = [
 name = "opentide-core"
 version = "0.12.0"
 dependencies = [
+ "compact_str",
  "indexmap",
  "memchr",
  "regex",

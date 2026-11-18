@@ -1,8 +1,9 @@
-# What each language's counted pass costs (`cargo xtask throughput`, ADR
-# 0014): parse alone and full analysis, over the short corpus and the
-# external public rules. `<pass>` is the bench binary's own instructions
-# (glibc and the loader left out), held within 3%; `<pass>_allocations`
-# its calls into the allocator, held within a few calls. Written by
+# What each language's passes cost (`cargo xtask throughput`, ADR 0014):
+# parse alone and full analysis, over the short corpus and the external
+# public rules. `<pass>` is the bench binary's own instructions in the
+# counted pass (glibc and the loader left out), held within 3%;
+# `<pass>_allocations` its calls into the allocator over the warm-up and
+# counted passes, held within a few calls. Written by
 # `cargo xtask throughput --record`, the highest of several runs. Record
 # again when a change lowers counts on purpose, or raises them on purpose
 # with the reason in its PR.
@@ -99,13 +100,13 @@ parse_external = 2823605
 parse_external_allocations = 6471
 
 [yara]
-analyze_corpus = 17147852
-analyze_corpus_allocations = 93081
-analyze_external = 371688352
-analyze_external_allocations = 1234412
-parse_corpus = 5588127
+analyze_corpus = 16402692
+analyze_corpus_allocations = 71472
+analyze_external = 354118330
+analyze_external_allocations = 947486
+parse_corpus = 5588116
 parse_corpus_allocations = 9489
-parse_external = 123043339
+parse_external = 123043184
 parse_external_allocations = 231459
 
 [yaral]
