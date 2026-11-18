@@ -39,6 +39,7 @@ use opentide_highlight::{
     tokens_from_spans,
 };
 use opentide_kql::Profile;
+use opentide_schema::platforms::PlatformId;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -80,39 +81,56 @@ const THREAT_TEMPLATE: &str = include_str!(concat!(
 /// path: its language comes from the block's `type` and `language`
 /// ([`elastic_query_language`]). A hunt's query
 /// (`response.procedure.searches.<n>.query`) takes the language its `system`
-/// names ([`hunt_query_language`]).
+/// names ([`hunt_query_language`]). A key that is no built-in platform (a
+/// plugin's block) holds no injected query.
 pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
-    match path {
-        ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
-        ["configurations", "defender_for_endpoint", "query"] => Some(LanguageId::Kql),
-        ["configurations", "splunk", "query" | "search"] => Some(LanguageId::Spl),
+    let ["configurations", platform, field @ ..] = path else {
+        return None;
+    };
+    platform_field_language(PlatformId::parse(platform)?, field)
+}
+
+/// The language of the field at `field` (a path inside the platform's block,
+/// list items by index) of a `platform` block, if it holds a query. Every
+/// built-in platform says which of its fields does, so a new one cannot be
+/// left out: Elastic's query depends on the block's `type` and `language`
+/// ([`elastic_query_language`]) and SentinelOne's PowerQuery has no offline
+/// engine, so neither names a field here.
+pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<LanguageId> {
+    match platform {
+        PlatformId::Sentinel | PlatformId::DefenderForEndpoint => {
+            matches!(field, ["query"]).then_some(LanguageId::Kql)
+        }
+        PlatformId::Splunk => matches!(field, ["query" | "search"]).then_some(LanguageId::Spl),
         // Lucene in each platform's dialect: the injection's platform
         // selects it (graylog-1.0, "Query dialect").
-        ["configurations", "carbon_black_cloud" | "graylog", "query"] => Some(LanguageId::Lucene),
-        ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
-        ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
+        PlatformId::CarbonBlackCloud | PlatformId::Graylog => {
+            matches!(field, ["query"]).then_some(LanguageId::Lucene)
+        }
+        PlatformId::Sysdig => matches!(field, ["condition"]).then_some(LanguageId::Falco),
+        PlatformId::Crowdstrike => matches!(field, ["query"]).then_some(LanguageId::Cql),
         // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
         // one rule assembled from several fields ([`yara`]).
-        [
-            "configurations",
-            "harfanglab" | "bitdefender",
-            "yara",
-            "signature",
-        ] => Some(LanguageId::Yara),
+        PlatformId::Harfanglab | PlatformId::Bitdefender => {
+            matches!(field, ["yara", "signature"]).then_some(LanguageId::Yara)
+        }
         // A Google SecOps block's text sections: one rule, which
         // `analyze_injections` checks assembled.
-        [
-            "configurations",
-            "google_secops",
-            "setup" | "events" | "outcome" | "condition" | "export",
-        ] => Some(LanguageId::Yaral),
+        PlatformId::GoogleSecops => matches!(
+            field,
+            ["setup" | "events" | "outcome" | "condition" | "export"]
+        )
+        .then_some(LanguageId::Yaral),
         // An Exabeam correlation rule's sequence filters (exabeam-1.0).
-        ["configurations", "exabeam", "sequences", item, "query"]
-            if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
-        {
-            Some(LanguageId::Exabeam)
-        }
-        _ => None,
+        PlatformId::Exabeam => match field {
+            ["sequences", item, "query"]
+                if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                Some(LanguageId::Exabeam)
+            }
+            _ => None,
+        },
+        PlatformId::Elastic | PlatformId::SentinelOne => None,
     }
 }
 
@@ -1783,6 +1801,51 @@ threat:
         assert_eq!(
             language_for_field_path(&["configurations", "sysdig", "condition"]),
             Some(LanguageId::Falco)
+        );
+    }
+
+    /// Every built-in platform's hunt language, and a key that is no
+    /// platform (a plugin's block, a typo) holding no query.
+    #[test]
+    fn every_platform_says_which_language_its_hunts_are() {
+        use opentide_schema::platforms::PlatformId;
+        let expected = |platform: PlatformId| match platform {
+            PlatformId::Sentinel | PlatformId::DefenderForEndpoint => Some(LanguageId::Kql),
+            PlatformId::Splunk => Some(LanguageId::Spl),
+            PlatformId::CarbonBlackCloud | PlatformId::Graylog => Some(LanguageId::Lucene),
+            PlatformId::Crowdstrike => Some(LanguageId::Cql),
+            PlatformId::GoogleSecops => Some(LanguageId::Yaral),
+            PlatformId::Exabeam => Some(LanguageId::Exabeam),
+            PlatformId::Elastic => Some(LanguageId::Esql),
+            // Sysdig's query is a block's `condition`, never a hunt's.
+            PlatformId::Sysdig
+            | PlatformId::Harfanglab
+            | PlatformId::Bitdefender
+            | PlatformId::SentinelOne => None,
+        };
+        for platform in PlatformId::ALL {
+            assert_eq!(
+                hunt_query_language(platform.as_str(), Some("esql")),
+                expected(platform),
+                "{platform:?}"
+            );
+        }
+        assert_eq!(hunt_query_language("acme", None), None);
+        assert_eq!(
+            language_for_field_path(&["configurations", "acme", "query"]),
+            None
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "sentinel", "query", "x"]),
+            None
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "exabeam", "sequences", "3", "query"]),
+            Some(LanguageId::Exabeam)
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "exabeam", "sequences", "x", "query"]),
+            None
         );
     }
 
