@@ -673,6 +673,8 @@ struct CodeSet(Vec<u64>);
 struct Universe {
     bits: std::collections::HashMap<&'static str, usize>,
     words: usize,
+    /// Every code's bit set, built once.
+    full: CodeSet,
 }
 
 impl Universe {
@@ -680,13 +682,19 @@ impl Universe {
         static UNIVERSE: std::sync::OnceLock<Universe> = std::sync::OnceLock::new();
         UNIVERSE.get_or_init(|| {
             let all = &Catalog::cached().all_codes;
+            let words = all.len().div_ceil(64);
+            let mut full = CodeSet(vec![0; words]);
+            for i in 0..all.len() {
+                full.0[i / 64] |= 1 << (i % 64);
+            }
             Universe {
                 bits: all
                     .iter()
                     .enumerate()
                     .map(|(i, c)| (c.as_str(), i))
                     .collect(),
-                words: all.len().div_ceil(64),
+                words,
+                full,
             }
         })
     }
@@ -698,18 +706,15 @@ impl CodeSet {
     }
 
     fn all() -> Self {
-        let n = Universe::get().bits.len();
-        let mut set = Self::empty();
-        for i in 0..n {
-            set.0[i / 64] |= 1 << (i % 64);
-        }
-        set
+        Universe::get().full.clone()
     }
 
     /// Adds `code`. Every code an event names is one of `all_codes` (its
     /// union), so none is dropped.
     fn insert(&mut self, code: &str) {
-        if let Some(&i) = Universe::get().bits.get(code) {
+        let bit = Universe::get().bits.get(code);
+        debug_assert!(bit.is_some(), "event code `{code}` outside the catalog's");
+        if let Some(&i) = bit {
             self.0[i / 64] |= 1 << (i % 64);
         }
     }
@@ -741,10 +746,11 @@ struct EventCodes<'a> {
     ctx: &'a Context,
     /// Each macro's condition, its lists expanded and parsed, once per
     /// analysis (`None`: unknown, or it does not parse); a condition names
-    /// the same macros again and again (ADR 0014 §2).
+    /// the same macros again and again (ADR 0014 §3).
     macros: std::collections::HashMap<String, Option<std::rc::Rc<parser::Expr>>>,
     /// The codes of each macro reached, by its name, sign and depth: the
-    /// depth is in the key because the walk stops at 32 levels (§3).
+    /// depth is in the key because the walk stops at 32 levels (ADR 0014
+    /// §3).
     resolved: std::collections::HashMap<(String, bool, usize), Option<CodeSet>>,
 }
 
@@ -754,7 +760,7 @@ thread_local! {
     /// catalog only, so they are kept across analyses, bounded by it (ADR
     /// 0014 §3).
     static CATALOG_MACROS: std::cell::RefCell<
-        std::collections::HashMap<&'static str, Option<std::rc::Rc<parser::Expr>>>,
+        std::collections::HashMap<&'static str, std::rc::Rc<parser::Expr>>,
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -798,11 +804,13 @@ impl<'a> EventCodes<'a> {
             && !self.ctx.macros.contains_key(name);
         if shared && let Some((key, _)) = Catalog::cached().macros.get_key_value(name) {
             let key = key.as_str();
-            let ast = CATALOG_MACROS.with(|m| m.borrow().get(key).cloned());
-            let ast = ast.unwrap_or_else(|| {
-                let parsed = self.parse_macro(name);
-                CATALOG_MACROS.with(|m| m.borrow_mut().insert(key, parsed.clone()));
-                parsed
+            // Found values only (§3): a catalog macro that does not parse is
+            // parsed again, as an unknown name is looked up again.
+            let kept = CATALOG_MACROS.with(|m| m.borrow().get(key).cloned());
+            let ast = kept.or_else(|| {
+                let parsed = self.parse_macro(name)?;
+                CATALOG_MACROS.with(|m| m.borrow_mut().insert(key, std::rc::Rc::clone(&parsed)));
+                Some(parsed)
             });
             self.macros.insert(name.to_owned(), ast.clone());
             return ast;
@@ -862,6 +870,8 @@ impl<'a> EventCodes<'a> {
                 if let Some(known) = self.resolved.get(&key) {
                     return known.clone();
                 }
+                #[cfg(test)]
+                MACRO_RESOLUTIONS.set(MACRO_RESOLUTIONS.get() + 1);
                 let ast = self.macro_ast(name)?;
                 let codes = self.codes(&ast, negated, depth + 1);
                 self.resolved.insert(key, codes.clone());
@@ -905,6 +915,8 @@ impl<'a> EventCodes<'a> {
 thread_local! {
     /// The macro conditions parsed to resolve event codes on this thread.
     static MACRO_PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The macros resolved to codes on this thread (not served by the memo).
+    static MACRO_RESOLUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// `evaluate_field_invariant`: `evt.num` starts at 1. `Some(true)` for a
@@ -2449,6 +2461,75 @@ mod event_code_tests {
             compared > 200 && unknown > 0,
             "{compared} compared, {unknown} unknown"
         );
+    }
+
+    /// The thread's catalog-macro expansions serve no block that redefines a
+    /// macro or defines lists, even after another analysis filled them.
+    #[test]
+    fn a_block_is_not_served_the_catalogs_expansion() {
+        let condition = "spawned_process";
+        let plain = Context::default();
+        let ast = parser::parse(condition).expect("a condition");
+        let filled = EventCodes::new(&plain)
+            .codes(&ast, false, 0)
+            .map(|s| s.len());
+        // A block that redefines the macro, with no lists.
+        let mut redefined = Context::default();
+        redefined.macros.insert(
+            "spawned_process".to_owned(),
+            "evt.type = connect".to_owned(),
+        );
+        let connect = EventCodes::names_to_codes(&["connect"]);
+        assert_eq!(
+            EventCodes::new(&redefined).codes(&ast, false, 0),
+            Some(connect.clone())
+        );
+        assert_ne!(filled, Some(connect.len()));
+        // A block list that a catalog macro's expansion reads: the macro's
+        // codes follow the block's list, not the catalog's.
+        let catalog = Catalog::cached();
+        let mut checked = 0;
+        for (name, m) in &catalog.macros {
+            let Some(list) = catalog
+                .lists
+                .keys()
+                .find(|l| m.condition.contains(l.as_str()))
+            else {
+                continue;
+            };
+            let mut block = Context::default();
+            block.lists.insert(
+                list.clone(),
+                vec!["x) or evt.type = open or proc.name in (y".to_owned()],
+            );
+            let ast = parser::parse(name).expect("a macro name");
+            let old = ByStrings {
+                ctx: &block,
+                all: catalog.all_codes.clone(),
+            };
+            let _ = EventCodes::new(&plain).codes(&ast, false, 0);
+            let new = EventCodes::new(&block).codes(&ast, false, 0);
+            assert_eq!(new.as_ref().map(names), old.codes(&ast, false, 0), "{name}");
+            checked += 1;
+        }
+        assert!(checked > 20, "{checked}");
+    }
+
+    /// A macro reached again at the same depth and sign is resolved once
+    /// (ADR 0014 §7): each reference resolved it again.
+    #[test]
+    fn a_macro_is_resolved_once_per_depth_and_sign() {
+        let ctx = Context::default();
+        let ast = parser::parse("open_write or open_write or open_write or not open_write")
+            .expect("a condition");
+        let before = MACRO_RESOLUTIONS.get();
+        EventCodes::new(&ctx).codes(&ast, false, 0);
+        // `open_write` at depth 1 in each sign, then the macros below it once.
+        let first = MACRO_RESOLUTIONS.get() - before;
+        let before = MACRO_RESOLUTIONS.get();
+        let single = parser::parse("open_write or not open_write").expect("a condition");
+        EventCodes::new(&ctx).codes(&single, false, 0);
+        assert_eq!(first, MACRO_RESOLUTIONS.get() - before);
     }
 
     /// A condition's macros are each expanded and parsed once per analysis
