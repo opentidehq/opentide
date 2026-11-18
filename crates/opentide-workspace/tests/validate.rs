@@ -1426,4 +1426,156 @@ mod validate {
             .unwrap();
         assert_eq!(note.message, "acme: note is deprecated");
     }
+
+    /// A rule with one platform block, `block` indented under it.
+    fn rule_with(uuid: &str, name: &str, platform: &str, block: &str) -> String {
+        format!(
+            "{}configurations:\n  {platform}:\n{block}",
+            rule(uuid, name)
+        )
+    }
+
+    /// The rules each finding of `code` is on.
+    fn on(validation: &Validation, code: &str) -> Vec<String> {
+        let mut uuids: Vec<String> = with_code(validation, code)
+            .iter()
+            .map(|d| d.object_uuid.clone())
+            .collect();
+        uuids.sort();
+        uuids
+    }
+
+    fn only(uuid: &str) -> Selection {
+        Selection {
+            uuids: vec![uuid.to_owned()],
+            ..Selection::default()
+        }
+    }
+
+    // Cross-rule checks, held here and not only by the CLI's snapshots (the
+    // mutation experiment of #844 found them unheld by this crate's tests).
+
+    #[test]
+    fn two_graylog_blocks_with_one_title_are_a_duplicate_on_each_rule_in_scope() {
+        let fs = workspace();
+        let block =
+            |title: &str, enabled: bool| format!("    enabled: {enabled}\n    name: {title}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "graylog", &block("Same", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "graylog", &block("Same", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "graylog", &block("Other", true)),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "graylog_title_duplicate"), [U1, U2]);
+        let finding = with_code(&validation, "graylog_title_duplicate")
+            .into_iter()
+            .find(|d| d.object_uuid == U1)
+            .unwrap();
+        assert!(finding.message.contains(U2), "{}", finding.message);
+        assert!(!finding.message.contains(U3), "{}", finding.message);
+        // In scope alone, a rule is still compared with every rule.
+        let selection = only(U2);
+        let alone = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(on(&alone, "graylog_title_duplicate"), [U2]);
+        // A disabled block has no title to clash with.
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "graylog", &block("Same", false)),
+        );
+        assert!(on(&run(&fs, &Options::default()), "graylog_title_duplicate").is_empty());
+    }
+
+    #[test]
+    fn two_exabeam_blocks_with_one_name_are_a_duplicate_whatever_its_case() {
+        let fs = workspace();
+        let block =
+            |name: &str, enabled: bool| format!("    enabled: {enabled}\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "exabeam", &block("Same", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("SAME", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "exabeam", &block("Other", true)),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "exabeam_name_duplicate"), [U1, U2]);
+        let finding = with_code(&validation, "exabeam_name_duplicate")[0];
+        assert_eq!(
+            finding.field_path,
+            ["configurations", "exabeam", "name"].map(str::to_owned)
+        );
+        let selection = only(U1);
+        let alone = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(on(&alone, "exabeam_name_duplicate"), [U1]);
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("SAME", false)),
+        );
+        assert!(on(&run(&fs, &Options::default()), "exabeam_name_duplicate").is_empty());
+    }
+
+    #[test]
+    fn two_google_secops_blocks_with_one_rule_name_are_a_duplicate() {
+        let fs = workspace();
+        let block =
+            |name: &str, enabled: bool| format!("    enabled: {enabled}\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "google_secops", &block("same_rule", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "google_secops", &block("same_rule", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "google_secops", &block("other_rule", true)),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "google_secops_name_duplicate"), [U1, U2]);
+        let selection = only(U1);
+        let alone = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(on(&alone, "google_secops_name_duplicate"), [U1]);
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "google_secops", &block("same_rule", false)),
+        );
+        assert!(
+            on(
+                &run(&fs, &Options::default()),
+                "google_secops_name_duplicate"
+            )
+            .is_empty()
+        );
+    }
 }
