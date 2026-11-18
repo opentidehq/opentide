@@ -166,16 +166,25 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 thread_local! {
     /// How many ASTs this thread built: an analysis builds one (ADR 0014,
     /// rule 7).
     static ASTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// `source`'s AST, by `yara-x-parser`.
+/// How many ASTs this thread has built ([`analyze_document`] builds one).
+/// Debug builds only, for the work-count tests; not API.
+#[doc(hidden)]
+#[cfg(debug_assertions)]
+pub fn asts_built() -> usize {
+    ASTS.get()
+}
+
+/// `source`'s AST, by `yara-x-parser`: every AST the crate builds is built
+/// here, so [`asts_built`] counts them all.
 pub(crate) fn ast(source: &str) -> AST<'_> {
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     ASTS.set(ASTS.get() + 1);
     AST::from(Parser::new(source.as_bytes()))
 }
@@ -342,10 +351,7 @@ pub fn highlight(source: &str) -> Vec<HighlightToken> {
 /// Format a YARA signature with `yara-x-fmt`'s defaults. `None` when the text
 /// does not parse, so an editor never rewrites a broken buffer.
 pub fn format(source: &str) -> Option<String> {
-    if !AST::from(Parser::new(source.as_bytes()))
-        .errors()
-        .is_empty()
-    {
+    if !ast(source).errors().is_empty() {
         return None;
     }
     let mut out = Vec::with_capacity(source.len());
@@ -364,9 +370,7 @@ pub fn format(source: &str) -> Option<String> {
 #[must_use]
 pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     use yara_x_parser::cst::{CST, Event, SyntaxKind};
-    let rejected = !AST::from(Parser::new(source.as_bytes()))
-        .errors()
-        .is_empty();
+    let rejected = !ast(source).errors().is_empty();
     let mut open = Vec::new();
     let mut kinds = Vec::new();
     for event in CST::from(source).iter() {
@@ -534,25 +538,22 @@ rule Loader_Stage1 : loader {
 
     /// An editor's analysis builds one AST for the diagnostics and the
     /// outline, which built one each (ADR 0014, rule 7); both are what the
-    /// two calls give apart.
+    /// two calls give apart. The corpus is compared in
+    /// `tests/document.rs`.
     #[test]
     fn a_document_is_parsed_once_for_its_diagnostics_and_outline() {
-        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/corpus/yara");
-        let mut files: Vec<_> = std::fs::read_dir(dir)
-            .unwrap()
-            .flatten()
-            .map(|e| e.path())
-            .collect();
-        files.sort();
-        assert!(files.len() > 50);
-        for path in files {
-            let source = std::fs::read_to_string(&path).unwrap();
+        for source in [
+            "rule a { strings: $s = \"x\" condition: $s }",
+            "import \"pe\"\nrule a : t { meta: k = 1 strings: $h = { 4D 5A } condition: $h at 0 and pe.number_of_sections > 1 }\nrule b { condition: a }",
+            "rule broken { condition: ( }",
+            "",
+        ] {
             let before = ASTS.get();
-            let (result, symbols) = analyze_document(&source);
-            assert_eq!(ASTS.get() - before, 1, "{}", path.display());
-            assert_eq!(result.diagnostics, analyze(&source).diagnostics);
-            assert_eq!(result.tokens, analyze(&source).tokens);
-            assert_eq!(symbols, editor::symbols(&source), "{}", path.display());
+            let (result, symbols) = analyze_document(source);
+            assert_eq!(ASTS.get() - before, 1, "{source}");
+            assert_eq!(result.diagnostics, analyze(source).diagnostics);
+            assert_eq!(result.tokens, analyze(source).tokens);
+            assert_eq!(symbols, editor::symbols(source), "{source}");
         }
     }
 }

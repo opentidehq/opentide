@@ -134,12 +134,24 @@ fn after_clause(more: &[T]) -> Valid {
 
 /// The tokens a parser state expects, on the stack: the parser builds one
 /// for each token it reads, where a `Vec` was an allocation each time
-/// (ADR 0014). Its capacity holds the largest set the grammar builds (25).
+/// (ADR 0014). Its capacity holds the largest set the grammar builds (25,
+/// below), and every set is built from this module's constants.
 #[derive(Clone, Copy)]
 struct Valid {
     items: [T; 32],
     len: usize,
 }
+
+// The largest set: a field term's operators and `IN` after a top-level term.
+const _: () = assert!(
+    [AND, OR].len()
+        + UNARY.len()
+        + CLAUSES.len()
+        + STATEMENT_END.len()
+        + FIELD_OPERATORS.len()
+        + [IN].len()
+        <= 32
+);
 
 impl Default for Valid {
     fn default() -> Self {
