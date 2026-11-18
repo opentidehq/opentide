@@ -35,7 +35,7 @@ fn strings(node: Option<&Node>) -> Vec<String> {
         Some(Value::Seq(items)) => items
             .iter()
             .filter_map(|item| match &item.value {
-                Value::Str(text) => Some(text.clone()),
+                Value::Str(text) => Some(text.to_string()),
                 Value::Int(integer) => Some(integer.to_string()),
                 _ => None,
             })

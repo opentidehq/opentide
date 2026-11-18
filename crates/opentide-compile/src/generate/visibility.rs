@@ -290,7 +290,7 @@ pub fn report(index: &Index, inputs: &Inputs) -> Json {
             .map(|node| &node.value)
         {
             implementers
-                .entry(target.clone())
+                .entry(target.to_string())
                 .or_default()
                 .push(rule.uuid.clone());
         }
