@@ -941,8 +941,12 @@ fn load_record(
         Err(error) => {
             let mut problem = error.problem.clone();
             if let Some(mark) = error.mark {
-                problem.push_str(&format!(" at line {}, column {}", mark.line, mark.column));
-                record.parse_position = Some((mark.line, mark.column));
+                problem.push_str(&format!(
+                    " at line {}, column {}",
+                    mark.line(),
+                    mark.column()
+                ));
+                record.parse_position = Some((mark.line(), mark.column()));
             }
             record.parse_error = Some(problem);
             return record;
