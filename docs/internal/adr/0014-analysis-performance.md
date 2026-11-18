@@ -171,7 +171,7 @@ keyword table and the catalog's name lookups each hash a name per use.
   `GreenNodeBuilder` uses through opentide-parse) hashes token text with Fx; it is rowan's, not
   ours. Measured (#1616): 70,000 names crafted to share their low 17 hash bits, in a 980 KB
   query, parse in 2.05 s against 0.093 s for ordinary names (about 22×); a seeded `NodeCache`
-  brings it to 1.02×. The fix is tracked there. KQL's catalog name lookups (`lib.rs`) still use
+  brings it to 1.02×. #1616 tracks the fix. KQL's catalog name lookups (`lib.rs`) still use
   SipHash until #1609 lands; their keys are catalog names, not the query's.
 
 ### 6. How to measure

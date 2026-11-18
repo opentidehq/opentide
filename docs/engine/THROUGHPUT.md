@@ -80,17 +80,27 @@ has a second budget, `<mode>_<set>_allocations`: how many times the counted pass
 `calloc`, `realloc` or the aligned allocators, whoever called them. Callgrind counts it as the
 number of times each allocator's first instruction runs (`--dump-instr=yes`), not from its call
 arcs: whether callgrind records `__rust_alloc`'s tail jump into `malloc` as a call of its own
-depends on where the code lies, so on #1624 the arcs added about 11,000 calls to CQL's and
-Falco's analyses while their allocations fell. An instruction runs as often however it is
-reached, and the count covers the counted pass alone, as the instructions do. On #1624's base and head, this count is the same for every CQL and Falco
-parse and falls by 96 to 741 for each analysis, as #1624's own change does; the arcs rose by
-7,312 and 10,049 on the corpus analyses. The count does not vary from run to run. From machine
-to machine the earlier arc count varied once by one call (Exabeam's corpus analysis, on CI's
-runner), so it is held within 2 calls, not a percentage: every input set has more analyses than
-that, and one allocation more a call fails the check. When the check fails, CI uploads the
+depends on where the code lies. On #1624, the arcs over the warm-up and counted passes of CQL's
+and Falco's corpus analyses rose by 7,312 and 10,049 while their allocations fell. An instruction
+runs as often however it is reached, and the count covers the counted pass alone, as the
+instructions do. On #1624's base and head it is the same for every CQL and Falco parse and falls
+by 96 to 741 for each analysis, as #1624's own change does.
+
+The new budgets are a third of the old for a parse, which does no one-time work, and lower still
+for an analysis: the arc count also took in the warm-up's one-time work (catalogs, compiled
+queries) wherever it allocated through a call site the counted pass shares, and every Rust
+allocation goes through the same few. glibc's calls between its own allocators count too
+(`posix_memalign` with a small alignment and `realloc` of a null pointer go through `malloc`), but
+Rust's system allocator makes neither, so one Rust allocation is one entry.
+
+The count does not vary from run to run (ten runs of Exabeam's corpus analysis gave one count).
+From machine to machine, the earlier arc count varied once by one call (Exabeam's corpus analysis,
+on CI's runner), so it is held within 2 calls, not a percentage: every input set has more analyses
+than that, and one allocation more a call fails the check. When the check fails, CI uploads the
 callgrind profiles (`target/throughput/`), which `callgrind_annotate --inclusive=yes` traces to a
-function. Each pass is counted three times (`--runs`): a record writes the highest, a check takes the lowest. The budgets file names the valgrind, glibc and
-architecture it was recorded on, and a check elsewhere warns. CI's `throughput` job is pinned to
+function. Each pass is counted three times (`--runs`): a record writes the highest, a check takes
+the lowest. The budgets file names the valgrind, glibc and architecture it was recorded on, and a
+check elsewhere warns. CI's `throughput` job is pinned to
 `ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded, so that its valgrind
 counts as it did there.
 

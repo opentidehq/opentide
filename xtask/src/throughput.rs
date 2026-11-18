@@ -25,11 +25,13 @@
 //! allocator's first instruction (`--dump-instr=yes`), whoever called it.
 //! Callgrind's call arcs (`calls=`) are not used: whether it records
 //! `__rust_alloc`'s tail jump into `malloc` as a call of its own depends on
-//! the code's layout: on #1624 it added 11,000 calls to CQL's and Falco's
-//! counts while their allocations fell. An instruction's execution count is
-//! the same however it was reached, and it counts only the counted pass, as
-//! the instructions do. It does not vary from run to run, so it is held
-//! within [`ALLOCATION_SLACK`] calls, with no percentage.
+//! the code's layout: on #1624 the arcs over the warm-up and counted passes
+//! of CQL's and Falco's corpus analyses rose by 7,312 and 10,049 while their
+//! allocations fell. An instruction's execution count is the same however it
+//! was reached, and it counts only the counted pass, as the instructions do.
+//! It does not vary from run to run (ten runs of Exabeam's corpus analysis
+//! gave one count), so it is held within [`ALLOCATION_SLACK`] calls, with no
+//! percentage.
 
 use anyhow::{Context, Result, bail};
 use clap::builder::TypedValueParser as _;
@@ -42,8 +44,9 @@ use std::process::{Command, ExitCode};
 pub const TOLERANCE: f64 = 0.03;
 
 /// How many allocator calls a count may differ from its budget by. The count
-/// does not vary from run to run, but it can by one from machine to machine:
-/// on CI's runner Exabeam's corpus analysis made one call more than here,
+/// does not vary from run to run, but the earlier count of call arcs did by
+/// one from machine to machine: on CI's runner Exabeam's corpus analysis made
+/// one call more than here,
 /// on the same build inputs, valgrind and glibc (a CPU-dependent choice in a
 /// dependency; #1581). Below the smallest input set's number of analyses, so
 /// one allocation more a call still fails.
@@ -476,10 +479,10 @@ fn count(
 struct Own {
     /// Its instructions.
     instructions: u64,
-    /// Its calls into the allocator (`malloc`, `calloc`, `realloc` and the
-    /// aligned ones), whose own instructions are left out with glibc's: the
-    /// number of calls is exact, so an allocation more a token still shows.
-    /// The counted pass's entries into them, from any caller (the module doc).
+    /// The counted pass's entries into the allocator (`malloc`, `calloc`,
+    /// `realloc` and the aligned ones), from any caller, whose own
+    /// instructions are left out with glibc's: the number is exact, so an
+    /// allocation more a token still shows (the module doc).
     allocations: u64,
 }
 
@@ -503,17 +506,26 @@ pub const ALLOCATORS: [&str; 5] = [
 /// [`ALLOCATORS`] function, the cost of its lowest address, the function's
 /// first instruction, which runs once each time the function is entered,
 /// whether callgrind recorded the way in as a call or as a jump (the module
-/// doc).
+/// doc). Every line at that address counts (callgrind may write a block in
+/// several contexts), and a function is told apart by its object too.
+///
+/// glibc's own calls between its allocators count as entries too:
+/// `posix_memalign` with an alignment of 16 or less, and `realloc` of a null
+/// pointer, go through `malloc`. Rust's system allocator calls neither (it
+/// calls `posix_memalign` only when an alignment exceeds the size, and never
+/// reallocates null), so each Rust allocation is one entry.
 fn own_cost(profile: &str, binary: &Path) -> Own {
     let wanted = binary.file_name();
     // Compressed names: objects and functions each have their own ids.
     let mut objects: BTreeMap<&str, &str> = BTreeMap::new();
     let mut functions: BTreeMap<&str, &str> = BTreeMap::new();
     let mut own = false;
+    let mut object = "";
     let mut function = "";
     let mut after_call = false;
-    // Each allocator's lowest address with a cost, and that cost.
-    let mut entries: BTreeMap<&str, (u64, u64)> = BTreeMap::new();
+    // Each allocator's (object, name) lowest address with a cost, and the
+    // cost of every line at that address.
+    let mut entries: BTreeMap<(&str, &str), (u64, u64)> = BTreeMap::new();
     let mut cost = Own {
         instructions: 0,
         allocations: 0,
@@ -545,9 +557,12 @@ fn own_cost(profile: &str, binary: &Path) -> Own {
                 if let Some(address) = address
                     && ALLOCATORS.contains(&function)
                 {
-                    let entry = entries.entry(function).or_insert((address, n));
+                    let entry = entries.entry((object, function)).or_insert((address, 0));
                     if address < entry.0 {
-                        *entry = (address, n);
+                        *entry = (address, 0);
+                    }
+                    if address == entry.0 {
+                        entry.1 += n;
                     }
                 }
             }
@@ -568,7 +583,10 @@ fn own_cost(profile: &str, binary: &Path) -> Own {
             None => rest.trim(),
         };
         match key {
-            "ob" => own = Path::new(name).file_name() == wanted,
+            "ob" => {
+                object = name;
+                own = Path::new(name).file_name() == wanted;
+            }
             "fn" => function = name,
             _ => {}
         }
@@ -711,6 +729,28 @@ calls=2 0xad750
         let binary = Path::new("/elsewhere/throughput-abc");
         assert_eq!(own_cost(entries, binary).allocations, 6 + 4);
         assert_eq!(own_cost(jumps, binary).allocations, 6 + 4);
+    }
+
+    #[test]
+    fn an_entry_is_summed_over_its_blocks_and_kept_to_its_object() {
+        // malloc's first instruction written in two blocks (3 + 2 entries),
+        // and another object's `malloc` at a lower address, which is not
+        // libc's entry and does not replace it.
+        let profile = "\
+ob=(1) /usr/lib/x86_64-linux-gnu/libc.so.6
+fn=(1) malloc
+0xad750 3
+0xad760 8
+ob=(2) /usr/lib/libother.so
+fn=(1)
+0x100 7
+0x104 7
+ob=(1)
+fn=(1)
+0xad750 2
+";
+        let binary = Path::new("/elsewhere/throughput-abc");
+        assert_eq!(own_cost(profile, binary).allocations, 3 + 2 + 7);
     }
 
     #[test]
