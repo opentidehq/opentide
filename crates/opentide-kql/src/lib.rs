@@ -49,7 +49,7 @@ pub mod inspect;
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 const OPERATORS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -273,6 +273,14 @@ pub struct OperatorOption {
     pub parameter_index: Option<u32>,
 }
 
+/// A profile's KQL catalog: operators, functions, plugins, types, tables and
+/// columns.
+///
+/// Reading it builds indexes and schemas once and keeps them on it, for
+/// every thread ([`Catalog::for_workspace`]'s catalogs included). Its
+/// methods that change rows rebuild them; a caller that changes the public
+/// rows directly does so on a fresh copy ([`Clone`] keeps none of them),
+/// before any read.
 #[derive(Debug, Clone)]
 pub struct Catalog {
     /// The profile the tables and columns come from.
@@ -289,15 +297,44 @@ pub struct Catalog {
     table_index: HashMap<String, usize>,
     /// `columns` by lower-cased table name.
     column_index: HashMap<String, Vec<usize>>,
+    /// What reading it builds once, for every thread.
+    memo: Memo,
 }
 
-/// Lower-cased names to row indices, one per profile's bundled catalog
-/// ([`Catalog::by_name`]).
-struct NameIndexes([OnceLock<HashMap<String, usize>>; 3]);
+/// What reading a catalog builds once and keeps on it, shared by every
+/// thread: the lower-cased name indexes of its operators, functions, scalar
+/// operators and plugins ([`Catalog::by_name`]), the schemas of its tables
+/// and ASIM parsers (`schema::table_schema`), its table names prepared for
+/// [`Catalog::suggest_table`] and the names of its hand-written columns.
+/// Each is built on first
+/// use, for a profile's bundled catalog and a workspace's catalog with
+/// declared columns alike, so a workspace that declares columns analyses as
+/// fast as one that does not, and a declared catalog's memo goes with it
+/// when [`Catalog::for_workspace`] lets it go. A copy of a catalog starts
+/// with an empty memo, and changing its rows through its methods empties
+/// it; a caller that changes a catalog's public rows directly does so
+/// before reading it.
+#[derive(Default)]
+struct Memo {
+    /// Operators, functions, scalar operators and plugins, in that order.
+    names: [OnceLock<HashMap<String, usize>>; 4],
+    /// Tables, then ASIM parsers: the schema built for each name.
+    schemas: [RwLock<HashMap<String, schema::Schema>>; 2],
+    /// The table names, lower-cased and folded ([`Catalog::suggest_table`]).
+    table_names: OnceLock<suggest::Candidates>,
+    /// The names of the hand-written columns.
+    hand_written: OnceLock<HashSet<Box<str>>>,
+}
 
-impl NameIndexes {
-    const fn new() -> Self {
-        Self([OnceLock::new(), OnceLock::new(), OnceLock::new()])
+impl Clone for Memo {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl std::fmt::Debug for Memo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Memo").finish_non_exhaustive()
     }
 }
 
@@ -349,6 +386,7 @@ impl Catalog {
             },
             table_index: HashMap::new(),
             column_index: HashMap::new(),
+            memo: Memo::default(),
         }
     }
 
@@ -479,6 +517,7 @@ impl Catalog {
     }
 
     fn reindex(&mut self) {
+        self.memo = Memo::default();
         self.table_index = self
             .tables
             .iter()
@@ -631,6 +670,7 @@ impl Catalog {
     /// Give each table the columns of its log sources, in order: the first
     /// to declare a column decides its type and description.
     fn apply_declared(&mut self, targets: BTreeMap<String, Vec<&DeclaredSource>>) {
+        self.memo = Memo::default();
         let profile_name = match self.profile {
             Profile::Defender => "defender",
             _ => "sentinel",
@@ -703,52 +743,40 @@ impl Catalog {
     }
 
     pub fn operator(&self, name: &str) -> Option<&OperatorRow> {
-        static INDEX: NameIndexes = NameIndexes::new();
-        self.by_name(&INDEX, &self.operators, |o| &o.name, name)
+        self.by_name(0, &self.operators, |o| &o.name, name)
     }
 
     pub fn function(&self, name: &str) -> Option<&FunctionRow> {
-        static INDEX: NameIndexes = NameIndexes::new();
-        self.by_name(&INDEX, &self.functions, |f| &f.name, name)
+        self.by_name(1, &self.functions, |f| &f.name, name)
     }
 
-    /// The first of `rows` whose name is `name`, ASCII case ignored. A
-    /// profile's bundled catalog looks it up in an index built on first use
-    /// (`index`, one per profile); a scan of the hundreds of functions for
-    /// each name a query uses was a tenth of its analysis. Any other catalog
-    /// scans.
+    /// The first of `rows` whose name is `name`, ASCII case ignored, looked
+    /// up in the index of `rows` this catalog builds on first use (its memo's
+    /// `names[slot]`): a scan of the hundreds of functions for each name a
+    /// query uses was a tenth of its analysis.
     fn by_name<'a, T>(
         &self,
-        index: &NameIndexes,
+        slot: usize,
         rows: &'a [T],
         name_of: impl Fn(&T) -> &String,
         name: &str,
     ) -> Option<&'a T> {
-        if std::ptr::eq(self, Self::cached(self.profile)) {
-            let slot = match self.profile {
-                Profile::Core => 0,
-                Profile::Sentinel => 1,
-                Profile::Defender => 2,
-            };
-            let index = index.0[slot].get_or_init(|| {
-                let mut by_name = HashMap::with_capacity(rows.len());
-                for (i, row) in rows.iter().enumerate() {
-                    by_name
-                        .entry(name_of(row).to_ascii_lowercase())
-                        .or_insert(i);
-                }
+        let index = self.memo.names.get(slot)?.get_or_init(|| {
+            let mut by_name = HashMap::with_capacity(rows.len());
+            for (i, row) in rows.iter().enumerate() {
                 by_name
-            });
-            // Most names are lower case already: no copy to look them up.
-            let found = if name.bytes().any(|b| b.is_ascii_uppercase()) {
-                index.get(&name.to_ascii_lowercase())
-            } else {
-                index.get(name)
-            };
-            return found.and_then(|&i| rows.get(i));
-        }
-        rows.iter()
-            .find(|row| name_of(row).eq_ignore_ascii_case(name))
+                    .entry(name_of(row).to_ascii_lowercase())
+                    .or_insert(i);
+            }
+            by_name
+        });
+        // Most names are lower case already: no copy to look them up.
+        let found = if name.bytes().any(|b| b.is_ascii_uppercase()) {
+            index.get(&name.to_ascii_lowercase())
+        } else {
+            index.get(name)
+        };
+        found.and_then(|&i| rows.get(i))
     }
 
     pub fn table(&self, name: &str) -> Option<&TableRow> {
@@ -756,37 +784,27 @@ impl Catalog {
     }
 
     pub fn scalar_operator(&self, name: &str) -> Option<&ScalarOperatorRow> {
-        static INDEX: NameIndexes = NameIndexes::new();
-        self.by_name(&INDEX, &self.scalar_operators, |o| &o.name, name)
+        self.by_name(2, &self.scalar_operators, |o| &o.name, name)
     }
 
     pub fn plugin(&self, name: &str) -> Option<&PluginRow> {
-        static INDEX: NameIndexes = NameIndexes::new();
-        self.by_name(&INDEX, &self.plugins, |p| &p.name, name)
+        self.by_name(3, &self.plugins, |p| &p.name, name)
     }
 
     /// The catalogued table `name` most likely means
     /// ([`opentide_core::suggest`]).
     pub fn suggest_table(&self, name: &str) -> Option<String> {
-        // The table names, lower-cased and folded once per bundled profile:
+        // The table names, lower-cased and folded once per catalog:
         // preparing the catalog's hundreds of names for each unknown table
         // was a third of a Sentinel query's analysis.
-        static PREPARED: [OnceLock<suggest::Candidates>; 3] =
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-        let names = || self.tables.iter().map(|t| t.name.as_str());
-        if std::ptr::eq(self, Self::cached(self.profile)) {
-            let slot = match self.profile {
-                Profile::Core => 0,
-                Profile::Sentinel => 1,
-                Profile::Defender => 2,
-            };
-            let prepared = PREPARED[slot].get_or_init(|| suggest::Candidates::new(names()));
-            return prepared
-                .closest(name)
-                .and_then(|i| self.tables.get(i))
-                .map(|t| t.name.clone());
-        }
-        suggest::closest(name, names()).map(str::to_string)
+        let prepared = self
+            .memo
+            .table_names
+            .get_or_init(|| suggest::Candidates::new(self.tables.iter().map(|t| t.name.as_str())));
+        prepared
+            .closest(name)
+            .and_then(|i| self.tables.get(i))
+            .map(|t| t.name.clone())
     }
 
     pub fn operator_names(&self) -> Vec<String> {
@@ -836,29 +854,16 @@ impl Catalog {
 
     /// The names of the hand-written catalog's columns. Finding them reads
     /// every column of the catalog, tens of thousands with the reference's:
-    /// for a profile's bundled catalog they are found once per process, not
-    /// once per query (a quarter of a short query's analysis).
-    fn hand_written_column_names(&self) -> std::borrow::Cow<'_, HashSet<&str>> {
-        static NAMES: [OnceLock<HashSet<&'static str>>; 3] =
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-        fn names(catalog: &Catalog) -> HashSet<&str> {
-            catalog
-                .columns
+    /// they are found once per catalog (its memo), not once per query (a
+    /// quarter of a short query's analysis).
+    fn hand_written_column_names(&self) -> &HashSet<Box<str>> {
+        self.memo.hand_written.get_or_init(|| {
+            self.columns
                 .iter()
                 .filter(|c| c.hand_written())
-                .map(|c| c.name.as_str())
+                .map(|c| Box::from(c.name.as_str()))
                 .collect()
-        }
-        let bundled = Self::cached(self.profile);
-        if std::ptr::eq(self, bundled) {
-            let slot = match self.profile {
-                Profile::Core => 0,
-                Profile::Sentinel => 1,
-                Profile::Defender => 2,
-            };
-            return std::borrow::Cow::Borrowed(NAMES[slot].get_or_init(|| names(bundled)));
-        }
-        std::borrow::Cow::Owned(names(self))
+        })
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -1184,7 +1189,7 @@ fn overlay_catalog_captures(
     let mut columns: HashSet<&str> = wanted
         .iter()
         .copied()
-        .filter(|name| hand_written.contains(name))
+        .filter(|name| hand_written.contains(*name))
         .collect();
     for table in &mentioned {
         for column in catalog.columns_for_table(&table.name) {
@@ -2069,21 +2074,39 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 mod tests {
     use super::*;
 
-    /// The bundled catalog's name indexes find what a scan of its rows
-    /// finds, the same row: for every operator, function, scalar operator and
-    /// plugin name, in its case, upper and lower case, and names it does not
-    /// have (ADR 0014, rule 2). A clone is not the bundled catalog, so it
-    /// scans.
+    /// Giving a catalog a profile empties what reading it kept: Core's
+    /// prepared table names (none) are not the profile's.
+    #[test]
+    fn a_profile_given_after_a_read_reads_its_own_tables() {
+        let core = Catalog::core();
+        assert_eq!(core.suggest_table("SecurityEvnt"), None);
+        assert!(core.function("strlen").is_some());
+        let sentinel = core.with_profile(Profile::Sentinel);
+        assert_eq!(
+            sentinel.suggest_table("SecurityEvnt").as_deref(),
+            Some("SecurityEvent")
+        );
+    }
+
+    /// A catalog's name indexes find what a scan of its rows finds, the same
+    /// row: for every operator, function, scalar operator and plugin name, in
+    /// its case, upper and lower case, and names it does not have (ADR 0014,
+    /// rule 2); in a profile's bundled catalog and in a copy, which builds
+    /// its own.
     #[test]
     fn the_name_indexes_find_what_a_scan_finds() {
-        // The row found, as its index: the clone's rows compare with the
-        // bundled catalog's.
+        // The row a scan finds, as its index.
+        fn scan<T>(rows: &[T], name_of: impl Fn(&T) -> &String, name: &str) -> Option<usize> {
+            rows.iter()
+                .position(|row| name_of(row).eq_ignore_ascii_case(name))
+        }
+        // The row found, as its index in `rows`.
         fn index<T>(rows: &[T], found: Option<&T>) -> Option<usize> {
             found.and_then(|f| rows.iter().position(|r| std::ptr::eq(r, f)))
         }
         for profile in [Profile::Core, Profile::Sentinel, Profile::Defender] {
             let bundled = Catalog::cached(profile);
-            let scanned = bundled.clone();
+            let copy = bundled.clone();
             let names: Vec<String> = bundled
                 .operators
                 .iter()
@@ -2094,36 +2117,39 @@ mod tests {
                 .chain(["", "nope", "É", "strlÉn", "\u{212a}ind"].map(String::from))
                 .collect();
             let mut checked = 0;
-            for name in &names {
-                for name in [
-                    name.clone(),
-                    name.to_ascii_uppercase(),
-                    name.to_ascii_lowercase(),
-                ] {
-                    assert_eq!(
-                        index(&bundled.functions, bundled.function(&name)),
-                        index(&scanned.functions, scanned.function(&name)),
-                        "function {name:?} in {profile:?}"
-                    );
-                    assert_eq!(
-                        index(&bundled.operators, bundled.operator(&name)),
-                        index(&scanned.operators, scanned.operator(&name)),
-                        "operator {name:?} in {profile:?}"
-                    );
-                    assert_eq!(
-                        index(&bundled.scalar_operators, bundled.scalar_operator(&name)),
-                        index(&scanned.scalar_operators, scanned.scalar_operator(&name)),
-                        "scalar operator {name:?} in {profile:?}"
-                    );
-                    assert_eq!(
-                        index(&bundled.plugins, bundled.plugin(&name)),
-                        index(&scanned.plugins, scanned.plugin(&name)),
-                        "plugin {name:?} in {profile:?}"
-                    );
-                    checked += 1;
+            for catalog in [bundled, &copy] {
+                for name in &names {
+                    for name in [
+                        name.clone(),
+                        name.to_ascii_uppercase(),
+                        name.to_ascii_lowercase(),
+                    ] {
+                        let c = catalog;
+                        assert_eq!(
+                            index(&c.functions, c.function(&name)),
+                            scan(&c.functions, |f| &f.name, &name),
+                            "function {name:?} in {profile:?}"
+                        );
+                        assert_eq!(
+                            index(&c.operators, c.operator(&name)),
+                            scan(&c.operators, |o| &o.name, &name),
+                            "operator {name:?} in {profile:?}"
+                        );
+                        assert_eq!(
+                            index(&c.scalar_operators, c.scalar_operator(&name)),
+                            scan(&c.scalar_operators, |o| &o.name, &name),
+                            "scalar operator {name:?} in {profile:?}"
+                        );
+                        assert_eq!(
+                            index(&c.plugins, c.plugin(&name)),
+                            scan(&c.plugins, |p| &p.name, &name),
+                            "plugin {name:?} in {profile:?}"
+                        );
+                        checked += 1;
+                    }
                 }
             }
-            assert!(checked > 1_000, "{checked} names in {profile:?}");
+            assert!(checked > 2_000, "{checked} names in {profile:?}");
         }
     }
 
