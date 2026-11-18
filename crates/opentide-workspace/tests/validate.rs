@@ -1426,4 +1426,337 @@ mod validate {
             .unwrap();
         assert_eq!(note.message, "acme: note is deprecated");
     }
+
+    /// A rule with one platform block, `block` indented under it.
+    fn rule_with(uuid: &str, name: &str, platform: &str, block: &str) -> String {
+        format!(
+            "{}configurations:\n  {platform}:\n{block}",
+            rule(uuid, name)
+        )
+    }
+
+    /// The rules each finding of `code` is on.
+    fn on(validation: &Validation, code: &str) -> Vec<String> {
+        let mut uuids: Vec<String> = with_code(validation, code)
+            .iter()
+            .map(|d| d.object_uuid.clone())
+            .collect();
+        uuids.sort();
+        uuids
+    }
+
+    /// Each finding of `code` is in its own rule's file: `files[uuid]`.
+    fn in_own_file(validation: &Validation, code: &str, files: &[(&str, &str)]) {
+        for finding in with_code(validation, code) {
+            let (_, file) = files
+                .iter()
+                .find(|(uuid, _)| *uuid == finding.object_uuid)
+                .unwrap();
+            assert_eq!(
+                finding.file_path.as_deref(),
+                Some(Path::new(file)),
+                "{code} on {}",
+                finding.object_uuid
+            );
+        }
+    }
+
+    const FILES: [(&str, &str); 3] = [
+        (U1, "/ws/objects/rules/a.yaml"),
+        (U2, "/ws/objects/rules/b.yaml"),
+        (U3, "/ws/objects/rules/c.yaml"),
+    ];
+
+    fn only(uuid: &str) -> Selection {
+        Selection {
+            uuids: vec![uuid.to_owned()],
+            ..Selection::default()
+        }
+    }
+
+    // Cross-rule checks, held here and not only by the CLI's snapshots (the
+    // mutation experiment of #844 found them unheld by this crate's tests).
+
+    #[test]
+    fn two_graylog_blocks_with_one_title_are_a_duplicate_on_each_rule_in_scope() {
+        let fs = workspace();
+        let block =
+            |title: &str, enabled: bool| format!("    enabled: {enabled}\n    name: {title}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "graylog", &block("Same", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "graylog", &block("Same", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "graylog", &block("Other", true)),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "graylog_title_duplicate"), [U1, U2]);
+        in_own_file(&validation, "graylog_title_duplicate", &FILES);
+        let finding = with_code(&validation, "graylog_title_duplicate")
+            .into_iter()
+            .find(|d| d.object_uuid == U1)
+            .unwrap();
+        assert!(finding.message.contains(U2), "{}", finding.message);
+        assert!(!finding.message.contains(U3), "{}", finding.message);
+        // In scope alone, a rule is still compared with every rule.
+        let selection = only(U2);
+        let alone = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(on(&alone, "graylog_title_duplicate"), [U2]);
+        // A disabled block has no title to clash with.
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "graylog", &block("Same", false)),
+        );
+        assert!(on(&run(&fs, &Options::default()), "graylog_title_duplicate").is_empty());
+    }
+
+    #[test]
+    fn two_exabeam_blocks_with_one_name_are_a_duplicate_whatever_its_case() {
+        let fs = workspace();
+        let block =
+            |name: &str, enabled: bool| format!("    enabled: {enabled}\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "exabeam", &block("Same", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("SAME", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "exabeam", &block("Other", true)),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "exabeam_name_duplicate"), [U1, U2]);
+        in_own_file(&validation, "exabeam_name_duplicate", &FILES);
+        let finding = with_code(&validation, "exabeam_name_duplicate")[0];
+        assert_eq!(
+            finding.field_path,
+            ["configurations", "exabeam", "name"].map(str::to_owned)
+        );
+        let selection = only(U1);
+        let alone = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(on(&alone, "exabeam_name_duplicate"), [U1]);
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("SAME", false)),
+        );
+        assert!(on(&run(&fs, &Options::default()), "exabeam_name_duplicate").is_empty());
+    }
+
+    #[test]
+    fn two_google_secops_blocks_with_one_rule_name_are_a_duplicate() {
+        let fs = workspace();
+        let block =
+            |name: &str, enabled: bool| format!("    enabled: {enabled}\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "google_secops", &block("same_rule", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "google_secops", &block("same_rule", true)),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "google_secops", &block("other_rule", true)),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "google_secops_name_duplicate"), [U1, U2]);
+        in_own_file(&validation, "google_secops_name_duplicate", &FILES);
+        let selection = only(U1);
+        let alone = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(on(&alone, "google_secops_name_duplicate"), [U1]);
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "google_secops", &block("same_rule", false)),
+        );
+        assert!(
+            on(
+                &run(&fs, &Options::default()),
+                "google_secops_name_duplicate"
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn every_check_is_named_as_check_takes_it_and_parsed_back() {
+        for check in Check::ALL {
+            assert!(!check.name().is_empty());
+            assert_eq!(Check::parse(check.name()), Some(check));
+        }
+        assert_eq!(Check::parse("schema"), Some(Check::Schema));
+        assert_eq!(Check::parse("id-uniqueness"), Some(Check::IdUniqueness));
+        assert_eq!(Check::parse("nonsense"), None);
+    }
+
+    #[test]
+    fn the_exit_code_and_the_checks_document_follow_the_run() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", splunk_rule(U1));
+        let clean = run(&fs, &Options::default());
+        assert!(!clean.failed, "{:#?}", all(&clean));
+        assert_eq!(clean.exit_code(), 0);
+        fs.write("/ws/objects/rules/b.yaml", rule(U1, "B"));
+        let failed = run(&fs, &Options::default());
+        assert!(failed.failed);
+        assert_eq!(failed.exit_code(), 1);
+        let checks = failed.checks_json();
+        for (check, status) in &failed.checks {
+            assert_eq!(
+                checks[check.name()],
+                serde_json::json!({"check": check.name(), "status": status})
+            );
+        }
+        assert_eq!(checks["id-uniqueness"]["status"], "failed");
+    }
+
+    /// A stand-in compiler: Splunk refuses every rule, once at the block and
+    /// once at a key the block does not have.
+    struct Refuses;
+
+    impl opentide_workspace::validate::CompileCheck for Refuses {
+        fn check(
+            &self,
+            _ws: &Workspace,
+            rules: &[opentide_workspace::validate::CompileRule<'_>],
+            enabled: &std::collections::BTreeSet<String>,
+        ) -> Vec<Vec<opentide_workspace::validate::CompileFailure>> {
+            assert!(
+                enabled.contains("splunk"),
+                "the test enables splunk: {enabled:?}"
+            );
+            let failure =
+                |code: &str, field_path: &[&str]| opentide_workspace::validate::CompileFailure {
+                    platform: "splunk".to_owned(),
+                    code: code.to_owned(),
+                    message: format!("{code} here"),
+                    hint: None,
+                    field_path: field_path.iter().map(|part| (*part).to_owned()).collect(),
+                };
+            rules
+                .iter()
+                .map(|_| {
+                    vec![
+                        failure("compile_empty_block", &[]),
+                        failure(
+                            "compile_missing_field",
+                            &["configurations", "splunk", "cron_schedule"],
+                        ),
+                        failure(
+                            "compile_invalid_value",
+                            &["configurations", "splunk", "query"],
+                        ),
+                    ]
+                })
+                .collect()
+        }
+    }
+
+    /// A rule that validates cleanly, with an enabled Splunk block: the
+    /// corpus's Splunk rule (`rule::1.0`), as `uuid`, without its detection
+    /// model (not in this workspace). It needs the rule schema and the
+    /// bundled vocabulary to accept it; if one stops doing so, the tests
+    /// that use it say so first (`assert!(!clean.failed, ..)`).
+    fn splunk_rule(uuid: &str) -> String {
+        format!(
+            "name: Splunk SPL Rule
+metadata:
+  uuid: {uuid}
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: |
+  A rule.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    enabled: true
+    name: Splunk SPL Rule
+    status: STAGING
+    query: index=main | head 1
+"
+        )
+    }
+
+    /// The line, from 0, of the first line of `text` that is `line`.
+    fn line_of(text: &str, line: &str) -> usize {
+        text.lines().position(|l| l == line).unwrap()
+    }
+
+    #[test]
+    fn a_compiler_s_refusal_is_on_the_rule_at_the_deepest_key_it_has() {
+        let fs = workspace();
+        fs.write(
+            "/ws/.opentide/configurations/platforms/splunk.toml",
+            "[platform]\nenabled = true\n",
+        );
+        let text = splunk_rule(U1);
+        fs.write("/ws/objects/rules/a.yaml", text.clone());
+        let validation = run(
+            &fs,
+            &Options {
+                compile_check: Some(&Refuses),
+                ..Options::default()
+            },
+        );
+        let empty = with_code(&validation, "compile_empty_block");
+        assert_eq!(empty.len(), 1, "{:#?}", all(&validation));
+        assert_eq!(empty[0].object_uuid, U1);
+        assert_eq!(empty[0].field_path, ["configurations", "splunk"]);
+        assert_eq!(
+            empty[0].file_path.as_deref(),
+            Some(Path::new("/ws/objects/rules/a.yaml"))
+        );
+        let block = line_of(&text, "  splunk:");
+        assert_eq!(empty[0].yaml_line, Some(block));
+        // `cron_schedule` is not in the block: the finding is on the block's key.
+        let missing = with_code(&validation, "compile_missing_field");
+        assert_eq!(missing.len(), 1);
+        assert_eq!(
+            missing[0].field_path,
+            ["configurations", "splunk", "cron_schedule"]
+        );
+        assert_eq!(missing[0].yaml_line, Some(block));
+        // A key the block has is the finding's own line.
+        let invalid = with_code(&validation, "compile_invalid_value");
+        assert_eq!(invalid.len(), 1);
+        assert_eq!(
+            invalid[0].yaml_line,
+            Some(line_of(&text, "    query: index=main | head 1"))
+        );
+        assert!(validation.failed);
+    }
 }

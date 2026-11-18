@@ -172,6 +172,8 @@ These `--platform` values are built into the package:
 | `crowdstrike` | CrowdStrike Falcon |
 | `harfanglab` | HarfangLab |
 | `sysdig` | Sysdig Secure (Falco) |
+| `bitdefender` | Bitdefender GravityZone |
+| `graylog` | Graylog |
 | `exabeam` | Exabeam New-Scale SIEM |
 | `google_secops` | Google Security Operations (YARA-L 2.0) |
 

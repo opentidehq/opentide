@@ -480,7 +480,10 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
                 members.push(("removed".to_owned(), Json::Str(removed.to_string())));
             }
             members.extend([
-                ("description".to_owned(), Json::str(&entry.description)),
+                (
+                    "description".to_owned(),
+                    Json::str(entry.description.as_str()),
+                ),
                 ("icon".to_owned(), Json::str(&entry.icon)),
                 ("link".to_owned(), Json::str(&entry.link)),
                 (

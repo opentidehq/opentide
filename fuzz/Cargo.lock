@@ -2937,6 +2937,7 @@ dependencies = [
 name = "opentide-kql"
 version = "0.12.0"
 dependencies = [
+ "foldhash",
  "logos",
  "opentide-core",
  "opentide-highlight",
@@ -3039,6 +3040,7 @@ dependencies = [
 name = "opentide-spl"
 version = "0.12.0"
 dependencies = [
+ "foldhash",
  "logos",
  "opentide-core",
  "opentide-highlight",

@@ -269,7 +269,8 @@ pub fn load(field: &str) -> Option<Result<Arc<Vocabulary>, VocabError>> {
     Some(
         slots()[index]
             .get_or_init(|| {
-                Vocabulary::from_file(&format!("{name}{}", super::SUFFIX), text).map(Arc::new)
+                Vocabulary::from_bundled_file(&format!("{name}{}", super::SUFFIX), text)
+                    .map(Arc::new)
             })
             .clone(),
     )
