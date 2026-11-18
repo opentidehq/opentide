@@ -114,7 +114,7 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 fn analyze_lines(source: &str, ctx: Context) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     let (root, parse) = parser::parse(source);
     let mut diagnostics = Vec::new();
     if let Some(err) = parse.errors.first() {
@@ -128,7 +128,7 @@ fn analyze_lines(source: &str, ctx: Context) -> AnalyzeResult {
     diagnostics.extend(check::diagnostics(&root, &parse.errors, source, ctx));
     AnalyzeResult {
         diagnostics,
-        tokens: highlight::tokens(&spec, &root, source),
+        tokens: highlight::tokens(spec, &root, source),
     }
 }
 

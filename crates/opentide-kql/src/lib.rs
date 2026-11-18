@@ -774,13 +774,31 @@ impl Catalog {
     /// The names [`Catalog::resolve_column_among`] resolves, as a set: what a
     /// caller that asks about every name of a query looks up, once each
     /// (the hand-written columns are a scan of the whole catalog).
-    fn column_names_among(&self, mentioned: &[&TableRow]) -> HashSet<&str> {
-        mentioned
-            .iter()
-            .flat_map(|table| self.columns_for_table(&table.name))
-            .chain(self.columns.iter().filter(|c| c.hand_written()))
-            .map(|c| c.name.as_str())
-            .collect()
+    /// The names of the hand-written catalog's columns. Finding them reads
+    /// every column of the catalog, tens of thousands with the reference's:
+    /// for a profile's bundled catalog they are found once per process, not
+    /// once per query (a quarter of a short query's analysis).
+    fn hand_written_column_names(&self) -> std::borrow::Cow<'_, HashSet<&str>> {
+        static NAMES: [OnceLock<HashSet<&'static str>>; 3] =
+            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+        fn names(catalog: &Catalog) -> HashSet<&str> {
+            catalog
+                .columns
+                .iter()
+                .filter(|c| c.hand_written())
+                .map(|c| c.name.as_str())
+                .collect()
+        }
+        let bundled = Self::cached(self.profile);
+        if std::ptr::eq(self, bundled) {
+            let slot = match self.profile {
+                Profile::Core => 0,
+                Profile::Sentinel => 1,
+                Profile::Defender => 2,
+            };
+            return std::borrow::Cow::Borrowed(NAMES[slot].get_or_init(|| names(bundled)));
+        }
+        std::borrow::Cow::Owned(names(self))
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -1059,8 +1077,12 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
     // Once per query, not once per name: a long query has thousands of names,
     // and each scan reads the whole query (quadratic on the old engine).
     let mentioned = catalog.mentioned_tables(source);
-    let columns = catalog.column_names_among(&mentioned);
-    for (span, capture) in spans.iter_mut() {
+    // The names still `variable` after the checks below that may be columns:
+    // looked up after the loop, in one pass over the mentioned tables'
+    // columns (a set of all those columns per query was a third of a short
+    // query's analysis).
+    let mut maybe_columns: Vec<(usize, ByteSpan)> = Vec::new();
+    for (i, (span, capture)) in spans.iter_mut().enumerate() {
         let end = span.end.min(source.len());
         if span.start >= end {
             continue;
@@ -1086,8 +1108,31 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
             && *capture == "variable"
         {
             *capture = "operator".into();
-        } else if *capture == "variable" && columns.contains(text) {
-            *capture = "property".into();
+        } else if *capture == "variable" {
+            maybe_columns.push((i, *span));
+        }
+    }
+    if maybe_columns.is_empty() {
+        return;
+    }
+    let text = |span: ByteSpan| &source[span.start..span.end.min(source.len())];
+    let hand_written = catalog.hand_written_column_names();
+    let wanted: HashSet<&str> = maybe_columns.iter().map(|&(_, span)| text(span)).collect();
+    let mut columns: HashSet<&str> = wanted
+        .iter()
+        .copied()
+        .filter(|name| hand_written.contains(name))
+        .collect();
+    for table in &mentioned {
+        for column in catalog.columns_for_table(&table.name) {
+            if let Some(name) = wanted.get(column.name.as_str()) {
+                columns.insert(name);
+            }
+        }
+    }
+    for (i, span) in maybe_columns {
+        if columns.contains(text(span)) {
+            spans[i].1 = "property".into();
         }
     }
 }

@@ -25,6 +25,7 @@
 use crate::{Catalog, Profile, tables};
 use opentide_core::{ByteSpan, Diagnostic, codes};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
 
 pub(crate) mod new_tree;
 
@@ -119,7 +120,10 @@ pub enum Source {
 
 #[derive(Debug, Clone)]
 pub struct Schema {
-    pub columns: Vec<Column>,
+    /// Shared between the copies of a schema each stage of a pipeline
+    /// records, until one of them changes its columns (`Arc::make_mut`):
+    /// a deep copy per stage was a third of a short query's analysis.
+    pub columns: Arc<Vec<Column>>,
     pub known: Known,
     pub source: Source,
     /// `project`, `summarize` or `distinct` narrowed the columns (in this
@@ -139,7 +143,7 @@ pub struct Schema {
 impl Schema {
     fn open() -> Self {
         Self {
-            columns: Vec::new(),
+            columns: Arc::default(),
             known: Known::Open,
             source: Source::Unknown,
             narrowed: false,
@@ -152,7 +156,7 @@ impl Schema {
 
     fn closed(columns: Vec<Column>, source: Source) -> Self {
         Self {
-            columns,
+            columns: Arc::new(columns),
             known: Known::Closed,
             source,
             ..Self::open()
@@ -174,10 +178,13 @@ impl Schema {
     /// Add `column`, replacing one of the same name (as `extend` does).
     fn set(&mut self, column: Column) {
         self.removed.remove(&column.name);
-        if let Some(existing) = self.columns.iter_mut().find(|c| c.name == column.name) {
+        if let Some(existing) = Arc::make_mut(&mut self.columns)
+            .iter_mut()
+            .find(|c| c.name == column.name)
+        {
             *existing = column;
         } else {
-            self.columns.push(column);
+            Arc::make_mut(&mut self.columns).push(column);
         }
     }
 
@@ -207,12 +214,12 @@ impl Schema {
             }
             taken.insert(column.name.clone());
             self.removed.remove(&column.name);
-            self.columns.push(column);
+            Arc::make_mut(&mut self.columns).push(column);
         }
     }
 
     fn remove(&mut self, name: &str, by: &'static str) {
-        self.columns.retain(|c| c.name != name);
+        Arc::make_mut(&mut self.columns).retain(|c| c.name != name);
         self.removed.insert(name.to_string(), by);
     }
 
@@ -471,7 +478,35 @@ pub(crate) fn source_schema(
     table_schema(catalog, word).or_else(|| asim_schema(catalog, word))
 }
 
+/// [`build_table_schema`], built once per table and thread for a profile's
+/// bundled catalog: a query names a few tables, and building one copies its
+/// hundred-odd columns from the catalog (a fifth of a short query's
+/// analysis). A copy of the built schema shares its columns
+/// ([`Schema::columns`] is copied on write). A workspace catalog with
+/// declared columns is built each time.
 fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
+    type Built = HashMap<(u8, String), Option<Schema>>;
+    thread_local! {
+        static BUILT: std::cell::RefCell<Built> = std::cell::RefCell::new(HashMap::new());
+    }
+    if !std::ptr::eq(catalog, Catalog::cached(catalog.profile)) {
+        return build_table_schema(catalog, name);
+    }
+    let slot = match catalog.profile {
+        crate::Profile::Core => 0,
+        crate::Profile::Sentinel => 1,
+        crate::Profile::Defender => 2,
+    };
+    let key = (slot, name.to_string());
+    if let Some(hit) = BUILT.with(|built| built.borrow().get(&key).cloned()) {
+        return hit;
+    }
+    let schema = build_table_schema(catalog, name);
+    BUILT.with(|built| built.borrow_mut().insert(key, schema.clone()));
+    schema
+}
+
+fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     let table = catalog.table(name)?;
     let columns: Vec<Column> = catalog
         .columns_for_table(name)
@@ -491,7 +526,7 @@ fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
         Known::Open
     };
     let mut schema = Schema {
-        columns,
+        columns: Arc::new(columns),
         known,
         source: Source::Table(name.to_string()),
         custom_columns: true,
@@ -502,7 +537,7 @@ fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     if catalog.profile == Profile::Sentinel && table.documented {
         for (column, type_name) in tables::STANDARD_COLUMNS {
             if !schema.has(column) {
-                schema.columns.push(
+                Arc::make_mut(&mut schema.columns).push(
                     Column::new(*column, Some((*type_name).to_string()))
                         .with_origin(Origin::Table(name.to_string())),
                 );
@@ -526,7 +561,8 @@ pub(crate) fn asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
                     class: c.class.clone(),
                 })
             })
-            .collect(),
+            .collect::<Vec<_>>()
+            .into(),
         known: Known::Typos,
         source: Source::Asim {
             parser: parser.name.clone(),
@@ -545,11 +581,11 @@ pub(crate) fn merge_union(legs: &[Schema], withsource: Option<String>) -> Schema
     for leg in legs {
         out.weaken(leg.known);
         out.custom_columns |= leg.custom_columns;
-        for column in &leg.columns {
+        for column in leg.columns.iter() {
             match types.get(&column.name) {
                 None => {
                     types.insert(column.name.clone(), column.type_name.clone());
-                    out.columns.push(column.clone());
+                    Arc::make_mut(&mut out.columns).push(column.clone());
                 }
                 Some(t) if *t != column.type_name => {
                     conflicts.insert(column.name.clone());
@@ -566,7 +602,7 @@ pub(crate) fn merge_union(legs: &[Schema], withsource: Option<String>) -> Schema
             .filter_map(|leg| leg.column(&name).map(|c| c.type_name.clone()))
             .collect();
         kinds.dedup();
-        out.columns.retain(|c| c.name != name);
+        Arc::make_mut(&mut out.columns).retain(|c| c.name != name);
         if kinds.iter().any(Option::is_none) {
             out.make_open();
             continue;
@@ -574,7 +610,7 @@ pub(crate) fn merge_union(legs: &[Schema], withsource: Option<String>) -> Schema
         for kind in kinds.into_iter().flatten() {
             let renamed = format!("{name}_{kind}");
             if !out.has(&renamed) {
-                out.columns.push(Column::new(renamed, Some(kind)));
+                Arc::make_mut(&mut out.columns).push(Column::new(renamed, Some(kind)));
             }
         }
     }
@@ -637,7 +673,7 @@ pub(crate) fn aggregate_columns_for(
             for arg in args {
                 let column = match arg {
                     AggArg::Star => {
-                        for column in &input.columns {
+                        for column in input.columns.iter() {
                             if !out.iter().any(|c: &Column| c.name == column.name) {
                                 out.push(Column::new(
                                     column.name.clone(),
@@ -879,7 +915,10 @@ pub(crate) mod tests {
         let mut schema = Schema::open();
         schema.push_all_unique(start.iter().map(|n| Column::new((*n).to_string(), None)));
         schema.push_all_unique(added.iter().map(|n| Column::new((*n).to_string(), None)));
-        schema.columns.into_iter().map(|c| c.name).collect()
+        std::sync::Arc::unwrap_or_clone(schema.columns)
+            .into_iter()
+            .map(|c| c.name)
+            .collect()
     }
 
     /// One pass gives each column the name a scan per column gave: the
@@ -966,7 +1005,7 @@ pub(crate) mod tests {
                 let mut left = schema(n, "c");
                 let right = schema(n, prefix);
                 NAMES_COMPARED.with(|c| c.set(0));
-                left.push_all_unique(right.columns);
+                left.push_all_unique(std::sync::Arc::unwrap_or_clone(right.columns));
                 let compared = NAMES_COMPARED.with(std::cell::Cell::get);
                 assert_eq!(left.columns.len(), 2 * n);
                 // One lookup per column, and one more per suffix tried when

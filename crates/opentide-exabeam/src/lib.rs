@@ -90,7 +90,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     let checked = check(source, ctx.profile);
     let lines = LineIndex::new(source);
     let diagnostics = checked
@@ -109,7 +109,7 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
         .collect();
     AnalyzeResult {
         diagnostics,
-        tokens: highlight(&spec, source),
+        tokens: highlight(spec, source),
     }
 }
 

@@ -304,10 +304,10 @@ fn profile_findings(source: &str, ctx: &Context) -> Vec<Finding> {
 /// Semantic tokens from `yara-x-parser`'s CST: every token's capture is
 /// decided by its kind and the node around it (`cst.rs`).
 pub fn highlight(source: &str) -> Vec<HighlightToken> {
-    let Ok(spec) = HighlightSpec::load() else {
+    let Ok(spec) = HighlightSpec::shared() else {
         return Vec::new();
     };
-    tokens_from_spans(&spec, source, &cst::highlight_spans(source)).unwrap_or_default()
+    tokens_from_spans(spec, source, &cst::highlight_spans(source)).unwrap_or_default()
 }
 
 /// Format a YARA signature with `yara-x-fmt`'s defaults. `None` when the text

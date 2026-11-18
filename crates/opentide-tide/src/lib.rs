@@ -535,7 +535,7 @@ pub fn analyze_parsed(
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 fn analyze_lines(input: AnalyzeInput<'_>, root: Option<Arc<Node>>) -> TideAnalyzeResult {
-    let spec = HighlightSpec::load().expect("spec");
+    let spec = HighlightSpec::shared().expect("spec");
     let mut diagnostics = Vec::new();
     // A file that is not YAML (`root` is `None`) is `validate`'s
     // `yaml_parse`: no finding here.
@@ -545,7 +545,7 @@ fn analyze_lines(input: AnalyzeInput<'_>, root: Option<Arc<Node>>) -> TideAnalyz
     else {
         return TideAnalyzeResult {
             diagnostics,
-            tokens: highlight_tide(&spec, input.source, &[]),
+            tokens: highlight_tide(spec, input.source, &[]),
             symbols: Vec::new(),
         };
     };
@@ -565,7 +565,7 @@ fn analyze_lines(input: AnalyzeInput<'_>, root: Option<Arc<Node>>) -> TideAnalyz
         .iter()
         .flat_map(InjectedQuery::host_spans)
         .collect();
-    let mut tokens = highlight_tide(&spec, input.source, &skip);
+    let mut tokens = highlight_tide(spec, input.source, &skip);
     let mut queries = analyze_injections(
         input.source,
         object.configurations.as_ref(),

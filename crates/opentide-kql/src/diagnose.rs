@@ -65,11 +65,11 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     // broken input too, and `union *` and `search *`, which both engines
     // reject, are the shapes they exist for.
     perf::check_scope(source, &mut diagnostics);
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
     let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    let tokens = tokens_from_spans(&spec, source, &refs).unwrap_or_default();
+    let tokens = tokens_from_spans(spec, source, &refs).unwrap_or_default();
     Analysis {
         diagnostics,
         hir,
