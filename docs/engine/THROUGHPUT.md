@@ -107,6 +107,14 @@ extensions, corpus, external directories, the file names to leave out, and its p
 Then `cargo xtask throughput --record --language <name>` adds its budgets: a record merges into
 the file, so the other languages' budgets stay as they are.
 
+## One walk per analysis
+
+ADR 0014 §5a: one walk of the tree serves a language's checks and its highlight, with
+`opentide_parse::walk_once`. Lucene, Kibana KQL, ES|QL, EQL, SPL, CQL and YARA-L walk once.
+Exabeam and Falco already did: their rowan tree is walked once, for the highlight, and their checks
+read a parse of their own. That second parse is the cost left in both, and moving the checks onto
+the tree is its own change.
+
 ## Against the vendors
 
 The vendors' own libraries, on the same inputs, through the same calls where a library offers them.
