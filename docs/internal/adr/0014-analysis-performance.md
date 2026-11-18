@@ -155,12 +155,20 @@ SipHash, std's default, cost about a seventh of a KQL analysis: the column pass'
 keyword table and the catalog's name lookups each hash a name per use.
 
 - **foldhash's `fast::RandomState`** (`foldhash::HashMap`, `foldhash::HashSet`, the workspace's
-  `foldhash` dependency) is the engine's hasher for maps on a hot path. It is as fast as Fx and
-  is seeded per process.
+  `foldhash` dependency) is the engine's hasher for maps on a hot path. It is about as fast as Fx
+  (foldhash's own benchmarks; Fx leads on some short keys).
+- **What its seed is.** One seed per process, mixed from ASLR addresses, the clock and a heap
+  address, not the operating system's random source, and one per map. foldhash calls itself
+  minimally DoS-resistant: it defeats collisions prepared ahead of time, not an attacker who
+  can watch timings and adapt. On `wasm32-unknown-unknown` (the browser host) there is no clock
+  and the addresses are fixed, so the seed there is close to fixed.
 - **Never a fixed-seed hasher for keys a query names.** A map keyed by the query's own names
-  (columns, `let` names, functions) under a hasher whose collisions can be found ahead of time
-  (FxHash, an unseeded foldhash) lets a crafted rule make the analysis quadratic. Every language
-  follows the same rule.
+  (columns, `let` names, functions) under a hasher whose collisions can be worked out once and
+  reused (FxHash, foldhash's `FixedState`) lets a crafted rule make the analysis quadratic.
+- **Known exceptions.** rowan's token cache (`NodeCache`, which every parser's
+  `GreenNodeBuilder` uses through opentide-parse) hashes token text with Fx; it is rowan's, not
+  ours, and is a follow-up. KQL's catalog name lookups (`lib.rs`) still use SipHash until #1609
+  lands; their keys are catalog names, not the query's.
 
 ### 6. How to measure
 
