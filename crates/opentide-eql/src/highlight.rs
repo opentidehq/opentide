@@ -6,6 +6,8 @@ use crate::lexical;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use opentide_core::ByteSpan;
 use rowan::NodeOrToken;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// A node that stands for one token (`identifier`, `string`, `any`, ...): it is captured as a
 /// whole, by its kind and its place in its parent. (`boolean` is not one: its `true` or `false`
@@ -116,11 +118,24 @@ fn token_capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
         ERROR_STRING => Some("string"),
         ERROR_NUMBER => Some("number"),
         _ if parent == K::BOOLEAN => Some("boolean"),
-        name => opentide_highlight::keywords(opentide_core::LanguageId::Eql)?
-            .iter()
-            .find(|(token, _)| *token == name)
-            .map(|(_, capture)| capture.name()),
+        name => keyword_captures().get(name).copied(),
     }
+}
+
+/// The capture of each keyword and symbol of the highlight table, by text, built once: a
+/// scan of the table per token was most of the highlight pass (ADR 0014 §2). The table's
+/// first row for a text wins, as the scan's did.
+fn keyword_captures() -> &'static HashMap<&'static str, &'static str> {
+    static CAPTURES: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    CAPTURES.get_or_init(|| {
+        let mut captures = HashMap::new();
+        for (token, capture) in
+            opentide_highlight::keywords(opentide_core::LanguageId::Eql).unwrap_or_default()
+        {
+            captures.entry(*token).or_insert(capture.name());
+        }
+        captures
+    })
 }
 
 /// A leaf node, by its kind and its place in its parent.
@@ -158,7 +173,37 @@ fn leaf_capture(leaf: &SyntaxNode) -> Option<&'static str> {
 /// prefix-capable `not`, `-`, `+` tokens adds to it; any other visible token ends the run.
 /// Whitespace and comments do not. Returns the token where `depth + run` first exceeds the
 /// limit.
-pub(crate) fn expression_depth_exceeded(root: &SyntaxNode) -> Option<ByteSpan> {
+///
+/// `root` is the tree of `source`. A cheap bound comes first (ADR 0014 §4): `depth + run`
+/// counts `(`, `not`, `-` and `+` tokens (`not` is a keyword only in lower case, as
+/// `parser::keywords` reads it), and each holds one of the bytes `(`, `n`, `-` or `+`, so a source with no more of those bytes than the limit cannot exceed it.
+pub(crate) fn expression_depth_exceeded(root: &SyntaxNode, source: &str) -> Option<ByteSpan> {
+    let candidates = source
+        .bytes()
+        .filter(|b| matches!(b, b'(' | b'n' | b'-' | b'+'))
+        .count();
+    if i64::try_from(candidates).is_ok_and(|n| n <= lexical::MAX_EXPRESSION_DEPTH) {
+        return None;
+    }
+    depth_walk(root)
+}
+
+thread_local! {
+    /// The depth walks on this thread: [`depth_walks`].
+    #[cfg(test)]
+    static DEPTH_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread walked a tree's tokens for the depth check (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn depth_walks() -> usize {
+    DEPTH_WALKS.get()
+}
+
+/// The token scan itself, over every visible token.
+fn depth_walk(root: &SyntaxNode) -> Option<ByteSpan> {
+    #[cfg(test)]
+    DEPTH_WALKS.set(DEPTH_WALKS.get() + 1);
     let mut depth: i64 = 0;
     let mut chain: i64 = 0;
     for token in visible_tokens(root) {
@@ -176,4 +221,97 @@ pub(crate) fn expression_depth_exceeded(root: &SyntaxNode) -> Option<ByteSpan> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Texts with every mix of nesting and prefix runs around the limit, and queries like the
+    /// corpus's.
+    fn texts() -> Vec<String> {
+        let limit = usize::try_from(lexical::MAX_EXPRESSION_DEPTH).unwrap_or(250);
+        let mut out = Vec::new();
+        for n in [limit - 1, limit, limit + 1] {
+            out.push(format!(
+                "process where {}a == 1{}",
+                "(".repeat(n),
+                ")".repeat(n)
+            ));
+            out.push(format!("process where {}a", "not ".repeat(n)));
+            out.push(format!("process where {}1 == 1", "-".repeat(n)));
+            out.push(format!("process where {}+1 == 1", "+-".repeat(n / 2)));
+            out.push(format!(
+                "process where {}(a){}",
+                "not (".repeat(n / 2),
+                ")".repeat(n / 2)
+            ));
+            out.push(format!("process where a == \"{}\"", "(".repeat(n + 5)));
+            out.push(format!("process where /* {} */ a", "(".repeat(n + 5)));
+            out.push(format!("process where {}a", "NOT ".repeat(n)));
+        }
+        // Queries like the corpus's, written here: an engine crate reads no
+        // file, its tests in `src/` included (`check-io-free.sh`).
+        out.extend(
+            [
+            r#"sequence with maxspan=5w [a where true] [b where true]"#,
+            r#"process where process.name in ()"#,
+            r#"process where process.pid =="#,
+            r#"process where ?process.parent.name == null and `odd field` != "x""#,
+            r#"process where /* unterminated true"#,
+            r#"sample by host.id [process where true] [file where true]"#,
+            r#"sequence [process where true] ![file where true] [network where true] | head 1"#,
+            r#"process where a == 0x10"#,
+            r#"process where file.path == 'C:\Windows'"#,
+            r#"process where not (a == 1 or -b == +2) and not c"#,
+            r#"process where length(process.args) > -(3 + -4)"#,
+            r#"network where destination.port in (22, 3389) and not cidrMatch(destination.ip, "10.0.0.0/8")"#,
+            r#"process where process.name : "cmd*" // a comment ( ( ("#,
+            r#"any where true | tail 5 | filter not x"#,
+            ]
+            .map(str::to_owned),
+        );
+        out
+    }
+
+    /// The bound cuts nothing the walk finds (ADR 0014 §4, §7).
+    #[test]
+    fn the_bound_cuts_nothing_the_walk_finds() {
+        let (mut found, mut cut) = (0, 0);
+        for source in texts() {
+            let root = SyntaxNode::new_root(crate::parser::parse(&source).green);
+            let walked = depth_walk(&root);
+            assert_eq!(
+                expression_depth_exceeded(&root, &source),
+                walked,
+                "{source:?}"
+            );
+            found += usize::from(walked.is_some());
+            let before = depth_walks();
+            expression_depth_exceeded(&root, &source);
+            cut += usize::from(depth_walks() == before);
+        }
+        assert!(found >= 6 && cut >= 10, "{found} found, {cut} cut");
+    }
+
+    /// A short query is not walked: the walk ran on every analysis.
+    #[test]
+    fn a_short_query_is_not_walked() {
+        let before = depth_walks();
+        crate::analyze("process where not (a == 1 or b == -2)");
+        assert_eq!(depth_walks() - before, 0);
+    }
+
+    /// The keyword index finds what a scan of the table finds, for each row's text.
+    #[test]
+    fn the_keyword_index_finds_what_a_scan_finds() {
+        let table =
+            opentide_highlight::keywords(opentide_core::LanguageId::Eql).unwrap_or_default();
+        assert!(!table.is_empty());
+        for (text, _) in table {
+            let scanned = table.iter().find(|(t, _)| t == text).map(|(_, c)| c.name());
+            assert_eq!(keyword_captures().get(text).copied(), scanned, "{text}");
+        }
+        assert_eq!(keyword_captures().get("no such keyword"), None);
+    }
 }
