@@ -44,7 +44,7 @@ use opentide_core::{
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use syntax::SyntaxKind as K;
-use tree::{Node, Tree, walk_with_ancestors};
+use tree::{Node, Tree, walk_once};
 
 const SYNTAX_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query#query-string-syntax";
 
@@ -133,7 +133,20 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         source: text,
         lines: &lines,
     };
-    walk_with_ancestors(&root, |node, ancestors| match node.kind() {
+    // One walk runs the checks and gathers the highlight's tokens, when the
+    // highlight reads this text (ADR 0014 §5a).
+    let same_text = std::ptr::eq(text, source);
+    let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
+    let mut highlight_token = |t: &rowan::SyntaxToken<syntax::Lucene>| {
+        if same_text && let Some(capture) = capture(t) {
+            let r = t.text_range();
+            spans.push((
+                ByteSpan::new(usize::from(r.start()), usize::from(r.end())),
+                capture,
+            ));
+        }
+    };
+    let checks = |node: &Node, ancestors: &[Node]| match node.kind() {
         K::BooleanQuery => {
             lowercase_operators(node, cx, &mut diagnostics);
             mixed_operators(node, cx, &mut diagnostics);
@@ -167,7 +180,8 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         K::Fuzzy => fuzziness(node, ancestors, cx, dialect, &mut diagnostics),
         K::Regexp => regexp_body(node, ancestors, cx, dialect, &mut diagnostics),
         _ => {}
-    });
+    };
+    walk_once(&root, checks, &mut highlight_token);
     if graylog {
         graylog::double_backslash(cx, &mut diagnostics);
     }
@@ -184,8 +198,8 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
             d.range = source_lines.range(ByteSpan::new(start, end));
         }
     }
-    let tokens = if std::ptr::eq(text, source) {
-        highlight(spec, &tree.root, source)
+    let tokens = if same_text {
+        tokens_from_spans(spec, source, &spans).unwrap_or_default()
     } else {
         highlight(spec, &Tree::parse(source).root, source)
     };
@@ -356,11 +370,12 @@ fn kuery_ranges(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
     let source = cx.source;
     let items = node.children();
     for pair in items.windows(2) {
+        // The kinds first: the text trims the node's range (ADR 0014 §4).
+        if pair[0].kind() != K::TermQuery || pair[1].kind() != K::TermQuery {
+            continue;
+        }
         let op = pair[1].text(source);
-        if pair[0].kind() == K::TermQuery
-            && pair[1].kind() == K::TermQuery
-            && matches!(op, "<" | "<=" | ">" | ">=")
-        {
+        if matches!(op, "<" | "<=" | ">" | ">=") {
             out.push(Diagnostic::warning(
                 codes::LUCENE_KUERY_SYNTAX,
                 format!(
@@ -997,6 +1012,7 @@ fn capture(token: &rowan::SyntaxToken<syntax::Lucene>) -> Option<&'static str> {
 fn highlight(spec: &HighlightSpec, root: &syntax::SyntaxNode, source: &str) -> Vec<HighlightToken> {
     let spans: Vec<(ByteSpan, &str)> = root
         .descendants_with_tokens()
+        .inspect(|_| tree::count_visit())
         .filter_map(rowan::NodeOrToken::into_token)
         .filter_map(|t| {
             let r = t.text_range();

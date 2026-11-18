@@ -270,7 +270,7 @@ fn set(entries: &[Entry], entry: Entry) -> Vec<Entry> {
 
 fn text(value: &str) -> Arc<Node> {
     Arc::new(Node {
-        value: Value::Str(value.to_owned()),
+        value: Value::Str(value.into()),
         start: Mark::default(),
         end: Mark::default(),
         text: None,

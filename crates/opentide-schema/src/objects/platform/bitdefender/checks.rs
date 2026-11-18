@@ -180,7 +180,7 @@ fn scalar(node: &Node) -> bool {
 /// any other value.
 fn scalar_text(node: &Node) -> Option<String> {
     match &node.value {
-        Value::Str(text) => Some(text.clone()),
+        Value::Str(text) => Some(text.to_string()),
         Value::Int(integer) => Some(integer.to_string()),
         _ => None,
     }
@@ -707,9 +707,9 @@ fn first_paths(node: &Node, path: &mut Vec<String>, first: &mut HashMap<*const N
             for entry in entries {
                 let key = match &entry.key.value {
                     Value::Str(key) => key.clone(),
-                    _ => crate::configuration::repr::node(&entry.key),
+                    _ => crate::configuration::repr::node(&entry.key).into(),
                 };
-                path.push(key);
+                path.push(key.into());
                 first_paths(&entry.value, path, first);
                 path.pop();
             }
