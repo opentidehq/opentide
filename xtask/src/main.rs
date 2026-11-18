@@ -9,8 +9,8 @@ use clap::{Args, Parser, Subcommand};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+use xtask::coverage;
 use xtask::layers::{self, LayerTable, Metadata};
-use xtask::{coverage, mutants};
 
 /// The repository's Rust tooling.
 ///
@@ -37,12 +37,6 @@ enum Cmd {
     Coverage {
         #[command(subcommand)]
         command: CoverageCmd,
-    },
-    /// The crates the weekly mutation run mutates, and its report
-    /// (xtask/mutants.toml)
-    Mutants {
-        #[command(subcommand)]
-        command: MutantsCmd,
     },
     /// Run every operation of tests/conformance/manifest.json on every corpus
     /// through the Rust, Python and Node SDKs and require byte-identical
@@ -119,39 +113,6 @@ enum CoverageCmd {
     },
 }
 
-#[derive(Subcommand)]
-enum MutantsCmd {
-    /// Print the crates the weekly mutation run mutates, one per line
-    Crates {
-        #[arg(long, value_name = "FILE")]
-        policy: Option<PathBuf>,
-        #[arg(long, value_name = "FILE")]
-        metadata: Option<PathBuf>,
-    },
-    /// Merge cargo-mutants' outcomes.json of every shard and print the scores
-    /// against the baseline
-    Report {
-        /// One shard's outcomes.json; repeat for every shard
-        #[arg(long, value_name = "FILE", required = true)]
-        outcomes: Vec<PathBuf>,
-        #[arg(long, value_name = "FILE")]
-        policy: Option<PathBuf>,
-        #[arg(long, value_name = "FILE")]
-        baseline: Option<PathBuf>,
-        /// Write DIR/<crate>.md for each crate whose surviving mutants exceed
-        /// its threshold
-        #[arg(long, value_name = "DIR")]
-        issues: Option<PathBuf>,
-        #[arg(long, value_name = "URL")]
-        run_url: Option<String>,
-        /// Record this run as the baseline
-        #[arg(long, value_name = "FILE", requires = "commit")]
-        write_baseline: Option<PathBuf>,
-        #[arg(long, value_name = "SHA", requires = "write_baseline")]
-        commit: Option<String>,
-    },
-}
-
 fn main() -> ExitCode {
     // The benchmarks call this binary for their child processes; those modes are
     // not part of the command line.
@@ -166,7 +127,6 @@ fn main() -> ExitCode {
     match command {
         Cmd::CheckLayers(args) => verdict("check-layers", check_layers(&args)),
         Cmd::Coverage { command } => verdict("coverage", coverage_command(&command)),
-        Cmd::Mutants { command } => verdict("mutants", mutants_command(&command).map(|()| true)),
         Cmd::Conformance(args) => status("conformance", xtask::conformance::cli::run(&args)),
         Cmd::Corpus { command } => status("corpus", xtask::corpus::cli::run_command(&command)),
         Cmd::Lsp { command } => status("lsp", xtask::lsp::run(&command)),
@@ -283,100 +243,6 @@ fn coverage_command(command: &CoverageCmd) -> Result<bool> {
     let report = coverage::gate(&policy, &members, &files);
     print!("{}", report.markdown());
     Ok(report.passed())
-}
-
-/// `mutants crates` and `mutants report`. Surviving mutants are not a
-/// failure here: the weekly job files them as issues.
-fn mutants_command(command: &MutantsCmd) -> Result<()> {
-    let policy_arg = match command {
-        MutantsCmd::Crates { policy, .. } | MutantsCmd::Report { policy, .. } => policy,
-    };
-    let policy_file = match policy_arg {
-        Some(path) => path.clone(),
-        None => Metadata::parse(&cargo_metadata()?)
-            .context("parse the cargo metadata")?
-            .workspace_root
-            .context("the metadata names no workspace_root")?
-            .join("xtask")
-            .join("mutants.toml"),
-    };
-    let policy = mutants::Policy::parse(&read(&policy_file)?)
-        .with_context(|| format!("parse {}", policy_file.display()))?;
-
-    match command {
-        MutantsCmd::Crates { metadata, .. } => {
-            let metadata_text = match metadata {
-                Some(path) => read(path)?,
-                None => cargo_metadata()?,
-            };
-            let members = coverage::members(&metadata_text)
-                .context("parse the cargo metadata")?
-                .into_iter()
-                .map(|member| member.name)
-                .collect();
-            let active = policy.active(&members).map_err(anyhow::Error::msg)?;
-            for krate in active {
-                println!("{krate}");
-            }
-            Ok(())
-        }
-        MutantsCmd::Report {
-            outcomes,
-            baseline,
-            issues,
-            run_url,
-            write_baseline,
-            commit,
-            ..
-        } => report_mutants(
-            &policy,
-            outcomes,
-            baseline.as_deref(),
-            issues.as_deref(),
-            run_url.as_deref(),
-            write_baseline.as_deref().zip(commit.as_deref()),
-        ),
-    }
-}
-
-/// `mutants report`: the shards merged and scored against the baseline.
-fn report_mutants(
-    policy: &mutants::Policy,
-    outcomes: &[PathBuf],
-    baseline: Option<&Path>,
-    issues: Option<&Path>,
-    run_url: Option<&str>,
-    write_baseline: Option<(&Path, &str)>,
-) -> Result<()> {
-    let runs = outcomes
-        .iter()
-        .map(|path| {
-            mutants::parse_run(&read(path)?)
-                .with_context(|| format!("parse {} as outcomes.json", path.display()))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let report = mutants::merge(policy, &runs).map_err(anyhow::Error::msg)?;
-    let baseline = match baseline {
-        Some(path) => Some(
-            mutants::Baseline::parse(&read(path)?)
-                .with_context(|| format!("parse {}", path.display()))?,
-        ),
-        None => None,
-    };
-    print!("{}", report.markdown(policy, baseline.as_ref()));
-    if let Some(dir) = issues {
-        std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-        for (krate, body) in report.issues(policy, run_url.unwrap_or("this run")) {
-            let path = dir.join(format!("{krate}.md"));
-            std::fs::write(&path, body).with_context(|| format!("write {}", path.display()))?;
-        }
-    }
-    // clap makes `--write-baseline` and `--commit` require each other.
-    if let Some((path, commit)) = write_baseline {
-        let text = report.baseline(commit).to_toml()?;
-        std::fs::write(path, text).with_context(|| format!("write {}", path.display()))?;
-    }
-    Ok(())
 }
 
 fn read(path: &Path) -> Result<String> {

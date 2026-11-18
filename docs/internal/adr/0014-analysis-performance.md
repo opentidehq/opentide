@@ -136,9 +136,11 @@ Lucene's short queries that, and the per-node vectors around it, was most of the
 
 - **One preorder walk over every element.** Nodes and tokens, in document order, from one stack
   and a scratch vector reused for each node's children. The walk hands each named element to the
-  checks, with its ancestors, and each token to the highlight. Lucene's `tree::walk_once` is the
-  model: it calls the checks exactly as the named-only walk did, and meets the tokens exactly as
-  `descendants_with_tokens` did, which a test holds over the corpus and every prefix.
+  checks, with its ancestors, and each token to the highlight. The walk is
+  `opentide_parse::walk_once`, with `opentide_parse::Ancestors` for a language that keeps the
+  ancestors in its own type; Lucene's `tree::walk_once` shows the use: it calls the checks exactly
+  as the named-only walk did, and meets the tokens exactly as `descendants_with_tokens` did, which
+  a test holds over the short samples and every prefix of them. A new language's single walk uses it, not a copy.
 - **Only where the highlight reads the same text.** A dialect that checks a rewritten text
   (Carbon Black's joined lines) keeps its own highlight pass.
 - **Find one child without collecting all.** A search for the first child of a kind is a lazy
@@ -148,6 +150,27 @@ Lucene's short queries that, and the per-node vectors around it, was most of the
   reads either's text.
 - **Held by element visits.** A test counts the elements the walks visit in one analysis and
   holds it to the tree's element count: the two-walk path visits more.
+
+### 5b. A fast hasher for maps keyed by user input (addendum, KQL)
+
+SipHash, std's default, cost about a seventh of a KQL analysis: the column pass's maps, the
+keyword table and the catalog's name lookups each hash a name per use.
+
+- **foldhash's `fast::RandomState`** (`foldhash::HashMap`, `foldhash::HashSet`, the workspace's
+  `foldhash` dependency) is the engine's hasher for maps on a hot path. It is about as fast as Fx
+  (foldhash's own benchmarks; Fx leads on some short keys).
+- **What its seed is.** One seed per process, mixed from ASLR addresses, the clock and a heap
+  address, not the operating system's random source, and one per map. foldhash calls itself
+  minimally DoS-resistant: it defeats collisions prepared ahead of time, not an attacker who
+  can watch timings and adapt. On `wasm32-unknown-unknown` (the browser host) there is no clock
+  and the addresses are fixed, so the seed there is close to fixed.
+- **Never a fixed-seed hasher for keys a query names.** A map keyed by the query's own names
+  (columns, `let` names, functions) under a hasher whose collisions can be worked out once and
+  reused (FxHash, foldhash's `FixedState`) lets a crafted rule make the analysis quadratic.
+- **Known exceptions.** rowan's token cache (`NodeCache`, which every parser's
+  `GreenNodeBuilder` uses through opentide-parse) hashes token text with Fx; it is rowan's, not
+  ours, and is a follow-up. KQL's catalog name lookups (`lib.rs`) still use SipHash until #1609
+  lands; their keys are catalog names, not the query's.
 
 ### 6. How to measure
 
