@@ -44,7 +44,7 @@ fn shown(range: TextRange) -> ByteSpan {
 )]
 pub fn analyze(source: &str) -> AnalyzeResult {
     let catalog = Catalog::cached();
-    let spec = HighlightSpec::load().expect("spec");
+    let spec = HighlightSpec::shared().expect("spec");
     let lines = LineIndex::new(source);
     let (root, parsed) = parse(source);
     let mut diagnostics = Vec::new();
@@ -94,7 +94,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
                 .and_then(|i| merged.get(i))
                 .is_none_or(|&(_, to)| start > to)
     });
-    let tokens = highlight(&root, source, &spec, catalog).unwrap_or_default();
+    let tokens = highlight(&root, source, spec, catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,

@@ -280,7 +280,7 @@ fn get(url: &str, accept: Option<&str>, network: Network<'_>) -> Option<Vec<u8>>
     let label = TenantLabel::new("skills", DEFAULT_SOURCE);
     let client = HttpClient::new(&label, &settings, &environment, network.proxy).ok()?;
     let interrupted = network.interrupted;
-    crate::threads::run_apart(|| {
+    opentide_connectors::runtime::sync_call(|| {
         opentide_connectors::runtime::block_on(async {
             let cancel = CancellationToken::new();
             let work = async {

@@ -312,7 +312,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 fn analyze_lines(source: &str) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     let catalog = Catalog::cached();
     let Some((parsed, prepared)) = parse_prepared(source) else {
         return AnalyzeResult {
@@ -354,7 +354,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
     if let Some(root) = ast::SourceFile::cast(parsed.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
-    let tokens = highlight(&spec, source, &parsed.syntax);
+    let tokens = highlight(spec, source, &parsed.syntax);
     AnalyzeResult {
         diagnostics: out,
         tokens,

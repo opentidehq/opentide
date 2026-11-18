@@ -291,6 +291,16 @@ pub struct Catalog {
     column_index: HashMap<String, Vec<usize>>,
 }
 
+/// Lower-cased names to row indices, one per profile's bundled catalog
+/// ([`Catalog::by_name`]).
+struct NameIndexes([OnceLock<HashMap<String, usize>>; 3]);
+
+impl NameIndexes {
+    const fn new() -> Self {
+        Self([OnceLock::new(), OnceLock::new(), OnceLock::new()])
+    }
+}
+
 /// The catalog a query is checked against ([`Catalog::for_workspace`]).
 #[derive(Debug, Clone)]
 pub enum CatalogRef {
@@ -693,15 +703,48 @@ impl Catalog {
     }
 
     pub fn operator(&self, name: &str) -> Option<&OperatorRow> {
-        self.operators
-            .iter()
-            .find(|o| o.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.operators, |o| &o.name, name)
     }
 
     pub fn function(&self, name: &str) -> Option<&FunctionRow> {
-        self.functions
-            .iter()
-            .find(|f| f.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.functions, |f| &f.name, name)
+    }
+
+    /// The first of `rows` whose name is `name`, ASCII case ignored. A
+    /// profile's bundled catalog looks it up in an index built on first use
+    /// (`index`, one per profile); a scan of the hundreds of functions for
+    /// each name a query uses was a tenth of its analysis. Any other catalog
+    /// scans.
+    fn by_name<'a, T>(
+        &self,
+        index: &NameIndexes,
+        rows: &'a [T],
+        name_of: impl Fn(&T) -> &String,
+        name: &str,
+    ) -> Option<&'a T> {
+        if std::ptr::eq(self, Self::cached(self.profile)) {
+            let slot = match self.profile {
+                Profile::Core => 0,
+                Profile::Sentinel => 1,
+                Profile::Defender => 2,
+            };
+            let index = index.0[slot].get_or_init(|| {
+                let mut by_name = HashMap::with_capacity(rows.len());
+                for (i, row) in rows.iter().enumerate() {
+                    by_name
+                        .entry(name_of(row).to_ascii_lowercase())
+                        .or_insert(i);
+                }
+                by_name
+            });
+            return index
+                .get(&name.to_ascii_lowercase())
+                .and_then(|&i| rows.get(i));
+        }
+        rows.iter()
+            .find(|row| name_of(row).eq_ignore_ascii_case(name))
     }
 
     pub fn table(&self, name: &str) -> Option<&TableRow> {
@@ -715,15 +758,32 @@ impl Catalog {
     }
 
     pub fn plugin(&self, name: &str) -> Option<&PluginRow> {
-        self.plugins
-            .iter()
-            .find(|p| p.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.plugins, |p| &p.name, name)
     }
 
     /// The catalogued table `name` most likely means
     /// ([`opentide_core::suggest`]).
     pub fn suggest_table(&self, name: &str) -> Option<String> {
-        suggest::closest(name, self.tables.iter().map(|t| t.name.as_str())).map(str::to_string)
+        // The table names, lower-cased and folded once per bundled profile:
+        // preparing the catalog's hundreds of names for each unknown table
+        // was a third of a Sentinel query's analysis.
+        static PREPARED: [OnceLock<suggest::Candidates>; 3] =
+            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+        let names = || self.tables.iter().map(|t| t.name.as_str());
+        if std::ptr::eq(self, Self::cached(self.profile)) {
+            let slot = match self.profile {
+                Profile::Core => 0,
+                Profile::Sentinel => 1,
+                Profile::Defender => 2,
+            };
+            let prepared = PREPARED[slot].get_or_init(|| suggest::Candidates::new(names()));
+            return prepared
+                .closest(name)
+                .and_then(|i| self.tables.get(i))
+                .map(|t| t.name.clone());
+        }
+        suggest::closest(name, names()).map(str::to_string)
     }
 
     pub fn operator_names(&self) -> Vec<String> {
@@ -771,16 +831,31 @@ impl Catalog {
             .find(|c| c.name == name && c.hand_written())
     }
 
-    /// The names [`Catalog::resolve_column_among`] resolves, as a set: what a
-    /// caller that asks about every name of a query looks up, once each
-    /// (the hand-written columns are a scan of the whole catalog).
-    fn column_names_among(&self, mentioned: &[&TableRow]) -> HashSet<&str> {
-        mentioned
-            .iter()
-            .flat_map(|table| self.columns_for_table(&table.name))
-            .chain(self.columns.iter().filter(|c| c.hand_written()))
-            .map(|c| c.name.as_str())
-            .collect()
+    /// The names of the hand-written catalog's columns. Finding them reads
+    /// every column of the catalog, tens of thousands with the reference's:
+    /// for a profile's bundled catalog they are found once per process, not
+    /// once per query (a quarter of a short query's analysis).
+    fn hand_written_column_names(&self) -> std::borrow::Cow<'_, HashSet<&str>> {
+        static NAMES: [OnceLock<HashSet<&'static str>>; 3] =
+            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+        fn names(catalog: &Catalog) -> HashSet<&str> {
+            catalog
+                .columns
+                .iter()
+                .filter(|c| c.hand_written())
+                .map(|c| c.name.as_str())
+                .collect()
+        }
+        let bundled = Self::cached(self.profile);
+        if std::ptr::eq(self, bundled) {
+            let slot = match self.profile {
+                Profile::Core => 0,
+                Profile::Sentinel => 1,
+                Profile::Defender => 2,
+            };
+            return std::borrow::Cow::Borrowed(NAMES[slot].get_or_init(|| names(bundled)));
+        }
+        std::borrow::Cow::Owned(names(self))
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -1059,8 +1134,12 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
     // Once per query, not once per name: a long query has thousands of names,
     // and each scan reads the whole query (quadratic on the old engine).
     let mentioned = catalog.mentioned_tables(source);
-    let columns = catalog.column_names_among(&mentioned);
-    for (span, capture) in spans.iter_mut() {
+    // The names still `variable` after the checks below that may be columns:
+    // looked up after the loop, in one pass over the mentioned tables'
+    // columns (a set of all those columns per query was a third of a short
+    // query's analysis).
+    let mut maybe_columns: Vec<(usize, ByteSpan)> = Vec::new();
+    for (i, (span, capture)) in spans.iter_mut().enumerate() {
         let end = span.end.min(source.len());
         if span.start >= end {
             continue;
@@ -1086,8 +1165,31 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
             && *capture == "variable"
         {
             *capture = "operator".into();
-        } else if *capture == "variable" && columns.contains(text) {
-            *capture = "property".into();
+        } else if *capture == "variable" {
+            maybe_columns.push((i, *span));
+        }
+    }
+    if maybe_columns.is_empty() {
+        return;
+    }
+    let text = |span: ByteSpan| &source[span.start..span.end.min(source.len())];
+    let hand_written = catalog.hand_written_column_names();
+    let wanted: HashSet<&str> = maybe_columns.iter().map(|&(_, span)| text(span)).collect();
+    let mut columns: HashSet<&str> = wanted
+        .iter()
+        .copied()
+        .filter(|name| hand_written.contains(name))
+        .collect();
+    for table in &mentioned {
+        for column in catalog.columns_for_table(&table.name) {
+            if let Some(name) = wanted.get(column.name.as_str()) {
+                columns.insert(name);
+            }
+        }
+    }
+    for (i, span) in maybe_columns {
+        if columns.contains(text(span)) {
+            spans[i].1 = "property".into();
         }
     }
 }

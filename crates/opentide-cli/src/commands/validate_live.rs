@@ -1391,8 +1391,9 @@ fn read_timeout_text(address: &str, seconds: u64) -> String {
     format!("no answer from {address} within {seconds}s")
 }
 
-/// Runs the checks on every batch, on a thread of its own with this
-/// thread's log subscriber (a host may already run a runtime here).
+/// Runs the checks on every batch on the process's runtime: here, or on a
+/// thread of its own with this thread's log subscriber when a host runs a
+/// runtime here (`sync_call`).
 fn check_batches(
     platform: &str,
     batches: &[Batch],
@@ -1401,7 +1402,7 @@ fn check_batches(
     compile: &opentide_compile::Context<'_>,
 ) -> Result<CheckReport, Early> {
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    let ran = crate::threads::run_apart(|| {
+    let ran = opentide_connectors::runtime::sync_call(|| {
         tracing::dispatcher::with_default(&dispatch, || {
             opentide_connectors::runtime::block_on(async {
                 if platform == "elastic" {

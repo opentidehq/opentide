@@ -78,7 +78,7 @@ fn capture(token: &SyntaxToken, parent: Option<K>) -> Option<&'static str> {
 
 /// Semantic tokens of the tree.
 pub(crate) fn highlight(root: &SyntaxNode, source: &str) -> Vec<HighlightToken> {
-    let Ok(spec) = HighlightSpec::load() else {
+    let Ok(spec) = HighlightSpec::shared() else {
         return Vec::new();
     };
     let mut spans: Vec<(ByteSpan, &'static str)> = Vec::new();
@@ -98,5 +98,5 @@ pub(crate) fn highlight(root: &SyntaxNode, source: &str) -> Vec<HighlightToken> 
             ));
         }
     }
-    tokens_from_spans(&spec, source, &spans).unwrap_or_default()
+    tokens_from_spans(spec, source, &spans).unwrap_or_default()
 }

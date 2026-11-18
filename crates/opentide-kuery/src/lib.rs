@@ -65,7 +65,7 @@ pub struct AnalyzeResult {
 /// sign that it was written for `language: lucene`. The Lucene engine depends
 /// on this one ([`parses`]), so it cannot be called from here.
 pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     // Kibana reads `or`, `and`, and `not` as keywords only with whitespace
     // after them; at the end of the query or before `)` they are value text.
     let parsed = parser::parse_memo(source);
@@ -144,7 +144,7 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     if let Some(d) = looks_like_lucene(lucene_only, source, &lines, &lucene_signals) {
         diagnostics.push(d);
     }
-    let tokens = highlight(&spec, root, source);
+    let tokens = highlight(spec, root, source);
     AnalyzeResult {
         diagnostics,
         tokens,

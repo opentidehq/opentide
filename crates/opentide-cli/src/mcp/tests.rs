@@ -443,3 +443,161 @@ fn a_blocking_client_gets_each_answer_before_its_next_read() {
         "{written}"
     );
 }
+
+/// Network tool calls, each on a `spawn_blocking` thread of the process's
+/// runtime as the server dispatches them, block on that runtime: they reach
+/// the tenant (refused here: nothing listens) and no call starts a runtime
+/// of its own (#1558).
+#[cfg(not(target_os = "wasi"))]
+#[test]
+fn network_tool_calls_run_on_the_one_runtime() {
+    let closed = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        format!("http://{}", listener.local_addr().unwrap())
+    };
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+             [[tenants]]\nname = \"closed\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+             url = \"{closed}\"\nelasticsearch_url = \"{closed}\"\napi_key = \"key\"\n"
+        ),
+    )
+    .unwrap();
+    let server = std::sync::Arc::new(server(&ws));
+    let answers = opentide_connectors::runtime::block_on(async {
+        let mut answers = Vec::new();
+        for _ in 0..3 {
+            let server = std::sync::Arc::clone(&server);
+            let answer = tokio::task::spawn_blocking(move || {
+                // A tool's thread is one of the process's runtime's.
+                assert_eq!(
+                    tokio::runtime::Handle::current().id(),
+                    opentide_connectors::runtime::shared()
+                        .unwrap()
+                        .handle()
+                        .id()
+                );
+                let args = json!({"query": "FROM x", "platform": "elastic", "live": true});
+                match server.call("run_query", &arguments(args)) {
+                    Answer::Result(result) => result.to_string(),
+                    Answer::Error(error) => format!("{error:?}"),
+                }
+            })
+            .await
+            .unwrap();
+            answers.push(answer);
+        }
+        answers
+    })
+    .unwrap();
+    for answer in &answers {
+        assert!(answer.contains("closed"), "the tenant was tried: {answer}");
+        for refused in [
+            opentide_connectors::runtime::INSIDE_THE_RUNTIME,
+            "stopped unexpectedly",
+        ] {
+            assert!(!answer.contains(refused), "{answer}");
+        }
+    }
+    assert_eq!(opentide_connectors::runtime::started(), 1);
+}
+
+/// A call still running when the client leaves is interrupted, and the
+/// server returns once it has stopped: the process's runtime is never
+/// dropped, so nothing else would stop it before the process exits (#1558).
+#[cfg(not(target_os = "wasi"))]
+#[test]
+fn the_session_ending_stops_the_running_call_and_waits_for_it() {
+    use std::io::Read;
+    use tokio::io::AsyncWriteExt;
+
+    // A stand-in Elasticsearch that never answers; it reports the request,
+    // then the connection closing.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let (seen, events) = std::sync::mpsc::channel::<&str>();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let seen = seen.clone();
+            std::thread::spawn(move || {
+                let mut chunk = [0_u8; 1024];
+                if stream.read(&mut chunk).unwrap_or(0) > 0 {
+                    let _ = seen.send("request");
+                }
+                while stream.read(&mut chunk).unwrap_or(0) > 0 {}
+                let _ = seen.send("closed");
+            });
+        }
+    });
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+             [[tenants]]\nname = \"stalls\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+             url = \"{address}\"\nelasticsearch_url = \"{address}\"\napi_key = \"key\"\n"
+        ),
+    )
+    .unwrap();
+    let server = server(&ws);
+    let turn = server.turn();
+    let (mut client, input) = tokio::io::duplex(1 << 16);
+    let patience = std::time::Duration::from_secs(60);
+    let finished = opentide_connectors::runtime::block_on(async move {
+        let serving = tokio::spawn(server.run(input, tokio::io::sink()));
+        for message in [
+            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0"},
+            }}),
+            json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+            json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
+                "name": "run_query",
+                "arguments": {"query": "FROM x", "platform": "elastic", "live": true},
+            }}),
+        ] {
+            client
+                .write_all(format!("{message}\n").as_bytes())
+                .await
+                .unwrap();
+        }
+        let reached = tokio::task::spawn_blocking(move || {
+            let reached = events.recv_timeout(patience);
+            (reached, events)
+        })
+        .await
+        .unwrap();
+        assert_eq!(reached.0, Ok("request"), "the call reached the tenant");
+        // The client leaves while the call runs.
+        drop(client);
+        tokio::time::timeout(patience, serving)
+            .await
+            .expect("the server returned")
+            .unwrap()
+            .unwrap();
+        // The server returned once the call had stopped: the call's work has
+        // returned and given its turn back (else the process would exit with
+        // it mid-work).
+        assert!(
+            turn.try_lock().is_ok(),
+            "the server returned while the call was still running"
+        );
+        reached.1
+    })
+    .unwrap();
+    // The call was interrupted: its request to the tenant is dropped, which
+    // the stand-in sees once the closed socket reaches it. Without the
+    // interrupt the request stays open past the bound (the query's own
+    // timeout is 120 s).
+    assert_eq!(finished.recv_timeout(patience), Ok("closed"));
+}

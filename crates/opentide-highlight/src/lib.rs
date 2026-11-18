@@ -68,10 +68,19 @@ pub struct HighlightSpec {
 }
 
 impl HighlightSpec {
+    /// A copy of the compiled-in spec ([`HighlightSpec::shared`]).
     pub fn load() -> Result<Self, HighlightError> {
+        Self::shared().cloned()
+    }
+
+    /// The compiled-in spec (`highlights/spec.toml`), parsed once per
+    /// process and borrowed: a copy per analysis, its maps of every capture
+    /// cloned, was a few percent of a short query's analysis in every
+    /// language.
+    pub fn shared() -> Result<&'static Self, HighlightError> {
         static SPEC: OnceLock<HighlightSpec> = OnceLock::new();
         if let Some(spec) = SPEC.get() {
-            return Ok(spec.clone());
+            return Ok(spec);
         }
         let file: SpecFile =
             toml::from_str(SPEC_TOML).map_err(|e| HighlightError::Spec(e.to_string()))?;
@@ -91,7 +100,7 @@ impl HighlightSpec {
             legend: file.meta.legend,
             captures: file.captures,
         };
-        Ok(SPEC.get_or_init(|| spec.clone()).clone())
+        Ok(SPEC.get_or_init(|| spec))
     }
 
     #[expect(

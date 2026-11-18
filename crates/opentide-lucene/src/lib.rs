@@ -100,7 +100,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
+    let spec = HighlightSpec::shared().expect("highlight spec");
     // Carbon Black deploy collapses newlines to spaces; same byte offsets.
     let joined;
     let text = if dialect == Dialect::CarbonBlack && source.contains(['\n', '\r']) {
@@ -185,9 +185,9 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         }
     }
     let tokens = if std::ptr::eq(text, source) {
-        highlight(&spec, &tree.root, source)
+        highlight(spec, &tree.root, source)
     } else {
-        highlight(&spec, &Tree::parse(source).root, source)
+        highlight(spec, &Tree::parse(source).root, source)
     };
     AnalyzeResult {
         diagnostics,
