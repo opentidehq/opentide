@@ -78,6 +78,9 @@ pub(crate) struct Checker<'s> {
     meta_required: bool,
     pub findings: Vec<Finding>,
     pub(super) stages: BTreeSet<String>,
+    /// The highlight's spans, gathered by the walk over every element when
+    /// the caller wants them (ADR 0014 §5a).
+    pub(super) spans: Option<Vec<(opentide_core::ByteSpan, &'static str)>>,
 }
 
 impl<'s> Checker<'s> {
@@ -88,6 +91,7 @@ impl<'s> Checker<'s> {
             meta_required,
             findings: Vec::new(),
             stages: BTreeSet::new(),
+            spans: None,
         }
     }
 
