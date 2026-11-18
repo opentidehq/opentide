@@ -80,7 +80,6 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`opentide_parse::walk_once` and `opentide_parse::Ancestors`** ([#1571](https://github.com/opentidehq/opentide/issues/1571)): one preorder walk over every node and token of a tree, each with its depth, and a stack of the ancestors in a caller's own type: the single walk of ADR 0014 §5a, for every language's checks and highlight to share. `opentide-lucene` walks with it.
 - **`opentide_yara::analyze_document`: the analysis and the outline of a `.yar` file from one parse** ([#1571](https://github.com/opentidehq/opentide/issues/1571)). It returns `analyze`'s result and `editor::symbols`, which each parsed the file; `opentide_analysis::analyze` uses it.
 - **`opentide_core::suggest::bag_distance`: a lower bound of the edit distance, cheap to measure.** The characters one string has that the other lacks, counting repeats; `suggest::Candidates` uses it to skip candidates before measuring their distance.
 - **`opentide_highlight::HighlightSpec::shared`: the compiled-in spec, borrowed.** `load` still returns a copy; the language crates now borrow it for each analysis.
