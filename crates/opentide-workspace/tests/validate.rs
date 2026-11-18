@@ -1618,9 +1618,10 @@ mod validate {
     #[test]
     fn the_exit_code_and_the_checks_document_follow_the_run() {
         let fs = workspace();
-        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/a.yaml", SPLUNK_RULE);
         let clean = run(&fs, &Options::default());
-        assert_eq!(clean.exit_code(), i32::from(clean.failed));
+        assert!(!clean.failed, "{:#?}", all(&clean));
+        assert_eq!(clean.exit_code(), 0);
         fs.write("/ws/objects/rules/b.yaml", rule(U1, "B"));
         let failed = run(&fs, &Options::default());
         assert!(failed.failed);
