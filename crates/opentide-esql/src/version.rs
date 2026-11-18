@@ -31,16 +31,23 @@ const NEWEST: usize = RELEASES.len() - 1;
 const RELEASE_NAMES: [&str; RELEASES.len()] =
     ["8.19", "9.0", "9.1", "9.2", "9.3", "9.4", "9.5", "9.6"];
 
+#[cfg(test)]
 thread_local! {
-    /// The catalog `versions` lists read on this thread: [`version_lists_read`].
-    static VERSION_LISTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The catalog `versions` and `stack` fields read on this thread: [`catalog_reads`].
+    static CATALOG_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How many catalog `versions` lists this thread has read into an
-/// [`Availability`]: once per catalog row, not once per lookup (ADR 0014 §7).
+/// Counts one read of a catalog row's `versions` or `stack`.
 #[cfg(test)]
-pub(crate) fn version_lists_read() -> usize {
-    VERSION_LISTS_READ.get()
+pub(crate) fn count_read() {
+    CATALOG_READS.set(CATALOG_READS.get() + 1);
+}
+
+/// How many catalog `versions` lists and `stack` lifecycles this thread has
+/// read: once per bundled row, not once per lookup (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn catalog_reads() -> usize {
+    CATALOG_READS.get()
 }
 
 /// The stack a query must run on.
@@ -158,7 +165,8 @@ impl Availability {
 
     /// The lines named in a catalog `versions` list. Unknown names are ignored.
     pub fn from_versions<S: AsRef<str>>(names: &[S]) -> Self {
-        VERSION_LISTS_READ.set(VERSION_LISTS_READ.get() + 1);
+        #[cfg(test)]
+        count_read();
         let mut bits = 0u16;
         for name in names {
             let name = name.as_ref();
