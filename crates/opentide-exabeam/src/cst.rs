@@ -115,24 +115,61 @@ const SCALAR: [T; 4] = [T::Str, T::Num, T::Ident, T::Bare];
 
 /// The tokens valid after a term: another term, `AND`, `OR`, and what ends
 /// the filter (`)` in a group; a clause or the statement's end elsewhere).
-fn after_term(top: bool, more: &[T]) -> Vec<T> {
-    let mut v = vec![AND, OR];
-    v.extend(UNARY);
-    if top {
-        v.extend(CLAUSES);
-        v.extend(STATEMENT_END);
+fn after_term(top: bool, more: &[T]) -> Valid {
+    let v = Valid::default().with(&[AND, OR]).with(&UNARY);
+    let v = if top {
+        v.with(&CLAUSES).with(&STATEMENT_END)
     } else {
-        v.push(RPAREN);
-    }
-    v.extend_from_slice(more);
-    v
+        v.with(&[RPAREN])
+    };
+    v.with(more)
 }
 
-fn after_clause(more: &[T]) -> Vec<T> {
-    let mut v = more.to_vec();
-    v.extend(CLAUSES);
-    v.extend(STATEMENT_END);
-    v
+fn after_clause(more: &[T]) -> Valid {
+    Valid::default()
+        .with(more)
+        .with(&CLAUSES)
+        .with(&STATEMENT_END)
+}
+
+/// The tokens a parser state expects, on the stack: the parser builds one
+/// for each token it reads, where a `Vec` was an allocation each time
+/// (ADR 0014). Its capacity holds the largest set the grammar builds (25).
+#[derive(Clone, Copy)]
+struct Valid {
+    items: [T; 32],
+    len: usize,
+}
+
+impl Default for Valid {
+    fn default() -> Self {
+        Self {
+            items: [NOT; 32],
+            len: 0,
+        }
+    }
+}
+
+impl Valid {
+    fn with(mut self, more: &[T]) -> Self {
+        for &t in more {
+            let slot = self.items.get_mut(self.len);
+            debug_assert!(slot.is_some(), "a token set past its capacity");
+            if let Some(slot) = slot {
+                *slot = t;
+                self.len += 1;
+            }
+        }
+        self
+    }
+}
+
+impl std::ops::Deref for Valid {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        self.items.get(..self.len).unwrap_or_default()
+    }
 }
 
 /// The length of the number `text` starts with: `[+-]?[0-9]+(\.[0-9]+)?`.
@@ -368,13 +405,9 @@ fn source_file(p: &mut Parser<'_>) {
     m.complete(p, K::SourceFile.raw());
 }
 
-fn statement_start(top: bool) -> Vec<T> {
-    let mut v = UNARY.to_vec();
-    v.extend(CLAUSES);
-    if top {
-        v.push(FOREACH);
-    }
-    v
+fn statement_start(top: bool) -> Valid {
+    let v = Valid::default().with(&UNARY).with(&CLAUSES);
+    if top { v.with(&[FOREACH]) } else { v }
 }
 
 fn statement_or_foreach(p: &mut Parser<'_>) {
@@ -390,8 +423,7 @@ fn foreach(p: &mut Parser<'_>) {
     eat(p, &[FOREACH], FOREACH);
     name(p, K::FieldName, "expected a field");
     if expect(p, &[LBRACKET], "missing `[`").is_some() {
-        let mut inner = statement_start(false);
-        inner.push(RBRACKET);
+        let inner = statement_start(false).with(&[RBRACKET]);
         if next(p, &inner).is_some_and(|(t, _)| t != RBRACKET) {
             statement(p);
         }
@@ -434,8 +466,7 @@ fn clause(p: &mut Parser<'_>, t: T) {
         }
         T::Kw("FROM") => {
             name(p, K::TableName, "expected a table");
-            let mut v = UNARY.to_vec();
-            v.extend(after_clause(&[]));
+            let v = Valid::default().with(&UNARY).with(&after_clause(&[]));
             if next(p, &v).is_some_and(|(t, _)| UNARY.contains(&t)) {
                 filter(p, true);
             }
@@ -605,8 +636,7 @@ fn primary(p: &mut Parser<'_>, top: bool) {
             let m = p.start();
             let field = p.start();
             take(p, T::Ident, end);
-            let mut v = FIELD_OPERATORS.to_vec();
-            v.push(IN);
+            let v = Valid::default().with(&FIELD_OPERATORS).with(&[IN]);
             match next(p, &after_term(top, &v)) {
                 Some((op, end)) if FIELD_OPERATORS.contains(&op) => {
                     field.complete(p, K::FieldName.raw());
@@ -656,9 +686,9 @@ fn field_value(p: &mut Parser<'_>, op: T, top: bool) {
         comparison(p);
         return;
     }
-    let mut v = VALUE.to_vec();
+    let mut v = Valid::default().with(&VALUE);
     if matches!(op, T::Lit(":" | "=")) {
-        v.extend(COMPARISONS);
+        v = v.with(&COMPARISONS);
     }
     match next(p, &v) {
         Some((cmp, end)) if COMPARISONS.contains(&cmp) => {

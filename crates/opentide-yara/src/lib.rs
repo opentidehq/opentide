@@ -166,6 +166,31 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many ASTs this thread built: an analysis builds one (ADR 0014,
+    /// rule 7).
+    static ASTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// `source`'s AST, by `yara-x-parser`.
+pub(crate) fn ast(source: &str) -> AST<'_> {
+    #[cfg(test)]
+    ASTS.set(ASTS.get() + 1);
+    AST::from(Parser::new(source.as_bytes()))
+}
+
+/// [`analyze`] and the document's outline ([`editor::symbols`]) from one
+/// parse: what an editor asks of a `.yar` file at each change.
+pub fn analyze_document(source: &str) -> (AnalyzeResult, Vec<editor::Symbol>) {
+    let ast = ast(source);
+    let result = AnalyzeResult {
+        diagnostics: diagnostics_of(source, &Context::default(), &ast),
+        tokens: highlight(source),
+    };
+    (result, editor::symbols_of(source, &ast))
+}
+
 /// Analyze a YARA signature on its own (a raw `.yar` file).
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
@@ -181,8 +206,12 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
 
 /// Every diagnostic of a signature, in source order.
 pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
+    diagnostics_of(source, ctx, &ast(source))
+}
+
+/// [`diagnostics`] on `source`'s AST.
+fn diagnostics_of(source: &str, ctx: &Context, ast: &AST<'_>) -> Vec<Diagnostic> {
     let mut findings = profile_findings(source, ctx);
-    let ast = AST::from(Parser::new(source.as_bytes()));
     let errors: Vec<(usize, usize)> = ast
         .errors()
         .iter()
@@ -231,7 +260,7 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
     };
     // The checker reads text (alphabets, jump bounds) from the source itself.
     let mut checker = check::Checker::new(source, ctx);
-    checker.signature(&ast, errors.is_empty(), &broken);
+    checker.signature(ast, errors.is_empty(), &broken);
     findings.extend(checker.findings);
     findings.sort_by_key(|f| (f.start, f.end));
     findings.dedup();
@@ -501,5 +530,29 @@ rule Loader_Stage1 : loader {
     #[test]
     fn format_refuses_a_broken_signature() {
         assert_eq!(format("rule a { condition: }"), None);
+    }
+
+    /// An editor's analysis builds one AST for the diagnostics and the
+    /// outline, which built one each (ADR 0014, rule 7); both are what the
+    /// two calls give apart.
+    #[test]
+    fn a_document_is_parsed_once_for_its_diagnostics_and_outline() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/corpus/yara");
+        let mut files: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .collect();
+        files.sort();
+        assert!(files.len() > 50);
+        for path in files {
+            let source = std::fs::read_to_string(&path).unwrap();
+            let before = ASTS.get();
+            let (result, symbols) = analyze_document(&source);
+            assert_eq!(ASTS.get() - before, 1, "{}", path.display());
+            assert_eq!(result.diagnostics, analyze(&source).diagnostics);
+            assert_eq!(result.tokens, analyze(&source).tokens);
+            assert_eq!(symbols, editor::symbols(&source), "{}", path.display());
+        }
     }
 }

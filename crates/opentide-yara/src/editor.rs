@@ -7,7 +7,6 @@
 use crate::catalog::{Catalog, Kind, Member, leaf_name};
 use opentide_core::{CompletionItem, ParameterInformation, SignatureHelp, SignatureInformation};
 use std::collections::BTreeSet;
-use yara_x_parser::Parser;
 use yara_x_parser::ast::{
     AST, Expr, Iterable, MatchAnchor, OfItems, PatternSet, Rule, RuleFlags, WithSpan,
 };
@@ -62,7 +61,10 @@ fn span_of(s: &yara_x_parser::Span) -> Span {
 }
 
 fn rules(source: &str) -> Vec<RuleInfo> {
-    let ast = AST::from(Parser::new(source.as_bytes()));
+    rules_of(&crate::ast(source))
+}
+
+fn rules_of(ast: &AST<'_>) -> Vec<RuleInfo> {
     ast.rules().map(|r| rule_info(r)).collect()
 }
 
@@ -197,8 +199,13 @@ fn walk(e: &Expr, info: &mut RuleInfo) {
 
 /// Rules and their strings.
 pub fn symbols(source: &str) -> Vec<Symbol> {
+    symbols_of(source, &crate::ast(source))
+}
+
+/// [`symbols`] on `source`'s AST.
+pub(crate) fn symbols_of(source: &str, ast: &AST<'_>) -> Vec<Symbol> {
     let mut out = Vec::new();
-    for rule in rules(source) {
+    for rule in rules_of(ast) {
         out.push(Symbol {
             name: rule.name.clone(),
             kind: SymbolKind::Rule,
