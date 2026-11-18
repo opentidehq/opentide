@@ -113,76 +113,76 @@ const COMPARISONS: [T; 4] = [T::Lit("<"), T::Lit(">"), T::Lit("<="), T::Lit(">="
 const VALUE: [T; 7] = [T::Str, T::Num, T::Ident, T::Bare, LPAREN, LBRACKET, LBRACE];
 const SCALAR: [T; 4] = [T::Str, T::Num, T::Ident, T::Bare];
 
+/// `parts` end to end, at compile time: the token sets the parser states
+/// expect are constants, so reading a token builds none (a `Vec` each was
+/// an allocation per token read, ADR 0014) and the recursive parse's frames
+/// hold a slice, not a set (ADR 0012's depth floor).
+const fn cat<const N: usize>(parts: &[&[T]]) -> [T; N] {
+    let mut out = [NOT; N];
+    let (mut at, mut i) = (0, 0);
+    while i < parts.len() {
+        let part = parts[i];
+        let mut j = 0;
+        while j < part.len() {
+            out[at] = part[j];
+            at += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    assert!(at == N, "a token set's length is the sum of its parts");
+    out
+}
+
+/// What may follow a term besides another term, `AND` and `OR`.
+#[derive(Clone, Copy)]
+enum AfterTerm {
+    /// Nothing else.
+    Plain,
+    /// A field term's operators and `IN`, after its field name.
+    FieldOperator,
+    /// `.`, after a table name.
+    Dot,
+}
+
+const AFTER_TERM_TOP: [T; 16] = cat(&[&[AND, OR], &UNARY, &CLAUSES, &STATEMENT_END]);
+const AFTER_TERM_GROUP: [T; 8] = cat(&[&[AND, OR], &UNARY, &[RPAREN]]);
+const AFTER_TERM_TOP_OPERATOR: [T; 25] = cat(&[&AFTER_TERM_TOP, &FIELD_OPERATORS, &[IN]]);
+const AFTER_TERM_GROUP_OPERATOR: [T; 17] = cat(&[&AFTER_TERM_GROUP, &FIELD_OPERATORS, &[IN]]);
+const AFTER_TERM_TOP_DOT: [T; 17] = cat(&[&AFTER_TERM_TOP, &[DOT]]);
+const AFTER_TERM_GROUP_DOT: [T; 9] = cat(&[&AFTER_TERM_GROUP, &[DOT]]);
+
 /// The tokens valid after a term: another term, `AND`, `OR`, and what ends
 /// the filter (`)` in a group; a clause or the statement's end elsewhere).
-fn after_term(top: bool, more: &[T]) -> Valid {
-    let v = Valid::default().with(&[AND, OR]).with(&UNARY);
-    let v = if top {
-        v.with(&CLAUSES).with(&STATEMENT_END)
-    } else {
-        v.with(&[RPAREN])
-    };
-    v.with(more)
-}
-
-fn after_clause(more: &[T]) -> Valid {
-    Valid::default()
-        .with(more)
-        .with(&CLAUSES)
-        .with(&STATEMENT_END)
-}
-
-/// The tokens a parser state expects, on the stack: the parser builds one
-/// for each token it reads, where a `Vec` was an allocation each time
-/// (ADR 0014). Its capacity holds the largest set the grammar builds (25,
-/// below), and every set is built from this module's constants.
-#[derive(Clone, Copy)]
-struct Valid {
-    items: [T; 32],
-    len: usize,
-}
-
-// The largest set: a field term's operators and `IN` after a top-level term.
-const _: () = assert!(
-    [AND, OR].len()
-        + UNARY.len()
-        + CLAUSES.len()
-        + STATEMENT_END.len()
-        + FIELD_OPERATORS.len()
-        + [IN].len()
-        <= 32
-);
-
-impl Default for Valid {
-    fn default() -> Self {
-        Self {
-            items: [NOT; 32],
-            len: 0,
-        }
+fn after_term(top: bool, more: AfterTerm) -> &'static [T] {
+    match (top, more) {
+        (true, AfterTerm::Plain) => &AFTER_TERM_TOP,
+        (false, AfterTerm::Plain) => &AFTER_TERM_GROUP,
+        (true, AfterTerm::FieldOperator) => &AFTER_TERM_TOP_OPERATOR,
+        (false, AfterTerm::FieldOperator) => &AFTER_TERM_GROUP_OPERATOR,
+        (true, AfterTerm::Dot) => &AFTER_TERM_TOP_DOT,
+        (false, AfterTerm::Dot) => &AFTER_TERM_GROUP_DOT,
     }
 }
 
-impl Valid {
-    fn with(mut self, more: &[T]) -> Self {
-        for &t in more {
-            let slot = self.items.get_mut(self.len);
-            debug_assert!(slot.is_some(), "a token set past its capacity");
-            if let Some(slot) = slot {
-                *slot = t;
-                self.len += 1;
-            }
-        }
-        self
-    }
-}
+/// The tokens valid after a clause: its own (the first part), then another
+/// clause or the statement's end.
+const AFTER_CLAUSE: [T; 9] = cat(&[&CLAUSES, &STATEMENT_END]);
+const AFTER_CLAUSE_COMMA: [T; 10] = cat(&[&[COMMA], &AFTER_CLAUSE]);
+const AFTER_CLAUSE_COMMA_AS: [T; 11] = cat(&[&[COMMA, AS], &AFTER_CLAUSE]);
+const AFTER_CLAUSE_ORDER: [T; 12] = cat(&[&[ASC, DESC, COMMA], &AFTER_CLAUSE]);
+const AFTER_CLAUSE_CALL: [T; 12] = cat(&[&[LPAREN, COMMA, AS], &AFTER_CLAUSE]);
+/// After `FROM` and its table: a filter, or what follows a clause.
+const AFTER_FROM: [T; 14] = cat(&[&UNARY, &AFTER_CLAUSE]);
 
-impl std::ops::Deref for Valid {
-    type Target = [T];
+/// What starts a statement (`FOREACH` too at the top level), and in a
+/// `FOREACH` body, the `]` that ends it.
+const STATEMENT_START: [T; 12] = cat(&[&UNARY, &CLAUSES]);
+const STATEMENT_START_TOP: [T; 13] = cat(&[&STATEMENT_START, &[FOREACH]]);
+const FOREACH_BODY: [T; 13] = cat(&[&STATEMENT_START, &[RBRACKET]]);
 
-    fn deref(&self) -> &[T] {
-        self.items.get(..self.len).unwrap_or_default()
-    }
-}
+/// A field value, and after `:` or `=`, a comparison too.
+const VALUE_OR_COMPARISON: [T; 11] = cat(&[&VALUE, &COMPARISONS]);
 
 /// The length of the number `text` starts with: `[+-]?[0-9]+(\.[0-9]+)?`.
 fn number_len(text: &[u8]) -> usize {
@@ -410,20 +410,15 @@ fn source_file(p: &mut Parser<'_>) {
         }
         // What cannot continue a statement: skip a piece, and read on.
         p.err_and_bump("unexpected");
-        if next(p, &statement_start(true)).is_some() {
+        if next(p, &STATEMENT_START_TOP).is_some() {
             statement_or_foreach(p);
         }
     }
     m.complete(p, K::SourceFile.raw());
 }
 
-fn statement_start(top: bool) -> Valid {
-    let v = Valid::default().with(&UNARY).with(&CLAUSES);
-    if top { v.with(&[FOREACH]) } else { v }
-}
-
 fn statement_or_foreach(p: &mut Parser<'_>) {
-    match next(p, &statement_start(true)) {
+    match next(p, &STATEMENT_START_TOP) {
         Some((FOREACH, _)) => foreach(p),
         Some(_) => statement(p),
         None => p.error("expected a statement"),
@@ -435,8 +430,7 @@ fn foreach(p: &mut Parser<'_>) {
     eat(p, &[FOREACH], FOREACH);
     name(p, K::FieldName, "expected a field");
     if expect(p, &[LBRACKET], "missing `[`").is_some() {
-        let inner = statement_start(false).with(&[RBRACKET]);
-        if next(p, &inner).is_some_and(|(t, _)| t != RBRACKET) {
+        if next(p, &FOREACH_BODY).is_some_and(|(t, _)| t != RBRACKET) {
             statement(p);
         }
         expect(p, &[RBRACKET], "missing `]`");
@@ -450,10 +444,10 @@ fn foreach(p: &mut Parser<'_>) {
 /// A filter then clauses, or clauses alone.
 fn statement(p: &mut Parser<'_>) {
     let m = p.start();
-    if next(p, &statement_start(false)).is_some_and(|(t, _)| UNARY.contains(&t)) {
+    if next(p, &STATEMENT_START).is_some_and(|(t, _)| UNARY.contains(&t)) {
         filter(p, true);
     }
-    while let Some((t, _)) = next(p, &after_clause(&[])) {
+    while let Some((t, _)) = next(p, &AFTER_CLAUSE) {
         if !CLAUSES.contains(&t) {
             break;
         }
@@ -470,7 +464,7 @@ fn clause(p: &mut Parser<'_>, t: T) {
             eat(p, &[DISTINCT, STAR, T::Ident], DISTINCT);
             loop {
                 column(p);
-                if !eat(p, &after_clause(&[COMMA, AS]), COMMA) {
+                if !eat(p, &AFTER_CLAUSE_COMMA_AS, COMMA) {
                     break;
                 }
             }
@@ -478,8 +472,7 @@ fn clause(p: &mut Parser<'_>, t: T) {
         }
         T::Kw("FROM") => {
             name(p, K::TableName, "expected a table");
-            let v = Valid::default().with(&UNARY).with(&after_clause(&[]));
-            if next(p, &v).is_some_and(|(t, _)| UNARY.contains(&t)) {
+            if next(p, &AFTER_FROM).is_some_and(|(t, _)| UNARY.contains(&t)) {
                 filter(p, true);
             }
             K::FromClause
@@ -495,7 +488,7 @@ fn clause(p: &mut Parser<'_>, t: T) {
         T::Kw("GROUP-BY") => {
             loop {
                 name(p, K::FieldName, "expected a field");
-                if !eat(p, &after_clause(&[COMMA]), COMMA) {
+                if !eat(p, &AFTER_CLAUSE_COMMA, COMMA) {
                     break;
                 }
             }
@@ -504,10 +497,10 @@ fn clause(p: &mut Parser<'_>, t: T) {
         T::Kw("ORDER-BY") => {
             loop {
                 name(p, K::FieldName, "expected a field");
-                if let Some((t @ (ASC | DESC), end)) = next(p, &after_clause(&[ASC, DESC, COMMA])) {
+                if let Some((t @ (ASC | DESC), end)) = next(p, &AFTER_CLAUSE_ORDER) {
                     take(p, t, end);
                 }
-                if !eat(p, &after_clause(&[COMMA]), COMMA) {
+                if !eat(p, &AFTER_CLAUSE_COMMA, COMMA) {
                     break;
                 }
             }
@@ -536,7 +529,7 @@ fn column(p: &mut Parser<'_>) {
         Some((T::Ident, end)) => {
             let inner = p.start();
             take(p, T::Ident, end);
-            if at(p, &after_clause(&[LPAREN, COMMA, AS]), LPAREN) {
+            if at(p, &AFTER_CLAUSE_CALL, LPAREN) {
                 arguments(p, &[STAR, T::Ident, T::Str, T::Bare], true);
                 inner.complete(p, K::Aggregate.raw());
             } else {
@@ -545,7 +538,7 @@ fn column(p: &mut Parser<'_>) {
         }
         _ => p.error("expected a column"),
     }
-    if eat(p, &after_clause(&[COMMA, AS]), AS) {
+    if eat(p, &AFTER_CLAUSE_COMMA_AS, AS) {
         name(p, K::Alias, "expected a name");
     }
     m.complete(p, K::Column.raw());
@@ -590,7 +583,7 @@ fn expression(p: &mut Parser<'_>, top: bool) {
     let m = p.start();
     and_chain(p, top);
     let mut chained = false;
-    while eat(p, &after_term(top, &[]), OR) {
+    while eat(p, after_term(top, AfterTerm::Plain), OR) {
         and_chain(p, top);
         chained = true;
     }
@@ -607,7 +600,7 @@ fn and_chain(p: &mut Parser<'_>, top: bool) {
     unary(p, top);
     let mut chained = false;
     loop {
-        match next(p, &after_term(top, &[])) {
+        match next(p, after_term(top, AfterTerm::Plain)) {
             Some((AND, end)) => {
                 take(p, AND, end);
                 unary(p, top);
@@ -648,8 +641,7 @@ fn primary(p: &mut Parser<'_>, top: bool) {
             let m = p.start();
             let field = p.start();
             take(p, T::Ident, end);
-            let v = Valid::default().with(&FIELD_OPERATORS).with(&[IN]);
-            match next(p, &after_term(top, &v)) {
+            match next(p, after_term(top, AfterTerm::FieldOperator)) {
                 Some((op, end)) if FIELD_OPERATORS.contains(&op) => {
                     field.complete(p, K::FieldName.raw());
                     take(p, op, end);
@@ -698,11 +690,12 @@ fn field_value(p: &mut Parser<'_>, op: T, top: bool) {
         comparison(p);
         return;
     }
-    let mut v = Valid::default().with(&VALUE);
-    if matches!(op, T::Lit(":" | "=")) {
-        v = v.with(&COMPARISONS);
-    }
-    match next(p, &v) {
+    let valid: &[T] = if matches!(op, T::Lit(":" | "=")) {
+        &VALUE_OR_COMPARISON
+    } else {
+        &VALUE
+    };
+    match next(p, valid) {
         Some((cmp, end)) if COMPARISONS.contains(&cmp) => {
             take(p, cmp, end);
             comparison(p);
@@ -712,7 +705,7 @@ fn field_value(p: &mut Parser<'_>, op: T, top: bool) {
         Some((T::Ident, end)) => {
             let m = p.start();
             take(p, T::Ident, end);
-            if at(p, &after_term(top, &[]), LPAREN) {
+            if at(p, after_term(top, AfterTerm::Plain), LPAREN) {
                 arguments(p, &SCALAR, false);
                 m.complete(p, K::Call.raw());
             } else {
@@ -771,7 +764,7 @@ fn context_table(p: &mut Parser<'_>, top: bool) {
             false
         }
     };
-    if table(p) && eat(p, &after_term(top, &[DOT]), DOT) {
+    if table(p) && eat(p, after_term(top, AfterTerm::Dot), DOT) {
         table(p);
     }
 }
