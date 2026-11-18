@@ -1,14 +1,16 @@
-# cargo-mutants (https://mutants.rs) for the weekly mutation run
-# (.github/workflows/mutants.yml, UC-X.2 #844) and for a local run:
+# cargo-mutants (https://mutants.rs) settings for a run by hand. Mutation
+# testing is not a recurring job here: #844 ran it once, as a time-boxed
+# experiment, and docs/internal/test-strength.md records what it found.
 #
-#   cargo mutants -p opentide-analysis                  one crate, every mutant
+#   export CARGO_TARGET_DIR=<a target pool that holds the workspace's build>
+#   cargo mutants -p opentide-schema --in-place --cap-lints false
 #   git diff origin/development... > /tmp/pr.diff
-#   cargo mutants -p opentide-analysis --in-diff /tmp/pr.diff   what a change touches
+#   cargo mutants -p opentide-workspace --in-place --cap-lints false --in-diff /tmp/pr.diff
 #
-# Which crates the weekly run mutates, and when their survivors become issues,
-# is xtask/mutants.toml; docs/internal/test-strength.md explains the scores.
-# There is no exclude list here: a mutant that cannot be killed is recorded as
-# equivalent in a comment on its crate's issue, not hidden from the run.
+# `--in-place` builds in CARGO_TARGET_DIR (leave the checkout alone while it
+# runs); `--cap-lints false` overrides cap_lints below and keeps the build's
+# RUSTFLAGS. Together they reuse a warm build; without them the run copies the
+# tree and builds the workspace from scratch.
 
 # The tests of the mutated package, through nextest (the default profile of
 # .config/nextest.toml). Doctests are not run.
