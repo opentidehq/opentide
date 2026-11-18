@@ -309,6 +309,7 @@ struct LineTable {
 
 impl LineTable {
     fn new(source: &str) -> Self {
+        scoped::TABLES.with(|tables| tables.set(tables.get() + 1));
         let mut starts = vec![0];
         starts.extend(source.match_indices('\n').map(|(i, _)| i + 1));
         let ascii = (0..starts.len())
@@ -438,6 +439,14 @@ pub fn scans_from_the_start() -> usize {
     scoped::SCANS.with(std::cell::Cell::get)
 }
 
+/// How many line tables ([`LineIndex::new`], [`with_line_index`]) this thread
+/// has built. Tests read it to prove an analysis builds one table for a text
+/// and hands it to every pass (ADR 0014 §1, a work count).
+#[doc(hidden)]
+pub fn line_tables_built() -> usize {
+    scoped::TABLES.with(std::cell::Cell::get)
+}
+
 mod scoped {
     use super::{LineTable, Position};
     use std::cell::{Cell, RefCell};
@@ -454,6 +463,7 @@ mod scoped {
     thread_local! {
         static INSTALLED: RefCell<Option<Installed>> = const { RefCell::new(None) };
         pub(super) static SCANS: Cell<usize> = const { Cell::new(0) };
+        pub(super) static TABLES: Cell<usize> = const { Cell::new(0) };
     }
 
     fn key(source: &str) -> (usize, usize) {
