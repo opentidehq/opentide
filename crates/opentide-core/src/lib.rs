@@ -664,6 +664,7 @@ impl Diagnostic {
     }
 }
 
+pub mod catalog;
 pub mod datasets;
 pub mod duration;
 pub mod falco;

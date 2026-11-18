@@ -17,7 +17,7 @@ Read `references/highlight-spec.md` before touching `highlights/spec.toml` or a 
 1. TOML (or JSON for generated Tide fields) lives in `data/catalogs/`.
 2. The engine `include_str!`s it with a path relative to the source file (`../../../data/catalogs/...`).
 3. A `serde::Deserialize` struct matches the file. `#[serde(default)]` on optional arrays.
-4. `toml::from_str` (toml 0.8) parses it inside `OnceLock` so each profile is parsed once per process. `Catalog::cached` is the pattern in `opentide-kql` and `opentide-spl`.
+4. `opentide_core::catalog::array_items` and `preamble` read it item by item inside a `OnceLock` (ADR 0013, `docs/internal/adr/0013-language-catalogs.md`), so each catalog (or profile) is built once per process and shared by every thread, and no whole TOML document of it is ever built: `toml::from_str` on a whole catalog file cost several times the catalog (5–6 MiB for Falco's `fields.toml`, ~25 MiB for the KQL Azure Monitor reference). The file must be in the loader's form: comments, an optional one-line `key = value` preamble, then top-level `[[arrays]]` with bare headers and one-line values; a line it cannot read is refused, but it parses only the array asked for, so the crate's test that its files read item by item equal `toml::from_str` of the whole files is mandatory: it is what guarantees the reading. `opentide-falco`'s `Catalog::cached` is the reference.
 5. Tests construct the catalog through that cache. They do not open the TOML themselves unless they are checking the sync script.
 
 Adding a key to a row struct without `#[serde(default)]` rejects every existing file that omits the key. Add the field as `Option` or `#[serde(default)]`, then fill the catalogs.

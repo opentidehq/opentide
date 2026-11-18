@@ -5,6 +5,7 @@
 //! An unknown field of a catalogued source is an error, as Falco refuses it; an
 //! unknown macro, list, or tuned rule is a warning (Sysdig manages its own).
 
+use opentide_core::catalog;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::OnceLock;
@@ -158,28 +159,43 @@ pub struct Param {
     pub param_type: String,
 }
 
-#[derive(Deserialize)]
+/// `fields.toml`, read item by item.
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct FieldsFile {
     sources: Vec<Source>,
     classes: Vec<String>,
     fields: Vec<Field>,
 }
 
-#[derive(Deserialize)]
+/// `defaults.toml`, read item by item.
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct DefaultsFile {
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     macros: Vec<Macro>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     lists: Vec<List>,
-    #[serde(default)]
+    #[cfg_attr(test, serde(default))]
     rules: Vec<Rule>,
 }
 
-#[derive(Deserialize)]
+/// `events.toml`, read item by item.
+#[cfg_attr(test, derive(Debug, Deserialize))]
 struct EventsFile {
     syscalls: Vec<String>,
     events: Vec<Event>,
     params: Vec<Param>,
+}
+
+/// `fields.toml`'s preamble.
+#[derive(Deserialize)]
+struct FieldsPreamble {
+    classes: Vec<String>,
+}
+
+/// `events.toml`'s preamble.
+#[derive(Deserialize)]
+struct EventsPreamble {
+    syscalls: Vec<String>,
 }
 
 /// Every Falco catalog.
@@ -217,20 +233,59 @@ pub enum Lookup<'c> {
     Unknown,
 }
 
+/// A catalog compiled in, read: a bad one fails the tests, never a user's
+/// document.
+#[expect(
+    clippy::expect_used,
+    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+)]
+fn read<T>(file: &str, result: Result<T, catalog::CatalogError>) -> T {
+    result
+        .map_err(|err| format!("data/catalogs/falco/{file}: {err}"))
+        .expect("a catalog compiled in reads")
+}
+
 impl Catalog {
-    #[expect(
-        clippy::expect_used,
-        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-    )]
+    /// Every Falco catalog, read once per process (ADR 0013): the first
+    /// caller reads it, every other thread waits for that read and then
+    /// shares it.
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let fields: FieldsFile =
-                toml::from_str(FIELDS_TOML).expect("data/catalogs/falco/fields.toml");
-            let defaults: DefaultsFile =
-                toml::from_str(DEFAULTS_TOML).expect("data/catalogs/falco/defaults.toml");
-            let events: EventsFile =
-                toml::from_str(EVENTS_TOML).expect("data/catalogs/falco/events.toml");
+            // Item by item (ADR 0013, `opentide_core::catalog`): never a
+            // whole TOML document of a catalog.
+            let fields = FieldsFile {
+                classes: read(
+                    "fields.toml",
+                    catalog::preamble::<FieldsPreamble>(FIELDS_TOML),
+                )
+                .classes,
+                sources: read("fields.toml", catalog::array_items(FIELDS_TOML, "sources")),
+                fields: read("fields.toml", catalog::array_items(FIELDS_TOML, "fields")),
+            };
+            let defaults = DefaultsFile {
+                macros: read(
+                    "defaults.toml",
+                    catalog::array_items(DEFAULTS_TOML, "macros"),
+                ),
+                lists: read(
+                    "defaults.toml",
+                    catalog::array_items(DEFAULTS_TOML, "lists"),
+                ),
+                rules: read(
+                    "defaults.toml",
+                    catalog::array_items(DEFAULTS_TOML, "rules"),
+                ),
+            };
+            let events = EventsFile {
+                syscalls: read(
+                    "events.toml",
+                    catalog::preamble::<EventsPreamble>(EVENTS_TOML),
+                )
+                .syscalls,
+                events: read("events.toml", catalog::array_items(EVENTS_TOML, "events")),
+                params: read("events.toml", catalog::array_items(EVENTS_TOML, "params")),
+            };
             let by_name = fields
                 .fields
                 .iter()
@@ -340,6 +395,40 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ADR 0013: the catalogs read item by item are what `toml` reads from
+    /// the whole files, item for item and field for field.
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let fields = FieldsFile {
+            classes: catalog::preamble::<FieldsPreamble>(FIELDS_TOML)
+                .unwrap()
+                .classes,
+            sources: catalog::array_items(FIELDS_TOML, "sources").unwrap(),
+            fields: catalog::array_items(FIELDS_TOML, "fields").unwrap(),
+        };
+        let defaults = DefaultsFile {
+            macros: catalog::array_items(DEFAULTS_TOML, "macros").unwrap(),
+            lists: catalog::array_items(DEFAULTS_TOML, "lists").unwrap(),
+            rules: catalog::array_items(DEFAULTS_TOML, "rules").unwrap(),
+        };
+        let events = EventsFile {
+            syscalls: catalog::preamble::<EventsPreamble>(EVENTS_TOML)
+                .unwrap()
+                .syscalls,
+            events: catalog::array_items(EVENTS_TOML, "events").unwrap(),
+            params: catalog::array_items(EVENTS_TOML, "params").unwrap(),
+        };
+        let whole_fields: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
+        let whole_defaults: DefaultsFile = toml::from_str(DEFAULTS_TOML).unwrap();
+        let whole_events: EventsFile = toml::from_str(EVENTS_TOML).unwrap();
+        assert_eq!(format!("{fields:?}"), format!("{whole_fields:?}"));
+        assert_eq!(format!("{defaults:?}"), format!("{whole_defaults:?}"));
+        assert_eq!(format!("{events:?}"), format!("{whole_events:?}"));
+        assert!(
+            fields.fields.len() > 500 && defaults.macros.len() > 300 && events.events.len() > 100
+        );
+    }
 
     #[test]
     fn catalogs_load_with_every_source() {

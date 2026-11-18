@@ -3,6 +3,7 @@
 //! and the ASIM schemas and parsers (`data/catalogs/kql/asim/asim.toml`,
 //! `scripts/engine/sync_asim_schemas.py`), parsed once per process.
 
+use opentide_core::catalog::array_items;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
@@ -65,125 +66,6 @@ pub fn azure_monitor() -> &'static BTreeMap<String, AzureMonitorTable> {
             array_items(AZURE_MONITOR_TOML, "tables").expect("azure-monitor/tables.toml");
         tables.into_iter().map(|t| (t.name.clone(), t)).collect()
     })
-}
-
-/// The items of the array of tables `[[key]]` in the generated catalog
-/// `text`, each parsed on its own: `toml` builds a whole document before it
-/// deserialises, and the 3.4 MB Azure Monitor reference's took tens of MiB
-/// more than the tables it holds (#1071). Only one item's is alive at a
-/// time here.
-///
-/// The catalog must be what the sync scripts write: comments and blank
-/// lines, then top-level arrays of tables. Each item starts at a line
-/// `[[name]]`; its sub-tables are `[name.<sub>]` or `[[name.<sub>]]`, every
-/// header written exactly so (bare names, at the start of the line, nothing
-/// after it); its values fit on their line (no `"""` or `'''` string).
-/// Anything else is refused, never read differently from `toml`'s reading
-/// of the whole file; items of another array are skipped. A test holds the
-/// result to the whole file's.
-///
-/// # Errors
-///
-/// An item does not parse, or the text is not in that form.
-pub(crate) fn array_items<T: serde::de::DeserializeOwned>(
-    text: &str,
-    key: &str,
-) -> Result<Vec<T>, String> {
-    let mut items = Vec::new();
-    // The item being read: `Some` while in one of `key`'s, `None` in
-    // another array's or before the first.
-    let mut item: Option<String> = None;
-    // The top-level array the last header opened, if any.
-    let mut array: Option<&str> = None;
-    for (number, line) in text.split_inclusive('\n').enumerate() {
-        let trimmed = line.trim_end();
-        let refuse = |why: &str| Err(format!("line {}: {why}: {trimmed:?}", number + 1));
-        if trimmed.contains("\"\"\"") || trimmed.contains("'''") {
-            return refuse("a multi-line string");
-        }
-        if !trimmed.trim_start().starts_with('[') {
-            match item.as_mut() {
-                Some(body) => body.push_str(line),
-                None => {
-                    let rest = trimmed.trim_start();
-                    if array.is_none() && !(rest.is_empty() || rest.starts_with('#')) {
-                        return refuse("not a comment before the first array item");
-                    }
-                }
-            }
-            continue;
-        }
-        let Some(header) = Header::of(trimmed) else {
-            return refuse("not a header of the form the sync scripts write");
-        };
-        match header {
-            Header {
-                array: true,
-                top,
-                sub: None,
-            } => {
-                if let Some(done) = item.take() {
-                    items.push(toml::from_str(&done).map_err(|err| err.to_string())?);
-                }
-                array = Some(top);
-                if top == key {
-                    item = Some(String::new());
-                }
-            }
-            Header { sub: None, .. } => {
-                return refuse("a top-level table, not an array item");
-            }
-            Header {
-                array: nested,
-                top,
-                sub: Some(sub),
-            } => {
-                if array != Some(top) {
-                    return refuse("a sub-table outside its array's last item");
-                }
-                if let Some(body) = item.as_mut() {
-                    // `[[key.columns]]` is the item's own `[[columns]]`.
-                    let (open, close) = if nested { ("[[", "]]") } else { ("[", "]") };
-                    body.push_str(open);
-                    body.push_str(sub);
-                    body.push_str(close);
-                    body.push('\n');
-                }
-            }
-        }
-    }
-    if let Some(done) = item {
-        items.push(toml::from_str(&done).map_err(|err| err.to_string())?);
-    }
-    Ok(items)
-}
-
-/// A table header as the sync scripts write it: `[[top]]`, `[[top.sub]]` or
-/// `[top.sub]`, bare names only, the whole line.
-struct Header<'a> {
-    array: bool,
-    top: &'a str,
-    sub: Option<&'a str>,
-}
-
-impl<'a> Header<'a> {
-    fn of(line: &'a str) -> Option<Self> {
-        let (array, name) = match line.strip_prefix("[[") {
-            Some(rest) => (true, rest.strip_suffix("]]")?),
-            None => (false, line.strip_prefix('[')?.strip_suffix(']')?),
-        };
-        let bare = |part: &str| {
-            !part.is_empty()
-                && part
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        };
-        let (top, sub) = match name.split_once('.') {
-            Some((top, sub)) => (top, Some(sub)),
-            None => (name, None),
-        };
-        (bare(top) && sub.is_none_or(bare)).then_some(Self { array, top, sub })
-    }
 }
 
 /// Columns every Log Analytics table has, whether or not the reference lists
@@ -300,8 +182,8 @@ impl Asim {
 mod tests {
     use super::*;
 
-    /// [`array_items`] reads the generated catalogs as `toml` reads the
-    /// whole file, item for item (#1071).
+    /// ADR 0013: the catalogs read item by item (`opentide_core::catalog`)
+    /// are what `toml` reads from the whole files, item for item (#1071).
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
         let whole: AzureMonitorFile = toml::from_str(AZURE_MONITOR_TOML).unwrap();
@@ -314,51 +196,6 @@ mod tests {
         assert_eq!(format!("{schemas:?}"), format!("{:?}", whole.schemas));
         assert_eq!(format!("{parsers:?}"), format!("{:?}", whole.parsers));
         assert!(schemas.len() > 10 && parsers.len() > 1000);
-        // A sub-table, an array of them, comments and the last item.
-        let text = "# c\n\n[[t]]\nname = \"a\"\n[t.meta]\nx = 1\n[[t.columns]]\nname = \"c\"\n\
-                    [[t.columns]]\nname = \"d\"\n# between\n[[t]]\nname = \"b\"\n";
-        #[derive(Debug, Deserialize)]
-        struct File {
-            t: Vec<toml::Value>,
-        }
-        let whole: File = toml::from_str(text).unwrap();
-        let items: Vec<toml::Value> = array_items(text, "t").unwrap();
-        assert_eq!(items, whole.t);
-        assert_eq!(items.len(), 2);
-        // Another array's items, before and after, are skipped.
-        let mixed = format!("[[u]]\nname = \"x\"\n[[u.sub]]\nk = 1\n{text}[[u]]\nname = \"y\"\n");
-        let items: Vec<toml::Value> = array_items(&mixed, "t").unwrap();
-        assert_eq!(items, whole.t);
-        // What the scripts never write is refused, not read otherwise.
-        for (text, why) in [
-            (
-                "[[t]]\nname = \"a\"\n[[t]] # c\nname = \"b\"\n",
-                "trailing comment",
-            ),
-            (
-                "[[t]]\nname = \"a\"\n[[t.columns]] # c\nname = \"c\"\n",
-                "sub comment",
-            ),
-            ("[[ t ]]\nname = \"a\"\n", "spaces"),
-            ("[[t]]\n[[ t.columns ]]\nname = \"c\"\n", "sub spaces"),
-            ("[[\"t\"]]\nname = \"a\"\n", "quoted"),
-            ("[[t]]\nname = \"a\"\n  [[t]]\nname = \"b\"\n", "indented"),
-            ("[[t]]\ndocs = \"\"\"\n[t.x]\n\"\"\"\n", "multi-line string"),
-            ("[[t]]\ndocs = '''\nx\n'''\n", "literal multi-line"),
-            (
-                "[[t]]\nname = \"a\"\n[[u]]\nk = 1\n[[t.columns]]\nname = \"c\"\n",
-                "late sub",
-            ),
-            ("[t.x]\nk = 1\n[[t]]\nname = \"a\"\n", "sub before item"),
-            ("[[t]]\nname = \"a\"\n[t.x.y]\nk = 1\n", "deep sub"),
-        ] {
-            assert!(array_items::<toml::Value>(text, "t").is_err(), "{why}");
-        }
-        // A top-level table that is not an array item is refused.
-        assert!(array_items::<toml::Value>("[[t]]\nname = \"a\"\n[x]\nk = 1\n", "t").is_err());
-        // Anything else before the first item is refused, not dropped.
-        assert!(array_items::<toml::Value>("x = 1\n[[t]]\nname = \"a\"\n", "t").is_err());
-        assert!(array_items::<toml::Value>("[[t]]\nname = \n", "t").is_err());
     }
 
     #[test]
