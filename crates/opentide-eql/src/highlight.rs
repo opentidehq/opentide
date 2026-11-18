@@ -84,7 +84,7 @@ pub(crate) fn captures(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
 }
 
 /// The span and capture of `token`, if it is visible and captured: what
-/// [`captures`] gathers, for a walk that meets the tokens itself (ADR 0014
+/// `captures` gathers, for a walk that meets the tokens itself (ADR 0014
 /// §5a).
 pub(crate) fn capture_of(token: &SyntaxToken) -> Option<(ByteSpan, &'static str)> {
     if token.kind() == K::WHITESPACE || token.text().is_empty() {
@@ -104,6 +104,7 @@ pub(crate) fn capture_of(token: &SyntaxToken) -> Option<(ByteSpan, &'static str)
 /// The tokens a reader sees: everything but whitespace, with a length.
 fn visible_tokens(root: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> {
     root.descendants_with_tokens()
+        .inspect(|_| crate::count_visit())
         .filter_map(NodeOrToken::into_token)
         .filter(|t| t.kind() != K::WHITESPACE && !t.text().is_empty())
 }

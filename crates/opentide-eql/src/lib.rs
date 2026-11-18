@@ -309,7 +309,7 @@ thread_local! {
 
 /// Counts one element the analysis's walk visited, in tests (ADR 0014 §7).
 #[inline]
-fn count_visit() {
+pub(crate) fn count_visit() {
     #[cfg(test)]
     VISITS.set(VISITS.get() + 1);
 }
@@ -1588,7 +1588,9 @@ mod walk_tests {
     }
 
     /// An analysis walks every element once (ADR 0014 §7): the checks walked
-    /// the nodes and the highlight every element again.
+    /// the nodes and the highlight every element again. Every walk over the
+    /// elements counts, the highlight's (`visible_tokens`) and the depth
+    /// check's included, so a second walk fails it.
     #[test]
     fn an_analysis_visits_each_element_once() {
         for source in [SAMPLES[0], SAMPLES[6]] {
