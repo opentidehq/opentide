@@ -386,3 +386,15 @@ fn misspellings(value: &str, seed: usize) -> Vec<String> {
     });
     typos
 }
+
+/// Every bundled vocabulary read item by item is field for field the
+/// document read whole (ADR 0013, #1071).
+#[test]
+fn bundled_vocabularies_read_item_by_item_are_the_whole_documents() {
+    for (field, text) in super::bundled::FILES {
+        let file = format!("{field}{}", super::SUFFIX);
+        let read = super::Vocabulary::from_bundled_file(&file, text).expect("item by item");
+        let whole = super::Vocabulary::from_file(&file, text).expect("whole");
+        assert_eq!(format!("{read:?}"), format!("{whole:?}"), "{file}");
+    }
+}

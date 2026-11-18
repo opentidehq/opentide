@@ -116,10 +116,43 @@ impl Vocabulary {
     /// Reads the document `text` of the file `file_name`
     /// (`{field}.vocab.toml`), whose `field` must be the file name's stem.
     pub fn from_file(file_name: &str, text: &str) -> Result<Self, VocabError> {
+        let vocabulary = Self::parse(text, file_name)?;
+        Self::named(file_name, vocabulary)
+    }
+
+    /// Reads a bundled document `text` (`{field}.vocab.toml`, compiled in)
+    /// item by item, as the engine's catalogs are read (ADR 0013): its
+    /// preamble, then its `[[stages]]` and `[[keys]]` one batch at a time, so
+    /// no whole TOML document of it is built. The largest were several MiB
+    /// each, and vocabularies a validation reads on several threads at once
+    /// built theirs together (#1071). The result is [`Vocabulary::from_file`]'s
+    /// (a test holds every bundled file to it). A user's own vocabulary is
+    /// hand-written, not in the loader's form: it is read whole.
+    pub fn from_bundled_file(file_name: &str, text: &str) -> Result<Self, VocabError> {
+        use opentide_core::catalog::{CatalogError, array_items, preamble};
+        let toml_error = |error: CatalogError| VocabError::Toml {
+            file: file_name.to_owned(),
+            message: error.to_string(),
+        };
+        let mut table: Table = preamble(text).map_err(toml_error)?;
+        for array in ["stages", "keys"] {
+            if table.contains_key(array) {
+                continue;
+            }
+            let items: Vec<Value> = array_items(text, array).map_err(toml_error)?;
+            if !items.is_empty() {
+                table.insert(array.to_owned(), Value::Array(items));
+            }
+        }
+        let vocabulary = Self::from_table(table, file_name)?;
+        Self::named(file_name, vocabulary)
+    }
+
+    /// `vocabulary`, read from `file_name`, whose stem must be its field.
+    fn named(file_name: &str, vocabulary: Self) -> Result<Self, VocabError> {
         let stem = file_name
             .strip_suffix(SUFFIX)
             .ok_or_else(|| VocabError::NotAVocabularyFile(file_name.to_owned()))?;
-        let vocabulary = Self::parse(text, file_name)?;
         if vocabulary.field() != stem {
             return Err(VocabError::FieldMismatch {
                 file: file_name.to_owned(),
