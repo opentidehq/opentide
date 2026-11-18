@@ -64,8 +64,9 @@ pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
 
 /// Whether [`parse`] reports no error. Every error the grammar records is
 /// one of the tree's, so a text with one is rejected without building the
-/// tree (ADR 0014 §4); the tree is built only to rule out the errors the
-/// build itself finds (a tree too deep).
+/// tree (ADR 0014 §4). A text with none is built, as a backstop for the
+/// errors only the build finds (a tree too deep, unbalanced events); the
+/// grammar's own depth limit fires before either today.
 pub(crate) fn accepts(source: &str) -> bool {
     with_events(source, |input, events| {
         !events.iter().any(|e| matches!(e, Event::Error { .. }))
@@ -91,6 +92,7 @@ fn with_events<R>(source: &str, f: impl FnOnce(&Input<'_>, Vec<Event>) -> R) -> 
     f(&input, events)
 }
 
+#[cfg(test)]
 thread_local! {
     /// The trees built on this thread: [`trees_built`].
     static TREES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -104,6 +106,7 @@ pub(crate) fn trees_built() -> usize {
 
 #[inline]
 fn built(input: &Input<'_>, events: Vec<Event>) -> Parse {
+    #[cfg(test)]
     TREES_BUILT.set(TREES_BUILT.get() + 1);
     build(input, events)
 }
@@ -419,8 +422,9 @@ mod tests {
         out
     }
 
-    /// `accepts` is `parse`'s verdict, on every text and at the nesting
-    /// limits, where the build itself reports a tree too deep.
+    /// `accepts` is `parse`'s verdict, on every text and at the grammar's
+    /// nesting limit (its own depth error, an error event, fires there before
+    /// the build could find a tree too deep).
     #[test]
     fn accepts_is_the_parse_without_errors() {
         let mut sources = texts();
@@ -444,14 +448,14 @@ mod tests {
         );
     }
 
-    /// A rejected text builds no tree (ADR 0014 §7): the other engine asks
-    /// it of every query its own grammar rejects.
+    /// A rejected text builds no tree through the public `parses` (ADR 0014
+    /// §7): the other engine asks it of every query its own grammar rejects.
     #[test]
     fn a_rejected_text_builds_no_tree() {
         let before = trees_built();
-        assert!(!accepts("a AND (b OR c"));
+        assert!(!crate::parses("a AND (b OR c"));
         assert_eq!(trees_built() - before, 0);
-        assert!(accepts("a AND (b OR c)"));
+        assert!(crate::parses("a AND (b OR c)"));
         assert_eq!(trees_built() - before, 1);
     }
 
