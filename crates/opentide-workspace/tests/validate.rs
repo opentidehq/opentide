@@ -1603,4 +1603,149 @@ mod validate {
             .is_empty()
         );
     }
+
+    #[test]
+    fn every_check_is_named_as_check_takes_it_and_parsed_back() {
+        for check in Check::ALL {
+            assert!(!check.name().is_empty());
+            assert_eq!(Check::parse(check.name()), Some(check));
+        }
+        assert_eq!(Check::parse("schema"), Some(Check::Schema));
+        assert_eq!(Check::parse("id-uniqueness"), Some(Check::IdUniqueness));
+        assert_eq!(Check::parse("nonsense"), None);
+    }
+
+    #[test]
+    fn the_exit_code_and_the_checks_document_follow_the_run() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let clean = run(&fs, &Options::default());
+        assert_eq!(clean.exit_code(), i32::from(clean.failed));
+        fs.write("/ws/objects/rules/b.yaml", rule(U1, "B"));
+        let failed = run(&fs, &Options::default());
+        assert!(failed.failed);
+        assert_eq!(failed.exit_code(), 1);
+        let checks = failed.checks_json();
+        for (check, status) in &failed.checks {
+            assert_eq!(
+                checks[check.name()],
+                serde_json::json!({"check": check.name(), "status": status})
+            );
+        }
+        assert_eq!(checks["id-uniqueness"]["status"], "failed");
+    }
+
+    /// A stand-in compiler: Splunk refuses every rule, once at the block and
+    /// once at a key the block does not have.
+    struct Refuses;
+
+    impl opentide_workspace::validate::CompileCheck for Refuses {
+        fn check(
+            &self,
+            _ws: &Workspace,
+            rules: &[opentide_workspace::validate::CompileRule<'_>],
+            enabled: &std::collections::BTreeSet<String>,
+        ) -> Vec<Vec<opentide_workspace::validate::CompileFailure>> {
+            assert!(enabled.contains("splunk"));
+            let failure =
+                |code: &str, field_path: &[&str]| opentide_workspace::validate::CompileFailure {
+                    platform: "splunk".to_owned(),
+                    code: code.to_owned(),
+                    message: format!("{code} here"),
+                    hint: None,
+                    field_path: field_path.iter().map(|part| (*part).to_owned()).collect(),
+                };
+            rules
+                .iter()
+                .map(|_| {
+                    vec![
+                        failure("compile_empty_block", &[]),
+                        failure(
+                            "compile_missing_field",
+                            &["configurations", "splunk", "cron_schedule"],
+                        ),
+                        failure(
+                            "compile_invalid_value",
+                            &["configurations", "splunk", "query"],
+                        ),
+                    ]
+                })
+                .collect()
+        }
+    }
+
+    /// A rule that validates cleanly, with an enabled Splunk block: the
+    /// corpus's Splunk rule, without its detection model (not in this
+    /// workspace).
+    const SPLUNK_RULE: &str = "name: Splunk SPL Rule
+metadata:
+  uuid: 11111111-1111-4111-8111-111111111111
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: |
+  A rule.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    enabled: true
+    name: Splunk SPL Rule
+    status: STAGING
+    query: index=main | head 1
+";
+
+    /// The line, from 0, of the first line of `text` that is `line`.
+    fn line_of(text: &str, line: &str) -> usize {
+        text.lines().position(|l| l == line).unwrap()
+    }
+
+    #[test]
+    fn a_compiler_s_refusal_is_on_the_rule_at_the_deepest_key_it_has() {
+        let fs = workspace();
+        fs.write(
+            "/ws/.opentide/configurations/platforms/splunk.toml",
+            "[platform]\nenabled = true\n",
+        );
+        fs.write("/ws/objects/rules/a.yaml", SPLUNK_RULE);
+        let validation = run(
+            &fs,
+            &Options {
+                compile_check: Some(&Refuses),
+                ..Options::default()
+            },
+        );
+        let empty = with_code(&validation, "compile_empty_block");
+        assert_eq!(empty.len(), 1, "{:#?}", all(&validation));
+        assert_eq!(empty[0].object_uuid, U1);
+        assert_eq!(empty[0].field_path, ["configurations", "splunk"]);
+        assert_eq!(
+            empty[0].file_path.as_deref(),
+            Some(Path::new("/ws/objects/rules/a.yaml"))
+        );
+        let block = line_of(SPLUNK_RULE, "  splunk:");
+        assert_eq!(empty[0].yaml_line, Some(block));
+        // `cron_schedule` is not in the block: the finding is on the block's key.
+        let missing = with_code(&validation, "compile_missing_field");
+        assert_eq!(missing.len(), 1);
+        assert_eq!(
+            missing[0].field_path,
+            ["configurations", "splunk", "cron_schedule"]
+        );
+        assert_eq!(missing[0].yaml_line, Some(block));
+        // A key the block has is the finding's own line.
+        let invalid = with_code(&validation, "compile_invalid_value");
+        assert_eq!(invalid.len(), 1);
+        assert_eq!(
+            invalid[0].yaml_line,
+            Some(line_of(SPLUNK_RULE, "    query: index=main | head 1"))
+        );
+        assert!(validation.failed);
+    }
 }
