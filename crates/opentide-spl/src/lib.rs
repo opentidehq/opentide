@@ -40,6 +40,7 @@ pub mod ast;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
+mod index;
 mod parens;
 
 const COMMANDS_TOML: &str = include_str!(concat!(
@@ -269,12 +270,23 @@ impl Catalog {
     }
 
     pub fn command(&self, name: &str) -> Option<&CommandRow> {
+        if let Some(index) = index::Index::of(self) {
+            return index.command(name).and_then(|i| self.commands.get(i));
+        }
+        index::scanned(self.commands.len());
         self.commands
             .iter()
             .find(|c| c.name.eq_ignore_ascii_case(name))
     }
 
     pub fn function(&self, name: &str) -> Option<&FunctionRow> {
+        if let Some(index) = index::Index::of(self) {
+            return index
+                .functions(name)
+                .first()
+                .and_then(|&i| self.functions.get(i));
+        }
+        index::scanned(self.functions.len());
         self.functions
             .iter()
             .find(|f| f.name.eq_ignore_ascii_case(name))
@@ -283,8 +295,20 @@ impl Catalog {
     /// Eval and aggregate rows can share a name (`sum`, `avg`, `min`, `max`).
     /// `aggregate` selects the stats/chart form; otherwise the eval form wins.
     pub fn function_in_context(&self, name: &str, aggregate: bool) -> Option<&FunctionRow> {
+        let named: Box<dyn Iterator<Item = &FunctionRow>> =
+            if let Some(index) = index::Index::of(self) {
+                Box::new(
+                    index
+                        .functions(name)
+                        .iter()
+                        .filter_map(|&i| self.functions.get(i)),
+                )
+            } else {
+                index::scanned(self.functions.len());
+                Box::new(self.functions.iter())
+            };
         let mut fallback = None;
-        for f in &self.functions {
+        for f in named {
             if !f.name.eq_ignore_ascii_case(name) {
                 continue;
             }
@@ -314,7 +338,15 @@ impl Catalog {
     pub fn suggest_command(&self, name: &str) -> Option<String> {
         let typos = self.command_typos(name);
         if typos.is_empty() {
-            suggest::closest(name, self.commands.iter().map(|c| c.name.as_str()))
+            match index::Index::of(self) {
+                // The names prepared once: the same ranking as `closest`.
+                Some(index) => index
+                    .command_names
+                    .closest(name)
+                    .and_then(|i| self.commands.get(i))
+                    .map(|c| c.name.as_str()),
+                None => suggest::closest(name, self.commands.iter().map(|c| c.name.as_str())),
+            }
         } else {
             suggest::best(name, typos)
         }
@@ -324,10 +356,29 @@ impl Catalog {
     /// The catalogued commands `name` is one typo from ([`one_typo`]).
     fn command_typos(&self, name: &str) -> Vec<&str> {
         let lower = name.to_ascii_lowercase();
-        self.commands
+        let Some(index) = index::Index::of(self) else {
+            return self
+                .commands
+                .iter()
+                .filter(|c| one_typo(&c.name.to_ascii_lowercase(), &lower))
+                .map(|c| c.name.as_str())
+                .collect();
+        };
+        // One typo is at most two edits, and two only as swaps, which keep
+        // the length: a name longer or shorter by more than one character,
+        // or with more than two characters the other lacks, is none, and
+        // its distance is not measured (ADR 0014, rule 4).
+        let length = lower.chars().count();
+        index
+            .lowered_commands
             .iter()
-            .filter(|c| one_typo(&c.name.to_ascii_lowercase(), &lower))
-            .map(|c| c.name.as_str())
+            .zip(&self.commands)
+            .filter(|((other, other_length), _)| {
+                other_length.abs_diff(length) <= 1
+                    && suggest::bag_distance(other, &lower).is_none_or(|d| d <= 2)
+                    && one_typo(other, &lower)
+            })
+            .map(|(_, c)| c.name.as_str())
             .collect()
     }
 
@@ -340,12 +391,20 @@ impl Catalog {
 
     pub fn field(&self, name: &str) -> Option<&FieldRow> {
         let bare = name.rsplit('.').next().unwrap_or(name);
+        if let Some(index) = index::Index::of(self) {
+            return index.field(name, bare).and_then(|i| self.fields.get(i));
+        }
+        index::scanned(self.fields.len());
         self.fields
             .iter()
             .find(|f| f.name == name || f.name == bare)
     }
 
     pub fn datamodel(&self, name: &str) -> Option<&DatamodelRow> {
+        if let Some(index) = index::Index::of(self) {
+            return index.datamodel(name).and_then(|i| self.datamodels.get(i));
+        }
+        index::scanned(self.datamodels.len());
         self.datamodels
             .iter()
             .find(|d| d.name.eq_ignore_ascii_case(name) || d.prefix.eq_ignore_ascii_case(name))
@@ -370,6 +429,8 @@ impl Catalog {
 /// substitution, or swapped neighbours, once or twice (`stast` and `tsast`
 /// are `stats`). Equal strings are not.
 fn one_typo(a: &str, b: &str) -> bool {
+    #[cfg(test)]
+    DISTANCES.set(DISTANCES.get() + 1);
     match strsim::osa_distance(a, b) {
         1 => true,
         2 => only_swaps(a, b),
@@ -407,6 +468,12 @@ pub struct AnalyzeResult {
 /// on the pure-Rust parser (`syntax`).
 pub fn analyze(source: &str) -> AnalyzeResult {
     syntax::analyze(source)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Typo distances measured on this thread ([`one_typo`]).
+    static DISTANCES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(debug_assertions)]
