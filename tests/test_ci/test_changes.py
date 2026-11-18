@@ -125,8 +125,9 @@ def test_a_crate_runs_itself_and_its_reverse_dependencies() -> None:
     assert set(outputs["crates"].split()) == ABOVE_PARSE
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
     # cover it (the maintainer's rule); of the specialised jobs, the parser
-    # layer runs the WebAssembly builds (WASI and browser) alone.
-    assert on(outputs) == {"rust", "lint", "wasm"}
+    # layer runs the WebAssembly builds (WASI and browser) and the analysis's
+    # instruction counts, which it is built into.
+    assert on(outputs) == {"rust", "lint", "wasm", "throughput"}
     # The anchors are built, so the third-party features resolve as on the
     # push that saved the compiler cache; only the affected crates' tests run.
     built = set(outputs["packages"].replace("-p ", "").split())
@@ -265,3 +266,40 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
 def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]) -> None:
     """`build`'s specifications and compile-fail checks read these outputs."""
     assert on(plan(path)) & set(changes.CHECKS) == checks
+
+
+@pytest.mark.parametrize(
+    ("path", "runs"),
+    [
+        # The bench, its budgets and the command.
+        ("crates/opentide-analysis/benches/throughput.rs", True),
+        ("tests/bench/instructions.toml", True),
+        ("xtask/src/throughput.rs", True),
+        ("xtask/src/parallel.rs", True),
+        ("xtask/src/lib.rs", True),
+        # A crate the analysis is built from, and the analysis itself.
+        ("crates/opentide-kql/src/parse.rs", True),
+        ("crates/opentide-parse/src/lib.rs", True),
+        ("crates/opentide-analysis/src/lib.rs", True),
+        # Not what the analysis is built from: above it, beside it, docs.
+        ("crates/opentide-cli/src/main.rs", False),
+        ("crates/opentide-compare/src/lib.rs", False),
+        ("xtask/src/codegen.rs", False),
+        ("docs/engine/THROUGHPUT.md", False),
+        # Shared configuration runs everything, as a push does.
+        ("Cargo.lock", True),
+        (".github/workflows/ci.yml", True),
+    ],
+)
+def test_the_throughput_gate_runs_when_the_analysis_or_its_counts_change(
+    path: str, runs: bool
+) -> None:
+    """The `throughput` job: instruction counts move with any crate the analysis
+    is built from (#1571, ADR 0014)."""
+    assert plan(path)["throughput"] == str(runs).lower()
+
+
+def test_a_budgets_only_change_runs_the_throughput_gate_alone() -> None:
+    outputs = plan("tests/bench/instructions.toml")
+    assert on(outputs) == {"throughput"}
+    assert outputs["crates"] == ""

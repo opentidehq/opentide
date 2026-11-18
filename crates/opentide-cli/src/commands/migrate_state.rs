@@ -122,7 +122,7 @@ impl Source {
     /// Whether the collection that starts at `node.start` is written in flow
     /// style (`[a, b]`, `{a: 1}`), after its anchor and tag if any.
     fn is_flow(&self, node: &Node) -> bool {
-        let mut index = node.start.index;
+        let mut index = node.start.index();
         loop {
             match self.chars.get(index) {
                 Some('&' | '!') => {
@@ -142,8 +142,8 @@ impl Source {
     /// The zero-based last line `node` occupies (`_last_line`).
     fn last_line(&self, node: &Node) -> usize {
         let (start, end) = (
-            node.start.line.saturating_sub(1),
-            node.end.line.saturating_sub(1),
+            node.start.line().saturating_sub(1),
+            node.end.line().saturating_sub(1),
         );
         match &node.value {
             Value::Seq(items) if !items.is_empty() && !self.is_flow(node) => items
@@ -157,7 +157,7 @@ impl Source {
                 .max()
                 .unwrap_or(end),
             Value::Seq(_) | Value::Map(_) => end,
-            _ if end > start && self.at_line_start(node.end.index) => end - 1,
+            _ if end > start && self.at_line_start(node.end.index()) => end - 1,
             _ => end,
         }
     }
@@ -270,7 +270,7 @@ fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
             };
             rule.removed.push((platform.clone(), key.to_owned()));
             rule.spans.push((
-                entry.key.start.line.saturating_sub(1),
+                entry.key.start.line().saturating_sub(1),
                 source.last_line(&entry.value),
             ));
             if LEGACY_MAP_KEYS.contains(&key) {

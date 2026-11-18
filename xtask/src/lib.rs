@@ -21,6 +21,7 @@ pub(crate) mod recorded;
 pub mod script;
 pub mod spec_fields;
 pub mod stubs;
+pub mod throughput;
 #[cfg(test)]
 mod verdict;
 pub mod vocab;
