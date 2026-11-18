@@ -80,9 +80,11 @@ impl Column {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
     /// A catalog table (`SigninLogs`): its catalog row has the column's docs.
-    Table(String),
+    /// Shared: every column of a table names it, and copying a pipeline's
+    /// columns copied it once per column.
+    Table(Arc<str>),
     /// An ASIM schema, with the column's class (`Mandatory`, `Optional`, ...).
-    Asim { schema: String, class: String },
+    Asim { schema: Arc<str>, class: Arc<str> },
 }
 
 /// How completely the pass knows a pipeline's columns.
@@ -123,7 +125,7 @@ pub struct Schema {
     /// Shared between the copies of a schema each stage of a pipeline
     /// records, until one of them changes its columns (`Arc::make_mut`):
     /// a deep copy per stage was a third of a short query's analysis.
-    pub columns: Arc<Vec<Column>>,
+    pub columns: Arc<Vec<Arc<Column>>>,
     pub known: Known,
     pub source: Source,
     /// `project`, `summarize` or `distinct` narrowed the columns (in this
@@ -156,7 +158,7 @@ impl Schema {
 
     fn closed(columns: Vec<Column>, source: Source) -> Self {
         Self {
-            columns: Arc::new(columns),
+            columns: Arc::new(columns.into_iter().map(Arc::new).collect()),
             known: Known::Closed,
             source,
             ..Self::open()
@@ -164,7 +166,7 @@ impl Schema {
     }
 
     pub fn column(&self, name: &str) -> Option<&Column> {
-        self.columns.iter().find(|c| {
+        self.columns.iter().map(|c| &**c).find(|c| {
             #[cfg(test)]
             tests::count_name_compared();
             c.name == name
@@ -182,9 +184,9 @@ impl Schema {
             .iter_mut()
             .find(|c| c.name == column.name)
         {
-            *existing = column;
+            *existing = Arc::new(column);
         } else {
-            Arc::make_mut(&mut self.columns).push(column);
+            Arc::make_mut(&mut self.columns).push(Arc::new(column));
         }
     }
 
@@ -196,13 +198,15 @@ impl Schema {
     /// joins cubic in their depth (#1424). An operator adds all its columns
     /// in one call: a call per item rebuilt the set each time. The smallest free suffix of a name only grows as columns are
     /// added, so resuming from the last one gives the same names.
-    fn push_all_unique(&mut self, columns: impl IntoIterator<Item = Column>) {
+    fn push_all_unique(&mut self, columns: impl IntoIterator<Item = impl Into<Arc<Column>>>) {
         let mut taken: HashSet<String> = self.columns.iter().map(|c| c.name.clone()).collect();
         let mut next: HashMap<String, usize> = HashMap::new();
-        for mut column in columns {
+        for column in columns {
+            let mut column: Arc<Column> = column.into();
             #[cfg(test)]
             tests::count_name_compared();
             if taken.contains(&column.name) {
+                let column = Arc::make_mut(&mut column);
                 let base = std::mem::take(&mut column.name);
                 let n = next.entry(base.clone()).or_insert(1);
                 while taken.contains(&format!("{base}{n}")) {
@@ -490,35 +494,53 @@ pub(crate) fn source_schema(
 /// typed in an editor) is looked up each time. A workspace catalog with
 /// declared columns is built each time.
 fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
-    type Built = [HashMap<String, Schema>; 3];
+    memoised(catalog, name, 0, build_table_schema)
+}
+
+/// The schema an ASIM parser (`imAuthentication`, `_Im_Dns`) returns, kept
+/// as [`table_schema`] keeps a table's.
+pub(crate) fn asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
+    memoised(catalog, name, 1, build_asim_schema)
+}
+
+/// `build(catalog, name)`, kept per thread for a bundled catalog when it is
+/// a schema, by `kind` (0: tables, 1: ASIM parsers), profile and name.
+fn memoised(
+    catalog: &Catalog,
+    name: &str,
+    kind: usize,
+    build: fn(&Catalog, &str) -> Option<Schema>,
+) -> Option<Schema> {
+    type Built = [[HashMap<String, Schema>; 3]; 2];
     thread_local! {
         static BUILT: std::cell::RefCell<Built> = std::cell::RefCell::new(Default::default());
     }
     if !std::ptr::eq(catalog, Catalog::cached(catalog.profile)) {
-        return build_table_schema(catalog, name);
+        return build(catalog, name);
     }
     let slot = match catalog.profile {
         crate::Profile::Core => 0,
         crate::Profile::Sentinel => 1,
         crate::Profile::Defender => 2,
     };
-    if let Some(hit) = BUILT.with(|built| built.borrow()[slot].get(name).cloned()) {
+    if let Some(hit) = BUILT.with(|built| built.borrow()[kind][slot].get(name).cloned()) {
         return Some(hit);
     }
-    let schema = build_table_schema(catalog, name)?;
-    BUILT.with(|built| built.borrow_mut()[slot].insert(name.to_string(), schema.clone()));
+    let schema = build(catalog, name)?;
+    BUILT.with(|built| built.borrow_mut()[kind][slot].insert(name.to_string(), schema.clone()));
     Some(schema)
 }
 
 fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     let table = catalog.table(name)?;
+    let origin: Arc<str> = Arc::from(name);
     let columns: Vec<Column> = catalog
         .columns_for_table(name)
         .into_iter()
         .filter(|c| &*c.table == name)
         .map(|c| {
             Column::new(c.name.clone(), c.type_name.clone())
-                .with_origin(Origin::Table(name.to_string()))
+                .with_origin(Origin::Table(Arc::clone(&origin)))
         })
         .collect();
     // The documented columns are reliable but not complete: tables gain
@@ -530,7 +552,7 @@ fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
         Known::Open
     };
     let mut schema = Schema {
-        columns: Arc::new(columns),
+        columns: Arc::new(columns.into_iter().map(Arc::new).collect()),
         known,
         source: Source::Table(name.to_string()),
         custom_columns: true,
@@ -541,30 +563,32 @@ fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     if catalog.profile == Profile::Sentinel && table.documented {
         for (column, type_name) in tables::STANDARD_COLUMNS {
             if !schema.has(column) {
-                Arc::make_mut(&mut schema.columns).push(
+                Arc::make_mut(&mut schema.columns).push(Arc::new(
                     Column::new(*column, Some((*type_name).to_string()))
-                        .with_origin(Origin::Table(name.to_string())),
-                );
+                        .with_origin(Origin::Table(Arc::clone(&origin))),
+                ));
             }
         }
     }
     Some(schema)
 }
 
-pub(crate) fn asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
+fn build_asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
     let parser = catalog.asim_parser(name)?;
     let asim = tables::asim();
     let schema = asim.schemas.get(&parser.schema)?;
+    let schema_name: Arc<str> = Arc::from(parser.schema.as_str());
     Some(Schema {
         columns: schema
             .columns
             .iter()
             .map(|c| {
                 Column::new(c.name.clone(), Some(c.type_name.clone())).with_origin(Origin::Asim {
-                    schema: parser.schema.clone(),
-                    class: c.class.clone(),
+                    schema: Arc::clone(&schema_name),
+                    class: Arc::from(c.class.as_str()),
                 })
             })
+            .map(Arc::new)
             .collect::<Vec<_>>()
             .into(),
         known: Known::Typos,
@@ -614,7 +638,7 @@ pub(crate) fn merge_union(legs: &[Schema], withsource: Option<String>) -> Schema
         for kind in kinds.into_iter().flatten() {
             let renamed = format!("{name}_{kind}");
             if !out.has(&renamed) {
-                Arc::make_mut(&mut out.columns).push(Column::new(renamed, Some(kind)));
+                Arc::make_mut(&mut out.columns).push(Arc::new(Column::new(renamed, Some(kind))));
             }
         }
     }
@@ -921,7 +945,7 @@ pub(crate) mod tests {
         schema.push_all_unique(added.iter().map(|n| Column::new((*n).to_string(), None)));
         std::sync::Arc::unwrap_or_clone(schema.columns)
             .into_iter()
-            .map(|c| c.name)
+            .map(|c| c.name.clone())
             .collect()
     }
 

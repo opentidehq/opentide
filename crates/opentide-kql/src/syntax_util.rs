@@ -15,6 +15,42 @@ pub(crate) fn is_trivia(token: &SyntaxToken) -> bool {
 /// from its first significant token to its last; empty at its start when it
 /// has none.
 pub(crate) fn range(node: &SyntaxNode) -> TextRange {
+    // From each end inward past the trivia only: walking every token of the
+    // node to find its last was most of the column pass on a long query,
+    // and `range` is asked of most nodes. rowan's token steps stop at an
+    // empty node (as broken input leaves), so a walk that runs out without
+    // a significant token, or a node of trivia only, takes the long way.
+    let inside = |t: &SyntaxToken| t.parent_ancestors().any(|a| a == *node);
+    let significant = |mut at: Option<SyntaxToken>, forward: bool| {
+        while let Some(t) = at {
+            if !inside(&t) {
+                return None;
+            }
+            if !is_trivia(&t) {
+                return Some(t);
+            }
+            at = if forward {
+                t.next_token()
+            } else {
+                t.prev_token()
+            };
+        }
+        None
+    };
+    match (
+        significant(node.first_token(), true),
+        significant(node.last_token(), false),
+    ) {
+        (Some(first), Some(last)) => {
+            TextRange::new(first.text_range().start(), last.text_range().end())
+        }
+        _ => range_by_walking(node),
+    }
+}
+
+/// [`range`] by walking every token of the node, in order: what [`range`]
+/// falls back to, and what the tests hold it to.
+pub(crate) fn range_by_walking(node: &SyntaxNode) -> TextRange {
     let mut tokens = node
         .descendants_with_tokens()
         .filter_map(NodeOrToken::into_token)
@@ -201,5 +237,59 @@ pub(crate) fn token_at(
         None
     } else {
         last.filter(|t| t.text_range().end() == offset)
+    }
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::*;
+
+    fn sources() -> Vec<String> {
+        let mut out = vec![
+            String::new(),
+            "   ".into(),
+            "// only a comment".into(),
+            "T | where a == 1 // trailing comment\n".into(),
+            "  T\n| where (  a == 1 /* c */ )  \n| project b , c ".into(),
+            "let x = (\n  // c\n);\nT".into(),
+            "T | where".into(),
+            "T | join ( U | where x == 1 ) on a".into(),
+            "T | summarize count() by bin(TimeGenerated, 1h) // x".into(),
+        ];
+        let mut dirs = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata")];
+        while let Some(dir) = dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else if path.extension().is_some_and(|e| e == "kql") {
+                    out.extend(std::fs::read_to_string(&path).ok());
+                }
+            }
+        }
+        out
+    }
+
+    /// From each end inward gives the range that walking every token gave,
+    /// for every node of every KQL file under `crates/testdata`, broken ones
+    /// and ones with trivia at either end among them.
+    #[test]
+    fn range_from_the_ends_is_range_by_walking() {
+        let mut nodes = 0;
+        for source in sources() {
+            let root = SyntaxNode::new_root(crate::parser::parse(&source).green);
+            for node in root.descendants() {
+                assert_eq!(
+                    range(&node),
+                    range_by_walking(&node),
+                    "{node:?} in {source:?}"
+                );
+                nodes += 1;
+            }
+        }
+        assert!(nodes > 5_000, "{nodes} nodes");
     }
 }

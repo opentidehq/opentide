@@ -1118,6 +1118,7 @@ impl<'a> Pass<'a> {
                                     .iter_mut()
                                     .find(|c| c.name == name)
                                 {
+                                    let column = Arc::make_mut(column);
                                     column.type_name = Some(to_type.clone());
                                     column.made_by = Some(made_by);
                                 }
