@@ -2818,6 +2818,7 @@ name = "opentide-core"
 version = "0.12.0"
 dependencies = [
  "indexmap",
+ "memchr",
  "regex",
  "saphyr",
  "saphyr-parser",
@@ -2838,7 +2839,6 @@ dependencies = [
  "opentide-parse",
  "rowan",
  "serde",
- "toml",
 ]
 
 [[package]]
@@ -2878,7 +2878,6 @@ dependencies = [
  "opentide-parse",
  "rowan",
  "serde",
- "toml",
 ]
 
 [[package]]
@@ -2907,7 +2906,6 @@ dependencies = [
  "regex",
  "rowan",
  "serde",
- "toml",
 ]
 
 [[package]]
@@ -3111,7 +3109,6 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "serde",
- "toml",
  "yara-x-fmt",
  "yara-x-parser",
 ]
@@ -3127,7 +3124,6 @@ dependencies = [
  "regex-syntax",
  "rowan",
  "serde",
- "toml",
 ]
 
 [[package]]
