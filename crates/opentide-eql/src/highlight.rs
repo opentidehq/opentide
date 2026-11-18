@@ -76,25 +76,29 @@ pub(crate) const ERROR_STRING: &str = "ERROR string";
 pub(crate) const ERROR_NUMBER: &str = "ERROR number";
 
 /// Each captured token of the tree, in document order, with its span and capture.
+#[cfg(test)]
 pub(crate) fn captures(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
-    let mut out = Vec::new();
-    for token in visible_tokens(root) {
-        let span = span_of(&token);
-        let Some(parent) = token.parent() else {
-            continue;
-        };
-        let capture = if matches!(token.kind(), K::LINE_COMMENT | K::BLOCK_COMMENT) {
-            Some("comment")
-        } else if is_leaf(parent.kind()) {
-            leaf_capture(&parent)
-        } else {
-            token_capture(&token, parent.kind())
-        };
-        if let Some(capture) = capture {
-            out.push((span, capture));
-        }
+    visible_tokens(root)
+        .filter_map(|t| capture_of(&t))
+        .collect()
+}
+
+/// The span and capture of `token`, if it is visible and captured: what
+/// [`captures`] gathers, for a walk that meets the tokens itself (ADR 0014
+/// §5a).
+pub(crate) fn capture_of(token: &SyntaxToken) -> Option<(ByteSpan, &'static str)> {
+    if token.kind() == K::WHITESPACE || token.text().is_empty() {
+        return None;
     }
-    out
+    let parent = token.parent()?;
+    let capture = if matches!(token.kind(), K::LINE_COMMENT | K::BLOCK_COMMENT) {
+        Some("comment")
+    } else if is_leaf(parent.kind()) {
+        leaf_capture(&parent)
+    } else {
+        token_capture(token, parent.kind())
+    };
+    Some((span_of(token), capture?))
 }
 
 /// The tokens a reader sees: everything but whitespace, with a length.
