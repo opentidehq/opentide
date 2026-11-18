@@ -926,6 +926,30 @@ platform!(
     CrowdstrikeConfiguration, "CrowdstrikeConfiguration", CrowdstrikeTenant
 );
 
+/// The kind of rule a HarfangLab tenant receives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, FromNode, JsonSchema)]
+#[from_node(literal)]
+pub enum HarfangLabKind {
+    /// `Sigma`.
+    #[serde(rename = "Sigma")]
+    Sigma,
+    /// `YARA`.
+    #[serde(rename = "YARA")]
+    Yara,
+}
+
+/// A HarfangLab tenant's `type`: its kind, or a `$NAME` placeholder that
+/// holds one, which deploy reads when it runs.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum HarfangLabType {
+    /// `Sigma` or `YARA`.
+    Kind(HarfangLabKind),
+    /// A placeholder.
+    Placeholder(EnvPlaceholder),
+}
+
 /// `[tenants.setup]` for HarfangLab.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -934,8 +958,9 @@ pub struct HarfangLabSetup {
     /// Verify the tenant's TLS certificate.
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
-    /// Rule type the tenant receives.
-    pub r#type: String,
+    /// Rule type the tenant receives: `Sigma` or `YARA` (case matters), or a
+    /// `$NAME` placeholder that holds one of them.
+    pub r#type: HarfangLabType,
     /// HarfangLab manager URL.
     pub url: String,
     /// API token.
