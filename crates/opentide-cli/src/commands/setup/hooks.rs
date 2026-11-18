@@ -61,7 +61,7 @@ pub fn hook_entry(relative: &str) -> String {
 fn yaml_string(text: &str) -> Option<String> {
     let document = node::load(text).ok()?;
     match &document.root()?.value {
-        Value::Str(value) => Some(value.clone()),
+        Value::Str(value) => Some(value.to_string()),
         _ => None,
     }
 }

@@ -2475,6 +2475,24 @@ fn release_when<T>(value: T, process_ends: bool) {
 /// `opentide` in this process: the process's environment and streams.
 pub fn main(argv: &[String], version: &str) -> i32 {
     use std::io::IsTerminal;
+    // `opentide --version` alone answers before anything else: no
+    // environment, working directory, workspace search or command tree, as
+    // it checks nothing (#1072; `opentide doctor` does).
+    if let Some(line) = version_only(argv, version) {
+        let mut out = std::io::stdout().lock();
+        return match out.write_all(line.as_bytes()).and_then(|()| out.flush()) {
+            Ok(()) => 0,
+            // A reader that went away reads no report either (as `run`).
+            Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => 1,
+            Err(error) => {
+                let _ignored = writeln!(
+                    std::io::stderr(),
+                    "error: the version could not be written: {error}"
+                );
+                1
+            }
+        };
+    }
     adopt_working_directory();
     let env = Env::from_process();
     let cwd = std::env::current_dir().ok();
@@ -2501,6 +2519,17 @@ pub fn main(argv: &[String], version: &str) -> i32 {
     let mut out = anstream::AutoStream::always(std::io::stdout()).lock();
     let mut err = anstream::AutoStream::always(std::io::stderr());
     run(argv, &env, &host, &mut out, &mut err)
+}
+
+/// What `opentide --version` (or `-V`) prints when it is the only argument:
+/// the line `dispatch` prints for it in any mode.
+fn version_only(argv: &[String], version: &str) -> Option<String> {
+    match argv {
+        [flag] if flag == "--version" || flag == "-V" => {
+            Some(format!("{} {version}\n", catalog::PROGRAM))
+        }
+        _ => None,
+    }
 }
 
 /// A command path of the tree that no handler answers: a bug in opentide
@@ -3172,6 +3201,28 @@ mod tests {
         ran(line, &[], false, |run, out, err| {
             Ok(run.emit(&unhandled("query"), &[], out, err)?)
         })
+    }
+
+    #[test]
+    fn the_version_answers_alone_as_dispatch_answers_it() {
+        for flag in ["--version", "-V"] {
+            let dispatched = dispatched(flag, &[], false);
+            assert_eq!(dispatched.code, 0);
+            assert_eq!(
+                version_only(&[flag.to_owned()], "9.9.9").as_deref(),
+                Some(dispatched.stdout.as_str()),
+                "{flag}"
+            );
+        }
+        assert_eq!(
+            version_only(&["--version".into(), "info".into()], "9.9.9"),
+            None
+        );
+        assert_eq!(
+            version_only(&["--json".into(), "--version".into()], "9.9.9"),
+            None
+        );
+        assert_eq!(version_only(&[], "9.9.9"), None);
     }
 
     #[test]
