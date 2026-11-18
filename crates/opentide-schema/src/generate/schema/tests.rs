@@ -212,7 +212,7 @@ fn long_hints_are_abbreviated_unless_the_field_says_not_to() {
         name: "Use of a tool and an agent with credentials to escalate privileges".to_owned(),
         version: "1.0".parse().unwrap(),
         removed: None,
-        description: String::new(),
+        description: crate::vocab::Description::default(),
         icon: String::new(),
         link: String::new(),
         stages: Vec::new(),

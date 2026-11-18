@@ -1,6 +1,8 @@
 //! One vocabulary: a `{field}.vocab.toml` document read into metadata and
 //! keyed entries.
 
+use std::sync::OnceLock;
+
 use indexmap::IndexMap;
 use toml::{Table, Value};
 
@@ -50,6 +52,106 @@ pub struct Metadata {
     pub extra: Table,
 }
 
+/// The line of a bundled entry that holds its description.
+const DESCRIPTION_LINE: &str = "description = ";
+
+/// An entry's description: its text, or for a bundled vocabulary its entry's
+/// line in the compiled-in document, read the first time it is asked for.
+/// A validation reads keys, names and versions, never a description: the
+/// bundled descriptions were most of the vocabularies' text, parsed and kept
+/// for nothing (#1071). It reads, compares and prints as its text.
+#[derive(Clone, Default)]
+pub struct Description(DescriptionText);
+
+#[derive(Clone)]
+enum DescriptionText {
+    Text(String),
+    Bundled {
+        item: &'static str,
+        read: OnceLock<String>,
+    },
+}
+
+impl Default for DescriptionText {
+    fn default() -> Self {
+        Self::Text(String::new())
+    }
+}
+
+impl Description {
+    /// The description of the bundled entry whose document text is `item`.
+    fn bundled(item: &'static str) -> Self {
+        Self(DescriptionText::Bundled {
+            item,
+            read: OnceLock::new(),
+        })
+    }
+
+    /// The text.
+    pub fn as_str(&self) -> &str {
+        match &self.0 {
+            DescriptionText::Text(text) => text,
+            DescriptionText::Bundled { item, read } => read.get_or_init(|| {
+                item.lines()
+                    .find(|line| line.starts_with(DESCRIPTION_LINE))
+                    .and_then(|line| line.trim_end().parse::<Table>().ok())
+                    .and_then(|line| line.get("description").and_then(text_of))
+                    .unwrap_or_default()
+            }),
+        }
+    }
+}
+
+impl std::ops::Deref for Description {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<String> for Description {
+    fn from(text: String) -> Self {
+        Self(DescriptionText::Text(text))
+    }
+}
+
+impl From<&str> for Description {
+    fn from(text: &str) -> Self {
+        Self(DescriptionText::Text(text.to_owned()))
+    }
+}
+
+impl PartialEq for Description {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<str> for Description {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for Description {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl std::fmt::Debug for Description {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl std::fmt::Display for Description {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// One vocabulary entry.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entry {
@@ -61,8 +163,9 @@ pub struct Entry {
     pub version: Version,
     /// The version that removed it, if any.
     pub removed: Option<Version>,
-    /// The description.
-    pub description: String,
+    /// The description ([`Description`]: a bundled vocabulary's is read
+    /// the first time it is asked for).
+    pub description: Description,
     /// The icon.
     pub icon: String,
     /// The link.
@@ -128,23 +231,33 @@ impl Vocabulary {
     /// built theirs together (#1071). The result is [`Vocabulary::from_file`]'s
     /// (a test holds every bundled file to it). A user's own vocabulary is
     /// hand-written, not in the loader's form: it is read whole.
-    pub fn from_bundled_file(file_name: &str, text: &str) -> Result<Self, VocabError> {
-        use opentide_core::catalog::{CatalogError, array_items, preamble};
+    pub fn from_bundled_file(file_name: &str, text: &'static str) -> Result<Self, VocabError> {
+        use opentide_core::catalog::{CatalogError, array_items, array_items_keeping, preamble};
         let toml_error = |error: CatalogError| VocabError::Toml {
             file: file_name.to_owned(),
             message: error.to_string(),
         };
         let mut table: Table = preamble(text).map_err(toml_error)?;
-        for array in ["stages", "keys"] {
-            if table.contains_key(array) {
-                continue;
-            }
-            let items: Vec<Value> = array_items(text, array).map_err(toml_error)?;
-            if !items.is_empty() {
-                table.insert(array.to_owned(), Value::Array(items));
-            }
+        // Most documents have no `[[stages]]` (theirs, if any, is a preamble
+        // list): no pass over the whole text to find none.
+        if !table.contains_key("stages") && text.contains("\n[[stages]]") {
+            let stages: Vec<Value> = array_items(text, "stages").map_err(toml_error)?;
+            table.insert("stages".to_owned(), Value::Array(stages));
         }
-        let vocabulary = Self::from_table(table, file_name)?;
+        // The entries without their descriptions, which stay in `text` until
+        // one is asked for ([`Description`]).
+        let mut items = Vec::new();
+        if !table.contains_key("keys") {
+            let keys: Vec<(Value, &'static str)> =
+                array_items_keeping(text, "keys", &|line| !line.starts_with(DESCRIPTION_LINE))
+                    .map_err(toml_error)?;
+            let (values, texts): (Vec<Value>, Vec<&'static str>) = keys.into_iter().unzip();
+            if !values.is_empty() {
+                table.insert("keys".to_owned(), Value::Array(values));
+            }
+            items = texts;
+        }
+        let vocabulary = Self::from_table_with(table, file_name, Some(&items))?;
         Self::named(file_name, vocabulary)
     }
 
@@ -173,7 +286,17 @@ impl Vocabulary {
     }
 
     /// Reads a vocabulary document already parsed as TOML.
-    pub fn from_table(mut table: Table, source: &str) -> Result<Self, VocabError> {
+    pub fn from_table(table: Table, source: &str) -> Result<Self, VocabError> {
+        Self::from_table_with(table, source, None)
+    }
+
+    /// [`Vocabulary::from_table`]; with `items`, the bundled document text of
+    /// each entry of `keys`, which holds its description.
+    fn from_table_with(
+        mut table: Table,
+        source: &str,
+        items: Option<&[&'static str]>,
+    ) -> Result<Self, VocabError> {
         let missing = |key: &str| VocabError::MissingKey {
             file: source.to_owned(),
             key: key.to_owned(),
@@ -224,7 +347,10 @@ impl Vocabulary {
         let mut skipped = Vec::new();
         for (index, raw) in entries_raw.into_iter().enumerate() {
             match entry_of(raw, key) {
-                Ok(entry) => {
+                Ok(mut entry) => {
+                    if let Some(&item) = items.and_then(|items| items.get(index)) {
+                        entry.description = Description::bundled(item);
+                    }
                     if entries.contains_key(&entry.key) {
                         return Err(VocabError::DuplicateKey {
                             file: source.to_owned(),
@@ -366,7 +492,7 @@ fn entry_of(raw: Value, key: KeyKind) -> Result<Entry, String> {
             Some(value) => text_of(&value).ok_or_else(|| format!("`{key}` is not text")),
         }
     };
-    let description = text("description")?;
+    let description = Description::from(text("description")?);
     let icon = text("icon")?;
     let link = text("link")?;
     Ok(Entry {
