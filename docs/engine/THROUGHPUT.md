@@ -28,17 +28,17 @@ only.
 
 | Language | Corpus, parse µs/call | Corpus, analyze µs/call | External, parse MB/s | External, analyze MB/s | External texts, bytes |
 |---|---:|---:|---:|---:|---|
-| KQL | 5.8 | 40.1 | 21.4 | 3.7 | 15, 39,092 |
-| ES\|QL | 6.2 | 28.0 | 21.6 | 5.6 | 12, 2,844 |
-| EQL | 4.8 | 15.1 | 26.0 | 9.1 | 12, 2,978 |
-| Kibana KQL | 4.2 | 16.8 | 7.5 | 3.6 | 55, 650 |
-| Lucene | 4.5 | 15.7 | 29.8 | 10.3 | 18, 2,716 |
-| SPL | 10.4 | 31.4 | 16.7 | 4.5 | 14, 12,328 |
-| CQL | 21.4 | 25.6 | 10.3 | 9.0 | 45, 55,062 |
-| Falco | 11.0 | 15.5 | 11.2 | 0.2 | 241, 30,955 |
-| YARA | 31.7 | 46.7 | 4.1 | 3.0 | 50, 206,242 |
-| Exabeam | 20.2 | 41.0 | 5.9 | 3.8 | 16, 2,550 |
-| YARA-L | 14.4 | 27.1 | 21.3 | 10.0 | 79, 243,055 |
+| KQL | 5.7 | 38.4 | 21.6 | 3.5 | 15, 39,092 |
+| ES\|QL | 6.2 | 28.2 | 21.0 | 5.4 | 12, 2,844 |
+| EQL | 6.7 | 17.9 | 26.8 | 8.9 | 12, 2,978 |
+| Kibana KQL | 4.4 | 17.1 | 7.1 | 2.9 | 55, 650 |
+| Lucene | 4.8 | 16.2 | 8.8 | 3.4 | 335, 6,654 |
+| SPL † | 10.3 | 32.4 | 17.1 | 4.5 | 14, 12,328 |
+| CQL † | 21.5 | 25.8 | 10.6 | 9.0 | 45, 55,062 |
+| Falco † | 10.6 | 15.4 | 11.4 | 0.2 | 241, 30,955 |
+| YARA † | 31.4 | 47.0 | 4.0 | 3.0 | 50, 206,242 |
+| Exabeam † | 20.1 | 41.6 | 6.6 | 3.7 | 4, 794 |
+| YARA-L † | 14.4 | 26.4 | 22.3 | 10.3 | 79, 243,055 |
 
 How to read the table:
 
@@ -50,8 +50,8 @@ How to read the table:
   their crates' `debug_kinds`, which also formats every kind's name (a quarter to two fifths of its
   time) and, for YARA, parses twice. Their parse figure is a lower bound on speed until each crate
   gives the benchmark a plain parse.
-- **Small inputs.** Kibana KQL's external queries are short (650 bytes in all), so its MB/s is
-  dominated by the per-call floor.
+- **Small inputs.** Kibana KQL's and Lucene's external queries are short (12 and 20 bytes on
+  average), and Exabeam's set is 794 bytes, so their MB/s is dominated by the per-call floor.
 
 ## Adding a language
 
