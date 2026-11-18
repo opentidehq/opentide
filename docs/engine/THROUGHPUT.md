@@ -46,10 +46,12 @@ How to read the table:
   goes on analysis, not parsing. That cost grows with the input: KQL spends about 700 µs on an
   external rule against a 40 µs floor on a corpus query, Falco about 640 µs a rule. It is the
   analysis's own work on long input, not per-call setup, and it is what step 4 of #1571 goes after.
-- **Parse entry points (marked †).** SPL, CQL, Falco, YARA, Exabeam and YARA-L are measured through
-  their crates' `debug_kinds`, which also formats every kind's name (a quarter to two fifths of its
-  time) and, for YARA, parses twice. Their parse figure is a lower bound on speed until each crate
-  gives the benchmark a plain parse.
+- **Parse entry points (marked †).** Every language's parse is now its crate's plain `parses`
+  (#1584). The † parse figures above were taken before that, through `debug_kinds`, which also
+  formats every kind's name (a quarter to two fifths of its time) and, for YARA, parsed twice: they
+  understate those languages' parse speed until the table is next recorded. YARA's `parses` drains
+  `yara-x-parser`'s events and builds no tree, where the other languages' build their rowan tree,
+  so its parse figure is not like for like with theirs.
 - **Small inputs.** Kibana KQL's and Lucene's external queries are short (12 and 20 bytes on
   average), and Exabeam's set is 794 bytes, so their MB/s is dominated by the per-call floor.
 

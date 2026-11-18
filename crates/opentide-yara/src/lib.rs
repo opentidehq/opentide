@@ -326,6 +326,25 @@ pub fn format(source: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// Whether `source` parses without an error: the parse alone, with no
+/// analysis, for the throughput benchmark (`cargo bench --bench throughput`, ADR
+/// 0014). Not part of the API.
+///
+/// The parser's own errors: the AST's builder adds a few (an integer out of
+/// range, an invalid escape, too deep a nesting), so a text can parse here
+/// and still be refused by [`debug_kinds`] and [`analyze`].
+#[doc(hidden)]
+#[must_use]
+pub fn parses(source: &str) -> bool {
+    // yara-x-parser's events, drained: one parse, with no tree built.
+    // (Counted, not `all`: a parse that stops at its first error is not the
+    // whole parse.)
+    Parser::new(source.as_bytes())
+        .filter(|event| matches!(event, yara_x_parser::cst::Event::Error { .. }))
+        .count()
+        == 0
+}
+
 /// Whether YARA-X rejects `source` (the errors the analysis reports), and the
 /// `Debug` names of the kinds of `yara-x-parser`'s CST in preorder: a node by
 /// its own name, a token as `PARENT/TOKEN` (the CST's expressions are generic
