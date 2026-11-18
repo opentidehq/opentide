@@ -311,7 +311,7 @@ impl MispClient {
             .map_err(|error| connectivity().with_detail(error.describe()))?;
         // The process's runtime (#1558); a call it refuses is a connectivity
         // failure with its reason.
-        let (status, body) = crate::runtime::block_on(async {
+        let (status, body) = crate::runtime::block_on_anywhere(async {
             let cancel = CancellationToken::new();
             let response = self.http.send(request, &cancel).await?;
             let status = response.status().as_u16();

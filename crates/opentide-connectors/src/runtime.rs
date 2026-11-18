@@ -41,9 +41,11 @@ pub fn builder() -> tokio::runtime::Builder {
         builder
             .worker_threads(2)
             .thread_name("opentide-net")
+            // Every thread of the runtime is known as one: a `spawn_blocking`
+            // thread may block on it.
+            .on_thread_start(|| RUNTIME_THREAD.set(true))
             // A worker thread drives async work: [`block_on`] there would
-            // block it, so it refuses. (Only workers park and unpark;
-            // `spawn_blocking` threads may block on the runtime.)
+            // block it, so it refuses. (Only workers park and unpark.)
             .on_thread_unpark(|| ASYNC_THREAD.set(true));
         builder
     }
@@ -57,6 +59,9 @@ thread_local! {
     /// Whether this thread drives async work: [`block_on`] is driving a
     /// future here, or it is one of [`shared`]'s worker threads.
     static ASYNC_THREAD: Cell<bool> = const { Cell::new(false) };
+    /// Whether this thread is one of [`shared`]'s (a worker, or a
+    /// `spawn_blocking` thread).
+    static RUNTIME_THREAD: Cell<bool> = const { Cell::new(false) };
 }
 
 /// [`block_on`]'s refusal on a thread that drives async work, where blocking
@@ -66,25 +71,65 @@ pub const INSIDE_THE_RUNTIME: &str = "cannot block on the network runtime from a
      drives asynchronous work; await the work there, or call it through spawn_blocking";
 
 /// Runs *work* to completion on the [`shared`] runtime, driven from this
-/// thread.
+/// thread: the main thread, a rayon thread, a `spawn_blocking` thread of the
+/// runtime.
 ///
 /// # Errors
 ///
-/// The runtime cannot start, or this thread drives async work
-/// ([`INSIDE_THE_RUNTIME`]): a call nested in another `block_on`, from a
-/// worker of the runtime, or, on WASI, from the MCP server, which runs its
-/// tools on its one thread.
+/// The runtime cannot start, or this thread may be driving async work
+/// ([`INSIDE_THE_RUNTIME`]), where tokio would panic: a call nested in
+/// another `block_on`, from a worker of the runtime, or from inside another
+/// runtime (an embedder's, or the MCP server's on WASI), which tokio cannot
+/// tell from one that drives it. [`block_on_anywhere`] serves that last
+/// caller.
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    let runtime = shared()?;
+    if ASYNC_THREAD.get() || in_another_runtime() {
+        return Err(INSIDE_THE_RUNTIME.into());
+    }
+    Ok(drive(runtime, work))
+}
+
+/// [`block_on`], which also serves a caller inside another runtime (an
+/// embedder's) by handing the work to a thread of its own ([`apart`]); no
+/// opentide caller is, after #1558. For a client a host may call from its
+/// own runtime (the CVE lookups, MISP).
+///
+/// # Errors
+///
+/// As [`block_on`]'s, but inside another runtime only on WASI (no thread to
+/// hand the work to); or *work* panicked on that thread.
+pub fn block_on_anywhere<F: Future + Send>(work: F) -> Result<F::Output, String>
+where
+    F::Output: Send,
+{
     let runtime = shared()?;
     if ASYNC_THREAD.get() {
         return Err(INSIDE_THE_RUNTIME.into());
     }
-    // WASI has one thread and no `spawn_blocking`: any runtime entered here
-    // (the MCP server's, a test's) drives async work on it.
-    #[cfg(target_os = "wasi")]
-    if tokio::runtime::Handle::try_current().is_ok() {
-        return Err(INSIDE_THE_RUNTIME.into());
+    if in_another_runtime() {
+        #[cfg(target_os = "wasi")]
+        {
+            drop(work);
+            return Err(INSIDE_THE_RUNTIME.into());
+        }
+        #[cfg(not(target_os = "wasi"))]
+        return apart(|| drive(runtime, work))
+            .map_err(|_| "the network work stopped unexpectedly".to_owned());
     }
+    Ok(drive(runtime, work))
+}
+
+/// Whether this thread is inside a runtime other than [`shared`]: entered
+/// (driving it, where tokio panics on a block) or one of its
+/// `spawn_blocking` threads, which tokio does not tell apart.
+fn in_another_runtime() -> bool {
+    !RUNTIME_THREAD.get() && tokio::runtime::Handle::try_current().is_ok()
+}
+
+/// *work* driven on *runtime* from this thread, which is marked as driving
+/// async work meanwhile.
+fn drive<F: Future>(runtime: &tokio::runtime::Runtime, work: F) -> F::Output {
     /// Clears the flag when the drive ends, panics included.
     struct Driving;
     impl Drop for Driving {
@@ -94,7 +139,7 @@ pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
     }
     ASYNC_THREAD.set(true);
     let _driving = Driving;
-    Ok(runtime.block_on(work))
+    runtime.block_on(work)
 }
 
 /// How many runtimes this process has started ([`shared`]'s, once): tests
@@ -133,7 +178,8 @@ pub fn shared() -> Result<&'static tokio::runtime::Runtime, String> {
 /// Runs *work* on a thread of its own and waits for it, as
 /// `std::thread::scope(|s| s.spawn(work).join())` does: a panic in *work*
 /// is the `Err`. On WASI, which has no threads (a spawn traps), it runs on
-/// the caller's, and a panic is caught there.
+/// the caller's, and a panic is caught there. [`block_on_anywhere`]'s way
+/// out of an embedder's runtime.
 ///
 /// # Errors
 ///
@@ -354,9 +400,27 @@ mod tests {
         );
     }
 
+    /// Inside another runtime (an embedder's), `block_on` refuses rather
+    /// than tokio's panic, and `block_on_anywhere` serves the call.
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn inside_another_runtime_block_on_refuses_and_block_on_anywhere_serves() {
+        let embedder = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap_or_else(|error| panic!("{error}"));
+        let (refused, served) =
+            embedder.block_on(async { (block_on(async { 5 }), block_on_anywhere(async { 6 })) });
+        assert_eq!(refused, Err(INSIDE_THE_RUNTIME.to_owned()));
+        assert_eq!(served, Ok(6));
+    }
+
     #[cfg(target_os = "wasi")]
     #[tokio::test(flavor = "current_thread")]
     async fn on_wasi_a_call_inside_any_runtime_is_refused() {
+        assert_eq!(
+            block_on_anywhere(async { 7 }),
+            Err(INSIDE_THE_RUNTIME.to_owned())
+        );
         assert_eq!(block_on(async { 7 }), Err(INSIDE_THE_RUNTIME.to_owned()));
     }
 
