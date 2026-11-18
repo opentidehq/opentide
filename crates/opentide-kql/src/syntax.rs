@@ -6,8 +6,8 @@
 //! tree; `cargo xtask codegen` generates its typed AST from it, over the
 //! `SyntaxKind`, `Lang` and `T!` of this module.
 
+use foldhash::HashMap;
 use opentide_parse::TokenSet;
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// A token or node kind of the KQL tree, spelled as rust-analyzer spells
