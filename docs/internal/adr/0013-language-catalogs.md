@@ -61,15 +61,24 @@ JSON or a binary form would lose that. The engine crates `include_str!` the file
 
 A crate reads a catalog with two functions:
 
-- `opentide_core::catalog::array_items::<T>(text, "name")`: the items of `[[name]]`, each
-  deserialised on its own, so only one item's TOML document is alive at a time;
+- `opentide_core::catalog::array_items::<T>(text, "name")`: the items of `[[name]]`, parsed a few
+  at a time (about 4 KiB of text per document, and never more than one item over that), so only a
+  small TOML document is alive and no parser is set up per item;
 - `opentide_core::catalog::preamble::<T>(text)`: the preamble.
 
-No engine crate calls `toml::from_str` on a whole catalog file. Both functions refuse, with the
-line, any text not in the form above, rather than reading it differently from `toml`'s reading of
-the whole file. Each catalog crate has a test that its compiled-in files read item by item are, field
-for field, what `toml::from_str` reads from the whole files (by `Debug`). A sync script that drifts
-from the form fails that test in CI, not a user's run.
+No engine crate calls `toml::from_str` on a whole catalog file.
+
+**What the loader checks, and what the test must.** The loader checks every line's form, and
+refuses, with the line, a header it cannot read, a multi-line string, or a line outside the items
+it reads that does not even look like `key = value`. It parses only the items of the array asked for:
+the other arrays' items and the preamble are not parsed by that call (that is what keeps a read
+cheap). So on its own it does not catch everything `toml` would, such as a duplicate key in another
+array or a preamble key named like an array.
+
+What makes a catalog safe is its crate's test, which is mandatory: the compiled-in files, read with
+these functions, are field for field what `toml::from_str` reads from the whole files (compared by
+`Debug`). A sync script that drifts from the form fails that test in CI, not a user's run. A parse
+error names the item at fault and the line in the file.
 
 ### 3. Sharing: built once per process, in a `OnceLock`, shared by every thread
 
@@ -124,9 +133,11 @@ the item-by-item heap is still a large share of a command's peak, not before.
 
 ## Consequences
 
-- **The temporary memory of a catalog build is one item's document,** not the file's: Falco's build
-  peak goes from 5–6 MiB to almost nothing, and catalogs building at once on several threads no
-  longer stack whole documents.
+- **The temporary memory of a catalog build is a 4 KiB batch's document,** not the file's: Falco's
+  build peak goes from 5–6 MiB to almost nothing, and catalogs building at once on several threads no
+  longer stack whole documents. The line scan is one pass with one look at an item line's first
+  byte, so a read costs no more instructions than the whole-file parse it replaces (measured in this
+  ADR's PR).
 - **The format is checked.** A generator that writes a multi-line string, a commented header or an
   indented table fails the equality test.
 - **The rollout.** Falco is the reference (this ADR's PR). CQL, YARA, ES|QL, YARA-L, EQL, SPL,
