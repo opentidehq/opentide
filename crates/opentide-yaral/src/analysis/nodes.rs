@@ -18,6 +18,10 @@ impl Checker<'_> {
     /// The checks that read one node at a time, in the order of the tree.
     pub(super) fn walk_all(&mut self, root: &SyntaxNode) {
         for element in root.descendants_with_tokens() {
+            super::count_visit();
+            if let (Some(spans), NodeOrToken::Token(t)) = (&mut self.spans, &element) {
+                spans.extend(super::highlight::span(t));
+            }
             match element {
                 NodeOrToken::Node(n) => self.node(&n),
                 NodeOrToken::Token(t) => match t.kind() {

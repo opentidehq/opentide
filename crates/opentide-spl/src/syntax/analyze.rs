@@ -46,24 +46,27 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     let catalog = Catalog::cached();
     let spec = HighlightSpec::shared().expect("spec");
     let lines = LineIndex::new(source);
+    // The pipelines, scanned once for the walks of the checks below.
+    let _plan = crate::scan::plan_scope(source);
     let (root, parsed) = parse(source);
     let mut diagnostics = Vec::new();
     let index = TreeIndex::new(&root);
     parse_errors(&root, &index, &parsed.errors, &lines, &mut diagnostics);
     let broken = broken_regions(&root, &index, &parsed.errors);
-    unknown_commands(&root, catalog, &lines, &mut diagnostics);
+    unknown_commands(&index, catalog, &lines, &mut diagnostics);
     crate::perf::collect(source, catalog, &lines, &mut diagnostics);
     crate::search_operators::collect(source, catalog, &lines, &mut diagnostics);
     crate::parens::refine(source, &lines, &mut diagnostics);
     stages(
         &root,
+        &index,
         source,
         &parsed.errors,
         catalog,
         &lines,
         &mut diagnostics,
     );
-    rejects(&root, &lines, &mut diagnostics);
+    rejects(&index, &lines, &mut diagnostics);
     crate::cim::collect(source, &lines, &mut diagnostics);
     crate::declared::collect(source, catalog, &lines, &mut diagnostics);
     // No hint in a broken stage at or after its syntax error, nor over it:
@@ -94,7 +97,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
                 .and_then(|i| merged.get(i))
                 .is_none_or(|&(_, to)| start > to)
     });
-    let tokens = highlight(&root, source, spec, catalog).unwrap_or_default();
+    let tokens = highlight(&index, source, spec, catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -110,21 +113,59 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 struct TreeIndex {
     tokens: Vec<SyntaxToken>,
     errors: Vec<SyntaxNode>,
+    /// Every node, in preorder (the root first).
+    nodes: Vec<SyntaxNode>,
+    /// Every token, trivia included, in order.
+    all_tokens: Vec<SyntaxToken>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The elements the analysis's walks visited on this thread: [`visits`].
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one element a walk over the tree visited, in tests (ADR 0014 §7).
+#[inline]
+fn count_visit() {
+    #[cfg(test)]
+    VISITS.set(VISITS.get() + 1);
+}
+
+/// How many elements the analysis's walks over the tree visited on this thread.
+#[cfg(test)]
+pub(crate) fn visits() -> usize {
+    VISITS.get()
 }
 
 impl TreeIndex {
+    /// One walk over every element of the tree (ADR 0014 §5a): the checks
+    /// and the highlight below read its lists, in preorder, and walk no more.
     fn new(root: &SyntaxNode) -> Self {
-        Self {
-            tokens: root
-                .descendants_with_tokens()
-                .filter_map(NodeOrToken::into_token)
-                .filter(|t| !trivia(t.kind()))
-                .collect(),
-            errors: root
-                .descendants()
-                .filter(|n| n.kind() == K::ERROR)
-                .collect(),
+        let mut index = Self {
+            tokens: Vec::new(),
+            errors: Vec::new(),
+            nodes: Vec::new(),
+            all_tokens: Vec::new(),
+        };
+        for element in root.descendants_with_tokens() {
+            count_visit();
+            match element {
+                NodeOrToken::Node(node) => {
+                    if node.kind() == K::ERROR {
+                        index.errors.push(node.clone());
+                    }
+                    index.nodes.push(node);
+                }
+                NodeOrToken::Token(token) => {
+                    if !trivia(token.kind()) {
+                        index.tokens.push(token.clone());
+                    }
+                    index.all_tokens.push(token);
+                }
+            }
         }
+        index
     }
 
     /// The first significant token at or after `offset`.
@@ -337,7 +378,7 @@ fn first_token_text(node: &SyntaxNode) -> String {
 /// know. An app on the search head can add commands, so it is a warning; one
 /// edit from a known command it is almost certainly a typo, an error.
 fn unknown_commands(
-    root: &SyntaxNode,
+    index: &TreeIndex,
     catalog: &Catalog,
     lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
@@ -345,11 +386,12 @@ fn unknown_commands(
     // The finding of each name, made once: its typo check and "did you mean"
     // scan the whole catalog, and a query can repeat one unknown command.
     let mut made: std::collections::HashMap<String, Diagnostic> = std::collections::HashMap::new();
-    for node in root
-        .descendants()
+    for node in index
+        .nodes
+        .iter()
         .filter(|n| n.kind() == K::UNKNOWN_COMMAND)
     {
-        let name = first_token_text(&node);
+        let name = first_token_text(node);
         if catalog.command(&name).is_none() {
             let range = lines.range(shown(node.text_range()));
             let mut finding = made
@@ -422,6 +464,7 @@ fn in_broken_pipeline(node: &SyntaxNode, errors: &[SyntaxError]) -> bool {
 
 fn stages(
     root: &SyntaxNode,
+    index: &TreeIndex,
     source: &str,
     errors: &[SyntaxError],
     catalog: &Catalog,
@@ -432,12 +475,20 @@ fn stages(
         return;
     };
     command_without_pipe(&pipeline, source, errors, catalog, lines, out);
-    if !has_error(root, errors) {
+    // `has_error` of the root, from the index: its error nodes are all of the
+    // tree's, and a walk of every node found none in a query without one.
+    let root_range = root.text_range();
+    let root_error = !index.errors.is_empty()
+        || errors.iter().any(|e| {
+            root_range.contains_inclusive(e.gap.start())
+                && root_range.contains_inclusive(e.gap.end())
+        });
+    if !root_error {
         empty_stage(&pipeline, lines, out);
     }
-    for node in root.descendants() {
-        if let Some((name, what, error)) = empty_command(&node)
-            && !in_broken_pipeline(&node, errors)
+    for node in &index.nodes {
+        if let Some((name, what, error)) = empty_command(node)
+            && !in_broken_pipeline(node, errors)
         {
             let range = lines.range(shown(node.text_range()));
             let message = format!("`{name}` with no arguments {what}");
@@ -523,14 +574,14 @@ fn command_without_pipe(
 /// Forms the grammar shares with valid ones that Splunk's parser rejects:
 /// a loose comparison in `tstats ... where`, and `geostats by` with no
 /// aggregate.
-fn rejects(root: &SyntaxNode, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
-    for node in root.descendants() {
+fn rejects(index: &TreeIndex, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
+    for node in &index.nodes {
         if node.kind() == K::TSTATS_COMMAND
             && let Some(clause) = node.children().find(|n| n.kind() == K::SEARCH_EXPRESSION)
         {
             loose_operators(&clause, lines, out);
         }
-        if node.kind() == K::STATS_COMMAND && first_token_text(&node) == "geostats" {
+        if node.kind() == K::STATS_COMMAND && first_token_text(node) == "geostats" {
             let first = node.children().find(|n| {
                 matches!(
                     n.kind(),
@@ -690,20 +741,17 @@ fn looks_like_macro(text: &str) -> bool {
 /// The highlight tokens: each token's capture, then the catalog's
 /// refinements, as the tree-sitter path does them.
 fn highlight(
-    root: &SyntaxNode,
+    index: &TreeIndex,
     source: &str,
     spec: &HighlightSpec,
     catalog: &Catalog,
 ) -> Result<Vec<opentide_highlight::HighlightToken>, opentide_highlight::HighlightError> {
     let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
-    for token in root
-        .descendants_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-    {
+    for token in &index.all_tokens {
         if token.kind() == K::WHITESPACE || token.text().is_empty() {
             continue;
         }
-        let Some(mut capture) = capture(&token) else {
+        let Some(mut capture) = capture(token) else {
             continue;
         };
         let text = token.text();
@@ -808,5 +856,72 @@ mod tests {
             clean.iter().any(|d| d.code == codes::SPL_WILDCARD),
             "{clean:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod walk_tests {
+    use super::*;
+
+    /// Searches like the corpus's, written here: an engine crate reads no file
+    /// (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        "index=main sourcetype=access_combined status>=500 | stats count by host | where count > 10 | sort - count",
+        "index=web [search index=threat | fields src_ip | rename src_ip as clientip] | table _time clientip uri",
+        "| tstats count from datamodel=Endpoint.Processes where Processes.process_name=cmd.exe by Processes.dest",
+        "index=main | geostats by city | mispsearch field=user | stast count | eval",
+        "index=main | eval a=\"unclosed [ | stats count | (",
+        "search index=a `macro(arg)` | append [| makeresults | eval y=1] | lookup assets ip as src",
+    ];
+
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = SAMPLES
+            .iter()
+            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// The index's lists are what the walks they replace read: every node in
+    /// preorder, every token in order, the significant tokens and the error
+    /// nodes (ADR 0014 §5a).
+    #[test]
+    fn the_index_holds_what_the_walks_read() {
+        for source in texts() {
+            let (root, _) = parse(&source);
+            let index = TreeIndex::new(&root);
+            let nodes: Vec<_> = root.descendants().collect();
+            assert_eq!(index.nodes, nodes, "{source:?}");
+            let tokens: Vec<_> = root
+                .descendants_with_tokens()
+                .filter_map(NodeOrToken::into_token)
+                .collect();
+            assert_eq!(index.all_tokens, tokens, "{source:?}");
+            let significant: Vec<_> = tokens.into_iter().filter(|t| !trivia(t.kind())).collect();
+            assert_eq!(index.tokens, significant, "{source:?}");
+            let errors: Vec<_> = root
+                .descendants()
+                .filter(|n| n.kind() == K::ERROR)
+                .collect();
+            assert_eq!(index.errors, errors, "{source:?}");
+        }
+    }
+
+    /// An analysis walks the tree once (ADR 0014 §7): the index, the unknown
+    /// commands, the stages, the rejects and the highlight each walked it.
+    /// The count is the index's walk; the checks and the highlight take the
+    /// index, not the tree, so no other walk of the whole tree is left to
+    /// count (`stages` reads the root's children for its pipeline).
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for source in [SAMPLES[1], SAMPLES[3]] {
+            let (root, _) = parse(source);
+            let elements = root.descendants_with_tokens().count();
+            let before = visits();
+            analyze(source);
+            assert_eq!(visits() - before, elements, "{source:?}");
+        }
     }
 }
