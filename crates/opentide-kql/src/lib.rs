@@ -291,6 +291,16 @@ pub struct Catalog {
     column_index: HashMap<String, Vec<usize>>,
 }
 
+/// Lower-cased names to row indices, one per profile's bundled catalog
+/// ([`Catalog::by_name`]).
+struct NameIndexes([OnceLock<HashMap<String, usize>>; 3]);
+
+impl NameIndexes {
+    const fn new() -> Self {
+        Self([OnceLock::new(), OnceLock::new(), OnceLock::new()])
+    }
+}
+
 /// The catalog a query is checked against ([`Catalog::for_workspace`]).
 #[derive(Debug, Clone)]
 pub enum CatalogRef {
@@ -693,15 +703,48 @@ impl Catalog {
     }
 
     pub fn operator(&self, name: &str) -> Option<&OperatorRow> {
-        self.operators
-            .iter()
-            .find(|o| o.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.operators, |o| &o.name, name)
     }
 
     pub fn function(&self, name: &str) -> Option<&FunctionRow> {
-        self.functions
-            .iter()
-            .find(|f| f.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.functions, |f| &f.name, name)
+    }
+
+    /// The first of `rows` whose name is `name`, ASCII case ignored. A
+    /// profile's bundled catalog looks it up in an index built on first use
+    /// (`index`, one per profile); a scan of the hundreds of functions for
+    /// each name a query uses was a tenth of its analysis. Any other catalog
+    /// scans.
+    fn by_name<'a, T>(
+        &self,
+        index: &NameIndexes,
+        rows: &'a [T],
+        name_of: impl Fn(&T) -> &String,
+        name: &str,
+    ) -> Option<&'a T> {
+        if std::ptr::eq(self, Self::cached(self.profile)) {
+            let slot = match self.profile {
+                Profile::Core => 0,
+                Profile::Sentinel => 1,
+                Profile::Defender => 2,
+            };
+            let index = index.0[slot].get_or_init(|| {
+                let mut by_name = HashMap::with_capacity(rows.len());
+                for (i, row) in rows.iter().enumerate() {
+                    by_name
+                        .entry(name_of(row).to_ascii_lowercase())
+                        .or_insert(i);
+                }
+                by_name
+            });
+            return index
+                .get(&name.to_ascii_lowercase())
+                .and_then(|&i| rows.get(i));
+        }
+        rows.iter()
+            .find(|row| name_of(row).eq_ignore_ascii_case(name))
     }
 
     pub fn table(&self, name: &str) -> Option<&TableRow> {
@@ -715,15 +758,32 @@ impl Catalog {
     }
 
     pub fn plugin(&self, name: &str) -> Option<&PluginRow> {
-        self.plugins
-            .iter()
-            .find(|p| p.name.eq_ignore_ascii_case(name))
+        static INDEX: NameIndexes = NameIndexes::new();
+        self.by_name(&INDEX, &self.plugins, |p| &p.name, name)
     }
 
     /// The catalogued table `name` most likely means
     /// ([`opentide_core::suggest`]).
     pub fn suggest_table(&self, name: &str) -> Option<String> {
-        suggest::closest(name, self.tables.iter().map(|t| t.name.as_str())).map(str::to_string)
+        // The table names, lower-cased and folded once per bundled profile:
+        // preparing the catalog's hundreds of names for each unknown table
+        // was a third of a Sentinel query's analysis.
+        static PREPARED: [OnceLock<suggest::Candidates>; 3] =
+            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+        let names = || self.tables.iter().map(|t| t.name.as_str());
+        if std::ptr::eq(self, Self::cached(self.profile)) {
+            let slot = match self.profile {
+                Profile::Core => 0,
+                Profile::Sentinel => 1,
+                Profile::Defender => 2,
+            };
+            let prepared = PREPARED[slot].get_or_init(|| suggest::Candidates::new(names()));
+            return prepared
+                .closest(name)
+                .and_then(|i| self.tables.get(i))
+                .map(|t| t.name.clone());
+        }
+        suggest::closest(name, names()).map(str::to_string)
     }
 
     pub fn operator_names(&self) -> Vec<String> {

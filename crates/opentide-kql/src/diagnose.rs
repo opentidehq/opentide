@@ -488,7 +488,10 @@ fn functions(
                 .with_suggestion(replacement.clone()),
             );
         } else if function.is_none() && catalog.operator(&name).is_none() {
-            // Only a likely typo of a known function: within two edits.
+            // Only a likely typo of a known function: within two edits. The
+            // distance is at least the difference in length: a name more than
+            // two characters longer or shorter is not measured.
+            let length = name.chars().count();
             if let Some(suggestion) = suggest::best(
                 &name,
                 catalog
@@ -496,6 +499,7 @@ fn functions(
                     .iter()
                     .filter(|f| f.deprecated.is_none())
                     .map(|f| f.name.as_str())
+                    .filter(|f| f.chars().count().abs_diff(length) <= 2)
                     .filter(|f| (1..=2).contains(&strsim::levenshtein(f, &name))),
             ) {
                 out.push(
