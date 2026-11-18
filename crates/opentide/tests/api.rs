@@ -504,3 +504,42 @@ fn info_and_a_plan_look_credentials_up_in_the_callers_environment() {
         "{shown}"
     );
 }
+
+/// A plan reads a HarfangLab tenant's `type` from the plan's environment, as
+/// the deploy reads it: a `$NAME` the environment does not set fails the
+/// plan with the deploy's text; one it sets to a kind passes.
+#[test]
+fn a_deploy_plan_fails_a_harfanglab_tenant_whose_type_is_unset() {
+    let dir = common::tide_corpus();
+    let config = dir
+        .path()
+        .join(".opentide/configurations/platforms/harfanglab.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[[tenants]]\nname = \"lab\"\ndescription = \"d\"\n[tenants.setup]\nssl = true\n\
+         type = \"$HL_TYPE\"\nurl = \"https://h.example.org\"\n",
+    );
+    std::fs::write(&config, text).unwrap();
+    let ws = Workspace::open(dir.path(), &Options::default()).unwrap();
+    let options = DeployPlanOptions::new(Strategy::Preview).platform("harfanglab");
+    let unset = ws
+        .deploy_plan(&options.clone().environment([("OTHER", "x")]))
+        .unwrap();
+    assert!(!unset.ok(), "{}", unset.document());
+    let document = unset.document().value();
+    assert_eq!(document["status"], "failed");
+    assert_eq!(
+        document["failures"],
+        serde_json::json!([{
+            "platform": "harfanglab",
+            "tenant": "lab",
+            "error": "harfanglab tenant 'lab' setup: type names the environment variable \
+                      HL_TYPE, which is unset",
+        }])
+    );
+    let set = ws
+        .deploy_plan(&options.environment([("HL_TYPE", "Sigma")]))
+        .unwrap();
+    assert!(set.ok(), "{}", set.document());
+    assert!(set.document().value().get("failures").is_none());
+}

@@ -43,8 +43,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let changed = |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
         Err("--all reads no diff".to_owned())
     };
-    let is_set = |name: &str| std::env::var_os(name).is_some();
-    let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
+    let env = |name: &str| std::env::var(name).ok();
+    let outcome = dry_run::run(&workspace, &owned, &request, &changed, &env);
     let total = started.elapsed();
     if json {
         let mut payload = outcome.payload.clone();

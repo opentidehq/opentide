@@ -476,6 +476,19 @@ fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileC
     None
 }
 
+/// The variable `name`'s value when it is set and not blank: in
+/// `environment`, else in the process's.
+pub(crate) fn lookup(
+    environment: Option<&std::collections::BTreeMap<String, String>>,
+    name: &str,
+) -> Option<String> {
+    match environment {
+        Some(vars) => vars.get(name).cloned(),
+        None => std::env::var_os(name).map(|value| value.to_string_lossy().into_owned()),
+    }
+    .filter(|value| !value.trim().is_empty())
+}
+
 /// Whether the variable `name` is set and not blank, as a connection reads
 /// it: in `environment`, else in the process's.
 pub(crate) fn is_set(

@@ -64,8 +64,9 @@ pub struct DeployPlanOptions {
     /// keeps them.
     pub keep_deprecated: Option<bool>,
     /// The environment a tenant's `$NAME` credentials are looked up in, to
-    /// say whether each is set (as `ConnectOptions::environment` names the
-    /// one a connection reads); `None`: the process's.
+    /// say whether each is set and to read a HarfangLab tenant's `type` (as
+    /// `ConnectOptions::environment` names the one a connection reads); a
+    /// blank variable counts as unset. `None`: the process's.
     pub environment: Option<std::collections::BTreeMap<String, String>>,
 }
 
@@ -213,8 +214,9 @@ impl Workspace {
         let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
             Err("the facade plans every rule file or a selection".to_owned())
         };
-        let is_set = |name: &str| crate::workspace::is_set(options.environment.as_ref(), name);
-        let outcome = dry_run::run(ws, &owned, &request, &changed, &is_set);
+        // A blank variable counts as unset, as `is_set` counts it.
+        let env = |name: &str| crate::workspace::lookup(options.environment.as_ref(), name);
+        let outcome = dry_run::run(ws, &owned, &request, &changed, &env);
         let message = || {
             outcome
                 .payload

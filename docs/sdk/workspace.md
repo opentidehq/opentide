@@ -103,7 +103,7 @@ A tenant in `info()["platforms"]` names the environment variables it reads and w
 
 ## Plan a deploy
 
-`deploy_plan` is `opentide deploy --dry-run`: the rules the strategies select, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. Without `uuids` or `files` it plans every rule file (`--all`); `platform` plans for one platform, and `keep_deprecated` is `--keep-deprecated` (`True`) or `--drop-deprecated` (`False`). `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `Connection.open` takes one; without it, the process's.
+`deploy_plan` is `opentide deploy --dry-run`: the rules the strategies select, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. Without `uuids` or `files` it plans every rule file (`--all`); `platform` plans for one platform, and `keep_deprecated` is `--keep-deprecated` (`True`) or `--drop-deprecated` (`False`). `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, and a HarfangLab tenant's `type` is read (a plan fails a tenant whose `type` the deploy could not read), as `Connection.open` takes one; without it, the process's.
 
 ```python
 from opentide import Workspace

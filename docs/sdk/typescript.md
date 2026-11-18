@@ -105,7 +105,7 @@ Workspace.open('.').then((ws) => {
 
 ## Plan a deploy
 
-`deployPlan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. It returns a promise of `{ document, summary, ok }`; `document` is the `result` of `deploy --dry-run --json`. `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `Connection.open` takes one, and `ws.info(environment)` reports each variable as set or not in it; without one, the process's.
+`deployPlan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. It returns a promise of `{ document, summary, ok }`; `document` is the `result` of `deploy --dry-run --json`. `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, and a HarfangLab tenant's `type` is read (a plan fails a tenant whose `type` the deploy could not read), as `Connection.open` takes one, and `ws.info(environment)` reports each variable as set or not in it; without one, the process's.
 
 ```js
 const { Workspace } = require('@opentide/opentide')

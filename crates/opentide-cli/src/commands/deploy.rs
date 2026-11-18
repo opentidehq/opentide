@@ -111,6 +111,9 @@ pub struct DryRun {
     pub result: Json,
     /// The rules that would fail to deploy, as code frames.
     pub diagnostics: Vec<Diagnostic>,
+    /// The tenants a deploy would fail before sending them a rule: each
+    /// failure's `error`, an `error:` line of its own.
+    pub failures: Vec<String>,
     /// The platforms compiled, in order: one progress event each.
     pub compiled: Vec<String>,
     /// Whether the run was refused before it started: no plan, no summary,
@@ -237,8 +240,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
     let changed = |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), String> {
         dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder)
     };
-    let is_set = |name: &str| cx.env.get(name).is_some();
-    let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
+    let outcome = dry_run::run(&workspace, &owned, &request, &changed, &env);
     let at_root = root::is_workspace_root(&OsFs, workspace.root());
     let result = from_outcome(outcome, at_root);
     // The index is large on a heavy workspace (see `app::release`).
@@ -258,6 +260,7 @@ fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
         outcome_line: None,
         plan_kind: false,
         diagnostics: Vec::new(),
+        failures: Vec::new(),
         compiled: Vec::new(),
         refused: true,
     }
@@ -276,6 +279,7 @@ fn failed(message: String) -> DryRun {
         outcome_line: None,
         plan_kind: false,
         diagnostics: Vec::new(),
+        failures: Vec::new(),
         compiled: Vec::new(),
         refused: false,
     }
@@ -370,6 +374,16 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
             _ => Vec::new(),
         })
         .unwrap_or_default();
+    let failures = match result.get("failures") {
+        Some(Json::Array(items)) => items
+            .iter()
+            .filter_map(|item| match item.get("error") {
+                Some(Json::Str(text)) => Some(text.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
     let compiled = match result.get("payloads") {
         Some(Json::Object(members)) => members.iter().map(|(key, _)| key.clone()).collect(),
         _ => Vec::new(),
@@ -390,6 +404,7 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
         plan_kind: outcome.outcome_kind == Some("plan"),
         result,
         diagnostics,
+        failures,
         compiled,
         refused: false,
     }

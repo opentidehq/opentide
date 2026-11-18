@@ -43,6 +43,12 @@ fn workspace(files: &[(&str, &str)]) -> Workspace {
 }
 
 fn run(workspace: &Workspace, request: Request, set: &[&str]) -> Outcome {
+    let vars: Vec<(&str, &str)> = set.iter().map(|name| (*name, "set")).collect();
+    run_with(workspace, request, &vars)
+}
+
+/// A dry run whose environment holds `vars`.
+fn run_with(workspace: &Workspace, request: Request, vars: &[(&str, &str)]) -> Outcome {
     let owned = Owned::new(
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
@@ -50,8 +56,12 @@ fn run(workspace: &Workspace, request: Request, set: &[&str]) -> Outcome {
     let changed = |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
         Err("no git here".to_owned())
     };
-    let is_set = |name: &str| set.contains(&name);
-    dry_run::run(workspace, &owned, &request, &changed, &is_set)
+    let env = |name: &str| {
+        vars.iter()
+            .find(|(key, _)| *key == name)
+            .map(|(_, value)| (*value).to_owned())
+    };
+    dry_run::run(workspace, &owned, &request, &changed, &env)
 }
 
 fn all(strategies: &[&str]) -> Request {
@@ -342,4 +352,109 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
             .contains("\"api_request\":{\"name\":\"Rule 00000000-0000-4000-8000-0000000000b2\""),
         "{payloads}"
     );
+}
+
+/// HarfangLab tenants `typo`, `unset`, `resolved` and `sigma`: their `type`
+/// is a typo, a placeholder for `$HL_TYPE`, a placeholder for `$HL_KIND`
+/// and `Sigma`.
+const HARFANGLAB: &str = "[platform]\nenabled = true\n\n\
+    [[tenants]]\nname = \"typo\"\ndescription = \"d\"\n[tenants.setup]\nssl = true\n\
+    type = \"Sigmaa\"\nurl = \"https://h.example.org\"\n\n\
+    [[tenants]]\nname = \"unset\"\ndescription = \"d\"\n[tenants.setup]\nssl = true\n\
+    type = \"$HL_TYPE\"\nurl = \"https://h.example.org\"\n\n\
+    [[tenants]]\nname = \"resolved\"\ndescription = \"d\"\n[tenants.setup]\nssl = true\n\
+    type = \"${HL_KIND}\"\nurl = \"https://h.example.org\"\n\n\
+    [[tenants]]\nname = \"sigma\"\ndescription = \"d\"\n[tenants.setup]\nssl = true\n\
+    type = \"Sigma\"\nurl = \"https://h.example.org\"\n";
+
+fn harfanglab_workspace() -> Workspace {
+    workspace(&[
+        (
+            ".opentide/configurations/platforms/harfanglab.toml",
+            HARFANGLAB,
+        ),
+        (
+            "objects/rules/sigma.yaml",
+            &rule(
+                "00000000-0000-4000-8000-0000000000c1",
+                "harfanglab",
+                "STAGING",
+                "    sigma:\n      logsource:\n        category: process_creation\n        \
+                 product: windows\n      selections:\n        - name: selection\n          \
+                 field: Image\n          value: cmd.exe\n      condition: selection\n",
+            ),
+        ),
+    ])
+}
+
+/// A dry run fails the HarfangLab tenants a deploy would fail before it
+/// sends a rule, with the deploy's text: a `type` that is not Sigma or YARA,
+/// or names a variable the caller's environment does not set. A placeholder
+/// the environment sets is read, as the deploy reads it.
+#[test]
+fn a_harfanglab_tenant_whose_type_cannot_be_read_fails_the_plan() {
+    let ws = harfanglab_workspace();
+    let outcome = run_with(&ws, all(&["PREVIEW"]), &[("HL_KIND", "YARA")]);
+    assert_eq!(outcome.exit_code, 1);
+    assert_eq!(text(&outcome, "status"), "\"failed\"");
+    assert_eq!(
+        text(&outcome, "failures"),
+        "[{\"platform\":\"harfanglab\",\"tenant\":\"typo\",\"error\":\"harfanglab tenant \
+         'typo' setup: type is Sigma or YARA, got \\\"Sigmaa\\\"\"},\
+         {\"platform\":\"harfanglab\",\"tenant\":\"unset\",\"error\":\"harfanglab tenant \
+         'unset' setup: type names the environment variable HL_TYPE, which is unset\"}]"
+    );
+    assert_eq!(
+        text(&outcome, "error"),
+        "\"harfanglab tenant 'typo' setup: type is Sigma or YARA, got \\\"Sigmaa\\\" (and 1 \
+         more failure)\""
+    );
+    // A placeholder set to a kind that is not one fails as the typo does.
+    let outcome = run_with(
+        &ws,
+        all(&["PREVIEW"]),
+        &[("HL_KIND", "yara"), ("HL_TYPE", "Sigma")],
+    );
+    assert_eq!(
+        text(&outcome, "failures"),
+        "[{\"platform\":\"harfanglab\",\"tenant\":\"typo\",\"error\":\"harfanglab tenant \
+         'typo' setup: type is Sigma or YARA, got \\\"Sigmaa\\\"\"},\
+         {\"platform\":\"harfanglab\",\"tenant\":\"resolved\",\"error\":\"harfanglab tenant \
+         'resolved' setup: type is Sigma or YARA, got \\\"yara\\\"\"}]"
+    );
+}
+
+/// A plan whose every HarfangLab tenant can read its `type` has no
+/// `failures`, and a tenant the run sends no rule to is not checked.
+#[test]
+fn a_harfanglab_plan_whose_types_resolve_has_no_failures() {
+    let ws = workspace(&[
+        (
+            ".opentide/configurations/platforms/harfanglab.toml",
+            &format!(
+                "{}\n[[tenants]]\nname = \"later\"\ndescription = \"d\"\nstrategies = \
+                 [\"RELEASE\"]\n[tenants.setup]\nssl = true\ntype = \"nonsense\"\n",
+                HARFANGLAB.replace("type = \"Sigmaa\"", "type = \"YARA\"")
+            ),
+        ),
+        (
+            "objects/rules/sigma.yaml",
+            &rule(
+                "00000000-0000-4000-8000-0000000000c1",
+                "harfanglab",
+                "STAGING",
+                "    sigma:\n      logsource:\n        category: process_creation\n        \
+                 product: windows\n      selections:\n        - name: selection\n          \
+                 field: Image\n          value: cmd.exe\n      condition: selection\n",
+            ),
+        ),
+    ]);
+    let outcome = run_with(
+        &ws,
+        all(&["PREVIEW"]),
+        &[("HL_KIND", "YARA"), ("HL_TYPE", "Sigma")],
+    );
+    assert_eq!(text(&outcome, "failures"), "");
+    assert_eq!(text(&outcome, "status"), "\"completed\"");
+    assert_eq!(outcome.exit_code, 0);
 }

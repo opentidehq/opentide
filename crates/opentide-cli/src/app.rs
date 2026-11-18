@@ -1533,6 +1533,13 @@ impl Run<'_> {
             )?;
             err.flush()?;
         }
+        // A tenant the deploy would fail: errors, under --quiet too.
+        for failure in &run.failures {
+            err.write_all(stderr.labelled("error", failure, 0).as_bytes())?;
+        }
+        if !run.failures.is_empty() {
+            err.flush()?;
+        }
         if !run.refused && outcome.exit_code != USAGE_EXIT_CODE {
             let markdown = summary::fit(
                 &summary::deploy_summary(&run.result, None, Some(true)),

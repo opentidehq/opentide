@@ -637,3 +637,76 @@ fn a_rule_without_a_status_logs_the_oracles_event_as_json_under_json() {
     );
     let _ = std::fs::remove_dir_all(&ws);
 }
+
+/// A workspace with one HarfangLab tenant, `lab`, whose `type` is `kind`,
+/// and one Sigma rule for it.
+fn harfanglab_workspace(kind: &str) -> PathBuf {
+    let root = workspace();
+    let _ = std::fs::remove_file(root.join(".opentide/configurations/platforms/sysdig.toml"));
+    let _ = std::fs::remove_file(root.join("objects/rules/bad.yaml"));
+    let _ = std::fs::remove_file(root.join("objects/rules/good.yaml"));
+    std::fs::write(
+        root.join(".opentide/configurations/platforms/harfanglab.toml"),
+        format!(
+            "[platform]\nenabled = true\n\n[[tenants]]\nname = \"lab\"\ndescription = \"d\"\n\
+             [tenants.setup]\nssl = true\ntype = \"{kind}\"\nurl = \"https://h.example.org\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("objects/rules/sigma.yaml"),
+        rule(
+            "00000000-0000-4000-8000-0000000000c1",
+            "harfanglab",
+            "    sigma:\n      logsource:\n        category: process_creation\n        \
+             product: windows\n      selections:\n        - name: selection\n          \
+             field: Image\n          value: cmd.exe\n      condition: selection\n",
+        ),
+    )
+    .unwrap();
+    root
+}
+
+/// A dry run fails as the deploy it predicts fails: a HarfangLab tenant
+/// whose `type` names an unset variable fails the plan, exit 1, with the
+/// deploy's text in `failures` and `error` and on stderr; the same plan
+/// with the variable set passes.
+#[test]
+fn a_plan_fails_a_harfanglab_tenant_whose_type_the_deploy_cannot_read() {
+    let ws = harfanglab_workspace("$HL_TYPE");
+    let said = "harfanglab tenant 'lab' setup: type names the environment variable HL_TYPE, \
+                which is unset";
+    let args = [
+        "--json",
+        "deploy",
+        "--strategy",
+        "PREVIEW",
+        "--all",
+        "--dry-run",
+    ];
+    let ran = deploy(&ws, &args, &[]);
+    assert_eq!(ran.exit_code, 1, "{}{}", ran.stdout, ran.stderr);
+    let document = Json::parse(&ran.stdout).unwrap();
+    assert_eq!(document.get("status"), Some(&Json::str("failed")));
+    assert_eq!(document.get("error"), Some(&Json::str(said)));
+    let Some(Json::Array(failures)) = document.get("failures") else {
+        panic!("no failures: {}", ran.stdout)
+    };
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert_eq!(failures[0].get("platform"), Some(&Json::str("harfanglab")));
+    assert_eq!(failures[0].get("tenant"), Some(&Json::str("lab")));
+    assert_eq!(failures[0].get("error"), Some(&Json::str(said)));
+    // Without --json, stderr says why the plan failed.
+    let plain = deploy(&ws, &args[1..], &[]);
+    assert_eq!(plain.exit_code, 1, "{}{}", plain.stdout, plain.stderr);
+    assert_eq!(
+        plain.stderr,
+        format!("error: {said}\nwarning: a real deploy would need $HL_TYPE, which is unset\n")
+    );
+    // The variable set to a kind: the plan passes.
+    let ran = deploy(&ws, &args, &[("HL_TYPE", "Sigma".to_owned())]);
+    assert_eq!(ran.exit_code, 0, "{}{}", ran.stdout, ran.stderr);
+    let document = Json::parse(&ran.stdout).unwrap();
+    assert_eq!(document.get("failures"), None);
+    let _ = std::fs::remove_dir_all(&ws);
+}

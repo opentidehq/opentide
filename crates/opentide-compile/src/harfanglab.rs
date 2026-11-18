@@ -398,6 +398,52 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     lines.join("\n")
 }
 
+/// Why a deploy fails the HarfangLab tenant `tenant` before it sends a rule,
+/// read from its `setup.type` as the deploy reads it: a `$NAME` or `${NAME}`
+/// placeholder resolved by `env` (an unset one fails), a legacy `$NAME` that
+/// `env` sets resolved, a number or a boolean as its TOML text, and anything
+/// but `Sigma` or `YARA` refused. `None` when the deploy can read the kind.
+/// The text is the deploy's own failure.
+pub fn tenant_type_failure(
+    tenant: &str,
+    value: Option<&Json>,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Option<String> {
+    let setup = format!("{PLATFORM} tenant '{tenant}' setup:");
+    let written = match value {
+        Some(Json::Str(text)) => text.clone(),
+        Some(Json::Int(number)) => toml::Value::Integer(*number).to_string(),
+        // TOML has no integer beyond i64: the deploy reads the nearest float.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "only an integer beyond i64 is approximated, as the deploy does"
+        )]
+        Some(Json::UInt(number)) => toml::Value::Float(*number as f64).to_string(),
+        Some(Json::Float(number)) => toml::Value::Float(*number).to_string(),
+        Some(Json::Bool(set)) => toml::Value::Boolean(*set).to_string(),
+        // No value, a null, a list or a table: the deploy reads no `type`.
+        _ => return Some(format!("{setup} type is missing")),
+    };
+    let kind = match crate::plan::env_reference(&written) {
+        Some(variable) => match env(variable) {
+            Some(found) => found,
+            None => {
+                return Some(format!(
+                    "{setup} type names the environment variable {variable}, which is unset"
+                ));
+            }
+        },
+        None => match written.strip_prefix('$').filter(|name| !name.is_empty()) {
+            Some(name) => env(name).unwrap_or(written),
+            None => written,
+        },
+    };
+    match kind.as_str() {
+        "Sigma" | "YARA" => None,
+        other => Some(format!("{setup} type is Sigma or YARA, got {other:?}")),
+    }
+}
+
 /// The writes a deploy sends for `rule` to `tenant`: the Sigma rule
 /// (`PUT .../SigmaRule/<uuid>/`) or the YARA file (`POST .../YaraFile/`), a
 /// delete for a DELETION status, or none when the rule's kind is not the
@@ -447,6 +493,60 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Vec<Write
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The `type` a deploy reads, and its failure when it cannot: each form
+    /// a tenant's setup can hold, resolved from the environment as the
+    /// deploy resolves it.
+    #[test]
+    fn a_tenant_type_fails_as_the_deploy_reads_it() {
+        let env = |name: &str| match name {
+            "KIND" => Some("YARA".to_owned()),
+            "BLANK" => Some(String::new()),
+            "AZ-KIND" => Some("Sigma".to_owned()),
+            _ => None,
+        };
+        let failure = |value: Option<Json>| tenant_type_failure("lab", value.as_ref(), &env);
+        let setup = "harfanglab tenant 'lab' setup:";
+        for ok in ["Sigma", "YARA", "$KIND", "${KIND}", "$AZ-KIND"] {
+            assert_eq!(failure(Some(Json::str(ok))), None, "{ok}");
+        }
+        for (value, said) in [
+            (
+                Some(Json::str("sigma")),
+                "type is Sigma or YARA, got \"sigma\"",
+            ),
+            (Some(Json::str("$BLANK")), "type is Sigma or YARA, got \"\""),
+            (
+                Some(Json::str("$HL_TYPE")),
+                "type names the environment variable HL_TYPE, which is unset",
+            ),
+            (
+                Some(Json::str("${HL_TYPE}")),
+                "type names the environment variable HL_TYPE, which is unset",
+            ),
+            // Not a placeholder and not set: the text itself.
+            (
+                Some(Json::str("$AZ-TYPE")),
+                "type is Sigma or YARA, got \"$AZ-TYPE\"",
+            ),
+            (Some(Json::str("$")), "type is Sigma or YARA, got \"$\""),
+            (Some(Json::Int(1)), "type is Sigma or YARA, got \"1\""),
+            (Some(Json::Float(1.0)), "type is Sigma or YARA, got \"1.0\""),
+            (
+                Some(Json::Bool(true)),
+                "type is Sigma or YARA, got \"true\"",
+            ),
+            (None, "type is missing"),
+            (Some(Json::Null), "type is missing"),
+            (Some(Json::Array(Vec::new())), "type is missing"),
+        ] {
+            assert_eq!(
+                failure(value.clone()),
+                Some(format!("{setup} {said}")),
+                "{value:?}"
+            );
+        }
+    }
 
     #[test]
     fn yara_names_are_identifiers() {

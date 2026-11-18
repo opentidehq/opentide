@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Plan a deploy
 
-`deploy_plan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. The plan is a `Document`: its text keeps the command line's key order, and its value is a `serde_json::Value` to read fields from. `DeployPlanOptions::environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `ConnectOptions::environment` names the one a connection reads, and `Workspace::info_in` reports each variable in it; without one, the process's. `crates/opentide/examples/deploy_plan.rs`:
+`deploy_plan` is `opentide deploy --dry-run`: the rules a strategy selects, the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. The plan is a `Document`: its text keeps the command line's key order, and its value is a `serde_json::Value` to read fields from. `DeployPlanOptions::environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, and a HarfangLab tenant's `type` is read (a plan fails a tenant whose `type` the deploy could not read), as `ConnectOptions::environment` names the one a connection reads, and `Workspace::info_in` reports each variable in it; without one, the process's. `crates/opentide/examples/deploy_plan.rs`:
 
 ```bash
 cargo run -p opentide --example deploy_plan -- path/to/workspace PREVIEW

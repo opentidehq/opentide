@@ -286,16 +286,18 @@ fn config_path(fs: &dyn FileSystem, workspace: &Workspace, platform: &str) -> St
     format!(".opentide/configurations/platforms/{platform}.toml")
 }
 
-/// Runs a dry run. `changed` answers the rule files the run changed;
-/// `is_set` whether an environment variable is set.
+/// Runs a dry run. `changed` answers the rule files the run changed; `env`
+/// an environment variable's value, `None` when it is unset, as the deploy
+/// reads it.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(
     workspace: &Workspace,
     owned: &Owned,
     request: &Request,
     changed: ChangedScope<'_>,
-    is_set: &dyn Fn(&str) -> bool,
+    env: &dyn Fn(&str) -> Option<String>,
 ) -> Outcome {
+    let is_set = &|name: &str| env(name).is_some();
     let fs = workspace.fs().as_ref();
     if let Some(value) = request
         .removed_plan
@@ -632,7 +634,8 @@ pub fn run(
             change.fails = true;
         }
     }
-    let failed = failed_before || !diagnostics.is_empty();
+    let failures = tenant_failures(&config, &targets, env);
+    let failed = failed_before || !diagnostics.is_empty() || !failures.is_empty();
     let mut payload = Object::new();
     payload.insert("message".into(), plan::message(&planned).into());
     payload.insert(
@@ -653,6 +656,21 @@ pub fn run(
             "error".into(),
             format!("{} would fail to deploy", plan::plural(count, "rule")).into(),
         );
+    }
+    if let Some(first) = failures.first() {
+        if !payload.contains_key("error") {
+            let error = first
+                .get("error")
+                .and_then(Json::as_str)
+                .unwrap_or_default();
+            let more = match failures.len() - 1 {
+                0 => String::new(),
+                1 => " (and 1 more failure)".to_owned(),
+                more => format!(" (and {more} more failures)"),
+            };
+            payload.insert("error".into(), format!("{error}{more}").into());
+        }
+        payload.insert("failures".into(), Json::Array(failures));
     }
     let mut own_warnings: Vec<String> = tenantless
         .iter()
@@ -714,6 +732,40 @@ pub fn run(
         &request.cwd,
     );
     outcome
+}
+
+/// The tenants this run sends a rule to that a deploy fails before it sends
+/// one, as `failures` lists them (`platform`, `tenant`, `error`, the
+/// deploy's text): a HarfangLab tenant whose `type`, read from `env` as the
+/// deploy reads it, is not `Sigma` or `YARA`.
+fn tenant_failures(
+    config: &Json,
+    targets: &IndexMap<String, IndexMap<String, Vec<String>>>,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Vec<Json> {
+    let platform = crate::harfanglab::PLATFORM;
+    let Some(reached) = targets.get(platform) else {
+        return Vec::new();
+    };
+    plan::tenants(config, platform)
+        .into_iter()
+        .filter_map(|tenant| {
+            let name = crate::deploy::tenant_name(tenant);
+            if reached.get(name).is_none_or(Vec::is_empty) {
+                return None;
+            }
+            let error = crate::harfanglab::tenant_type_failure(
+                name,
+                crate::deploy::setup(tenant, "type"),
+                env,
+            )?;
+            let mut failure = Object::new();
+            failure.insert("platform".into(), platform.into());
+            failure.insert("tenant".into(), name.into());
+            failure.insert("error".into(), error.into());
+            Some(Json::Object(failure))
+        })
+        .collect()
 }
 
 /// A compile failure as the plan's diagnostic (`compile_diagnostics`).

@@ -93,7 +93,7 @@ fn run(workspace: &Workspace, request: &Request) -> Outcome {
     let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
         Err("no git here".to_owned())
     };
-    dry_run::run(workspace, &owned, request, &changed, &|_| false)
+    dry_run::run(workspace, &owned, request, &changed, &|_| None)
 }
 
 /// What a run plans, without the paths it names.
