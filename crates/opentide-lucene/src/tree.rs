@@ -353,32 +353,38 @@ pub(crate) fn visits() -> usize {
 mod tests {
     use super::*;
 
-    /// Corpus and external queries, and every prefix of each short one.
+    /// Queries of the corpus and the external sets, written here: an engine
+    /// crate reads no file, its tests in `src/` included (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        r#"(a OR b) AND c"#,
+        r#"process.name:AND"#,
+        r#"message:"failed login"#,
+        r#"title:alert^2"#,
+        r#"book.*:x"#,
+        r#"bytes:[100 TO 200} AND @timestamp:[now-1d/d TO now]"#,
+        r#"process.name:"#,
+        r#"title:alert^"#,
+        r#"name:jon~1 AND name:bob~AUTO"#,
+        r#"process.name:cmd* AND file.name:a?c"#,
+        r#"bytes:[100 TO]"#,
+        r#"process.name:cmd.exe AND _exists_:host.name"#,
+        r#"*:"#,
+        r#"process.name:/cmd\.exe/"#,
+        r#"+title:quick -body:"brown fox"~3 NOT status:500"#,
+        r#"a && b || !c"#,
+        r#"field:(one two "three four")^1.5"#,
+        r#"port:>=1024 AND port:<49152"#,
+        r#"path:C\:\\Windows\\System32\\*"#,
+        r#"user.name:"SYSTEM" OR user.name:LOCAL\ SERVICE"#,
+        r#"(a:1 or b:2) and c:3"#,
+        r#"event.code >= 4624"#,
+        r#"title:{a TO *]"#,
+        r#"/re[gx]+p/ AND x"#,
+    ];
+
+    /// The samples, and every prefix of each.
     fn texts() -> Vec<String> {
-        let testdata = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
-        let mut out = Vec::new();
-        for dir in [
-            "corpus/lucene",
-            "conformance/external/lucene",
-            "conformance/external/lucene-queryparser",
-        ] {
-            let mut dirs = vec![testdata.join(dir)];
-            while let Some(dir) = dirs.pop() {
-                for path in std::fs::read_dir(&dir)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .map(|e| e.path())
-                {
-                    if path.is_dir() {
-                        dirs.push(path);
-                    } else if let Ok(text) = std::fs::read_to_string(&path) {
-                        out.extend(text.lines().map(str::to_owned).take(400));
-                        out.push(text);
-                    }
-                }
-            }
-        }
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = out
             .iter()
             .filter(|t| t.len() < 300)
@@ -427,7 +433,7 @@ mod tests {
             assert_eq!(new_tokens, old_tokens, "{source:?}");
             named += old.len();
         }
-        assert!(named > 10_000, "{named}");
+        assert!(named > 2_000, "{named}");
     }
 
     /// An analysis visits each element of the tree once (ADR 0014 §7): the
