@@ -134,7 +134,7 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         lines: &lines,
     };
     // One walk runs the checks and gathers the highlight's tokens, when the
-    // highlight reads this text (ADR 0014 §5).
+    // highlight reads this text (ADR 0014 §5a).
     let same_text = std::ptr::eq(text, source);
     let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
     let mut highlight_token = |t: &rowan::SyntaxToken<syntax::Lucene>| {

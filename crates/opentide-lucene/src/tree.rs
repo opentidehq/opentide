@@ -94,7 +94,7 @@ impl Node {
     }
 
     /// The span a diagnostic on the node covers: at least one byte. The
-    /// range is trimmed once (ADR 0014 §5).
+    /// range is trimmed once (ADR 0014 §5a).
     pub(crate) fn span(&self) -> ByteSpan {
         let range = self.range();
         let (start, end) = (usize::from(range.start()), usize::from(range.end()));
@@ -114,7 +114,7 @@ impl Node {
     }
 
     /// The named children, in order, read as they are needed: a search for
-    /// one stops there, and collects none (ADR 0014 §5).
+    /// one stops there, and collects none (ADR 0014 §5a).
     fn named_children(&self) -> impl Iterator<Item = Node> + use<> {
         let node = match &self.0 {
             NodeOrToken::Node(n) => Some(n.clone()),
@@ -297,7 +297,7 @@ pub(crate) fn walk_with_ancestors(root: &Node, mut f: impl FnMut(&Node, &[Node])
 /// each named node and token with its ancestors, in the same order, and
 /// `token` gets every token in document order. A walk allocates a cursor for
 /// each element it visits, and the highlight walked the tree a second time
-/// (ADR 0014 §5).
+/// (ADR 0014 §5a).
 pub(crate) fn walk_once(
     root: &Node,
     mut f: impl FnMut(&Node, &[Node]),
@@ -318,12 +318,9 @@ pub(crate) fn walk_once(
             }
             NodeOrToken::Node(n) => {
                 ancestors.truncate(depth);
+                children.extend(n.children_with_tokens());
                 let node = Node(NodeOrToken::Node(n));
                 f(&node, &ancestors);
-                let NodeOrToken::Node(n) = &node.0 else {
-                    continue;
-                };
-                children.extend(n.children_with_tokens());
                 if !children.is_empty() {
                     stack.extend(children.drain(..).rev().map(|c| (c, depth + 1)));
                     ancestors.push(node);
@@ -407,7 +404,7 @@ mod tests {
     }
 
     /// The one walk calls the checks as [`walk_with_ancestors`] does, and
-    /// meets the tokens as the highlight's scan did (ADR 0014 §5).
+    /// meets the tokens as the highlight's scan did (ADR 0014 §5a).
     #[test]
     fn walk_once_is_the_walk_and_the_token_scan() {
         let mut named = 0;
