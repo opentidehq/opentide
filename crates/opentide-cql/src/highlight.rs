@@ -10,26 +10,40 @@ use opentide_highlight::{Capture, HighlightSpec, HighlightToken, tokens_from_spa
 
 /// The highlight tokens of a tree. A call to a catalogued function is
 /// `function.builtin`; any other call (a newer function) stays `function`.
+#[cfg(test)]
 pub(crate) fn tokens(spec: &HighlightSpec, root: &SyntaxNode, source: &str) -> Vec<HighlightToken> {
-    let catalog = Catalog::cached();
     let spans: Vec<(ByteSpan, &str)> = root
         .descendants_with_tokens()
+        .inspect(|_| crate::check::count_visit())
         .filter_map(rowan::NodeOrToken::into_token)
-        .filter_map(|t| {
-            let range = t.text_range();
-            let span = ByteSpan::new(usize::from(range.start()), usize::from(range.end()));
-            let mut c = capture(&t, source)?;
-            if c == Capture::FUNCTION
-                && catalog
-                    .function(source.get(span.start..span.end).unwrap_or(""))
-                    .is_some_and(|f| !f.removed)
-            {
-                c = Capture::FUNCTION_BUILTIN;
-            }
-            (!range.is_empty()).then_some((span, c.name()))
-        })
+        .filter_map(|t| span(&t, source))
         .collect();
-    tokens_from_spans(spec, source, &spans).unwrap_or_default()
+    from_spans(spec, source, &spans)
+}
+
+/// The span and capture of one token, if it has one: what `tokens` reads
+/// of each, for a walk that meets the tokens itself (ADR 0014 §5a).
+pub(crate) fn span(token: &SyntaxToken, source: &str) -> Option<(ByteSpan, &'static str)> {
+    let range = token.text_range();
+    let span = ByteSpan::new(usize::from(range.start()), usize::from(range.end()));
+    let mut c = capture(token, source)?;
+    if c == Capture::FUNCTION
+        && Catalog::cached()
+            .function(source.get(span.start..span.end).unwrap_or(""))
+            .is_some_and(|f| !f.removed)
+    {
+        c = Capture::FUNCTION_BUILTIN;
+    }
+    (!range.is_empty()).then_some((span, c.name()))
+}
+
+/// The highlight tokens of the spans, in document order.
+pub(crate) fn from_spans(
+    spec: &HighlightSpec,
+    source: &str,
+    spans: &[(ByteSpan, &str)],
+) -> Vec<HighlightToken> {
+    tokens_from_spans(spec, source, spans).unwrap_or_default()
 }
 
 /// Whether `node` is the `n`th child node of its parent, and the parent is `parent`.

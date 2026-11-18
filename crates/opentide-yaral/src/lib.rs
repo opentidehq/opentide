@@ -148,9 +148,10 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     let parsed = parser::parse(source);
     let root = SyntaxNode::new_root(parsed.green.clone());
+    let (diagnostics, tokens) = analysis::analysis_of(source, *ctx, &parsed, &root);
     AnalyzeResult {
-        diagnostics: analysis::diagnostics_of(source, *ctx, &parsed, &root),
-        tokens: analysis::highlight(&root, source),
+        diagnostics,
+        tokens,
     }
 }
 

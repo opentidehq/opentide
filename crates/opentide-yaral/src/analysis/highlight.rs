@@ -6,6 +6,8 @@ use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use opentide_core::{ByteSpan, LanguageId};
 use opentide_highlight::{HighlightSpec, HighlightToken, keywords, tokens_from_spans};
 use rowan::NodeOrToken;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Outcomes Google gives a meaning: constants, before every other variable.
 fn platform_outcome(name: &str) -> bool {
@@ -66,37 +68,96 @@ fn capture(token: &SyntaxToken, parent: Option<K>) -> Option<&'static str> {
         K::INTEGER | K::FLOAT | K::DURATION => "number",
         K::TRUE_KW | K::FALSE_KW => "boolean",
         _ => {
-            let table = keywords(LanguageId::Yaral)?;
-            let text = token.text().to_ascii_lowercase();
-            return table
-                .iter()
-                .find(|(t, _)| *t == text)
-                .map(|(_, c)| c.name());
+            let text = token.text();
+            let table = keyword_captures()?;
+            return if text.bytes().any(|b| b.is_ascii_uppercase()) {
+                table.get(text.to_ascii_lowercase().as_str()).copied()
+            } else {
+                table.get(text).copied()
+            };
         }
     })
 }
 
-/// Semantic tokens of the tree.
-pub(crate) fn highlight(root: &SyntaxNode, source: &str) -> Vec<HighlightToken> {
+/// The capture of each text of the `KEYWORDS` table, built once: a scan of
+/// the table per token was a share of the highlight (ADR 0014 §2). The
+/// table's first row for a text wins, as the scan's did.
+fn keyword_captures() -> Option<&'static HashMap<&'static str, &'static str>> {
+    static CAPTURES: OnceLock<Option<HashMap<&'static str, &'static str>>> = OnceLock::new();
+    CAPTURES
+        .get_or_init(|| {
+            let table = keywords(LanguageId::Yaral)?;
+            let mut captures = HashMap::new();
+            for (text, capture) in table {
+                captures.entry(*text).or_insert(capture.name());
+            }
+            Some(captures)
+        })
+        .as_ref()
+}
+
+/// The highlight's span of `token` and its capture, if it has one.
+pub(crate) fn span(token: &SyntaxToken) -> Option<(ByteSpan, &'static str)> {
+    if token.kind() == K::WHITESPACE || token.text().is_empty() {
+        return None;
+    }
+    let parent = token.parent().map(|p| p.kind());
+    let capture = capture(token, parent)?;
+    let range = token.text_range();
+    Some((
+        ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
+        capture,
+    ))
+}
+
+/// The semantic tokens of `spans`, in document order.
+pub(crate) fn tokens(spans: &[(ByteSpan, &'static str)], source: &str) -> Vec<HighlightToken> {
     let Ok(spec) = HighlightSpec::shared() else {
         return Vec::new();
     };
-    let mut spans: Vec<(ByteSpan, &'static str)> = Vec::new();
-    for element in root.descendants_with_tokens() {
-        let NodeOrToken::Token(token) = element else {
-            continue;
-        };
-        if token.kind() == K::WHITESPACE || token.text().is_empty() {
-            continue;
-        }
-        let parent = token.parent().map(|p| p.kind());
-        if let Some(capture) = capture(&token, parent) {
-            let range = token.text_range();
-            spans.push((
-                ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                capture,
-            ));
+    tokens_from_spans(spec, source, spans).unwrap_or_default()
+}
+
+/// Semantic tokens of the tree.
+pub(crate) fn highlight(root: &SyntaxNode, source: &str) -> Vec<HighlightToken> {
+    let spans: Vec<(ByteSpan, &'static str)> = root
+        .descendants_with_tokens()
+        .inspect(|_| super::count_visit())
+        .filter_map(NodeOrToken::into_token)
+        .filter_map(|t| span(&t))
+        .collect();
+    tokens(&spans, source)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The keyword index finds what a scan of the table finds, for each text
+    /// of the table in each case (ADR 0014 §2).
+    #[test]
+    fn the_keyword_index_finds_what_a_scan_finds() {
+        let table = keywords(LanguageId::Yaral).unwrap_or_default();
+        assert!(!table.is_empty());
+        let index = keyword_captures().expect("the YARA-L keyword table");
+        for (text, _) in table {
+            for probe in [
+                text.to_string(),
+                text.to_ascii_uppercase(),
+                format!("{text}x"),
+            ] {
+                let lower = probe.to_ascii_lowercase();
+                let scanned = table
+                    .iter()
+                    .find(|(t, _)| *t == lower)
+                    .map(|(_, c)| c.name());
+                let found = if probe.bytes().any(|b| b.is_ascii_uppercase()) {
+                    index.get(lower.as_str()).copied()
+                } else {
+                    index.get(probe.as_str()).copied()
+                };
+                assert_eq!(found, scanned, "{probe:?}");
+            }
         }
     }
-    tokens_from_spans(spec, source, &spans).unwrap_or_default()
 }

@@ -301,6 +301,25 @@ pub fn steps() -> usize {
     STEPS.get()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The elements the analysis's walk visited on this thread: [`visits`].
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one element the analysis's walk visited, in tests (ADR 0014 §7).
+#[inline]
+pub(crate) fn count_visit() {
+    #[cfg(test)]
+    VISITS.set(VISITS.get() + 1);
+}
+
+/// How many elements the analysis's walk visited on this thread.
+#[cfg(test)]
+fn visits() -> usize {
+    VISITS.get()
+}
+
 /// Analyze an EQL query: its diagnostics and highlight tokens. The findings'
 /// ranges come from one line table ([`opentide_core::with_line_index`]).
 pub fn analyze(source: &str) -> AnalyzeResult {
@@ -345,16 +364,23 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
     }
     let mut translated = semantics::Translated::default();
     semantics::forget_types();
-    for event in parsed.syntax.preorder() {
-        if let rowan::WalkEvent::Enter(node) = event {
-            check_node(&node, &parsed, &mut translated, source, catalog, &mut out);
+    // One walk over every element: the checks read the nodes, the highlight
+    // the tokens (ADR 0014 §5a).
+    let mut spans = Vec::new();
+    for element in parsed.syntax.descendants_with_tokens() {
+        count_visit();
+        match element {
+            rowan::NodeOrToken::Node(node) => {
+                check_node(&node, &parsed, &mut translated, source, catalog, &mut out);
+            }
+            rowan::NodeOrToken::Token(token) => spans.extend(highlight::capture_of(&token)),
         }
     }
     semantics::forget_types();
     if let Some(root) = ast::SourceFile::cast(parsed.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
-    let tokens = highlight(spec, source, &parsed.syntax);
+    let tokens = highlight_spans(spec, source, spans);
     AnalyzeResult {
         diagnostics: out,
         tokens,
@@ -510,9 +536,18 @@ fn range(source: &str, span: ByteSpan) -> Range {
 }
 
 /// Each token's capture (`highlight::captures`), a known function's as `function.builtin`.
+#[cfg(test)]
 fn highlight(spec: &HighlightSpec, source: &str, root: &syntax::SyntaxNode) -> Vec<HighlightToken> {
+    highlight_spans(spec, source, highlight::captures(root))
+}
+
+/// The semantic tokens of `spans`, with a catalog function's call marked a builtin.
+fn highlight_spans(
+    spec: &HighlightSpec,
+    source: &str,
+    mut spans: Vec<(ByteSpan, &'static str)>,
+) -> Vec<HighlightToken> {
     let catalog = Catalog::cached();
-    let mut spans = highlight::captures(root);
     for (span, capture) in &mut spans {
         let name = source.get(span.start..span.end).unwrap_or("");
         if *capture == "function" && catalog.function(name.trim_end_matches('~')).is_some() {
@@ -1492,5 +1527,80 @@ mod tests {
         assert!(completions(src, inside).is_empty());
         assert_eq!(hover(src, inside), None);
         assert!(signature_help(src, inside).is_none());
+    }
+}
+
+#[cfg(test)]
+mod walk_tests {
+    use super::*;
+
+    /// Queries like the corpus's, written here: an engine crate reads no file
+    /// (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        "sequence by host.id with maxspan=5m [process where process.name : \"cmd.exe\"] [network where destination.port in (22, 3389)] until [process where event.type == \"end\"]",
+        "process where process.name in~ (\"cmd.exe\", \"powershell.exe\") and not process.args : \"*-enc*\" | head 5",
+        "sample by host.id [file where file.extension == \"exe\"] [process where true]",
+        "process where length(process.args) > 3 and ?process.parent.name == null and `odd field` != \"x\" // c",
+        "network where cidrMatch(destination.ip, \"10.0.0.0/8\") and /* block */ startsWith~(process.name, \"svc\")",
+        "process where a == 0x10 and b : (\"x\", \"y\") | filter c > 1 | unique d",
+        "process where process.pid ==",
+        "sequence [a where true] ![b where true] [c where",
+    ];
+
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = SAMPLES
+            .iter()
+            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// The one walk meets the nodes in the order the checks' preorder did,
+    /// and gives the tokens the highlight's walk gave (ADR 0014 §5a).
+    #[test]
+    fn one_walk_is_the_checks_walk_and_the_highlights() {
+        let spec = HighlightSpec::shared().expect("highlight spec");
+        for source in texts() {
+            let parsed = parsed::parse(&source);
+            let preorder: Vec<_> = parsed
+                .syntax
+                .preorder()
+                .filter_map(|e| match e {
+                    rowan::WalkEvent::Enter(n) => Some(n),
+                    rowan::WalkEvent::Leave(_) => None,
+                })
+                .collect();
+            let nodes: Vec<_> = parsed
+                .syntax
+                .descendants_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_node)
+                .collect();
+            assert_eq!(nodes, preorder, "{source:?}");
+            let tokens = analyze(&source).tokens;
+            assert_eq!(
+                format!("{tokens:?}"),
+                format!("{:?}", highlight(spec, &source, &parsed.syntax)),
+                "{source:?}"
+            );
+        }
+    }
+
+    /// An analysis walks every element once (ADR 0014 §7): the checks walked
+    /// the nodes and the highlight every element again. Every walk over the
+    /// elements counts, the highlight's (`visible_tokens`) and the depth
+    /// check's included, so a second walk fails it.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for source in [SAMPLES[0], SAMPLES[6]] {
+            let elements = parsed::parse(source)
+                .syntax
+                .descendants_with_tokens()
+                .count();
+            let before = visits();
+            analyze(source);
+            assert_eq!(visits() - before, elements, "{source:?}");
+        }
     }
 }

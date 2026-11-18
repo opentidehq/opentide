@@ -22,8 +22,8 @@ opentide-parse.workspace = true
 logos.workspace = true
 rowan.workspace = true
 serde = { workspace = true, features = ["rc"] }
-toml.workspace = true
 regex.workspace = true
 
 [dev-dependencies]
+toml.workspace = true
 insta.workspace = true

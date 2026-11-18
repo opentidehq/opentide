@@ -539,8 +539,11 @@ fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
         .into_iter()
         .filter(|c| &*c.table == name)
         .map(|c| {
-            Column::new(c.name.clone(), c.type_name.clone())
-                .with_origin(Origin::Table(Arc::clone(&origin)))
+            Column::new(
+                c.name.to_string(),
+                c.type_name.as_deref().map(str::to_owned),
+            )
+            .with_origin(Origin::Table(Arc::clone(&origin)))
         })
         .collect();
     // The documented columns are reliable but not complete: tables gain
@@ -583,10 +586,12 @@ fn build_asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
             .columns
             .iter()
             .map(|c| {
-                Column::new(c.name.clone(), Some(c.type_name.clone())).with_origin(Origin::Asim {
-                    schema: Arc::clone(&schema_name),
-                    class: Arc::from(c.class.as_str()),
-                })
+                Column::new(c.name.clone(), Some(c.type_name.to_string())).with_origin(
+                    Origin::Asim {
+                        schema: Arc::clone(&schema_name),
+                        class: Arc::from(c.class.as_str()),
+                    },
+                )
             })
             .map(Arc::new)
             .collect::<Vec<_>>()
