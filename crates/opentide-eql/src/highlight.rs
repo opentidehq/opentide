@@ -175,12 +175,12 @@ fn leaf_capture(leaf: &SyntaxNode) -> Option<&'static str> {
 /// limit.
 ///
 /// `root` is the tree of `source`. A cheap bound comes first (ADR 0014 §4): `depth + run`
-/// counts `(`, `not`, `-` and `+` tokens, and each holds one of the bytes `(`, `n`, `-` or
-/// `+`, so a source with no more of those bytes than the limit cannot exceed it.
+/// counts `(`, `not`, `-` and `+` tokens (`not` is a keyword only in lower case, as
+/// `parser::keywords` reads it), and each holds one of the bytes `(`, `n`, `-` or `+`, so a source with no more of those bytes than the limit cannot exceed it.
 pub(crate) fn expression_depth_exceeded(root: &SyntaxNode, source: &str) -> Option<ByteSpan> {
     let candidates = source
         .bytes()
-        .filter(|b| matches!(b, b'(' | b'n' | b'N' | b'-' | b'+'))
+        .filter(|b| matches!(b, b'(' | b'n' | b'-' | b'+'))
         .count();
     if i64::try_from(candidates).is_ok_and(|n| n <= lexical::MAX_EXPRESSION_DEPTH) {
         return None;
