@@ -303,31 +303,26 @@ pub(crate) fn walk_once(
     mut f: impl FnMut(&Node, &[Node]),
     mut token: impl FnMut(&rowan::SyntaxToken<crate::syntax::Lucene>),
 ) {
-    let mut stack: Vec<(Element, usize)> = vec![(root.0.clone(), 0)];
-    let mut ancestors: Vec<Node> = Vec::new();
-    let mut children: Vec<Element> = Vec::new();
-    while let Some((element, depth)) = stack.pop() {
+    let NodeOrToken::Node(root) = &root.0 else {
+        return;
+    };
+    let mut ancestors = opentide_parse::Ancestors::default();
+    opentide_parse::walk_once(root, |element, depth| {
         count_visit();
         match element {
             NodeOrToken::Token(t) => {
                 token(&t);
                 if NAMED_TOKENS.contains(&t.kind()) {
-                    ancestors.truncate(depth);
-                    f(&Node(NodeOrToken::Token(t)), &ancestors);
+                    f(&Node(NodeOrToken::Token(t)), ancestors.at(depth));
                 }
             }
             NodeOrToken::Node(n) => {
-                ancestors.truncate(depth);
-                children.extend(n.children_with_tokens());
                 let node = Node(NodeOrToken::Node(n));
-                f(&node, &ancestors);
-                if !children.is_empty() {
-                    stack.extend(children.drain(..).rev().map(|c| (c, depth + 1)));
-                    ancestors.push(node);
-                }
+                f(&node, ancestors.at(depth));
+                ancestors.push(node);
             }
         }
-    }
+    });
 }
 
 #[cfg(test)]
