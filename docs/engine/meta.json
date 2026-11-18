@@ -5,6 +5,7 @@
     "ARCHITECTURE",
     "LANGUAGE",
     "LANGUAGE-HARNESS",
+    "THROUGHPUT",
     "OBJECTS",
     "EDITORS",
     "FALCO",
