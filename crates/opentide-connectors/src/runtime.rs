@@ -95,7 +95,7 @@ pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
 
 /// [`block_on`], which also serves a caller inside another runtime (an
 /// embedder's, or the MCP server's until it runs on [`shared`]) by handing
-/// the work to a thread of its own ([`apart`]). For a client a host may
+/// the work to a thread of its own (`apart`). For a client a host may
 /// call from its own runtime (the CVE lookups, MISP, a plugin's tenant).
 ///
 /// # Errors
@@ -201,7 +201,7 @@ fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T> {
 /// Runs *work*, a synchronous call that may [`block_on`] the runtime, and
 /// gives its result, or its panic as the `Err`: on this thread, or, inside
 /// another runtime (an embedder's: a host that calls a command from a tokio
-/// task), on a thread of its own ([`apart`]), where blocking is allowed. On a
+/// task), on a thread of its own (`apart`), where blocking is allowed. On a
 /// thread that drives this runtime's async work it runs here, and its
 /// [`block_on`] refuses ([`INSIDE_THE_RUNTIME`]): blocking a worker would
 /// stall the runtime.
