@@ -362,7 +362,7 @@ fn leaf<'py>(value: &Bound<'py, PyAny>) -> PyResult<Leaf<'py>> {
     }
     if let Ok(text) = value.cast::<PyString>() {
         return Ok(match text.to_str() {
-            Ok(text) => Leaf::Value(Value::Str(text.to_owned())),
+            Ok(text) => Leaf::Value(Value::Str(text.into())),
             // Pydantic's type and message for a `str` with lone surrogates.
             Err(_) => Leaf::Unreadable((
                 ErrorKind::InvalidType("string_unicode"),
@@ -372,7 +372,7 @@ fn leaf<'py>(value: &Bound<'py, PyAny>) -> PyResult<Leaf<'py>> {
         });
     }
     if let Some(text) = temporal(value)? {
-        return Ok(Leaf::Value(Value::Str(text)));
+        return Ok(Leaf::Value(Value::Str(text.into())));
     }
     if value.hasattr("model_dump")? {
         let options = PyDict::new(value.py());

@@ -4,19 +4,15 @@
 
 `Cargo.toml` members, in dependency order of the product (not the member list):
 
-```
-opentide-core
-  opentide-highlight
-  opentide-parse           (the parsers' toolkit: logos, rowan)
-    opentide-kql
-    opentide-spl
-      opentide-tide
-        opentide-analysis
-          opentide-lsp     (bin)
-          opentide-wasm    (cdylib + rlib)
-```
+The layers and tiers are [`xtask/layers.toml`](../../../../xtask/layers.toml), the one copy of the
+table, which `cargo xtask check-layers` enforces; `crates/AGENTS.md` "Crates and layers" lists
+them. In short: `opentide-core`, then `opentide-parse` and `opentide-highlight`, then the language
+crates (foundation tiers 2 to 4: Lucene above kuery, ES|QL and EQL above Lucene), then
+`opentide-schema`, then `opentide-tide`, `opentide-analysis`,
+the hosts and the facade.
 
-`opentide-kql` and `opentide-spl` must not depend on `opentide-tide` or `opentide-analysis`. Tide injects into them. Analysis depends on all three engines. A cycle means the layer is wrong.
+A language crate never depends on `opentide-tide` or `opentide-analysis`: Tide injects into it,
+and analysis depends on every engine. A cycle means the layer is wrong.
 
 Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repository`) is `[workspace.package]`. New crates set `version.workspace = true` and the other `*.workspace = true` keys. License is EUPL-1.2.
 
@@ -35,7 +31,7 @@ No engine crate builds C: `cc` is in the lock only as `ring`'s build dependency 
 - `#[serde(rename_all = "kebab-case")]` on `LanguageId`, with explicit `rename` / `alias` where the wire string is not the kebab of the variant (`TideYaml` → `opentide-yaml`).
 - Optional fields that must disappear from JSON use `#[serde(default, skip_serializing_if = "Option::is_none")]`.
 - Catalog TOML uses `#[serde(default)]` on vectors and flags so a missing key is empty, not a parse failure.
-- `toml::from_str` on `include_str!` data. Do not `std::fs::read_to_string` a catalog from an engine.
+- Catalogs compiled in with `include_str!` are read item by item through `opentide_core::catalog` (ADR 0013), never `toml::from_str` on a whole file, and never `std::fs::read_to_string` from an engine.
 - `serde_json::json!` is the LSP wire format in `opentide-lsp`. See `.agents/skills/lsp-host/SKILL.md`.
 - YAML has one reader: `opentide_core::node` (saphyr, YAML 1.2), which `validate`, the model and `opentide-tide` all use (#850). Do not add `serde_yaml`, `serde_yml` or another YAML parser.
 
@@ -72,7 +68,7 @@ The `regex` crate is Unicode-aware by default. Patterns that should be ASCII-onl
 
 ## Snapshot and diff crates
 
-`similar` and `insta` were declared and never used; #181 removed them. Do not add them back to diff or snapshot diagnostic lists: assert the code, the field path and the severity.
+`insta` snapshots what a contract fixes (a diagnostic's code, range and message, rendered as text), never a whole struct: `crates/AGENTS.md` "Tests". Assert codes, field paths and severities directly where a snapshot would only restate them.
 
 ## Profile
 

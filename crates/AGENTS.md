@@ -13,7 +13,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | A `crates/CHANGELOG.md` entry, or an engine release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
 | A release: the release train (`.github/workflows/publish.yml`, `vX.Y.Z` tags; `scripts/engine/release.py` for the crates and assets); the engine's own `engine-v*` releases are retired | `release-management`, in the root `AGENTS.md`'s skills table |
 | `data/catalogs/`, `highlights/spec.toml`, `crates/testdata/conformance`, `crates/testdata/oracles`, `scripts/engine/oracles`, schema sync | `.agents/skills/catalogs/SKILL.md` |
-| A new query language (S1QL, Sigma) | `.agents/skills/add-language/SKILL.md` (then the rows above) |
+| A new query language (S1QL, Sigma) | `.agents/skills/add-language/SKILL.md`: its checklist and definition of done, which link every rule the language meets (then the rows above) |
 
 ## Product
 
@@ -31,7 +31,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md), [`opentide-cassette`](opentide-cassette/AGENTS.md) (the recorded-HTTP harness, UC-4.1, not published) |
 | foundation 1 | [`opentide-parse`](opentide-parse/AGENTS.md) (the pure-Rust parsers' toolkit, ADR 0012), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
-| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
+| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md), `opentide-yara`, `opentide-yaral`, `opentide-exabeam` (imported without an `AGENTS.md`; their guides are `docs/engine/YARA.md`, `YARAL.md` and `EXABEAM.md`). A new query language goes here, with an `AGENTS.md` |
 | foundation 3 | [`opentide-lucene`](opentide-lucene/AGENTS.md) (above kuery: each tells the other's rules by the other's grammar) |
 | foundation 4 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | foundation 5 | [`opentide-schema`](opentide-schema/AGENTS.md) |
@@ -43,7 +43,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,parse,kql,spl,esql,eql,kuery,lucene,falco,cql,exabeam,yara,yaral,ecs,tide,analysis,schema,compare}/src`. Tests may read the repo.
+- No `std::fs` in an engine crate's `src/`: `scripts/engine/check-io-free.sh` lists them (`opentide-core`, `-highlight`, `-parse`, `-ecs`, `-tide`, `-analysis`, `-schema` and every language crate), and a new language crate is added there. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - CrowdStrike is CQL, checked against CrowdStrike's published grammar and function reference (`docs/engine/CQL.md`). Never report an unknown field, saved search, lookup file or repository as a finding: they live in the tenant.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.

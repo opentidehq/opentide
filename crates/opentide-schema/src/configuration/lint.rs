@@ -322,7 +322,7 @@ fn filename_config(
             )));
         }
         regex = Some(compile(raw, &place)?);
-        pattern = Some(raw.clone());
+        pattern = Some(raw.to_string());
         pattern_key = format!("[{key}].pattern");
     }
     let mut config = FilenameConfig {
@@ -376,7 +376,7 @@ fn required_metadata(value: &Node, place: &str) -> Result<Vec<String>, LintConfi
                 "{place}.required must be a list of metadata keys"
             )));
         };
-        names.push(name.clone());
+        names.push(name.to_string());
     }
     let unknown: Vec<String> = names
         .iter()

@@ -23,7 +23,7 @@ pub fn text(node: Option<&Node>) -> Option<String> {
 /// `_string`: the value when it is a string that is not blank.
 pub fn string(node: Option<&Node>) -> Option<String> {
     match node.map(|node| &node.value) {
-        Some(Value::Str(text)) if !text.trim().is_empty() => Some(text.clone()),
+        Some(Value::Str(text)) if !text.trim().is_empty() => Some(text.to_string()),
         _ => None,
     }
 }

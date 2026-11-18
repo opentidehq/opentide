@@ -177,9 +177,9 @@ pub fn status_names(deployment: &Node) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for entry in statuses {
         if let Some(Value::Str(name)) = entry.get("name").map(|node| &node.value)
-            && !names.contains(name)
+            && !names.iter().any(|known| known == name)
         {
-            names.push(name.clone());
+            names.push(name.to_string());
         }
     }
     names

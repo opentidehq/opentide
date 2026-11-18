@@ -53,7 +53,7 @@ pub fn node_json(node: &Node) -> Json {
         } else {
             "-inf"
         }),
-        Value::Str(text) | Value::Datetime(text) => Json::str(text),
+        Value::Str(text) | Value::Datetime(text) => Json::str(text.as_str()),
         Value::Seq(items) => Json::Array(items.iter().map(|item| node_json(item)).collect()),
         Value::Map(entries) => Json::Object(
             entries
@@ -107,7 +107,7 @@ pub fn block_statuses(body: &Node) -> Vec<String> {
         .iter()
         .filter_map(
             |entry| match entry.value.get("status").map(|node| &node.value) {
-                Some(Value::Str(status)) if !status.is_empty() => Some(status.clone()),
+                Some(Value::Str(status)) if !status.is_empty() => Some(status.to_string()),
                 _ => None,
             },
         )

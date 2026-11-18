@@ -68,7 +68,7 @@ pub fn rule_objective<'i>(rule: &Node, index: &'i Index) -> Option<&'i Node> {
     };
     let owner = index
         .signals
-        .get(target)
+        .get(target.as_str())
         .map_or(target.as_str(), |signal| signal.owner.as_str());
     lookup(index, "objective", owner)
 }
