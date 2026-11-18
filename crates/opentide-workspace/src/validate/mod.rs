@@ -1140,7 +1140,10 @@ impl Prepared {
     /// freed before the query engines build their catalogs (#1071).
     fn release(&mut self) {
         for job in &mut self.queries {
-            if let QueryText::Shared(document) = &job.text {
+            // A document kept for annotation stays: its text is shared.
+            if let QueryText::Shared(document) = &job.text
+                && !self.documents.contains_key(&job.path)
+            {
                 job.text = QueryText::Owned(document.source().to_owned());
             }
         }
