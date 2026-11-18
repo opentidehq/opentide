@@ -64,7 +64,7 @@ const OPTIONS_TOML: &str = include_str!(concat!(
 ));
 
 #[derive(Debug, Clone)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct CommandsFile {
     commands: Vec<CommandRow>,
     #[cfg_attr(test, serde(default))]
@@ -95,7 +95,7 @@ pub struct FunctionRow {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct FieldsFile {
     fields: Vec<FieldRow>,
 }
@@ -111,7 +111,7 @@ pub struct FieldRow {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct DatamodelsFile {
     /// Data models known by name only (no dataset rows).
     #[cfg_attr(test, serde(default))]
@@ -166,7 +166,7 @@ impl DatamodelRow {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct MacrosFile {
     macros: Vec<MacroRow>,
 }
@@ -180,7 +180,7 @@ pub struct MacroRow {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct OptionsFile {
     options: Vec<CommandOption>,
 }

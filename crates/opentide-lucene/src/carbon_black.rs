@@ -29,6 +29,7 @@ pub struct Field {
 /// The whole of `fields.toml`; only the test reads it as one document.
 #[cfg(test)]
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Catalog {
     field: Vec<Field>,
 }

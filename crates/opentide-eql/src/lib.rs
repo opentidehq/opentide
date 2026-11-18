@@ -82,7 +82,7 @@ const KEYWORD_WORDS: &[&str] = &[
 const MAX_SAMPLE_QUERIES: usize = 5;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct FunctionsFile {
     functions: Vec<FunctionRow>,
 }
@@ -120,7 +120,7 @@ pub struct ParamRow {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct PipesFile {
     pipes: Vec<PipeRow>,
 }
@@ -880,6 +880,8 @@ pub fn debug_node_kinds() -> Vec<String> {
 mod tests {
     use super::*;
 
+    use opentide_core::Severity;
+
     /// The item-by-item read is field for field the whole-file parse (ADR 0013).
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
@@ -889,7 +891,6 @@ mod tests {
         let whole: PipesFile = toml::from_str(PIPES_TOML).unwrap();
         assert_eq!(format!("{pipes:?}"), format!("{whole:?}"));
     }
-    use opentide_core::Severity;
 
     /// Codes of errors, warnings, and information; hints are left out.
     fn codes_of(src: &str) -> Vec<String> {

@@ -88,7 +88,7 @@ pub struct ActivityType {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct FieldsFile {
     #[cfg_attr(test, serde(default))]
     prefixes: Vec<Prefix>,
@@ -97,7 +97,7 @@ struct FieldsFile {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
+#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
 struct ValuesFile {
     #[cfg_attr(test, serde(default))]
     outcomes: Vec<String>,
