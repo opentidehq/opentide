@@ -54,3 +54,7 @@ insta.workspace = true
 [[bench]]
 name = "analyze"
 harness = false
+
+[[bench]]
+name = "throughput"
+harness = false
