@@ -58,7 +58,21 @@ pub struct CommandRow {
 
 impl CommandRow {
     pub fn availability(&self) -> Option<Availability> {
-        self.versions.as_deref().map(Availability::from_versions)
+        self.prepared().available
+    }
+
+    /// The `stack` lifecycle.
+    pub fn lifecycle(&self) -> Lifecycle {
+        self.prepared().lifecycle
+    }
+
+    fn read(&self) -> Prepared {
+        Prepared::of(self.versions.as_deref(), &self.stack)
+    }
+
+    fn prepared(&self) -> Prepared {
+        static PREPARED: OnceLock<Vec<Prepared>> = OnceLock::new();
+        bundled(&Catalog::cached().commands, self, &PREPARED, Self::read)
     }
 }
 
@@ -103,7 +117,21 @@ pub struct FunctionRow {
 
 impl FunctionRow {
     pub fn availability(&self) -> Option<Availability> {
-        self.versions.as_deref().map(Availability::from_versions)
+        self.prepared().available
+    }
+
+    /// The `stack` lifecycle.
+    pub fn lifecycle(&self) -> Lifecycle {
+        self.prepared().lifecycle
+    }
+
+    fn read(&self) -> Prepared {
+        Prepared::of(self.versions.as_deref(), &self.stack)
+    }
+
+    fn prepared(&self) -> Prepared {
+        static PREPARED: OnceLock<Vec<Prepared>> = OnceLock::new();
+        bundled(&Catalog::cached().functions, self, &PREPARED, Self::read)
     }
 }
 
@@ -156,8 +184,53 @@ pub struct TypeRow {
 
 impl TypeRow {
     pub fn availability(&self) -> Availability {
-        Availability::from_versions(&self.versions)
+        static PREPARED: OnceLock<Vec<Availability>> = OnceLock::new();
+        bundled(&Catalog::cached().types, self, &PREPARED, |row| {
+            Availability::from_versions(&row.versions)
+        })
     }
+}
+
+/// What a row's `versions` and `stack` say.
+#[derive(Debug, Clone, Copy)]
+struct Prepared {
+    available: Option<Availability>,
+    lifecycle: Lifecycle,
+}
+
+impl Prepared {
+    fn of(versions: Option<&[String]>, stack: &str) -> Self {
+        Self {
+            available: versions.map(Availability::from_versions),
+            lifecycle: Lifecycle::parse(stack),
+        }
+    }
+}
+
+/// `read(row)`, from `prepared` when `row` is one of `rows`, the bundled
+/// catalog's: read once for all its rows on first use (ADR 0014 §2). Any other
+/// row (a clone, a caller's own) is read as it is now.
+fn bundled<T, P: Copy>(
+    rows: &'static [T],
+    row: &T,
+    prepared: &'static OnceLock<Vec<P>>,
+    read: fn(&T) -> P,
+) -> P {
+    match index_in(rows, row) {
+        Some(i) => prepared.get_or_init(|| rows.iter().map(read).collect())[i],
+        None => read(row),
+    }
+}
+
+/// The index of `row` in `rows` when it is one of them (the same address,
+/// not an equal value).
+fn index_in<T>(rows: &[T], row: &T) -> Option<usize> {
+    let size = std::mem::size_of::<T>().max(1);
+    let offset = std::ptr::from_ref(row)
+        .addr()
+        .checked_sub(rows.as_ptr().addr())?;
+    let i = offset / size;
+    rows.get(i).filter(|r| std::ptr::eq(*r, row)).map(|_| i)
 }
 
 #[derive(Debug)]
@@ -323,7 +396,7 @@ impl std::fmt::Display for StackVersion {
 pub const FIRST_AFTER_FLOOR: StackVersion = StackVersion::new(9, 2);
 
 /// The `stack:` lifecycle of a command or function in the 9.x docs.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Lifecycle {
     /// First version documented as GA. `None` with `ga_unversioned` means
     /// GA in every documented version.
@@ -337,6 +410,8 @@ pub struct Lifecycle {
 impl Lifecycle {
     /// Parse `preview =9.2, ga 9.3+`, `preview 9.1-9.3, ga 9.4+`, `ga`, `ga 9.4.0`.
     pub fn parse(stack: &str) -> Self {
+        #[cfg(test)]
+        crate::version::count_read();
         let mut lifecycle = Lifecycle::default();
         for entry in stack.split(',') {
             let mut words = entry.split_whitespace();
@@ -397,6 +472,48 @@ impl Lifecycle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A bundled row is read once; any other row, a changed clone included,
+    /// is read as it is (ADR 0014 §2).
+    #[test]
+    fn only_the_bundled_rows_are_read_once() {
+        let catalog = Catalog::cached();
+        for (i, row) in catalog.functions.iter().enumerate() {
+            assert_eq!(index_in(&catalog.functions, row), Some(i));
+            assert_eq!(
+                row.availability(),
+                row.versions.as_deref().map(Availability::from_versions)
+            );
+            assert_eq!(row.lifecycle(), Lifecycle::parse(&row.stack));
+        }
+        for (i, row) in catalog.commands.iter().enumerate() {
+            assert_eq!(index_in(&catalog.commands, row), Some(i));
+            assert_eq!(row.lifecycle(), Lifecycle::parse(&row.stack));
+        }
+        for row in &catalog.types {
+            assert_eq!(
+                row.availability(),
+                Availability::from_versions(&row.versions)
+            );
+        }
+        let bundled = catalog.function("to_lower").expect("a bundled function");
+        let mut changed = bundled.clone();
+        assert_eq!(index_in(&catalog.functions, &changed), None);
+        changed.versions = Some(vec!["9.6".to_owned()]);
+        changed.stack = "preview 9.6".to_owned();
+        assert_eq!(
+            changed.availability(),
+            Some(Availability::from_versions(&["9.6"]))
+        );
+        assert_ne!(changed.availability(), bundled.availability());
+        assert_eq!(changed.lifecycle(), Lifecycle::parse("preview 9.6"));
+        let mut cast = catalog
+            .cast_type("keyword")
+            .expect("a bundled type")
+            .clone();
+        cast.versions = vec!["8.19".to_owned()];
+        assert_eq!(cast.availability(), Availability::ONLY_8_19);
+    }
 
     /// The item-by-item read is field for field the whole-file parse (ADR 0013).
     #[test]
