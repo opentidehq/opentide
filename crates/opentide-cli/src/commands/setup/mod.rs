@@ -602,7 +602,7 @@ fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
             entry.get("name").map_or_else(
                 || "(no name)".to_owned(),
                 |name| match &name.value {
-                    Value::Str(text) => text.clone(),
+                    Value::Str(text) => text.to_string(),
                     _ => opentide_schema::configuration::repr::node(name),
                 },
             )

@@ -356,9 +356,13 @@ fn emit(node: &Arc<Node>, source: &str, offsets: &ByteOffsets, found: &mut Vec<S
             // value) is the text it is written as.
             let value = match value {
                 Value::Str(text) => text.clone(),
-                _ => text.trim().to_owned(),
+                _ => text.trim().into(),
             };
-            found.push(Scalar { value, start, end });
+            found.push(Scalar {
+                value: value.into(),
+                start,
+                end,
+            });
         }
     }
 }

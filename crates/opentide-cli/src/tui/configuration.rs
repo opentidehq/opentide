@@ -224,7 +224,7 @@ fn reference(value: &Node) -> Option<String> {
 /// (`null`, `true`, `1.5`).
 fn scalar_text(value: &Value) -> String {
     match value {
-        Value::Str(text) | Value::Datetime(text) => text.clone(),
+        Value::Str(text) | Value::Datetime(text) => text.to_string(),
         Value::Seq(_) | Value::Map(_) => String::new(),
         other => other.to_string(),
     }
@@ -548,7 +548,7 @@ fn decode(token: &str) -> Result<Node, ScanError> {
 
 fn decode_str(token: &str) -> Result<String, ScanError> {
     match &decode(token)?.value {
-        Value::Str(text) => Ok(text.clone()),
+        Value::Str(text) => Ok(text.to_string()),
         _ => Err(ScanError),
     }
 }
@@ -937,7 +937,7 @@ fn secrets(document: &Node) -> HashSet<String> {
         match &value.value {
             Value::Str(text) => {
                 if opentide_workspace::info::env_reference(text).is_none() {
-                    found.insert(text.clone());
+                    found.insert(text.to_string());
                     found.extend(text.split('\n').map(|line| line.trim().to_owned()));
                 }
             }
@@ -973,7 +973,7 @@ fn proven(document: &Node, redacted: &str) -> bool {
             return false;
         };
         let expected = match &original.value {
-            Value::Str(text) => Value::Str(hide_userinfo(text)),
+            Value::Str(text) => Value::Str(hide_userinfo(text).into()),
             other => other.clone(),
         };
         if value.value != expected {

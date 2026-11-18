@@ -310,7 +310,7 @@ fn scalar(node: &Node) -> bool {
 /// names no list, by its YAML 1.2 form.
 pub fn item_text(node: &Node) -> String {
     match &node.value {
-        Value::Str(text) | Value::Datetime(text) => text.clone(),
+        Value::Str(text) | Value::Datetime(text) => text.to_string(),
         other => node
             .text
             .as_deref()
