@@ -214,3 +214,24 @@ fn a_closed_model_tolerates_only_the_keys_it_names() {
     assert_eq!(errors[0].kind.pydantic_type(), Some("extra_forbidden"));
     assert_eq!(errors[0].field_path(), ["other"]);
 }
+
+/// A model's `after` validator runs only once every field validated, extra
+/// keys included, as Pydantic's `mode="after"` does: the derive compares
+/// `Context::error_count` before and after the fields. A `yara` object with
+/// an unknown key reports that key alone, not also its missing decomposed
+/// form; without the unknown key, the validator reports the form.
+#[test]
+fn an_after_validator_waits_for_the_fields() {
+    use opentide_schema::objects::platform::harfanglab::HarfangLabYara;
+
+    let (value, errors) = convert::<HarfangLabYara>("yara:\n  strings: s\n  bogus: 1\n", "yara");
+    assert!(value.is_none());
+    assert_eq!(errors.len(), 1, "{errors:#?}");
+    assert_eq!(errors[0].kind, ErrorKind::UnknownKey);
+    assert_eq!(errors[0].field_path(), ["bogus"]);
+
+    let (value, errors) = convert::<HarfangLabYara>("yara:\n  strings: s\n", "yara");
+    assert!(value.is_none());
+    assert_eq!(errors.len(), 1, "{errors:#?}");
+    assert_eq!(errors[0].kind, ErrorKind::InvalidValue("value_error"));
+}

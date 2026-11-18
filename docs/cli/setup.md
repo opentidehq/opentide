@@ -158,6 +158,8 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--harfanglab` | HarfangLab |
 | `--elastic` | Elastic Security |
 | `--sysdig` | Sysdig Secure (Falco) |
+| `--bitdefender` | Bitdefender GravityZone |
+| `--graylog` | Graylog |
 | `--exabeam` | Exabeam New-Scale SIEM |
 | `--google-secops` | Google Security Operations (YARA-L) |
 

@@ -125,13 +125,16 @@ pages (`docs/mcp/`) are exempt.
 
 ## Platform capability rule
 
-All thirteen platforms deploy; nine validate queries on a tenant (`--live`), ten offline, and eleven
-run `opentide query`. CrowdStrike, HarfangLab, Sysdig and Bitdefender are **`supported: false`** for
-`--live`; SentinelOne, Graylog and Exabeam are checked on a tenant only, so `validate query` without
-`--live` is a usage error naming it. The matrix, from the registry
+All thirteen platforms deploy; nine validate queries on a tenant (`--live`), twelve offline, and
+eleven run `opentide query`. CrowdStrike, HarfangLab, Sysdig and Bitdefender are **`supported: false`**
+for `--live`; SentinelOne is checked on a tenant only, so `validate query` without `--live` is a usage
+error naming it. The matrix, from the registry
 (`crates/opentide-schema/src/platforms.rs`), is in the root [`AGENTS.md`](../../../AGENTS.md#platforms):
-document it the same way in Usage, CLI, MCP and SDK pages, and check a claim against
-`opentide info --json` before writing it.
+document it the same way in Usage, CLI, MCP and SDK pages, and check a claim against the registry
+before writing it (`opentide info --json` prints only `can_deploy`, `can_validate` and `can_query`).
+`xtask/tests/platform_docs.rs` holds the tables of `AGENTS.md`, `docs/cli/new.md`,
+`docs/cli/validate.md`, `docs/cli/query.md`, `docs/cli/setup.md`, `docs/usage/installation.md` and
+`docs/usage/concepts/platforms.md` to the registry.
 
 ## Cross-linking
 

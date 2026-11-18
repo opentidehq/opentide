@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 opentide-core.workspace = true
+foldhash.workspace = true
 opentide-highlight.workspace = true
 opentide-parse.workspace = true
 logos.workspace = true

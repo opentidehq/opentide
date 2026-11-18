@@ -21,7 +21,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | Input | Purpose |
 |-------|---------|
 | `[QUERY]` | The query, in the platform's language. `-` reads it from stdin |
-| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner: it exits `2` (`usage_invalid_value`) |
+| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `graylog`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner: it exits `2` (`usage_invalid_value`) |
 | `--tenant` | A configured tenant name (repeatable), or `all`. Default: the only tenant configured |
 | `--rule` | Run the query this rule (by UUID) deploys to the platform |
 | `--file` | Run the query of the rule in this YAML file, saved or not: a path from the current directory or the repository root |
@@ -56,7 +56,9 @@ Each tenant runs independently: one that refuses the query or cannot be reached 
 | HarfangLab | telemetry API | a source and `field=value` filters (below) | `@event_create_date` | `limit` |
 | Elastic | ES\|QL `_query`, EQL `_eql/search`, Lucene `_search` | `--language` | `@timestamp` range filter | `LIMIT`, `size` |
 | Elastic `kuery` | detection rule preview | KQL | the rule's look-back | the rule's `max_signals` |
+| Graylog | `POST /api/search/messages`, newest first; `--index` names stream aliases | Lucene (Graylog dialect) | `timerange`, absolute | `limit` |
 | Exabeam | Search `POST /search/v2/events`, synchronous | Exabeam Query Language, as the `filter` | `startTime`/`endTime` | `limit`, at most 3,000 |
+| Google SecOps | Chronicle `udmSearch`, `queryDialect=YL2` | YARA-L 2.0 | `timeRange.startTime`/`timeRange.endTime` | `limit`, at most 10,000 |
 
 One row past `--limit` is requested, so a result knows when more matched: `truncated` is `true` and the table says `more matched; raise --limit`.
 
