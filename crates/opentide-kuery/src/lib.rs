@@ -15,7 +15,7 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 use opentide_core::{ByteSpan, CompletionItem, Diagnostic, LineIndex, Range, Severity, codes};
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_in};
 use opentide_parse::TokenSet;
 use regex::Regex;
 use rowan::{NodeOrToken, TextRange, TextSize, WalkEvent};
@@ -153,7 +153,7 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     if let Some(d) = looks_like_lucene(lucene_only, source, &lines, &lucene_signals) {
         diagnostics.push(d);
     }
-    let tokens = highlight(spec, root, source);
+    let tokens = highlight(spec, root, &lines);
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -775,7 +775,11 @@ fn capture(token: &SyntaxToken) -> Option<&'static str> {
     })
 }
 
-fn highlight(spec: &HighlightSpec, root: &SyntaxNode, source: &str) -> Vec<HighlightToken> {
+fn highlight(
+    spec: &HighlightSpec,
+    root: &SyntaxNode,
+    lines: &LineIndex<'_>,
+) -> Vec<HighlightToken> {
     let spans: Vec<(ByteSpan, &str)> = root
         .descendants_with_tokens()
         .filter_map(|e| e.into_token())
@@ -784,7 +788,7 @@ fn highlight(spec: &HighlightSpec, root: &SyntaxNode, source: &str) -> Vec<Highl
             Some((ByteSpan::new(start, end), capture(&t)?))
         })
         .collect();
-    tokens_from_spans(spec, source, &spans).unwrap_or_default()
+    tokens_in(spec, lines, &spans).unwrap_or_default()
 }
 
 /// Field names a query mentions, for completion and for Tide checks.

@@ -219,8 +219,40 @@ pub(crate) enum Order {
 }
 
 /// What a walk skips as text that cannot open or close a subsearch or end a
-/// stage (comments, quoted strings, macros): `skip_hidden`'s shape.
+/// stage (comments, quoted strings, macros): `skip_hidden`'s shape. Hidden
+/// text starts with a quote or a backtick (a comment's three of them): a
+/// `Hidden` gives `None` at any other byte, so a scan calls it only at those
+/// ([`next_stop`]).
 pub(crate) type Hidden = fn(&str, usize, usize) -> Option<usize>;
+
+/// Bytes a scan stops at: those [`Hidden`] text starts with, and `extra`.
+const fn stops(extra: &[u8]) -> [bool; 256] {
+    let mut table = [false; 256];
+    table[b'"' as usize] = true;
+    table[b'\'' as usize] = true;
+    table[b'`' as usize] = true;
+    let mut k = 0;
+    while k < extra.len() {
+        table[extra[k] as usize] = true;
+        k += 1;
+    }
+    table
+}
+
+/// Where [`bracket_pairs`] stops: hidden text and brackets.
+const PAIR_STOPS: [bool; 256] = stops(b"[]");
+/// Where [`top_level`] stops: hidden text, a stage's `|` and a `[`.
+const STAGE_STOPS: [bool; 256] = stops(b"|[");
+
+/// The first byte of `i..end` in `stops`, or `end`: the bytes between are
+/// neither hidden text nor anything the scan reads (ADR 0014 §4: the walk
+/// called its [`Hidden`] at every byte).
+fn next_stop(bytes: &[u8], i: usize, end: usize, stops: &[bool; 256]) -> usize {
+    bytes[i..end]
+        .iter()
+        .position(|&b| stops[usize::from(b)])
+        .map_or(end, |at| i + at)
+}
 
 /// Every `[` of `start..end` and the `]` that closes it, found in one pass;
 /// a `[` never closed is absent.
@@ -233,6 +265,10 @@ fn bracket_pairs(
     let (mut open, mut pairs) = (Vec::new(), std::collections::HashMap::new());
     let mut i = start;
     while i < end {
+        i = next_stop(bytes, i, end, &PAIR_STOPS);
+        if i >= end {
+            break;
+        }
         if let Some(next) = hidden(source, i, end) {
             i = next;
             continue;
@@ -267,6 +303,10 @@ fn top_level(
     let bytes = source.as_bytes();
     let (mut out, mut stage_start, mut i) = (Vec::new(), start, start);
     while i < end {
+        i = next_stop(bytes, i, end, &STAGE_STOPS);
+        if i >= end {
+            break;
+        }
         if let Some(next) = hidden(source, i, end) {
             i = next;
             continue;
@@ -546,6 +586,80 @@ pub(crate) fn top_levels() -> usize {
 mod plan_tests {
     use super::*;
 
+    // [`bracket_pairs`] and [`top_level`] as they were: `hidden` asked at
+    // every byte. The scanning walk below reads them, as it did.
+    /// Every `[` of `start..end` and the `]` that closes it, found in one pass;
+    /// a `[` never closed is absent.
+    fn bracket_pairs_bytewise(
+        source: &str,
+        (start, end): (usize, usize),
+        hidden: Hidden,
+    ) -> std::collections::HashMap<usize, usize> {
+        let bytes = source.as_bytes();
+        let (mut open, mut pairs) = (Vec::new(), std::collections::HashMap::new());
+        let mut i = start;
+        while i < end {
+            if let Some(next) = hidden(source, i, end) {
+                i = next;
+                continue;
+            }
+            match bytes[i] {
+                b'[' => open.push(i),
+                b']' => {
+                    if let Some(at) = open.pop() {
+                        pairs.insert(at, i);
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        pairs
+    }
+
+    /// The stages of `start..end` and, with `inner`, the subsearches of it, at
+    /// its top level: a subsearch is jumped over by its pair, never rescanned
+    /// (each level of a walk read all the text nested inside it). After a `[`
+    /// never closed nothing splits, and it opens no subsearch, as before.
+    fn top_level_bytewise(
+        source: &str,
+        (start, end): (usize, usize),
+        hidden: Hidden,
+        pairs: &std::collections::HashMap<usize, usize>,
+        inner: bool,
+    ) -> Vec<(usize, usize)> {
+        let bytes = source.as_bytes();
+        let (mut out, mut stage_start, mut i) = (Vec::new(), start, start);
+        while i < end {
+            if let Some(next) = hidden(source, i, end) {
+                i = next;
+                continue;
+            }
+            match bytes[i] {
+                b'|' if !inner => {
+                    out.push((stage_start, i));
+                    stage_start = i + 1;
+                }
+                b'[' => match pairs.get(&i) {
+                    Some(&close) if close < end => {
+                        if inner {
+                            out.push((i + 1, close));
+                        }
+                        i = close + 1;
+                        continue;
+                    }
+                    _ => break,
+                },
+                _ => {}
+            }
+            i += 1;
+        }
+        if !inner && stage_start < end {
+            out.push((stage_start, end));
+        }
+        out
+    }
+
     /// [`walk_pipelines`] as it was before plans: every pipeline scanned as
     /// the walk reaches it.
     fn walk_scanning<S>(
@@ -562,9 +676,9 @@ mod plan_tests {
             next: usize,
             inner: Option<std::vec::IntoIter<(usize, usize)>>,
         }
-        let pairs = std::rc::Rc::new(bracket_pairs(source, (start, end), hidden));
+        let pairs = std::rc::Rc::new(bracket_pairs_bytewise(source, (start, end), hidden));
         let _installed = Installed::new(source, std::rc::Rc::clone(&pairs));
-        let stages = |range| top_level(source, range, hidden, &pairs, false);
+        let stages = |range| top_level_bytewise(source, range, hidden, &pairs, false);
         let mut open = |stages: Vec<(usize, usize)>| {
             let entered = enter(&stages);
             Frame {
@@ -590,7 +704,7 @@ mod plan_tests {
                 if depth > MAX_SUBSEARCH_DEPTH {
                     Vec::new().into_iter()
                 } else {
-                    top_level(source, range, hidden, &pairs, true).into_iter()
+                    top_level_bytewise(source, range, hidden, &pairs, true).into_iter()
                 }
             });
             if let Some(sub) = inner.next() {
@@ -679,7 +793,7 @@ mod plan_tests {
     /// order, with the same subsearch brackets installed (ADR 0014 §5).
     #[test]
     fn a_plan_walks_as_the_scanning_walk() {
-        let rules: [Hidden; 2] = [skip_hidden, crate::search_operators::skip_hidden];
+        let rules: [Hidden; 2] = [skip_hidden, crate::search_operators::skip_hidden_own];
         for source in texts() {
             for hidden in rules {
                 for order in [Order::StageFirst, Order::SubsearchesFirst] {
@@ -690,7 +804,7 @@ mod plan_tests {
                         Plan::new(s, (0, s.len()), hidden).walk(s, o, e, st);
                     });
                     assert_eq!(planned, scanned, "{source:?}");
-                    // Installed for the analysis's rule: the other rule's walk
+                    // Installed for the analysis's rule: another rule's walk
                     // misses it and scans its own, to the same result.
                     let _scope = plan_scope(&source);
                     let installed = record(&source, order, |s, o, e, st| {
@@ -702,23 +816,94 @@ mod plan_tests {
         }
     }
 
-    /// An analysis scans its pipelines once for its walks that read them
-    /// alike (perf, CIM, declared datasets), and once for the search
-    /// operators', which skip other text (ADR 0014 §7): each walk scanned
-    /// them again.
+    /// An analysis scans its pipelines once, for every walk that reads them
+    /// (perf, CIM, declared datasets and the search operators share one
+    /// rule): the search operators' copy of the rule scanned them a second
+    /// time (ADR 0014 §7).
     #[test]
     fn an_analysis_scans_its_pipelines_once() {
         let source = SAMPLES[1];
         let before = top_levels();
         let _ = Plan::new(source, (0, source.len()), skip_hidden);
-        let _ = Plan::new(
-            source,
-            (0, source.len()),
-            crate::search_operators::skip_hidden,
-        );
         let once = top_levels() - before;
         let before = top_levels();
         crate::analyze(source);
         assert_eq!(top_levels() - before, once);
+    }
+
+    /// The search operators' rule is the scan's: the same end of hidden text
+    /// at every byte of the samples, their prefixes and generated texts.
+    #[test]
+    fn the_search_operators_rule_is_the_scans() {
+        let mut probes = texts();
+        let mut seed: u32 = 11;
+        for _ in 0..400 {
+            let mut t = String::new();
+            for _ in 0..(seed >> 16) % 24 {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                t.push(b"\"'`\\a |["[((seed >> 16) % 8) as usize] as char);
+            }
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            probes.push(t);
+        }
+        for source in &probes {
+            for end in 0..=source.len() {
+                for i in 0..=end {
+                    assert_eq!(
+                        skip_hidden(source, i, end),
+                        crate::search_operators::skip_hidden_own(source, i, end),
+                        "{source:?} {i} {end}"
+                    );
+                }
+            }
+        }
+    }
+
+    thread_local! {
+        static ASKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    fn counting(source: &str, i: usize, end: usize) -> Option<usize> {
+        ASKED.set(ASKED.get() + 1);
+        skip_hidden(source, i, end)
+    }
+
+    /// A scan asks its rule only at the bytes hidden text or a stage's
+    /// structure starts with, where it asked at every byte (ADR 0014 §4, §7):
+    /// and finds the same stages and pairs.
+    #[test]
+    fn a_scan_asks_its_rule_only_where_hidden_text_can_start() {
+        for source in texts() {
+            let range = (0, source.len());
+            let pairs = bracket_pairs(&source, range, skip_hidden);
+            assert_eq!(
+                pairs,
+                bracket_pairs_bytewise(&source, range, skip_hidden),
+                "{source:?}"
+            );
+            for inner in [false, true] {
+                assert_eq!(
+                    top_level(&source, range, skip_hidden, &pairs, inner),
+                    top_level_bytewise(&source, range, skip_hidden, &pairs, inner),
+                    "{source:?}"
+                );
+            }
+            let stops = source
+                .bytes()
+                .filter(|&b| PAIR_STOPS[usize::from(b)] || STAGE_STOPS[usize::from(b)])
+                .count();
+            ASKED.set(0);
+            let _ = Plan::new(&source, range, counting);
+            let asked = ASKED.get();
+            assert!(
+                asked <= 3 * stops.max(1),
+                "{source:?}: {asked} asks, {stops} stops"
+            );
+            if source.len() > 40 {
+                ASKED.set(0);
+                let _ = bracket_pairs_bytewise(&source, range, counting);
+                assert!(ASKED.get() > asked, "{source:?}");
+            }
+        }
     }
 }

@@ -11,7 +11,7 @@ use super::kind::SyntaxKind as K;
 use super::{SyntaxNode, SyntaxToken, parse};
 use crate::{AnalyzeResult, Catalog};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
-use opentide_highlight::{HighlightSpec, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, tokens_in};
 use opentide_parse::SyntaxError;
 use rowan::{NodeOrToken, TextRange};
 
@@ -97,7 +97,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
                 .and_then(|i| merged.get(i))
                 .is_none_or(|&(_, to)| start > to)
     });
-    let tokens = highlight(&index, source, spec, catalog).unwrap_or_default();
+    let tokens = highlight(&index, source, &lines, spec, catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -743,6 +743,7 @@ fn looks_like_macro(text: &str) -> bool {
 fn highlight(
     index: &TreeIndex,
     source: &str,
+    lines: &LineIndex<'_>,
     spec: &HighlightSpec,
     catalog: &Catalog,
 ) -> Result<Vec<opentide_highlight::HighlightToken>, opentide_highlight::HighlightError> {
@@ -782,7 +783,7 @@ fn highlight(
         spans.push((span(token.text_range()), capture));
     }
     let _ = source;
-    tokens_from_spans(spec, source, &spans)
+    tokens_in(spec, lines, &spans)
 }
 
 #[cfg(test)]

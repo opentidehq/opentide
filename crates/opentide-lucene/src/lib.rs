@@ -42,7 +42,7 @@ pub fn debug_parse(source: &str) -> String {
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LineIndex, Range, Severity, codes, position_to_offset,
 };
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans, tokens_in};
 use syntax::SyntaxKind as K;
 use tree::{Node, Tree, walk_once};
 
@@ -208,7 +208,8 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         }
     }
     let tokens = if same_text {
-        tokens_from_spans(spec, source, &spans).unwrap_or_default()
+        // `text` is `source`: its line table is `lines`.
+        tokens_in(spec, &lines, &spans).unwrap_or_default()
     } else {
         highlight(spec, &Tree::parse(source).root, source)
     };

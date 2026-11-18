@@ -1,6 +1,6 @@
 //! One line table for an analysis (ADR 0014 §1): `analyze` builds the line
-//! index of its text once and hands it to the column pass and the performance
-//! checks, which built their own (four tables a call, with the highlight's).
+//! index of its text once and hands it to the column pass, the performance
+//! checks and the highlight, which built their own (four tables a call).
 //! A work count, not a wall clock.
 
 use opentide_core::line_tables_built;
@@ -15,7 +15,7 @@ fn tables(source: &str) -> usize {
 }
 
 #[test]
-fn an_analysis_builds_one_line_table_and_the_highlight_its_own() {
+fn an_analysis_builds_one_line_table() {
     for source in [
         // Clean, over several lines: the column pass and both performance
         // checks run.
@@ -27,8 +27,7 @@ fn an_analysis_builds_one_line_table_and_the_highlight_its_own() {
         // Non-ASCII, so the table records its wide characters.
         "SecurityEvent\n| where Account == \"é\u{1F600}\"",
     ] {
-        // The analysis's own table and the highlight's (opentide-highlight
-        // builds one from the text it is given).
-        assert_eq!(tables(source), 2, "{source:?}");
+        // The analysis's own table, which the highlight reads too.
+        assert_eq!(tables(source), 1, "{source:?}");
     }
 }
