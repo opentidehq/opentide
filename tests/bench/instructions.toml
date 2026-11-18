@@ -31,9 +31,9 @@ parse_external_allocations = 1079
 
 [esql]
 analyze_corpus = 9837416
-analyze_corpus_allocations = 31150
+analyze_corpus_allocations = 30161
 analyze_external = 2199148
-analyze_external_allocations = 5841
+analyze_external_allocations = 5398
 parse_corpus = 3493928
 parse_corpus_allocations = 7246
 parse_external = 879541
@@ -91,9 +91,9 @@ parse_external_allocations = 9580
 
 [spl]
 analyze_corpus = 9828531
-analyze_corpus_allocations = 17669
+analyze_corpus_allocations = 16960
 analyze_external = 13742323
-analyze_external_allocations = 12542
+analyze_external_allocations = 11613
 parse_corpus = 3257020
 parse_corpus_allocations = 5313
 parse_external = 2823605
