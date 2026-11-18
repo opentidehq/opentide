@@ -269,6 +269,10 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
         ("editors/zed/opentide.json", {"wiring"}),
         ("src/opentide/_native/__init__.pyi", {"wiring", "stubs"}),
         ("tests/bench/instructions.toml", {"wiring"}),
+        # The pages that restate the platform registry (platform_docs).
+        ("AGENTS.md", {"wiring"}),
+        ("docs/cli/validate.md", {"wiring"}),
+        ("docs/usage/concepts/platforms.md", {"wiring"}),
         ("crates/testdata/corpus/kql/take.kql", {"wiring"}),
     ],
 )

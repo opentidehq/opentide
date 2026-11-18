@@ -200,15 +200,17 @@ capability there, not in a list of names.
 | `elastic` | Elastic Security | ✅ | ✅ | ✅ | ES\|QL, EQL, Kibana KQL, Lucene | the same four |
 | `sysdig` | Sysdig Secure | ✅ | ✅ | `supported: false` | Falco | — |
 | `bitdefender` | Bitdefender GravityZone | ✅ | ✅ | `supported: false` | YARA (Bitdefender profile; `.yar`, `.yara`) | — |
-| `graylog` | Graylog | ✅ | ✅ | ✅ | — (`--live` required) | Lucene |
-| `exabeam` | Exabeam New-Scale SIEM | ✅ | ✅ | ✅ | — (`--live` required) | Exabeam Query Language |
+| `graylog` | Graylog | ✅ | ✅ | ✅ | Lucene (Graylog dialect) | Lucene |
+| `exabeam` | Exabeam New-Scale SIEM | ✅ | ✅ | ✅ | Exabeam Query Language (`.exabeam`) | Exabeam Query Language |
 | `google_secops` | Google Security Operations | ✅ | ✅ | ✅ | YARA-L 2.0 (`.yaral`, `.yl2`) | YARA-L 2.0 |
 
-All 13 deploy; 9 have a tenant check, 10 an offline engine, 11 `opentide query`. A check a platform
+All 13 deploy; 9 have a tenant check, 12 an offline engine, 11 `opentide query`. A check a platform
 does not have is `supported: false` (or, offline, a usage error naming `--live`), never a fake pass.
 Every platform's block is also checked by its model (`opentide validate`'s `schema` check) and, in the
 editor, by the language server. A change to this table is a change to the registry, the user docs
-(`docs/cli/validate.md`, `docs/usage/concepts/platforms.md`) and opentidehq/skills (item 5 below).
+(`docs/cli/validate.md`, `docs/usage/concepts/platforms.md`, `docs/cli/new.md`,
+`docs/usage/installation.md`) and opentidehq/skills (item 5 below); `xtask/tests/platform_docs.rs`
+fails when this table, its counts or those pages disagree with the registry.
 
 ## Definition of done
 

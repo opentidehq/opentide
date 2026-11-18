@@ -483,8 +483,8 @@ jobs:
       - name: Install mold
         run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
 
-      - name: Every query language is wired
-        run: cargo nextest run --locked -p xtask --test language_wiring
+      - name: Every query language is wired, and the docs' platform tables are the registry's
+        run: cargo nextest run --locked -p xtask --test language_wiring --test platform_docs
 
       - name: Save the compiler cache
         if: ${{ !cancelled() }}
