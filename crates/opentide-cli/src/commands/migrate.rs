@@ -156,7 +156,9 @@ fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migratio
             node::load_bytes_keeping_repeated_keys(&bytes).map_err(|error| match error.mark {
                 Some(mark) => format!(
                     "{} (line {}, column {})",
-                    error.problem, mark.line, mark.column
+                    error.problem,
+                    mark.line(),
+                    mark.column()
                 ),
                 None => error.problem,
             })
