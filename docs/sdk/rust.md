@@ -158,7 +158,7 @@ With the `connectors` feature, a `Connection` reaches one tenant through the pla
 | `Connection::validate_query(&QueryRequest)` | `opentide validate query --live` | `LiveCheck`: the one-row search's result, and the `errors` that still fail the query |
 | `Connection::deploy(&DeployRequest)` | one rule of `opentide deploy` | `DeployOutcome`: the platform's identifier of the rule, and the warnings the deploy raised |
 
-The operations are `async`, as the connectors are: run them on a [tokio](https://tokio.rs) runtime (`connection.query(&request).await`), or from synchronous code with `opentide::connectors::block_on`, which starts a runtime of its own (never call it inside one). A query saves nothing on the tenant. `Connection::canceller()` stops a running operation from elsewhere (the error's code is then `interrupted`), and a search the connector stops waiting for is stopped on the tenant where the API allows it (CrowdStrike). `crates/opentide/examples/query.rs`:
+The operations are `async`, as the connectors are: run them on a [tokio](https://tokio.rs) runtime (`connection.query(&request).await`), or from synchronous code with `opentide::connectors::block_on`, which runs it on the process's one runtime (never call it inside a runtime, nor on a `spawn_blocking` thread of one: there it answers the code `runtime_unavailable`). A query saves nothing on the tenant. `Connection::canceller()` stops a running operation from elsewhere (the error's code is then `interrupted`), and a search the connector stops waiting for is stopped on the tenant where the API allows it (CrowdStrike). `crates/opentide/examples/query.rs`:
 
 ```bash
 cargo run -p opentide --features connectors --example query -- path/to/workspace splunk spl 'index=main | head 5'
@@ -195,7 +195,7 @@ pub fn run(
     };
     let mut request = QueryRequest::new(query, language, window);
     request.limit = 10;
-    // A synchronous caller runs the async operation on a runtime of its own;
+    // A synchronous caller runs the async operation on the process's runtime;
     // in a tokio task, `connection.query(&request).await?` instead.
     let outcome = connectors::block_on(connection.query(&request))??;
     for row in &outcome.rows {

@@ -32,9 +32,9 @@ use crate::error::ConnectorError;
 use crate::progress::{ProgressSink, TenantEvent};
 
 /// [`shared`]'s builder: two worker threads, or, on WASI (one thread), the
-/// current thread. The Python binding starts its own runtime
-/// (`pyo3_async_runtimes`) from it.
-pub fn builder() -> tokio::runtime::Builder {
+/// current thread. It installs the thread flags [`block_on`] reads, so it
+/// builds only [`shared`].
+fn builder() -> tokio::runtime::Builder {
     #[cfg(not(target_os = "wasi"))]
     {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
@@ -45,7 +45,10 @@ pub fn builder() -> tokio::runtime::Builder {
             // thread may block on it.
             .on_thread_start(|| RUNTIME_THREAD.set(true))
             // A worker thread drives async work: [`block_on`] there would
-            // block it, so it refuses. (Only workers park and unpark.)
+            // block it, so it refuses. (Only workers park and unpark. A worker
+            // just started may poll a task before it first parks; a
+            // `block_on` in that task gets tokio's panic, caught as the
+            // task's crash: no opentide code blocks inside async work.)
             .on_thread_unpark(|| ASYNC_THREAD.set(true));
         builder
     }
@@ -91,9 +94,9 @@ pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
 }
 
 /// [`block_on`], which also serves a caller inside another runtime (an
-/// embedder's) by handing the work to a thread of its own ([`apart`]); no
-/// opentide caller is, after #1558. For a client a host may call from its
-/// own runtime (the CVE lookups, MISP).
+/// embedder's, or the MCP server's until it runs on [`shared`]) by handing
+/// the work to a thread of its own ([`apart`]). For a client a host may
+/// call from its own runtime (the CVE lookups, MISP, a plugin's tenant).
 ///
 /// # Errors
 ///

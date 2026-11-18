@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you call `opentide::connectors::block_on` (or `opentide_connectors::runtime::block_on`) on a thread of your own tokio runtime, a `spawn_blocking` thread included, await the operation there instead: the call now runs on the process's one runtime and answers the code `runtime_unavailable` on a thread that has a runtime's handle, where it used to start a runtime of its own.
 - If you call `opentide_connectors::plugin::with_plugins(host)`, pass the environment the built-in connectors read too: `with_plugins(host, &environment)` (`&Environment::process()` for the process's).
 - If you build an `opentide_connectors::google_secops::deploy::RuleDeploy` with a `recreate_refusal`, pass its code as a `&'static str`; if you read `RuleFailure::code`, it is a `&'static str` too.
 - If you use `opentide_connectors::graylog::Graylog` as a value, call `Graylog::new()` (or `Graylog::default()`): it is a struct with a private field now. `Graylog::on_version(version)` makes one for a tenant whose version you read, which sends no `GET /api/system`.
