@@ -82,7 +82,7 @@ fn rust_result(bytes: &[u8]) -> Json {
         Err(error) => {
             let at = error
                 .mark
-                .map(|m| format!(" (line {}, column {})", m.line, m.column))
+                .map(|m| format!(" (line {}, column {})", m.line(), m.column()))
                 .unwrap_or_default();
             json!({ "error": kind_name(error.kind), "detail": format!("{}{at}", error.problem) })
         }

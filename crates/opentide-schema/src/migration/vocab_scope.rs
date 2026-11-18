@@ -347,10 +347,10 @@ fn emit(node: &Arc<Node>, source: &str, offsets: &ByteOffsets, found: &mut Vec<S
         }
         Value::Map(_) => {}
         value => {
-            let start = offsets.byte(node.start.index);
+            let start = offsets.byte(node.start.index());
             // A quoted value ends at its closing quote: the parser's end
             // runs on over a comment after it, which the rewrite would drop.
-            let end = node::scalar_end(source, start, offsets.byte(node.end.index).max(start));
+            let end = node::scalar_end(source, start, offsets.byte(node.end.index()).max(start));
             let text = source.get(start..end).unwrap_or_default();
             // A string is its value; another scalar (`null`, `12`, an empty
             // value) is the text it is written as.
