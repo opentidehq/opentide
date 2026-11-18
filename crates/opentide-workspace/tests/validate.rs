@@ -1445,6 +1445,28 @@ mod validate {
         uuids
     }
 
+    /// Each finding of `code` is in its own rule's file: `files[uuid]`.
+    fn in_own_file(validation: &Validation, code: &str, files: &[(&str, &str)]) {
+        for finding in with_code(validation, code) {
+            let (_, file) = files
+                .iter()
+                .find(|(uuid, _)| *uuid == finding.object_uuid)
+                .unwrap();
+            assert_eq!(
+                finding.file_path.as_deref(),
+                Some(Path::new(file)),
+                "{code} on {}",
+                finding.object_uuid
+            );
+        }
+    }
+
+    const FILES: [(&str, &str); 3] = [
+        (U1, "/ws/objects/rules/a.yaml"),
+        (U2, "/ws/objects/rules/b.yaml"),
+        (U3, "/ws/objects/rules/c.yaml"),
+    ];
+
     fn only(uuid: &str) -> Selection {
         Selection {
             uuids: vec![uuid.to_owned()],
@@ -1474,6 +1496,7 @@ mod validate {
         );
         let validation = run(&fs, &Options::default());
         assert_eq!(on(&validation, "graylog_title_duplicate"), [U1, U2]);
+        in_own_file(&validation, "graylog_title_duplicate", &FILES);
         let finding = with_code(&validation, "graylog_title_duplicate")
             .into_iter()
             .find(|d| d.object_uuid == U1)
@@ -1517,6 +1540,7 @@ mod validate {
         );
         let validation = run(&fs, &Options::default());
         assert_eq!(on(&validation, "exabeam_name_duplicate"), [U1, U2]);
+        in_own_file(&validation, "exabeam_name_duplicate", &FILES);
         let finding = with_code(&validation, "exabeam_name_duplicate")[0];
         assert_eq!(
             finding.field_path,
@@ -1557,6 +1581,7 @@ mod validate {
         );
         let validation = run(&fs, &Options::default());
         assert_eq!(on(&validation, "google_secops_name_duplicate"), [U1, U2]);
+        in_own_file(&validation, "google_secops_name_duplicate", &FILES);
         let selection = only(U1);
         let alone = run(
             &fs,
