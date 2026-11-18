@@ -26,11 +26,3 @@ why = "plan §5.4: the Tide model"
 name = "opentide-workspace"
 item = "UC-2.1 (#816)"
 why = "plan §5.4: loading, validation, lint"
-
-[[crate]]
-name = "opentide-analysis"
-why = "becomes opentide-workspace (plan §4); until then its stand-in"
-
-[[crate]]
-name = "opentide-tide"
-why = "its checks become opentide-workspace (plan §4); until then its stand-in"
