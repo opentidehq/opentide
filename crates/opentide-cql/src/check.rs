@@ -1177,9 +1177,12 @@ mod walk_tests {
         assert!(correlated > 10, "{correlated} correlation findings");
     }
 
-    /// An analysis walks every element once, a correlation rule's too (ADR
-    /// 0014 §7): the checks, the correlation rule and the highlight each
-    /// walked it. A walk reads an enter and a leave per element.
+    /// The checks, the correlation rule and the highlight share one walk over
+    /// every element, a correlation rule's included (ADR 0014 §7): each walked
+    /// it. A walk reads an enter and a leave per element. The count is of
+    /// those whole-tree walks; `free_text_after_aggregate` walks each
+    /// pipeline step on its own, before and after this change, and is not
+    /// counted.
     #[test]
     fn an_analysis_visits_each_element_once() {
         for source in [SAMPLES[2], SAMPLES[6]] {
