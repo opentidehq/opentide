@@ -1,6 +1,6 @@
 ---
 title: "Throughput"
-description: "How fast each language's parse and analysis run, how that is measured (the throughput bench, ADR 0014), and how it compares with the vendors' own libraries."
+description: "How fast each language's parse and analysis run, in wall time and in instructions, how that is measured and held (the throughput bench, cargo xtask throughput, ADR 0014), and how it compares with the vendors' own libraries."
 ---
 
 # Throughput
@@ -55,12 +55,52 @@ How to read the table:
 - **Small inputs.** Kibana KQL's and Lucene's external queries are short (12 and 20 bytes on
   average), and Exabeam's set is 794 bytes, so their MB/s is dominated by the per-call floor.
 
+## Instructions: the gate
+
+`cargo xtask throughput --check` builds the same bench with its symbols kept, then counts each
+language's instructions with callgrind (valgrind required). For every language, mode and input set
+it runs the bench's `--count`: two warm-up passes, then one pass inside a function of its own,
+which callgrind alone counts (`--toggle-collect`). Each pass is counted three times (`--runs`), and
+the lowest is held to [`tests/bench/instructions.toml`](../../tests/bench/instructions.toml):
+
+- **Over budget.** An instruction count more than 3% over its budget fails, an allocator-call
+  count more than 2 calls over fails, and so does a count with no budget, or a budget no pass
+  counted any more.
+- **Under budget.** A count further under than that is a warning that asks for the budgets to be
+  recorded again (`cargo xtask throughput --record`), so that the gain is kept.
+
+Instruction counts do not depend on the machine's load, which time does. Only the bench binary's
+own instructions are counted: glibc (malloc, the string routines) and the loader are left out. Their
+counts move with the glibc version, with the CPU glibc picks a routine for, and with the allocation
+order each process's hash seeds give: counted with them, one run of a pass differed from the next by
+1.5%, and CI's runner from a local run by up to 3.3%. Without them, runs differ by under 0.1%.
+
+What an allocation costs inside malloc and free is then out of the instruction count, so each pass
+has a second budget, `<mode>_<set>_allocations`: the calls the bench's own code makes into `malloc`,
+`calloc`, `realloc` and the aligned allocators, read from the same callgrind profile. That number
+does not vary from run to run (16 runs, each with its own hash seeds, gave one count). From machine
+to machine it varied once by one call: Exabeam's corpus analysis made one call more on CI's runner
+than on a local machine with the same build inputs, valgrind and glibc, and an lld-linked build
+counted as the local one, which leaves the CPU. So it is held within 2 calls, not a percentage:
+every input set has more analyses than that, and one allocation more a call fails the check. When
+the check fails, CI uploads the callgrind profiles (`target/throughput/`), which
+`callgrind_annotate --inclusive=yes` traces to a function. Each pass is counted three times (`--runs`): a record
+writes the highest, a check takes the lowest. The budgets file names the valgrind, glibc and
+architecture it was recorded on, and a check elsewhere warns. CI's `throughput` job is pinned to
+`ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded, so that its valgrind
+counts as it did there.
+
+CI's `throughput` job runs the check when any crate the analysis is built from changes, when the
+bench, the budgets or the command change, and on every push; the table goes to the step summary. A
+change that raises a count on purpose records the budgets again and gives the reason in its pull
+request.
+
 ## Adding a language
 
-A language joins the benchmark with one row in the bench's `LANGUAGES` table: its id, extensions,
-corpus, external directories and parse entry point. The bench's `--count LANG MODE SET` runs one
-pass after its warm-up, inside a function of its own, for an instruction count with callgrind
-(ADR 0014 §6).
+A language joins the bench and the gate with one row in the bench's `LANGUAGES` table: its id,
+extensions, corpus, external directories, the file names to leave out, and its parse entry point.
+Then `cargo xtask throughput --record --language <name>` adds its budgets: a record merges into
+the file, so the other languages' budgets stay as they are.
 
 ## Against the vendors
 
