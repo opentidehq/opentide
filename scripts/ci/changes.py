@@ -104,6 +104,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("src/opentide/_native/*", ("python", "pylint"), ALL),
     ("src/opentide/*", ("python", "pylint"), ()),
     ("tests/*.py", ("python", "pylint"), ()),
+    # The throughput budgets: the `throughput` job alone (THROUGHPUT_PATHS).
+    ("tests/bench/instructions.toml", (), ()),
     # Test data outside a crate: fixtures, corpora, cassettes, goldens, which
     # the crates' tests read as well.
     ("tests/*", ("python",), ALL),
@@ -269,6 +271,8 @@ THROUGHPUT_PATHS = (
     "crates/opentide-analysis/benches/*",
     "tests/bench/instructions.toml",
     "xtask/src/throughput.rs",
+    "xtask/src/parallel.rs",
+    "xtask/src/lib.rs",
     "xtask/src/main.rs",
     "xtask/Cargo.toml",
 )

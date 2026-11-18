@@ -460,11 +460,14 @@ jobs:
       contents: read
     env:
       RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      # xtask's own dev build: no debuginfo (the bench builds in `bench`).
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_CACHE_SIZE: 3G
       SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -481,6 +484,8 @@ jobs:
       - name: Install mold and valgrind
         run: sudo apt-get install -y -q --no-install-recommends mold valgrind || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold valgrind; }
 
+      # The table goes to the step summary; budgets are recorded where this
+      # runs (its valgrind and glibc are counted: the file names them).
       - name: Instruction counts within their budgets
         run: cargo xtask throughput --check
 

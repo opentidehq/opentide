@@ -58,17 +58,26 @@ How to read the table:
 `cargo xtask throughput --check` builds the same bench with its symbols kept, then counts each
 language's instructions with callgrind (valgrind required). For every language, mode and input set
 it runs the bench's `--count`: two warm-up passes, then one pass inside a function of its own,
-which callgrind alone counts (`--toggle-collect`). Each count is held to
-[`tests/bench/instructions.toml`](../../tests/bench/instructions.toml):
+which callgrind alone counts (`--toggle-collect`). Each pass is counted three times (`--runs`), and
+the lowest is held to [`tests/bench/instructions.toml`](../../tests/bench/instructions.toml):
 
-- **Over budget.** A count more than 3% over its budget fails, and so does a count with no budget.
-- **Under budget.** A count more than 3% under is reported, with a request to record the budgets
-  again (`cargo xtask throughput --record`), so that the gain is kept.
+- **Over budget.** A count more than 3% over its budget fails, and so does a count with no budget,
+  or a budget no pass counted any more.
+- **Under budget.** A count more than 3% under is a warning that asks for the budgets to be
+  recorded again (`cargo xtask throughput --record`), so that the gain is kept.
 
-Instruction counts are deterministic for a build and an input, which time is not: two runs of one
-build differ by under 1% (hash seeds, the routine chosen by CPU feature). CI's `throughput` job runs
-the check when any crate the analysis is built from changes, and on every push. A change that
-raises a count on purpose records the budgets again and gives the reason in its pull request.
+Instruction counts do not depend on the machine's load, which time does. They still depend on the
+allocation order: each process seeds its hash maps, and glibc's malloc does more or less work with
+the order, so one run of a pass can differ from the next by 1.5%. A record writes the highest of
+its runs and a check takes the lowest, which keeps that noise inside the tolerance. glibc's malloc
+is counted, so budgets hold for one environment: the file names the valgrind, glibc and
+architecture it was recorded on, and a check elsewhere warns. Record where CI checks (the
+`throughput` job's runner image).
+
+CI's `throughput` job runs the check when any crate the analysis is built from changes, when the
+bench, the budgets or the command change, and on every push; the table goes to the step summary. A
+change that raises a count on purpose records the budgets again and gives the reason in its pull
+request.
 
 ## Adding a language
 

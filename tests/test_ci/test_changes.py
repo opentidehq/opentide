@@ -275,6 +275,8 @@ def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]
         ("crates/opentide-analysis/benches/throughput.rs", True),
         ("tests/bench/instructions.toml", True),
         ("xtask/src/throughput.rs", True),
+        ("xtask/src/parallel.rs", True),
+        ("xtask/src/lib.rs", True),
         # A crate the analysis is built from, and the analysis itself.
         ("crates/opentide-kql/src/parse.rs", True),
         ("crates/opentide-parse/src/lib.rs", True),
@@ -295,3 +297,9 @@ def test_the_throughput_gate_runs_when_the_analysis_or_its_counts_change(
     """The `throughput` job: instruction counts move with any crate the analysis
     is built from (#1571, ADR 0014)."""
     assert plan(path)["throughput"] == str(runs).lower()
+
+
+def test_a_budgets_only_change_runs_the_throughput_gate_alone() -> None:
+    outputs = plan("tests/bench/instructions.toml")
+    assert on(outputs) == {"throughput"}
+    assert outputs["crates"] == ""

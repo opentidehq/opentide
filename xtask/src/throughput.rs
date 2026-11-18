@@ -7,12 +7,18 @@
 //! (`parse`, `analyze`) and input set (`corpus`, `external`) after its
 //! warm-up (`--count`); callgrind counts that pass alone
 //! (`--toggle-collect=throughput::counted`). Instructions are deterministic
-//! for a build and an input, where time is not: the check allows
-//! [`TOLERANCE`] for what still varies (hash seeds, the CPU features a
-//! routine is chosen by), and a count that falls further asks for the budgets
-//! to be recorded again (`--record`), so that the gain is kept.
+//! for a build, an input and an allocation order, where time is not. The
+//! allocation order still varies (each process seeds its hash maps, and
+//! glibc's malloc does more or less work with the order): one pass can differ
+//! from the next by 1.5%. So each pass is counted [`RUNS`] times: the check
+//! holds the lowest to its budget within [`TOLERANCE`], and a record writes
+//! the highest. A count that falls further asks for the budgets to be recorded
+//! again (`--record`), so that the gain is kept. glibc's malloc is counted, so
+//! budgets hold for one environment: the file names it ([`environment`]), and
+//! a check elsewhere warns.
 
 use anyhow::{Context, Result, bail};
+use clap::builder::TypedValueParser as _;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -20,6 +26,9 @@ use std::process::{Command, ExitCode};
 /// How far a count may rise above its budget before the check fails, and fall
 /// below it before the check asks for the budgets to be recorded again.
 pub const TOLERANCE: f64 = 0.03;
+
+/// How many times each pass is counted (the default of `--runs`).
+pub const RUNS: usize = 3;
 
 const MODES: [&str; 2] = ["parse", "analyze"];
 const SETS: [&str; 2] = ["corpus", "external"];
@@ -39,10 +48,14 @@ pub struct ThroughputArgs {
     /// Only these languages (names as the bench binary lists them).
     #[arg(long = "language")]
     pub languages: Vec<String>,
+    /// How many times each pass is counted: the check takes the lowest, a
+    /// record the highest.
+    #[arg(long, default_value_t = RUNS, value_parser = clap::value_parser!(u8).range(1..).map(usize::from))]
+    pub runs: usize,
 }
 
 /// One counted pass.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Count {
     language: String,
     key: String,
@@ -63,56 +76,113 @@ pub fn main(args: &ThroughputArgs) -> ExitCode {
 }
 
 fn run(args: &ThroughputArgs) -> Result<bool> {
+    let counts = counts(args)?;
+    let environment = environment();
+    if args.record {
+        record(args, &counts, &environment)?;
+        return Ok(true);
+    }
+    check(args, &counts, &environment)
+}
+
+/// Every pass of the languages asked for, counted `args.runs` times: the
+/// lowest for a check, the highest for a record.
+fn counts(args: &ThroughputArgs) -> Result<Vec<Count>> {
     let binary = build()?;
     let listed = output(Command::new(&binary).arg("--list"))?;
+    let listed: Vec<&str> = listed.lines().collect();
+    if let Some(unknown) = args
+        .languages
+        .iter()
+        .find(|l| !listed.contains(&l.as_str()))
+    {
+        bail!(
+            "unknown language {unknown:?}: the bench lists {}",
+            listed.join(", ")
+        );
+    }
     let languages: Vec<&str> = listed
-        .lines()
+        .into_iter()
         .filter(|l| args.languages.is_empty() || args.languages.iter().any(|w| w == l))
         .collect();
-    let cases: Vec<(&str, &str, &str)> = languages
+    let cases: Vec<(&str, &str, &str, usize)> = languages
         .iter()
         .flat_map(|l| {
-            MODES
-                .iter()
-                .flat_map(move |m| SETS.iter().map(move |s| (*l, *m, *s)))
+            MODES.iter().flat_map(move |m| {
+                SETS.iter()
+                    .flat_map(move |s| (0..args.runs).map(move |r| (*l, *m, *s, r)))
+            })
         })
         .collect();
     let scratch = tempfile::tempdir()?;
-    let counts = crate::parallel::in_order(&cases, |&(language, mode, set)| {
-        count(&binary, scratch.path(), language, mode, set)
+    let runs = crate::parallel::in_order(&cases, |&(language, mode, set, run)| {
+        count(&binary, scratch.path(), language, mode, set, run)
     })
     .into_iter()
-    .collect::<Result<Vec<_>>>()?
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>();
-    if args.record {
-        // Merged into the budgets there are: `--language` records those alone.
-        let mut budgets = if args.budgets.exists() {
-            read_budgets(&args.budgets)?
-        } else {
-            BTreeMap::new()
-        };
-        for c in &counts {
-            budgets
-                .entry(c.language.clone())
-                .or_default()
-                .insert(c.key.clone(), c.instructions);
-        }
-        std::fs::write(&args.budgets, budgets_toml(&budgets))
-            .with_context(|| format!("writing {}", args.budgets.display()))?;
-        println!(
-            "throughput: {} counts recorded in {}",
-            counts.len(),
-            args.budgets.display()
-        );
-        return Ok(true);
+    .collect::<Result<Vec<_>>>()?;
+    // Each pass's runs, in order: the lowest for a check, the highest for a record.
+    let counts: Vec<Count> = runs
+        .chunks(args.runs)
+        .map(|chunk| {
+            let pick = if args.record {
+                chunk.iter().max_by_key(|c| c.instructions)
+            } else {
+                chunk.iter().min_by_key(|c| c.instructions)
+            };
+            pick.cloned()
+        })
+        .collect::<Option<_>>()
+        .context("no counts")?;
+    if counts.is_empty() {
+        bail!("no language to count");
     }
-    let budgets = read_budgets(&args.budgets)?;
+    Ok(counts)
+}
+
+/// Writes the budgets.
+fn record(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<()> {
+    // A whole record writes the file anew (a language gone from the bench
+    // goes from it); `--language` merges into the budgets there are.
+    let mut budgets = if args.languages.is_empty() || !args.budgets.exists() {
+        BTreeMap::new()
+    } else {
+        read_budgets(&args.budgets)?
+    };
+    for c in counts {
+        budgets
+            .entry(c.language.clone())
+            .or_default()
+            .insert(c.key.clone(), c.instructions);
+    }
+    std::fs::write(&args.budgets, budgets_toml(&budgets, environment))
+        .with_context(|| format!("writing {}", args.budgets.display()))?;
+    println!(
+        "throughput: {} counts recorded in {} ({environment})",
+        counts.len(),
+        args.budgets.display()
+    );
+    Ok(())
+}
+
+/// Holds the counts to the budgets: false when one is over, has none, or a
+/// budget is stale (and `--check` is given).
+fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<bool> {
+    let text = std::fs::read_to_string(&args.budgets)
+        .with_context(|| format!("reading {}", args.budgets.display()))?;
+    let budgets = parse_budgets(&text, &args.budgets)?;
+    let recorded = recorded_environment(&text);
+    if recorded.as_deref() != Some(environment) {
+        println!(
+            "::warning::throughput: the budgets were recorded on {}, this is {environment}: \
+             glibc's malloc is counted, so counts can differ",
+            recorded.as_deref().unwrap_or("an unnamed environment")
+        );
+    }
     let mut ok = true;
-    println!("| language | pass | instructions | per byte | budget | change |");
-    println!("|---|---|---:|---:|---:|---:|");
-    for c in &counts {
+    let mut report = String::from(
+        "| language | pass | instructions | per byte | budget | change |\n|---|---|---:|---:|---:|---:|\n",
+    );
+    for c in counts {
         let budget = budgets
             .get(&c.language)
             .and_then(|b| b.get(&c.key))
@@ -124,26 +194,82 @@ fn run(args: &ThroughputArgs) -> Result<bool> {
         #[expect(clippy::cast_precision_loss, reason = "a ratio for the report")]
         let per_byte = c.instructions as f64 / c.bytes.max(1) as f64;
         let change = budget.map_or_else(String::new, |b| change(c.instructions, b));
-        println!(
-            "| {} | {} | {} | {per_byte:.0} | {shown} | {change} {} |",
+        report.push_str(&format!(
+            "| {} | {} | {} | {per_byte:.0} | {shown} | {change} {} |\n",
             c.language,
             c.key,
             c.instructions,
             verdict.mark()
-        );
-        if args.check && matches!(verdict, Verdict::Over | Verdict::Missing) {
-            ok = false;
+        ));
+        match verdict {
+            Verdict::Over | Verdict::Missing => ok &= !args.check,
+            Verdict::Under => println!(
+                "::warning::throughput: {} {} is {change} under its budget: record the budgets again",
+                c.language, c.key
+            ),
+            Verdict::Within => {}
         }
+    }
+    // A budget no pass counted: a language or a pass gone from the bench.
+    if args.languages.is_empty() {
+        for (language, keys) in &budgets {
+            for key in keys.keys() {
+                if !counts
+                    .iter()
+                    .any(|c| &c.language == language && &c.key == key)
+                {
+                    report.push_str(&format!("| {language} | {key} | — | | | **stale** |\n"));
+                    ok &= !args.check;
+                }
+            }
+        }
+    }
+    print!("{report}");
+    if let Some(summary) = std::env::var_os("GITHUB_STEP_SUMMARY") {
+        // The step summary is a convenience: the table is on stdout too.
+        let _ = std::fs::OpenOptions::new()
+            .append(true)
+            .open(summary)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, report.as_bytes()));
     }
     if !ok {
         eprintln!(
-            "throughput: a count is over its budget by more than {:.0}%, or has none; \
-             fix the regression, or record the budgets again on purpose \
+            "throughput: a count is over its budget by more than {:.0}%, has none, or a budget \
+             is stale; fix the regression, or record the budgets again on purpose \
              (`cargo xtask throughput --record`, ADR 0014)",
             TOLERANCE * 100.0
         );
     }
     Ok(ok)
+}
+
+/// Where the counts are taken: the valgrind and glibc versions and the
+/// architecture, which the counts depend on.
+fn environment() -> String {
+    let first_line = |program: &str, arg: &str| {
+        Command::new(program)
+            .arg(arg)
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|t| t.lines().next().map(str::to_owned))
+            .unwrap_or_else(|| format!("{program}?"))
+    };
+    format!(
+        "{}, {}, {}",
+        first_line("valgrind", "--version"),
+        first_line("getconf", "GNU_LIBC_VERSION"),
+        std::env::consts::ARCH
+    )
+}
+
+const ENVIRONMENT: &str = "# Recorded on: ";
+
+/// The environment a budgets file names, if it names one.
+fn recorded_environment(text: &str) -> Option<String> {
+    text.lines()
+        .find_map(|l| l.strip_prefix(ENVIRONMENT))
+        .map(str::to_owned)
 }
 
 /// A count against its budget.
@@ -216,15 +342,16 @@ fn build() -> Result<PathBuf> {
         .context("cargo built no `throughput` bench binary")
 }
 
-/// One counted pass under callgrind; `None` for an empty input set.
+/// One counted pass under callgrind (the bench stops on an empty input set).
 fn count(
     binary: &Path,
     scratch: &Path,
     language: &str,
     mode: &str,
     set: &str,
-) -> Result<Option<Count>> {
-    let out = scratch.join(format!("{language}.{mode}.{set}.callgrind"));
+    run: usize,
+) -> Result<Count> {
+    let out = scratch.join(format!("{language}.{mode}.{set}.{run}.callgrind"));
     let printed = output(
         Command::new("valgrind")
             .arg("--tool=callgrind")
@@ -239,7 +366,7 @@ fn count(
         bail!("{language} {mode} {set}: the bench printed {printed:?}");
     };
     if calls == 0 {
-        return Ok(None);
+        bail!("{language} {mode} {set}: no texts");
     }
     let profile =
         std::fs::read_to_string(&out).with_context(|| format!("reading {}", out.display()))?;
@@ -257,12 +384,12 @@ fn count(
              (were the bench binary's symbols stripped?)"
         );
     }
-    Ok(Some(Count {
+    Ok(Count {
         language: language.to_owned(),
         key: format!("{mode}_{set}"),
         instructions,
         bytes,
-    }))
+    })
 }
 
 fn output(command: &mut Command) -> Result<String> {
@@ -278,20 +405,29 @@ fn output(command: &mut Command) -> Result<String> {
     Ok(String::from_utf8(out.stdout)?)
 }
 
-fn read_budgets(path: &Path) -> Result<BTreeMap<String, BTreeMap<String, u64>>> {
+type Budgets = BTreeMap<String, BTreeMap<String, u64>>;
+
+fn read_budgets(path: &Path) -> Result<Budgets> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))
+    parse_budgets(&text, path)
 }
 
-fn budgets_toml(budgets: &BTreeMap<String, BTreeMap<String, u64>>) -> String {
+fn parse_budgets(text: &str, path: &Path) -> Result<Budgets> {
+    toml::from_str(text).with_context(|| format!("parsing {}", path.display()))
+}
+
+fn budgets_toml(budgets: &Budgets, environment: &str) -> String {
     let mut out = String::from(
         "# Instructions each language's counted pass takes (`cargo xtask throughput`,\n\
          # ADR 0014): parse alone and full analysis, over the short corpus and the\n\
          # external public rules. Written by `cargo xtask throughput --record`; the\n\
          # check fails a count more than 3% over. Record again when a change lowers\n\
-         # counts on purpose, or raises them on purpose with the reason in its PR.\n",
+         # counts on purpose, or raises them on purpose with the reason in its PR.\n\
+         # Each is the highest of several runs. glibc's malloc is counted, so record\n\
+         # where CI checks (its `throughput` job's runner image).\n",
     );
+    out.push_str(&format!("{ENVIRONMENT}{environment}\n"));
     for (language, counts) in budgets {
         out.push_str(&format!("\n[{language}]\n"));
         for (key, instructions) in counts {
@@ -324,8 +460,15 @@ mod tests {
             .entry("eql".into())
             .or_default()
             .insert("parse_corpus".into(), 3);
-        let budgets: BTreeMap<String, BTreeMap<String, u64>> =
-            toml::from_str(&budgets_toml(&written)).expect("budgets");
+        let budgets: BTreeMap<String, BTreeMap<String, u64>> = toml::from_str(&budgets_toml(
+            &written,
+            "valgrind-3.22.0, glibc 2.39, x86_64",
+        ))
+        .expect("budgets");
         assert_eq!(budgets, written);
+        assert_eq!(
+            recorded_environment(&budgets_toml(&written, "here")).as_deref(),
+            Some("here")
+        );
     }
 }
