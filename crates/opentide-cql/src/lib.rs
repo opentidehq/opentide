@@ -134,10 +134,18 @@ fn analyze_lines(source: &str, ctx: Context) -> AnalyzeResult {
             span_to_range(source, span),
         ));
     }
-    diagnostics.extend(check::diagnostics(&root, &parse.errors, source, ctx));
+    // One walk for the checks and the highlight (ADR 0014 §5a).
+    let mut spans = Vec::new();
+    diagnostics.extend(check::diagnostics_with(
+        &root,
+        &parse.errors,
+        source,
+        ctx,
+        |t| spans.extend(highlight::span(t, source)),
+    ));
     AnalyzeResult {
         diagnostics,
-        tokens: highlight::tokens(spec, &root, source),
+        tokens: highlight::from_spans(spec, source, &spans),
     }
 }
 

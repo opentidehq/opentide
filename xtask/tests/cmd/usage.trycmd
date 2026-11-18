@@ -12,7 +12,6 @@ Usage: cargo xtask <COMMAND>
 Commands:
   check-layers  Check that every dependency between workspace crates points down the layer table (xtask/layers.toml, plan section 4)
   coverage      Check each workspace crate's line coverage against its gate (xtask/coverage.toml, plan section 5.4)
-  mutants       The crates the weekly mutation run mutates, and its report (xtask/mutants.toml)
   conformance   Run every operation of tests/conformance/manifest.json on every corpus through the Rust, Python and Node SDKs and require byte-identical documents (UC-5.4, #839)
   corpus        Generate the heavy workspace, run the fault catalogue against the oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
   lsp           For each fault kind `opentide validate` reports, the language server's published diagnostics against validate's findings (UC-2.6, #821)

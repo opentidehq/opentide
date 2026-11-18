@@ -210,10 +210,19 @@ pub(crate) fn parent_of(element: &SyntaxElement) -> Option<SyntaxNode<Lang>> {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Elements [`capture`] read on this thread: every highlight, by a walk
+    /// of its own or not, reads each leaf there.
+    pub(crate) static CAPTURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The highlight capture of a leaf of the tree-sitter tree (a token, a comment, a
 /// one-token node), by the patterns of `highlights.scm` in their order
 /// (first wins).
 pub(crate) fn capture(element: &SyntaxElement) -> Option<&'static str> {
+    #[cfg(test)]
+    CAPTURES.set(CAPTURES.get() + 1);
     let node = match element {
         NodeOrToken::Token(t) if t.kind() == K::COMMENT => return Some("comment"),
         NodeOrToken::Token(t) => {

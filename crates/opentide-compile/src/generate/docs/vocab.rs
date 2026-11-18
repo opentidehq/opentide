@@ -122,7 +122,7 @@ impl<'v> Vocab<'v> {
         Enriched {
             key: key.to_owned(),
             label,
-            description: entry.description.clone(),
+            description: entry.description.to_string(),
             link: entry.link.clone(),
             id: entry
                 .extra

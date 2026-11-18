@@ -1,11 +1,11 @@
 ---
 title: Test strength
-description: How strong the verifier is — Rust line coverage per crate with its gates and weekly mutation testing with its baseline (UC-X.2); the parity dashboard was retired with the Python implementation (UC-6.2).
+description: How strong the verifier is — Rust line coverage per crate with its gates and mutation testing, once, as a time-boxed experiment (UC-X.2, #844); the parity dashboard was retired with the Python implementation (UC-6.2).
 ---
 
 # Test strength
 
-> Status: **implemented**, with the mutation baseline pending the first weekly run, by UC-X.2 ([#844](https://github.com/opentidehq/opentide/issues/844)),
+> Status: **implemented** by UC-X.2; mutation testing ran once, as a time-boxed experiment (below, [#844](https://github.com/opentidehq/opentide/issues/844)),
 > plan [§5.4 "Strength"](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#54-layered-tests). Three measures: coverage gates per
 > crate, mutation testing, and the parity dashboard, retired since (UC-6.2).
 
@@ -63,47 +63,103 @@ and `opentide-lsp` measured 66.8% instead of 91.8%.
 
 ## Mutation testing
 
-| | |
-|---|---|
-| Workflow | [`.github/workflows/mutants.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/mutants.yml), Mondays 02:41 UTC and on demand |
-| Policy | [`xtask/mutants.toml`](https://github.com/opentidehq/opentide/blob/development/xtask/mutants.toml) (crates, thresholds) |
-| Settings | [`.cargo/mutants.toml`](https://github.com/opentidehq/opentide/blob/development/.cargo/mutants.toml) |
-| Baseline | `xtask/mutants-baseline.toml`, generated from the first full weekly run (not recorded yet, below) |
-| Report | `cargo xtask mutants report --outcomes mutants.out/outcomes.json …` |
+Mutation testing is not a recurring job here. It ran once, as a time-boxed experiment (#844,
+November 2026), to measure how strong the tests of `opentide-schema` and `opentide-workspace` are
+and to find the gaps worth a test. This section is that experiment's record; the full list of
+surviving mutants is [`mutants-844.txt`](mutants-844.txt).
 
 [cargo-mutants](https://mutants.rs) replaces a function body or an operator, one mutant at a time,
 and runs the mutated crate's tests. A mutant is **caught** (a test failed), **missed** (every test
 passed: it survived), **timeout** (counted as detected) or **unviable** (it did not build; not
 counted). The **score** is detected (caught + timeout) over viable (caught + timeout + missed).
 
-The plan tracks the score of `opentide-schema` and `opentide-workspace`. The job mutates
-`opentide-schema`, and until `opentide-workspace` exists the crates whose code becomes it:
-`opentide-analysis` and `opentide-tide`. The run is split into eight shards; the `report` job merges them, prints each
-crate's score against the baseline in the job summary, and writes a candidate baseline into its
-artifact. On the schedule only, the `issues` job (the one job with a write permission, `issues:
-write`) opens or updates one issue per crate whose survivors exceed `issue_above`, listing them.
+### What ran
 
-**No baseline is recorded yet.** A full run of both crates is about 1,900 mutants at roughly 30 s
-each, more than a local session holds; the weekly job's eight shards fit it. A partial local run
-(UC-X.2, cargo-mutants 27.1.0) measured, as an indication only: `opentide-analysis` 138 of 387
-mutants, 80 caught, 24 missed, 34 unviable (76.9%); `opentide-tide` 764 of 1,546, 411 caught,
-292 missed, 61 unviable (58.5%). Until the baseline exists the report shows "none" and every
-survivor is listed.
+| | |
+|---|---|
+| Tool | cargo-mutants 27.1.0, nextest, the settings of [`.cargo/mutants.toml`](../../.cargo/mutants.toml) |
+| Crates | `opentide-schema` and `opentide-workspace`, each with its own tests only |
+| Where | GitHub Actions, run 44336903971 (a branch made for it and deleted after), 32 shards |
+| Time box | 105 minutes of mutation per shard (`timeout --signal=INT`), 120 per job |
+| Mutants | 6,651, 208 a shard (203 in the last). The shards are contiguous slices of the files: 0 to 20 are `opentide-schema`'s (4,368), 22 to 31 `opentide-workspace`'s (2,075), and shard 21 holds the end of one and the start of the other |
 
-The workflow rewrites an issue's description every week, so an equivalent mutant is explained in a
-comment on the issue, not in its description. An issue is not closed when its crate falls back
-under `issue_above`: close it by hand once its survivors are killed.
+**The `opentide-schema` score is partial.** Of the 32 shards, 24 finished. Six (0, 1, 4, 8, 15, 20, all `opentide-schema`) reached the time box
+while building a mutant, and two (13, 14) were stopped by a runner shutdown, not the box. Every
+shard of `opentide-workspace` finished; 13 of the 21 `opentide-schema`-only shards did, so its score
+covers 2,704 of at least 4,368 mutants. The stopped shards' surviving mutants are still in the list below
+(cargo-mutants prints each one as it finds it), but their caught and unviable counts are not known. A mutant
+takes a build of the crate and a run of its tests, about 30 s on a runner, so 208 mutants a shard
+is near the limit of the box.
 
-To record the first or a new baseline, take `mutants-baseline.toml` from a full run's `mutants-report` artifact
-(or run the report locally with `--write-baseline`) and commit it in a reviewed change, lowering
-`issue_above` to the new missed count. Never edit the baseline by hand.
+### Scores
 
-Locally, for a change:
+From the 24 shards that finished (a shard prints its counts only when it ends):
+
+| Crate | Mutants tested | Caught | Timeout | Missed | Unviable | Score |
+|---|---:|---:|---:|---:|---:|---:|
+| `opentide-workspace` (shards 22 to 31: all of it but its part of shard 21) | 2,075 | 1,467 | 10 | 351 | 247 | **80.8%** |
+| `opentide-schema` (13 of its 21 whole shards) | 2,704 | 2,011 | 9 | 390 | 294 | **83.8%** |
+| Shard 21 (both crates) | 208 | 141 | 4 | 37 | 26 | 79.7% |
+
+Counting every shard's surviving-mutant lines, the finished and the stopped ones: **901 survivors**,
+524 in `opentide-schema` and 377 in `opentide-workspace`, and 32 timeouts.
+
+### The survivors, triaged
+
+cargo-mutants runs only the mutated crate's tests. Much of what these crates do is held by the
+tests of the crates above them, above all the command line's snapshots (`opentide-cli`'s
+`cli_snapshots`), so a survivor here is first a mutant that *this crate's* tests do not hold.
+
+| Kind | Schema | Workspace | Verdict |
+|---|---:|---:|---|
+| `JsonSchema` implementations | 51 | | Held elsewhere: `cargo xtask codegen --check` compares the generated schemas, not a test of the crate |
+| `IntoPyObject` implementations | 8 | | Held elsewhere: the Python suite, through `opentide._native` |
+| `Display` and `Debug` implementations | 3 | 5 | Equivalent where only a debug format changes; the rest are in the gap list |
+| A whole function body replaced (`vec![]`, `None`, `true`, `""`, `()`) | 158 | 113 | Gap: a function no test of the crate calls with an input that tells |
+| Comparisons, `&&`/`\|\|`, `!`, match arms and guards | 234 | 212 | Gap, mostly: a branch no test takes both ways |
+| Arithmetic and shifts (`+` to `*`, `-` to `/`, a unary `-` deleted) | 68 | 42 | Gap or equivalent: many are positions and lengths the snapshots hold |
+| A struct literal's field deleted | 2 | 5 | Gap: a default no test tells from the value |
+| **Total** | **524** | **377** | |
+
+The largest files: `opentide-workspace`'s `validate/mod.rs` (102), `validate/objects.rs` (54),
+`fs.rs` (35), `validate/annotate.rs` (26) and `lint/mod.rs` (25); `opentide-schema`'s `python.rs`
+(53, the PyO3 surface, held by the Python suite), `harfanglab/yara.rs` (43), `generate/schema.rs`
+(38) and `configuration/types.rs` (34).
+
+Fixed in #844: **23 survivors**, each killed by a test that fails with the mutant (checked by a
+cargo-mutants run on the functions, and by hand):
+
+- `Context::error_count -> 0` (`opentide-schema`'s `from_node.rs`): with it, a model's
+  `mode="after"` validator ran on a model whose fields had already failed, and reported a second
+  error. `an_after_validator_waits_for_the_fields`.
+- 22 in `opentide-workspace`'s `validate/mod.rs`, the checks a user sees, which only the command
+  line's snapshots held (tests in `crates/opentide-workspace/tests/validate.rs`):
+  - the cross-rule name checks (`title_duplicates`, `exabeam_names`, `name_duplicates`: Graylog
+    titles, Exabeam names, Google SecOps rule names), each finding on its own rule's file;
+  - `Check::name` and `Check::parse`, `Validation::exit_code` and `checks_json`;
+  - `compile_findings` and `nearest_key_line`: a compiler's refusal at its block, at a key the
+    block lacks and at a key it has.
+
+The other survivors are listed in [`mutants-844.txt`](mutants-844.txt); the 819 that are neither
+killed here nor held elsewhere are followed by file in
+[#1614](https://github.com/opentidehq/opentide/issues/1614), `validate/` and the platform models
+first.
+
+### Running it again
+
+By hand, for a crate or for what a change touches (settings in `.cargo/mutants.toml`):
 
 ```bash
+export CARGO_TARGET_DIR=<a target pool that holds the workspace's build>
+cargo mutants -p opentide-workspace --in-place --cap-lints false
 git diff origin/development... > /tmp/change.diff
-cargo mutants -p opentide-analysis --in-diff /tmp/change.diff
+cargo mutants -p opentide-workspace --in-place --cap-lints false --in-diff /tmp/change.diff
 ```
+
+`--in-place` mutates the checkout (leave it alone until the run ends: cargo-mutants restores each
+file) and builds in `CARGO_TARGET_DIR`; `--cap-lints false` keeps the build's own flags. Together they
+reuse a warm build; without them, cargo-mutants copies the tree and builds the workspace from
+scratch. A whole crate takes hours; `--shard k/n` splits it, `-f <file>` and `-F <regex>` narrow it.
 
 ## Parity dashboard (retired)
 

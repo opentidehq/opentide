@@ -34,7 +34,6 @@ WRITES = {
     ("ci.yml", "python"): {"checks", "code-quality"},  # test report, coverage upload
     ("ci.yml", "nightly-report"): {"issues"},
     ("codeql.yml", None): {"security-events"},
-    ("mutants.yml", "issues"): {"issues"},
     ("rust-audit.yml", "issue"): {"issues"},
     ("vocab-upstream.yml", None): {"contents", "pull-requests"},  # opens its PR
     ("publish.yml", "internal-release"): {"contents"},
