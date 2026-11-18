@@ -61,8 +61,9 @@ it runs the bench's `--count`: two warm-up passes, then one pass inside a functi
 which callgrind alone counts (`--toggle-collect`). Each pass is counted three times (`--runs`), and
 the lowest is held to [`tests/bench/instructions.toml`](../../tests/bench/instructions.toml):
 
-- **Over budget.** A count more than 3% over its budget fails, and so does a count with no budget,
-  or a budget no pass counted any more.
+- **Over budget.** An instruction count more than 3% over its budget fails, an allocator-call
+  count over its budget at all fails, and so does a count with no budget, or a budget no pass
+  counted any more.
 - **Under budget.** A count more than 3% under is a warning that asks for the budgets to be
   recorded again (`cargo xtask throughput --record`), so that the gain is kept.
 
@@ -70,9 +71,13 @@ Instruction counts do not depend on the machine's load, which time does. Only th
 own instructions are counted: glibc (malloc, the string routines) and the loader are left out. Their
 counts move with the glibc version, with the CPU glibc picks a routine for, and with the allocation
 order each process's hash seeds give: counted with them, one run of a pass differed from the next by
-1.5%, and CI's runner from a local run by up to 3.3%. Without them, runs differ by under 0.1%. An
-allocation still costs the bench's own code (growing, copying and dropping what it holds), so a
-change that allocates more still counts more. Each pass is counted three times (`--runs`): a record
+1.5%, and CI's runner from a local run by up to 3.3%. Without them, runs differ by under 0.1%.
+
+What an allocation costs inside malloc and free is then out of the instruction count, so each pass
+has a second budget, `<mode>_<set>_allocations`: the calls the bench's own code makes into `malloc`,
+`calloc`, `realloc` and the aligned allocators, read from the same callgrind profile. That number
+is exact from run to run and machine to machine, so it is held with no tolerance: one allocation
+more a call fails the check. Each pass is counted three times (`--runs`): a record
 writes the highest, a check takes the lowest. The budgets file names the valgrind, glibc and
 architecture it was recorded on, and a check elsewhere warns. CI's `throughput` job is pinned to
 `ubuntu-24.04` (glibc 2.39, valgrind 3.22), where the budgets are recorded, so that its valgrind

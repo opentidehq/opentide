@@ -195,7 +195,7 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
             .copied();
         let (shown, verdict) = match budget {
             None => ("—".to_owned(), Verdict::Missing),
-            Some(b) => (b.to_string(), verdict(c.instructions, b)),
+            Some(b) => (b.to_string(), verdict(c.instructions, b, tolerance(&c.key))),
         };
         #[expect(clippy::cast_precision_loss, reason = "a ratio for the report")]
         let per_byte = c.instructions as f64 / c.bytes.max(1) as f64;
@@ -240,8 +240,9 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
     }
     if !ok {
         eprintln!(
-            "throughput: a count is over its budget by more than {:.0}%, has none, or a budget \
-             is stale; fix the regression, or record the budgets again on purpose \
+            "throughput: an instruction count is over its budget by more than {:.0}%, an \
+             allocator-call count is over its budget at all, a count has no budget, or a \
+             budget is stale; fix the regression, or record the budgets again on purpose \
              (`cargo xtask throughput --record`, ADR 0014)",
             TOLERANCE * 100.0
         );
@@ -302,14 +303,25 @@ impl Verdict {
     clippy::cast_precision_loss,
     reason = "instruction counts, far below 2^52"
 )]
-fn verdict(count: u64, budget: u64) -> Verdict {
+fn verdict(count: u64, budget: u64, tolerance: f64) -> Verdict {
     let ratio = count as f64 / budget.max(1) as f64;
-    if ratio > 1.0 + TOLERANCE {
+    if ratio > 1.0 + tolerance {
         Verdict::Over
-    } else if ratio < 1.0 - TOLERANCE {
+    } else if ratio < 1.0 - tolerance {
         Verdict::Under
     } else {
         Verdict::Within
+    }
+}
+
+/// The tolerance of a budget: [`TOLERANCE`] for instructions, none for
+/// allocator calls, whose count is exact from run to run and machine to
+/// machine.
+fn tolerance(key: &str) -> f64 {
+    if key.ends_with("_allocations") {
+        0.0
+    } else {
+        TOLERANCE
     }
 }
 
@@ -595,10 +607,16 @@ totals: 1300
 
     #[test]
     fn a_count_is_within_over_or_under_its_budget() {
-        assert_eq!(verdict(1_000, 1_000), Verdict::Within);
-        assert_eq!(verdict(1_029, 1_000), Verdict::Within);
-        assert_eq!(verdict(1_031, 1_000), Verdict::Over);
-        assert_eq!(verdict(969, 1_000), Verdict::Under);
+        assert_eq!(verdict(1_000, 1_000, TOLERANCE), Verdict::Within);
+        assert_eq!(verdict(1_029, 1_000, TOLERANCE), Verdict::Within);
+        assert_eq!(verdict(1_031, 1_000, TOLERANCE), Verdict::Over);
+        assert_eq!(verdict(969, 1_000, TOLERANCE), Verdict::Under);
+        // An allocator call more is over its budget; one fewer, under.
+        let exact = tolerance("parse_corpus_allocations");
+        assert_eq!(verdict(1_000, 1_000, exact), Verdict::Within);
+        assert_eq!(verdict(1_001, 1_000, exact), Verdict::Over);
+        assert_eq!(verdict(999, 1_000, exact), Verdict::Under);
+        assert!((tolerance("parse_corpus") - TOLERANCE).abs() < f64::EPSILON);
     }
 
     #[test]
