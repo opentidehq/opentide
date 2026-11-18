@@ -128,6 +128,27 @@ exception.
 - No quadratic in the size of a query: a work count or a linear-growth test holds each loop that
   could be one (#1424, #1459).
 
+### 5a. One walk for the checks and the highlight (addendum, Lucene)
+
+rowan allocates a cursor for every node and token a walk visits, and frees it after. A language
+whose checks walk the tree and whose highlight walks it again pays for every element twice; on
+Lucene's short queries that, and the per-node vectors around it, was most of the call.
+
+- **One preorder walk over every element.** Nodes and tokens, in document order, from one stack
+  and a scratch vector reused for each node's children. The walk hands each named element to the
+  checks, with its ancestors, and each token to the highlight. Lucene's `tree::walk_once` is the
+  model: it calls the checks exactly as the named-only walk did, and meets the tokens exactly as
+  `descendants_with_tokens` did, which a test holds over the corpus and every prefix.
+- **Only where the highlight reads the same text.** A dialect that checks a rewritten text
+  (Carbon Black's joined lines) keeps its own highlight pass.
+- **Find one child without collecting all.** A search for the first child of a kind is a lazy
+  iterator that stops there, not a vector of every child.
+- **Trim a range once.** A node's span and text compute its trimmed range once, not once per end.
+- **Kinds before text.** A check that needs two siblings of given kinds tests the kinds before it
+  reads either's text.
+- **Held by element visits.** A test counts the elements the walks visit in one analysis and
+  holds it to the tree's element count: the two-walk path visits more.
+
 ### 6. How to measure
 
 - **Instructions.** callgrind on the warm loop only: `--toggle-collect` on a function that runs the

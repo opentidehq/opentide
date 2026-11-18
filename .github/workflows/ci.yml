@@ -92,6 +92,7 @@ env:
 #   native          `native`: the `_native` extension
 #   stubs           `stubs`: the extension with PyO3's introspection, xtask
 #   throughput      `throughput`: the throughput bench (bench profile), xtask
+#   wiring          `wiring`: xtask's language_wiring test
 #   engine-check    `engine-lint`: clippy (native and wasm32) and rustdoc
 #   wasm            `wasm`: the browser module, the WASI server and command line
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
@@ -139,6 +140,7 @@ jobs:
       fields: ${{ steps.plan.outputs.fields }}
       schema_ui: ${{ steps.plan.outputs.schema_ui }}
       stubs: ${{ steps.plan.outputs.stubs }}
+      wiring: ${{ steps.plan.outputs.wiring }}
       throughput: ${{ steps.plan.outputs.throughput }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -445,6 +447,52 @@ jobs:
           key: ${{ steps.sccache.outputs.key }}
           save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
+  # Every query language in every table it must be in (xtask's
+  # language_wiring test, the add-language skill): when a file outside a crate
+  # that the test reads changes. A crate's change runs it in `build`.
+  wiring:
+    name: Language wiring
+    needs: changes
+    if: needs.changes.outputs.wiring == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0,cargo-nextest@0.9.148
+          cache: wiring
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Every query language is wired
+        run: cargo nextest run --locked -p xtask --test language_wiring
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
   # Each language's parse and full analysis, counted with callgrind in the
   # bench's own instructions (within 3%) and its allocator calls (within 2),
   # and held to tests/bench/instructions.toml (#1571,
@@ -566,8 +614,8 @@ jobs:
           tools: sccache@0.19.0,cargo-nextest@0.9.148
           cache: build-v5
 
-      - name: Install mold
-        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+      - name: Install mold and strace
+        run: sudo apt-get install -y -q --no-install-recommends mold strace || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold strace; }
 
       - name: Runner CPU
         run: grep -m1 "model name" /proc/cpuinfo
@@ -1550,6 +1598,7 @@ jobs:
     name: PR gate
     needs:
       - stubs
+      - wiring
       - throughput
       - changes
       - lint

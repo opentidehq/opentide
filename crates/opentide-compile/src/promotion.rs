@@ -159,7 +159,7 @@ pub fn promotable(root: &Node, non_promotable: &[String]) -> Vec<(String, String
 /// (`null`, `true`, `1`).
 fn key_text(key: &Node) -> String {
     match &key.value {
-        Value::Str(text) => text.clone(),
+        Value::Str(text) => text.to_string(),
         other => other.to_string(),
     }
 }
@@ -283,7 +283,9 @@ pub fn promote_block_statuses(
                     .trim_start()
                     .starts_with(['"', '\'', '!']);
                 let (name, string_key) = match &platform.key.value {
-                    Value::Str(name) if !(plain && yaml11_non_string(name)) => (name.clone(), true),
+                    Value::Str(name) if !(plain && yaml11_non_string(name)) => {
+                        (name.to_string(), true)
+                    }
                     _ => (
                         span(source, &offsets, &platform.key).trim().to_owned(),
                         false,
