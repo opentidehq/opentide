@@ -24,11 +24,12 @@ fn options() -> ConnectOptions {
     ConnectOptions::default().environment([("HL_TOKEN", "hl-secret"), ("S1_TOKEN", "s1-secret")])
 }
 
-fn harfanglab(url: &str, kind: &str) -> TenantConfig {
+/// A HarfangLab tenant: no kind, as every tenant takes Sigma and YARA.
+fn harfanglab(url: &str) -> TenantConfig {
     TenantConfig::new(
         "harfanglab",
         "lab",
-        [("url", url), ("api_token", "$HL_TOKEN"), ("type", kind)],
+        [("url", url), ("api_token", "$HL_TOKEN")],
     )
 }
 
@@ -133,7 +134,7 @@ fn opening_refuses_an_unknown_platform_and_an_unset_credential() {
 
 #[test]
 fn nothing_prints_a_secret() {
-    let tenant = harfanglab("https://hl.example", "Sigma");
+    let tenant = harfanglab("https://hl.example");
     let printed = format!("{tenant:?}");
     assert!(
         printed.contains("api_token") && !printed.contains("HL_TOKEN"),
@@ -171,7 +172,7 @@ async fn a_query_returns_the_tenant_rows() {
         .expect(1)
         .mount(&server)
         .await;
-    let connection = Connection::open(&harfanglab(&server.uri(), "Sigma"), &options()).unwrap();
+    let connection = Connection::open(&harfanglab(&server.uri()), &options()).unwrap();
     assert!(connection.capabilities().query);
     let mut request = QueryRequest::new("processes process_name=cmd.exe", "telemetry", window());
     request.limit = 2;
@@ -190,7 +191,7 @@ async fn a_refusal_keeps_the_vendor_words() {
         .respond_with(ResponseTemplate::new(400).set_body_string(r#"{"detail": "bad filter"}"#))
         .mount(&server)
         .await;
-    let connection = Connection::open(&harfanglab(&server.uri(), "Sigma"), &options()).unwrap();
+    let connection = Connection::open(&harfanglab(&server.uri()), &options()).unwrap();
     let request = QueryRequest::new("processes x=y", "telemetry", window());
     let error = connection.query(&request).await.unwrap_err();
     assert_eq!(code(&error), "tenant_refused");
@@ -220,17 +221,21 @@ async fn a_live_check_runs_on_a_platform_that_has_one_only() {
     let result = check.result.unwrap();
     assert_eq!(result.rows.len(), 1);
 
-    let connection = Connection::open(&harfanglab(&server.uri(), "Sigma"), &options()).unwrap();
+    let connection = Connection::open(&harfanglab(&server.uri()), &options()).unwrap();
     let error = connection.validate_query(&request).await.unwrap_err();
     assert_eq!(code(&error), connectors::OPERATION_UNSUPPORTED);
     assert_eq!(error.to_string(), "harfanglab cannot check a query live");
 }
 
+/// One HarfangLab tenant takes a Sigma rule and a YARA file through the
+/// SDK: each request names its kind, and the compiled rule reaches that
+/// kind's endpoint byte for byte.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_deploy_sends_the_compiled_body() {
     let server = MockServer::start().await;
     let rule = "11111111-1111-4111-8111-111111111111";
-    let body = r#"{"name": "Example", "content": "title: Example"}"#;
+    let sigma = r#"{"name": "Example", "content": "title: Example"}"#;
+    let yara = r#"{"name": "Loader", "content": "rule loader { condition: true }"}"#;
     Mock::given(method("PUT"))
         .and(path(format!(
             "/api/data/threat_intelligence/SigmaRule/{rule}/"
@@ -241,16 +246,65 @@ async fn a_deploy_sends_the_compiled_body() {
         .await;
     Mock::given(method("POST"))
         .and(path("/api/data/threat_intelligence/SigmaRule/"))
-        .and(body_string(body))
+        .and(body_string(sigma))
         .respond_with(ResponseTemplate::new(201))
         .expect(1)
         .mount(&server)
         .await;
-    let connection = Connection::open(&harfanglab(&server.uri(), "Sigma"), &options()).unwrap();
-    let request = DeployRequest::new(rule.to_owned(), Operation::Create, body.as_bytes().to_vec());
-    let outcome = connection.deploy(&request).await.unwrap();
-    assert_eq!(outcome.operation, Operation::Create);
-    assert_eq!(outcome.remote_id, None);
+    Mock::given(method("POST"))
+        .and(path("/api/data/threat_intelligence/YaraFile/"))
+        .and(body_string(yara))
+        .respond_with(ResponseTemplate::new(201))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(format!(
+            "/api/data/threat_intelligence/YaraFile/{rule}/"
+        )))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let connection = Connection::open(&harfanglab(&server.uri()), &options()).unwrap();
+    for (kind, operation, body) in [
+        ("Sigma", Operation::Create, Some(sigma)),
+        ("YARA", Operation::Create, Some(yara)),
+        ("YARA", Operation::Delete, None),
+    ] {
+        let envelope = match body {
+            Some(body) => format!(r#"{{"kind": "{kind}", "rule": {body}}}"#),
+            None => format!(r#"{{"kind": "{kind}"}}"#),
+        };
+        let request = DeployRequest::new(rule.to_owned(), operation, envelope.into_bytes());
+        let outcome = connection.deploy(&request).await.unwrap();
+        assert_eq!(outcome.operation, operation);
+        assert_eq!(outcome.remote_id, None);
+    }
+}
+
+/// A HarfangLab tenant that still sets the removed `type` does not open,
+/// even when it names an unset variable: the SDKs refuse it as `validate`
+/// does.
+#[test]
+fn a_harfanglab_tenant_with_type_does_not_open() {
+    for kind in ["Sigma", "$HL_TYPE"] {
+        let tenant = TenantConfig::new(
+            "harfanglab",
+            "lab",
+            [
+                ("url", "https://hl.example"),
+                ("api_token", "$HL_TOKEN"),
+                ("type", kind),
+            ],
+        );
+        let error = Connection::open(&tenant, &options()).unwrap_err();
+        assert!(
+            error.to_string().contains("`type` is removed"),
+            "{kind}: {error}"
+        );
+        assert!(!error.to_string().contains("unset"), "{kind}: {error}");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -272,7 +326,7 @@ async fn a_cancelled_operation_stops() {
         .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
         .mount(&server)
         .await;
-    let connection = Connection::open(&harfanglab(&server.uri(), "Sigma"), &options()).unwrap();
+    let connection = Connection::open(&harfanglab(&server.uri()), &options()).unwrap();
     let canceller = connection.canceller();
     assert!(!canceller.is_cancelled());
     let later = canceller.clone();
@@ -296,7 +350,7 @@ async fn an_unreachable_tenant_is_named_by_its_address() {
     // released could be taken by a stand-in server of a test running at the
     // same time, which answered: `tenant_refused` on a CI runner (#1433).
     let url = "http://127.0.0.1:1".to_string();
-    let connection = Connection::open(&harfanglab(&url, "Sigma"), &options()).unwrap();
+    let connection = Connection::open(&harfanglab(&url), &options()).unwrap();
     let error = connection
         .query(&QueryRequest::new("processes", "telemetry", window()))
         .await

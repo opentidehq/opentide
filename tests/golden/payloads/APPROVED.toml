@@ -240,3 +240,58 @@ candidate = '''{"uuid":"00000000-0000-4000-8005-000000000101","name":"Sysdig Ful
 reason = "Falco reads an exception value as its text: the body sends each value as the scalar the rule file writes, a string (`\"5\"`), where the oracle sent the JSON number `5`. The rest of the body is the same."
 issue = "https://github.com/opentidehq/opentide/issues/841"
 changelog = "**Falco receives a Sysdig list item or exception value as the file writes it**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000601"
+platform = "harfanglab"
+what = "tenant:yara"
+oracle = '''[]'''
+candidate = '''[{"method":"PUT","url":"https://hl-yara.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000601/","body":{"name":"HarfangLab Sigma: Encoded","content":"title: \"HarfangLab Sigma: Encoded\"\nid: 00000000-0000-4000-8005-000000000601\ndescription: HarfangLab Sigma for the compile corpus.\nauthor: Detection Team\nstatus: stable\ntags:\n    - attack.execution\n    - attack.t1059.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection_img:\n        Image|endswith: \\powershell.exe\n        OriginalFileName: PowerShell.EXE\n    selection_cli:\n        CommandLine|contains|all:\n            - \" -enc\"\n            - \"yes\"\n    condition: all of selection_*\nfalsepositives:\n    - Administration scripts\nlevel: high\n","source_id":"yara-source","enabled":true,"global_state":"block","hl_status":"stable","block_on_agent":true,"quarantine_on_agent":false,"rule_confidence_override":"strong","rule_level_override":"high","overwrite":true}}]'''
+reason = "platform-harfanglab 1.6 (opentidehq/specifications#95): a HarfangLab tenant takes Sigma rules and YARA files, and each rule's own block picks its kind. The oracle compiled nothing for a rule whose kind was not the tenant's `type`; the rule is now compiled for every tenant, to the endpoint of its own kind."
+issue = "https://github.com/opentidehq/specifications/pull/95"
+changelog = "**A HarfangLab tenant takes both kinds; `type` is removed**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000602"
+platform = "harfanglab"
+what = "tenant:yara"
+oracle = '''[]'''
+candidate = '''[{"method":"PUT","url":"https://hl-yara.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000602/","body":{"name":"HarfangLab Sigma Disabled","content":"title: HarfangLab Sigma Disabled\nid: 00000000-0000-4000-8005-000000000602\ndescription: |\n    HarfangLab Sigma Disabled for the compile corpus.\n    Second line.\nstatus: experimental\nlogsource:\n    category: network_connection\n    product: linux\ndetection:\n    selection:\n        DestinationPort: 4444\n    condition: selection\nlevel: informational\n","source_id":"yara-source","enabled":false,"global_state":"disabled","hl_status":"experimental","block_on_agent":false,"quarantine_on_agent":false,"rule_confidence_override":"moderate","rule_level_override":"informational","overwrite":true}}]'''
+reason = "platform-harfanglab 1.6 (opentidehq/specifications#95): a HarfangLab tenant takes Sigma rules and YARA files, and each rule's own block picks its kind. The oracle compiled nothing for a rule whose kind was not the tenant's `type`; the rule is now compiled for every tenant, to the endpoint of its own kind."
+issue = "https://github.com/opentidehq/specifications/pull/95"
+changelog = "**A HarfangLab tenant takes both kinds; `type` is removed**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000603"
+platform = "harfanglab"
+what = "tenant:sigma"
+oracle = '''[]'''
+candidate = '''[{"method":"POST","url":"https://hl.example.org/api/data/threat_intelligence/YaraFile/","body":{"name":"HarfangLab YARA Loader","content":"import \"pe\"\n\nrule harfanglab_yara_loader {\n    meta:\n        id = \"00000000-0000-4000-8005-000000000603\"\n        title = \"HarfangLab YARA Loader\"\n        description = \"HarfangLab \\\"YARA\\\" for the compile corpus.\"\n        author = \"Detection Team\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.org/report\\nhttps://example.org/other\"\n        tags = \"loader\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x64\"\n        classification = \"Loader \\\"family\\\"\"\n        score = 90\n        confidence = \"moderate\"\n    strings:\n        $a = \"loader\" ascii\n        $b = { 4D 5A }\n    condition:\n        $a and $b\n}","source_id":"sigma-source","global_state":"alert","hl_status":"experimental","rule_confidence_override":"moderate","rule_level_override":"medium","overwrite":true}}]'''
+reason = "platform-harfanglab 1.6 (opentidehq/specifications#95): a HarfangLab tenant takes Sigma rules and YARA files, and each rule's own block picks its kind. The oracle compiled nothing for a rule whose kind was not the tenant's `type`; the rule is now compiled for every tenant, to the endpoint of its own kind."
+issue = "https://github.com/opentidehq/specifications/pull/95"
+changelog = "**A HarfangLab tenant takes both kinds; `type` is removed**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000604"
+platform = "harfanglab"
+what = "tenant:sigma"
+oracle = '''[]'''
+candidate = '''[{"method":"DELETE","url":"https://hl.example.org/api/data/threat_intelligence/YaraFile/00000000-0000-4000-8005-000000000604/","body":null}]'''
+reason = "platform-harfanglab 1.6 (opentidehq/specifications#95): a HarfangLab tenant takes Sigma rules and YARA files, and each rule's own block picks its kind. The oracle compiled nothing for a rule whose kind was not the tenant's `type`; the rule is now compiled for every tenant, to the endpoint of its own kind."
+issue = "https://github.com/opentidehq/specifications/pull/95"
+changelog = "**A HarfangLab tenant takes both kinds; `type` is removed**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000605"
+platform = "harfanglab"
+what = "tenant:yara"
+oracle = '''[]'''
+candidate = '''[{"method":"PUT","url":"https://hl-yara.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000605/","body":{"name":"HarfangLab Sigma Quarantine","content":"title: HarfangLab Sigma Quarantine\nid: 00000000-0000-4000-8005-000000000605\ndescription: HarfangLab Sigma Quarantine for the compile corpus.\nstatus: experimental\nlogsource:\n    category: network_connection\n    product: linux\ndetection:\n    selection:\n        DestinationPort: 4444\n    condition: selection\nlevel: informational\n","source_id":"yara-source","enabled":true,"global_state":"quarantine","hl_status":"experimental","block_on_agent":true,"quarantine_on_agent":true,"rule_confidence_override":"moderate","rule_level_override":"informational","overwrite":true}}]'''
+reason = "platform-harfanglab 1.6 (opentidehq/specifications#95): a HarfangLab tenant takes Sigma rules and YARA files, and each rule's own block picks its kind. The oracle compiled nothing for a rule whose kind was not the tenant's `type`; the rule is now compiled for every tenant, to the endpoint of its own kind."
+issue = "https://github.com/opentidehq/specifications/pull/95"
+changelog = "**A HarfangLab tenant takes both kinds; `type` is removed**"
