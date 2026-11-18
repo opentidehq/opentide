@@ -73,6 +73,18 @@ pub struct Server {
     state: Arc<State>,
     /// Held by the call or read running; queued ones wait for it.
     turn: Arc<tokio::sync::Mutex<()>>,
+    /// The session's end ([`Server::run`]): the call running, interrupted,
+    /// and whether the session is over, so a queued call does not start.
+    ending: Arc<Ending>,
+}
+
+/// What [`Server::run`] stops when the session ends.
+#[derive(Default)]
+struct Ending {
+    /// The running call's [`Interrupt`].
+    running: std::sync::Mutex<Option<Interrupt>>,
+    /// The session is over: a call that gets its turn now does not run.
+    over: std::sync::atomic::AtomicBool,
 }
 
 /// Interrupts a call's work when its handler ends ([`Server::apart`]).
@@ -129,6 +141,7 @@ impl Server {
                 workspace_problem,
             }),
             turn: Arc::default(),
+            ending: Arc::default(),
         }
     }
 
@@ -151,6 +164,19 @@ impl Server {
         };
         let state = Arc::clone(&self.state);
         let interrupt = Interrupt::default();
+        {
+            // Under the lock the session's end takes: a call either starts
+            // before it, and is interrupted, or sees it and does not start.
+            let mut running = self
+                .ending
+                .running
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.ending.over.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(stopped());
+            }
+            *running = Some(interrupt.clone());
+        }
         #[cfg(target_os = "wasi")]
         {
             let _turn = turn;
@@ -191,6 +217,33 @@ impl Server {
         // A last message without its newline is still read at end of input:
         // the transport only takes whole lines.
         let stdin = tokio::io::AsyncReadExt::chain(input, &b"\n"[..]);
+        let (turn, ending) = (Arc::clone(&self.turn), Arc::clone(&self.ending));
+        let served = self.serve_until_closed(stdin, rpc).await;
+        // The session is over, but its handlers live on in the process's
+        // runtime, which is never dropped (#1558): no queued call starts, the
+        // running one is interrupted as Ctrl-C interrupts a command, and the
+        // server returns once it has stopped (its deploy state written), as
+        // it did when dropping a runtime of its own waited for it.
+        {
+            let mut running = ending
+                .running
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            ending.over.store(true, std::sync::atomic::Ordering::SeqCst);
+            if let Some(running) = running.take() {
+                running.request();
+            }
+        }
+        drop(turn.lock_owned().await);
+        served
+    }
+
+    /// [`Server::run`]'s service, until the client closes its input.
+    async fn serve_until_closed<I, O>(self, stdin: I, rpc: O) -> std::io::Result<()>
+    where
+        I: tokio::io::AsyncRead + Send + Unpin + 'static,
+        O: tokio::io::AsyncWrite + Send + Unpin + 'static,
+    {
         let service = match self.serve((stdin, rpc)).await {
             Ok(service) => service,
             Err(error) => {
