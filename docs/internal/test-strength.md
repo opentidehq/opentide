@@ -138,8 +138,10 @@ cargo-mutants run on the functions, and by hand):
   - `compile_findings` and `nearest_key_line`: a compiler's refusal at its block, at a key the
     block lacks and at a key it has.
 
-The other survivors are listed in [`mutants-844.txt`](mutants-844.txt); the gaps among them are
-followed in an issue, by file.
+The other survivors are listed in [`mutants-844.txt`](mutants-844.txt); the 819 that are neither
+killed here nor held elsewhere are followed by file in
+[#1614](https://github.com/opentidehq/opentide/issues/1614), `validate/` and the platform models
+first.
 
 ### Running it again
 

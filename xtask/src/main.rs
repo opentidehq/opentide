@@ -9,8 +9,8 @@ use clap::{Args, Parser, Subcommand};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
-use xtask::layers::{self, LayerTable, Metadata};
 use xtask::coverage;
+use xtask::layers::{self, LayerTable, Metadata};
 
 /// The repository's Rust tooling.
 ///
