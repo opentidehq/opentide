@@ -182,6 +182,33 @@ mod tests {
         out
     }
 
+    /// The position of `found` among `rows`: the row itself, not only its
+    /// name.
+    fn row<T>(rows: &[T], found: Option<&T>) -> Option<usize> {
+        found.and_then(|f| rows.iter().position(|r| std::ptr::eq(r, f)))
+    }
+
+    /// `field`'s first row of the name or of the name after its last dot,
+    /// the earlier of the two, as the scan finds it (the bundled catalog has
+    /// no dotted field, so its own names never take this branch).
+    #[test]
+    fn a_field_lookup_takes_the_earlier_of_the_name_and_its_last_part() {
+        let index = Index {
+            commands: HashMap::new(),
+            functions: HashMap::new(),
+            fields: HashMap::from([("a.b", 3), ("b", 1), ("c", 0), ("a.c", 2)]),
+            datamodels: HashMap::new(),
+            command_names: Candidates::new([]),
+            lowered_commands: Vec::new(),
+        };
+        assert_eq!(index.field("a.b", "b"), Some(1));
+        assert_eq!(index.field("a.c", "c"), Some(0));
+        assert_eq!(index.field("x.b", "b"), Some(1));
+        assert_eq!(index.field("a.b", "z"), Some(3));
+        assert_eq!(index.field("b", "b"), Some(1));
+        assert_eq!(index.field("x.y", "y"), None);
+    }
+
     /// A lookup through the index finds the row a scan finds, and a typo or
     /// a suggestion is the scan's, over every name of the catalog.
     #[test]
@@ -196,18 +223,20 @@ mod tests {
                 "{name}"
             );
             assert_eq!(
-                bundled.function(&name).map(|r| (&r.name, &r.kind, &r.docs)),
-                scanned.function(&name).map(|r| (&r.name, &r.kind, &r.docs)),
+                row(&bundled.functions, bundled.function(&name)),
+                row(&scanned.functions, scanned.function(&name)),
                 "{name}"
             );
             for aggregate in [false, true] {
                 assert_eq!(
-                    bundled
-                        .function_in_context(&name, aggregate)
-                        .map(|r| (&r.name, &r.kind, &r.docs)),
-                    scanned
-                        .function_in_context(&name, aggregate)
-                        .map(|r| (&r.name, &r.kind, &r.docs)),
+                    row(
+                        &bundled.functions,
+                        bundled.function_in_context(&name, aggregate)
+                    ),
+                    row(
+                        &scanned.functions,
+                        scanned.function_in_context(&name, aggregate)
+                    ),
                     "{name}"
                 );
             }

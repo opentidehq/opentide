@@ -295,18 +295,18 @@ impl Catalog {
     /// Eval and aggregate rows can share a name (`sum`, `avg`, `min`, `max`).
     /// `aggregate` selects the stats/chart form; otherwise the eval form wins.
     pub fn function_in_context(&self, name: &str, aggregate: bool) -> Option<&FunctionRow> {
-        let named: Box<dyn Iterator<Item = &FunctionRow>> =
-            if let Some(index) = index::Index::of(self) {
-                Box::new(
-                    index
-                        .functions(name)
-                        .iter()
-                        .filter_map(|&i| self.functions.get(i)),
-                )
-            } else {
+        // The rows named `name`: through the index, or every row, scanned.
+        let (indexed, all): (&[usize], &[FunctionRow]) = match index::Index::of(self) {
+            Some(index) => (index.functions(name), &[]),
+            None => {
                 index::scanned(self.functions.len());
-                Box::new(self.functions.iter())
-            };
+                (&[], &self.functions)
+            }
+        };
+        let named = indexed
+            .iter()
+            .filter_map(|&i| self.functions.get(i))
+            .chain(all);
         let mut fallback = None;
         for f in named {
             if !f.name.eq_ignore_ascii_case(name) {
