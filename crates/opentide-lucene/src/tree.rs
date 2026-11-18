@@ -93,36 +93,46 @@ impl Node {
         usize::from(self.range().end())
     }
 
-    /// The span a diagnostic on the node covers: at least one byte.
+    /// The span a diagnostic on the node covers: at least one byte. The
+    /// range is trimmed once (ADR 0014 §5).
     pub(crate) fn span(&self) -> ByteSpan {
-        ByteSpan::new(self.start(), self.end().max(self.start() + 1))
+        let range = self.range();
+        let (start, end) = (usize::from(range.start()), usize::from(range.end()));
+        ByteSpan::new(start, end.max(start + 1))
     }
 
     pub(crate) fn text<'s>(&self, source: &'s str) -> &'s str {
-        source.get(self.start()..self.end()).unwrap_or("")
+        let range = self.range();
+        source
+            .get(usize::from(range.start())..usize::from(range.end()))
+            .unwrap_or("")
     }
 
     /// The named children, in order.
     pub(crate) fn children(&self) -> Vec<Node> {
-        match &self.0 {
-            NodeOrToken::Node(n) => n
-                .children_with_tokens()
-                .filter(is_named)
-                .map(Node)
-                .collect(),
-            NodeOrToken::Token(_) => Vec::new(),
-        }
+        self.named_children().collect()
+    }
+
+    /// The named children, in order, read as they are needed: a search for
+    /// one stops there, and collects none (ADR 0014 §5).
+    fn named_children(&self) -> impl Iterator<Item = Node> + use<> {
+        let node = match &self.0 {
+            NodeOrToken::Node(n) => Some(n.clone()),
+            NodeOrToken::Token(_) => None,
+        };
+        node.into_iter()
+            .flat_map(|n| n.children_with_tokens())
+            .filter(is_named)
+            .map(Node)
     }
 
     /// The first named child of kind `kind`.
     fn child(&self, kinds: &[K]) -> Option<Node> {
-        self.children()
-            .into_iter()
-            .find(|c| kinds.contains(&c.kind()))
+        self.named_children().find(|c| kinds.contains(&c.kind()))
     }
 
     pub(crate) fn first_child(&self) -> Option<Node> {
-        self.children().into_iter().next()
+        self.named_children().next()
     }
 
     pub(crate) fn parent(&self) -> Option<Node> {
@@ -153,8 +163,7 @@ impl Node {
         if self.kind() != K::FieldQuery {
             return None;
         }
-        self.children()
-            .into_iter()
+        self.named_children()
             .find(|c| c.kind() != K::FieldName && c.kind() != K::Error)
     }
 
@@ -271,6 +280,7 @@ pub(crate) fn walk_with_ancestors(root: &Node, mut f: impl FnMut(&Node, &[Node])
     let mut stack: Vec<(Node, usize)> = vec![(root.clone(), 0)];
     let mut ancestors: Vec<Node> = Vec::new();
     while let Some((node, depth)) = stack.pop() {
+        count_visit();
         ancestors.truncate(depth);
         f(&node, &ancestors);
         let children = node.children();
@@ -280,5 +290,157 @@ pub(crate) fn walk_with_ancestors(root: &Node, mut f: impl FnMut(&Node, &[Node])
                 stack.push((child, depth + 1));
             }
         }
+    }
+}
+
+/// [`walk_with_ancestors`] and a visit of every token, in one pass: `f` gets
+/// each named node and token with its ancestors, in the same order, and
+/// `token` gets every token in document order. A walk allocates a cursor for
+/// each element it visits, and the highlight walked the tree a second time
+/// (ADR 0014 §5).
+pub(crate) fn walk_once(
+    root: &Node,
+    mut f: impl FnMut(&Node, &[Node]),
+    mut token: impl FnMut(&rowan::SyntaxToken<crate::syntax::Lucene>),
+) {
+    let mut stack: Vec<(Element, usize)> = vec![(root.0.clone(), 0)];
+    let mut ancestors: Vec<Node> = Vec::new();
+    let mut children: Vec<Element> = Vec::new();
+    while let Some((element, depth)) = stack.pop() {
+        count_visit();
+        match element {
+            NodeOrToken::Token(t) => {
+                token(&t);
+                if NAMED_TOKENS.contains(&t.kind()) {
+                    ancestors.truncate(depth);
+                    f(&Node(NodeOrToken::Token(t)), &ancestors);
+                }
+            }
+            NodeOrToken::Node(n) => {
+                ancestors.truncate(depth);
+                let node = Node(NodeOrToken::Node(n));
+                f(&node, &ancestors);
+                let NodeOrToken::Node(n) = &node.0 else {
+                    continue;
+                };
+                children.extend(n.children_with_tokens());
+                if !children.is_empty() {
+                    stack.extend(children.drain(..).rev().map(|c| (c, depth + 1)));
+                    ancestors.push(node);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The elements the walks visited on this thread: [`visits`].
+    static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one element a walk visited, in tests (ADR 0014 §7).
+#[inline]
+pub(crate) fn count_visit() {
+    #[cfg(test)]
+    VISITS.set(VISITS.get() + 1);
+}
+
+/// How many elements the walks visited on this thread.
+#[cfg(test)]
+pub(crate) fn visits() -> usize {
+    VISITS.get()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Corpus and external queries, and every prefix of each short one.
+    fn texts() -> Vec<String> {
+        let testdata = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
+        let mut out = Vec::new();
+        for dir in [
+            "corpus/lucene",
+            "conformance/external/lucene",
+            "conformance/external/lucene-queryparser",
+        ] {
+            let mut dirs = vec![testdata.join(dir)];
+            while let Some(dir) = dirs.pop() {
+                for path in std::fs::read_dir(&dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|e| e.path())
+                {
+                    if path.is_dir() {
+                        dirs.push(path);
+                    } else if let Ok(text) = std::fs::read_to_string(&path) {
+                        out.extend(text.lines().map(str::to_owned).take(400));
+                        out.push(text);
+                    }
+                }
+            }
+        }
+        let cut: Vec<String> = out
+            .iter()
+            .filter(|t| t.len() < 300)
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t[..i].to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        out.extend(cut);
+        out.push(format!("{}a{}", "(".repeat(900), ")".repeat(900)));
+        out
+    }
+
+    type Visit = (K, TextRange, Vec<(K, TextRange)>);
+
+    fn visit(node: &Node, ancestors: &[Node]) -> Visit {
+        let path = ancestors
+            .iter()
+            .map(|a| (a.kind(), a.0.text_range()))
+            .collect();
+        (node.kind(), node.0.text_range(), path)
+    }
+
+    /// The one walk calls the checks as [`walk_with_ancestors`] does, and
+    /// meets the tokens as the highlight's scan did (ADR 0014 §5).
+    #[test]
+    fn walk_once_is_the_walk_and_the_token_scan() {
+        let mut named = 0;
+        for source in texts() {
+            let tree = Tree::parse(&source);
+            let mut old = Vec::new();
+            walk_with_ancestors(&tree.root(), |n, a| old.push(visit(n, a)));
+            let old_tokens: Vec<_> = tree
+                .root
+                .descendants_with_tokens()
+                .filter_map(NodeOrToken::into_token)
+                .collect();
+            let (mut new, mut new_tokens) = (Vec::new(), Vec::new());
+            walk_once(
+                &tree.root(),
+                |n, a| new.push(visit(n, a)),
+                |t| new_tokens.push(t.clone()),
+            );
+            assert_eq!(new, old, "{source:?}");
+            assert_eq!(new_tokens, old_tokens, "{source:?}");
+            named += old.len();
+        }
+        assert!(named > 10_000, "{named}");
+    }
+
+    /// An analysis visits each element of the tree once (ADR 0014 §7): the
+    /// checks' walk and the highlight's walked it twice.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        let source = "title:(quick OR brown) AND -status:[200 TO 299} && body:\"fox jumps\"~2 OR /joh?n(ath[oa]n)/ NOT x^2";
+        let elements = Tree::parse(source).root.descendants_with_tokens().count();
+        let before = visits();
+        crate::analyze(source);
+        assert_eq!(visits() - before, elements);
     }
 }
