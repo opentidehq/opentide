@@ -244,7 +244,7 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
             .and_then(|root| root.get("name"))
             .map(|name| match &name.value {
                 node::Value::Str(text) => text.clone(),
-                other => other.to_string(),
+                other => other.to_string().into(),
             })
             .unwrap_or_default();
         let blocks = root
@@ -253,13 +253,13 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
         if blocks.is_empty() {
             events.push(Event::Info(
                 "nothing_to_promote_rule_already_in_production_status",
-                vec![("detail", name)],
+                vec![("detail", name.to_string())],
             ));
             continue;
         }
         events.push(Event::Info(
             "detected_statuses_needing_promotion_for_the_following_rule",
-            vec![("detail", name)],
+            vec![("detail", name.to_string())],
         ));
         let listed: Vec<String> = blocks
             .iter()

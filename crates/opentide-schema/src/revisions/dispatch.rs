@@ -170,22 +170,25 @@ pub fn select(document: &Document, family: &str) -> Result<Selection, Rejection>
     };
     let written = match &schema.value {
         Value::Str(text) => text.clone(),
-        other => other.to_string(),
+        other => other.to_string().into(),
     };
     if let Some(revision) = lookup(&written).filter(|revision| revision.in_object_registry()) {
         return if revision.id().family() == family {
             Ok(Selection::Registered(revision))
         } else {
             Err(Rejection::OtherFamily {
-                identifier: written,
+                identifier: written.into(),
                 family,
             })
         };
     }
     match SchemaId::parse(&written) {
-        Ok(id) if id.family() == family => Ok(Selection::Unknown { written, newest }),
+        Ok(id) if id.family() == family => Ok(Selection::Unknown {
+            written: written.into(),
+            newest,
+        }),
         _ => Err(Rejection::Unknown {
-            identifier: written,
+            identifier: written.into(),
         }),
     }
 }

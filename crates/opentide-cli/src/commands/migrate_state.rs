@@ -108,7 +108,7 @@ fn node_repr(node: &Node) -> String {
 fn external_id(node: &Node) -> Option<ExternalId> {
     match &node.value {
         Value::Int(integer) => Some(ExternalId::Int(*integer)),
-        Value::Str(text) => Some(ExternalId::Text(text.clone())),
+        Value::Str(text) => Some(ExternalId::Text(text.to_string())),
         _ => None,
     }
 }
@@ -432,7 +432,7 @@ fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
         }
     } else if let Some(uuid) = raw_uuid.filter(|uuid| uuid.value != Value::Null) {
         rule.object_uuid = Some(match &uuid.value {
-            Value::Str(text) => text.clone(),
+            Value::Str(text) => text.to_string(),
             other => other.to_string(),
         });
     }

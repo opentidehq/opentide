@@ -343,7 +343,7 @@ pub fn fill_legacy_keys(model: &str, block: &Node) -> Node {
                 if !taken {
                     out.push(crate::node::Entry {
                         key: std::sync::Arc::new(Node {
-                            value: Value::Str((*target).to_owned()),
+                            value: Value::Str((*target).to_owned().into()),
                             start: entry.key.start,
                             end: entry.key.end,
                             text: None,
@@ -588,7 +588,7 @@ pub(crate) fn json_node(value: &serde_json::Value) -> Node {
             Some(integer) => Value::Int(integer),
             None => Value::Float(number.as_f64().unwrap_or(f64::NAN)),
         },
-        Json::String(text) => Value::Str(text.clone()),
+        Json::String(text) => Value::Str(text.as_str().into()),
         Json::Array(items) => Value::Seq(
             items
                 .iter()

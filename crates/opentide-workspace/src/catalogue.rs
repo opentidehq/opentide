@@ -571,7 +571,7 @@ impl Builder<'_> {
             if let Some(Value::Str(parent)) = get(signal, "parent").map(|n| &n.value)
                 && !parent.is_empty()
             {
-                let missing = !self.index.signals.contains_key(parent);
+                let missing = !self.index.signals.contains_key(parent.as_str());
                 self.edge(
                     &signal_uuid,
                     parent,
@@ -756,7 +756,7 @@ pub fn build_from(
                         && !target.trim().is_empty()
                     {
                         let missing = !builder.has("objective", target)
-                            && !index.signals.contains_key(target);
+                            && !index.signals.contains_key(target.as_str());
                         builder.edge(uuid, target, "implements", "detection_model", None, missing);
                     }
                 }

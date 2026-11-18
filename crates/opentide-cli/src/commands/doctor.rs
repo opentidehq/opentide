@@ -811,7 +811,7 @@ impl Doctor<'_> {
             }
             for (index, tenant) in tenants.iter().enumerate() {
                 let name = match tenant.get("name").map(|node| &node.value) {
-                    Some(Value::Str(name)) if !name.is_empty() => name.clone(),
+                    Some(Value::Str(name)) if !name.is_empty() => name.to_string(),
                     Some(Value::Null | Value::Bool(false)) | None => {
                         format!("tenant {}", index + 1)
                     }

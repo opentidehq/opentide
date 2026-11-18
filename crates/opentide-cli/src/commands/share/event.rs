@@ -68,7 +68,7 @@ fn vocab_misp(field: &str) -> &'static BTreeMap<String, String> {
                     entry.get("name").map(|node| &node.value),
                     entry.get("misp").map(|node| &node.value),
                 ) {
-                    mapping.insert(name.clone(), tag.clone());
+                    mapping.insert(name.to_string(), tag.to_string());
                 }
             }
         }
