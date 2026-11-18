@@ -443,3 +443,56 @@ fn a_blocking_client_gets_each_answer_before_its_next_read() {
         "{written}"
     );
 }
+
+/// Network tool calls, each on a `spawn_blocking` thread of the process's
+/// runtime as the server dispatches them, block on that runtime: they reach
+/// the tenant (refused here: nothing listens) and no call starts a runtime
+/// of its own (#1558).
+#[cfg(not(target_os = "wasi"))]
+#[test]
+fn network_tool_calls_run_on_the_one_runtime() {
+    let closed = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        format!("http://{}", listener.local_addr().unwrap())
+    };
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+             [[tenants]]\nname = \"closed\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+             url = \"{closed}\"\nelasticsearch_url = \"{closed}\"\napi_key = \"key\"\n"
+        ),
+    )
+    .unwrap();
+    let server = std::sync::Arc::new(server(&ws));
+    let answers = opentide_connectors::runtime::block_on(async {
+        let mut answers = Vec::new();
+        for _ in 0..3 {
+            let server = std::sync::Arc::clone(&server);
+            let answer = tokio::task::spawn_blocking(move || {
+                let args = json!({"query": "FROM x", "platform": "elastic", "live": true});
+                match server.call("run_query", &arguments(args)) {
+                    Answer::Result(result) => result.to_string(),
+                    Answer::Error(error) => format!("{error:?}"),
+                }
+            })
+            .await
+            .unwrap();
+            answers.push(answer);
+        }
+        answers
+    })
+    .unwrap();
+    for answer in &answers {
+        assert!(answer.contains("closed"), "the tenant was tried: {answer}");
+        assert!(
+            !answer.contains(opentide_connectors::runtime::INSIDE_THE_RUNTIME),
+            "{answer}"
+        );
+    }
+    assert_eq!(opentide_connectors::runtime::started(), 1);
+}

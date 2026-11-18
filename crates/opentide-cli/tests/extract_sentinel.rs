@@ -150,6 +150,8 @@ fn as_data(path: &str, bytes: &[u8]) -> String {
 #[test]
 fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     let (_scratch, ws, report) = extract();
+    // The import ran on the process's one runtime (#1558).
+    assert_eq!(opentide_connectors::runtime::started(), 1);
 
     // The document: the oracle's keys, message and counts.
     let oracle: serde_json::Value =

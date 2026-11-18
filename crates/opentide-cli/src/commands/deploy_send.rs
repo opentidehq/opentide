@@ -307,11 +307,12 @@ fn failed(message: &str) -> Vec<(String, Json)> {
     ]
 }
 
-/// Runs `deploy` without `--dry-run`, on a thread of its own with this
-/// thread's log subscriber (a host may already run a runtime here).
+/// Runs `deploy` without `--dry-run` on the process's runtime: here, or on
+/// a thread of its own with this thread's log subscriber when a host runs a
+/// runtime here (`sync_call`).
 pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    let ran = crate::threads::run_apart(|| {
+    let ran = opentide_connectors::runtime::sync_call(|| {
         tracing::dispatcher::with_default(&dispatch, || run_deploy(args, cx))
     });
     Sent {

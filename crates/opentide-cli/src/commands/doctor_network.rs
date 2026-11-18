@@ -63,7 +63,7 @@ pub fn fetch_latest(env: &Environment, proxy: Option<&str>) -> Result<String, Fa
         other => Failed::problem(other.to_string()),
     })?;
     let stopped = || Failed::problem("the request stopped unexpectedly");
-    crate::threads::run_apart(|| {
+    opentide_connectors::runtime::sync_call(|| {
         opentide_connectors::runtime::block_on(async {
             let cancel = CancellationToken::new();
             let request = client

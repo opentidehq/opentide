@@ -102,9 +102,9 @@ fn tenant(
     Ok((tenant, http))
 }
 
-/// Runs `work` on a runtime of its own, off this thread.
+/// Runs `work` on the process's runtime (`sync_call`).
 fn block_on<T: Send>(work: impl std::future::Future<Output = T> + Send) -> Result<T, String> {
-    crate::threads::run_apart(|| opentide_connectors::runtime::block_on(work))
+    opentide_connectors::runtime::sync_call(|| opentide_connectors::runtime::block_on(work))
         .map_err(|_| "the import stopped unexpectedly".to_owned())?
 }
 
