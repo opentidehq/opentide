@@ -458,6 +458,8 @@ type Classes = Vec<(String, Vec<usize>)>;
 thread_local! {
     /// Scans of the catalog's fields for a source's classes ([`classes_for`]).
     pub(crate) static FIELD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Fields of a class read by [`resolve`] ([`ClassFields`]).
+    pub(crate) static FIELDS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What one class's `parse_field_name` returns for *full*: `-1` as `None`, a
@@ -468,16 +470,38 @@ enum ClassParse<'c> {
     Throw(String),
 }
 
-fn longest_prefix<'c>(fields: &[&'c Field], full: &str) -> Option<&'c Field> {
+/// The fields of one class that apply to a source: indices into the
+/// catalog's fields ([`class_fields`]), read where they are, so that a
+/// [`resolve`] copies no list of them (ADR 0014, rule 1).
+#[derive(Clone, Copy)]
+struct ClassFields<'c, 's> {
+    catalog: &'c Catalog,
+    indices: &'s [usize],
+}
+
+impl<'c> ClassFields<'c, '_> {
+    fn iter(self) -> impl Iterator<Item = &'c Field> {
+        self.indices.iter().filter_map(move |&i| {
+            #[cfg(test)]
+            FIELDS_READ.set(FIELDS_READ.get() + 1);
+            self.catalog.fields.get(i)
+        })
+    }
+
+    fn first(self) -> Option<&'c Field> {
+        self.iter().next()
+    }
+}
+
+fn longest_prefix<'c>(fields: ClassFields<'c, '_>, full: &str) -> Option<&'c Field> {
     fields
         .iter()
         .filter(|f| full.starts_with(f.name.as_str()))
         .max_by_key(|f| f.name.len())
-        .copied()
 }
 
-fn field_named<'c>(fields: &[&'c Field], name: &str) -> Option<&'c Field> {
-    fields.iter().find(|f| f.name == name).copied()
+fn field_named<'c>(fields: ClassFields<'c, '_>, name: &str) -> Option<&'c Field> {
+    fields.iter().find(|f| f.name == name)
 }
 
 /// `find_longest_matching_evt_param`.
@@ -493,7 +517,7 @@ fn longest_param<'c>(catalog: &'c Catalog, rest: &str) -> Option<&'c crate::cata
 
 fn class_parse<'c>(
     catalog: &'c Catalog,
-    fields: &[&'c Field],
+    fields: ClassFields<'c, '_>,
     class: &str,
     full: &str,
 ) -> ClassParse<'c> {
@@ -664,7 +688,7 @@ fn class_parse<'c>(
 }
 
 /// `sinsp_filter_check_plugin::parse_field_name`.
-fn plugin_parse<'c>(fields: &[&'c Field], full: &str) -> ClassParse<'c> {
+fn plugin_parse<'c>(fields: ClassFields<'c, '_>, full: &str) -> ClassParse<'c> {
     let Some(field) = longest_prefix(fields, full) else {
         return ClassParse::NoMatch;
     };
@@ -730,15 +754,13 @@ pub fn resolve<'c>(
         Some(a) => format!("{name}[{a}]"),
         None => name.to_string(),
     };
-    for (class, fields) in class_fields(catalog, source).iter() {
-        let fields: Vec<&Field> = fields
-            .iter()
-            .filter_map(|&i| catalog.fields.get(i))
-            .collect();
-        if fields.is_empty() {
+    for (class, indices) in class_fields(catalog, source).iter() {
+        let fields = ClassFields { catalog, indices };
+        // The indices come from this catalog's own fields: none is missing.
+        if indices.is_empty() {
             continue;
         }
-        match class_parse(catalog, &fields, class, &full) {
+        match class_parse(catalog, fields, class, &full) {
             ClassParse::NoMatch => {}
             ClassParse::Throw(message) => return Err(FieldError::Argument(message)),
             ClassParse::Len(len, field, ty) => {
@@ -1515,6 +1537,49 @@ mod tests {
             let _ = resolve(catalog, "syscall", name, None);
         }
         assert_eq!(FIELD_SCANS.get() - scans, 0);
+    }
+
+    /// A resolve reads each field of the classes it tries once, where the
+    /// catalog keeps it: it copies no list of a class's fields first, which
+    /// read every field once more (ADR 0014, rules 1 and 7).
+    #[test]
+    fn resolving_a_field_reads_each_field_once() {
+        let catalog = Catalog::cached();
+        let classes = class_fields(catalog, "syscall");
+        for name in [
+            "proc.name",
+            "fd.name",
+            "evt.type",
+            "proc.nmae",
+            "user.name",
+            "k8s.ns.name",
+        ] {
+            let resolved = resolve(catalog, "syscall", name, None);
+            // The fields of the classes tried, up to the one that holds the
+            // field or every class when none does, and the first of each
+            // once more (whether its class comes from a plugin).
+            let mut bound = 0;
+            for (_, indices) in classes.iter() {
+                bound += indices.len() + 1;
+                if let Ok(r) = &resolved
+                    && indices.iter().any(|&i| {
+                        catalog
+                            .fields
+                            .get(i)
+                            .is_some_and(|f| std::ptr::eq(f, r.field))
+                    })
+                {
+                    break;
+                }
+            }
+            FIELDS_READ.set(0);
+            let _ = resolve(catalog, "syscall", name, None);
+            let read = FIELDS_READ.get();
+            assert!(
+                read > 0 && read <= bound,
+                "{name}: {read} fields read, {bound} tried"
+            );
+        }
     }
     use crate::parser::parse;
 

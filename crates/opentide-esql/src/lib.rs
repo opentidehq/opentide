@@ -486,37 +486,32 @@ fn expression_depth(root: &SyntaxNode) -> (usize, Option<ByteSpan>) {
     let mut stack = vec![(root.clone(), 0usize)];
     let (mut max, mut deepest) = (0usize, None);
     while let Some((node, base)) = stack.pop() {
-        let kids: Vec<SyntaxNode> = children_of(&node)
-            .into_iter()
-            .filter_map(NodeOrToken::into_node)
-            .collect();
+        let kids: Vec<SyntaxNode> = gates::tree_child_nodes(&node).collect();
         let flat = matches!(
             node.kind(),
             K::AND_EXPRESSION | K::OR_EXPRESSION | K::BINARY_EXPRESSION
         ) && kids.len() > 1;
-        let mut depths = vec![base; kids.len()];
-        if NESTING.contains(&node.kind()) {
-            let levels = if flat { kids.len() - 1 } else { 1 };
-            if base + levels > max {
-                max = base + levels;
-                deepest = Some(if flat {
-                    ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
-                } else {
-                    span_of(&node)
-                });
-            }
-            for (i, d) in depths.iter_mut().enumerate() {
-                *d = base
-                    + if !flat {
-                        1
-                    } else if i == 0 {
-                        levels
-                    } else {
-                        kids.len() - i
-                    };
-            }
+        let nesting = NESTING.contains(&node.kind());
+        let levels = if flat { kids.len() - 1 } else { 1 };
+        if nesting && base + levels > max {
+            max = base + levels;
+            deepest = Some(if flat {
+                ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
+            } else {
+                span_of(&node)
+            });
         }
-        for (kid, depth) in kids.into_iter().zip(depths).rev() {
+        let count = kids.len();
+        for (i, kid) in kids.into_iter().enumerate().rev() {
+            let depth = if !nesting {
+                base
+            } else if !flat {
+                base + 1
+            } else if i == 0 {
+                base + levels
+            } else {
+                base + count - i
+            };
             stack.push((kid, depth));
         }
     }
@@ -1588,6 +1583,186 @@ mod tests {
             }
         }
         assert_eq!(version::catalog_reads() - before, 0);
+    }
+
+    /// A name and a suggestion are found in the bundled catalog's indexes,
+    /// with no scan of its rows (ADR 0014 §2, §7): every command, function
+    /// and cast scanned the rows, and every unknown name prepared every
+    /// candidate again.
+    #[test]
+    fn names_and_suggestions_scan_no_rows() {
+        let queries = [
+            "FROM logs-* | EVAL x = TO_LOWR(a::keywrd) | STATZ c = COUNT(*) BY x | LIMIT 10",
+            "FROM logs-* | EVAL y = TO_UPER(b::kyword) | SORTT y | LIMIT 11",
+        ];
+        for q in queries {
+            analyze(q);
+        }
+        let before = catalog::scans();
+        for _ in 0..3 {
+            for q in queries {
+                assert!(!analyze(q).diagnostics.is_empty());
+            }
+        }
+        assert_eq!(catalog::scans() - before, 0);
+    }
+
+    /// [`expression_depth`] as it was: every child collected, tokens
+    /// included, then the nodes kept.
+    fn expression_depth_by_all_children(root: &SyntaxNode) -> (usize, Option<ByteSpan>) {
+        const NESTING: &[K] = &[
+            K::NOT_EXPRESSION,
+            K::AND_EXPRESSION,
+            K::OR_EXPRESSION,
+            K::IN_EXPRESSION,
+            K::IS_NULL_EXPRESSION,
+            K::LIKE_EXPRESSION,
+            K::MATCH_EXPRESSION,
+            K::COMPARISON,
+            K::UNARY_EXPRESSION,
+            K::BINARY_EXPRESSION,
+            K::PARENTHESIZED_EXPRESSION,
+            K::INLINE_CAST,
+            K::FUNCTION_CALL,
+        ];
+        // Iterative: a 10 000-term chain must not overflow the stack.
+        let mut stack = vec![(root.clone(), 0usize)];
+        let (mut max, mut deepest) = (0usize, None);
+        while let Some((node, base)) = stack.pop() {
+            let kids: Vec<SyntaxNode> = children_of(&node)
+                .into_iter()
+                .filter_map(NodeOrToken::into_node)
+                .collect();
+            let flat = matches!(
+                node.kind(),
+                K::AND_EXPRESSION | K::OR_EXPRESSION | K::BINARY_EXPRESSION
+            ) && kids.len() > 1;
+            let mut depths = vec![base; kids.len()];
+            if NESTING.contains(&node.kind()) {
+                let levels = if flat { kids.len() - 1 } else { 1 };
+                if base + levels > max {
+                    max = base + levels;
+                    deepest = Some(if flat {
+                        ByteSpan::new(span_of(&node).start, span_of(&kids[1]).end)
+                    } else {
+                        span_of(&node)
+                    });
+                }
+                for (i, d) in depths.iter_mut().enumerate() {
+                    *d = base
+                        + if !flat {
+                            1
+                        } else if i == 0 {
+                            levels
+                        } else {
+                            kids.len() - i
+                        };
+                }
+            }
+            for (kid, depth) in kids.into_iter().zip(depths).rev() {
+                stack.push((kid, depth));
+            }
+        }
+        (max, deepest)
+    }
+
+    fn depth_probes() -> Vec<String> {
+        // Queries like the corpus's and Elastic's rules, written here: an
+        // engine crate reads no file, its tests in `src/` included
+        // (`check-io-free.sh`).
+        let mut out: Vec<String> = [
+            r#"FROM logs-* METADATA _id
+| WHERE process.name == "cmd.exe" AND NOT host.os.type == "linux"
+| KEEP @timestamp, host.*, `process.name`"#,
+            r#"FROM logs-endpoint.events.process-* METADATA _id, _index, _version
+| WHERE event.category == "process" AND (process.name IN ("powershell.exe", "pwsh.exe") OR process.args RLIKE ".*-enc.*")
+| EVAL cmd = TO_LOWER(process.command_line), len = LENGTH(cmd)
+| STATS n = COUNT(*), hosts = COUNT_DISTINCT(host.id) BY user.name, cmd
+| WHERE n > 5 AND len >= 20
+| SORT n DESC
+| LIMIT 100"#,
+            r#"FROM logs-* METADATA _id
+| COMPLETION summary = message WITH { "inference_id": "my-llm" }"#,
+            r#"FROM logs-*
+| WHERE MATCH(message, "failed login", {"operator": "AND", "boost": (1 + (2 * 3))}) AND @timestamp > NOW() - 1 day"#,
+            r#"FROM logs-* | EVAL port = destination.port::integer, ok = port BETWEEN 1 AND 1024 | WHERE NOT ok IS NULL"#,
+            r#"TS metrics-* | STATS avg = AVG(RATE(bytes)) BY TBUCKET(1 hour)"#,
+            r#"FROM logs-* | RENAME a AS b, new = old | DISSECT message "%{a} %{b}" | GROK message "%{IP:ip}""#,
+            r#"FROM a, b:c::data | LOOKUP JOIN threat_intel ON source.ip | ENRICH policy ON host WITH x = y"#,
+            r#"ROW a = [1, 2, 3], b = CASE(a > 1, "x", a < -1, "y", "z") | MV_EXPAND a | FORK (WHERE a > 1) (WHERE a < 1)"#,
+            r#"FROM logs-* | WHERE (a == 1 AND (b == 2 OR (c == 3 AND NOT (d == 4)))) | EVAL x = ABS(ABS(ABS(-1)))"#,
+            r#"FROM logs-* | WHERE a LIKE ("x*", "y*") OR b RLIKE "z.*" | EVAL d = DATE_TRUNC(1 hour, @timestamp) | EVAL"#,
+            r#"FROM logs-* | WHERE a == | STATS BY"#,
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        for n in [1, 2, 150, 299, 300, 301, 400, 401] {
+            let chain = vec!["a == 1"; n + 1].join(" AND ");
+            out.push(format!("FROM i | WHERE {chain}"));
+            out.push(format!(
+                "FROM i | WHERE {}a{}",
+                "(".repeat(n),
+                ")".repeat(n)
+            ));
+            out.push(format!(
+                "FROM i | EVAL x = {}1{}",
+                "ABS(".repeat(n),
+                ")".repeat(n)
+            ));
+            out.push(format!("FROM i | WHERE {}", vec!["NOT a"; n].join(" OR ")));
+            out.push(format!(
+                "FROM i | EVAL x = {}",
+                vec!["1 + 2"; n].join(" * ")
+            ));
+            out.push(format!(
+                "FROM i | WHERE MATCH(a, \"x\", {{\"boost\": {}1{}}}) AND b",
+                "(".repeat(n),
+                ")".repeat(n)
+            ));
+        }
+        let cut: Vec<String> = out
+            .iter()
+            .filter(|t| t.len() < 2_000)
+            .flat_map(|t| {
+                let ends: Vec<usize> = t.char_indices().map(|(i, _)| i).step_by(7).collect();
+                ends.into_iter()
+                    .map(|i| t[..i].to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// The node walk measures what the walk over every child measured (ADR 0014 §5).
+    #[test]
+    fn the_depth_walk_over_nodes_is_the_walk_over_every_child() {
+        let mut deep = 0;
+        for source in depth_probes() {
+            let root = tree::parse(&source).syntax;
+            let walked = expression_depth(&root);
+            assert_eq!(
+                walked,
+                expression_depth_by_all_children(&root),
+                "{source:?}"
+            );
+            deep += usize::from(walked.0 > 300);
+        }
+        assert!(deep >= 10, "{deep}");
+    }
+
+    /// The depth walk visits the nodes only, no token (ADR 0014 §5, §7): it
+    /// collected every token of the tree, each a cursor allocated.
+    #[test]
+    fn the_depth_walk_visits_no_token() {
+        let source = "FROM logs-* METADATA _id | WHERE (a == 1 AND b != \"x\") OR NOT c IN (1, 2, 3) | EVAL d = TO_LOWER(e::keyword) | STATS n = COUNT(*) BY d";
+        let root = tree::parse(source).syntax;
+        let nodes = root.descendants().count();
+        let before = gates::children_read();
+        expression_depth(&root);
+        let visits = gates::children_read() - before;
+        // Each node but the root is read once, as a child of its parent.
+        assert!(visits < nodes, "{visits} children read for {nodes} nodes");
     }
 
     #[test]

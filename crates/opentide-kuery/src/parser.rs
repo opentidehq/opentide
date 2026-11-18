@@ -4,7 +4,9 @@
 //! flat node, so a 20 000-term chain is not 20 000 levels deep.
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
-use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree};
+use opentide_parse::{
+    Event, Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -56,6 +58,44 @@ pub(crate) const MEMO_MAX: usize = 64 * 1024;
 
 /// Parses `source` (with Kibana's trailing-keyword masking when `mask`).
 pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {
+    let parse = with_events(source, mask, built);
+    (SyntaxNode::new_root(parse.green.clone()), parse)
+}
+
+/// Whether [`parse`] reports no error. Every error the grammar records is
+/// one of the tree's, so a text with one is rejected without building the
+/// tree (ADR 0014 §4). A text with none is built, as a backstop for the
+/// errors only the build finds (a tree too deep, unbalanced events); the
+/// grammar's own depth limit fires before either today.
+pub(crate) fn accepts(source: &str, mask: bool) -> bool {
+    with_events(source, mask, |input, events| {
+        !events.iter().any(|e| matches!(e, Event::Error { .. }))
+            && built(input, events).errors.is_empty()
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The trees built on this thread: [`trees_built`].
+    static TREES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many trees this thread has built (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn trees_built() -> usize {
+    TREES_BUILT.get()
+}
+
+#[inline]
+fn built(input: &Input<'_>, events: Vec<Event>) -> Parse {
+    #[cfg(test)]
+    TREES_BUILT.set(TREES_BUILT.get() + 1);
+    build(input, events)
+}
+
+/// `f` of the grammar's events over `source`, before the tree is built.
+#[inline]
+fn with_events<R>(source: &str, mask: bool, f: impl FnOnce(&Input<'_>, Vec<Event>) -> R) -> R {
     let grammar = Grammar {
         eof: K::Eof.raw(),
         error: K::Error.raw(),
@@ -79,8 +119,8 @@ pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {
         }
     }
     root.complete(&mut p, K::SourceFile.raw());
-    let parse = build(&input, p.finish());
-    (SyntaxNode::new_root(parse.green.clone()), parse)
+    let events = p.finish();
+    f(&input, events)
 }
 
 fn at(p: &mut Parser<'_>, kind: K) -> bool {
@@ -272,6 +312,91 @@ mod tests {
     use super::*;
     use crate::syntax::Kuery;
     use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
+
+    /// Queries of the corpus and the external sets, written here: an engine
+    /// crate reads no file, its tests in `src/` included (`check-io-free.sh`).
+    const SAMPLES: &[&str] = &[
+        r#"process.name:"cmd.exe""#,
+        r#"host.os.type:(not )"#,
+        r#""process.name:cmd.exe"#,
+        r#"not(user.name:SYSTEM)"#,
+        r#"message:"failed login""#,
+        r#"(a:1 or b:2) and c:3"#,
+        r#"event.category:process and(event.type:start)"#,
+        r#"process.name:(cmd.exe or"#,
+        r#"powershell"#,
+        r#"process.name:(cmd.exe or "power shell.exe")"#,
+        r#"process.name:cmd.exe or )"#,
+        r#"event.category:process and event.type:start"#,
+        r#"host.os.type:(windows or linux)"#,
+        r#"event.code >= "#,
+        r#"event.code >= 4624 and event.code < 4700"#,
+        r#"user.name:* and not user.name:SYSTEM"#,
+        r#"process.args:{ name:"-enc" and value:* }"#,
+        r#"destination.ip:"10.0.0.0/8" or destination.port:(22 or 3389)"#,
+        r#"file.path:C\:\\Windows\\* and file.extension:exe"#,
+        r#"a:1 and b:2 or c:3 and not d:4"#,
+        r#"title:alert^2 AND -status:[200 TO 299}"#,
+        r#"process.name:cmd* AND file.name:a?c"#,
+        r#"name:jon~1 OR /joh?n/"#,
+        r#"a:1 and"#,
+        r#"not"#,
+        r#"(a:1"#,
+    ];
+
+    /// The samples, each cut at every
+    /// character: valid and broken queries alike.
+    fn texts() -> Vec<String> {
+        let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
+        let cut: Vec<String> = out
+            .iter()
+            .filter(|t| t.len() < 400)
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t[..i].to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        out.extend(cut);
+        out
+    }
+
+    /// `accepts` is `parse`'s verdict, on every text and at the grammar's
+    /// nesting limit (its own depth error, an error event, fires there before
+    /// the build could find a tree too deep).
+    #[test]
+    fn accepts_is_the_parse_without_errors() {
+        let mut sources = texts();
+        for depth in [MAX_DEPTH - 1, MAX_DEPTH, MAX_DEPTH + 1] {
+            let depth = depth as usize;
+            sources.push(format!("{}a:1{}", "(".repeat(depth), ")".repeat(depth)));
+        }
+        let (mut accepted, mut rejected) = (0, 0);
+        for source in &sources {
+            let expected = parse(source, false).1.errors.is_empty();
+            assert_eq!(accepts(source, false), expected, "{source:?}");
+            if expected {
+                accepted += 1;
+            } else {
+                rejected += 1;
+            }
+        }
+        assert!(
+            accepted > 100 && rejected > 100,
+            "{accepted} accepted, {rejected} rejected"
+        );
+    }
+
+    /// A rejected text builds no tree through the public `parses` (ADR 0014
+    /// §7): the other engine asks it of every query its own grammar rejects.
+    #[test]
+    fn a_rejected_text_builds_no_tree() {
+        let before = trees_built();
+        assert!(!crate::parses("a:1 and (b or c"));
+        assert_eq!(trees_built() - before, 0);
+        assert!(crate::parses("a:1 and (b or c)"));
+        assert_eq!(trees_built() - before, 1);
+    }
 
     #[test]
     fn every_tree_is_lossless() {
