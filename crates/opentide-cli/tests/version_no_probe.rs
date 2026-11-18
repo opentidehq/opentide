@@ -20,6 +20,59 @@ fn runtime_path(path: &str) -> bool {
     ]
     .iter()
     .any(|prefix| path.starts_with(prefix))
+        // glibc's malloc reads it when it trims a heap (`malloc/arena.c`,
+        // `check_may_shrink_heap`, glibc 2.39): the allocator on a `free`,
+        // not a file opentide reads (seen on CI's runners, #1591).
+        || path == "/proc/sys/vm/overcommit_memory"
+}
+
+/// Each call in `probes` with its stack, from `strace -k` (where strace has
+/// it), so that a failure names the component that made the call.
+fn stacks(binary: &str, flag: &str, dir: &std::path::Path, probes: &[&str]) -> String {
+    let log = dir.join("stacks.log");
+    let ran = Command::new("strace")
+        .args([
+            "-f",
+            "-qq",
+            "-k",
+            "-s",
+            "4096",
+            "-e",
+            "trace=%file,%network,getcwd",
+            "-o",
+        ])
+        .arg(&log)
+        .arg(binary)
+        .arg(flag)
+        .current_dir(dir)
+        .env_clear()
+        .env("HOME", dir)
+        .env("PWD", dir)
+        .output();
+    let Ok(trace) = ran.and_then(|_| std::fs::read_to_string(&log)) else {
+        return "(no stacks: strace -k did not run)".to_owned();
+    };
+    // A call's line, then its frames (` > ...`).
+    let mut out = String::new();
+    let mut keep = false;
+    for line in trace.lines() {
+        if line.starts_with(" > ") {
+            if keep {
+                out.push_str(line);
+                out.push('\n');
+            }
+        } else {
+            keep = probes.iter().any(|probe| {
+                let call = probe.split_once(' ').map_or(*probe, |(_, call)| call);
+                line.contains(call.split(" = ").next().unwrap_or(call))
+            });
+            if keep {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    out
 }
 
 #[test]
@@ -80,6 +133,10 @@ fn the_version_touches_no_file_and_no_network() {
                 network || !(quoted.is_empty() || runtime_path(quoted) || quoted == binary)
             })
             .collect();
-        assert!(probes.is_empty(), "{flag}: {probes:#?}");
+        assert!(
+            probes.is_empty(),
+            "{flag}: {probes:#?}\n{}",
+            stacks(binary, flag, dir.path(), &probes)
+        );
     }
 }
