@@ -16,7 +16,7 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
@@ -27,7 +27,7 @@ use napi::{Env, JsDate};
 use napi_derive::napi;
 use opentide::connectors::{
     self, DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployRequest, Operation, QueryOutcome,
-    QueryRequest, RUNTIME_UNAVAILABLE, TimeWindow, Timestamp,
+    QueryRequest, TimeWindow, Timestamp,
 };
 use serde::Serialize;
 
@@ -772,20 +772,11 @@ where
     .await
 }
 
-/// The runtime the operations run on, started by the first one: a failure
-/// to start it is `runtime_unavailable`, never a panic.
+/// The runtime the operations run on: the process's one
+/// ([`opentide::connectors::runtime`], #1558), started by the first
+/// operation. A failure to start it is `runtime_unavailable`, never a panic.
 pub(crate) fn runtime() -> Result<&'static tokio::runtime::Runtime, Failure> {
-    static RUNTIME: OnceLock<Result<tokio::runtime::Runtime, String>> = OnceLock::new();
-    RUNTIME
-        .get_or_init(|| {
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("opentide-sdk")
-                .build()
-                .map_err(|error| format!("cannot start the network runtime: {error}"))
-        })
-        .as_ref()
-        .map_err(|message| Failure::new(RUNTIME_UNAVAILABLE, message.clone()))
+    opentide::connectors::runtime().map_err(Failure::from)
 }
 
 /// Where a window without a `start` starts.
@@ -1397,6 +1388,20 @@ mod tests {
         work: impl Future<Output = Result<T, Failure>> + Send + 'static,
     ) -> Result<T, Failure> {
         runtime().unwrap().block_on(work)
+    }
+
+    #[test]
+    fn the_operations_run_on_the_process_runtime() {
+        // One runtime per process (#1558): the promises' and `block_on`'s.
+        assert!(std::ptr::eq(
+            runtime().unwrap(),
+            opentide::connectors::runtime().unwrap()
+        ));
+        let spawned = runtime()
+            .unwrap()
+            .block_on(async { tokio::task::spawn_blocking(|| 1).await })
+            .unwrap();
+        assert_eq!(spawned, 1);
     }
 
     #[test]

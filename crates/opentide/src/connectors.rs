@@ -522,6 +522,26 @@ pub fn block_on<F: Future>(work: F) -> Result<F::Output, Error> {
     })
 }
 
+/// The process's tokio runtime, the one [`block_on`] drives: started by its
+/// first caller and never dropped. For the language bindings, which await
+/// the operations on it (Node's promises, Python's awaitables), so that a
+/// process starts one runtime whichever way it reaches a tenant (#1558).
+///
+/// # Errors
+///
+/// [`Error::Connector`] with the code `runtime_unavailable`: the runtime
+/// cannot start.
+#[doc(hidden)]
+pub fn runtime() -> Result<&'static tokio::runtime::Runtime, Error> {
+    opentide_connectors::runtime::shared().map_err(|message| Error::Connector {
+        code: RUNTIME_UNAVAILABLE,
+        platform: String::new(),
+        tenant: String::new(),
+        message,
+        detail: None,
+    })
+}
+
 /// The code of [`block_on`]'s failure to start its runtime.
 pub const RUNTIME_UNAVAILABLE: &str = "runtime_unavailable";
 
