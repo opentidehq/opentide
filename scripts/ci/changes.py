@@ -245,6 +245,14 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         "src/opentide/_native/__init__.pyi",
         "tests/bench/instructions.toml",
         "crates/testdata/corpus/*",
+        # xtask's platform_docs test: the pages that restate the registry.
+        "AGENTS.md",
+        "docs/cli/new.md",
+        "docs/cli/query.md",
+        "docs/cli/setup.md",
+        "docs/cli/validate.md",
+        "docs/usage/installation.md",
+        "docs/usage/concepts/platforms.md",
     ),
     # opentide-schema's compile-fail cases (trybuild): the derive, the crate,
     # the cases (the lockfile and the toolchain are in EVERYTHING).
