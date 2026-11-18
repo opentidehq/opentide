@@ -42,7 +42,7 @@ The server picks each document's language once, when the editor opens it:
 
 1. A `.toml` file under `.opentide/configurations/` is `opentide-config`, whatever id the editor sends. No other `.toml` is read.
 2. Otherwise the editor's language id, when it is one of the ids below or an alias.
-3. Otherwise the file's extension: `.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`.
+3. Otherwise the file's extension: `.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`, `.yaral`, `.yl2`.
 4. Otherwise Tide YAML. A YAML document is analysed only when the editor sends `opentide-yaml`, the file is under an `objects/` folder, or it names a Tide schema (`metadata.schema: rule::1.0`), so CI workflows and other YAML files get no findings.
 
 | Language id | Aliases | Files |
@@ -56,9 +56,12 @@ The server picks each document's language once, when the editor opens it:
 | `lucene` | `opentide-lucene` | `.lucene` |
 | `falco` | `opentide-falco` | `.falco`: Falco conditions (Sysdig Secure) |
 | `cql` | `opentide-cql`, `logscale`, `crowdstrike` | `.cql`: the CrowdStrike Query Language (Falcon LogScale and Next-Gen SIEM) |
+| `yara` | `opentide-yara` | `.yar`, `.yara`: YARA rules (HarfangLab and Bitdefender) |
+| `exabeam` | `opentide-exabeam` | `.exabeam`: the Exabeam Query Language |
+| `yaral` | `opentide-yaral`, `yara-l` | `.yaral`, `.yl2`: YARA-L 2.0 (Google Security Operations) |
 | `opentide-config` | — | `.opentide/configurations/**/*.toml` |
 
-There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` as Lucene, `configurations.sysdig.condition` as Falco, `configurations.crowdstrike.query` as CQL (a Next-Gen SIEM correlation rule), a Google SecOps block's `setup`, `events`, `outcome`, `condition` and `export` as YARA-L (together, as the one rule deploy assembles), a HarfangLab block's `yara.signature` as YARA and its decomposed `imports`, `strings` and `condition` as the one YARA rule deploy assembles (both under the HarfangLab profile), and an Elastic query by the block's `type` and `language`. A hunt's search takes the language of its `system`.
+There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` and `configurations.graylog.query` as Lucene (in each one's dialect), `configurations.sysdig.condition` as Falco, `configurations.crowdstrike.query` as CQL (a Next-Gen SIEM correlation rule), a Google SecOps block's `setup`, `events`, `outcome`, `condition` and `export` as YARA-L (together, as the one rule deploy assembles), a HarfangLab block's `yara.signature` as YARA and its decomposed `imports`, `strings` and `condition` as the one YARA rule deploy assembles (both under the HarfangLab profile), a Bitdefender block's `yara.signature` as YARA under the Bitdefender profile, an Exabeam block's sequence filters in the Exabeam Query Language, and an Elastic query by the block's `type` and `language`. A hunt's search takes the language of its `system`.
 
 ### Diagnostics
 

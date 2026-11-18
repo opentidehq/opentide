@@ -80,7 +80,10 @@ rule.configurations.sentinel.query
 | `CrowdstrikeConfig` | `crowdstrike` | `platform::crowdstrike::1.0` | [crowdstrike-1.0](/docs/specifications/specs/platforms/crowdstrike-1.0/) |
 | `HarfangLabConfig` | `harfanglab` | `platform::harfanglab::1.0` | [harfanglab-1.0](/docs/specifications/specs/platforms/harfanglab-1.0/) |
 | `CarbonBlackConfig` | `carbon_black_cloud` | `platform::carbon_black_cloud::1.0` | [carbon-black-cloud-1.0](/docs/specifications/specs/platforms/carbon-black-cloud-1.0/) |
+| `ElasticConfig` | `elastic` | `platform::elastic::1.0` | [elastic-1.0](/docs/specifications/specs/platforms/elastic-1.0/) |
 | `SysdigConfig` | `sysdig` | `platform::sysdig::1.0` | [sysdig-1.0](/docs/specifications/specs/platforms/sysdig-1.0/) |
+| `BitdefenderConfig` | `bitdefender` | `platform::bitdefender::1.0` | [bitdefender-1.0](/docs/specifications/specs/platforms/bitdefender-1.0/) |
+| `GraylogConfig` | `graylog` | `platform::graylog::1.0` | [graylog-1.0](/docs/specifications/specs/platforms/graylog-1.0/) |
 | `ExabeamConfig` | `exabeam` | `platform::exabeam::1.0` | [exabeam-1.0](/docs/specifications/specs/platforms/exabeam-1.0/) |
 | `GoogleSecopsConfig` | `google_secops` | `platform::google_secops::1.0` | [google-secops-1.0](/docs/specifications/specs/platforms/google-secops-1.0/) |
 
