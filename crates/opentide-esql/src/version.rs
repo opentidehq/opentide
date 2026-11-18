@@ -25,6 +25,24 @@ pub const RELEASES: [StackVersion; 8] = [
 
 const NEWEST: usize = RELEASES.len() - 1;
 
+/// [`RELEASES`] as the catalog writes them (`StackVersion`'s `Display`), so
+/// that a name is matched without formatting a version
+/// (`release_names_are_the_releases_displayed`).
+const RELEASE_NAMES: [&str; RELEASES.len()] =
+    ["8.19", "9.0", "9.1", "9.2", "9.3", "9.4", "9.5", "9.6"];
+
+thread_local! {
+    /// The catalog `versions` lists read on this thread: [`version_lists_read`].
+    static VERSION_LISTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many catalog `versions` lists this thread has read into an
+/// [`Availability`]: once per catalog row, not once per lookup (ADR 0014 §7).
+#[cfg(test)]
+pub(crate) fn version_lists_read() -> usize {
+    VERSION_LISTS_READ.get()
+}
+
 /// The stack a query must run on.
 ///
 /// `Version` takes `MAJOR.MINOR`. A version between two tracked lines, or
@@ -140,10 +158,11 @@ impl Availability {
 
     /// The lines named in a catalog `versions` list. Unknown names are ignored.
     pub fn from_versions<S: AsRef<str>>(names: &[S]) -> Self {
+        VERSION_LISTS_READ.set(VERSION_LISTS_READ.get() + 1);
         let mut bits = 0u16;
         for name in names {
             let name = name.as_ref();
-            if let Some(i) = RELEASES.iter().position(|r| r.to_string() == name) {
+            if let Some(i) = RELEASE_NAMES.iter().position(|r| *r == name) {
                 bits |= 1 << i;
             }
         }
@@ -261,6 +280,12 @@ pub fn join_versions(versions: &[StackVersion]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn release_names_are_the_releases_displayed() {
+        let displayed: Vec<String> = RELEASES.iter().map(ToString::to_string).collect();
+        assert_eq!(displayed, RELEASE_NAMES);
+    }
 
     #[test]
     fn target_parses_the_spec_spelling() {

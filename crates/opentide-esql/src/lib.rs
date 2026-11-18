@@ -195,7 +195,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
                     &display_name(&name),
                     "command",
                     row.snapshot_only,
-                    &Lifecycle::parse(&row.stack),
+                    row.lifecycle(),
                     row.availability(),
                     keyword_span(&node),
                     &to_range,
@@ -829,7 +829,7 @@ fn function_diagnostic(
             &format!("{}()", name.to_ascii_uppercase()),
             "function",
             row.snapshot_only,
-            &Lifecycle::parse(&row.stack),
+            row.lifecycle(),
             row.availability(),
             span,
             &|s| range(source, s),
@@ -934,18 +934,22 @@ fn availability(
             range(),
         ));
     }
-    let described = lifecycle.describe();
     if let Some(available) = available {
-        let gate = gates::Gate {
-            subject: format!("{what} `{name}`"),
-            available,
-            note: (!described.is_empty()).then(|| described.clone()),
-            suggestion: None,
-            floor_severity: None,
-            span,
-        };
-        if let Some(d) = gate.diagnostic(target, to_range) {
-            return Some(d);
+        // The gate's text is built only when it fires: most names are
+        // available everywhere (ADR 0014 §4).
+        if gates::Gate::fires(available, target) {
+            let described = lifecycle.describe();
+            let gate = gates::Gate {
+                subject: format!("{what} `{name}`"),
+                available,
+                note: (!described.is_empty()).then_some(described),
+                suggestion: None,
+                floor_severity: None,
+                span,
+            };
+            if let Some(d) = gate.diagnostic(target, to_range) {
+                return Some(d);
+            }
         }
         let ga_on_target = match (target, lifecycle.ga) {
             (Some(StackTarget::Serverless), _) => true,
@@ -1562,6 +1566,26 @@ mod tests {
                 .contains(&codes::ESQL_METADATA_ID.to_string())
         );
         assert!(!codes_of("ROW a = 1").contains(&codes::ESQL_METADATA_ID.to_string()));
+    }
+
+    /// A catalog row's `versions` list is read once, not on each lookup
+    /// (ADR 0014 §2, §7): every lookup formatted the eight release lines.
+    #[test]
+    fn a_rows_versions_are_read_once_not_per_lookup() {
+        let queries = [
+            "FROM logs-* | EVAL x = TO_LOWER(a::keyword) | STATS c = COUNT(*) BY x | LIMIT 10",
+            "FROM logs-* | EVAL y = TO_UPPER(b::keyword) | STATS d = COUNT(*) BY y | LIMIT 11",
+        ];
+        for q in queries {
+            analyze(q);
+        }
+        let before = version::version_lists_read();
+        for _ in 0..3 {
+            for q in queries {
+                analyze(q);
+            }
+        }
+        assert_eq!(version::version_lists_read() - before, 0);
     }
 
     #[test]

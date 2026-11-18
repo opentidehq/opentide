@@ -54,11 +54,40 @@ pub struct CommandRow {
     pub citation: Option<String>,
     #[serde(default)]
     pub alias_of: Option<String>,
+    /// `versions` and `stack` read once per row (ADR 0014 §2).
+    #[serde(skip)]
+    prepared: OnceLock<Prepared>,
+}
+
+/// What a row's `versions` and `stack` say, read once.
+#[derive(Debug, Clone)]
+struct Prepared {
+    available: Option<Availability>,
+    lifecycle: Lifecycle,
+}
+
+impl Prepared {
+    fn of(versions: Option<&[String]>, stack: &str) -> Self {
+        Self {
+            available: versions.map(Availability::from_versions),
+            lifecycle: Lifecycle::parse(stack),
+        }
+    }
 }
 
 impl CommandRow {
     pub fn availability(&self) -> Option<Availability> {
-        self.versions.as_deref().map(Availability::from_versions)
+        self.prepared().available
+    }
+
+    /// The `stack` lifecycle, parsed once.
+    pub fn lifecycle(&self) -> &Lifecycle {
+        &self.prepared().lifecycle
+    }
+
+    fn prepared(&self) -> &Prepared {
+        self.prepared
+            .get_or_init(|| Prepared::of(self.versions.as_deref(), &self.stack))
     }
 }
 
@@ -99,11 +128,24 @@ pub struct FunctionRow {
     pub example: Option<String>,
     #[serde(default)]
     pub parameters: Vec<ParamRow>,
+    /// `versions` and `stack` read once per row (ADR 0014 §2).
+    #[serde(skip)]
+    prepared: OnceLock<Prepared>,
 }
 
 impl FunctionRow {
     pub fn availability(&self) -> Option<Availability> {
-        self.versions.as_deref().map(Availability::from_versions)
+        self.prepared().available
+    }
+
+    /// The `stack` lifecycle, parsed once.
+    pub fn lifecycle(&self) -> &Lifecycle {
+        &self.prepared().lifecycle
+    }
+
+    fn prepared(&self) -> &Prepared {
+        self.prepared
+            .get_or_init(|| Prepared::of(self.versions.as_deref(), &self.stack))
     }
 }
 
@@ -152,11 +194,16 @@ pub struct TypeRow {
     pub function: String,
     #[serde(default)]
     pub versions: Vec<String>,
+    /// `versions` read once per row (ADR 0014 §2).
+    #[serde(skip)]
+    available: OnceLock<Availability>,
 }
 
 impl TypeRow {
     pub fn availability(&self) -> Availability {
-        Availability::from_versions(&self.versions)
+        *self
+            .available
+            .get_or_init(|| Availability::from_versions(&self.versions))
     }
 }
 
