@@ -25,7 +25,7 @@ const KUSTO_TYPES: [&str; 10] = [
 ];
 
 /// The Kusto type `name`, shared with every column of that type when it is
-/// one of [`KUSTO_TYPES`]; any other is made for its column.
+/// one of the ten Kusto scalar types; any other is made for its column.
 pub fn kusto_type(name: &str) -> Arc<str> {
     static SHARED: OnceLock<Vec<Arc<str>>> = OnceLock::new();
     let shared = SHARED.get_or_init(|| KUSTO_TYPES.iter().map(|&t| Arc::from(t)).collect());
