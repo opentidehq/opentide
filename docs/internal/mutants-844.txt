@@ -2,6 +2,7 @@
 # opentide-schema and opentide-workspace, each with its own tests only, in GitHub Actions run
 # 44336903971 (2026-11-18). One mutant a line: the crate, then cargo-mutants' description.
 # docs/internal/test-strength.md ("Mutation testing") has the scores and the triage.
+# A line ending in "# killed in #1615" is held by a test since.
 schema	crates/opentide-schema/src/configuration/bundled.rs:189:58: delete ! in tlp_names
 schema	crates/opentide-schema/src/configuration/bundled.rs:189:58: replace match guard !name.is_empty() with false in tlp_names
 schema	crates/opentide-schema/src/configuration/bundled.rs:189:58: replace match guard !name.is_empty() with true in tlp_names
@@ -109,7 +110,7 @@ schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl Jso
 schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl JsonSchema for NonEmptyList<T>>::schema_name -> Cow<'static, str> with Cow::Owned("".to_owned())
 schema	crates/opentide-schema/src/configuration/types.rs:80:9: replace <impl JsonSchema for NonEmptyList<T>>::schema_name -> Cow<'static, str> with Cow::Owned("xyzzy".to_owned())
 schema	crates/opentide-schema/src/configuration/types.rs:84:9: replace <impl JsonSchema for NonEmptyList<T>>::inline_schema -> bool with false
-schema	crates/opentide-schema/src/from_node.rs:187:9: replace Context::error_count -> usize with 0
+schema	crates/opentide-schema/src/from_node.rs:187:9: replace Context::error_count -> usize with 0	# killed in #1615
 schema	crates/opentide-schema/src/from_node.rs:580:29: delete ! in union_value
 schema	crates/opentide-schema/src/generate/annotate.rs:307:9: delete match arm Json::Array(items) in walk
 schema	crates/opentide-schema/src/generate/annotate.rs:334:43: replace match guard !title.is_empty() with true in annotate_editor_schema
@@ -704,8 +705,8 @@ workspace	crates/opentide-workspace/src/validate/annotate.rs:501:24: replace == 
 workspace	crates/opentide-workspace/src/validate/annotate.rs:503:12: delete ! in annotate_one
 workspace	crates/opentide-workspace/src/validate/annotate.rs:523:36: replace != with == in annotate_one
 workspace	crates/opentide-workspace/src/validate/annotate.rs:80:9: delete match arm "detection_model" in reference_listing
-workspace	crates/opentide-workspace/src/validate/mod.rs:103:57: replace == with != in Check::parse
-workspace	crates/opentide-workspace/src/validate/mod.rs:103:9: replace Check::parse -> Option<Self> with None
+workspace	crates/opentide-workspace/src/validate/mod.rs:103:57: replace == with != in Check::parse	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:103:9: replace Check::parse -> Option<Self> with None	# killed in #1615
 workspace	crates/opentide-workspace/src/validate/mod.rs:1141:37: replace + with * in validate
 workspace	crates/opentide-workspace/src/validate/mod.rs:1149:42: replace || with && in validate
 workspace	crates/opentide-workspace/src/validate/mod.rs:1183:29: replace && with || in validate
@@ -777,32 +778,32 @@ workspace	crates/opentide-workspace/src/validate/mod.rs:1608:19: replace == with
 workspace	crates/opentide-workspace/src/validate/mod.rs:1608:24: replace && with || in query_place
 workspace	crates/opentide-workspace/src/validate/mod.rs:1608:35: replace == with != in query_place
 workspace	crates/opentide-workspace/src/validate/mod.rs:372:9: replace <impl std::fmt::Debug for Options<'_>>::fmt -> std::fmt::Result with Ok(Default::default())
-workspace	crates/opentide-workspace/src/validate/mod.rs:464:9: replace Validation::exit_code -> i32 with 1
-workspace	crates/opentide-workspace/src/validate/mod.rs:469:9: replace Validation::checks_json -> serde_json::Value with Default::default()
+workspace	crates/opentide-workspace/src/validate/mod.rs:464:9: replace Validation::exit_code -> i32 with 1	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:469:9: replace Validation::checks_json -> serde_json::Value with Default::default()	# killed in #1615
 workspace	crates/opentide-workspace/src/validate/mod.rs:485:14: replace < with <= in workers
 workspace	crates/opentide-workspace/src/validate/mod.rs:485:14: replace < with == in workers
-workspace	crates/opentide-workspace/src/validate/mod.rs:567:5: replace title_duplicates -> Vec<Diagnostic> with vec![]
-workspace	crates/opentide-workspace/src/validate/mod.rs:578:42: replace == with != in title_duplicates
-workspace	crates/opentide-workspace/src/validate/mod.rs:580:63: replace == with != in title_duplicates
-workspace	crates/opentide-workspace/src/validate/mod.rs:605:5: replace exabeam_names -> Vec<Diagnostic> with vec![]
-workspace	crates/opentide-workspace/src/validate/mod.rs:608:26: replace != with == in exabeam_names
-workspace	crates/opentide-workspace/src/validate/mod.rs:631:42: replace == with != in exabeam_names
-workspace	crates/opentide-workspace/src/validate/mod.rs:636:73: replace == with != in exabeam_names
-workspace	crates/opentide-workspace/src/validate/mod.rs:679:58: replace && with || in name_duplicates
-workspace	crates/opentide-workspace/src/validate/mod.rs:679:74: replace == with != in name_duplicates
+workspace	crates/opentide-workspace/src/validate/mod.rs:567:5: replace title_duplicates -> Vec<Diagnostic> with vec![]	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:578:42: replace == with != in title_duplicates	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:580:63: replace == with != in title_duplicates	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:605:5: replace exabeam_names -> Vec<Diagnostic> with vec![]	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:608:26: replace != with == in exabeam_names	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:631:42: replace == with != in exabeam_names	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:636:73: replace == with != in exabeam_names	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:679:58: replace && with || in name_duplicates	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:679:74: replace == with != in name_duplicates	# killed in #1615
 workspace	crates/opentide-workspace/src/validate/mod.rs:711:41: replace || with && in id_uniqueness
 workspace	crates/opentide-workspace/src/validate/mod.rs:835:43: replace || with && in plugin_blocks
 workspace	crates/opentide-workspace/src/validate/mod.rs:841:21: replace && with || in plugin_blocks
 workspace	crates/opentide-workspace/src/validate/mod.rs:842:21: replace && with || in plugin_blocks
-workspace	crates/opentide-workspace/src/validate/mod.rs:877:5: replace compile_findings -> Vec<Diagnostic> with vec![]
-workspace	crates/opentide-workspace/src/validate/mod.rs:879:42: replace == with != in compile_findings
-workspace	crates/opentide-workspace/src/validate/mod.rs:90:9: replace Check::name -> &'static str with ""
-workspace	crates/opentide-workspace/src/validate/mod.rs:90:9: replace Check::name -> &'static str with "xyzzy"
-workspace	crates/opentide-workspace/src/validate/mod.rs:915:5: replace root_of -> Option<&'d Node> with None
-workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with None
-workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with Some(0)
-workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with Some(1)
-workspace	crates/opentide-workspace/src/validate/mod.rs:929:52: replace == with != in nearest_key_line
+workspace	crates/opentide-workspace/src/validate/mod.rs:877:5: replace compile_findings -> Vec<Diagnostic> with vec![]	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:879:42: replace == with != in compile_findings	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:90:9: replace Check::name -> &'static str with ""	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:90:9: replace Check::name -> &'static str with "xyzzy"	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:915:5: replace root_of -> Option<&'d Node> with None	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with None	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with Some(0)	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:921:5: replace nearest_key_line -> Option<usize> with Some(1)	# killed in #1615
+workspace	crates/opentide-workspace/src/validate/mod.rs:929:52: replace == with != in nearest_key_line	# killed in #1615
 workspace	crates/opentide-workspace/src/validate/mod.rs:950:21: delete - in sort_key
 workspace	crates/opentide-workspace/src/validate/mod.rs:975:5: replace clock_start -> Option<Instant> with None
 workspace	crates/opentide-workspace/src/validate/mod.rs:981:5: replace clock_start -> Option<Instant> with Some(Default::default())

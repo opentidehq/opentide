@@ -78,7 +78,6 @@ Listed at the end of Phase 0 and not checked again since; the release's own step
 - The engine release-candidate tag, and the `opentidehq/vscode-extension` pull request that pins it.
 - The `.claude/settings.json` allow-list.
 - Transfer language-server's 9 open issues to this repository.
-- Mutation testing was a time-boxed experiment, not a recurring job (#844): its results and how to rerun it by hand are in [test-strength.md](test-strength.md#mutation-testing).
 - Optional: set the repository variable `PARITY_COMMIT` (#855).
 - [#788](https://github.com/opentidehq/opentide/pull/788) (CrowdStrike offline checks) needs a repin to engine 0.12.0 when it is scheduled.
 
@@ -325,7 +324,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 | ID | Item | Exit |
 |----|------|------|
 | UC-X.1 | Supply chain and safety: cargo-deny, unsafe policy, fuzzing in CI, SBOM | Gates required |
-| UC-X.2 | Test strength: coverage gates, mutation testing, parity dashboard | Thresholds met |
+| UC-X.2 | Test strength: coverage gates, mutation testing, parity dashboard | Coverage thresholds met; mutation testing run once, as an experiment ([test-strength.md](test-strength.md#mutation-testing)) |
 | UC-X.3 | ADRs and contributor docs | Every decision in this page has an ADR |
 
 ## 7. Rollout

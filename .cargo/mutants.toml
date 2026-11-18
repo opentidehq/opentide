@@ -2,12 +2,15 @@
 # testing is not a recurring job here: #844 ran it once, as a time-boxed
 # experiment, and docs/internal/test-strength.md records what it found.
 #
-#   cargo mutants -p opentide-schema --cap-lints false   one crate, every mutant
+#   export CARGO_TARGET_DIR=<a target pool that holds the workspace's build>
+#   cargo mutants -p opentide-schema --in-place --cap-lints false
 #   git diff origin/development... > /tmp/pr.diff
-#   cargo mutants -p opentide-workspace --in-diff /tmp/pr.diff   what a change touches
+#   cargo mutants -p opentide-workspace --in-place --cap-lints false --in-diff /tmp/pr.diff
 #
-# `--cap-lints false` keeps the build's RUSTFLAGS, so the workspace is not
-# rebuilt from scratch (cap_lints below changes them).
+# `--in-place` builds in CARGO_TARGET_DIR (leave the checkout alone while it
+# runs); `--cap-lints false` overrides cap_lints below and keeps the build's
+# RUSTFLAGS. Together they reuse a warm build; without them the run copies the
+# tree and builds the workspace from scratch.
 
 # The tests of the mutated package, through nextest (the default profile of
 # .config/nextest.toml). Doctests are not run.

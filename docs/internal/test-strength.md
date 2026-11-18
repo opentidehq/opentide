@@ -77,16 +77,16 @@ counted). The **score** is detected (caught + timeout) over viable (caught + tim
 
 | | |
 |---|---|
-| Tool | cargo-mutants 27.1.0, nextest, the settings of [`.cargo/mutants.toml`](https://github.com/opentidehq/opentide/blob/development/.cargo/mutants.toml) |
+| Tool | cargo-mutants 27.1.0, nextest, the settings of [`.cargo/mutants.toml`](../../.cargo/mutants.toml) |
 | Crates | `opentide-schema` and `opentide-workspace`, each with its own tests only |
 | Where | GitHub Actions, run 44336903971 (a branch made for it and deleted after), 32 shards |
 | Time box | 105 minutes of mutation per shard (`timeout --signal=INT`), 120 per job |
-| Mutants | 6,651: 4,368 in `opentide-schema` (shards 0 to 20 and part of 21), 2,283 in `opentide-workspace` (the rest of 21, and 22 to 31) |
+| Mutants | 6,651, 208 a shard (203 in the last). The shards are contiguous slices of the files: 0 to 20 are `opentide-schema`'s (4,368), 22 to 31 `opentide-workspace`'s (2,075), and shard 21 holds the end of one and the start of the other |
 
 **The `opentide-schema` score is partial.** Of the 32 shards, 24 finished. Six (0, 1, 4, 8, 15, 20, all `opentide-schema`) reached the time box
 while building a mutant, and two (13, 14) were stopped by a runner shutdown, not the box. Every
 shard of `opentide-workspace` finished; 13 of the 21 `opentide-schema`-only shards did, so its score
-covers 2,704 of its 4,368 mutants. The stopped shards' surviving mutants are still in the list below
+covers 2,704 of at least 4,368 mutants. The stopped shards' surviving mutants are still in the list below
 (cargo-mutants prints each one as it finds it), but their caught and unviable counts are not known. A mutant
 takes a build of the crate and a run of its tests, about 30 s on a runner, so 208 mutants a shard
 is near the limit of the box.
@@ -97,8 +97,8 @@ From the 24 shards that finished (a shard prints its counts only when it ends):
 
 | Crate | Mutants tested | Caught | Timeout | Missed | Unviable | Score |
 |---|---:|---:|---:|---:|---:|---:|
-| `opentide-workspace` (all of it; shard 22 to 31) | 2,075 | 1,467 | 10 | 351 | 247 | **80.8%** |
-| `opentide-schema` (13 of its 21 shards) | 2,704 | 2,011 | 9 | 390 | 294 | **83.8%** |
+| `opentide-workspace` (shards 22 to 31: all of it but its part of shard 21) | 2,075 | 1,467 | 10 | 351 | 247 | **80.8%** |
+| `opentide-schema` (13 of its 21 whole shards) | 2,704 | 2,011 | 9 | 390 | 294 | **83.8%** |
 | Shard 21 (both crates) | 208 | 141 | 4 | 37 | 26 | 79.7% |
 
 Counting every shard's surviving-mutant lines, the finished and the stopped ones: **901 survivors**,
@@ -115,9 +115,11 @@ tests of the crates above them, above all the command line's snapshots (`opentid
 | `JsonSchema` implementations | 51 | | Held elsewhere: `cargo xtask codegen --check` compares the generated schemas, not a test of the crate |
 | `IntoPyObject` implementations | 8 | | Held elsewhere: the Python suite, through `opentide._native` |
 | `Display` and `Debug` implementations | 3 | 5 | Equivalent where only a debug format changes; the rest are in the gap list |
-| A whole function body replaced (`vec![]`, `None`, `true`, `""`) | 158 | 108 | Gap: a function no test of the crate calls with an input that tells |
+| A whole function body replaced (`vec![]`, `None`, `true`, `""`, `()`) | 158 | 113 | Gap: a function no test of the crate calls with an input that tells |
 | Comparisons, `&&`/`\|\|`, `!`, match arms and guards | 234 | 212 | Gap, mostly: a branch no test takes both ways |
-| Arithmetic (`+` to `*`, `-` to `/`) | 67 | 42 | Gap or equivalent: many are positions and lengths the snapshots hold |
+| Arithmetic and shifts (`+` to `*`, `-` to `/`, a unary `-` deleted) | 68 | 42 | Gap or equivalent: many are positions and lengths the snapshots hold |
+| A struct literal's field deleted | 2 | 5 | Gap: a default no test tells from the value |
+| **Total** | **524** | **377** | |
 
 The largest files: `opentide-workspace`'s `validate/mod.rs` (102), `validate/objects.rs` (54),
 `fs.rs` (35), `validate/annotate.rs` (26) and `lint/mod.rs` (25); `opentide-schema`'s `python.rs`
@@ -148,13 +150,16 @@ first.
 By hand, for a crate or for what a change touches (settings in `.cargo/mutants.toml`):
 
 ```bash
-cargo mutants -p opentide-workspace --cap-lints false
+export CARGO_TARGET_DIR=<a target pool that holds the workspace's build>
+cargo mutants -p opentide-workspace --in-place --cap-lints false
 git diff origin/development... > /tmp/change.diff
-cargo mutants -p opentide-workspace --cap-lints false --in-diff /tmp/change.diff
+cargo mutants -p opentide-workspace --in-place --cap-lints false --in-diff /tmp/change.diff
 ```
 
-`--cap-lints false` keeps the build's own flags, so the workspace is not rebuilt from scratch. A
-whole crate takes hours; `--shard k/n` splits it.
+`--in-place` mutates the checkout (leave it alone until the run ends: cargo-mutants restores each
+file) and builds in `CARGO_TARGET_DIR`; `--cap-lints false` keeps the build's own flags. Together they
+reuse a warm build; without them, cargo-mutants copies the tree and builds the workspace from
+scratch. A whole crate takes hours; `--shard k/n` splits it, `-f <file>` and `-F <regex>` narrow it.
 
 ## Parity dashboard (retired)
 

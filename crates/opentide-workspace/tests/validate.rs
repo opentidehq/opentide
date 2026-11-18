@@ -1618,7 +1618,7 @@ mod validate {
     #[test]
     fn the_exit_code_and_the_checks_document_follow_the_run() {
         let fs = workspace();
-        fs.write("/ws/objects/rules/a.yaml", SPLUNK_RULE);
+        fs.write("/ws/objects/rules/a.yaml", splunk_rule(U1));
         let clean = run(&fs, &Options::default());
         assert!(!clean.failed, "{:#?}", all(&clean));
         assert_eq!(clean.exit_code(), 0);
@@ -1647,7 +1647,10 @@ mod validate {
             rules: &[opentide_workspace::validate::CompileRule<'_>],
             enabled: &std::collections::BTreeSet<String>,
         ) -> Vec<Vec<opentide_workspace::validate::CompileFailure>> {
-            assert!(enabled.contains("splunk"));
+            assert!(
+                enabled.contains("splunk"),
+                "the test enables splunk: {enabled:?}"
+            );
             let failure =
                 |code: &str, field_path: &[&str]| opentide_workspace::validate::CompileFailure {
                     platform: "splunk".to_owned(),
@@ -1676,11 +1679,15 @@ mod validate {
     }
 
     /// A rule that validates cleanly, with an enabled Splunk block: the
-    /// corpus's Splunk rule, without its detection model (not in this
-    /// workspace).
-    const SPLUNK_RULE: &str = "name: Splunk SPL Rule
+    /// corpus's Splunk rule (`rule::1.0`), as `uuid`, without its detection
+    /// model (not in this workspace). It needs the rule schema and the
+    /// bundled vocabulary to accept it; if one stops doing so, the tests
+    /// that use it say so first (`assert!(!clean.failed, ..)`).
+    fn splunk_rule(uuid: &str) -> String {
+        format!(
+            "name: Splunk SPL Rule
 metadata:
-  uuid: 11111111-1111-4111-8111-111111111111
+  uuid: {uuid}
   schema: rule::1.0
   version: 1
   created: 2026-01-01
@@ -1700,7 +1707,9 @@ configurations:
     name: Splunk SPL Rule
     status: STAGING
     query: index=main | head 1
-";
+"
+        )
+    }
 
     /// The line, from 0, of the first line of `text` that is `line`.
     fn line_of(text: &str, line: &str) -> usize {
@@ -1714,7 +1723,8 @@ configurations:
             "/ws/.opentide/configurations/platforms/splunk.toml",
             "[platform]\nenabled = true\n",
         );
-        fs.write("/ws/objects/rules/a.yaml", SPLUNK_RULE);
+        let text = splunk_rule(U1);
+        fs.write("/ws/objects/rules/a.yaml", text.clone());
         let validation = run(
             &fs,
             &Options {
@@ -1730,7 +1740,7 @@ configurations:
             empty[0].file_path.as_deref(),
             Some(Path::new("/ws/objects/rules/a.yaml"))
         );
-        let block = line_of(SPLUNK_RULE, "  splunk:");
+        let block = line_of(&text, "  splunk:");
         assert_eq!(empty[0].yaml_line, Some(block));
         // `cron_schedule` is not in the block: the finding is on the block's key.
         let missing = with_code(&validation, "compile_missing_field");
@@ -1745,7 +1755,7 @@ configurations:
         assert_eq!(invalid.len(), 1);
         assert_eq!(
             invalid[0].yaml_line,
-            Some(line_of(SPLUNK_RULE, "    query: index=main | head 1"))
+            Some(line_of(&text, "    query: index=main | head 1"))
         );
         assert!(validation.failed);
     }
