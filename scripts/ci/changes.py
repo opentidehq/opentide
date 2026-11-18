@@ -248,6 +248,8 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         # xtask's platform_docs test: the pages that restate the registry.
         "AGENTS.md",
         "docs/cli/new.md",
+        "docs/cli/query.md",
+        "docs/cli/setup.md",
         "docs/cli/validate.md",
         "docs/usage/installation.md",
         "docs/usage/concepts/platforms.md",

@@ -271,7 +271,11 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
         ("tests/bench/instructions.toml", {"wiring"}),
         # The pages that restate the platform registry (platform_docs).
         ("AGENTS.md", {"wiring"}),
+        ("docs/cli/new.md", {"wiring"}),
+        ("docs/cli/query.md", {"wiring"}),
+        ("docs/cli/setup.md", {"wiring"}),
         ("docs/cli/validate.md", {"wiring"}),
+        ("docs/usage/installation.md", {"wiring"}),
         ("docs/usage/concepts/platforms.md", {"wiring"}),
         ("crates/testdata/corpus/kql/take.kql", {"wiring"}),
     ],
