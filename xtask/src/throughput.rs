@@ -199,7 +199,7 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
         };
         #[expect(clippy::cast_precision_loss, reason = "a ratio for the report")]
         let per_byte = c.instructions as f64 / c.bytes.max(1) as f64;
-        let change = budget.map_or_else(String::new, |b| change(c.instructions, b));
+        let change = budget.map_or_else(String::new, |b| change(&c.key, c.instructions, b));
         report.push_str(&format!(
             "| {} | {} | {} | {per_byte:.0} | {shown} | {change} {} |\n",
             c.language,
@@ -329,7 +329,12 @@ fn tolerance(key: &str) -> f64 {
     clippy::cast_precision_loss,
     reason = "instruction counts, far below 2^52"
 )]
-fn change(count: u64, budget: u64) -> String {
+fn change(key: &str, count: u64, budget: u64) -> String {
+    if key.ends_with("_allocations") {
+        // Held exactly: the difference itself, which a percentage rounds away.
+        let difference = i128::from(count) - i128::from(budget);
+        return format!("{difference:+}");
+    }
     format!(
         "{:+.1}%",
         (count as f64 / budget.max(1) as f64 - 1.0) * 100.0
@@ -617,6 +622,8 @@ totals: 1300
         assert_eq!(verdict(1_001, 1_000, exact), Verdict::Over);
         assert_eq!(verdict(999, 1_000, exact), Verdict::Under);
         assert!((tolerance("parse_corpus") - TOLERANCE).abs() < f64::EPSILON);
+        assert_eq!(change("parse_corpus_allocations", 220_053, 219_819), "+234");
+        assert_eq!(change("parse_corpus", 1_050, 1_000), "+5.0%");
     }
 
     #[test]
