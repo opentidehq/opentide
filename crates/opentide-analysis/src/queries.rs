@@ -700,7 +700,7 @@ impl HarfangLabAdvisories {
             (
                 code,
                 message,
-                entry.key.start.line.saturating_sub(1),
+                entry.key.start.line().saturating_sub(1),
                 &CONTEXT_PATH[..],
                 String::new(),
             )
@@ -766,7 +766,7 @@ fn signature_lines<'v>(
 ) -> impl Fn(usize) -> usize + 'v {
     // A block scalar's node starts at its content; its indicator (`|`, `|-`,
     // after any anchor or tag) ends the line before.
-    let before: String = text.chars().take(node.start.index).collect();
+    let before: String = text.chars().take(node.start.index()).collect();
     let header = before
         .trim_end_matches([' ', '\t'])
         .strip_suffix('\n')
@@ -777,7 +777,7 @@ fn signature_lines<'v>(
         .next()
         .and_then(|head| head.split_whitespace().last())
         .is_some_and(|token| token.starts_with('|'));
-    let first = node.start.line.saturating_sub(1);
+    let first = node.start.line().saturating_sub(1);
     move |offset: usize| {
         if literal {
             first + value[..offset.min(value.len())].matches('\n').count()
@@ -812,9 +812,18 @@ fn block_advisories(
                     .at(advisory.field_path);
             diagnostic.yaml_line = locator.yaml_line(&diagnostic.field_path);
             diagnostic.path = Some(relative.to_owned());
-            diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
-            // One line, as `_finding` places a finding with a `yaml_line`.
-            diagnostic.end_line = diagnostic.line;
+            // Where `validate` points the same finding (its annotate): the
+            // block's key, not the line its value starts on (`yaml_line`,
+            // from 0), which was a line below it (#922).
+            if let Some(span) = locator.span(&diagnostic.field_path, false) {
+                diagnostic.line = Some(span.line);
+                diagnostic.column = Some(span.column);
+                diagnostic.end_line = Some(span.end_line);
+                diagnostic.end_column = Some(span.end_column);
+            } else {
+                diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
+                diagnostic.end_line = diagnostic.line;
+            }
             opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
         })
         .collect()

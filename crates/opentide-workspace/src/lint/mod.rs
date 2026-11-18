@@ -306,7 +306,11 @@ impl LintFinding {
             check: LintCheck::Queries,
             severity: diagnostic.severity.as_str().to_owned(),
             path: relative.to_owned(),
-            yaml_line: diagnostic.line.map(|line| line.saturating_sub(1)),
+            // The diagnostic's own, where it has one: a block's is the line its
+            // value starts on, where its line is the key's (#922).
+            yaml_line: diagnostic
+                .yaml_line
+                .or_else(|| diagnostic.line.map(|line| line.saturating_sub(1))),
             uuid: uuid.map(str::to_owned),
             expected: None,
             message: diagnostic.message.clone(),
@@ -937,8 +941,12 @@ fn load_record(
         Err(error) => {
             let mut problem = error.problem.clone();
             if let Some(mark) = error.mark {
-                problem.push_str(&format!(" at line {}, column {}", mark.line, mark.column));
-                record.parse_position = Some((mark.line, mark.column));
+                problem.push_str(&format!(
+                    " at line {}, column {}",
+                    mark.line(),
+                    mark.column()
+                ));
+                record.parse_position = Some((mark.line(), mark.column()));
             }
             record.parse_error = Some(problem);
             return record;

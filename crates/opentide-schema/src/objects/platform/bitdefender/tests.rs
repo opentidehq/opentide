@@ -911,7 +911,7 @@ fn a_signature_that_is_a_yaml_alias_is_found_with_its_anchor() {
     let lines = |rule: &crate::node::Node| -> Vec<(String, usize)> {
         checks::signature_aliases(rule)
             .into_iter()
-            .map(|(platform, node)| (platform.to_owned(), node.start.line))
+            .map(|(platform, node)| (platform.to_owned(), node.start.line()))
             .collect()
     };
     // The anchor's node, on the `description` line.
