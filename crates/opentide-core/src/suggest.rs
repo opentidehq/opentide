@@ -189,8 +189,10 @@ impl Candidates {
             // Nor fewer than the characters one has that the other lacks,
             // the same over the whole spellings as over what lies between
             // their shared prefix and suffix: measured first, as most
-            // candidates of a near length stop here.
-            if !same_word && bag_distance(&lower, &item.lower).is_some_and(|d| d > edits) {
+            // candidates of a near length stop here, before the distance
+            // (most of what an unknown name cost).
+            let bag = bag_distance(&lower, &item.lower);
+            if !same_word && bag.is_some_and(|d| d > edits) {
                 continue;
             }
             // A common prefix and suffix cost no edit: measure what lies
@@ -202,10 +204,7 @@ impl Candidates {
             if !same_word && a.chars().count().abs_diff(b.chars().count()) > bound {
                 continue;
             }
-            // Nor can it be fewer than the characters one has and the other
-            // lacks: most candidates of a near length stop here, before the
-            // distance, which was most of the time an unknown name cost.
-            if !same_word && bag_distance(a, b).is_some_and(|d| d > bound) {
+            if !same_word && bag.is_some_and(|d| d > bound) {
                 continue;
             }
             #[cfg(test)]
