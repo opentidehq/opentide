@@ -21,8 +21,12 @@
 //!
 //! Leaving glibc out leaves out what malloc and free do, so each pass has a
 //! second budget, `<pass>_allocations`: the calls the bench's own code makes
-//! into the allocator ([`ALLOCATORS`]). It does not vary from run to run, so
-//! it is held within [`ALLOCATION_SLACK`] calls, with no percentage.
+//! into the allocator ([`ALLOCATORS`]). Callgrind counts calls for the whole
+//! run, not only inside `--toggle-collect` (`--zero-before` does not reset
+//! them either), so this is the two warm-up passes and the counted one: three
+//! analyses a text, the first with what the warm-up builds once. It does not
+//! vary from run to run, so it is held within [`ALLOCATION_SLACK`] calls,
+//! with no percentage.
 
 use anyhow::{Context, Result, bail};
 use clap::builder::TypedValueParser as _;
@@ -469,6 +473,7 @@ struct Own {
     /// Its calls into the allocator (`malloc`, `calloc`, `realloc` and the
     /// aligned ones), whose own instructions are left out with glibc's: the
     /// number of calls is exact, so an allocation more a token still shows.
+    /// Over the whole run (the warm-up passes too), as callgrind counts calls.
     allocations: u64,
 }
 
@@ -485,7 +490,7 @@ pub const ALLOCATORS: [&str; 5] = [
 /// every cost line under an `ob=` (the object a function is in) that names
 /// it, but a call's inclusive cost (the line after `calls=`), which is the
 /// callee's. Its allocations: the calls (`calls=N`) it makes to an
-/// [`ALLOCATORS`] function. Shared libraries (glibc's malloc and string
+/// [`ALLOCATORS`] function, which callgrind counts over the whole run. Shared libraries (glibc's malloc and string
 /// routines, the loader) are left out of the instructions: their counts move
 /// with the glibc version, the CPU it picks a routine for, and the allocation
 /// order, where the bench's own code counts the same on any x86-64 Linux.
