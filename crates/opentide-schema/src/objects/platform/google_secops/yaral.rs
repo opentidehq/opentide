@@ -325,7 +325,7 @@ fn string_entries(node: &Node) -> Vec<(String, &Node)> {
 /// YAML writes it (`true`, `1`, `null`).
 pub(crate) fn key_text(key: &Node) -> String {
     match &key.value {
-        Value::Str(text) | Value::Datetime(text) => text.clone(),
+        Value::Str(text) | Value::Datetime(text) => text.to_string(),
         _ => repr::node(key),
     }
 }
@@ -600,7 +600,7 @@ pub fn render_match(node: &Node) -> Option<String> {
 /// or `false`, anything else as its YAML text.
 fn scalar_text(node: &Node) -> String {
     match &node.value {
-        Value::Str(text) | Value::Datetime(text) => text.clone(),
+        Value::Str(text) | Value::Datetime(text) => text.to_string(),
         Value::Bool(flag) => flag.to_string(),
         _ => repr::node(node),
     }

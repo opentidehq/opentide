@@ -10,7 +10,7 @@ metadata:
 
 The workspace is edition **2024**, `rust-version` **1.95** (the floor `yara-x-parser` and `yara-x-fmt` set), toolchain pinned to one exact release with `rustfmt` and `clippy` (`rust-toolchain.toml`, which says how to move it; CI installs the same file's toolchain). CI exports `RUSTFLAGS=-Dwarnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`. A warning is a failed build.
 
-This skill is how engine code is written. How the workspace is built, linted and tested (the pinned toolchain, nextest profiles, insta, trycmd, `cargo xtask`, worktrees and target pools) is the `rust` skill (`.agents/skills/rust/SKILL.md`); proving a port against the Python oracle is `golden`.
+This skill is how engine code is written. How the workspace is built, linted and tested (the pinned toolchain, nextest profiles, insta, trycmd, `cargo xtask`, worktrees and target pools) is the `rust` skill (`.agents/skills/rust/SKILL.md`); changing what a command prints or writes is `golden`.
 
 Read `references/crates.md` before adding a dependency or a new crate. Read `references/edition-2024.md` before writing `unsafe`, `extern`, or a function that returns `impl Trait`.
 
@@ -98,7 +98,7 @@ pub enum HighlightError {
 
 ## Regex and OnceLock
 
-Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::cached`, `HighlightSpec::load`). Parse each profile once per process. Do not re-parse TOML on every keystroke.
+Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::cached`, `HighlightSpec::shared`; `load` builds a copy, for tests), built and indexed once per process and read item by item through `opentide_core::catalog` ([ADR 0013](../../../docs/internal/adr/0013-language-catalogs.md)); what the analysis derives from them is prepared in that build ([ADR 0014](../../../docs/internal/adr/0014-analysis-performance.md)). Do not re-parse TOML on every keystroke.
 
 `regex::Regex::new` is expensive and fallible. New regexes go in a `OnceLock<Regex>` (or a function-scoped `OnceLock`) and the pattern is a tested string. Do not call `Regex::new` inside a loop over diagnostics. Existing call sites that still compile per call are not a reason to copy that shape.
 
@@ -117,6 +117,6 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 
 - `tower-lsp`, `async-lsp`, or a second JSON-RPC stack beside `lsp-server`. See `lsp-host`.
 - `std::fs` in an engine `src/` tree. Pass the text in.
-- `async` / `tokio` in the engine. The server is a blocking stdio loop.
+- `async` / `tokio` in the engine. The server is a blocking stdio loop; CPU work runs on rayon, and only the connectors reach the network, on the one process runtime (#1558, `crates/AGENTS.md` "Hard rules").
 - A new `LanguageId` without the `add-language` skill.
 - `unsafe`: the workspace forbids it and no crate holds any. A C dependency (`cc`, a `*-sys` crate) in the engine: it is pure Rust (ADR 0012). See `references/edition-2024.md`.

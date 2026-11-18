@@ -890,6 +890,8 @@ jobs:
           out="$("${RUNNER_TEMP}/venv/bin/opentide" --version)"
           echo "${out}"
           grep -qF "${PYPI_VERSION}" <<< "${out}"
+          # --version checks nothing (#1072): a command proves the engine loads.
+          "${RUNNER_TEMP}/venv/bin/opentide" --json explain yaml_parse > /dev/null
       - name: npx @opentide/opentide --version
         if: env.CHANNEL == 'release'
         run: |

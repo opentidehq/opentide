@@ -403,7 +403,11 @@ fn changed_scalars(
             })
         }
         (a, b) if a == b => Some(0),
-        (Value::Str(a), Value::Str(b)) if old.contains(a) && new.contains(b) => Some(1),
+        (Value::Str(a), Value::Str(b))
+            if old.iter().any(|o| o == a) && new.iter().any(|n| n == b) =>
+        {
+            Some(1)
+        }
         _ => None,
     }
 }
