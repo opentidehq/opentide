@@ -481,6 +481,33 @@ fn configuration_bundled_files_are_valid_on_their_own() {
     }
 }
 
+/// `[debug] mdr_test_uuids` and `ssl_enabled` are retired, as `proxy_enabled`
+/// was: nothing read them, so a workspace that still sets either gets an
+/// `unknown_key` error at the key, and an empty `[debug]` table still loads.
+#[test]
+fn the_retired_debug_keys_are_unknown_keys() {
+    let path = "/w/.opentide/configurations/deployment.toml";
+    for (key, value) in [("mdr_test_uuids", "[\"\"]"), ("ssl_enabled", "true")] {
+        let found = checks::text_issues(
+            path,
+            &format!("[debug]\n{key} = {value}\n"),
+            &Layers::default(),
+        );
+        assert_eq!(found.len(), 1, "{key}: {found:?}");
+        assert_eq!(found[0].code, "unknown_key", "{key}");
+        assert_eq!(found[0].field_path, ["debug", key], "{key}");
+        assert_eq!(found[0].message, "unknown key", "{key}");
+    }
+    let empty = checks::text_issues(path, "[debug]\n", &Layers::default());
+    assert!(empty.is_empty(), "{empty:?}");
+    for (path, text) in bundled::FILES {
+        assert!(
+            !text.contains("mdr_test_uuids") && !text.contains("ssl_enabled"),
+            "{path} still writes a retired [debug] key"
+        );
+    }
+}
+
 #[test]
 fn configuration_buffer_takes_its_parent_layer_and_open_deployment() {
     let path = "/w/.opentide/configurations/sharing.toml";

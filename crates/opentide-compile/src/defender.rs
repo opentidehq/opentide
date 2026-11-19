@@ -1,6 +1,6 @@
 //! Microsoft Defender for Endpoint: the custom detection rule a deploy sends
 //! to one tenant through Microsoft Graph (`platforms/defender_for_endpoint/
-//! deployer.py` `deploy_mdr`, the client's `create_detection_rule`,
+//! deployer.py`'s deploy, the client's `create_detection_rule`,
 //! `update_detection_rule`, `delete_detection_rule`).
 
 use crate::Context;

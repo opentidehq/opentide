@@ -63,7 +63,7 @@ The Tide model is Rust code in the `opentide-schema` crate (plan §4, "The model
 
 Each key keeps its name, so a field's derived schema holds the same key with the same value as Pydantic's `json_schema_extra`, and the generation pipeline (UC-1.8, [#814](https://github.com/opentidehq/opentide/issues/814)) reads it where the Python pipeline does. The editor schemas `opentide generate` writes carry none of these keys (`strip_framework_keywords`), so keeping the names is what keeps those files byte-identical. The keys are the constants of `opentide_schema::keys` in this order; `crates/opentide-schema/tests/adr.rs` fails when this table and `keys::ALL` differ.
 
-The 23 keys are every `tide.*` string literal in `src/opentide` that names metadata: 27 such literals, less the four highlight captures (`tide.keyword`, `tide.property`, `tide.schema`, `tide.uuid`). Origin says where the oracle sets the key:
+The 23 keys were every `tide.*` string literal in `src/opentide` that names metadata: 27 such literals, less the four highlight captures (`tide.keyword`, `tide.property`, `tide.schema`, `tide.uuid`). 22 remain: `tide.mdr.parameter` (ReadOnly, read by the oracle's `generation/framework.py` `rename_param_nest`) had no reader in the port and nothing set it, so it was removed with the other leftovers of the product opentide grew out of. Origin says where the oracle sets the key:
 
 - **Field:** a model field declares it (`TideField(schema_extra=...)`, `VocabField`).
 - **Pipeline:** `generation/pydantic_metaschema.py` or `models/platform_schema.py` adds it to a field's schema.
@@ -91,13 +91,12 @@ The 23 keys are every `tide.*` string literal in `src/opentide` that names metad
 | 16 | `tide.config.visibility.detectors` | ReadOnly | `#[schemars(extend("tide.config.visibility.detectors" = true))]` | `detectors: [EDR]`, values from `visibility.toml`'s `[[detectors]]` | `generation/schema_pipeline.py` |
 | 17 | `tide.config.parameter-list` | ReadOnly | `#[schemars(extend("tide.config.parameter-list" = "name"))]` | `"tide.config.parameter-list": "name"`: values from that configuration list | `generation/schema_pipeline.py` |
 | 18 | `tide.config.systems::enabled` | ReadOnly | `#[schemars(extend("tide.config.systems::enabled" = true))]` | `systems: [sentinel, splunk]`, values from the enabled platforms | `generation/schema_pipeline.py` |
-| 19 | `tide.mdr.parameter` | ReadOnly | `#[schemars(extend("tide.mdr.parameter" = "name"))]` | `"tide.mdr.parameter": "query_frequency"`: the key renamed in the platform payload | `generation/framework.py` `rename_param_nest` |
-| 20 | `tide.meta` | Lookup | none: `keys::META`, the request for a scope's property map | `lookup_schema_extra(schema, scope, "tide.meta")` | `generation/pydantic_metaschema.py` |
-| 21 | `tide.vocab.stages` | VocabularyEntry | `#[serde(rename = "tide.vocab.stages")]` on the vocabulary entry struct (UC-1.6) | `"tide.vocab.stages" = [ "Host", "Cloud",]` | `data/vocabulary/*.vocab.toml`, `generation/vocabulary.py` |
-| 22 | `tide.vocab.relation.type` | VocabularyEntry | `#[serde(rename = "tide.vocab.relation.type")]` on the vocabulary entry struct (UC-1.6) | `"tide.vocab.relation.type" = "from"` | `data/vocabulary/chaining_relations.vocab.toml` |
-| 23 | `tide.object.parent` | VocabularyEntry | `#[serde(rename = "tide.object.parent")]` on the object-vocabulary entry (UC-2.4) | `"tide.object.parent": "<objective uuid>"` on a signal entry | `indexing/object_vocab.py` |
+| 19 | `tide.meta` | Lookup | none: `keys::META`, the request for a scope's property map | `lookup_schema_extra(schema, scope, "tide.meta")` | `generation/pydantic_metaschema.py` |
+| 20 | `tide.vocab.stages` | VocabularyEntry | `#[serde(rename = "tide.vocab.stages")]` on the vocabulary entry struct (UC-1.6) | `"tide.vocab.stages" = [ "Host", "Cloud",]` | `data/vocabulary/*.vocab.toml`, `generation/vocabulary.py` |
+| 21 | `tide.vocab.relation.type` | VocabularyEntry | `#[serde(rename = "tide.vocab.relation.type")]` on the vocabulary entry struct (UC-1.6) | `"tide.vocab.relation.type" = "from"` | `data/vocabulary/chaining_relations.vocab.toml` |
+| 22 | `tide.object.parent` | VocabularyEntry | `#[serde(rename = "tide.object.parent")]` on the object-vocabulary entry (UC-2.4) | `"tide.object.parent": "<objective uuid>"` on a signal entry | `indexing/object_vocab.py` |
 
-The six ReadOnly keys have readers and no writer at the oracle: UC-1.8 ports each reader, or removes it as an approved diff.
+The five ReadOnly keys have readers and no writer at the oracle: UC-1.8 ports each reader, or removes it as an approved diff.
 
 ### Optional versus defaulted, and field order
 

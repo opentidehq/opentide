@@ -1563,7 +1563,10 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             "tags".into(),
             CJson::Array(
                 tags.iter()
-                    .filter(|tag| tag.as_str() != Some("OpenTide"))
+                    .filter(|tag| {
+                        !tag.as_str()
+                            .is_some_and(opentide_compile::elastic::is_marker_tag)
+                    })
                     .cloned()
                     .collect(),
             ),
@@ -2226,6 +2229,27 @@ mod elastic_tests {
         assert_eq!(
             uuid::Uuid::new_v5(&migration_namespace(), b"x").get_version_num(),
             5
+        );
+    }
+
+    /// opentide's marker tag is left out of an imported block, as written
+    /// now (`opentide`) and by 0.28.1 and earlier (`OpenTide`); any other
+    /// tag, whatever its case, is the rule's own.
+    #[test]
+    fn both_marker_tags_are_left_out_of_an_imported_rule() {
+        let converted = kibana_to_opentide(
+            &rule(
+                r#"{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "Tagged",
+                    "description": "d", "severity": "low", "type": "query", "language": "kuery",
+                    "query": "x", "risk_score": 21,
+                    "tags": ["opentide", "OpenTide", "Windows", "OPENTIDE"]}"#,
+            ),
+            true,
+        );
+        let text = rule_yaml(&converted).unwrap();
+        assert!(
+            text.contains("    tags:\n      - Windows\n      - OPENTIDE\n"),
+            "{text}"
         );
     }
 

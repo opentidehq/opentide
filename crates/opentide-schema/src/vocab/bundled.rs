@@ -211,13 +211,6 @@ pub const FILES: &[(&str, &str)] = &[
         )),
     ),
     (
-        "stakeholders",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/stakeholders.vocab.toml"
-        )),
-    ),
-    (
         "surface",
         include_str!(concat!(
             env!("OPENTIDE_ASSETS"),

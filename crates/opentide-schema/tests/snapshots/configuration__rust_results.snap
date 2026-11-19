@@ -406,15 +406,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   ],
   "deployment-unknown-keys": [
     {
-      "code": "schema_validation",
+      "code": "unknown_key",
       "context": {},
       "field_path": [
         "debug",
-        "mdr_test_uuids",
-        "0"
+        "mdr_test_uuids"
       ],
       "file_path": "/w/.opentide/configurations/deployment.toml",
-      "message": "Input should be a valid string",
+      "message": "unknown key",
       "severity": "error"
     },
     {
@@ -3015,12 +3014,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "issues": [],
     "resolved": {
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -3438,12 +3431,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ],
     "resolved": {
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -3842,12 +3829,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "time_nanos": "07:32:00.123456789"
       },
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -4231,12 +4212,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ],
     "resolved": {
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -4612,12 +4587,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ],
     "resolved": {
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -5060,12 +5029,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "resolved": {
       "deployment": {
         "colour": "blue",
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -5452,12 +5415,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "c": 1
       },
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -5849,12 +5806,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "b": -9223372036854775808
       },
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
@@ -6234,12 +6185,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         }
       },
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "cert",
         "promotion": {
           "enabled": true,
@@ -6715,12 +6660,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "issues": [],
     "resolved": {
       "deployment": {
-        "debug": {
-          "mdr_test_uuids": [
-            ""
-          ],
-          "ssl_enabled": true
-        },
         "default_responders": "",
         "promotion": {
           "enabled": true,
