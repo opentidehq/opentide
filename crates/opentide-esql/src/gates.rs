@@ -487,6 +487,27 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
                     Availability::since_9(2),
                     span,
                 ));
+                // 8.19 to 9.4 take only `inference_id` and `task_settings`:
+                // "Invalid option [timeout] in COMPLETION, expected one of
+                // [[inference_id, task_settings]]" (9.4.9).
+                let timeout = node
+                    .children()
+                    .filter(|c| c.kind() == K::NAMED_PARAMETERS)
+                    .flat_map(|n| n.children())
+                    .filter(|m| m.kind() == K::MAP_EXPRESSION)
+                    .flat_map(|m| m.children())
+                    .filter(|e| e.kind() == K::MAP_ENTRY)
+                    .find(|e| {
+                        e.first_child()
+                            .is_some_and(|k| text_of(&k, source).trim_matches('"') == "timeout")
+                    });
+                if let Some(entry) = timeout {
+                    out.push(Gate::new(
+                        "the `COMPLETION` option `timeout`",
+                        Availability::since_9(5),
+                        span_of(&entry),
+                    ));
+                }
             }
         }
         K::METADATA if first_token(&parts, &[K::L_BRACK]).is_some() => {
@@ -697,6 +718,22 @@ mod tests {
         assert_eq!(
             gates("ROW a = \"x\" | WHERE a LIKE b"),
             one("a LIKE pattern that is not a string literal", "b", None)
+        );
+        // 9.4.9: "Invalid option [timeout] in COMPLETION, expected one of
+        // [[inference_id, task_settings]]"; 9.5 takes it.
+        let completion =
+            "FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\", \"timeout\": \"10s\"}";
+        assert!(
+            gates(completion).iter().any(
+                |g| g.0 == "the `COMPLETION` option `timeout`" && g.1 == "\"timeout\": \"10s\""
+            ),
+            "{:?}",
+            gates(completion)
+        );
+        assert!(
+            !gates("FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\"}")
+                .iter()
+                .any(|g| g.0 == "the `COMPLETION` option `timeout`")
         );
         assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
         // Rejected by 9.5.6 ("no viable alternative at input"), as the
