@@ -1,0 +1,33 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/198_ip_location_geo_client_ip.esql
+---
+SOURCE_FILE@0..40
+  QUERY@0..39
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    IP_LOCATION_COMMAND@12..39
+      IP_LOCATION_KW@12..23 "IP_LOCATION"
+      WHITESPACE@23..24 " "
+      QUALIFIED_NAME@24..27
+        IDENTIFIER@24..27
+          IDENT@24..27 "geo"
+      WHITESPACE@27..28 " "
+      EQ@28..29 "="
+      WHITESPACE@29..30 " "
+      QUALIFIED_NAME@30..39
+        IDENTIFIER@30..36
+          IDENT@30..36 "client"
+        DOT@36..37 "."
+        IDENTIFIER@37..39
+          IDENT@37..39 "ip"
+  WHITESPACE@39..40 "\n"
+--- errors

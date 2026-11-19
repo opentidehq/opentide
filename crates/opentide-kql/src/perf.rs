@@ -483,7 +483,7 @@ fn classify_search(tokens: &[Tok], index: usize) -> SearchShape {
 fn stars_in_list(tokens: &[Tok], paren_idx: usize) -> Vec<(usize, usize)> {
     let mut depth = 0i32;
     let mut stars = Vec::new();
-    for tok in tokens.iter().skip(paren_idx) {
+    for (i, tok) in tokens.iter().enumerate().skip(paren_idx) {
         match &tok.kind {
             Kind::LParen => depth += 1,
             Kind::RParen => {
@@ -492,7 +492,7 @@ fn stars_in_list(tokens: &[Tok], paren_idx: usize) -> Vec<(usize, usize)> {
                     break;
                 }
             }
-            Kind::Star if depth == 1 => stars.push((tok.start, tok.end)),
+            Kind::Star if depth == 1 && bare(tokens, i) => stars.push((tok.start, tok.end)),
             _ => {}
         }
     }
@@ -501,17 +501,31 @@ fn stars_in_list(tokens: &[Tok], paren_idx: usize) -> Vec<(usize, usize)> {
 
 fn union_star(tokens: &[Tok], union_idx: usize) -> Option<(usize, usize)> {
     let mut depth = 0i32;
-    for tok in tokens.iter().skip(union_idx + 1) {
+    for (i, tok) in tokens.iter().enumerate().skip(union_idx + 1) {
         match &tok.kind {
             Kind::Pipe | Kind::Semi if depth == 0 => break,
             Kind::RParen if depth == 0 => break,
             Kind::LParen => depth += 1,
             Kind::RParen => depth -= 1,
-            Kind::Star if depth == 0 => return Some((tok.start, tok.end)),
+            Kind::Star if depth == 0 && bare(tokens, i) => return Some((tok.start, tok.end)),
             _ => {}
         }
     }
     None
+}
+
+/// Whether the star at `i` stands alone: `*`, every table, not part of a
+/// pattern that touches a name (`Sec*`, `*Events`), which names only the
+/// tables it matches.
+fn bare(tokens: &[Tok], i: usize) -> bool {
+    let star = &tokens[i];
+    let touches = |other: Option<&Tok>, at: bool| {
+        other.is_some_and(|t| matches!(t.kind, Kind::Word(_)) && at)
+    };
+    let before = i.checked_sub(1).and_then(|j| tokens.get(j));
+    let after = tokens.get(i + 1);
+    !touches(before, before.is_some_and(|t| t.end == star.start))
+        && !touches(after, after.is_some_and(|t| t.start == star.end))
 }
 
 fn push(

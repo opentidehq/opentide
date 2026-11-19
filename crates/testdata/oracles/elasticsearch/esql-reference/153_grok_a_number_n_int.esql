@@ -1,0 +1,1 @@
+FROM logs | GROK a "%{NUMBER:n:int}"

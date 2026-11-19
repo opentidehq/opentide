@@ -1,0 +1,1 @@
+FROM logs | RENAME b = a, d = c

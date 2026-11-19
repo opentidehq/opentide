@@ -53,6 +53,7 @@ TabularSource = TabularPrimary
 
 TabularPrimary =
   TableRef
+| QualifiedTable
 | ParenTabular
 | PrintOperator
 | UnionOperator
@@ -63,13 +64,17 @@ TabularPrimary =
 | MaterializeExpression
 | SearchSource
 
-TableRef = table:'ident'
+TableRef = '['? table:('ident' | 'quoted_ident' | 'string') ']'?
+// A table in another scope: `cluster("c").database("d").T`, `workspace("w").['T']`.
+QualifiedTable = FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)
+// A union leg's or a search's tables by pattern: `Sec*`, `*Events`, `*`.
+TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*
 ParenTabular = '(' TabularExpression ')'
 
 // `search "x"`, `search in (A, B) Account == "a"`, `find in (T) where x`.
 SearchSource =
   name:('search' | 'find') OperatorOption*
-  ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr
 
 MaterializeExpression = 'materialize' '(' body:TabularExpression ')'
 
@@ -171,7 +176,7 @@ LookupOperator =
 
 // `union T1, (T2 | where x), f("a")`.
 UnionOperator = 'union' OperatorOption* UnionLeg (',' UnionLeg)*
-UnionLeg = TableRef | FunctionCall | ParenTabular
+UnionLeg = TableRef | TablePattern | QualifiedTable | FunctionCall | ParenTabular
 
 // `parse col with "a" x:long * "b"`.
 ParseOperator =

@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/214_explain_from_logs_limit_1.esql
+---
+SOURCE_FILE@0..30
+  QUERY@0..29
+    EXPLAIN_COMMAND@0..29
+      EXPLAIN_KW@0..7 "EXPLAIN"
+      WHITESPACE@7..8 " "
+      L_PAREN@8..9 "("
+      QUERY@9..28
+        FROM_COMMAND@9..18
+          FROM_KW@9..13 "FROM"
+          WHITESPACE@13..14 " "
+          INDEX_PATTERN@14..18
+            INDEX_NAME@14..18
+              SOURCE_TEXT@14..18 "logs"
+        WHITESPACE@18..19 " "
+        PIPE@19..20 "|"
+        WHITESPACE@20..21 " "
+        LIMIT_COMMAND@21..28
+          LIMIT_KW@21..26 "LIMIT"
+          WHITESPACE@26..27 " "
+          NUMBER@27..28
+            NUMBER_LIT@27..28 "1"
+      R_PAREN@28..29 ")"
+  WHITESPACE@29..30 "\n"
+--- errors

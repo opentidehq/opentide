@@ -1095,11 +1095,13 @@ impl From<UnknownOperator> for TabularOperator {
     }
 }
 
-/// `TabularPrimary = TableRef | ParenTabular | PrintOperator | UnionOperator | DatatableExpression | ExternaldataExpression | RangeOperator | FunctionCall | MaterializeExpression | SearchSource`
+/// `TabularPrimary = TableRef | QualifiedTable | ParenTabular | PrintOperator | UnionOperator | DatatableExpression | ExternaldataExpression | RangeOperator | FunctionCall | MaterializeExpression | SearchSource`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TabularPrimary {
     /// A `TableRef`.
     TableRef(TableRef),
+    /// A `QualifiedTable`.
+    QualifiedTable(QualifiedTable),
     /// A `ParenTabular`.
     ParenTabular(ParenTabular),
     /// A `PrintOperator`.
@@ -1124,6 +1126,7 @@ impl AstNode for TabularPrimary {
     type Language = Lang;
     fn can_cast(kind: SyntaxKind) -> bool {
         TableRef::can_cast(kind)
+            || QualifiedTable::can_cast(kind)
             || ParenTabular::can_cast(kind)
             || PrintOperator::can_cast(kind)
             || UnionOperator::can_cast(kind)
@@ -1137,6 +1140,7 @@ impl AstNode for TabularPrimary {
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let node = match syntax.kind() {
             SyntaxKind::TABLE_REF => Self::TableRef(TableRef { syntax }),
+            SyntaxKind::QUALIFIED_TABLE => Self::QualifiedTable(QualifiedTable { syntax }),
             SyntaxKind::PAREN_TABULAR => Self::ParenTabular(ParenTabular { syntax }),
             SyntaxKind::PRINT_OPERATOR => Self::PrintOperator(PrintOperator { syntax }),
             SyntaxKind::UNION_OPERATOR => Self::UnionOperator(UnionOperator { syntax }),
@@ -1159,6 +1163,7 @@ impl AstNode for TabularPrimary {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             Self::TableRef(it) => it.syntax(),
+            Self::QualifiedTable(it) => it.syntax(),
             Self::ParenTabular(it) => it.syntax(),
             Self::PrintOperator(it) => it.syntax(),
             Self::UnionOperator(it) => it.syntax(),
@@ -1175,6 +1180,12 @@ impl AstNode for TabularPrimary {
 impl From<TableRef> for TabularPrimary {
     fn from(node: TableRef) -> Self {
         Self::TableRef(node)
+    }
+}
+
+impl From<QualifiedTable> for TabularPrimary {
+    fn from(node: QualifiedTable) -> Self {
+        Self::QualifiedTable(node)
     }
 }
 
@@ -1232,7 +1243,7 @@ impl From<SearchSource> for TabularPrimary {
     }
 }
 
-/// `TableRef = table:'ident'`
+/// `TableRef = '['? table:('ident' | 'quoted_ident' | 'string') ']'?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TableRef {
     syntax: SyntaxNode,
@@ -1253,8 +1264,54 @@ impl AstNode for TableRef {
 
 impl TableRef {
     /// The token child.
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['['])
+    }
+    /// The token child.
     pub fn table(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident], T![string]])
+    }
+    /// The token child.
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![']'])
+    }
+}
+
+/// `QualifiedTable = FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct QualifiedTable {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for QualifiedTable {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::QUALIFIED_TABLE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl QualifiedTable {
+    /// The `FunctionCall` children.
+    pub fn function_calls(&self) -> AstChildren<FunctionCall> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn dot_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![.])
+    }
+    /// The `TableRef` child.
+    pub fn table_ref(&self) -> Option<TableRef> {
+        support::child(&self.syntax)
+    }
+    /// The `TablePattern` child.
+    pub fn table_pattern(&self) -> Option<TablePattern> {
+        support::child(&self.syntax)
     }
 }
 
@@ -1614,7 +1671,7 @@ impl MaterializeExpression {
     }
 }
 
-/// `SearchSource = name:('search' | 'find') OperatorOption* ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr`
+/// `SearchSource = name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SearchSource {
     syntax: SyntaxNode,
@@ -1650,9 +1707,13 @@ impl SearchSource {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T!['('])
     }
-    /// The token child.
-    pub fn table(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
+    /// The token children, in order.
+    pub fn table(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The `TablePattern` children.
+    pub fn table_patterns(&self) -> AstChildren<TablePattern> {
+        support::children(&self.syntax)
     }
     /// The token child.
     pub fn comma_token(&self) -> Option<SyntaxToken> {
@@ -1669,6 +1730,32 @@ impl SearchSource {
     /// The `Expr` child.
     pub fn predicate(&self) -> Option<Expr> {
         support::child(&self.syntax)
+    }
+}
+
+/// `TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TablePattern {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for TablePattern {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TABLE_PATTERN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TablePattern {
+    /// The token children, in order.
+    pub fn pieces(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![number], T![timespan], T![*]])
     }
 }
 
@@ -3567,11 +3654,15 @@ impl NameTuple {
     }
 }
 
-/// `UnionLeg = TableRef | FunctionCall | ParenTabular`
+/// `UnionLeg = TableRef | TablePattern | QualifiedTable | FunctionCall | ParenTabular`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnionLeg {
     /// A `TableRef`.
     TableRef(TableRef),
+    /// A `TablePattern`.
+    TablePattern(TablePattern),
+    /// A `QualifiedTable`.
+    QualifiedTable(QualifiedTable),
     /// A `FunctionCall`.
     FunctionCall(FunctionCall),
     /// A `ParenTabular`.
@@ -3581,11 +3672,17 @@ pub enum UnionLeg {
 impl AstNode for UnionLeg {
     type Language = Lang;
     fn can_cast(kind: SyntaxKind) -> bool {
-        TableRef::can_cast(kind) || FunctionCall::can_cast(kind) || ParenTabular::can_cast(kind)
+        TableRef::can_cast(kind)
+            || TablePattern::can_cast(kind)
+            || QualifiedTable::can_cast(kind)
+            || FunctionCall::can_cast(kind)
+            || ParenTabular::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let node = match syntax.kind() {
             SyntaxKind::TABLE_REF => Self::TableRef(TableRef { syntax }),
+            SyntaxKind::TABLE_PATTERN => Self::TablePattern(TablePattern { syntax }),
+            SyntaxKind::QUALIFIED_TABLE => Self::QualifiedTable(QualifiedTable { syntax }),
             SyntaxKind::FUNCTION_CALL => Self::FunctionCall(FunctionCall { syntax }),
             SyntaxKind::PAREN_TABULAR => Self::ParenTabular(ParenTabular { syntax }),
             _ => return None,
@@ -3595,6 +3692,8 @@ impl AstNode for UnionLeg {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             Self::TableRef(it) => it.syntax(),
+            Self::TablePattern(it) => it.syntax(),
+            Self::QualifiedTable(it) => it.syntax(),
             Self::FunctionCall(it) => it.syntax(),
             Self::ParenTabular(it) => it.syntax(),
         }
@@ -3604,6 +3703,18 @@ impl AstNode for UnionLeg {
 impl From<TableRef> for UnionLeg {
     fn from(node: TableRef) -> Self {
         Self::TableRef(node)
+    }
+}
+
+impl From<TablePattern> for UnionLeg {
+    fn from(node: TablePattern) -> Self {
+        Self::TablePattern(node)
+    }
+}
+
+impl From<QualifiedTable> for UnionLeg {
+    fn from(node: QualifiedTable) -> Self {
+        Self::QualifiedTable(node)
     }
 }
 
@@ -5266,6 +5377,7 @@ pub static RULES: &[NodeRule] = &[
         text: "TabularPrimary",
         rule: Rule::Alt(&[
             Rule::Kind(SyntaxKind::TABLE_REF as u16),
+            Rule::Kind(SyntaxKind::QUALIFIED_TABLE as u16),
             Rule::Kind(SyntaxKind::PAREN_TABULAR as u16),
             Rule::Kind(SyntaxKind::PRINT_OPERATOR as u16),
             Rule::Kind(SyntaxKind::UNION_OPERATOR as u16),
@@ -5280,8 +5392,33 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::TABLE_REF as u16,
         name: "TableRef",
-        text: "table:'ident'",
-        rule: Rule::Kind(T![ident] as u16),
+        text: "'['? table:('ident' | 'quoted_ident' | 'string') ']'?",
+        rule: Rule::Seq(&[
+            Rule::Opt(&Rule::Kind(T!['['] as u16)),
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![quoted_ident] as u16),
+                Rule::Kind(T![string] as u16),
+            ]),
+            Rule::Opt(&Rule::Kind(T![']'] as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::QUALIFIED_TABLE as u16,
+        name: "QualifiedTable",
+        text: "FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)",
+        rule: Rule::Seq(&[
+            Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![.] as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+            ])),
+            Rule::Kind(T![.] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::TABLE_REF as u16),
+                Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+            ]),
+        ]),
     },
     NodeRule {
         kind: SyntaxKind::PAREN_TABULAR as u16,
@@ -5359,6 +5496,8 @@ pub static RULES: &[NodeRule] = &[
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
             Rule::Alt(&[
                 Rule::Kind(SyntaxKind::TABLE_REF as u16),
+                Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                Rule::Kind(SyntaxKind::QUALIFIED_TABLE as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
                 Rule::Kind(SyntaxKind::PAREN_TABULAR as u16),
             ]),
@@ -5366,6 +5505,8 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(T![,] as u16),
                 Rule::Alt(&[
                     Rule::Kind(SyntaxKind::TABLE_REF as u16),
+                    Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                    Rule::Kind(SyntaxKind::QUALIFIED_TABLE as u16),
                     Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
                     Rule::Kind(SyntaxKind::PAREN_TABULAR as u16),
                 ]),
@@ -5651,17 +5792,29 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::SEARCH_SOURCE as u16,
         name: "SearchSource",
-        text: "name:('search' | 'find') OperatorOption* ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr",
+        text: "name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr",
         rule: Rule::Seq(&[
             Rule::Alt(&[Rule::Kind(T![search] as u16), Rule::Kind(T![find] as u16)]),
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
             Rule::Opt(&Rule::Seq(&[
                 Rule::Kind(T![in] as u16),
                 Rule::Kind(T!['('] as u16),
-                Rule::Kind(T![ident] as u16),
+                Rule::Alt(&[
+                    Rule::Alt(&[
+                        Rule::Kind(T![ident] as u16),
+                        Rule::Kind(T![quoted_ident] as u16),
+                    ]),
+                    Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                ]),
                 Rule::Rep(&Rule::Seq(&[
                     Rule::Kind(T![,] as u16),
-                    Rule::Kind(T![ident] as u16),
+                    Rule::Alt(&[
+                        Rule::Alt(&[
+                            Rule::Kind(T![ident] as u16),
+                            Rule::Kind(T![quoted_ident] as u16),
+                        ]),
+                        Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                    ]),
                 ])),
                 Rule::Kind(T![')'] as u16),
             ])),
@@ -5686,6 +5839,17 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
             ]),
         ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::TABLE_PATTERN as u16,
+        name: "TablePattern",
+        text: "pieces:('ident' | 'number' | 'timespan' | '*')*",
+        rule: Rule::Rep(&Rule::Alt(&[
+            Rule::Kind(T![ident] as u16),
+            Rule::Kind(T![number] as u16),
+            Rule::Kind(T![timespan] as u16),
+            Rule::Kind(T![*] as u16),
+        ])),
     },
     NodeRule {
         kind: SyntaxKind::OPERATOR_OPTION as u16,

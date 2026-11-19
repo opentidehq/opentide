@@ -1,0 +1,55 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/121_stats_m_max_a_by_host_sort_m_desc.esql
+---
+SOURCE_FILE@0..51
+  QUERY@0..50
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    STATS_COMMAND@12..36
+      STATS_KW@12..17 "STATS"
+      WHITESPACE@17..18 " "
+      AGGREGATE_FIELD@18..28
+        QUALIFIED_NAME@18..19
+          IDENTIFIER@18..19
+            IDENT@18..19 "m"
+        WHITESPACE@19..20 " "
+        EQ@20..21 "="
+        WHITESPACE@21..22 " "
+        FUNCTION_CALL@22..28
+          IDENTIFIER@22..25
+            IDENT@22..25 "MAX"
+          L_PAREN@25..26 "("
+          QUALIFIED_NAME@26..27
+            IDENTIFIER@26..27
+              IDENT@26..27 "a"
+          R_PAREN@27..28 ")"
+      WHITESPACE@28..29 " "
+      BY_KW@29..31 "BY"
+      WHITESPACE@31..32 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@32..36
+        QUALIFIED_NAME@32..36
+          IDENTIFIER@32..36
+            IDENT@32..36 "host"
+    WHITESPACE@36..37 " "
+    PIPE@37..38 "|"
+    WHITESPACE@38..39 " "
+    SORT_COMMAND@39..50
+      SORT_KW@39..43 "SORT"
+      WHITESPACE@43..44 " "
+      ORDER_EXPRESSION@44..50
+        QUALIFIED_NAME@44..45
+          IDENTIFIER@44..45
+            IDENT@44..45 "m"
+        WHITESPACE@45..46 " "
+        DESC_KW@46..50 "DESC"
+  WHITESPACE@50..51 "\n"
+--- errors

@@ -1,0 +1,1 @@
+FROM logs | FILLNULL 0 ON a, b

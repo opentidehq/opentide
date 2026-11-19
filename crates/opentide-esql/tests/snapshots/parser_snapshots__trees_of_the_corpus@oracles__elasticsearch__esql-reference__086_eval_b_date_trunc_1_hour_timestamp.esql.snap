@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/086_eval_b_date_trunc_1_hour_timestamp.esql
+---
+SOURCE_FILE@0..52
+  QUERY@0..51
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..51
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..51
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..51
+          IDENTIFIER@21..31
+            IDENT@21..31 "DATE_TRUNC"
+          L_PAREN@31..32 "("
+          QUALIFIED_INTERVAL@32..38
+            NUMBER@32..33
+              NUMBER_LIT@32..33 "1"
+            WHITESPACE@33..34 " "
+            TIME_UNIT@34..38
+              IDENT@34..38 "hour"
+          COMMA@38..39 ","
+          WHITESPACE@39..40 " "
+          QUALIFIED_NAME@40..50
+            IDENTIFIER@40..50
+              IDENT@40..50 "@timestamp"
+          R_PAREN@50..51 ")"
+  WHITESPACE@51..52 "\n"
+--- errors

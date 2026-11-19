@@ -1,0 +1,1 @@
+FROM logs | KEEP a, b, c

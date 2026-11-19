@@ -7,7 +7,7 @@ use super::{
     AggArg, Analysis, Column, Ctx, Definition, Item, Known, LITERAL_FUNCTIONS, MadeBy, Pipeline,
     Primary, Reference, Schema, Source, Stage, aggregate_columns_for, asim_schema, glob_matches,
     merge_union, mismatch_message, primary_type, reshaped, resolve_column, source_schema,
-    type_mismatch, unknown_column,
+    type_mismatch, unknown_column, unquote_name,
 };
 use crate::Catalog;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
@@ -391,8 +391,8 @@ impl<'a> Pass<'a> {
         };
         match inner.kind() {
             K::TABLE_REF => {
-                let word = ident(&inner)
-                    .map(|t| Self::token_text(&t))
+                let word = crate::syntax_util::table_token(&inner)
+                    .map(|t| unquote_name(t.text()).to_owned())
                     .unwrap_or_default();
                 self.named_source(&word, scope).unwrap_or_else(|| {
                     let mut schema = Schema::open();
@@ -441,6 +441,8 @@ impl<'a> Pass<'a> {
                 && literal_kind(&arg) == Some(K::STRING)
             {
                 let text = self.text(&arg);
+                // An obfuscated name (`table(h"SigninLogs")`) names the table too.
+                let text = text.strip_prefix(['h', 'H']).unwrap_or(text);
                 let table = text.trim_matches(|c| c == '"' || c == '\'' || c == '@');
                 return self.named_source(table, scope).unwrap_or_else(Schema::open);
             }
@@ -515,8 +517,8 @@ impl<'a> Pass<'a> {
                     }
                 }
                 K::TABLE_REF => {
-                    let word = ident(&child)
-                        .map(|t| Self::token_text(&t))
+                    let word = crate::syntax_util::table_token(&child)
+                        .map(|t| unquote_name(t.text()).to_owned())
                         .unwrap_or_default();
                     legs.push(self.named_source(&word, scope).unwrap_or_else(Schema::open));
                 }
@@ -526,6 +528,11 @@ impl<'a> Pass<'a> {
                     }
                 }
                 K::FUNCTION_CALL => legs.push(self.call_source(&child, scope)),
+                // The tables a pattern matches are the workspace's: their
+                // columns are not known here.
+                K::TABLE_PATTERN => legs.push(Schema::open()),
+                // Another database's table: its columns are not known here.
+                K::QUALIFIED_TABLE => legs.push(Schema::open()),
                 _ => {}
             }
         }

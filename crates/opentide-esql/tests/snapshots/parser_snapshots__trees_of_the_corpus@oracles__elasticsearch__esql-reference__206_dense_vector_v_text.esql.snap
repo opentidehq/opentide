@@ -1,0 +1,30 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/206_dense_vector_v_text.esql
+---
+SOURCE_FILE@0..34
+  QUERY@0..33
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    DENSE_VECTOR_COMMAND@12..33
+      DENSE_VECTOR_KW@12..24 "DENSE_VECTOR"
+      WHITESPACE@24..25 " "
+      QUALIFIED_NAME@25..26
+        IDENTIFIER@25..26
+          IDENT@25..26 "v"
+      WHITESPACE@26..27 " "
+      EQ@27..28 "="
+      WHITESPACE@28..29 " "
+      QUALIFIED_NAME@29..33
+        IDENTIFIER@29..33
+          IDENT@29..33 "text"
+  WHITESPACE@33..34 "\n"
+--- errors

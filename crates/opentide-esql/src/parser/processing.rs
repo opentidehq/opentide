@@ -222,9 +222,17 @@ fn join(p: &mut Parser<'_>, kind: K) {
     p.bump_as(kind.raw());
     expect_kw(p, K::JOIN_KW);
     index_pattern(p);
-    eat_kw(p, K::AS_KW);
-    if p.at(K::SOURCE_TEXT.raw()) {
+    let alias = eat_kw(p, K::AS_KW);
+    if alias && p.at(K::SOURCE_TEXT.raw()) && p.current_text().eq_ignore_ascii_case("as") {
+        // `LOOKUP JOIN t AS AS ON x`: the second `AS` lexes as source text
+        // here and read as the qualifier. A keyword is no qualifier.
+        p.err_and_bump("expected a qualifier after `AS`, not `AS`");
+    } else if p.at(K::SOURCE_TEXT.raw()) {
         token_node(p, K::SOURCE_TEXT, K::JOIN_QUALIFIER);
+    } else if alias {
+        // `AS` takes a qualifier: `LOOKUP JOIN t AS ON x` parsed with no
+        // error, where Elasticsearch's grammar needs `AS qualifier` (#1641).
+        p.error("expected a qualifier after `AS`");
     }
     expect_kw(p, K::ON_KW);
     comma_list(p, |p| {

@@ -1,0 +1,53 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/092_eval_b_mv_count_a_c_mv_first_a.esql
+---
+SOURCE_FILE@0..50
+  QUERY@0..49
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..49
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..32
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..32
+          IDENTIFIER@21..29
+            IDENT@21..29 "MV_COUNT"
+          L_PAREN@29..30 "("
+          QUALIFIED_NAME@30..31
+            IDENTIFIER@30..31
+              IDENT@30..31 "a"
+          R_PAREN@31..32 ")"
+      COMMA@32..33 ","
+      WHITESPACE@33..34 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@34..49
+        QUALIFIED_NAME@34..35
+          IDENTIFIER@34..35
+            IDENT@34..35 "c"
+        WHITESPACE@35..36 " "
+        EQ@36..37 "="
+        WHITESPACE@37..38 " "
+        FUNCTION_CALL@38..49
+          IDENTIFIER@38..46
+            IDENT@38..46 "MV_FIRST"
+          L_PAREN@46..47 "("
+          QUALIFIED_NAME@47..48
+            IDENTIFIER@47..48
+              IDENT@47..48 "a"
+          R_PAREN@48..49 ")"
+  WHITESPACE@49..50 "\n"
+--- errors

@@ -88,15 +88,80 @@ fn source(p: &mut P<'_>) {
             p.done(m, K::MATERIALIZE_EXPRESSION);
         }
         K::SEARCH_KW | K::FIND_KW => search_source(p),
-        _ if p.name_at(0) && next == K::L_PAREN => {
-            expr::function_call(p);
+        _ if p.name_at(0) && next == K::L_PAREN => call_or_qualified_table(p, false),
+        _ => table_name(p),
+    }
+}
+
+/// A table by name, quoted (`['My Table']`) or not, or "expected a name".
+fn table_name(p: &mut P<'_>) {
+    let m = p.start();
+    let touching = |p: &P<'_>, n: usize| {
+        p.0.nth_range(n)
+            .zip(p.0.nth_range(n + 1))
+            .is_some_and(|(a, b)| a.end() == b.start())
+    };
+    if p.at(K::L_BRACKET)
+        && p.nth(1) == K::STRING
+        && p.nth(2) == K::R_BRACKET
+        && touching(p, 0)
+        && touching(p, 1)
+        && p.0.nth_text(1).starts_with(['\'', '"'])
+    {
+        // `.['My Table']` after a scope: the lexer reads a `[` after a dot
+        // as an index, so the quoted name comes as its three tokens.
+        p.bump();
+        p.bump();
+        p.bump();
+    } else if !p.eat(K::QUOTED_IDENT) {
+        p.expect_name();
+    }
+    p.done(m, K::TABLE_REF);
+}
+
+/// A call (`f(x)`), or a table in another scope: a scope call, then a
+/// dot and the table's name (`database("d").SecurityEvent`,
+/// `workspace("w").['T']`, `app("a").requests`), with `cluster("c")`
+/// before a `database(...)` (`cluster("c").database("d").T`). A pattern
+/// (`database("d").Sec*`) only where a union takes one (`patterns`). Kusto's
+/// scope functions are spelled in lower case; a scope call with no dot after
+/// it stays a call, and one with a dot but no table after it is an error.
+fn call_or_qualified_table(p: &mut P<'_>, patterns: bool) {
+    let scope = |p: &P<'_>| {
+        if !(p.name_at(0) && p.nth(1) == K::L_PAREN) {
+            return None;
         }
-        _ => {
-            let m = p.start();
-            p.expect_name();
-            p.done(m, K::TABLE_REF);
+        ["cluster", "database", "workspace", "app"]
+            .into_iter()
+            .find(|scope| p.0.nth_text(0) == *scope)
+    };
+    let Some(first) = scope(p) else {
+        expr::function_call(p);
+        return;
+    };
+    let call = expr::function_call(p);
+    if !p.at(K::DOT) {
+        return;
+    }
+    let m = p.precede(call);
+    p.bump();
+    // `cluster(...)` names the cluster a `database(...)` is in.
+    if first == "cluster" {
+        if scope(p) == Some("database") {
+            expr::function_call(p);
+        } else {
+            p.error("expected `database(...)` after `cluster(...)`");
+        }
+        if !p.eat(K::DOT) {
+            p.error("expected `.` and a table name");
+            p.done(m, K::QUALIFIED_TABLE);
+            return;
         }
     }
+    if !(patterns && table_run(p, Some(K::TABLE_REF))) {
+        table_name(p);
+    }
+    p.done(m, K::QUALIFIED_TABLE);
 }
 
 /// One operator after a pipe.
@@ -521,11 +586,60 @@ fn union_leg(p: &mut P<'_>) {
         p.expect(K::R_PAREN);
         p.done(m, K::PAREN_TABULAR);
     } else if p.name_at(0) && p.nth(1) == K::L_PAREN {
-        expr::function_call(p);
-    } else {
-        let m = p.start();
+        call_or_qualified_table(p, true);
+    } else if !table_run(p, Some(K::TABLE_REF)) {
+        table_name(p);
+    }
+}
+
+/// A table or a table pattern (`Sec*`, `*Events`, `Sec*Events`, `*`): a run
+/// of touching words, numbers, timespans and stars that starts with a word or
+/// a star, consumed as it is read, as [`column_ref`] reads a column pattern.
+/// With a star it is a pattern, as Kusto takes in a union and a search's `in`
+/// list; without one it is a single name, closed as `plain`, or left a bare
+/// token when `plain` is `None`. Returns false, consuming nothing, at
+/// anything else.
+fn table_run(p: &mut P<'_>, plain: Option<K>) -> bool {
+    if !(p.at(K::STAR) || p.name_at(0)) {
+        return false;
+    }
+    let m = p.start();
+    let mut star = false;
+    let mut end = None;
+    loop {
+        let range = p.current_range();
+        if end.is_some()
+            && (range.map(|r| r.start()) != end
+                || !(matches!(p.current(), K::STAR | K::NUMBER | K::TIMESPAN) || p.name_at(0)))
+        {
+            break;
+        }
+        end = range.map(|r| r.end());
+        match p.current() {
+            K::STAR => {
+                star = true;
+                p.bump();
+            }
+            K::NUMBER | K::TIMESPAN => p.bump(),
+            _ => p.bump_as(K::IDENT),
+        }
+    }
+    match (star, plain) {
+        (true, _) => {
+            p.done(m, K::TABLE_PATTERN);
+        }
+        (false, Some(kind)) => {
+            p.done(m, kind);
+        }
+        (false, None) => p.abandon(m),
+    }
+    true
+}
+
+/// One table of a search's `in` list: a name, or a pattern.
+fn search_table(p: &mut P<'_>) {
+    if !table_run(p, None) && !p.eat(K::QUOTED_IDENT) {
         p.expect_name();
-        p.done(m, K::TABLE_REF);
     }
 }
 
@@ -875,7 +989,7 @@ fn search_source(p: &mut P<'_>) {
     if p.at(K::IN_KW) {
         p.bump();
         if p.expect(K::L_PAREN) {
-            list(p, ident);
+            list(p, search_table);
             p.expect(K::R_PAREN);
         }
     }

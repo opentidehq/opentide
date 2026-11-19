@@ -1,0 +1,1 @@
+FROM logs | STATS AVG(a), MAX(a), MIN(a), SUM(a)

@@ -96,6 +96,14 @@ pub(crate) fn ident(node: &SyntaxNode) -> Option<SyntaxToken> {
     tokens(node).find(|t| t.kind() == K::IDENT)
 }
 
+/// The token that names a `TABLE_REF`: its identifier, or its quoted name
+/// (`['My Table']`, as one token or, after a scope's dot, the string between
+/// `[` and `]`). Its name is [`crate::schema::unquote_name`] of its text,
+/// which leaves an identifier as it is.
+pub(crate) fn table_token(table_ref: &SyntaxNode) -> Option<SyntaxToken> {
+    tokens(table_ref).find(|t| matches!(t.kind(), K::IDENT | K::QUOTED_IDENT | K::STRING))
+}
+
 /// The first child node of `kind`.
 pub(crate) fn child(node: &SyntaxNode, kind: K) -> Option<SyntaxNode> {
     node.children().find(|c| c.kind() == kind)

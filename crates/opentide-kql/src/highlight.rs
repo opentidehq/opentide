@@ -213,7 +213,7 @@ pub(crate) fn highlight_spans(root: &crate::syntax::SyntaxNode) -> Vec<(ByteSpan
 /// its tree once, and the highlight reads that walk as it goes).
 pub(crate) fn highlight_span(element: &SyntaxElement, out: &mut Vec<(ByteSpan, &'static str)>) {
     match element {
-        NodeOrToken::Node(node) if node.kind() == K::COLUMN_PATTERN => {
+        NodeOrToken::Node(node) if matches!(node.kind(), K::COLUMN_PATTERN | K::TABLE_PATTERN) => {
             let range = node.text_range();
             out.push((
                 ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
@@ -224,7 +224,7 @@ pub(crate) fn highlight_span(element: &SyntaxElement, out: &mut Vec<(ByteSpan, &
             let Some(parent) = token.parent() else {
                 return;
             };
-            if parent.kind() == K::COLUMN_PATTERN {
+            if matches!(parent.kind(), K::COLUMN_PATTERN | K::TABLE_PATTERN) {
                 return;
             }
             if let Some(capture) = capture(token, parent.kind()) {
