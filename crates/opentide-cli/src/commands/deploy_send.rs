@@ -2487,10 +2487,31 @@ impl Sender<'_, '_> {
         };
         let deployer = self.deployer(platform)?;
         let context = self.context(connection);
+        // Splunk addresses a saved search by its name, the rule's title: the
+        // name the tenant got last, from deployment state (#1657).
+        let tenant = batch.tenant.name.as_str();
+        let recorded = if id == Some(PlatformId::Splunk) {
+            deploy_state::Shard::load(self.workspace.root(), &rule.uuid)
+                .ok()
+                .and_then(|shard| shard.get(platform, tenant).map(str::to_owned))
+        } else {
+            None
+        };
         let outcome = self
             .block(async { Ok(deployer.deploy(context, &request).await) })
             .map_err(|error| raised(&error))?
             .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+        if id == Some(PlatformId::Splunk) {
+            self.splunk_renamed(
+                platform,
+                connection,
+                rule,
+                result,
+                recorded.as_deref(),
+                &request.rule_id,
+                deletion,
+            )?;
+        }
         for warning in &outcome.warnings {
             match id {
                 // `splunk_alert_deleted`: the saved search the tenant had.
@@ -2504,7 +2525,60 @@ impl Sender<'_, '_> {
                 _ => {}
             }
         }
-        let _ = result;
+        Ok(())
+    }
+
+    /// After a Splunk saved search was written or deleted: the saved search
+    /// the tenant had under `recorded`, an earlier name of the rule (renamed,
+    /// or its ` - Rule` suffix changed with `enterprise_security` or
+    /// `correlation_search`), is deleted, so the old one does not keep
+    /// alerting beside the new one; then the name written is recorded in
+    /// deployment state, or forgotten after a delete (#1657).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the rule's step, kept in one call"
+    )]
+    fn splunk_renamed(
+        &mut self,
+        platform: &str,
+        connection: &Connection,
+        rule: &opentide_compile::Rule,
+        result: &mut RuleResult,
+        recorded: Option<&str>,
+        written: &str,
+        deletion: bool,
+    ) -> Result<(), Raised> {
+        let tenant = connection.tenant.label.tenant.clone();
+        if let Some(old) = recorded.filter(|old| *old != written) {
+            let deployer = self.deployer(platform)?;
+            let context = self.context(connection);
+            let request = DeployRequest::new(old, Operation::Delete, Vec::new());
+            self.block(async { Ok(deployer.deploy(context, &request).await) })
+                .map_err(|error| raised(&error))?
+                .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+            tracing::warn!(
+                uuid = rule.uuid.as_str(),
+                tenant = tenant.as_str(),
+                old,
+                new = written,
+                "splunk_saved_search_renamed"
+            );
+        }
+        if deletion {
+            self.record_deleted(result, platform, &tenant);
+        } else if recorded != Some(written) {
+            let root = self.workspace.root().to_path_buf();
+            if let Err(error) = deploy_state::record_created(
+                &root,
+                &rule.uuid,
+                platform,
+                &tenant,
+                &ExternalId::Text(written.to_owned()),
+            ) {
+                self.report_failure(&error, &rule.uuid, platform, &tenant);
+                result.fail(&error.message);
+            }
+        }
         Ok(())
     }
 

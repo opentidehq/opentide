@@ -183,7 +183,10 @@ pub const PLATFORMS: &[Platform] = &[
         label: "Splunk Enterprise Security",
         configuration_name: "Splunk Enterprise",
         config_class: "SplunkConfig",
-        external_id: ExternalId::None,
+        // The saved search's name, the rule's title: the deployer still
+        // writes by name, but the state keeps the name per tenant so a
+        // rename deletes the old saved search (#1657).
+        external_id: ExternalId::Text { pattern: None },
         deploys: true,
         compiles_offline: false,
         live_check: true,
@@ -648,6 +651,7 @@ mod tests {
             state_platforms(),
             [
                 "defender_for_endpoint",
+                "splunk",
                 "sentinel_one",
                 "crowdstrike",
                 "sysdig",

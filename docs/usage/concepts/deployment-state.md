@@ -1,13 +1,15 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, the names of Splunk's saved searches, and why the files must be committed.
 ---
 
 # Deployment state
 
 Microsoft Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
 opentide creates an id of their own, and so do platform plugins. The next deploy has to update or delete the
-remote rule by that id. opentide keeps it in a per-rule JSON file under
+remote rule by that id. Splunk's saved searches are named after their rule, so
+opentide keeps each one's name too, to delete the old one when a rule is
+renamed. opentide keeps it in a per-rule JSON file under
 `.opentide/states/`, not in the rule YAML.
 
 The normative definition is [`specs/deployment-state.md`](https://github.com/opentidehq/specifications/blob/main/specs/deployment-state.md)
@@ -29,23 +31,9 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the eight platforms that keep ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
-platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black Cloud and
-Elastic address rules by `metadata.uuid` or by title and never get one. Splunk
-names a saved search after the rule's `name`: renaming a deployed rule creates
-a second saved search and leaves the old one enabled and scheduled, and
-retiring the rule deletes only the one with its current name. Delete the old
-search in Splunk when you rename a rule.
-
-Splunk is the one that addresses a rule by title: its saved search is named
-after the rule's `name` (with ` - Rule` for a correlation search). Renaming a
-rule therefore creates a second saved search on the next deploy, and the old
-one keeps running, so each alert fires twice. To rename a Splunk rule, retire
-the old saved search first: deploy the rule with a status that maps to
-`DELETION` (`REMOVED` by default), then rename it and deploy it again. Or
-delete the old saved search in Splunk after the deploy. Both searches carry
-the rule's `MDR_UUID`, so `| rest /servicesNS/-/-/saved/searches | search
-search="*MDR_UUID=\"<uuid>\"*" | table title` finds every copy.
+deployed to one of the eight platforms that keep ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), to Splunk, or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
+platform, has no file. Sentinel, HarfangLab, Carbon Black Cloud and Elastic
+address rules by `metadata.uuid` and never get one.
 
 ```json
 {
@@ -67,8 +55,35 @@ search="*MDR_UUID=\"<uuid>\"*" | table title` finds every copy.
 - Only the canonical spelling is read. An uppercase, unhyphenated or `.JSON` file name, or a second file for the same rule, is `deployment_state_uuid_mismatch` and the rule is refused: a case-sensitive checkout would not find such a file, and deploy would create a second remote rule.
 - An empty `platforms` map, or an empty map for one platform, reads as no binding. Writers never leave one behind.
 - Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). Exabeam ids are a lower-case canonical UUID (`016dbc1d-a727-43df-a143-9546dcc81a5a`): deploy lower-cases the id Exabeam returns, and a shard that holds another spelling is `deployment_state_shape`. CrowdStrike ids, and the ids a platform plugin returns, are stored exactly as the platform returned them.
+- A Splunk entry is the saved search's name, as written (`platforms.splunk.<tenant>`, see [Splunk's saved-search names](#splunks-saved-search-names)).
 - A platform plugin's ids sit under its identifier (`platforms.acme`). Any platform identifier that is not a built-in platform's is accepted, whether or not the plugin is installed where the shard is read.
 - Keys are sorted, the indent is two spaces, and the file ends with one newline, so a deploy that touches one tenant changes one line in review.
+
+### Splunk's saved-search names
+
+Splunk names a saved search after the rule's `name`, with ` - Rule` for a
+correlation search (`enterprise_security`, or the block's
+`correlation_search`). Each deploy records that name per tenant, as
+`platforms.splunk.<tenant>`, after it creates or updates the saved search. When
+a later deploy writes the rule under another name (the rule was renamed, or
+the ` - Rule` suffix came or went), it deletes the saved search under the
+recorded name once the new one is written. So a renamed rule does not leave
+its old search alerting beside the new one. A rule whose status maps to
+`DELETION` deletes the saved search and forgets the name.
+
+Splunk records a name on every create and update, in any job: a pull request's
+`PREVIEW` deploy writes it too, and the production job's write-back commits it.
+Splunk never refuses a create for want of state (`deployment_state_unpersisted`
+and `deployment_state_ignored` are about vendor ids, which Splunk does not have).
+A tenant whose shard has no Splunk name yet, such as a rule deployed by an
+earlier release, gets one on its next deploy. A rename made before that leaves the old
+saved search behind. To clean it up, deploy the rule with a status that maps to
+`DELETION` (`REMOVED` by default) under its old name, then set the status back
+and deploy the renamed rule. Or delete the old search in Splunk: `| rest
+/servicesNS/-/-/saved/searches | search search="*MDR_UUID=\"<uuid>\"*" | table
+title` lists every saved search of a rule. A rule file you delete is never
+retired on any platform; give it a `DELETION` status and deploy before you
+delete the file.
 
 ## What deploy does with it
 

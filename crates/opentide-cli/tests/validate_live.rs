@@ -743,3 +743,90 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
         ]
     );
 }
+
+/// A Splunk live validator that keeps the search of each check it gets.
+struct Searches(std::sync::Mutex<Vec<String>>);
+
+impl LiveValidator for Searches {
+    fn validate<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
+        self.0.lock().unwrap().push(request.text.clone());
+        Box::pin(async {
+            Ok(LiveCheck {
+                result: None,
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            })
+        })
+    }
+}
+
+/// Registers a [`Searches`] as `splunk`.
+struct SearchesPlatform(&'static Searches);
+
+impl Platform for SearchesPlatform {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn live_validator(&self) -> Option<&dyn LiveValidator> {
+        Some(self.0)
+    }
+}
+
+/// `validate query --live` checks the Splunk search deploy writes to each
+/// tenant (smoke E5, #1657): with the mapping macro by default, without it
+/// where the tenant sets `mdr_mapping_macro = false`.
+#[test]
+fn a_splunk_check_follows_the_tenants_mapping_macro() {
+    for (setting, with_macro) in [("", true), ("mdr_mapping_macro = false\n", false)] {
+        let ws = splunk_rules(1);
+        let config = ws.path().join(".opentide/configurations/platforms/splunk.toml");
+        let text = std::fs::read_to_string(&config).unwrap();
+        std::fs::write(
+            &config,
+            text.replace("[tenants.setup]\n", &format!("[tenants.setup]\n{setting}")),
+        )
+        .unwrap();
+        let searches: &'static Searches =
+            Box::leak(Box::new(Searches(std::sync::Mutex::new(Vec::new()))));
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(SearchesPlatform(searches)))
+            .unwrap();
+        let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
+        let args = Args {
+            platform: Some("splunk".to_owned()),
+            live: true,
+            check_timeout: Some("5".to_owned()),
+            ..Args::default()
+        };
+        let never = || false;
+        let live = run(
+            &args,
+            &Context {
+                repo: Some(ws.path().to_str().unwrap()),
+                env: &env,
+                cwd: ws.path(),
+                proxy: None,
+                interrupted: &never,
+                now: now(),
+                registry: &registry,
+            },
+        );
+        assert_eq!(value(&live, "status"), &Json::str("passed"), "{setting}");
+        let searches = searches.0.lock().unwrap();
+        let [search] = &searches[..] else {
+            panic!("one check: {searches:?}");
+        };
+        assert_eq!(
+            search.ends_with("|`soc_macro_auto_mdr_mapping(MDR_UUID)`"),
+            with_macro,
+            "{setting}: {search}"
+        );
+        assert!(search.contains("MDR_status=\"STAGING\""), "{search}");
+    }
+}
