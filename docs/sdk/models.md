@@ -101,8 +101,7 @@ These classes implement the [platform specs](/docs/specifications/specs/platform
 |-----------|------|-------|
 | `name` | `str` | Display name |
 | `metadata` | `ObjectMetadata` | Shared metadata |
-| `composition` | `ObjectiveComposition` | Top-level strategy (mirrors `objective.composition`) |
-| `objective` | `ObjectiveBody` | Body: `priority`, `type`, `signals`, `threats`, … |
+| `objective` | `ObjectiveBody` | Body: `priority`, `type`, `composition` (the strategy), `signals`, `threats`, … |
 
 ```python
 obj                             # a DetectionObjective, read as the rule above

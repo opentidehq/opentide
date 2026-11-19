@@ -32,7 +32,7 @@ pub fn run(
     out: &mut dyn Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let ws = Workspace::open(path, &Options::default())?;
-    let Some(tenant) = ws.tenants(platform).into_iter().next() else {
+    let Some(tenant) = ws.tenants(platform)?.into_iter().next() else {
         return Err(format!("{} configures no {platform} tenant", path.display()).into());
     };
     let connection = Connection::open(&tenant, options)?;

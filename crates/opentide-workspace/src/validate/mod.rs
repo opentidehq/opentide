@@ -441,8 +441,50 @@ pub struct Summary {
 /// Warning codes `--strict` reports without failing.
 pub const STRICT_EXEMPT_WARNINGS: [&str; 1] = ["platform_not_enabled"];
 
-/// A `validate` run's result.
+/// The object families `validate --type` takes.
+pub const OBJECT_TYPES: [&str; 3] = ["rule", "threat", "objective"];
+
+/// An option `validate` refuses before it runs, as the command line refuses
+/// it: the usage failure's code, the option, the first value refused, and
+/// the message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    /// The usage failure's code (`usage_invalid_choice`).
+    pub code: &'static str,
+    /// The option (`--type`).
+    pub argument: &'static str,
+    /// The first value refused.
+    pub value: String,
+    /// What is wrong and what to pass instead.
+    pub message: String,
+}
+
+/// The `--type` values that name no object family, refused; `None` when
+/// every value is one of [`OBJECT_TYPES`].
+pub fn unknown_types(types: &[String]) -> Option<Refusal> {
+    let mut unknown: Vec<&str> = types
+        .iter()
+        .map(String::as_str)
+        .filter(|family| !OBJECT_TYPES.contains(family))
+        .collect();
+    unknown.sort_unstable();
+    unknown.dedup();
+    let first = (*unknown.first()?).to_owned();
+    Some(Refusal {
+        code: "usage_invalid_choice",
+        argument: "--type",
+        value: first,
+        message: format!(
+            "Unknown object type(s): {}. Choose rule, threat, or objective.",
+            unknown.join(", ")
+        ),
+    })
+}
+
+/// A `validate` run's result. Read its fields; it gains fields in minor
+/// releases (`refused`), so code outside this crate does not build one.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Validation {
     /// Each check run, with `passed` or `failed`, in the order `checks`
     /// lists them.
@@ -456,12 +498,52 @@ pub struct Validation {
     pub failed: bool,
     /// Whether a warning that `--strict` would count was reported.
     pub warned: bool,
+    /// The option the run refused before checking anything (an unknown
+    /// `--type`), as the command line refuses it; `None` when it ran.
+    pub refused: Option<Refusal>,
 }
 
 impl Validation {
-    /// The process exit code: 1 when the run fails.
+    /// The process exit code: 1 when the run fails, 2 when it refused an
+    /// option, as the command line's usage error.
     pub fn exit_code(&self) -> i32 {
+        if self.refused.is_some() {
+            return 2;
+        }
         i32::from(self.failed)
+    }
+
+    /// A run that checked nothing: `refusal` says why.
+    fn refusing(refusal: Refusal) -> Self {
+        Self {
+            checks: Vec::new(),
+            report: Report {
+                ok: false,
+                issues: Vec::new(),
+                warnings: Vec::new(),
+                stats: Stats {
+                    objects_checked: 0,
+                    parallel: false,
+                    workers: 0,
+                    object_workers: 0,
+                    id_workers: 0,
+                    queries_checked: None,
+                    wall_ms: 0.0,
+                },
+            },
+            summary: Summary {
+                objects: 0,
+                errors: 0,
+                warnings: 0,
+                files: 0,
+                warning_files: 0,
+                queries: None,
+                fixable: 0,
+            },
+            failed: true,
+            warned: false,
+            refused: Some(refusal),
+        }
     }
 
     /// `checks`, as `validate --json` writes it.
@@ -1098,6 +1180,12 @@ fn cve_findings(threat: &crate::index::Object, lookup: &dyn CveCheck) -> Vec<Dia
     reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
 )]
 pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
+    if let Some(refusal) = options
+        .selection
+        .and_then(|selection| unknown_types(&selection.types))
+    {
+        return Validation::refusing(refusal);
+    }
     let started = clock_start();
     let fs = ws.fs().as_ref();
     let index = ws.index();
@@ -1471,6 +1559,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         summary,
         failed,
         warned,
+        refused: None,
     }
 }
 

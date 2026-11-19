@@ -42,7 +42,9 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   a refused connection's errno (`<ECONNREFUSED>`, 111 on Linux, 61 on macOS), and `validate`'s worker counts in JSON
   (`<CORES>`). The host reports a fixed version (`0.28.1`, `tests/common/snapshot.rs`
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
-  standard input, and the fixtures get fixed modes.
+  standard input, and the fixtures get fixed modes. A case's `PATH` is `/usr/local/bin:/usr/bin:/bin`
+  unless its `env` names one: `<TMP>/bin` holds a stand-in `opentide` and `<TMP>/empty` nothing, so a
+  case that looks for `opentide` (`setup mcp`) names the one it means rather than reading the host's.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
 - **Left out**: `serve`'s session, which feeds standard input: `tests/serve.rs` holds it in its own
   snapshots (#1285), while `cli_snapshots` still lists `serve` among its skipped commands.
@@ -145,6 +147,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is snapshotted |
 | `tide-corpus-bad-values` | `tide-corpus` with two declared edits: CrowdStrike `trigger: sometimes` and SentinelOne `treat_as_threat: maybe`, values the models do not take, whose help and `context.expected` name the values the field takes (#1663) |
 | `vscode-unscoped` | `vscode` with one declared edit: signal entities written without their stage or in the wrong case (`hostname`, `'host::command line'`, `Process`), so the file `migrate vocab-scope --apply` rewrites is snapshotted (`tide-corpus` links its object folders, which the command does not follow) |
+| `vscode-long-query` | `vscode` with one declared edit: `long.lucene`, a Lucene query on one line longer than a frame shows, whose `(` never closes, so the frame shows the line in part |
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are snapshotted as they are, not asserted against the fault manifest |
