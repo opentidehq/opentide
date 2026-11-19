@@ -2381,7 +2381,7 @@ impl Sender<'_, '_> {
                 u32::try_from(civil.hour()).unwrap_or(0),
             ),
         };
-        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, clock)
+        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, Some(clock))
             .map_err(compile_error)?;
         let mut name = rule.name.trim().to_owned();
         let correlation = match rule

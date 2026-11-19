@@ -94,10 +94,25 @@ pub fn deployers() -> Vec<&'static str> {
 pub struct Inputs {
     /// The id the deployment state records for the rule on the tenant.
     pub known: Option<String>,
-    /// Splunk's schedule minute and hour.
-    pub clock: splunk::Clock,
-    /// Carbon Black's report timestamp (UNIX seconds).
-    pub timestamp: i64,
+    /// Splunk's schedule minute and hour; `None` in a dry run, which shows
+    /// `<send-time:minute>` and `<send-time:hour>` where a deploy draws or
+    /// reads them as it sends.
+    pub clock: Option<splunk::Clock>,
+    /// Carbon Black's report timestamp (UNIX seconds); `None` in a dry run,
+    /// which shows `<send-time:timestamp>`.
+    pub timestamp: Option<i64>,
+}
+
+impl Inputs {
+    /// What a dry run knows of a deploy to one tenant: the id the deployment
+    /// state records, and nothing a deploy learns only as it sends.
+    pub fn dry_run(known: Option<String>) -> Self {
+        Self {
+            known,
+            clock: None,
+            timestamp: None,
+        }
+    }
 }
 
 /// What a deploy sends for `rule` on `platform` to the tenant named
@@ -113,9 +128,9 @@ pub fn compile_tenant(
     let known = deploy::tenant(cx, platform, tenant);
     let empty = Json::Object(Object::new());
     let config = known.unwrap_or(&empty);
-    let writes = |result: Result<Vec<deploy::Write>, CompileError>| {
-        Some(result.map(|writes| deploy::writes_json(&writes)))
-    };
+    if deployers().contains(&platform) {
+        return Some(tenant_writes(cx, platform, rule, tenant, config, inputs));
+    }
     let id = inputs.known.as_deref();
     match platform {
         "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
@@ -133,14 +148,154 @@ pub fn compile_tenant(
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             Some(elastic::compile(cx, rule, &setup))
         }
-        "defender_for_endpoint" => writes(defender::compile(cx, rule, tenant, id)),
-        "sentinel_one" => writes(sentinel_one::compile(cx, rule, config, id)),
-        "crowdstrike" => writes(crowdstrike::compile(cx, rule, config, id)),
-        "harfanglab" => writes(harfanglab::compile(cx, rule, config)),
-        "splunk" => writes(splunk::compile(cx, rule, config, inputs.clock)),
-        "carbon_black_cloud" => writes(carbon_black::compile(cx, rule, config, inputs.timestamp)),
         _ => None,
     }
+}
+
+/// The writes a deploy sends for `rule` on one of the [`deployers`] to the
+/// tenant named `tenant`, whose table is `config`, in order:
+/// `[{"method", "url", "body"}]`. `[]` when there is nothing to send.
+fn tenant_writes(
+    cx: &Context<'_>,
+    platform: &str,
+    rule: &Rule,
+    tenant: &str,
+    config: &Json,
+    inputs: &Inputs,
+) -> Result<Json, CompileError> {
+    let id = inputs.known.as_deref();
+    let writes = match platform {
+        "defender_for_endpoint" => defender::compile(cx, rule, tenant, id),
+        "sentinel_one" => sentinel_one::compile(cx, rule, config, id),
+        "crowdstrike" => crowdstrike::compile(cx, rule, config, id),
+        "harfanglab" => harfanglab::compile(cx, rule, config),
+        "splunk" => splunk::compile(cx, rule, config, inputs.clock),
+        "carbon_black_cloud" => carbon_black::compile(cx, rule, config, inputs.timestamp),
+        _ => Ok(Vec::new()),
+    }?;
+    Ok(deploy::writes_json(&writes))
+}
+
+/// The `setup` keys of `platform` a deploy's requests carry, which a dry run
+/// that reaches no tenant shows as `<tenant:KEY>` (a SentinelOne tenant
+/// names its site; one that names its account instead gets `accountIds`).
+fn tenant_keys(platform: &str) -> &'static [&'static str] {
+    match platform {
+        "sentinel_one" => &["url", "site_id"],
+        "crowdstrike" => &["api", "customer_id"],
+        "harfanglab" => &["url", "source_id"],
+        "carbon_black_cloud" => &["org_key", "watchlist"],
+        _ => &[],
+    }
+}
+
+/// The tenant a dry run that reaches no tenant of `platform` compiles for:
+/// named [`PREVIEW_TENANT`], its `setup` holding each value the requests
+/// carry as its placeholder ([`tenant_keys`]) and nothing else.
+fn unreached_tenant(platform: &str) -> Json {
+    let mut setup = Object::new();
+    for key in tenant_keys(platform) {
+        setup.insert((*key).to_owned(), deploy::tenant_value(key).into());
+    }
+    let mut tenant = Object::new();
+    tenant.insert("name".into(), PREVIEW_TENANT.into());
+    tenant.insert("setup".into(), Json::Object(setup));
+    Json::Object(tenant)
+}
+
+/// Whether `value` holds the placeholder of `key` anywhere.
+fn shows(value: &Json, placeholder: &str) -> bool {
+    match value {
+        Json::Str(text) => text.contains(placeholder),
+        Json::Array(items) => items.iter().any(|item| shows(item, placeholder)),
+        Json::Object(members) => members.values().any(|member| shows(member, placeholder)),
+        _ => false,
+    }
+}
+
+/// The preview of `rule` on one of the [`deployers`] (#1712): the writes a
+/// deploy sends to the first tenant the run sends it to, in order, each
+/// `{"method", "url", "body"}`, compiled for every such tenant as a deploy
+/// compiles them, so one that cannot take the rule fails the dry run and is
+/// named. `known` gives the id the deployment state records for the rule on
+/// a tenant. What a deploy learns only as it sends is a `<send-time:NAME>`
+/// placeholder. With no tenant, the writes are compiled for a tenant whose
+/// `setup` sets nothing, the values a tenant gives shown as `<tenant:KEY>`
+/// and named under `unresolved`.
+fn requests_preview(
+    cx: &Context<'_>,
+    platform: &str,
+    rule: &Rule,
+    tenants: &[String],
+    known: &dyn Fn(&str) -> Option<String>,
+) -> Json {
+    let reached: Vec<(&str, &Json)> = tenants
+        .iter()
+        .filter_map(|name| deploy::tenant(cx, platform, name).map(|table| (name.as_str(), table)))
+        .collect();
+    let mut entry = Object::new();
+    entry.insert("uuid".into(), rule.uuid.clone().into());
+    entry.insert("name".into(), rule.name.clone().into());
+    if reached.is_empty() {
+        let tenant = unreached_tenant(platform);
+        let writes = match tenant_writes(
+            cx,
+            platform,
+            rule,
+            PREVIEW_TENANT,
+            &tenant,
+            &Inputs::dry_run(None),
+        ) {
+            Ok(writes) => writes,
+            Err(error) => return failure(rule, &error),
+        };
+        let shown: Vec<Json> = tenant_keys(platform)
+            .iter()
+            .filter(|key| shows(&writes, &deploy::tenant_value(key)))
+            .map(|key| Json::Str((*key).to_owned()))
+            .collect();
+        entry.insert("api_request".into(), writes);
+        let mut unresolved = Object::new();
+        unresolved.insert(
+            "reason".into(),
+            format!(
+                "this run deploys the rule to no {platform} tenant: the requests are compiled \
+                 for a tenant whose setup sets nothing, with no exclusion or modifier scoped to \
+                 a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>"
+            )
+            .into(),
+        );
+        if !shown.is_empty() {
+            unresolved.insert("setup".into(), Json::Array(shown));
+        }
+        entry.insert("unresolved".into(), Json::Object(unresolved));
+        return Json::Object(entry);
+    }
+    let mut first = None;
+    for (name, table) in reached {
+        match tenant_writes(
+            cx,
+            platform,
+            rule,
+            name,
+            table,
+            &Inputs::dry_run(known(name)),
+        ) {
+            Ok(writes) => {
+                first.get_or_insert((name, writes));
+            }
+            Err(mut error) => {
+                error.reason = format!("{} (tenant '{name}')", error.reason);
+                return failure(rule, &error);
+            }
+        }
+    }
+    let Some((name, writes)) = first else {
+        return dump_entry(platform, rule);
+    };
+    entry.insert("api_request".into(), writes);
+    entry.insert("tenant".into(), name.into());
+    Json::Object(entry)
 }
 
 /// The request a deploy sends for `rule` on the GravityZone `tenant`, under
@@ -174,7 +329,8 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
     model_config_dump(platform, block).unwrap_or_else(|| block.clone())
 }
 
-/// The block of `platform` as the dry run shows it when it builds no body:
+/// The block of `platform` as the dry run shows it when it builds no body
+/// (an Elastic rule that does not compile, a platform plugin's):
 /// [`config_dump`] without `enabled` and `name` when the block does not
 /// write them. Their model defaults (`enabled: false`, `name: ""`) are not
 /// what the block says, and no deployer reads them (#1662, D12); every other
@@ -262,11 +418,27 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 /// for each, and shows the first; Elastic compiles it for the first; every
 /// other platform is [`preview`]'s.
 pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[String]) -> Json {
+    preview_planned(cx, platform, rule, tenants, &|_| None)
+}
+
+/// [`preview_on`], where `known` gives the id the deployment state records
+/// for the rule on a tenant: the platforms that keep one (Defender for
+/// Endpoint, SentinelOne, CrowdStrike) update or delete the rule it names.
+pub fn preview_planned(
+    cx: &Context<'_>,
+    platform: &str,
+    rule: &Rule,
+    tenants: &[String],
+    known: &dyn Fn(&str) -> Option<String>,
+) -> Json {
     match platform {
         "bitdefender" => bitdefender_preview(cx, rule, tenants),
         "graylog" => graylog_preview(cx, rule, tenants),
         "exabeam" => exabeam_preview(cx, rule, tenants),
         "elastic" => elastic_preview(cx, rule, tenants),
+        _ if deployers().contains(&platform) => {
+            requests_preview(cx, platform, rule, tenants, known)
+        }
         _ => preview(cx, platform, rule),
     }
 }
@@ -348,11 +520,11 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 }
 
 /// The preview of `rule` on `platform` (`preview_rule_deployment`), the
-/// entry the dry run's `payloads` lists. Sentinel, Sysdig, Graylog and Exabeam report
-/// a rule they cannot compile as a failure; Elastic shows its deploy body
-/// ([`elastic_request`]) or falls back to the block's dump, and every other
-/// platform shows the dump ([`config_dump`]). It compiles for no tenant:
-/// [`preview_on`] compiles for the run's.
+/// entry the dry run's `payloads` lists. Every platform but Elastic reports
+/// a rule it cannot compile as a failure; Elastic shows its deploy body
+/// ([`elastic_request`]) or falls back to the block's dump, and the
+/// [`deployers`] show the writes a deploy sends (`requests_preview`). It
+/// compiles for no tenant: [`preview_on`] compiles for the run's.
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
     match platform {
         "graylog" => graylog_preview(cx, rule, &[]),
@@ -392,6 +564,9 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Err(error) => failure(rule, &error),
         },
         "elastic" => elastic_preview(cx, rule, &[]),
+        _ if deployers().contains(&platform) => {
+            requests_preview(cx, platform, rule, &[], &|_| None)
+        }
         _ => dump_entry(platform, rule),
     }
 }

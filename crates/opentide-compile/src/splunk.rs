@@ -52,11 +52,14 @@ fn invalid(message: &str) -> CompileError {
 }
 
 /// The cron of a frequency (`cron_to_timeframe`): `15m`, `2h` or `1d`.
+/// Without a `clock` (a dry run), the minute and hour a `random` or
+/// `current` schedule runs at are the placeholders `<send-time:minute>` and
+/// `<send-time:hour>`: the deploy draws or reads them as it sends.
 pub fn cron_to_timeframe(
     frequency: &str,
     mode: &str,
     custom_time: Option<&str>,
-    clock: Clock,
+    clock: Option<Clock>,
 ) -> Result<String, CompileError> {
     let mut chars = frequency.chars();
     let unit = chars.next_back();
@@ -65,9 +68,10 @@ pub fn cron_to_timeframe(
             "frequency {frequency:?} must be a whole number followed by m, h or d"
         ))
     })?;
-    let (minute, hour) = match mode {
-        "random" => (clock.random.0.to_string(), clock.random.1.to_string()),
-        "current" => (format!("{:02}", clock.now.0), format!("{:02}", clock.now.1)),
+    let (minute, hour) = match (mode, clock) {
+        ("random" | "current", None) => (deploy::send_time("minute"), deploy::send_time("hour")),
+        ("random", Some(clock)) => (clock.random.0.to_string(), clock.random.1.to_string()),
+        ("current", Some(clock)) => (format!("{:02}", clock.now.0), format!("{:02}", clock.now.1)),
         _ => {
             let Some(custom) = custom_time.filter(|custom| !custom.is_empty()) else {
                 return Err(invalid(
@@ -248,7 +252,7 @@ fn config_mdr(
     rule: &Rule,
     block: &Json,
     settings: &Settings,
-    clock: Clock,
+    clock: Option<Clock>,
     correlation: bool,
 ) -> Result<Object, CompileError> {
     let mut config = Object::new();
@@ -635,13 +639,14 @@ fn actions_config(
 
 /// The writes a deploy sends for `rule` to `tenant` when the saved search
 /// does not exist yet: the create (`POST saved/searches`, name and search),
-/// then the two updates of its settings (`POST saved/searches/<name>`); none
-/// for a DELETION status.
+/// then the two updates of its settings (`POST saved/searches/<name>`), each
+/// with the `search` first; none for a DELETION status. Without a `clock`, a schedule drawn or read at
+/// send time is written with placeholders ([`cron_to_timeframe`]).
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
-    clock: Clock,
+    clock: Option<Clock>,
 ) -> Result<Vec<Write>, CompileError> {
     let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
@@ -680,25 +685,30 @@ pub fn compile(
     for (key, value) in actions {
         first.insert(key, value);
     }
-    first.insert("search".into(), query.clone().into());
+    // Each update sends the saved search's `search` first, as Splunk's REST
+    // API takes it (`SavedSearch.update`): on a new saved search, the one
+    // just created.
+    let searched = |settings: Object| {
+        let mut body = Object::new();
+        body.insert("search".into(), query.clone().into());
+        body.extend(settings.into_iter().filter(|(key, _)| key != "search"));
+        Json::Object(body)
+    };
     let mut second = Object::new();
-    for key in ["alert.suppress", "is_scheduled", "actions", "search"] {
+    for key in ["alert.suppress", "is_scheduled", "actions"] {
         if let Some(value) = first.shift_remove(key) {
             second.insert(key.into(), value);
         }
     }
     let mut create = Object::new();
     create.insert("name".into(), name.clone().into());
-    create.insert("search".into(), query.into());
+    create.insert("search".into(), query.clone().into());
     let path = format!("saved/searches/{name}");
-    let mut writes = vec![
+    Ok(vec![
         Write::new("POST", "saved/searches", Json::Object(create)),
-        Write::new("POST", path.clone(), Json::Object(first)),
-    ];
-    if !second.is_empty() {
-        writes.push(Write::new("POST", path, Json::Object(second)));
-    }
-    Ok(writes)
+        Write::new("POST", path.clone(), searched(first)),
+        Write::new("POST", path, searched(second)),
+    ])
 }
 
 #[cfg(test)]
@@ -757,24 +767,37 @@ mod tests {
     #[test]
     fn frequencies_become_crons() {
         assert_eq!(
-            cron_to_timeframe("15m", "random", None, CLOCK).unwrap(),
+            cron_to_timeframe("15m", "random", None, Some(CLOCK)).unwrap(),
             "*/15 * * * *"
         );
         assert_eq!(
-            cron_to_timeframe("2h", "current", None, CLOCK).unwrap(),
+            cron_to_timeframe("2h", "current", None, Some(CLOCK)).unwrap(),
             "04 */2 * * *"
         );
         assert_eq!(
-            cron_to_timeframe("2h", "random", None, CLOCK).unwrap(),
+            cron_to_timeframe("2h", "random", None, Some(CLOCK)).unwrap(),
             "7 */2 * * *"
         );
         assert_eq!(
-            cron_to_timeframe("1d", "custom", Some("06h30"), CLOCK).unwrap(),
+            cron_to_timeframe("1d", "custom", Some("06h30"), Some(CLOCK)).unwrap(),
             "30 06 */1 * *"
         );
-        assert!(cron_to_timeframe("1d", "custom", None, CLOCK).is_err());
-        assert!(cron_to_timeframe("1w", "random", None, CLOCK).is_err());
-        assert!(cron_to_timeframe("xh", "random", None, CLOCK).is_err());
+        // A dry run's schedule: the minute and hour are the send's.
+        assert_eq!(
+            cron_to_timeframe("2h", "random", None, None).unwrap(),
+            "<send-time:minute> */2 * * *"
+        );
+        assert_eq!(
+            cron_to_timeframe("1d", "current", None, None).unwrap(),
+            "<send-time:minute> <send-time:hour> */1 * *"
+        );
+        assert_eq!(
+            cron_to_timeframe("1d", "custom", Some("06h30"), None).unwrap(),
+            "30 06 */1 * *"
+        );
+        assert!(cron_to_timeframe("1d", "custom", None, Some(CLOCK)).is_err());
+        assert!(cron_to_timeframe("1w", "random", None, Some(CLOCK)).is_err());
+        assert!(cron_to_timeframe("xh", "random", None, Some(CLOCK)).is_err());
     }
 
     #[test]
@@ -793,7 +816,7 @@ mod tests {
     fn unreadable_numbers_name_the_setting() {
         let reason = |error: CompileError| error.reason;
         assert_eq!(
-            reason(cron_to_timeframe("xh", "random", None, CLOCK).unwrap_err()),
+            reason(cron_to_timeframe("xh", "random", None, Some(CLOCK)).unwrap_err()),
             "Splunk cannot compile this rule: frequency \"xh\" must be a whole number followed \
              by m, h or d"
         );

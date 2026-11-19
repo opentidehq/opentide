@@ -230,6 +230,10 @@ check-jsonschema --schemafile validate.schema.json validate.json
 
 The schemas allow keys they do not name, because new keys are added without notice. A key a schema names keeps its type.
 
+## Placeholders
+
+A value a command cannot know when it prints is a string in angle brackets in its place. `deploy --dry-run` shows the requests a deploy would send ([Payloads](./deploy.md#payloads)) with `<send-time:NAME>` for a value a deploy learns as it sends the request (Splunk's schedule minute, Carbon Black's report timestamp), `<tenant-read:NAME>` for one it reads from the tenant (a Carbon Black watchlist), and `<tenant:KEY>` for a tenant's `setup` value when the run reaches no tenant of the platform. A placeholder can stand where the value is a number or an object, so read a string that starts with `<` and ends with `>` as a placeholder before you read the value's type.
+
 ## Related
 
 - [Exit codes](./exit-codes.md)

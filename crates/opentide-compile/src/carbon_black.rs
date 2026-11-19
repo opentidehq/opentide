@@ -117,13 +117,18 @@ pub fn report(
 }
 
 /// The writes a deploy sends for `rule` to `tenant` when the org holds no
-/// report of the rule's title: the new report (`POST .../reports`), or none
-/// for a rule to retire or a block with no query.
+/// report of the rule's title: the new report (`POST .../reports`), then
+/// the watchlist with the report added (`PUT .../watchlists/<id>`, the
+/// watchlist as the deploy reads it from the tenant:
+/// `<tenant-read:watchlist_id>`, `<tenant-read:watchlist>`), or none for a
+/// rule to retire or a block with no query. Without a `timestamp` (a
+/// dry run), the report's is the placeholder `<send-time:timestamp>`: the
+/// deploy stamps it as it sends.
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
-    timestamp: i64,
+    timestamp: Option<i64>,
 ) -> Result<Vec<Write>, CompileError> {
     let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
@@ -193,7 +198,10 @@ pub fn compile(
     body.insert("title".into(), report.into());
     body.insert("description".into(), description.into());
     body.insert("severity".into(), Json::Int(severity));
-    body.insert("timestamp".into(), Json::Int(timestamp));
+    body.insert(
+        "timestamp".into(),
+        timestamp.map_or_else(|| deploy::send_time("timestamp").into(), Json::Int),
+    );
     body.insert(
         "tags".into(),
         Json::Array(
@@ -203,14 +211,20 @@ pub fn compile(
         ),
     );
     body.insert("iocs_v2".into(), Json::Array(vec![Json::Object(ioc)]));
-    Ok(vec![Write::new(
-        "POST",
-        format!(
-            "/threathunter/watchlistmgr/v3/orgs/{}/reports",
-            deploy::setup_text(tenant, "org_key")
+    let org = format!(
+        "/threathunter/watchlistmgr/v3/orgs/{}",
+        deploy::setup_text(tenant, "org_key")
+    );
+    // The new report joins the watchlist, which the deploy reads from the
+    // tenant and writes back with the report's id added to `report_ids`.
+    Ok(vec![
+        Write::new("POST", format!("{org}/reports"), Json::Object(body)),
+        Write::new(
+            "PUT",
+            format!("{org}/watchlists/{}", deploy::tenant_read("watchlist_id")),
+            deploy::tenant_read("watchlist").into(),
         ),
-        Json::Object(body),
-    )])
+    ])
 }
 
 #[cfg(test)]

@@ -3088,3 +3088,373 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
     assert_eq!(skipped.len(), 1, "{skipped:?}");
     assert_eq!(skipped[0].get("platform"), Some(&Json::str("splunk")));
 }
+
+// #1712: a dry run's `api_request` is the requests a deploy sends. For each
+// platform whose writes are built from the tenant, the dry run of a
+// workspace is held to what the tenant's stand-in receives when the same
+// workspace deploys: the recorded cassettes of the `send-*` golden cases (or
+// the connector's own), or a wiremock tenant.
+
+/// A copy of the golden fixture `name` (`tests/golden/fixtures/<name>`).
+fn fixture(name: &str) -> tempfile::TempDir {
+    fn copy(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    copy(&repo().join("tests/golden/fixtures").join(name), dir.path());
+    dir
+}
+
+/// Every write `deploy --dry-run --json` shows for `platform` in `ws`, rule
+/// after rule, each `{"method", "url", "body"}`, members in their order; each
+/// entry names the tenant `lab`.
+fn planned_writes(ws: &Path, platform: &str) -> Vec<Json> {
+    let (code, stdout, stderr) = cli(
+        ws,
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let mut writes = Vec::new();
+    for entry in result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .unwrap()
+    {
+        let Some(requests) = entry.get("api_request").and_then(Json::as_array) else {
+            panic!("api_request is not the requests: {}", entry.to_compact())
+        };
+        assert_eq!(
+            entry.get("tenant").and_then(Json::as_str),
+            Some("lab"),
+            "{}",
+            entry.to_compact()
+        );
+        writes.extend(requests.iter().cloned());
+    }
+    writes
+}
+
+/// Whether `shown`, a write's `url`, is `url`, a request's: the same URL, or
+/// the same path (a stand-in on another address), or (Splunk's under the
+/// app's namespace, Carbon Black's under the tenant's URL) the end of its
+/// percent-decoded path, a `<tenant-read:NAME>` placeholder standing for one
+/// segment.
+fn same_url(shown: &str, url: &str) -> bool {
+    if shown == url {
+        return true;
+    }
+    if let (Ok(shown), Ok(url)) = (url::Url::parse(shown), url::Url::parse(url)) {
+        return shown.path() == url.path() && shown.query() == url.query();
+    }
+    let decoded = percent_encoding::percent_decode_str(url).decode_utf8_lossy();
+    let decoded = decoded.trim_end_matches('/');
+    let shown = shown.trim_matches('/');
+    let Some(at) = shown.find("<tenant-read:") else {
+        return decoded.ends_with(&format!("/{shown}"));
+    };
+    let (head, tail) = (&shown[..at], &shown[at..]);
+    let tail = tail.find('>').map_or("", |end| &tail[end + 1..]);
+    let Some(start) = decoded.find(head) else {
+        return false;
+    };
+    let rest = &decoded[start + head.len()..];
+    let segment = rest.find('/').unwrap_or(rest.len());
+    segment > 0 && &rest[segment..] == tail
+}
+
+/// A value as a Splunk form sends it (`json_text`).
+fn form_text(value: &Json) -> String {
+    match value {
+        Json::Str(text) => text.clone(),
+        other => other.to_compact(),
+    }
+}
+
+/// Whether `shown`, a write's body, is `body`, a request's: the same JSON,
+/// `<send-time:timestamp>` read as `now` and a `<tenant-read:NAME>` body
+/// standing for any; or, for a form (Splunk), the same pairs in order.
+fn same_body(shown: &Json, body: &[u8], now: i64) -> bool {
+    if shown
+        .as_str()
+        .is_some_and(|text| text.starts_with("<tenant-read:"))
+    {
+        return !body.is_empty();
+    }
+    if shown.is_null() {
+        return body.is_empty();
+    }
+    if let Ok(sent) = Json::parse(&String::from_utf8_lossy(body)) {
+        let mut shown = shown.clone();
+        if let Some(stamp) = shown.get_mut("timestamp")
+            && stamp.as_str() == Some("<send-time:timestamp>")
+        {
+            *stamp = Json::Int(now);
+        }
+        return shown == sent;
+    }
+    let Some(fields) = shown.as_object() else {
+        return false;
+    };
+    let pairs: Vec<(String, String)> = url::form_urlencoded::parse(body)
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    let expected: Vec<(String, String)> = fields
+        .iter()
+        .map(|(key, value)| (key.clone(), form_text(value)))
+        .collect();
+    pairs == expected
+}
+
+/// A request a tenant received: method, URL and body.
+type Received = (String, String, Vec<u8>);
+
+/// The writes a tenant received (every request but reads and sign-ins), as
+/// `(method, url, body)`.
+fn received_writes(requests: Vec<Received>) -> Vec<Received> {
+    requests
+        .into_iter()
+        .filter(|(method, url, _)| method != "GET" && !url.contains("/oauth2/"))
+        .collect()
+}
+
+/// The dry run's writes are the writes the tenant received, in order.
+fn assert_sent_as_planned(planned: &[Json], received: &[Received], now: i64) {
+    let shown: Vec<String> = planned.iter().map(Json::to_compact).collect();
+    let sent: Vec<String> = received
+        .iter()
+        .map(|(method, url, body)| format!("{method} {url} {}", String::from_utf8_lossy(body)))
+        .collect();
+    assert_eq!(
+        planned.len(),
+        received.len(),
+        "planned:\n{}\nreceived:\n{}",
+        shown.join("\n"),
+        sent.join("\n")
+    );
+    for (write, (method, url, body)) in planned.iter().zip(received) {
+        let shown = write.to_compact();
+        let text = |key: &str| write.get(key).and_then(Json::as_str).unwrap_or_default();
+        assert_eq!(text("method"), method.as_str(), "{shown}\n{url}");
+        assert!(same_url(text("url"), url), "{shown}\n{url}");
+        assert!(
+            same_body(write.get("body").unwrap_or(&Json::Null), body, now),
+            "{shown}\nreceived: {}",
+            String::from_utf8_lossy(body)
+        );
+    }
+}
+
+/// The requests a replaying proxy received.
+fn replayed(proxy: &Proxy) -> Vec<Received> {
+    proxy
+        .requests()
+        .into_iter()
+        .map(|request| (request.method, request.url, request.body.bytes()))
+        .collect()
+}
+
+/// Runs the `send-<platform>` golden case's deploy of `deploy-tenants`
+/// against its cassette, after its dry run: what each showed and the tenant
+/// received.
+fn golden_send(platform: &str, scenario: &str, variable: &str) -> (Vec<Json>, Vec<Received>) {
+    let ws = fixture("deploy-tenants");
+    let planned = planned_writes(ws.path(), platform);
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
+    let all: Vec<usize> = (0..Cassette::parse(&text).unwrap().interactions.len()).collect();
+    let (proxy, env, _ca) = replay(scenario, &all, variable);
+    let (sent, _) = deploy(
+        ws.path(),
+        platform,
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    (planned, received_writes(replayed(&proxy)))
+}
+
+#[test]
+fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send(
+        "defender_for_endpoint",
+        "golden/deploy-defender-continues",
+        "DEFENDER_CLIENT_SECRET",
+    );
+    // A create, an update of the recorded id, a delete of the other.
+    let at = |write: &Json, key: &str| write.get(key).cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        planned
+            .iter()
+            .map(|write| at(write, "method"))
+            .collect::<Vec<_>>(),
+        ["POST", "PATCH", "DELETE"].map(Json::str)
+    );
+    assert_eq!(at(&at(&planned[0], "body"), "isEnabled"), Json::Bool(true));
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_sentinel_one_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) =
+        golden_send("sentinel_one", "golden/deploy-sentinel-one", "S1_API_TOKEN");
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_crowdstrike_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send(
+        "crowdstrike",
+        "golden/deploy-crowdstrike",
+        "CROWDSTRIKE_CLIENT_SECRET",
+    );
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_splunk_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send("splunk", "golden/deploy-splunk", "SPLUNK_TOKEN");
+    // The saved search created, then its settings, each update with the
+    // search first, as Splunk receives them.
+    assert_eq!(planned.len(), 3);
+    let first = |write: &Json| {
+        write
+            .get("body")
+            .and_then(Json::as_object)
+            .and_then(|body| body.first().map(|(key, _)| key.clone()))
+    };
+    assert_eq!(first(&planned[1]).as_deref(), Some("search"));
+    assert_eq!(first(&planned[2]).as_deref(), Some("search"));
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_carbon_black_dry_run_shows_the_requests_the_tenant_receives() {
+    let ws = cbc_workspace();
+    let planned = planned_writes(ws.path(), "carbon_black_cloud");
+    // The report, stamped at send time, then the watchlist the deploy reads.
+    let body = |write: &Json| write.get("body").cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        body(&planned[0]).get("timestamp"),
+        Some(&Json::str("<send-time:timestamp>"))
+    );
+    assert_eq!(body(&planned[1]), Json::str("<tenant-read:watchlist>"));
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    let (sent, _) = deploy(
+        ws.path(),
+        "carbon_black_cloud",
+        &env,
+        &opentide_connectors::builtin(),
+        CBC_NOW,
+    );
+    assert_eq!(proxy.verify(), Vec::new());
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
+    assert_sent_as_planned(&planned, &received_writes(replayed(&proxy)), CBC_NOW);
+}
+
+#[test]
+fn a_harfanglab_dry_run_shows_the_requests_the_tenant_receives() {
+    use wiremock::matchers::any;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(any())
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server),
+    );
+    let sigma = |status: &str| {
+        format!(
+            "  harfanglab:\n    status: {status}\n    sigma:\n      logsource:\n        \
+             category: process_creation\n        product: windows\n      selections:\n        \
+             - name: selection\n          field: Image\n          value: cmd.exe\n      \
+             condition: selection\n"
+        )
+    };
+    let yara = "  harfanglab:\n    status: STAGING\n    yara:\n      meta:\n        os: \
+                Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n";
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
+            server.uri()
+        ),
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "Sigma rule",
+                    "00000000-0000-4000-8003-0000000000b1",
+                    "A.",
+                    &sigma("STAGING"),
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "YARA file",
+                    "00000000-0000-4000-8003-0000000000b2",
+                    "B.",
+                    yara,
+                ),
+            ),
+            (
+                "c.yaml",
+                rule(
+                    "Gone Sigma",
+                    "00000000-0000-4000-8003-0000000000b3",
+                    "C.",
+                    &sigma("REMOVED"),
+                ),
+            ),
+        ],
+    );
+    let planned = planned_writes(ws.path(), "harfanglab");
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 3]);
+    let received = rt
+        .block_on(server.received_requests())
+        .unwrap()
+        .into_iter()
+        .map(|request| {
+            (
+                request.method.as_str().to_owned(),
+                request.url.to_string(),
+                request.body,
+            )
+        })
+        .collect();
+    assert_sent_as_planned(&planned, &received_writes(received), 0);
+}

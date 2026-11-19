@@ -1,14 +1,15 @@
 # Approved differences between opentide-compile and the oracle's recorded
 # compile (UC-3.1, #823): the compile corpus's request bodies and previews
-# (`[[diff]]`), the oracle's own faults (`[[fault]]`) and the dump classes
-# (`[[dump]]`), which opentide-compile's tests/oracle.rs reads; `reason`,
+# (`[[diff]]`), the oracle's own faults (`[[fault]]`), the classes of the
+# dry run's previews (`[[dump]]`) and of the tenants' writes (`[[writes]]`),
+# which opentide-compile's tests/oracle.rs reads; `reason`,
 # `issue` and `changelog` are for the reader.
 # The `cargo xtask payloads` tool that wrote and checked this file, and the
 # dry-run plan entries it compared, were retired with the oracle (#1142).
 
 [[dump]]
 rule = "nulls"
-platforms = ["defender_for_endpoint", "splunk", "sentinel_one", "crowdstrike", "harfanglab", "carbon_black_cloud", "elastic"]
+platforms = ["elastic"]
 reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The preview is display output: what it shows of the block is the same, without the nulls."
 issue = "https://github.com/opentidehq/opentide/issues/895"
 changelog = "**A dry run's preview leaves out unset fields**"
@@ -21,11 +22,25 @@ issue = "https://github.com/opentidehq/opentide/issues/1142"
 changelog = "**A dry run's Elastic entry is the deploy body**"
 
 [[dump]]
-rule = "unset"
+rule = "request"
 platforms = ["defender_for_endpoint", "splunk", "sentinel_one", "crowdstrike", "harfanglab", "carbon_black_cloud"]
-reason = "A dry run's preview of a block opentide builds no request body for leaves out `enabled` and `name` when the block does not write them: their model defaults (enabled: false, name: \"\") are not what the block says and no deployer reads them. Every other member, defaults a deploy sends included, is the oracle's."
-issue = "https://github.com/opentidehq/opentide/issues/1662"
-changelog = "**A dry run's preview leaves out unset fields**"
+reason = "A dry run's api_request for a platform whose deploy writes are built from the tenant is the list of writes the first tenant the run reaches receives, each {method, url, body}, as compile_tenant builds them (tenant:<name>, held to the oracle's writes above), where the oracle showed the rule's block with its model's defaults. A value a deploy learns only as it sends (Splunk's schedule minute and hour, Carbon Black's report timestamp) is a <send-time:NAME> placeholder, and a tenant that cannot take the rule fails the dry run, naming it, as it fails the deploy."
+issue = "https://github.com/opentidehq/opentide/issues/1712"
+changelog = "**A dry run's `api_request` is the request a deploy sends, on every platform**"
+
+[[writes]]
+rule = "search"
+platforms = ["splunk"]
+reason = "Each update of a Splunk saved search sends its `search` first: Splunk's REST API takes it with every update (`SavedSearch.update` adds it), so the tenant receives it, and on a new saved search it is the one just created. The oracle's probe recorded the settings the deployer passed to the SDK, without it. The writes compared to the oracle's are the candidate's with that leading `search`, which must equal the create's, taken out of the first update and moved to the end of the last, where the probe recorded it."
+issue = "https://github.com/opentidehq/opentide/issues/1712"
+changelog = "**A dry run's `api_request` is the request a deploy sends, on every platform**"
+
+[[writes]]
+rule = "watchlist"
+platforms = ["carbon_black_cloud"]
+reason = "A new Carbon Black report joins its watchlist: the deploy reads the watchlist from the tenant and writes it back with the new report's id added to report_ids (PUT .../watchlists/<id>), as the oracle's SDK did with save_watchlist(). The probe recorded the report alone. The candidate shows that update after the report, its id and body the <tenant-read:watchlist_id> and <tenant-read:watchlist> placeholders, since both are read from the tenant; the writes compared to the oracle's are the candidate's without it."
+issue = "https://github.com/opentidehq/opentide/issues/1712"
+changelog = "**A dry run's `api_request` is the request a deploy sends, on every platform**"
 
 [[diff]]
 corpus = "payloads"
