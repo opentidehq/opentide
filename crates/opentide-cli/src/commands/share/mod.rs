@@ -879,8 +879,9 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
                 .collect();
             all.sort_unstable();
             all.dedup();
-            // Status reads the local ledger only: nothing says an object is on
-            // the target, and its counts say what a push would do (#1661).
+            // Status compares each object with the local ledger only: nothing
+            // says an object is on the target. `to create` counts the objects
+            // the ledger has no line for (#1661).
             format!(
                 "Status of {} for {targets}",
                 plural(all.len(), "object", None)
@@ -968,10 +969,12 @@ fn from_run(
     } else if mode == Mode::Preview {
         payload.plan = true;
     }
-    // A preview's rows say what would happen only when it is a plan: one with
-    // a failure is rendered as a result (`_outcome_kind`). Status sends
-    // nothing either: its rows say what a push would do (#1661).
-    let words = if payload.plan {
+    // A preview sends nothing, with or without a failure: its rows always
+    // use the planned words and the dry-run note, even when a failure makes
+    // the run a result rather than a plan (`_outcome_kind`). Status sends
+    // nothing either: its rows compare each object with the local ledger
+    // (#1661).
+    let words = if payload.plan || mode == Mode::Preview {
         Rows::Preview
     } else if mode == Mode::Status {
         Rows::Status
@@ -1039,7 +1042,9 @@ enum Rows {
     Done,
     /// What a push would do, in a preview: `create`, `update`, ...
     Preview,
-    /// What a push would do, from the ledger alone (`share status`).
+    /// Each object compared with the local ledger (`share status`): `create`
+    /// where the ledger has no line for it, `update` where its content
+    /// changed since. Not a prediction of a push, which `share preview` is.
     Status,
 }
 
