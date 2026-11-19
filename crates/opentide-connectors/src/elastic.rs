@@ -938,9 +938,11 @@ impl Elastic {
     /// remote's fields the block leaves out) or, when its type changes,
     /// deletes and creates it. A prebuilt rule is never modified. A 401 or
     /// 403 fails the tenant ([`ElasticError::Tenant`]), and so does a
-    /// connection never made ([`ConnectorError::Unreachable`]: the other
-    /// rules would only wait on the same retries); any other refusal fails
-    /// the rule ([`Deployed::Failed`]).
+    /// connection that failed ([`ConnectorError::Unreachable`]: refused, DNS,
+    /// TLS, a proxy, or dropped mid-request) on any step, and a gateway's 502,
+    /// 503 or 504 in front of Kibana on the lookup or a delete
+    /// ([`ConnectorError::Gateway`]): the other rules would only wait on the
+    /// same failure. Any other refusal fails the rule ([`Deployed::Failed`]).
     pub async fn deploy_rule(
         &self,
         cx: TenantContext<'_>,
@@ -980,6 +982,7 @@ impl Elastic {
                     &answer,
                     &client.rule_query(rule_id),
                 ))),
+                status @ 502..=504 => Err(gateway(cx, &answer, status, "a delete")),
                 status if !(200..300).contains(&status) => Ok(failed(
                     "delete_elastic_rule_failed",
                     None,
@@ -1034,12 +1037,7 @@ impl Elastic {
                 }));
             }
         };
-        if matches!(get.status, 401 | 403) {
-            return Err(ElasticError::Tenant(format!(
-                "Tenant {tenant} auth error: HTTP {}",
-                get.status
-            )));
-        }
+        tenant_refused_lookup(cx, &get)?;
         if get.status == 404 {
             let answer = match client.create_rule(cx, &Json::Object(compiled)).await {
                 Ok(answer) => answer,
@@ -1362,11 +1360,13 @@ impl Deployer for Elastic {
     /// [`DeployError::partial`] (and, when a rule whose type changed was
     /// deleted but not created again, its `elastic_rule_deleted` event). A
     /// key Kibana or Elasticsearch refuses (401, 403) fails the tenant
-    /// (`tenant_refused`), and so does a connection never made, on any step,
-    /// and any connection failure during the checks, a replace or a type
-    /// change; a read timeout or an unreadable answer on the lookup, a create
-    /// or a delete fails the rule with that step's code, as `opentide deploy`
-    /// reports it.
+    /// (`tenant_refused`), and so does a connection that failed (refused,
+    /// DNS, TLS, a proxy, or dropped mid-request) on any step, a gateway's
+    /// 502, 503 or 504 on the lookup or a delete (`tenant_gateway`), and any
+    /// connector error during the checks, a replace or a type change (a read
+    /// timeout included); a read timeout or an answer that cannot be read on
+    /// the lookup, a create or a delete fails the rule with that step's code,
+    /// as `opentide deploy` reports it.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -1559,6 +1559,37 @@ fn kibana_error(answer: &Answer) -> String {
         },
         None => answer.text(),
     }
+}
+
+/// The rule lookup's answer when it fails the tenant: a 401 or 403 (the
+/// key), or a gateway's 502, 503 or 504.
+fn tenant_refused_lookup(cx: TenantContext<'_>, get: &Answer) -> Result<(), ElasticError> {
+    match get.status {
+        status @ (401 | 403) => Err(ElasticError::Tenant(format!(
+            "Tenant {} auth error: HTTP {status}",
+            cx.tenant.label.tenant
+        ))),
+        status @ 502..=504 => Err(gateway(cx, get, status, "the rule lookup")),
+        _ => Ok(()),
+    }
+}
+
+/// A gateway's 502, 503 or 504 in front of Kibana (a proxy, or Elastic
+/// Cloud's front end with Kibana down), already retried by the client: the
+/// tenant's failure, not the rule's.
+fn gateway(cx: TenantContext<'_>, answer: &Answer, status: u16, step: &str) -> ElasticError {
+    let tenant = &cx.tenant.label.tenant;
+    let detail = answer
+        .not_json_detail()
+        .unwrap_or_else(|| kibana_error(answer));
+    ElasticError::Connector(ConnectorError::Gateway {
+        platform: PLATFORM.into(),
+        tenant: tenant.clone(),
+        message: format!(
+            "Kibana of elastic tenant '{tenant}' answered {step} with HTTP {status}: {detail}"
+        ),
+        status,
+    })
 }
 
 /// `_is_prebuilt_rule`.
