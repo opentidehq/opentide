@@ -339,6 +339,51 @@ fn gate(format: &str, lint_changed: bool) -> Vec<String> {
         .collect()
 }
 
+/// The Code Quality merge GitLab's validate job runs in `after_script`:
+/// GitLab Runner uploads one `codequality` report file, so the gate
+/// commands' reports become `opentide-reports/codequality.json`. It runs on
+/// the job's Python image, the release installs no module for it (#1656). A
+/// report that is missing, empty or not a JSON array (its command never ran
+/// or crashed) is skipped with a note, so the merged file is always a report,
+/// `[]` at worst; an issue whose `fingerprint` is already in is kept once.
+fn codequality_merge() -> String {
+    let inputs: Vec<String> = GATE_COMMANDS
+        .iter()
+        .map(|command| format!("{REPORTS_DIR}/{command}.codequality.json"))
+        .collect();
+    format!(
+        "python3 - {REPORTS_DIR}/codequality.json {} <<'PY'\n{CODEQUALITY_MERGE}PY\n",
+        inputs.join(" ")
+    )
+}
+
+/// [`codequality_merge`]'s Python: the output, then the reports to merge.
+const CODEQUALITY_MERGE: &str = r#"import json, os, sys
+output, *reports = sys.argv[1:]
+issues, seen = [], set()
+for path in reports:
+    try:
+        with open(path, encoding="utf-8") as stream:
+            document = json.load(stream)
+    except (OSError, ValueError) as error:
+        print(f"opentide codequality: {path} skipped ({error})", file=sys.stderr)
+        continue
+    if not isinstance(document, list):
+        print(f"opentide codequality: {path} is not a Code Quality report; skipped", file=sys.stderr)
+        continue
+    for issue in (item for item in document if isinstance(item, dict)):
+        fingerprint = issue.get("fingerprint")
+        if isinstance(fingerprint, str):
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+        issues.append(issue)
+os.makedirs(os.path.dirname(output), exist_ok=True)
+with open(output, "w", encoding="utf-8") as stream:
+    json.dump(issues, stream, indent=2, ensure_ascii=False)
+    stream.write("\n")
+"#;
+
 /// Every variable the bundled platform files reference (`$NAME`), sorted:
 /// the secrets the header lists and GitHub's deploy jobs map
 /// (`platform_credential_names`).
@@ -476,14 +521,7 @@ fn values(options: &Options) -> Value {
         lint_changed => options.lint_changed,
         validate_sarif => gate("sarif", options.lint_changed),
         validate_codequality => gate("codequality", options.lint_changed),
-        codequality_merge => format!(
-            "python -m opentide.ci.codequality --output {REPORTS_DIR}/codequality.json {}",
-            GATE_COMMANDS
-                .iter()
-                .map(|command| format!("{REPORTS_DIR}/{command}.codequality.json"))
-                .collect::<Vec<_>>()
-                .join(" ")
-        ),
+        codequality_merge => codequality_merge(),
         gate_commands => GATE_COMMANDS,
         not_skipped => GITHUB_NOT_SKIPPED,
         skip_guard => AZURE_SKIP_GUARD,
@@ -576,6 +614,35 @@ mod tests {
                 vec!["AZURE_CLIENT_ID".to_owned()],
             )]),
         }
+    }
+
+    /// Every job runs what the pinned release has (#1656): GitLab merges its
+    /// Code Quality reports on the job's Python, not with a module the
+    /// package no longer ships, and the explorer job installs the release,
+    /// not opentide's source.
+    #[test]
+    fn jobs_run_only_what_the_release_installs() {
+        let gitlab = render(&options(Provider::GitLab)).unwrap();
+        assert!(!gitlab.contains("opentide.ci"), "{gitlab}");
+        assert!(
+            gitlab.contains(
+                "python3 - opentide-reports/codequality.json opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json <<'PY'"
+            ),
+            "{gitlab}"
+        );
+        assert!(gitlab.contains("codequality: opentide-reports/codequality.json"));
+
+        let github = render(&options(Provider::GitHub)).unwrap();
+        let explorer = &github[github.find("  explorer:").unwrap()..];
+        for gone in [
+            "pip install -e",
+            "opentidehq/opentide\n",
+            "GH_APP",
+            "OPENTIDE_REPO_TOKEN",
+        ] {
+            assert!(!explorer.contains(gone), "{gone} in {explorer}");
+        }
+        assert!(explorer.contains("run: pip install \"opentide==$OPENTIDE_VERSION\""));
     }
 
     #[test]

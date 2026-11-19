@@ -2246,6 +2246,21 @@ variant = "promotion-target"
 args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
 fixtures = ["vscode-docs-folder"]
 
+# GitLab merges its Code Quality reports on the job's Python, with no module
+# the release does not ship (#1656).
+[[case]]
+command = "setup ci"
+variant = "gitlab"
+args = ["setup", "ci", "gitlab", "--yes"]
+fixtures = ["tide-corpus"]
+
+# The explorer job installs the pinned release, as every job does (#1656).
+[[case]]
+command = "setup ci"
+variant = "explorer-pages"
+args = ["setup", "ci", "github", "--default-branch", "main", "--explorer-pages", "--yes"]
+fixtures = ["tide-corpus"]
+
 [[case]]
 command = "setup env"
 variant = "example"

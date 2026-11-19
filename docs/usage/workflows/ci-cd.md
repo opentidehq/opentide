@@ -376,11 +376,13 @@ opentide lint --strict --format codequality --output opentide-reports/lint.codeq
 
 Regenerate an existing pipeline with `opentide setup ci <github|gitlab|azure> --yes` to get them.
 
-GitLab Runner uploads a Code Quality report as a single file and fails a job that declares more (`failed to copy content to form: only one file can be sent as raw`, seen on Runner 18.9). The generated validate job therefore writes `validate.codequality.json` and `lint.codequality.json`, and its `after_script` merges them:
+GitLab Runner uploads a Code Quality report as a single file and fails a job that declares more (`failed to copy content to form: only one file can be sent as raw`, seen on Runner 18.9). The generated validate job therefore writes `validate.codequality.json` and `lint.codequality.json`, and its `after_script` merges them into `opentide-reports/codequality.json` with a short Python script written into the pipeline, which runs on the job's `python` image:
 
 ```bash
-python -m opentide.ci.codequality --output opentide-reports/codequality.json \
-  opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json
+python3 - opentide-reports/codequality.json \
+  opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json <<'PY'
+# … reads each report, keeps each fingerprint once, writes the first path
+PY
 ```
 
 `after_script` runs after a failed command too, so the merge request shows the findings of the command that failed. A report that is missing (`lint` never ran because `validate` failed), empty, or cut short by a crash is skipped with a note in the log, so the merged file is always a valid report; an issue whose fingerprint is already in it is kept once. Through 0.20.1 the job declared both files, and on GitLab Runner 18.9 it failed after both commands had passed; regenerate it with `opentide setup ci gitlab --yes`.
