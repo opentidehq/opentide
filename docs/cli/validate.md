@@ -47,7 +47,7 @@ opentide validate --check queries
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined (a line longer than 400 characters is shown in part around the value, with `…` where it goes on and without colours), and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
 error[vocab_unknown]: "clearr" is not a TLP value
@@ -437,7 +437,7 @@ opentide --json validate query --platform sentinel_one
 }
 ```
 
-Each finding prints as a code frame at its place in the rule file, with the query coloured as your editor colours it when you run it at a terminal, then one outcome line. A rule file that is not UTF-8 or not YAML is an error (`yaml_parse`), never a file silently passed over. A finding's code (`kql_unknown_table`, `spl_parse_error`, `esql_unavailable`, ...) has an `opentide explain` page and its help line links the language's reference. The sample is illustrative, because it needs a rule with a broken query:
+Each finding prints as a code frame at its place in the rule file, with the query coloured as your editor colours it when you run it at a terminal, then one outcome line. On a line longer than 400 characters (a query written on one line), the frame shows 400 characters around the finding, with `…` where the line goes on and no colours, and a message longer than 500 characters is cut the same way. A rule file that is not UTF-8 or not YAML is an error (`yaml_parse`), never a file silently passed over. A finding's code (`kql_unknown_table`, `spl_parse_error`, `esql_unavailable`, ...) has an `opentide explain` page and its help line links the language's reference. The sample is illustrative, because it needs a rule with a broken query:
 
 ```text illustrative
 error[kql_unknown_operator]: unknown tabular operator 'wher'
