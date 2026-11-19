@@ -429,6 +429,14 @@ pub fn with_line_index<T>(source: &str, run: impl FnOnce() -> T) -> T {
     scoped::with(source, run)
 }
 
+/// Whether [`with_line_index`] has installed the line table of this very
+/// `source`: then [`span_to_range`] searches it, and a caller that would build
+/// a [`LineIndex`] of its own for `source` need not (ADR 0014 §1).
+#[must_use]
+pub fn line_index_installed(source: &str) -> bool {
+    scoped::installed(source)
+}
+
 /// How many times [`span_to_range`] and [`offset_to_position`] scanned a text
 /// from its start on this thread (no [`with_line_index`] table was installed
 /// for it), and [`position_to_offset`], which always does ([`LineIndex::offset`]
@@ -494,6 +502,16 @@ mod scoped {
         let previous = INSTALLED.with(|installed| installed.replace(Some(table)));
         let _restore = Restore(previous);
         run()
+    }
+
+    /// Whether the installed table is `source`'s.
+    pub(super) fn installed(source: &str) -> bool {
+        INSTALLED.with(|installed| {
+            installed
+                .borrow()
+                .as_ref()
+                .is_some_and(|table| table.key == key(source))
+        })
     }
 
     /// The position of `offset` from the installed table, if it is
