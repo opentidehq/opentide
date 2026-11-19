@@ -20,8 +20,17 @@
 # `clippy` lints the code only these targets compile (the wasm32 paths of
 # opentide-wasm, the wasip1 paths of opentide-lsp and the command line), which
 # the workspace's native clippy run cannot see, with -D warnings.
+#
+# The artifacts are read where cargo writes them: $CARGO_TARGET_DIR (a
+# worktree's target pool, AGENTS.md), else the workspace's target/.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+target_dir="${CARGO_TARGET_DIR:-$root/target}"
+# cargo reads a relative CARGO_TARGET_DIR from the working directory.
+case "$target_dir" in
+  /* | [A-Za-z]:*) ;;
+  *) target_dir="$PWD/$target_dir" ;;
+esac
 targets=("$@")
 [[ ${#targets[@]} -gt 0 ]] || targets=(browser wasi)
 
@@ -30,7 +39,7 @@ version=25.0
 digest=52640dde13599bf127a95499e61d6d640256119456d1af8897ab6725bcf3d89c
 wasi_sdk() {
   if [[ -z "${WASI_SDK_PATH:-}" ]]; then
-    local cache="$root/target/wasi-sdk"
+    local cache="$target_dir/wasi-sdk"
     WASI_SDK_PATH="$cache/wasi-sdk-$version-x86_64-linux"
     if [[ ! -x "$WASI_SDK_PATH/bin/clang" ]]; then
       mkdir -p "$cache"
@@ -48,10 +57,10 @@ for target in "${targets[@]}"; do
     browser)
       rustup target add wasm32-unknown-unknown >/dev/null
       cargo build --release -p opentide-wasm --target wasm32-unknown-unknown
-      wasm="$root/target/wasm32-unknown-unknown/release/opentide_wasm.wasm"
+      wasm="$target_dir/wasm32-unknown-unknown/release/opentide_wasm.wasm"
       node "$root/scripts/engine/wasm-smoke.mjs" imports "$wasm"
       if command -v wasm-bindgen >/dev/null 2>&1; then
-        out="$root/target/wasm-bindgen"
+        out="$target_dir/wasm-bindgen"
         wasm-bindgen --target nodejs --out-dir "$out" "$wasm"
         node "$root/scripts/engine/wasm-smoke.mjs" browser "$out/opentide_wasm.js"
       else
@@ -63,7 +72,7 @@ for target in "${targets[@]}"; do
       # Node 22's fast WASI calls (fd_write, path_open) can start a garbage
       # collection inside the call, which segfaults once the instance holds
       # enough memory; the lsp-client wasi transport documents the same flag.
-      node --no-turbo-fast-api-calls "$root/scripts/engine/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+      node --no-turbo-fast-api-calls "$root/scripts/engine/wasm-smoke.mjs" wasi "$target_dir/wasm32-wasip1/release/opentide-lsp.wasm" ;;
     cli)
       # The command line under WASI (ADR 0007's amendment): no terminal UI, no
       # threads; requests to the network fail with network_unavailable.
@@ -79,8 +88,8 @@ for target in "${targets[@]}"; do
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot -Oz" \
         cargo build --locked --profile wasi -p opentide-cli --bin opentide-cli \
           --no-default-features --target wasm32-wasip1
-      built="$root/target/wasm32-wasip1/wasi/opentide-cli.wasm"
-      out="$root/target/wasm32-wasip1/wasi/opentide.wasm"
+      built="$target_dir/wasm32-wasip1/wasi/opentide-cli.wasm"
+      out="$target_dir/wasm32-wasip1/wasi/opentide.wasm"
       # OPENTIDE_WASM_OPT=1: binaryen's wasm-opt as well. Measured on this
       # module it saves about 2% of the gzip size (6.85 to 6.70 MB) for
       # minutes of CPU, so it is the release's step, not every CI run's.
