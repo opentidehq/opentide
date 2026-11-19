@@ -54,7 +54,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--sharing` / `--no-sharing` | Share changed objects on the default branch (default: off) |
 | `--lint-changed` / `--lint-all` | Gate `opentide lint` on the object files each run changed, or on every file (default) |
 | `--promotion` / `--no-promotion` | Status promotion in `opentide deploy`. Omit the flag to keep the repository's setting; `--no-promotion` writes `[promotion] enabled = false` (see [setup ci](#setup-ci)) |
-| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
+| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs: after the documentation job, an `explorer` job installs the pinned opentide release, runs `opentide --json generate explorer`, builds the site from `opentidehq/explorer` and uploads it, and `deploy-explorer` publishes it to GitHub Pages from the default branch. Enable Pages with **GitHub Actions** as the source; no secret is needed |
 | `--promotion-target` | Status `deploy` promotes rules to. Omit the flag to keep the repository's setting; another status is written as `[promotion] promotion_target` |
 | `--python-version` | CI Python version (default `3.12`) |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |

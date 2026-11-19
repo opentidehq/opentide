@@ -209,7 +209,9 @@ fn typed_literal(lex: &mut logos::Lexer<'_, Token>) -> bool {
         return false;
     }
     let rest = lex.remainder().as_bytes();
-    match rest.iter().position(|&b| matches!(b, b')' | b'\r' | b'\n')) {
+    let found = rest.iter().position(|&b| matches!(b, b')' | b'\r' | b'\n'));
+    crate::inspect::count_typed_literal_scan(found.map_or(rest.len(), |end| end + 1));
+    match found {
         Some(end) if rest[end] == b')' => {
             lex.bump(end + 1);
             true

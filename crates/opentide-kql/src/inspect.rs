@@ -11,6 +11,20 @@ use std::collections::BTreeSet;
 
 thread_local! {
     static COLUMNS_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_LITERAL_SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many bytes the lexer read on this thread looking for a typed
+/// literal's `)` (`datetime(…)`): a test bounds it by the input's length, so
+/// a scan per `datetime(` to the end of its line cannot come back unnoticed
+/// (a work count, not a wall clock).
+#[must_use]
+pub fn typed_literal_bytes_scanned() -> usize {
+    TYPED_LITERAL_SCANNED.with(std::cell::Cell::get)
+}
+
+pub(crate) fn count_typed_literal_scan(bytes: usize) {
+    TYPED_LITERAL_SCANNED.with(|n| n.set(n.get() + bytes));
 }
 
 /// How many columns an unknown column's name was measured against
