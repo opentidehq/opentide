@@ -194,6 +194,9 @@ pub(crate) fn phase_failed(
 
 /// The workspace a generate command reads, or the report of why it cannot.
 fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> {
+    if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
+        return Err(Box::new(refused));
+    }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     open(options).map_err(|message| Box::new(Report::error(command, message)))
 }
@@ -209,6 +212,9 @@ fn workspace_in_step(
     extra: Vec<(String, Json)>,
     cx: &Context<'_>,
 ) -> Result<Workspace, Box<Report>> {
+    if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
+        return Err(Box::new(refused));
+    }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     open(options).map_err(|detail| {
         let ran = run_phase(step, cx.cwd, cx.cwd, |_| Err(detail));
@@ -1790,6 +1796,40 @@ mod tests {
         let written = walk(&absolute);
         assert!(written > 1);
         assert_eq!(report.steps[0].count, Some(written));
+    }
+
+    #[test]
+    fn generate_outside_a_workspace_writes_nothing() {
+        // D17 (smoke test): `opentide generate` in a folder with no
+        // `.opentide/` or `objects/` wrote 20 files there and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let stray = OsFs.resolve(dir.path());
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &stray,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let reports = [
+            phases(&[], &cx, "0.0.0"),
+            phases(&["schemas".to_owned()], &cx, "0.0.0"),
+            docs(&DocsArgs::default(), &cx),
+            exports(None, &cx),
+        ];
+        for report in reports {
+            assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
+            let failure = report.outcome.failure.as_ref().unwrap();
+            assert_eq!(failure.code, "workspace_not_found");
+            assert!(
+                report.outcome.message.starts_with("No workspace at "),
+                "{}",
+                report.outcome.message
+            );
+        }
+        assert_eq!(walk(&stray), 0, "nothing is written");
+        assert_eq!(std::fs::read_dir(&stray).unwrap().count(), 0);
     }
 
     /// The files under `dir`, at any depth.

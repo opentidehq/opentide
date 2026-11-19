@@ -50,7 +50,7 @@ All commands inherit [global options](./global-options.md):
 | Flag | Env var | Purpose |
 |------|---------|---------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Detection repository root |
-| `--data` | `OPENTIDE_DATA_ROOT` | Bundled data root override |
+| `--data` | `OPENTIDE_DATA_ROOT` | Accepted; changes nothing in this release (the data is compiled in) |
 | `--debug` | `OPENTIDE_DEBUG` | Debug logging |
 | `--quiet` | — | Only the outcome line and errors |
 | `--no-color` | `NO_COLOR` | Disable colour |

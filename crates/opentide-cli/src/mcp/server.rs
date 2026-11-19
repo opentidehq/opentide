@@ -114,7 +114,19 @@ impl State {
             cwd: self.cwd.as_deref(),
             repo: self.repo.as_deref(),
             version: &self.version,
-            workspace_problem: self.workspace_problem.clone(),
+            workspace_problem: self.workspace_problem.clone().or_else(|| {
+                let cwd = self
+                    .cwd
+                    .clone()
+                    .or_else(|| std::env::current_dir().ok())
+                    .unwrap_or_default();
+                super::plugin::missing_workspace(
+                    &opentide_workspace::OsFs,
+                    &self.env,
+                    &cwd,
+                    self.repo.as_deref(),
+                )
+            }),
             interrupt,
         }
     }
@@ -418,6 +430,64 @@ mod tests {
         assert_eq!(data.message, "Unknown resource: x");
         assert_eq!(data.data, Some(json!({"uri": "x"})));
         assert_eq!(error_data(&json!({})).code, ErrorCode::INTERNAL_ERROR);
+    }
+
+    #[test]
+    fn a_catalogue_tool_refuses_where_there_is_no_workspace() {
+        // C1 (smoke test): started in an empty folder, or with
+        // OPENTIDE_REPO_ROOT naming none, the server answered an empty
+        // catalogue and `validation_report` said `ok: true`.
+        let scratch = tempfile::tempdir().unwrap();
+        let empty = scratch.path().join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let missing = scratch.path().join("missing");
+        let text = |server: &Server, tool: &str, arguments: Value| -> (Value, String) {
+            let arguments = serde_json::from_value(arguments).unwrap();
+            let Answer::Result(result) = server.call(tool, &arguments) else {
+                panic!("not a result");
+            };
+            let text = result["content"][0]["text"].as_str().unwrap_or("").to_owned();
+            (result, text)
+        };
+        let in_empty = Server::new(
+            Env::from_pairs::<&str, &str>([]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        let (result, said) = text(&in_empty, "validation_report", json!({}));
+        assert_eq!(result["isError"], true, "{said}");
+        assert!(
+            said.contains("workspace_not_found: no detection workspace at"),
+            "{said}"
+        );
+        let (result, said) = text(&in_empty, "search", json!({"query": "x"}));
+        assert_eq!(result["isError"], true, "{said}");
+        // `explain` needs no workspace.
+        let (result, said) = text(&in_empty, "explain", json!({"code": "yaml_parse"}));
+        assert_ne!(result["isError"], true, "{said}");
+        // A workspace made while the server runs is served.
+        std::fs::create_dir_all(empty.join(".opentide")).unwrap();
+        let (_, said) = text(&in_empty, "validation_report", json!({}));
+        assert!(!said.contains("workspace_not_found"), "{said}");
+
+        let shown = missing.to_string_lossy().into_owned();
+        let named = Server::new(
+            Env::from_pairs([("OPENTIDE_REPO_ROOT", shown.as_str())]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        let (result, said) = text(&named, "validation_report", json!({}));
+        assert_eq!(result["isError"], true, "{said}");
+        assert!(
+            said.contains(&format!(
+                "workspace_not_found: OPENTIDE_REPO_ROOT names {shown}, which is not a folder"
+            )),
+            "{said}"
+        );
     }
 
     #[test]

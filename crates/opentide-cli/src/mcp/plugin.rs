@@ -126,6 +126,58 @@ pub fn apply(env: Env, launch: Option<&PluginLaunch>) -> (Env, Option<String>) {
     }
 }
 
+/// Why the server has no workspace to serve now, from `cwd` (or `repo`,
+/// `--repo`) and the workspace variables of `env`: a variable naming a
+/// folder that does not exist, or a root with no `.opentide/` or `objects/`
+/// (C1: the catalogue tools answered an empty catalogue, and
+/// `validation_report` `ok: true`). `None` when there is a workspace. Read
+/// on each call, so a workspace created while the server runs is served.
+pub fn missing_workspace(
+    fs: &dyn FileSystem,
+    env: &Env,
+    cwd: &Path,
+    repo: Option<&str>,
+) -> Option<String> {
+    let set = |name: &str| env.get(name).filter(|value| !value.is_empty());
+    let named = match repo {
+        Some(repo) => Some(("--repo", repo.to_owned())),
+        None => WORKSPACE_VARIABLES
+            .iter()
+            .find_map(|name| set(name).map(|value| (*name, value.to_owned()))),
+    };
+    let absolute = |value: &str| {
+        let path = Path::new(value);
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            cwd.join(path)
+        }
+    };
+    let root = match &named {
+        Some((name, value)) => {
+            let path = absolute(value);
+            if !fs.is_dir(&path) {
+                return Some(format!(
+                    "{WORKSPACE_NOT_FOUND}: {name} names {value}, which is not a folder. Set \
+                     OPENTIDE_REPO_ROOT to your detection repository in the host's MCP server \
+                     settings."
+                ));
+            }
+            path
+        }
+        None => find_workspace_root(fs, cwd),
+    };
+    (!is_workspace_root(fs, &root)).then(|| {
+        format!(
+            "{WORKSPACE_NOT_FOUND}: no detection workspace at {}: no .opentide/ or objects/ \
+             there or above it. Set OPENTIDE_REPO_ROOT to your detection repository in the \
+             host's MCP server settings, start the host inside it, or create one with \
+             'opentide setup'.",
+            root.display()
+        )
+    })
+}
+
 /// [`resolve`] and [`apply`] on the disk.
 pub fn served(env: Env, cwd: &Path) -> (Env, Option<String>) {
     let launch = resolve(&OsFs, cwd, &env);

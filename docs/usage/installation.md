@@ -133,7 +133,7 @@ opentide --help
 | Variable | Purpose |
 |----------|---------|
 | `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations). See [Repository setup](./repository-setup.md) |
-| `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
+| `OPENTIDE_DATA_ROOT` | Accepted, and changes nothing in this release: the vocabularies and default configurations are compiled into opentide |
 | `DEBUG` | Enable debug logging when set |
 
 ## Verify installation

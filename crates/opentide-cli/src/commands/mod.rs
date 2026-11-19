@@ -383,6 +383,44 @@ pub fn placement(repo: Option<&str>, env: &Env, cwd: &Path) -> (String, RootOpti
     (shown, options)
 }
 
+/// The refusal of a command that writes into the workspace when `repo`,
+/// `env` and `cwd` place none: no `.opentide/` or `objects/` at the
+/// repository root (or the `OPENTIDE_TIDE_WORKSPACE` it names), so writing
+/// there would make that folder a workspace every folder below it discovers
+/// (D17, B18: `generate` wrote 20 files into a stray folder and `migrate`
+/// reported 0 files scanned, both exiting 0). `workspace_not_found`, exit 1,
+/// as `opentide new` refuses.
+pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) -> Option<Report> {
+    let (shown, options) = placement(repo, env, cwd);
+    let absolute = |path: &Path| {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            cwd.join(path)
+        }
+    };
+    let root = absolute(Path::new(&shown));
+    let found = std::iter::once(root.clone())
+        .chain(options.tide_workspace_env.as_deref().map(absolute))
+        .any(|path| root::is_workspace_root(&OsFs, &path));
+    if found {
+        return None;
+    }
+    let mut report = Report::failed(
+        command,
+        1,
+        Failure::new(
+            new::WORKSPACE_NOT_FOUND,
+            format!(
+                "No workspace at {}: no .opentide/ or objects/ there or above it",
+                root.display()
+            ),
+        ),
+    );
+    report.next("opentide setup", "create a workspace first");
+    Some(report)
+}
+
 /// Opens the workspace `options` place, on disk.
 ///
 /// # Errors

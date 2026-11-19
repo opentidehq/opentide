@@ -537,19 +537,36 @@ impl Run<'_> {
             // The tree and its derive disagree: a bug, reported as one.
             Err(error) => return Err(std::io::Error::other(error.to_string())),
         };
-        if matches.value_source("repo") == Some(ValueSource::CommandLine)
-            && let Some(repo) = &self.globals.repo
-            && words.first().map(String::as_str) != Some("setup")
-            && !self.resolve(repo).is_dir()
+        // `OPENTIDE_REPO_ROOT` is held to the same test (A10): a typo in a CI
+        // variable would otherwise read as an empty catalogue that passes.
+        // The servers a host starts (`mcp`, `lsp`, `serve`) answer for it
+        // per request instead: MCP's catalogue tools refuse with
+        // `workspace_not_found`. An empty value names no folder.
+        let first = words.first().map(String::as_str);
+        let named = match &self.globals.repo {
+            Some(repo) => (first != Some("setup")).then(|| ("--repo", repo.clone())),
+            None => self
+                .env
+                .get("OPENTIDE_REPO_ROOT")
+                .filter(|repo| !repo.is_empty())
+                .filter(|_| !matches!(first, Some("setup" | "mcp" | "lsp" | "serve")))
+                .map(|repo| ("OPENTIDE_REPO_ROOT", repo.to_owned())),
+        };
+        if let Some((named, repo)) = named
+            && !self.resolve(&repo).is_dir()
         {
-            let problem = if self.resolve(repo).exists() {
+            let problem = if self.resolve(&repo).exists() {
                 "is not a directory"
             } else {
                 "does not exist"
             };
-            let message = format!("--repo {repo} {problem}");
+            let message = if named == "--repo" {
+                format!("--repo {repo} {problem}")
+            } else {
+                format!("OPENTIDE_REPO_ROOT={repo} {problem}")
+            };
             let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
-            failure.argument = Some("--repo".into());
+            failure.argument = Some(named.into());
             let mut outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
             outcome.next_actions = vec![NextAction::new(
                 "opentide --help",
@@ -4109,6 +4126,38 @@ mod tests {
             subcommand.stdout.contains("usage_unknown_option"),
             "{}",
             subcommand.stdout
+        );
+    }
+
+    #[test]
+    fn a_repo_root_variable_naming_no_folder_is_a_usage_error() {
+        // A10 (smoke test): `OPENTIDE_REPO_ROOT=/nonexist opentide validate`
+        // passed on an empty catalogue, where `--repo /nonexist` exits 2.
+        let missing = std::env::temp_dir().join(format!(
+            "opentide-cli-no-such-root-{}",
+            std::process::id()
+        ));
+        let shown = missing.to_string_lossy().into_owned();
+        let pairs = [("OPENTIDE_REPO_ROOT", shown.as_str())];
+        for line in ["validate", "info", "--json validate"] {
+            let ran = dispatched(line, &pairs, false);
+            assert_eq!(ran.code, USAGE_EXIT_CODE, "{line}: {}{}", ran.stdout, ran.stderr);
+            let said = format!("{}{}", ran.stdout, ran.stderr);
+            assert!(
+                said.contains(&format!("OPENTIDE_REPO_ROOT={shown} does not exist")),
+                "{line}: {said}"
+            );
+        }
+        let json = dispatched("--json validate", &pairs, false);
+        assert!(json.stdout.contains("\"code\":\"usage_invalid_value\""));
+        assert!(json.stdout.contains("\"argument\":\"OPENTIDE_REPO_ROOT\""));
+        // `--repo` wins over the variable; an empty value names no folder.
+        let here = std::env::temp_dir();
+        let line = format!("--repo {} --json commands", here.display());
+        assert_eq!(dispatched(&line, &pairs, false).code, 0);
+        assert_eq!(
+            dispatched("--json commands", &[("OPENTIDE_REPO_ROOT", "")], false).code,
+            0
         );
     }
 }
