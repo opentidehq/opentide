@@ -94,3 +94,14 @@ exit: 0
   "step": "splunk",
   "total": 1
 }
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000041.json · created 0644
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000041",
+  "platforms": {
+    "splunk": {
+      "lab": "Splunk create rule"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

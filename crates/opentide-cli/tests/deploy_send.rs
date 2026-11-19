@@ -3087,11 +3087,16 @@ fn a_renamed_splunk_rule_deletes_its_old_saved_search() {
     );
     // The tenant turns Enterprise Security on: the saved search becomes a
     // correlation search named `<title> - Rule`, and the plain one goes.
-    let config = ws.path().join(".opentide/configurations/platforms/splunk.toml");
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
     let text = std::fs::read_to_string(&config).unwrap();
     std::fs::write(
         &config,
-        text.replace("[tenants.setup]\n", "[tenants.setup]\nenterprise_security = true\n"),
+        text.replace(
+            "[tenants.setup]\n",
+            "[tenants.setup]\nenterprise_security = true\n",
+        ),
     )
     .unwrap();
     sends(&[

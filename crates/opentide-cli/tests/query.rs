@@ -1016,7 +1016,10 @@ fn a_splunk_rule_query_leaves_the_macro_out_where_the_tenant_turns_it_off() {
     let setup = std::fs::read_to_string(&config).unwrap();
     std::fs::write(
         &config,
-        setup.replace("[tenants.setup]\n", "[tenants.setup]\nmdr_mapping_macro = false\n"),
+        setup.replace(
+            "[tenants.setup]\n",
+            "[tenants.setup]\nmdr_mapping_macro = false\n",
+        ),
     )
     .unwrap();
     let ca = scratch.path().join("cassette-ca.pem");
@@ -1046,7 +1049,10 @@ fn a_splunk_rule_query_leaves_the_macro_out_where_the_tenant_turns_it_off() {
     assert_eq!(ran.code, 0, "{}\n{}", ran.stdout, ran.stderr);
     let document = ran.document();
     let queries = document["rule"]["queries"][0].as_str().unwrap();
-    assert!(queries.ends_with("`soc_macro_auto_mdr_mapping(MDR_UUID)`"), "{queries}");
+    assert!(
+        queries.ends_with("`soc_macro_auto_mdr_mapping(MDR_UUID)`"),
+        "{queries}"
+    );
     let sent = document["results"][0]["sent"].as_str().unwrap();
     assert!(!sent.contains("soc_macro_auto_mdr_mapping"), "{sent}");
     assert!(sent.ends_with("MDR_status=\"STAGING\""), "{sent}");

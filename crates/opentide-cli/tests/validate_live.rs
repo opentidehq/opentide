@@ -784,7 +784,9 @@ impl Platform for SearchesPlatform {
 fn a_splunk_check_follows_the_tenants_mapping_macro() {
     for (setting, with_macro) in [("", true), ("mdr_mapping_macro = false\n", false)] {
         let ws = splunk_rules(1);
-        let config = ws.path().join(".opentide/configurations/platforms/splunk.toml");
+        let config = ws
+            .path()
+            .join(".opentide/configurations/platforms/splunk.toml");
         let text = std::fs::read_to_string(&config).unwrap();
         std::fs::write(
             &config,
