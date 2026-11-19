@@ -84,7 +84,43 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
 fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
     use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
     let inputs = fixture("splunk");
-    let tenant = replay("splunk/deploy");
+    // The recording is the Python client's, which looked for no old saved
+    // search: after each write the deployer now lists the saved searches
+    // naming the rule's MDR_UUID (#1657), answered with the one it wrote.
+    let recorded = support::cassette("splunk/deploy");
+    let created = &recorded.interactions[1].request;
+    let Body::Text(form) = &created.body else {
+        panic!("a form body")
+    };
+    let uuid = form
+        .split("MDR_UUID%3D%22")
+        .nth(1)
+        .and_then(|rest| rest.split("%22").next())
+        .unwrap()
+        .to_owned();
+    let listing = |found: &opentide_cassette::Interaction| {
+        let mut listing = found.clone();
+        listing.request.url = format!(
+            "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches?search={uuid}&count=0"
+        );
+        listing
+    };
+    let mut interactions = recorded.interactions.clone();
+    let found = interactions[4].clone();
+    // After the create's second update (3), and after the update's (6+1).
+    interactions.insert(4, listing(&found));
+    interactions.insert(8, listing(&found));
+    let tenant = support::Replayed::start_with(
+        opentide_cassette::Cassette::new(
+            &recorded.scenario,
+            recorded.recorded_from.clone(),
+            interactions,
+        ),
+        splunk::PLATFORM,
+        SETUP,
+        "SPLUNK_TOKEN",
+        &splunk::http_settings(Duration::from_secs(120)),
+    );
     let connector = Splunk::new();
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();

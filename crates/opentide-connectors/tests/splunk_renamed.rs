@@ -40,19 +40,18 @@ struct State {
 struct FakeSplunk(Arc<Mutex<State>>);
 
 fn feed(entries: &[(&String, &String)]) -> Vec<u8> {
-    let entries: String = entries
-        .iter()
-        .map(|(name, search)| {
-            let path = format!("{SAVED}/{}", urlencoding(name));
-            format!(
-                "<entry><title>{name}</title><link href=\"{path}\" rel=\"alternate\"/>\
-                 <content type=\"text/xml\"><s:dict><s:key name=\"search\">{}</s:key>\
-                 <s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key>\
-                 </s:dict></s:key></s:dict></content></entry>",
-                search.replace('&', "&amp;").replace('<', "&lt;")
-            )
-        })
-        .collect();
+    let mut text = String::new();
+    for (name, search) in entries {
+        let path = format!("{SAVED}/{}", urlencoding(name));
+        text.push_str(&format!(
+            "<entry><title>{name}</title><link href=\"{path}\" rel=\"alternate\"/>\
+             <content type=\"text/xml\"><s:dict><s:key name=\"search\">{}</s:key>\
+             <s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key>\
+             </s:dict></s:key></s:dict></content></entry>",
+            search.replace('&', "&amp;").replace('<', "&lt;")
+        ));
+    }
+    let entries = text;
     format!(
         "<feed xmlns=\"http://www.w3.org/2005/Atom\" \
          xmlns:s=\"http://dev.splunk.com/ns/rest\">{entries}</feed>"
@@ -167,13 +166,12 @@ impl TransportFactory for FakeSplunk {
 /// One installed fake at a time: the transport is the process's.
 static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
 
+/// A step's warnings (code, message), or its failure's code and message.
+type Done = Result<Vec<(String, String)>, (String, String)>;
+
 /// Runs *steps* (rule name, rule UUID, query) as deploys on a tenant served
-/// by *fake*: each step's `Ok` (its warnings' codes and messages) or the
-/// failure's code and message.
-fn deploy(
-    fake: &FakeSplunk,
-    steps: &[(&str, &str, &str)],
-) -> Vec<Result<Vec<(String, String)>, (String, String)>> {
+/// by *fake*.
+fn deploy(fake: &FakeSplunk, steps: &[(&str, &str, &str)]) -> Vec<Done> {
     let _one = ONE_AT_A_TIME
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -216,6 +214,7 @@ fn deploy(
                 Json::Object(settings).to_compact().into_bytes(),
             );
             block_on(async { connector.deploy(cx, &request).await })
+                .unwrap()
                 .map(|done| {
                     done.warnings
                         .iter()
@@ -262,7 +261,10 @@ fn a_renamed_rules_old_saved_search_is_deleted() {
     let done = deploy(&fake, &[("New name", A, "index=main")]);
     assert_eq!(
         done,
-        [Ok(vec![(RENAMED_DELETED.to_owned(), "Old name".to_owned())])]
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
     );
     assert_eq!(names(&fake), ["New name", "Other rule"]);
     // The same name again: the listing finds nothing else to delete.
@@ -338,7 +340,10 @@ fn a_refused_delete_fails_the_rule_and_the_next_deploy_retries() {
     let retried = deploy(&fake, &[("New name", A, "index=main")]);
     assert_eq!(
         retried,
-        [Ok(vec![(RENAMED_DELETED.to_owned(), "Old name".to_owned())])]
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
     );
     assert_eq!(names(&fake), ["New name"]);
 }

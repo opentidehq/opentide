@@ -503,7 +503,7 @@ exit = 1
 
 [[scenario]]
 name = "golden/deploy-splunk"
-description = "deploy on Splunk's stand-in, the golden cases' cassette: a saved search looked up (404), created and its settings set in two updates; a retired one already absent."
+description = "deploy on Splunk's stand-in, the golden cases' cassette: a saved search looked up (404), created and its settings set in two updates, then the saved searches naming its MDR_UUID listed (none other to delete); a retired one already absent. Re-recorded from the Rust command line through the proxy (#1657)."
 client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform splunk --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]

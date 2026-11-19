@@ -19,9 +19,8 @@ use opentide_compile::json::{Json, Object};
 use crate::answer::{Answer, describe_answer, gateway_answer, page_title};
 use crate::connector::{
     BoxFuture, DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployWarning, Deployer,
-    LiveCheck, LiveValidator,
-    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
-    columns_of,
+    LiveCheck, LiveValidator, Operation, Platform, QueryColumn, QueryOutcome, QueryRequest,
+    QueryRunner, Row, TenantContext, columns_of,
 };
 use crate::error::ConnectorError;
 use crate::text::json_text;
@@ -660,7 +659,11 @@ impl Splunk {
         let app = Self::app(cx)?;
         Ok(entries(&reply.answer.body)
             .iter()
-            .filter(|entry| entry.key("search").is_some_and(|search| search.contains(&marker)))
+            .filter(|entry| {
+                entry
+                    .key("search")
+                    .is_some_and(|search| search.contains(&marker))
+            })
             .filter(|entry| entry.key("app").is_none_or(|owner| owner == app))
             .filter_map(SavedSearch::from_entry)
             .filter_map(|saved| {
@@ -690,6 +693,67 @@ impl Splunk {
             return Err(refused_call(cx, &reply));
         }
         Ok(())
+    }
+
+    /// [`Deployer::deploy`]: the saved search `request` names written, or
+    /// deleted, and a renamed rule's old saved searches deleted.
+    async fn deploy_saved_search(
+        &self,
+        cx: TenantContext<'_>,
+        request: &DeployRequest,
+    ) -> Result<DeployOutcome, DeployError> {
+        let settings = match serde_json::from_slice::<Json>(&request.body) {
+            Ok(Json::Object(settings)) => settings,
+            Ok(_) | Err(_) if request.operation == Operation::Delete => Object::new(),
+            _ => {
+                return Err(ConnectorError::Setup {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    message: "the compiled saved search is not a JSON object".into(),
+                }
+                .into());
+            }
+        };
+        if request.operation == Operation::Delete {
+            let mut warnings = Vec::new();
+            if self.saved_search(cx, &request.rule_id).await?.is_some() {
+                self.delete_saved_search(cx, &request.rule_id).await?;
+                // Said, not raised: the run's warnings are for what to check.
+                warnings.push(
+                    DeployWarning::new("splunk_alert_deleted", request.rule_id.clone()).unraised(),
+                );
+            }
+            return Ok(DeployOutcome::new(None, request.operation).with_warnings(warnings));
+        }
+        self.apply_saved_search(cx, &request.rule_id, &settings, false)
+            .await?;
+        // The saved searches an earlier name of the rule left (a rename,
+        // or ` - Rule` added or dropped), found by the rule's UUID in
+        // their search, are deleted once the new one is written (#1657).
+        let mut warnings = Vec::new();
+        if let Some(uuid) = settings
+            .get("search")
+            .map(json_text)
+            .as_deref()
+            .and_then(mdr_uuid)
+        {
+            let written = &request.rule_id;
+            let others = self
+                .other_saved_searches(cx, &uuid, written)
+                .await
+                .map_err(|error| renamed_failure(written, None, &error))?;
+            for old in others {
+                self.delete_saved_search(cx, &old)
+                    .await
+                    .map_err(|error| renamed_failure(written, Some(&old), &error))?;
+                // Said, not raised: what the run did, not what to check.
+                warnings.push(DeployWarning::new(RENAMED_DELETED, old).unraised());
+            }
+        }
+        Ok(
+            DeployOutcome::new(Some(request.rule_id.clone()), request.operation)
+                .with_warnings(warnings),
+        )
     }
 
     /// Writes the saved search *name* with *settings*
@@ -1025,56 +1089,9 @@ impl Deployer for Splunk {
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying(async move {
-            let settings = match serde_json::from_slice::<Json>(&request.body) {
-                Ok(Json::Object(settings)) => settings,
-                Ok(_) | Err(_) if request.operation == Operation::Delete => Object::new(),
-                _ => {
-                    return Err(ConnectorError::Setup {
-                        platform: PLATFORM.into(),
-                        tenant: cx.tenant.label.tenant.clone(),
-                        message: "the compiled saved search is not a JSON object".into(),
-                    });
-                }
-            };
-            if request.operation == Operation::Delete {
-                let mut warnings = Vec::new();
-                if self.saved_search(cx, &request.rule_id).await?.is_some() {
-                    self.delete_saved_search(cx, &request.rule_id).await?;
-                    // Said, not raised: the run's warnings are for what to check.
-                    warnings.push(
-                        DeployWarning::new("splunk_alert_deleted", request.rule_id.clone())
-                            .unraised(),
-                    );
-                }
-                return Ok(DeployOutcome::new(None, request.operation).with_warnings(warnings));
-            }
-            self.apply_saved_search(cx, &request.rule_id, &settings, false)
-                .await?;
-            // The saved searches an earlier name of the rule left (a rename,
-            // or ` - Rule` added or dropped), found by the rule's UUID in
-            // their search, are deleted once the new one is written (#1657).
-            let mut warnings = Vec::new();
-            if let Some(uuid) = settings.get("search").map(json_text).as_deref().and_then(mdr_uuid)
-            {
-                let written = &request.rule_id;
-                let others = self
-                    .other_saved_searches(cx, &uuid, written)
-                    .await
-                    .map_err(|error| renamed_failure(written, None, &error))?;
-                for old in others {
-                    self.delete_saved_search(cx, &old)
-                        .await
-                        .map_err(|error| renamed_failure(written, Some(&old), &error))?;
-                    // Said, not raised: what the run did, not what to check.
-                    warnings.push(DeployWarning::new(RENAMED_DELETED, old).unraised());
-                }
-            }
-            Ok(
-                DeployOutcome::new(Some(request.rule_id.clone()), request.operation)
-                    .with_warnings(warnings),
-            )
-        })
+        // Connector errors convert as `deploying` converts them; a rename's
+        // cleanup fails the rule with its own code.
+        Box::pin(self.deploy_saved_search(cx, request))
     }
 }
 
