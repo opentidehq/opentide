@@ -10,4 +10,4 @@ exit: 1
 ━━━ stderr
 error: Environment variable missing · detail: Unset configuration variables: $DEFENDER_CLIENT_SECRET · advice: Set those environment variables before a live check.
 ✗ Microsoft Defender for Endpoint queries · 1 rule · <SECONDS>
-error: Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.
+error: Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables, then run the command again.
