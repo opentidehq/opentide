@@ -141,6 +141,11 @@ pub const STRATEGY_REQUIRED: &str = "Pass --strategy: PREVIEW deploys the rules 
 /// Nothing matched the run's strategies.
 pub const NO_RULES_MATCHED: &str = "No rule this run read has a status that maps to its strategies";
 
+/// The message of a run without `--all` or a selection whose commits changed
+/// no rule file: nothing was read, so no status is at fault.
+pub const NO_RULE_FILE_CHANGED: &str =
+    "No rule file changed in this run's commits; pass --all to deploy every rule file";
+
 /// The deployable strategy closest to the first `--strategy` value that is
 /// not one (`strategy_suggestion`).
 pub fn strategy_suggestion(values: &[String]) -> Option<String> {
@@ -338,6 +343,7 @@ pub fn run(
     let (rules_dir, folder) = rules_folder(workspace);
     let local = plan::local_scope(fs, &rules_dir, &folder);
     let selecting = !request.uuids.is_empty() || !request.files.is_empty();
+    let reads_changes = !selecting && !request.all;
     let mut no_commits: Option<String> = None;
     let scope = if selecting {
         let (scope, unmatched) = selected_scope(fs, workspace, &local, request, &request.cwd);
@@ -378,6 +384,8 @@ pub fn run(
             }
         }
     };
+    // The commits changed no rule file: say so, rather than blame a status.
+    let unchanged = reads_changes && scope.files.is_empty() && scope.nested.is_empty();
     let enabled = plan::enabled_with(
         &Json::from_node(&workspace.configuration().resolved.tree),
         &request.plugins,
@@ -447,7 +455,11 @@ pub fn run(
             }
             None => {
                 return nothing(
-                    "No rules to deploy for this platform",
+                    if unchanged {
+                        NO_RULE_FILE_CHANGED
+                    } else {
+                        "No rules to deploy for this platform"
+                    },
                     failed_before,
                     Some(("platform", Json::from(platform.as_str()))),
                     &selection,
@@ -464,7 +476,11 @@ pub fn run(
     }
     if deployment.is_empty() {
         return nothing(
-            NO_RULES_MATCHED,
+            if unchanged {
+                NO_RULE_FILE_CHANGED
+            } else {
+                NO_RULES_MATCHED
+            },
             failed_before,
             Some(("strategies", Json::from(run_names.clone()))),
             &selection,
