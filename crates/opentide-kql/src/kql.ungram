@@ -296,7 +296,7 @@ ReduceOperator =
 // `T | search kind=case_sensitive in (U) "x"`.
 SearchOperator =
   'search' OperatorOption*
-  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr
 
 // `invoke`, `getschema`, `sample`, `consume`, `make-graph`, ...: an operator
 // that takes at most one argument.

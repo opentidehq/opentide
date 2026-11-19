@@ -355,13 +355,10 @@ fn operator(p: &mut P<'_>) {
         K::PARTITION_KW => partition(p),
         K::SCAN_KW => scan(p),
         K::SEARCH_KW => {
-            // `T | search kind=case_sensitive in (U) "x"`: a source's grammar,
-            // its one option `kind`.
+            // `T | search kind=case_sensitive in (U) "x"`: a source's grammar.
             p.bump();
-            while at_named_option(p, &["kind"]) {
-                option_after_name(p, K::OPERATOR_OPTION);
-            }
-            search_body(p);
+            search_options(p);
+            search_body(p, false);
             K::SEARCH_OPERATOR
         }
         K::FIND_KW
@@ -1041,21 +1038,50 @@ fn with_options(p: &mut P<'_>) {
     }
 }
 
-/// `search "x"`, `search in (A, B) where x`, `find in (T) where x`.
+/// `search "x"`, `search in (A, B) x`, `find in (T) where x`.
 fn search_source(p: &mut P<'_>) {
     let m = p.start();
     let find = p.at(K::FIND_KW);
     p.bump();
-    options(p);
-    search_body(p);
+    if find {
+        options(p);
+    } else {
+        search_options(p);
+    }
+    search_body(p, find);
     if find && p.at(K::PROJECT_KW) {
         find_project(p);
     }
     p.done(m, K::SEARCH_SOURCE);
 }
 
-/// What follows a search's options: its tables, then its predicate.
-fn search_body(p: &mut P<'_>) {
+/// The options `search` takes, as Kusto.Language reads them: `kind` with one
+/// of its three values, `withsource` (or `with_source`), `bagexpansion` and
+/// `isfuzzy`. Any other name is not an option (`search foo=1 "x"`).
+fn search_options(p: &mut P<'_>) {
+    const NAMES: &[&str] = &[
+        "kind",
+        "withsource",
+        "with_source",
+        "bagexpansion",
+        "isfuzzy",
+    ];
+    while at_named_option(p, NAMES) {
+        let kind = p.nth_text(0) == "kind";
+        let value_ok = matches!(
+            p.nth_text(2),
+            "default" | "case_insensitive" | "case_sensitive"
+        ) && p.name_at(2);
+        option_after_name(p, K::OPERATOR_OPTION);
+        if kind && !value_ok {
+            p.error("expected `default`, `case_insensitive` or `case_sensitive`");
+        }
+    }
+}
+
+/// What follows a search's options: its tables, then its predicate, after a
+/// `where` only in a `find`.
+fn search_body(p: &mut P<'_>, find: bool) {
     // `in` after `search` starts the table list, as in the old grammar.
     if p.at(K::IN_KW) {
         p.bump();
@@ -1064,7 +1090,9 @@ fn search_body(p: &mut P<'_>) {
             p.expect(K::R_PAREN);
         }
     }
-    p.eat(K::WHERE_KW);
+    if find {
+        p.eat(K::WHERE_KW);
+    }
     expr::expr(p);
 }
 

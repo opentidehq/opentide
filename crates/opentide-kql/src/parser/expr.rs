@@ -88,22 +88,33 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     // `a : "x" == true`: the search term binds first. Read from the token the
     // operator match reads anyway: a level of its own cost every operand a
     // call (parse +1.0% on the external corpus).
+    let mut term = false;
     if next == K::COLON {
         lhs = colon_rest(p, lhs);
         next = p.current();
+        term = true;
     }
+    // A search term stands where a string operator does: after one, only an
+    // equality or ordering, a set or a range test (`a : "x" == true`, `a :
+    // "x" in (…)`); `a : "x" has "y"` is an error, as in Kusto.Language.
     let (kind, shape) = match next {
-        K::CMP_OP => (K::COMPARISON_EXPR, Shape::Operand),
-        K::MATCHES_KW => (K::COMPARISON_EXPR, Shape::Matches),
+        K::CMP_OP if !term || equality_or_ordering(p.nth_text(0)) => {
+            (K::COMPARISON_EXPR, Shape::Operand)
+        }
+        K::MATCHES_KW if !term => (K::COMPARISON_EXPR, Shape::Matches),
         K::IN_KW if p.nth(1) == K::L_PAREN => (K::IN_EXPR, Shape::List),
         K::SET_OP => (K::IN_EXPR, Shape::List),
         K::BETWEEN_OP => (K::BETWEEN_EXPR, Shape::Range),
         _ => return Some(lhs),
     };
+    let equality = shape == Shape::Operand && equality_or_ordering(p.nth_text(0));
     let m = p.precede(lhs);
     p.bump();
     match shape {
-        Shape::Operand => operand_or_error(p, colon_operand),
+        // `a == "x" : true`; after a string operator the right side is no
+        // search term (`a has "y" : "x"` is an error).
+        Shape::Operand if equality => operand_or_error(p, colon_operand),
+        Shape::Operand => operand_or_error(p, additive),
         Shape::Matches => {
             p.expect(K::REGEX_KW);
             operand_or_error(p, additive);
@@ -135,6 +146,12 @@ fn colon_operand(p: &mut P<'_>) -> Option<CompletedMarker> {
     })
 }
 
+/// `==`, `!=`, `<>` and the orderings: the comparisons a search term goes with.
+fn equality_or_ordering(op: &str) -> bool {
+    matches!(op, "==" | "!=" | "<>" | "<" | "<=" | ">" | ">=")
+}
+
+#[derive(PartialEq, Eq)]
 enum Shape {
     Operand,
     Matches,

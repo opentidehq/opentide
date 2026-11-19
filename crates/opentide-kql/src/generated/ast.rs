@@ -3600,7 +3600,7 @@ impl ReduceOperator {
     }
 }
 
-/// `SearchOperator = 'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr`
+/// `SearchOperator = 'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SearchOperator {
     syntax: SyntaxNode,
@@ -3651,10 +3651,6 @@ impl SearchOperator {
     /// The token child.
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![')'])
-    }
-    /// The token child.
-    pub fn where_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![where])
     }
     /// The `Expr` child.
     pub fn predicate(&self) -> Option<Expr> {
@@ -8001,7 +7997,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::SEARCH_OPERATOR as u16,
         name: "SearchOperator",
-        text: "'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr",
+        text: "'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr",
         rule: Rule::Seq(&[
             Rule::Kind(T![search] as u16),
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
@@ -8027,7 +8023,6 @@ pub static RULES: &[NodeRule] = &[
                 ])),
                 Rule::Kind(T![')'] as u16),
             ])),
-            Rule::Opt(&Rule::Kind(T![where] as u16)),
             Rule::Alt(&[
                 Rule::Kind(SyntaxKind::OR_EXPR as u16),
                 Rule::Kind(SyntaxKind::AND_EXPR as u16),

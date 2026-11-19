@@ -213,7 +213,7 @@ accessors! {
         AsOperator => [as_token, hint_options, name],
         TopHittersOperator => [keyword, count, of_token, value, top_hitters_by],
         ReduceOperator => [reduce_token, operator_options, by_token, value, with_token, comma_token],
-        SearchOperator => [search_token, operator_options, in_token, l_paren_token, table, table_patterns, comma_token, r_paren_token, where_token, predicate],
+        SearchOperator => [search_token, operator_options, in_token, l_paren_token, table, table_patterns, comma_token, r_paren_token, predicate],
         KeywordOperator => [name, args],
         UnknownOperator => [name, args],
         Subquery => [tabular_operators, pipe_token],
