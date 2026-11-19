@@ -569,7 +569,16 @@ pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> 
         J::Float(number) => toml::Value::Float(*number),
         J::Bool(flag) => toml::Value::Boolean(*flag),
         J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
-        J::Null | J::Object(_) => return None,
+        // A table (Graylog's `stream_ids` and `notification_ids`) is kept,
+        // as the connectors' `tenant::configured` keeps it: `Tenant` reads
+        // it with `table`.
+        J::Object(entries) => toml::Value::Table(
+            entries
+                .iter()
+                .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
+                .collect(),
+        ),
+        J::Null => return None,
     })
 }
 
@@ -2167,9 +2176,18 @@ mod tests {
             ]))
         );
         assert_eq!(toml_value(&J::Null), None);
+        // A table is kept (Graylog's `stream_ids`), its nulls left out.
+        let mut ids = opentide_compile::json::Object::new();
+        ids.insert("endpoint".into(), J::Str("65f0c0ffee0123456789abcd".into()));
+        ids.insert("gone".into(), J::Null);
+        let mut expected = toml::Table::new();
+        expected.insert(
+            "endpoint".into(),
+            toml::Value::String("65f0c0ffee0123456789abcd".into()),
+        );
         assert_eq!(
-            toml_value(&J::Object(opentide_compile::json::Object::new())),
-            None
+            toml_value(&J::Object(ids)),
+            Some(toml::Value::Table(expected))
         );
         assert_eq!(reference(&J::Str("$TOKEN".into())), Some("TOKEN"));
         assert_eq!(reference(&J::Str("${TOKEN}".into())), Some("TOKEN"));
