@@ -2322,8 +2322,6 @@ variant = "sharing-variables-azure"
 args = ["setup", "ci", "azure", "--default-branch", "main", "--sharing", "--yes"]
 fixtures = ["share-misp"]
 
-# --python-version is written into the pipeline as it is: a version opentide
-# does not install on exits 2 and writes nothing (#1656).
 # A pipeline the user wrote is kept, in a plan and in a run, by the command
 # and by the group (#1656).
 [[case]]
@@ -2338,6 +2336,8 @@ variant = "own-pipeline-plan"
 args = ["setup", "--ci", "gitlab", "--plan"]
 fixtures = ["vscode-own-pipeline"]
 
+# --python-version is written into the pipeline as it is: a version opentide
+# does not install on exits 2 and writes nothing (#1656).
 [[case]]
 command = "setup ci"
 variant = "python-version-refused"

@@ -205,7 +205,7 @@ fn an_older_pipeline_is_regenerated_and_an_unreadable_one_is_kept() {
         assert_eq!(files.len(), 1, "{words:?}: {stdout}");
         assert_eq!(files[0]["action"], "skip", "{words:?}: {stdout}");
         assert!(
-            stdout.contains(".gitlab-ci.yml cannot be read as UTF-8 text"),
+            stdout.contains(".gitlab-ci.yml is not UTF-8 text, or cannot be read"),
             "{stdout}"
         );
     }
@@ -214,6 +214,27 @@ fn an_older_pipeline_is_regenerated_and_an_unreadable_one_is_kept() {
     assert!(
         stderr.contains("move or delete it and run the command again"),
         "{stderr}"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), latin1);
+    // `setup ci` and the group's step report the kept file alike.
+    let (code, stdout, stderr) = opentide(&ws, &["--json", "setup", "ci", "gitlab", "--yes"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let run: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        run["skipped"],
+        serde_json::json!([".gitlab-ci.yml"]),
+        "{stdout}"
+    );
+    assert_eq!(run["files"], serde_json::json!([]), "{stdout}");
+    let (code, stdout, stderr) = opentide(&ws, &["--json", "setup", "--ci", "gitlab", "--yes"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stdout.contains("CI pipeline kept: the file there is not opentide's"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(".gitlab-ci.yml is not UTF-8 text, or cannot be read"),
+        "{stdout}"
     );
     assert_eq!(std::fs::read(&path).unwrap(), latin1);
 }
