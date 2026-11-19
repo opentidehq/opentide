@@ -863,7 +863,7 @@ fn deploy(
                     .unwrap_or_default(),
             })
             .collect();
-        log_unset(&configured, cx.env);
+        log_unset(&configured, cx.env, "a deploy");
         let tenants: Vec<plan::Tenant> = tables
             .iter()
             .map(|table| plan::Tenant::from_json(table))

@@ -844,6 +844,8 @@ fn a_gateway_in_front_of_kibana_fails_the_tenant() {
                 wiremock::ResponseTemplate::new(503)
                     .set_body_string("<html><title>503 Service Unavailable</title></html>"),
             )
+            // The request and the client's three retries, then the tenant fails.
+            .expect(4)
             .mount(&kibana),
         );
         let (outcome, _) = deploy_with_kibana_at(&runtime, &kibana.uri(), operation);
@@ -874,5 +876,40 @@ fn a_gateway_in_front_of_kibana_fails_the_tenant() {
             !methods.iter().any(|m| m == "POST" || m == "PUT"),
             "{methods:?}"
         );
+        runtime.block_on(kibana.verify());
     }
+}
+
+/// A gateway's 503 that clears within the client's retries is no failure:
+/// the lookup's retry finds no rule, and the rule is created (#1658, E7).
+#[test]
+fn a_gateway_503_that_clears_on_a_retry_deploys_the_rule() {
+    use wiremock::matchers::{method, path};
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let kibana = runtime.block_on(wiremock::MockServer::start());
+    runtime.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/detection_engine/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(503))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&kibana)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/detection_engine/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&kibana)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/detection_engine/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .expect(1)
+            .mount(&kibana)
+            .await;
+    });
+    let (outcome, _) = deploy_with_kibana_at(&runtime, &kibana.uri(), Operation::Update);
+    let done = outcome.unwrap();
+    assert_eq!(done.events[0].name, "elastic_rule_created");
+    runtime.block_on(kibana.verify());
 }
