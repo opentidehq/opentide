@@ -2405,6 +2405,93 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
     assert!(shard_of(ws.path(), removed).is_empty());
 }
 
+/// A deploy resolves the tenant's stream and notification aliases through
+/// its `stream_ids` and `notification_ids`, as the dry run does, in every
+/// request it builds from the rule: the query check, a create and an update
+/// name the ids, never an empty list (which Graylog reads as every stream and
+/// no notification). An alias the tenant does not define fails its rule
+/// alone, before any request for it.
+#[test]
+fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
+    const STREAM: &str = "65f1c0de2a3b4c5d6e7f2222";
+    const NOTIFICATION: &str = "65f1c0de2a3b4c5d6e7f3333";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, "7.1.0");
+    let setup = format!(
+        "url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\nstreams = [\"endpoint\"]\n\
+         [tenants.setup.stream_ids]\nendpoint = \"{STREAM}\"\n\
+         [tenants.setup.notification_ids]\npager = \"{NOTIFICATION}\"\n",
+        server.uri()
+    );
+    let (created, recorded, unknown) = (
+        "00000000-0000-4000-8099-000000000127",
+        "00000000-0000-4000-8099-000000000128",
+        "00000000-0000-4000-8099-000000000129",
+    );
+    let notify = |alias: &str| {
+        format!(
+            "{}    notifications:\n      - {alias}\n",
+            graylog_block("STAGING", "EventID:1")
+        )
+    };
+    let ws = stated(
+        "graylog",
+        &setup,
+        &[("b.yaml", recorded, notify("pager"), GRAYLOG_KEPT)],
+    );
+    let rules = ws.path().join("objects/rules");
+    std::fs::write(
+        rules.join("a.yaml"),
+        rule("Aliased rule", created, "Aliased.", &notify("pager")),
+    )
+    .unwrap();
+    std::fs::write(
+        rules.join("c.yaml"),
+        rule("Unknown alias rule", unknown, "Unknown.", &notify("nobody")),
+    )
+    .unwrap();
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    // The unknown alias fails its rule, and the run; the others deploy.
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("graylog_alias_unknown"), "{err}");
+    assert!(err.contains("nobody"), "{err}");
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let bodies = |verb: wiremock::http::Method, prefix: &str| -> Vec<serde_json::Value> {
+        received
+            .iter()
+            .filter(|request| request.method == verb && request.url.path().starts_with(prefix))
+            .map(|request| serde_json::from_slice(&request.body).unwrap())
+            .collect()
+    };
+    // Graylog 7 takes a created definition under `entity`; an update is bare.
+    let created_bodies = bodies(wiremock::http::Method::POST, "/api/events/definitions");
+    let updated = bodies(
+        wiremock::http::Method::PUT,
+        &format!("/api/events/definitions/{GRAYLOG_KEPT}"),
+    );
+    let checked = bodies(wiremock::http::Method::POST, "/api/search/validate");
+    assert_eq!((created_bodies.len(), updated.len()), (1, 1), "{err}");
+    // The query is checked for the two rules that resolve, never the third.
+    assert_eq!(checked.len(), 2, "{err}");
+    for definition in [&created_bodies[0]["entity"], &updated[0]] {
+        assert_eq!(
+            definition["config"]["streams"],
+            serde_json::json!([STREAM]),
+            "{definition}"
+        );
+        assert_eq!(
+            definition["notifications"],
+            serde_json::json!([{"notification_id": NOTIFICATION}]),
+            "{definition}"
+        );
+    }
+    for body in &checked {
+        assert_eq!(body["streams"], serde_json::json!([STREAM]), "{body}");
+    }
+    assert!(shard_of(ws.path(), unknown).is_empty(), "{err}");
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.
