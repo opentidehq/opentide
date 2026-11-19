@@ -313,6 +313,7 @@ esql-reference/213_promql_step_1m_sum_up.esql	ERR	ERR	ERR	ERR	ERR	OK	OK
 esql-reference/214_explain_from_logs_limit_1.esql	ERR	ERR	ERR	ERR	ERR	ERR	ERR
 esql-reference/215_fillnull_0_on_a_b.esql	ERR	ERR	ERR	ERR	ERR	ERR	ERR
 esql-reference/216_where_a_1_eval_b_a_stats_c_count_by_b_sort_c_des.esql	OK	OK	OK	OK	OK	OK	OK
+esql-reference/217_rerank_timeout.esql	ERR	ERR	ERR	ERR	ERR	ERR	OK
 esql-syntax/change_point_by.esql	ERR	ERR	ERR	ERR	ERR	ERR	OK
 esql-syntax/cluster_pattern_control.esql	OK	OK	OK	OK	OK	OK	OK
 esql-syntax/cluster_selector.esql	ERR	ERR	ERR	ERR	ERR	OK	OK

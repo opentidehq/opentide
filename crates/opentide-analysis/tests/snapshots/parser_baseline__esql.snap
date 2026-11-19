@@ -4764,6 +4764,27 @@ esql_metadata_id warning 0:0-0:4 non-aggregating ES|QL query lacks `METADATA _id
 78..79 operator.pipe
 80..85 keyword
 86..87 number
+== oracles/elasticsearch/esql-reference/217_rerank_timeout.esql
+esql_unavailable information 0:59-0:75 the `RERANK` option `timeout`: needs Elasticsearch 9.5 or later; 8.19 and 9.0 to 9.4 reject it
+esql_unavailable information 0:12-0:18 command `RERANK`: needs Elasticsearch 9.2 or later; 8.19, 9.0 and 9.1 reject it; technical preview from 9.2, GA from 9.4
+esql_metadata_id warning 0:0-0:4 non-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic Security cannot de-duplicate its alerts (9.4 and later add it)
+0..4 keyword
+5..9 type
+10..11 operator.pipe
+12..18 keyword
+19..22 string
+23..25 keyword
+26..31 property
+32..36 keyword
+37..38 punctuation.bracket
+38..52 string
+52..53 operator
+54..57 string
+57..58 punctuation.delimiter
+59..68 string
+68..69 operator
+70..75 string
+75..76 punctuation.bracket
 == oracles/elasticsearch/esql-syntax/change_point_by.esql
 esql_unavailable information 0:80-0:112 `CHANGE_POINT … BY`: needs Elasticsearch 9.5 or later; 8.19 and 9.0 to 9.4 reject it
 esql_unavailable information 0:80-0:92 command `CHANGE_POINT`: Elasticsearch 9.0 rejects it (it works on 8.19 and 9.1 to 9.6); technical preview from 9.1, GA from 9.2
