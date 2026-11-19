@@ -267,8 +267,31 @@ pub(crate) const GATED: &[K] = &[
     K::JOIN_COMMAND,
     K::MAP_EXPRESSION,
     K::COMPLETION_COMMAND,
+    K::RERANK_COMMAND,
     K::METADATA,
 ];
+
+/// The `"timeout"` entry of a command's `WITH {…}` options, which
+/// COMPLETION and RERANK take from 9.5: 9.4 refuses it ("Invalid option
+/// [timeout] in COMPLETION, expected one of [[inference_id,
+/// task_settings]]", and in RERANK "[[inference_id]]"). A key of a nested
+/// map is not an option. A text check first: walking the map's entries
+/// allocates a handle per node, on every command with options.
+fn timeout_option(node: &SyntaxNode, source: &str) -> Option<SyntaxNode> {
+    if !text_of(node, source).contains("timeout") {
+        return None;
+    }
+    node.children()
+        .filter(|c| c.kind() == K::NAMED_PARAMETERS)
+        .flat_map(|n| n.children())
+        .filter(|m| m.kind() == K::MAP_EXPRESSION)
+        .flat_map(|m| m.children())
+        .filter(|e| e.kind() == K::MAP_ENTRY)
+        .find(|e| {
+            e.first_child()
+                .is_some_and(|k| text_of(&k, source).trim_matches('"') == "timeout")
+        })
+}
 
 /// Version gates for one node (not names: those come from the catalog).
 pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
@@ -281,6 +304,21 @@ pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
 
 /// The gates of one node, of any kind.
 fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
+    // RERANK has only its option gate: answered before the parts below are
+    // collected, which allocates on every gated node. 9.2 to 9.4: "Invalid
+    // option [timeout] in RERANK, expected one of [[inference_id]]".
+    if node.kind() == K::RERANK_COMMAND {
+        return timeout_option(node, source)
+            .map(|entry| {
+                Gate::new(
+                    "the `RERANK` option `timeout`",
+                    Availability::since_9(5),
+                    span_of(&entry),
+                )
+            })
+            .into_iter()
+            .collect();
+    }
     let mut out = Vec::new();
     let span = span_of(node);
     let parts = parts(node);
@@ -495,26 +533,7 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
                     Availability::since_9(2),
                     span,
                 ));
-                // 8.19 to 9.4 take only `inference_id` and `task_settings`:
-                // "Invalid option [timeout] in COMPLETION, expected one of
-                // [[inference_id, task_settings]]" (9.4.9).
-                // A text check first: walking the map's entries allocates a
-                // handle per node, on every COMPLETION with options.
-                let mentions = text_of(node, source).contains("timeout");
-                let timeout = mentions
-                    .then(|| node.children())
-                    .into_iter()
-                    .flatten()
-                    .filter(|c| c.kind() == K::NAMED_PARAMETERS)
-                    .flat_map(|n| n.children())
-                    .filter(|m| m.kind() == K::MAP_EXPRESSION)
-                    .flat_map(|m| m.children())
-                    .filter(|e| e.kind() == K::MAP_ENTRY)
-                    .find(|e| {
-                        e.first_child()
-                            .is_some_and(|k| text_of(&k, source).trim_matches('"') == "timeout")
-                    });
-                if let Some(entry) = timeout {
+                if let Some(entry) = timeout_option(node, source) {
                     out.push(Gate::new(
                         "the `COMPLETION` option `timeout`",
                         Availability::since_9(5),
@@ -743,6 +762,20 @@ mod tests {
             "{:?}",
             gates(completion)
         );
+        let rerank =
+            "FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\", \"timeout\": \"10s\"}";
+        assert_eq!(
+            gates(rerank),
+            one(
+                "the `RERANK` option `timeout`",
+                "\"timeout\": \"10s\"",
+                None
+            )
+        );
+        assert_eq!(
+            gates("FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\"}"),
+            []
+        );
         // `timeout` in the prompt, or in a nested map, is not the option.
         for q in [
             "FROM a | COMPLETION c = \"timeout\" WITH {\"inference_id\": \"e\"}",
@@ -815,6 +848,7 @@ mod tests {
             "ROW a = 1 | LIMIT 1 BY a | CHANGE_POINT a BY b",
             "ROW a = \"x\" | GROK a \"%{WORD:b}\", \"%{WORD:c}\"",
             "FROM a | LOOKUP JOIN t ON x, y | COMPLETION p WITH ep | FUSE linear WITH {}",
+            "FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\", \"timeout\": \"1s\"}",
         ] {
             for node in crate::syntax_tree(query).descendants() {
                 if !gates_of(&node, query).is_empty() {
