@@ -333,7 +333,7 @@ impl Run<'_> {
         };
         Console {
             colour,
-            width: self.host.width.filter(|_| tty && colour != Colour::None),
+            width: self.host.width.filter(|_| tty),
         }
     }
 
@@ -1720,9 +1720,10 @@ impl Run<'_> {
             }
         }
         let stdout = self.console(self.host.stdout_tty);
-        // `plain` and `agent` lines are never wrapped, so a long path stays
-        // on one line (`docs/cli/json-output.md`, Output modes): 0 is no wrap.
-        let width = if self.mode == Mode::Human {
+        // Lines wrap at a terminal only: a pipe, a file, a CI log or an
+        // agent keeps each line whole, a long path on one line, as 0.28.1
+        // did (`docs/cli/json-output.md`, Output modes). 0 is no wrap.
+        let width = if self.host.stdout_tty {
             self.stdout_width()
         } else {
             0
@@ -4131,6 +4132,8 @@ mod tests {
         for (pairs, mode) in [
             (&[][..], "plain"),
             (&[("OPENTIDE_OUTPUT", "agent")][..], "agent"),
+            // Human output redirected to a file is not wrapped either.
+            (&[("OPENTIDE_OUTPUT", "human")][..], "human"),
         ] {
             let _ = std::fs::remove_dir_all(&path);
             let ran = dispatched(&line, pairs, false);

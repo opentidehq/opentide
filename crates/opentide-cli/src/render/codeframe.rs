@@ -169,13 +169,13 @@ pub fn underline_offset(source: &str, column: usize) -> String {
 }
 
 /// The longest message a frame's headline shows, in characters.
-const MAX_MESSAGE: usize = 500;
+pub const MAX_MESSAGE: usize = 500;
 
 /// The longest source line a frame shows whole, in characters.
-const MAX_SOURCE: usize = 240;
+const MAX_SOURCE: usize = 400;
 
-/// `text` cut to [`MAX_MESSAGE`]-like `limit` characters, `…` marking the cut.
-fn shortened(text: &str, limit: usize) -> std::borrow::Cow<'_, str> {
+/// `text` cut to `limit` characters, `…` marking the cut.
+pub fn shortened(text: &str, limit: usize) -> std::borrow::Cow<'_, str> {
     match text.char_indices().nth(limit) {
         Some((at, _)) => format!("{}…", &text[..at]).into(),
         None => text.into(),
@@ -536,7 +536,9 @@ impl Frames {
             };
             let highlighted = engine_reference(&diagnostic.code).is_some();
             let mut source_text = |text: &str, line_number: usize| -> Text {
-                let long = text.chars().count() > MAX_SOURCE;
+                // The finding's own line is cut already ([`window`]).
+                let target = line_number == number && shift.is_some();
+                let long = !target && text.chars().count() > MAX_SOURCE;
                 let text = if long {
                     window(text, 1).0
                 } else {
@@ -545,7 +547,7 @@ impl Frames {
                 let mut line = Text::plain(&format!(" {}", text.trim_end()));
                 // A line shown in part keeps no colours: their columns are
                 // the whole line's.
-                let shown_whole = !long && (line_number != number || shift.is_none());
+                let shown_whole = !long && !target;
                 if highlighted
                     && shown_whole
                     && let (Some(styles), Some(path)) = (styles.as_deref_mut(), &file)
@@ -1026,6 +1028,36 @@ mod tests {
         // A short line is unchanged.
         let out = framed(&mut at(1, 4, 7), "k: abc\n", None);
         assert!(out.contains("1 │ k: abc\n"), "{out}");
+    }
+
+    /// The characters the underline row marks under the source row.
+    fn underlined(out: &str) -> String {
+        let lines: Vec<&str> = out.lines().collect();
+        let at = lines.iter().position(|row| row.starts_with("1 │")).unwrap();
+        lines[at]
+            .chars()
+            .chain(std::iter::repeat(' '))
+            .zip(lines[at + 1].chars())
+            .filter(|(_, mark)| *mark == '━')
+            .map(|(character, _)| character)
+            .collect()
+    }
+
+    #[test]
+    fn a_long_line_ends_where_the_line_does_under_a_finding_at_its_end() {
+        // Review of #1691: the line was cut twice, so a finding on its last
+        // character was underlined under a `…`.
+        let line = format!("{}(END)", "a".repeat(1_000));
+        let length = line.chars().count();
+        let out = framed(&mut at(1, length, length + 1), &format!("{line}\n"), None);
+        let source = out.lines().find(|row| row.starts_with("1 │")).unwrap();
+        assert!(source.ends_with("(END)"), "{source}");
+        assert_eq!(underlined(&out), ")", "{out}");
+        // At the end of the input: one cell past the last character.
+        let out = framed(&mut at(1, length + 1, length + 2), &format!("{line}\n"), None);
+        let source = out.lines().find(|row| row.starts_with("1 │")).unwrap();
+        assert!(source.ends_with("(END)"), "{source}");
+        assert_eq!(underlined(&out), " ", "{out}");
     }
 
     #[test]
