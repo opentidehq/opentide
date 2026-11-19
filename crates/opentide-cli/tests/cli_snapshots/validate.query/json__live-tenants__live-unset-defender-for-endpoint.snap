@@ -9,16 +9,16 @@ exit: 1
 {
   "command": "validate query",
   "duration_ms": 0,
-  "error": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.",
+  "error": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables, then run the command again.",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "command_failed",
     "crash_log": null,
-    "message": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.",
+    "message": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables, then run the command again.",
     "suggestion": null
   },
-  "message": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.",
+  "message": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables, then run the command again.",
   "mode": "live",
   "next_actions": [],
   "ok": false,

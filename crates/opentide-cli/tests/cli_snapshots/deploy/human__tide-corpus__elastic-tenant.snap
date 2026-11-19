@@ -8,7 +8,7 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
+error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a deploy.
 ␛[1mDeploy plan␛[0m␛[1m␛[2m · strategy ␛[0m␛[1mPREVIEW␛[0m␛[1m␛[2m · 1 platform, 1 tenant␛[0m
 ␛[2mPlan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete␛[0m
 
