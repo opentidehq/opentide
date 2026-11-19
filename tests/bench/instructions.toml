@@ -60,10 +60,10 @@ parse_external = 7323190
 parse_external_allocations = 13748
 
 [kql]
-analyze_corpus = 9231052
-analyze_corpus_allocations = 22574
-analyze_external = 39369369
-analyze_external_allocations = 83481
+analyze_corpus = 9077764
+analyze_corpus_allocations = 21537
+analyze_external = 38639996
+analyze_external_allocations = 78093
 parse_corpus = 2005538
 parse_corpus_allocations = 4112
 parse_external = 10074249
