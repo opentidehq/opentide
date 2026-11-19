@@ -131,8 +131,8 @@ pub enum Source {
 /// #1628), and the references to such a schema m·n. The index holds
 /// positions, not names. The changes that look a name up (`set`, `get_mut`)
 /// count the columns they scan and build it once that passes
-/// [`SCANNED_BEFORE_INDEX`] times the schema's length. A schema that gained
-/// [`PUSHED_BEFORE_INDEX`] columns (`summarize`, `join`, `union`, `mv-apply`
+/// `SCANNED_BEFORE_INDEX` times the schema's length. A schema that gained
+/// `PUSHED_BEFORE_INDEX` columns (`summarize`, `join`, `union`, `mv-apply`
 /// push theirs) counts its lookups' scans too, and builds it the same way:
 /// built on the push, it cost the corpus analysis 1.2%, as a join or a union
 /// pushes a whole table its query reads a few times. Then every change keeps
