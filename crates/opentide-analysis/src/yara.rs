@@ -203,6 +203,48 @@ mod tests {
         }
     }
 
+    /// The end of a value deploy quotes into the rule's `meta` (`os:
+    /// Windows`, a tag, the UUID) is not a line of YARA (#1702 review):
+    /// completion and hover there are the Tide object's, also after a blank
+    /// typed into a value of several words.
+    #[test]
+    fn a_meta_value_end_is_tide_not_yara() {
+        let host = crate::MemoryWorkspace::default();
+        let labels = |items: Vec<crate::CompletionItem>| -> Vec<String> {
+            items.into_iter().map(|item| item.label).collect()
+        };
+        let typed = RULE.replace("os: Windows\n", "os: Windows \n");
+        for (text, value) in [
+            (RULE, "os: Windows"),
+            (typed.as_str(), "os: Windows "),
+            (RULE, "uuid: 00000000-0000-4000-8003-000000000001"),
+        ] {
+            let at = text.find(value).unwrap() + value.len();
+            assert!(
+                opentide_tide::injection_typed_at(text, at).is_none(),
+                "{value:?}"
+            );
+            assert!(
+                opentide_tide::injection_at_offset(text, at).is_none(),
+                "{value:?}"
+            );
+            let workspace = crate::workspace_index(&host);
+            assert_eq!(
+                labels(crate::completions(&host, LanguageId::TideYaml, text, at)),
+                labels(opentide_tide::completions_tide(text, at, &workspace)),
+                "{value:?}"
+            );
+            assert_eq!(
+                crate::hover(&host, LanguageId::TideYaml, text, at),
+                opentide_tide::hover_tide(text, at, &workspace),
+                "{value:?}"
+            );
+        }
+        // The YARA lines still are.
+        let at = RULE.find("#cmd > 1").unwrap() + "#cmd > 1".len();
+        assert!(opentide_tide::injection_typed_at(RULE, at).is_some());
+    }
+
     #[test]
     fn raw_files_format_and_fold() {
         assert_eq!(

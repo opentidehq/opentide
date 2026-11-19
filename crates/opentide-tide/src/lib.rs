@@ -229,9 +229,25 @@ pub fn injection_typed_at(source: &str, offset: usize) -> Option<(InjectedQuery,
     injection_at(source, offset, true)
 }
 
+/// Whether `field` holds YARA as the author types it: the decomposed
+/// HarfangLab `strings`, `condition` and `imports`. The other written parts
+/// of the assembled rule are values deploy quotes into its `meta`
+/// (`metadata.uuid`, `tags` items, `yara.meta.os`): the end of one is not
+/// the end of a line of YARA.
+fn typed_as_yara(field: &[String]) -> bool {
+    matches!(
+        field,
+        [a, b, c, d, ..] if a == "configurations"
+            && b == "harfanglab"
+            && c == "yara"
+            && matches!(d.as_str(), "strings" | "condition" | "imports")
+    )
+}
+
 /// The end of the line of `inj`, an assembled injection, that `offset` is
 /// typed after, and the text typed: blanks after the line, or with
-/// `new_lines` a new line at the field's indentation or deeper.
+/// `new_lines` a new line at the field's indentation or deeper. Only a
+/// line of YARA ([`typed_as_yara`]) counts.
 fn assembled_line_end<'s>(
     source: &'s str,
     inj: &InjectedQuery,
@@ -239,7 +255,8 @@ fn assembled_line_end<'s>(
     new_lines: bool,
 ) -> Option<(usize, &'s str)> {
     let column = |at: usize| at - source[..at].rfind('\n').map_or(0, |i| i + 1);
-    let written = |p: &&InjectionPart| !p.synthetic && p.end > p.start;
+    let written =
+        |p: &&InjectionPart| !p.synthetic && p.end > p.start && typed_as_yara(&p.field_path);
     inj.parts.iter().rev().filter(written).find_map(|p| {
         let last = *inj.host_map.get(p.end - 1)?;
         // Past the last character, whichever of its bytes it maps onto.
