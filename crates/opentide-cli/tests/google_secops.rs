@@ -181,6 +181,7 @@ fn live(ws: &Path, env: &Env) -> Live {
             interrupted: &never,
             now: jiff::Timestamp::from_second(1_800_000_000).unwrap(),
             registry: &opentide_connectors::builtin(),
+            debug: false,
         },
     )
 }
