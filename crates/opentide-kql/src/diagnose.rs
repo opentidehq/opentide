@@ -692,6 +692,8 @@ fn tables(
         while open.last().is_some_and(|&(at, _)| at >= depth) {
             open.pop();
         }
+        // Preorder: a node is at most one level below the one before it.
+        debug_assert!(depth <= path.len(), "a node deeper than its parent");
         path.truncate(depth);
         path.push(index);
         let scope = open.last().map_or(0, |&(_, layer)| layer);
@@ -825,6 +827,25 @@ mod tests {
     }
 
     /// The tables `analyze` reports unknown in `source` (Sentinel).
+    /// A tabular parameter names a table inside its function only: the
+    /// scope a definition opens ends with its body, for its siblings and for
+    /// what follows, and a nested definition's scope is over its parent's.
+    #[test]
+    fn a_parameter_scope_ends_with_its_function() {
+        assert_eq!(
+            unknown_tables(
+                "let f = (T:(*)) { T };\nlet g = (U:(*)) { T | union U };\nT | union U"
+            ),
+            ["T", "T", "U"]
+        );
+        assert_eq!(
+            unknown_tables(
+                "let f = (T:(*)) { let g = (U:(*)) { T | union U }; g(T) | union U };\nT"
+            ),
+            ["U", "T"]
+        );
+    }
+
     fn unknown_tables(source: &str) -> Vec<String> {
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
         analyze(source, &catalog)
