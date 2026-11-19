@@ -223,6 +223,12 @@ impl<'i> P<'i> {
         self.0.start()
     }
 
+    /// Lets go of a node `start` opened: what it took stays in the node
+    /// around it.
+    pub(crate) fn abandon(&mut self, marker: Marker) {
+        marker.abandon(&mut self.0);
+    }
+
     pub(crate) fn enter(&mut self) -> bool {
         self.0.enter()
     }
