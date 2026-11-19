@@ -1,6 +1,8 @@
 // The SDK: Workspace and runJson, against the command line's own documents.
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { MANIFEST, PACKAGE, tideCorpus } from './corpus.mjs'
 
@@ -107,7 +109,8 @@ test('an option the command line would refuse throws usage_invalid_choice', asyn
   assert.throws(() => ws.validate({ types: ['bogus'] }), { code: 'usage_invalid_choice' })
   assert.throws(() => ws.tenants('bogus'), { code: 'usage_invalid_choice' })
   await assert.rejects(ws.deployPlan({ platform: 'bogus' }), { code: 'usage_invalid_choice' })
-  await assert.rejects(opentide.Workspace.open('/nonexistent/x'), { code: 'usage_invalid_value' })
+  const nowhere = join(tmpdir(), `opentide-nowhere-${process.pid}-${Date.now()}`)
+  await assert.rejects(opentide.Workspace.open(nowhere), { code: 'usage_invalid_value' })
 })
 
 test('a configuration that does not resolve throws its code', () => {

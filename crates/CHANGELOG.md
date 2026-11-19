@@ -41,6 +41,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you depend on `opentide-syntax`, drop it: the crate is gone, and no engine crate parses with tree-sitter. Each language crate parses its own queries (`opentide_<lang>::analyze`); `opentide_highlight::keywords(language)` gives what a `highlights.scm` listed.
 - If you read `opentide_highlight::highlights_scm` or a `*_HIGHLIGHTS_SCM` constant of a query language, read `opentide_highlight::keywords(language)` instead: the queries are gone. If you unpacked a `queries/<lang>/highlights.scm` from `highlights-vX.Y.Z.zip`, drop it: the zip has no `queries/` folder. Tide's `TIDE_HIGHLIGHTS_SCM` is gone too, and with it `scm_captures` and `assert_scm_subset_of_spec`: nothing read the Tide query, and the language server colours Tide YAML by path.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
+- If you call `opentide::Workspace::tenants`, handle its `Result`: `ws.tenants(platform)?` ([#1669](https://github.com/opentidehq/opentide/issues/1669)).
 
 ### Breaking
 
@@ -77,6 +78,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **Two copies of the Defender KQL masker are removed.** `opentide_connectors::defender::strip_kql_literals_and_comments` and `opentide_kql::defender_required_column_groups` (an unused copy of Defender's column check) are gone; both masked `//` before strings. Nothing in the workspace called them outside their own tests. Use `opentide_connectors::connector::kql_code` and `opentide_connectors::defender::missing_required_column_groups`.
 
 - **`opentide-schema` has no `wasm` feature.** It enabled nothing: the crate builds for `wasm32-unknown-unknown` as it is, and the `schema` workflow builds it so. Unused dependencies are gone too (`gix-fs` from `opentide-compile`, `opentide-kql` and `opentide-spl` from `opentide-lsp`, `tree-sitter` from `opentide-exabeam`, `serde` from `opentide-analysis` and `opentide-wasm`, `thiserror` from `opentide-cassette`), with no change to any API.
+- **`opentide::Workspace::tenants` returns a `Result`** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). It refuses a platform the command line's `--platform` refuses (neither built in nor a loaded plugin's) with `Error::Usage` (`usage_invalid_choice`), where it returned no tenant. `Workspace::validate` keeps its signature: an unknown object type checks nothing, and its `refused` holds the usage failure (exit code 2). `opentide_workspace::validate` gains `OBJECT_TYPES`, `Refusal`, `unknown_types` and `Validation::refused`, and `opentide_connectors::connector::MAX_QUERY_LIMIT` (5000) is the limit `Connection::query` and `opentide query --limit` share.
 
 ### Added
 
@@ -146,7 +148,6 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`opentide_core::falco` and `opentide_core::duration`: Falco's terms and the Elastic duration grammar, written once** ([#810](https://github.com/opentidehq/opentide/issues/810)). Falco's operators, modifiers, priorities and keywords, the macro and list name rule, `resolve_list`, and the list expansion `sysdig_list_in_value` is judged on, and the Elastic `d`/`h`/`m`/`s` and ISO 8601 duration grammar, are shared by `opentide-tide` (the language server's Sysdig findings and `eql_maxspan_*` advisories) and `opentide-schema` (the model `opentide validate` checks), so the editor and the CLI judge a block by the same rules. `duration_millis` keeps its signature and results.
 
 - **Each release carries CycloneDX SBOMs** ([#843](https://github.com/opentidehq/opentide/issues/843)). `opentide-lsp.cdx.json` (the binaries and the WASI build), `opentide-wasm.cdx.json` (the browser build, with the wasi-libc it links), `opentide-lsp-client.cdx.json` and `opentide-lsp-worker.cdx.json` (the npm packages) are release assets, listed in `SHA256SUMS` and checked against the CycloneDX 1.5 schema before they ship. The other assets keep their names.
-- **`opentide::Workspace::check_platform`, `ValidateOptions::verify` and `connectors::MAX_QUERY_LIMIT`** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). `check_platform` refuses a name that is neither a built-in platform nor one the workspace configures; `verify` refuses an object type that is not `rule`, `threat` or `objective`; `MAX_QUERY_LIMIT` (5000) is the most rows `Connection::query` returns. Each refusal is `Error::Usage`, with the command line's code.
 
 ### Changed
 

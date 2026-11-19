@@ -13,7 +13,7 @@
 //! use opentide::connectors::{self, ConnectOptions, Connection, QueryRequest, TimeWindow, Timestamp};
 //!
 //! let ws = opentide::Workspace::open("path/to/workspace", &opentide::Options::default())?;
-//! let tenant = &ws.tenants("splunk")[0];
+//! let tenant = &ws.tenants("splunk")?[0];
 //! let connection = Connection::open(tenant, &ConnectOptions::default())?;
 //! let request = QueryRequest::new("index=main | head 5", "spl", TimeWindow::check(Timestamp::now()));
 //! let outcome = connectors::block_on(connection.query(&request))??;
@@ -47,17 +47,13 @@ pub use jiff::Timestamp;
 pub use opentide_compile::Json;
 pub use opentide_connectors::connector::{
     DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployError, DeployEvent, DeployFailure, DeployOutcome,
-    DeployRequest, DeployScope, DeployWarning, LiveCheck, Operation, QueryColumn, QueryOutcome,
-    QueryRequest, Row, TimeWindow,
+    DeployRequest, DeployScope, DeployWarning, LiveCheck, MAX_QUERY_LIMIT, Operation, QueryColumn,
+    QueryOutcome, QueryRequest, Row, TimeWindow,
 };
 
 /// The code of an operation the platform's connector does not have (a live
 /// check on CrowdStrike), or of a platform without a connector.
 pub const OPERATION_UNSUPPORTED: &str = "operation_unsupported";
-
-/// The most rows [`Connection::query`] returns per tenant: the command
-/// line's `opentide query --limit` takes 1 to this.
-pub const MAX_QUERY_LIMIT: usize = 5_000;
 
 /// The platforms with a connector, in the order opentide lists them.
 ///
@@ -180,20 +176,29 @@ impl Workspace {
     ///         "enabled = true\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\nurl = \"$SPLUNK_URL\"\n",
     ///     )],
     /// )?;
-    /// let tenants = ws.tenants("splunk");
+    /// let tenants = ws.tenants("splunk")?;
     /// assert_eq!(tenants[0].name(), "prod");
+    /// assert!(ws.tenants("elastic")?.is_empty());
+    /// assert_eq!(ws.tenants("splunck").unwrap_err().code(), "usage_invalid_choice");
     /// # Ok::<(), opentide::Error>(())
     /// ```
-    pub fn tenants(&self, platform: &str) -> Vec<TenantConfig> {
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Usage`] (`usage_invalid_choice`) for a `platform` the command
+    /// line's `--platform` refuses: neither built in nor a loaded platform
+    /// plugin's.
+    pub fn tenants(&self, platform: &str) -> Result<Vec<TenantConfig>, Error> {
+        crate::workspace::known_platform(platform)?;
         let config = opentide_compile::Json::from_node(&self.inner().configuration().resolved.tree);
-        opentide_connectors::tenant::configured(&config, platform)
+        Ok(opentide_connectors::tenant::configured(&config, platform)
             .into_iter()
             .map(|(name, setup)| TenantConfig {
                 platform: platform.to_owned(),
                 name,
                 setup,
             })
-            .collect()
+            .collect())
     }
 }
 

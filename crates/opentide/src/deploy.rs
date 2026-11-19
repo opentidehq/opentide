@@ -171,48 +171,6 @@ impl DeployPlan {
 }
 
 impl Workspace {
-    /// Refuses `platform` unless it is a built-in platform or one this
-    /// workspace configures (a platform plugin's
-    /// `.opentide/configurations/platforms/<platform>.toml`), as the command
-    /// line's `--platform` refuses it: a plan or a tenant lookup for any other
-    /// name would find nothing and say so only by being empty.
-    ///
-    /// ```
-    /// let ws = opentide::Workspace::from_files("/ws", [("objects/rules/.keep", "")])?;
-    /// assert!(ws.check_platform("splunk").is_ok());
-    /// assert_eq!(ws.check_platform("splunck").unwrap_err().code(), "usage_invalid_choice");
-    /// # Ok::<(), opentide::Error>(())
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// [`Error::Usage`] (`usage_invalid_choice`), naming the built-in
-    /// platforms.
-    pub fn check_platform(&self, platform: &str) -> Result<(), Error> {
-        let configured = self
-            .inner()
-            .configuration()
-            .resolved
-            .tree
-            .get("platforms")
-            .and_then(|platforms| platforms.get(platform))
-            .is_some();
-        if configured || opentide_schema::platforms::get(platform).is_some() {
-            return Ok(());
-        }
-        let known: Vec<&str> = opentide_schema::platforms::PLATFORMS
-            .iter()
-            .map(|known| known.id)
-            .collect();
-        Err(Error::Usage {
-            code: "usage_invalid_choice",
-            message: format!(
-                "platform: {platform:?} is not a platform: choose {}, or one the workspace configures",
-                known.join(", ")
-            ),
-        })
-    }
-
     /// Plans a deploy (`opentide deploy --dry-run`): the rules the
     /// strategies select, the tenants each reaches, and the request bodies a
     /// real run would send. Nothing is sent and nothing is written.
@@ -229,13 +187,12 @@ impl Workspace {
     /// # Errors
     ///
     /// [`Error::Usage`] when `options` has no strategy (`usage_missing_option`),
-    /// or a strategy the configured statuses refuse or a `platform` that is
-    /// neither a built-in platform nor configured in the workspace
-    /// (`usage_invalid_choice`).
+    /// or a strategy the configured statuses refuse or a `platform` that
+    /// `opentide deploy --platform` refuses (`usage_invalid_choice`).
     pub fn deploy_plan(&self, options: &DeployPlanOptions) -> Result<DeployPlan, Error> {
         let ws = self.inner();
         if let Some(platform) = &options.platform {
-            self.check_platform(platform)?;
+            crate::workspace::known_platform(platform)?;
         }
         let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
         let request = Request {

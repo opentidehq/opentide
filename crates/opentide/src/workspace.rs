@@ -153,6 +153,11 @@ impl Workspace {
     /// nothing else failed, and reports what the platform's offline compiler
     /// refuses (`compile_missing_field`, ...), as `opentide validate` does.
     ///
+    /// An option the command line refuses before it runs (an object type
+    /// that is not `rule`, `threat` or `objective`) checks nothing: the
+    /// result's `refused` holds its usage failure (`usage_invalid_choice`),
+    /// and its exit code is 2, as `validate --type` exits.
+    ///
     /// ```
     /// use opentide::validate::QueriesMode;
     ///
@@ -164,6 +169,10 @@ impl Workspace {
     /// let validation = ws.validate(&options);
     /// assert!(validation.failed);
     /// assert!(validation.report.issues.iter().any(|d| d.code == "invalid_uuid"));
+    ///
+    /// let refused = ws.validate(&opentide::ValidateOptions::default().object_type("rules"));
+    /// assert_eq!(refused.exit_code(), 2);
+    /// assert_eq!(refused.refused.unwrap().code, "usage_invalid_choice");
     /// # Ok::<(), opentide::Error>(())
     /// ```
     pub fn validate(&self, options: &ValidateOptions) -> Validation {
@@ -408,43 +417,33 @@ impl ValidateOptions {
         self.queries = queries;
         self
     }
+}
 
-    /// Refuses what `opentide validate` refuses before it runs: an object
-    /// type that is not `rule`, `threat` or `objective`. A binding checks its
-    /// caller's options with it; [`Workspace::validate`] itself reports an
-    /// unknown type as a selection that matches nothing (`scope_no_match`).
-    ///
-    /// ```
-    /// let options = opentide::ValidateOptions::default().object_type("rules");
-    /// let error = options.verify().unwrap_err();
-    /// assert_eq!(error.code(), "usage_invalid_choice");
-    /// assert!(opentide::ValidateOptions::default().object_type("rule").verify().is_ok());
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// [`Error::Usage`] (`usage_invalid_choice`), naming the unknown types.
-    pub fn verify(&self) -> Result<(), Error> {
-        const TYPES: [&str; 3] = ["rule", "threat", "objective"];
-        let mut unknown: Vec<&str> = self
-            .types
-            .iter()
-            .map(String::as_str)
-            .filter(|family| !TYPES.contains(family))
-            .collect();
-        unknown.sort_unstable();
-        unknown.dedup();
-        if unknown.is_empty() {
-            return Ok(());
-        }
-        Err(Error::Usage {
-            code: "usage_invalid_choice",
-            message: format!(
-                "Unknown object type(s): {}. Choose rule, threat, or objective.",
-                unknown.join(", ")
-            ),
-        })
+/// Refuses `platform` unless the command line's `--platform` takes it: a
+/// built-in platform, or (with the `plugins` feature) one a loaded platform
+/// plugin adds. A plan or a tenant lookup for any other name would find
+/// nothing and say so only by being empty.
+pub(crate) fn known_platform(platform: &str) -> Result<(), Error> {
+    if opentide_schema::platforms::get(platform).is_some() {
+        return Ok(());
     }
+    #[cfg(feature = "plugins")]
+    if crate::plugins::configurations()
+        .is_some_and(|plugins| plugins.platforms().iter().any(|name| name == platform))
+    {
+        return Ok(());
+    }
+    let known: Vec<&str> = opentide_schema::platforms::PLATFORMS
+        .iter()
+        .map(|known| known.id)
+        .collect();
+    Err(Error::Usage {
+        code: "usage_invalid_choice",
+        message: format!(
+            "platform: {platform:?} is not a platform: choose {}, or a platform plugin's",
+            known.join(", ")
+        ),
+    })
 }
 
 /// What [`Workspace::lint`] runs: `opentide lint`'s options, without `--fix`

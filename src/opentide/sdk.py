@@ -266,7 +266,9 @@ class Workspace:
         or ``objects/``, or a folder inside one. Paths in findings are shown
         from *cwd* (default: the workspace's own folder).
 
-        Raises :class:`OpentideError` (``io_error``, ``configuration_invalid``).
+        Raises :class:`OpentideError` (``usage_invalid_value`` for a *path* that
+        is not a folder, as ``--repo`` refuses it; ``io_error``,
+        ``configuration_invalid``).
         """
         _load()
         from opentide._native.sdk import Workspace as NativeWorkspace
@@ -307,7 +309,10 @@ class Workspace:
         """Runs every check of ``opentide validate`` (or *check* alone).
 
         The options are the command's flags: ``--file``, ``--uuid``,
-        ``--type``, ``--strict`` and ``--queries``.
+        ``--type``, ``--strict`` and ``--queries``. Raises
+        :class:`OpentideError` ``usage_invalid_choice`` for an option the
+        command refuses: a *types* entry that is not ``rule``, ``threat`` or
+        ``objective``, an unknown *check* or *queries* mode.
         """
         data = json.loads(
             _call(
@@ -388,7 +393,11 @@ class Workspace:
         plans every rule file (``--all``). *environment* is where the tenants'
         ``$NAME`` credentials are looked up, to say which are unset, as
         :meth:`Connection.open`'s names the one a connection reads; ``None``:
-        the process's."""
+        the process's.
+
+        Raises :class:`OpentideError` ``usage_invalid_choice`` for a *strategy*
+        the configured statuses refuse, or a *platform* ``--platform`` refuses
+        (neither built in nor a loaded platform plugin's)."""
         document, summary, ok = _call(
             self._inner.deploy_plan,
             strategies=list(strategies),
@@ -408,7 +417,9 @@ class Workspace:
         """The tenants the workspace configures for *platform* (its
         ``[[tenants]]`` in ``.opentide/configurations/platforms/<platform>.toml``),
         in file order; empty when it configures none. Open one with
-        :meth:`Connection.open`."""
+        :meth:`Connection.open`. Raises :class:`OpentideError`
+        ``usage_invalid_choice`` for a *platform* ``--platform`` refuses
+        (neither built in nor a loaded platform plugin's)."""
         return [TenantConfig._wrap(tenant) for tenant in _call(self._inner.tenants, platform)]
 
     def run_json(self, argv: Sequence[str]) -> Any:
@@ -523,30 +534,18 @@ def _query_result(data: Document) -> QueryResult:
     return QueryResult(**data)
 
 
-def _instant(at: datetime) -> str:
-    """*at* as an RFC 3339 instant; a naive datetime is taken as UTC."""
-    if at.tzinfo is None:
-        at = at.replace(tzinfo=timezone.utc)
-    return at.isoformat()
-
-
-def _moment(name: str, at: object) -> datetime | None:
-    """*at*, a ``start`` or ``end`` argument, as a datetime: a datetime as it
-    is, an RFC 3339 string (``"2026-11-12T09:00:00Z"``) parsed, ``None`` as
-    ``None``. Anything else, or a string with no offset, is refused with
-    ``usage_invalid_value``, as the Node SDK and the command line refuse it."""
-    if at is None or isinstance(at, datetime):
+def _instant(name: str, at: object) -> str | None:
+    """*at*, a ``start`` or ``end`` argument, as the RFC 3339 instant the
+    engine reads: a datetime written out (a naive one taken as UTC), a string
+    passed as it is (the engine parses it as the Node SDK's does, and refuses
+    one that is no RFC 3339 instant with ``usage_invalid_value``), ``None`` as
+    ``None``. Any other type is refused with ``usage_invalid_value``."""
+    if at is None or isinstance(at, str):
         return at
-    if isinstance(at, str):
-        text = at.strip()
-        try:
-            # Python 3.10's fromisoformat takes no `Z`.
-            parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text[-1:] in "Zz" else text)
-        except ValueError:
-            parsed = None
-        if parsed is not None and parsed.tzinfo is not None:
-            return parsed
-        raise OpentideError("usage_invalid_value", f"{name}: `{at}` is not an RFC 3339 instant")
+    if isinstance(at, datetime):
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        return at.isoformat()
     raise OpentideError(
         "usage_invalid_value",
         f"{name}: a datetime or an RFC 3339 string, not {type(at).__name__}",
@@ -732,14 +731,12 @@ class Connection:
         ``operation_unsupported``, ...; ``usage_invalid_value`` for a *start*,
         *end* or *limit* the command line would refuse).
         """
-        end = _moment("end", end) or datetime.now(timezone.utc)
-        start = _moment("start", start) or end - DEFAULT_SINCE
         data = await _document(
             self._inner.query,
             text,
             language,
-            start=_instant(start),
-            end=_instant(end),
+            start=_instant("start", start),
+            end=_instant("end", end),
             limit=limit,
             index=list(index),
             data_view=data_view,
@@ -769,14 +766,12 @@ class Connection:
         check a query live (CrowdStrike, HarfangLab, Sysdig): never a faked
         verdict.
         """
-        start = _moment("start", start)
-        end = _moment("end", end)
         data = await _document(
             self._inner.validate_query,
             text,
             language,
-            start=None if start is None else _instant(start),
-            end=None if end is None else _instant(end),
+            start=_instant("start", start),
+            end=_instant("end", end),
             limit=limit,
             index=list(index),
             data_view=data_view,

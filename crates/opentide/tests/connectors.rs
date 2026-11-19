@@ -65,7 +65,7 @@ fn a_workspace_lists_its_tenants_in_file_order() {
         )],
     )
     .unwrap();
-    let tenants = ws.tenants("splunk");
+    let tenants = ws.tenants("splunk").unwrap();
     let names: Vec<&str> = tenants.iter().map(TenantConfig::name).collect();
     assert_eq!(names, ["prod", "lab"]);
     assert_eq!(tenants[0].platform(), "splunk");
@@ -73,7 +73,12 @@ fn a_workspace_lists_its_tenants_in_file_order() {
         tenants[0].setup_keys().collect::<Vec<_>>(),
         ["port", "token", "url"]
     );
-    assert!(ws.tenants("elastic").is_empty());
+    assert!(ws.tenants("elastic").unwrap().is_empty());
+    // A name `--platform` refuses is refused, not an empty list (smoke D13).
+    assert_eq!(
+        code(&ws.tenants("splunck").unwrap_err()),
+        "usage_invalid_choice"
+    );
 }
 
 #[test]

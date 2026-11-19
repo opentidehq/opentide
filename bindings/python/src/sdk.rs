@@ -215,13 +215,17 @@ impl Workspace {
         for family in types {
             options = options.object_type(family);
         }
-        options.verify().map_err(|error| from_facade(&error))?;
         // The platform plugins' own checks of their blocks, as the command
         // line's validate runs them (UC-4.5b).
         let validation = py.detach(|| match opentide::plugins::configurations() {
             Some(platforms) => self.inner.validate_with_platforms(&options, platforms),
             None => self.inner.validate(&options),
         });
+        // An option the command line refuses (an unknown `types` entry):
+        // raised with its usage code, as the other refused options are.
+        if let Some(refusal) = &validation.refused {
+            return Err(failure(refusal.code, refusal.message.clone()));
+        }
         to_json(&ValidationJson::from(&validation))
     }
 
@@ -284,13 +288,11 @@ impl Workspace {
 
     /// The tenants the workspace configures for *platform*, in file order;
     /// empty when it configures none. A *platform* that is neither built in
-    /// nor configured is refused (`usage_invalid_choice`).
+    /// nor a loaded plugin's is refused (`usage_invalid_choice`).
     fn tenants(&self, py: Python<'_>, platform: String) -> PyResult<Vec<tenants::TenantConfig>> {
-        self.inner
-            .check_platform(&platform)
-            .map_err(|error| from_facade(&error))?;
         Ok(py
             .detach(|| self.inner.tenants(&platform))
+            .map_err(|error| from_facade(&error))?
             .into_iter()
             .map(tenants::TenantConfig::from)
             .collect())

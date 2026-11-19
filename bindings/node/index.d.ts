@@ -168,7 +168,8 @@ export declare class Workspace {
    * The tenants the workspace configures for `platform` (the
    * `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
    * in file order; empty when it configures none. Open one with
-   * `Connection.open`.
+   * `Connection.open`. Throws `usage_invalid_choice` for a `platform`
+   * that is neither built in nor a loaded plugin's.
    */
   tenants(platform: string): Array<TenantConfig>
 }

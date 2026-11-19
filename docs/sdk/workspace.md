@@ -103,7 +103,7 @@ A tenant in `info()["platforms"]` names the environment variables it reads and w
 
 ## Plan a deploy
 
-`deploy_plan` is `opentide deploy --dry-run`: the rules the strategies select (`RELEASE` when you name none), the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. Without `uuids` or `files` it plans every rule file (`--all`); `platform` plans for one platform (a name that is neither a built-in platform nor one the workspace configures raises `usage_invalid_choice`), and `keep_deprecated` is `--keep-deprecated` (`True`) or `--drop-deprecated` (`False`). `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `Connection.open` takes one; without it, the process's.
+`deploy_plan` is `opentide deploy --dry-run`: the rules the strategies select (`RELEASE` when you name none), the tenants each reaches and the request bodies a real run would send. Nothing is sent and nothing is written. Without `uuids` or `files` it plans every rule file (`--all`); `platform` plans for one platform (a name that is neither a built-in platform nor a loaded plugin's raises `usage_invalid_choice`), and `keep_deprecated` is `--keep-deprecated` (`True`) or `--drop-deprecated` (`False`). `environment` is where the tenants' `$NAME` credentials are looked up to say which are unset, as `Connection.open` takes one; without it, the process's.
 
 ```python
 from opentide import Workspace
@@ -150,7 +150,7 @@ When the compiled core does not load (a damaged install), the first call raises 
 
 ## Tenant operations
 
-A `Connection` is one tenant's client: it runs a query (`opentide query`), checks a query live (`opentide validate query --live`) and deploys one compiled rule, through the same platform connectors as the command line. `Workspace.tenants(platform)` returns the tenants the workspace configures, in file order, each a `TenantConfig` (none for a platform it configures no tenant for; a name that is no platform raises `usage_invalid_choice`):
+A `Connection` is one tenant's client: it runs a query (`opentide query`), checks a query live (`opentide validate query --live`) and deploys one compiled rule, through the same platform connectors as the command line. `Workspace.tenants(platform)` returns the tenants the workspace configures, in file order, each a `TenantConfig` (none for a platform it configures no tenant for; a name that is neither a built-in platform nor a loaded plugin's raises `usage_invalid_choice`):
 
 ```toml
 # .opentide/configurations/platforms/sentinel_one.toml

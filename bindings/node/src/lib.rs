@@ -359,7 +359,7 @@ impl Workspace {
     /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
     /// in file order; empty when it configures none. Open one with
     /// `Connection.open`. Throws `usage_invalid_choice` for a `platform`
-    /// that is neither built in nor configured.
+    /// that is neither built in nor a loaded plugin's.
     #[napi(catch_unwind)]
     pub fn tenants(&self, env: &Env, platform: String) -> napi::Result<Vec<TenantConfig>> {
         self.tenant_configs(&platform).map_err(|e| throw(*env, e))
@@ -371,10 +371,9 @@ impl Workspace {
 impl Workspace {
     /// The tenants of `platform`, once the facade knows the platform.
     fn tenant_configs(&self, platform: &str) -> Result<Vec<TenantConfig>, Failure> {
-        self.inner.check_platform(platform)?;
         Ok(self
             .inner
-            .tenants(platform)
+            .tenants(platform)?
             .into_iter()
             .map(TenantConfig::from)
             .collect())
@@ -385,7 +384,13 @@ impl Workspace {
         options: Option<ValidateOptions>,
     ) -> Result<opentide::Validation, Failure> {
         let options = validate_options(options.unwrap_or_default())?;
-        Ok(self.inner.validate(&options))
+        let validation = self.inner.validate(&options);
+        // An option the command line refuses (an unknown `types` entry):
+        // thrown with its usage code, as the other refused options are.
+        if let Some(refusal) = &validation.refused {
+            return Err(Failure::new(refusal.code, refusal.message.clone()));
+        }
+        Ok(validation)
     }
 
     fn lint_report(&self, options: Option<LintOptions>) -> Result<LintReport, Failure> {
@@ -718,7 +723,6 @@ fn validate_options(options: ValidateOptions) -> Result<opentide::ValidateOption
     for family in options.types.unwrap_or_default() {
         out = out.object_type(family);
     }
-    out.verify()?;
     Ok(out)
 }
 

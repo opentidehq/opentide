@@ -185,8 +185,11 @@ def test_a_window_that_ends_before_it_starts_is_refused(connection: Connection) 
 
 def test_a_window_takes_rfc_3339_strings(connection: Connection) -> None:
     # As the Node SDK takes them; a string was an AttributeError (smoke D14).
-    result = run(connection.query("x", start="2026-11-12T09:00:00Z", end="2026-11-12T10:00:00Z"))
+    # The engine reads them, as the Node SDK's: a fraction of a second too.
+    result = run(connection.query("x", start="2026-11-12T09:00:00.5Z", end="2026-11-12T10:00:00Z"))
     assert result.rows
+    # Only an end: the 24 hours before it.
+    assert run(connection.query("x", end="2026-11-12T10:00:00Z")).rows
     run(connection.validate_query("x", end="2026-11-12T10:00:00+00:00"))
 
 
@@ -205,10 +208,10 @@ def test_a_window_that_does_not_read_is_refused(
 @pytest.mark.parametrize("limit", [0, -1, 5001])
 def test_a_limit_the_command_line_refuses_is_refused(connection: Connection, limit: int) -> None:
     # opentide query --limit takes 1 to 5000 (smoke D13); nothing is sent.
-    with pytest.raises((OpentideError, OverflowError)) as raised:
+    with pytest.raises(OpentideError) as raised:
         run(connection.query("x", limit=limit))
-    if isinstance(raised.value, OpentideError):
-        assert raised.value.code == "usage_invalid_value"
+    assert raised.value.code == "usage_invalid_value"
+    assert "between 1 and 5000" in raised.value.message
 
 
 def test_tenants_of_a_platform_that_is_none_is_refused() -> None:

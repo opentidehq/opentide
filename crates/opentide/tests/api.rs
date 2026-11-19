@@ -355,18 +355,20 @@ fn what_the_command_line_refuses_is_refused() {
     let types = ValidateOptions::default()
         .object_type("bogus")
         .object_type("rules");
-    let error = types.verify().unwrap_err();
-    assert_eq!(error.code(), "usage_invalid_choice");
+    let refused = ws.validate(&types);
+    assert_eq!(refused.exit_code(), 2);
+    let refusal = refused.refused.unwrap();
+    assert_eq!(refusal.code, "usage_invalid_choice");
     assert_eq!(
-        error.to_string(),
+        refusal.message,
         "Unknown object type(s): bogus, rules. Choose rule, threat, or objective."
     );
+    assert!(refused.checks.is_empty());
     let plan = ws.deploy_plan(&DeployPlanOptions::new(Strategy::Preview).platform("bogus"));
     let Err(error) = plan else {
         panic!("a plan for no platform is refused");
     };
     assert_eq!(error.code(), "usage_invalid_choice", "{error}");
-    assert!(ws.check_platform("sentinel").is_ok());
 }
 
 #[test]
