@@ -1078,6 +1078,18 @@ pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
 pub const FIELD_UNSUPPORTED: &str = "graylog_field_unsupported_version";
 
 impl Deployer for Graylog {
+    /// The tenant's `url` and `token`: nothing is sent. `opentide deploy`
+    /// then reads the version, once, before any write.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            cx.tenant.secret("url")?;
+            cx.tenant.secret("token").map(|_| ())
+        })
+    }
+
     /// One rule, from the compiled create body alone (a delete needs none):
     /// the definition is read back from it (flat, or wrapped in `entity`),
     /// then the tenant's version is read, as `opentide deploy` reads it

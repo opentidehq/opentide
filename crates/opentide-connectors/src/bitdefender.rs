@@ -809,6 +809,17 @@ async fn recreate(
 pub struct Bitdefender;
 
 impl Deployer for Bitdefender {
+    /// The console's `url` and `api_key`: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            cx.tenant.secret("url")?;
+            cx.tenant.secret("api_key").map(|_| ())
+        })
+    }
+
     /// One rule, from the compiled `createCustomRule` params alone (the
     /// [`DeployRequest`]'s body, bare or as `params`): created, updated (a
     /// [`Operation::Disable`] is an update of a body compiled under the

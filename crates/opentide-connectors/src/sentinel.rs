@@ -593,6 +593,18 @@ pub fn serialize_iso(at: jiff::Timestamp) -> String {
 }
 
 impl Deployer for Sentinel {
+    /// The workspace's address and the ARM token, signed in once: the
+    /// first rule's request reuses it.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            Self::rules_url(cx, None)?;
+            self.token(cx, ARM_SCOPE).await.map(|_| ())
+        })
+    }
+
     /// The analytics rule `rule_id` (the rule's UUID): `PUT` with the
     /// compiled rule (a disabled rule is the rule with `enabled` false),
     /// `DELETE` for a delete.

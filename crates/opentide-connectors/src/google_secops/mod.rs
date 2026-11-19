@@ -319,6 +319,18 @@ impl QueryRunner for GoogleSecops {
 }
 
 impl Deployer for GoogleSecops {
+    /// The instance and the credentials, loaded: nothing is sent; the first
+    /// rule signs in.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            Instance::of(cx.tenant)?;
+            self.authorizer(cx.tenant).map(|_| ())
+        })
+    }
+
     /// One rule from its plan payload: the `rules.create` body's `text`,
     /// with the `name`, `sections`, `run_state` (`mask`, `body`) and
     /// `run_frequency` that `opentide deploy`'s plan compiles beside it

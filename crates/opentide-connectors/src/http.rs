@@ -10,6 +10,7 @@
 //! reqwest's.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use tokio::sync::Semaphore;
@@ -60,6 +61,9 @@ pub struct HttpClient {
     settings: HttpSettings,
     permits: Arc<Semaphore>,
     proxies: ProxySettings,
+    /// The writes the tenant accepted ([`HttpClient::writes_accepted`]),
+    /// shared by the client's clones.
+    accepted: Arc<AtomicUsize>,
 }
 
 impl HttpClient {
@@ -97,6 +101,7 @@ impl HttpClient {
             settings: settings.clone(),
             permits: Arc::new(Semaphore::new(settings.max_in_flight.max(1))),
             proxies,
+            accepted: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -114,6 +119,15 @@ impl HttpClient {
     /// The settings it was built with.
     pub fn settings(&self) -> &HttpSettings {
         &self.settings
+    }
+
+    /// How many requests that may change something (any method but `GET`,
+    /// `HEAD` and `OPTIONS`) the tenant answered with a 2xx status, through
+    /// this client and its clones. While it has not grown since a tenant
+    /// was opened, the tenant has taken nothing: a failure then sent no
+    /// rule (`opentide deploy`'s tenant failure before any rule, #1701).
+    pub fn writes_accepted(&self) -> usize {
+        self.accepted.load(Ordering::Relaxed)
     }
 
     /// A request to *url*, to finish and pass to [`HttpClient::send`].
@@ -201,12 +215,20 @@ impl HttpClient {
         request: Request,
         cancel: &CancellationToken,
     ) -> Result<Result<Response, TransportFailure>, ConnectorError> {
+        let write = !matches!(
+            *request.method(),
+            Method::GET | Method::HEAD | Method::OPTIONS
+        );
         // `biased`: see `send`.
-        tokio::select! {
+        let outcome = tokio::select! {
             biased;
-            () = cancel.cancelled() => Err(ConnectorError::Cancelled),
-            outcome = self.transport.execute(request, cancel) => Ok(outcome),
+            () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
+            outcome = self.transport.execute(request, cancel) => outcome,
+        };
+        if write && matches!(&outcome, Ok(response) if response.status().is_success()) {
+            self.accepted.fetch_add(1, Ordering::Relaxed);
         }
+        Ok(outcome)
     }
 
     /// An answer's body, read whole by the transport, or why it could not

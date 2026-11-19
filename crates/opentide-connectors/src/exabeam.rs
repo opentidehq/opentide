@@ -1448,6 +1448,17 @@ impl Exabeam {
 }
 
 impl Deployer for Exabeam {
+    /// The tenant's client id and secret and its API's address: nothing is
+    /// sent; the first rule signs in.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            self.session(cx).map(|_| ())
+        })
+    }
+
     /// One rule from the compiled body alone: its name is the body's, a
     /// [`Operation::Disable`] disables; a delete takes no body. What was
     /// done is the outcome's event (`exabeam_rule_created`, `_updated`,

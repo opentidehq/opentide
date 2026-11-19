@@ -26,8 +26,8 @@ use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
 use opentide_connectors::connector::{
-    DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer as _,
-    Operation, TenantContext,
+    DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer, Operation,
+    TenantContext,
 };
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
@@ -1489,6 +1489,15 @@ impl<'l> DeployLog<'l> {
         self.finished(result);
     }
 
+    /// Whether a rule of *tenant* on *platform* was deployed.
+    fn deployed_on(&self, platform: &str, tenant: &str) -> bool {
+        self.results.iter().any(|result| {
+            result.platform == platform
+                && result.tenant.as_deref() == Some(tenant)
+                && result.status == "deployed"
+        })
+    }
+
     fn platform_results(&self, platform: &str) -> Vec<&RuleResult> {
         self.results
             .iter()
@@ -1784,6 +1793,9 @@ enum Stops {
 struct Raised {
     problem: String,
     stops: Stops,
+    /// The tenant did nothing with the request that failed
+    /// ([`took_nothing`]): never sent, or refused.
+    unsent: bool,
 }
 
 impl Raised {
@@ -1792,12 +1804,19 @@ impl Raised {
         Self {
             problem: problem.into(),
             stops: Stops::Rule,
+            unsent: false,
         }
     }
 
     /// The same failure, stopping `stops`.
     fn stopping(self, stops: Stops) -> Self {
         Self { stops, ..self }
+    }
+
+    /// The same failure, of a request the tenant did nothing with when
+    /// `unsent`.
+    fn unsent(self, unsent: bool) -> Self {
+        Self { unsent, ..self }
     }
 
     /// The problem, for the run's message.
@@ -1893,7 +1912,40 @@ fn raised(error: &ConnectorError) -> Raised {
         | ConnectorError::Refused { .. }
         | ConnectorError::QueryTimedOut { .. } => Stops::Rule,
     };
-    described(error).stopping(stops)
+    described(error)
+        .stopping(stops)
+        .unsent(took_nothing(error))
+}
+
+/// Whether the tenant did nothing with a request that failed with *error*:
+/// it was never sent (the connection, the address, a certificate refused,
+/// an unset or unusable credential, no network), or the tenant refused it
+/// (its credentials, or another refusal). A request that timed out, got a
+/// gateway's error or an answer cannot be read, or stopped on a bug or an
+/// interrupt may have been taken (#1701).
+fn took_nothing(error: &ConnectorError) -> bool {
+    match error {
+        ConnectorError::Unreachable { .. }
+        | ConnectorError::Setup { .. }
+        | ConnectorError::MissingCredential { .. }
+        | ConnectorError::Authentication { .. }
+        | ConnectorError::NetworkUnavailable { .. }
+        | ConnectorError::Refused { .. } => true,
+        // Exhaustive: a new kind must say whether it was taken.
+        ConnectorError::Timeout { .. }
+        | ConnectorError::Gateway { .. }
+        | ConnectorError::Answer { .. }
+        | ConnectorError::Crashed { .. }
+        | ConnectorError::Cancelled
+        | ConnectorError::QueryTimedOut { .. } => false,
+    }
+}
+
+/// [`took_nothing`] for a deploy's failure: one that did part of its work
+/// ([`DeployError::partial`]) took something; one a platform built itself,
+/// with no connector error, is the tenant's refusal.
+fn deploy_took_nothing(error: &DeployError) -> bool {
+    error.partial.is_none() && error.connector.as_deref().is_none_or(took_nothing)
 }
 
 /// A `Deployer`'s failure, raised by `raise` from its connector error: the
@@ -1901,7 +1953,8 @@ fn raised(error: &ConnectorError) -> Raised {
 /// report it (`DeployError::scope`), whatever the error's kind.
 fn scoped(failed: DeployError, raise: impl FnOnce(ConnectorError) -> Raised) -> Raised {
     let tenant = failed.scope == DeployScope::Tenant;
-    let raised = raise(failed.into_connector());
+    let unsent = deploy_took_nothing(&failed);
+    let raised = raise(failed.into_connector()).unsent(unsent);
     if tenant && raised.stops == Stops::Rule {
         raised.stopping(Stops::Tenant)
     } else {
@@ -1972,6 +2025,16 @@ struct Sender<'s, 'c> {
 struct Connection {
     tenant: Tenant,
     http: HttpClient,
+    /// The writes the tenant had accepted once it was opened (its sign-in):
+    /// while none more is accepted, the tenant has taken no rule.
+    opened: std::cell::Cell<usize>,
+}
+
+impl Connection {
+    /// The tenant is open: what it accepts from now on is a rule's.
+    fn mark_opened(&self) {
+        self.opened.set(self.http.writes_accepted());
+    }
 }
 
 /// What screening planned for one rule on a tenant that records ids.
@@ -2041,7 +2104,11 @@ impl Sender<'_, '_> {
             self.cx.proxy,
         )
         .map_err(|error| Raised::new(error.to_string()))?;
-        Ok(Connection { tenant, http })
+        Ok(Connection {
+            tenant,
+            http,
+            opened: std::cell::Cell::new(0),
+        })
     }
 
     /// The tenants' batches of *uuids* (`TideDeployment`).
@@ -2140,22 +2207,86 @@ impl Sender<'_, '_> {
         if on_a_rule {
             self.stop_tenant(platform, tenant, log);
         } else {
-            self.unusable(platform, Some(tenant), &error);
-            log.unreached_on(
-                platform,
-                tenant,
-                "not_attempted",
-                &format!("not attempted: tenant {tenant} failed"),
-            );
+            self.unused(platform, tenant, log, &error);
         }
         Ok(())
     }
 
+    /// A tenant that failed before any rule was sent to it: the run fails,
+    /// and every rule of the tenant is `not attempted`, the one it failed
+    /// on included (#1701).
+    fn unused(&mut self, platform: &str, tenant: &str, log: &mut DeployLog<'_>, error: &str) {
+        self.unusable(platform, Some(tenant), error);
+        log.unreached_on(
+            platform,
+            tenant,
+            "not_attempted",
+            &format!("not attempted: tenant {tenant} failed"),
+        );
+    }
+
+    /// Whether a failure of the tenant on a rule came before the tenant took
+    /// anything: the request was never sent, or refused (`unsent`), the
+    /// tenant has accepted no write since it was opened, and no rule of it
+    /// was deployed. Its connection or its credentials, resolved on that
+    /// first request, failed, so no rule was sent (#1701): the platforms
+    /// with no sign-in reach the tenant first with a rule's own request.
+    fn before_any_rule(
+        &self,
+        connection: &Connection,
+        platform: &str,
+        tenant: &str,
+        log: &DeployLog<'_>,
+        unsent: bool,
+    ) -> bool {
+        unsent
+            && !self.interrupted()
+            && connection.http.writes_accepted() == connection.opened.get()
+            && !log.deployed_on(platform, tenant)
+    }
+
+    /// [`before_any_rule`](Self::before_any_rule) for a raised failure that
+    /// stops the tenant: when it came before any rule, the tenant is
+    /// reported as one that could not be used, and `true` is returned.
+    fn raised_before_any_rule(
+        &mut self,
+        connection: &Connection,
+        platform: &str,
+        tenant: &str,
+        log: &mut DeployLog<'_>,
+        outcome: &Result<(), Raised>,
+    ) -> bool {
+        let Err(raised) = outcome else {
+            return false;
+        };
+        if raised.stops != Stops::Tenant
+            || !self.before_any_rule(connection, platform, tenant, log, raised.unsent)
+        {
+            return false;
+        }
+        let error = raised.error();
+        tracing::error!(
+            platform,
+            tenant,
+            error = error.as_str(),
+            critical = true,
+            "tenant_deployment_failed"
+        );
+        self.unused(platform, tenant, log, &error);
+        true
+    }
+
     /// A deploy the tenant failed on: the rule fails with the connector's
     /// text, an interrupt stops the run, and otherwise the tenant's other
-    /// rules are not attempted.
+    /// rules are not attempted. A failure before the tenant took anything
+    /// ([`Sender::before_any_rule`]) leaves the rule `not attempted` too.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one rule's failure on its tenant, the connection telling whether it took anything"
+    )]
     fn tenant_deploy_failed(
         &mut self,
+        connection: &Connection,
         platform: &str,
         event: &str,
         tenant: &str,
@@ -2163,8 +2294,21 @@ impl Sender<'_, '_> {
         mut result: RuleResult,
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
+        let before_any = self.before_any_rule(
+            connection,
+            platform,
+            tenant,
+            log,
+            deploy_took_nothing(&error),
+        );
         let text = error.into_connector().text();
         tracing::error!(tenant, error = text.as_str(), critical = true, "{event}");
+        if before_any {
+            // The key or the connection failed on the tenant's first
+            // request: no rule was sent (#1701).
+            self.unused(platform, tenant, log, &text);
+            return Ok(());
+        }
         self.failed = true;
         result.fail(&text);
         log.finished(result);
@@ -2239,6 +2383,45 @@ impl Sender<'_, '_> {
         }
     }
 
+    /// The tenant's connection, opened by *deployer* before its first rule
+    /// ([`Deployer::open`]: its credentials resolved, its sign-in made), or
+    /// `None` when either fails: the tenant failed before any rule was
+    /// sent, each of its rules `not attempted`, and the run goes on.
+    fn open_or_fail(
+        &mut self,
+        platform: &str,
+        batch: &Batch,
+        log: &mut DeployLog<'_>,
+        deployer: &dyn Deployer,
+    ) -> Result<Option<Connection>, Raised> {
+        let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
+            return Ok(None);
+        };
+        let opened = self
+            .block(async { Ok(deployer.open(self.context(&connection)).await) })
+            .map_err(DeployError::from)
+            .and_then(|opened| opened);
+        if let Err(failed) = opened {
+            let raised = scoped(failed, |error| raised(&error));
+            // An interrupt stops the run; anything else, the tenant.
+            let stops = if raised.stops == Stops::Run {
+                Stops::Run
+            } else {
+                Stops::Tenant
+            };
+            self.tenant_failed(
+                platform,
+                &batch.tenant.name,
+                log,
+                raised.stopping(stops),
+                false,
+            )?;
+            return Ok(None);
+        }
+        connection.mark_opened();
+        Ok(Some(connection))
+    }
+
     /// `_deployment_error`: the run fails, the rule says why.
     fn rule_error(&mut self, result: &mut RuleResult, message: &str) {
         self.failed = true;
@@ -2253,9 +2436,19 @@ impl Sender<'_, '_> {
         batches: &[Batch],
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
+        let cx = self.cx;
         for batch in batches {
             let tenant = batch.tenant.name.clone();
-            let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
+            // The registry's engine opens the tenant and deploys its rules.
+            let deployer = match cx
+                .registry
+                .get(platform)
+                .and_then(opentide_connectors::Platform::deployer)
+            {
+                Some(deployer) => deployer,
+                None => &NoOpen,
+            };
+            let Some(connection) = self.open_or_fail(platform, batch, log, deployer)? else {
                 continue;
             };
             for sent in &batch.rules {
@@ -2291,6 +2484,9 @@ impl Sender<'_, '_> {
                 }
                 let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
                 let outcome = self.by_uuid_rule(platform, &connection, batch, rule, &mut result);
+                if self.raised_before_any_rule(&connection, platform, &tenant, log, &outcome) {
+                    break;
+                }
                 if let Err(raised) = self.close(log, result, outcome) {
                     self.tenant_failed(platform, &tenant, log, raised, true)?;
                     break;
@@ -2770,7 +2966,15 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
+            // Defender's open signs in (Entra ID); the rules reuse its token.
+            let defender = opentide_connectors::defender::Defender::new();
+            let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
+            let opener: &dyn Deployer = match PlatformId::parse(platform) {
+                Some(PlatformId::DefenderForEndpoint) => &defender,
+                Some(PlatformId::Crowdstrike) => &crowdstrike,
+                _ => &opentide_connectors::sentinel_one::SentinelOne,
+            };
+            let Some(connection) = self.open_or_fail(platform, batch, log, opener)? else {
                 continue;
             };
             let cancel = self.cancel.clone();
@@ -2779,23 +2983,12 @@ impl Sender<'_, '_> {
                 http: &connection.http,
                 cancel: &cancel,
             };
-            let defender = opentide_connectors::defender::Defender::new();
             let session = match PlatformId::parse(platform) {
-                Some(PlatformId::DefenderForEndpoint) => self
-                    .block(async {
-                        defender
-                            .token(context)
-                            .await
-                            .map_err(|error| error.into_connector(&batch.tenant.name))
-                    })
-                    .map(|_| None),
                 // A platform of the tenant's own, signed in once before any
                 // rule: its Deployer sends every rule on that token.
-                Some(PlatformId::Crowdstrike) => {
-                    let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
-                    self.block(crowdstrike.sign_in(context))
-                        .map(|()| Some(crowdstrike))
-                }
+                Some(PlatformId::Crowdstrike) => self
+                    .block(crowdstrike.sign_in(context))
+                    .map(|()| Some(&crowdstrike)),
                 _ => Ok(None),
             };
             // No token or session: no rule on the tenant can deploy.
@@ -2812,6 +3005,7 @@ impl Sender<'_, '_> {
                     continue;
                 }
             };
+            connection.mark_opened();
             for (rule, action) in planned {
                 let tenant = batch.tenant.name.as_str();
                 let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
@@ -2821,11 +3015,14 @@ impl Sender<'_, '_> {
                     tenant,
                     context,
                     &defender,
-                    session.as_ref(),
+                    session,
                     rule,
                     &action,
                     &mut result,
                 );
+                if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
+                    break;
+                }
                 if let Err(raised) = self.close(log, result, outcome) {
                     self.tenant_failed(platform, tenant, log, raised, true)?;
                     break;
@@ -2856,7 +3053,7 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
+            let Some(connection) = self.open_or_fail(platform, batch, log, deployer)? else {
                 continue;
             };
             for (rule, action) in planned {
@@ -2864,6 +3061,9 @@ impl Sender<'_, '_> {
                 let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
                 let outcome =
                     self.plugin_rule(deployer, platform, &connection, rule, &action, &mut result);
+                if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
+                    break;
+                }
                 if let Err(raised) = self.close(log, result, outcome) {
                     self.tenant_failed(platform, tenant, log, raised, true)?;
                     break;
@@ -2898,7 +3098,11 @@ impl Sender<'_, '_> {
             self.cx.proxy,
         )
         .map_err(|error| Raised::new(error.to_string()))?;
-        Ok(Connection { tenant, http })
+        Ok(Connection {
+            tenant,
+            http,
+            opened: std::cell::Cell::new(0),
+        })
     }
 
     /// One rule on a plugin's tenant: the request the plugin receives (its
@@ -3120,6 +3324,7 @@ impl Sender<'_, '_> {
         use opentide_connectors::sentinel_one::SentinelOne;
         // The console's refusal, by its code: each kind's event.
         let refused = |error: DeployError, action: &Planned| {
+            let unsent = deploy_took_nothing(&error);
             let failure = &error.failure;
             let detail = failure.field("detail").unwrap_or_default();
             match failure.code {
@@ -3168,6 +3373,7 @@ impl Sender<'_, '_> {
                 failure.message
             ))
             .stopping(stops)
+            .unsent(unsent)
         };
         // The Deployer's request: the stored id addresses an update
         // or a delete; the body is the compiled rule.
@@ -3246,7 +3452,8 @@ impl Sender<'_, '_> {
     fn elastic(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         const PLATFORM: &str = PlatformId::Elastic.as_str();
         for batch in batches {
-            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log)? else {
+            let opener = opentide_connectors::elastic::Elastic;
+            let Some(connection) = self.open_or_fail(PLATFORM, batch, log, &opener)? else {
                 continue;
             };
             let mut tenant_state = ElasticTenant {
@@ -3397,6 +3604,27 @@ impl Sender<'_, '_> {
                 );
                 return Err(Raised::new("interrupted").stopping(Stops::Run));
             }
+            // The key or the connection failed on the tenant's first
+            // request: no rule was sent (#1701).
+            Err(error)
+                if self.before_any_rule(
+                    connection,
+                    PLATFORM,
+                    &tenant,
+                    log,
+                    deploy_took_nothing(&error),
+                ) =>
+            {
+                let stopped = error.into_connector().text();
+                tracing::error!(
+                    tenant = tenant.as_str(),
+                    error = stopped.as_str(),
+                    critical = true,
+                    "elastic_tenant_deployment_failed"
+                );
+                self.unused(PLATFORM, &tenant, log, &stopped);
+                return Ok(true);
+            }
             Err(error) => {
                 self.elastic_tenant_failed(error, result, &tenant, log)?;
                 return Ok(true);
@@ -3536,7 +3764,8 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log)? else {
+            let opener = opentide_connectors::sysdig::Sysdig;
+            let Some(connection) = self.open_or_fail(PLATFORM, batch, log, &opener)? else {
                 continue;
             };
             let tenant_policies: Vec<String> =
@@ -3637,6 +3866,7 @@ impl Sender<'_, '_> {
             }
             Err(error) => {
                 self.tenant_deploy_failed(
+                    connection,
                     PlatformId::Sysdig.as_str(),
                     "sysdig_tenant_deployment_failed",
                     &tenant,
@@ -3703,7 +3933,8 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log)? else {
+            let opener = opentide_connectors::bitdefender::Bitdefender;
+            let Some(connection) = self.open_or_fail(PLATFORM, batch, log, &opener)? else {
                 continue;
             };
             // A value that is not a boolean fails each rule `compile_rule` compiles,
@@ -3851,6 +4082,7 @@ impl Sender<'_, '_> {
             }
             Err(error) => {
                 self.tenant_deploy_failed(
+                    connection,
                     PlatformId::Bitdefender.as_str(),
                     "bitdefender_tenant_deployment_failed",
                     &tenant,
@@ -4113,8 +4345,21 @@ impl Sender<'_, '_> {
             }
             Err(error) => {
                 // Refused credentials or an unreachable instance fail every rule on it.
+                let before_any = self.before_any_rule(
+                    connection,
+                    platform,
+                    &tenant,
+                    log,
+                    deploy_took_nothing(&error),
+                );
                 let text = error.into_connector().text();
                 self.google_secops_tenant_failed(&tenant, &text);
+                if before_any {
+                    // The sign-in or the connection failed on the tenant's
+                    // first request: no rule was sent (#1701).
+                    self.unused(platform, &tenant, log, &text);
+                    return Ok(true);
+                }
                 result.fail(&text);
                 log.finished(result);
                 // An interrupt stops the run, not the tenant.
@@ -4444,6 +4689,13 @@ impl Sender<'_, '_> {
                 log.finished(result);
             }
             Err(error) => {
+                let before_any = self.before_any_rule(
+                    connection,
+                    PLATFORM,
+                    &tenant,
+                    log,
+                    deploy_took_nothing(&error),
+                );
                 let error = error.into_connector();
                 let text = error.text();
                 let code = match &error {
@@ -4458,6 +4710,11 @@ impl Sender<'_, '_> {
                     critical = true,
                     "graylog_tenant_deployment_failed"
                 );
+                if before_any {
+                    // No write was taken yet: no rule was sent (#1701).
+                    self.unused(PLATFORM, &tenant, log, &text);
+                    return Ok(true);
+                }
                 result.fail(&text);
                 log.finished(result);
                 // An interrupt stops the run, not the tenant.
@@ -4683,6 +4940,18 @@ impl Sender<'_, '_> {
                     critical = true,
                     "exabeam_tenant_deployment_failed"
                 );
+                if self.before_any_rule(
+                    connection,
+                    platform,
+                    &tenant,
+                    log,
+                    deploy_took_nothing(&error),
+                ) {
+                    // The sign-in or the connection failed on the tenant's
+                    // first request: no rule was sent (#1701).
+                    self.unused(platform, &tenant, log, &error.failure.message);
+                    return Ok(true);
+                }
                 self.failed = true;
                 result.fail(&error.failure.message);
                 log.finished(result);
@@ -4732,6 +5001,25 @@ impl Sender<'_, '_> {
 /// platform, and, for an update, a disable or a delete, the id deployment
 /// state holds. `opentide.plugins` hands the plugin `remote_id` as the
 /// request's own field.
+/// A platform with no engine opens nothing: its first rule says so
+/// (`Sender::deployer`).
+struct NoOpen;
+
+impl Deployer for NoOpen {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        _request: &'a DeployRequest,
+    ) -> opentide_connectors::connector::BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        Box::pin(async {
+            Err(DeployError::rule(DeployFailure::new(
+                "deployer_missing",
+                "no deployment engine",
+            )))
+        })
+    }
+}
+
 fn plugin_body(rule: &opentide_compile::Rule, platform: &str, stored: Option<&str>) -> CJson {
     let mut body = opentide_compile::json::Object::new();
     body.insert("rule".into(), rule.data.clone());

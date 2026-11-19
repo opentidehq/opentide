@@ -918,6 +918,18 @@ fn html_answer(cx: TenantContext<'_>, url: &str, answer: &Answer) -> ConnectorEr
 }
 
 impl Deployer for Splunk {
+    /// The tenant's address, app and token: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            Self::authority(cx)?;
+            Self::namespace(cx)?;
+            cx.tenant.secret("token").map(|_| ())
+        })
+    }
+
     /// The saved search `rule_id` with the compiled settings in `body` (a
     /// JSON object: the rule's settings, its actions and `search`), through
     /// [`Splunk::apply_saved_search`]. A delete removes it when the tenant
