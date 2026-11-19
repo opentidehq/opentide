@@ -655,6 +655,11 @@ fn schema_issue(error: &SchemaError, subject: &Subject<'_>, graph: &Graph<'_>) -
     {
         diagnostic = diagnostic.with("value", value);
     }
+    // The values a field takes, when its check names them (CrowdStrike's
+    // `details.trigger`): annotate's help writes them.
+    if let Some(expected) = error.context.get("expected") {
+        diagnostic = diagnostic.with("expected", expected.clone());
+    }
     diagnostic.yaml_line = error.yaml_line;
     diagnostic
 }
@@ -1107,17 +1112,28 @@ fn chain_links(root: &Node) -> Vec<(usize, &Node)> {
         .collect()
 }
 
-/// The keys of a `threat.chaining` link.
+/// The keys of a `threat.chaining` link opentide reads.
 const CHAIN_KEYS: [&str; 2] = ["vector", "relation"];
 
-/// What a `threat.chaining` link holds besides its relation's name (B15):
-/// a key other than `vector` and `relation` (`vectr`, which the model's
-/// open mapping took), one of the two missing, or a `vector` that is the
-/// threat itself. `schema_validation`, at the key or the link.
+/// A link's other key 0.28.x reads (the TUI's chains view shows it).
+const CHAIN_DESCRIPTION: &str = "description";
+
+/// What a `threat.chaining` link holds besides its relation's name (B15),
+/// at the key or the link, `schema_validation`:
+/// - an error for a key within two edits of `vector` or `relation`
+///   (`vectr`, which the model's open mapping took), and for a `vector`
+///   that is the threat itself;
+/// - a warning for any other key opentide does not read (`description` is
+///   read), and for a link missing `vector` or `relation`.
 fn chain_shapes(subject: &Subject<'_>, root: &Node) -> Vec<Diagnostic> {
     let mut out = Vec::new();
-    let finding = |message: String, path: Vec<String>| {
-        Diagnostic::error("schema_validation", message)
+    let finding = |error: bool, message: String, path: Vec<String>| {
+        let diagnostic = if error {
+            Diagnostic::error("schema_validation", message)
+        } else {
+            Diagnostic::warning("schema_validation", message)
+        };
+        diagnostic
             .object(subject.uuid, "threat")
             .file(subject.path)
             .at(path)
@@ -1135,24 +1151,27 @@ fn chain_shapes(subject: &Subject<'_>, root: &Node) -> Vec<Diagnostic> {
             path.extend(key.map(str::to_owned));
             path
         };
-        let mut unknown = false;
+        let mut misspelt = false;
         for entry in entries {
             let key = entry.key.value.to_string();
-            if CHAIN_KEYS.contains(&key.as_str()) {
+            if CHAIN_KEYS.contains(&key.as_str()) || key == CHAIN_DESCRIPTION {
                 continue;
             }
-            unknown = true;
-            let close = opentide_core::suggest::closest(&key, CHAIN_KEYS);
+            let close = opentide_core::suggest::closest_within(&key, CHAIN_KEYS, 2);
+            misspelt |= close.is_some();
+            let message = match close {
+                Some(meant) => format!(
+                    "unknown key {}; did you mean `{meant}`? A link has `vector` and `relation`",
+                    quote(&key)
+                ),
+                None => format!(
+                    "opentide does not read the key {}; a link has `vector`, `relation` and an \
+                     optional `description`",
+                    quote(&key)
+                ),
+            };
             out.push(
-                finding(
-                    format!(
-                        "threat.chaining.{index}: unknown key {}; a link has `vector` and \
-                         `relation`",
-                        quote(&key)
-                    ),
-                    at(Some(&key)),
-                )
-                .suggest(close.map(str::to_owned)),
+                finding(close.is_some(), message, at(Some(&key))).suggest(close.map(str::to_owned)),
             );
         }
         let missing: Vec<&str> = CHAIN_KEYS
@@ -1160,11 +1179,11 @@ fn chain_shapes(subject: &Subject<'_>, root: &Node) -> Vec<Diagnostic> {
             .copied()
             .filter(|key| link.get(key).is_none())
             .collect();
-        if !missing.is_empty() && !unknown {
+        if !missing.is_empty() && !misspelt {
             out.push(finding(
+                false,
                 format!(
-                    "threat.chaining.{index}: a link needs `vector` and `relation`; `{}` is \
-                     missing",
+                    "a link needs `vector` and `relation`; `{}` is missing",
                     missing.join("` and `")
                 ),
                 at(None),
@@ -1174,10 +1193,8 @@ fn chain_shapes(subject: &Subject<'_>, root: &Node) -> Vec<Diagnostic> {
             && vector.value.to_string().eq_ignore_ascii_case(subject.uuid)
         {
             out.push(finding(
-                format!(
-                    "threat.chaining.{index}: the threat chains to itself; `vector` names \
-                     another threat"
-                ),
+                true,
+                "the threat chains to itself; `vector` names another threat".to_owned(),
                 at(Some("vector")),
             ));
         }

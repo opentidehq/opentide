@@ -95,6 +95,7 @@ exit: 1
 ␛[1m␛[31merror[yaml_parse]␛[0m␛[1m: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']'␛[0m
   ␛[1mat line 83, column 1␛[0m
   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/encoded-beacon-rule-0034.yaml␛\objects/rules/encoded-beacon-rule-0034.yaml:83:1␛]8;;␛\
+  ␛[34m├─␛[0m ␛[1m␛[34mnote:␛[0m the `[` opened at line 82, column 9 is not closed
   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
   ␛[34m ␛[0m        position
 
@@ -147,12 +148,12 @@ exit: 1
   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the template in .opentide/templates/ shows the field and its values
 
 ␛[1m␛[31merror[yaml_parse]␛[0m␛[1m: Could not parse object YAML: while scanning a plain scalar, found a tab at line␛[0m
-  ␛[1m44, column 18␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml␛\objects/rules/hidden-loader-rule-0024.yaml:44:18␛]8;;␛\
+  ␛[1m45, column 1␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml␛\objects/rules/hidden-loader-rule-0024.yaml:45:1␛]8;;␛\
 ␛[34m   │␛[0m
-␛[34m43 │␛[0m       group_by: source
 ␛[34m44 │␛[0m       condition: count() >= 3
-␛[34m   │␛[0m                  ␛[1m␛[31m━␛[0m
+␛[34m45 │␛[0m    indent: tab
+␛[34m   │␛[0m ␛[1m␛[31m━━━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
    ␛[34m ␛[0m        position
@@ -309,6 +310,7 @@ exit: 1
 ␛[1m␛[31merror[yaml_parse]␛[0m␛[1m: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']'␛[0m
   ␛[1mat line 72, column 1␛[0m
   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/staged-exfiltration-rule-0021.yaml␛\objects/rules/staged-exfiltration-rule-0021.yaml:72:1␛]8;;␛\
+  ␛[34m├─␛[0m ␛[1m␛[34mnote:␛[0m the `[` opened at line 71, column 9 is not closed
   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
   ␛[34m ␛[0m        position
 

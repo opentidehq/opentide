@@ -57,7 +57,7 @@ configurations:
     status: STAGING
     query: index=main
     details:
-      trigger: event
+      trigger: verbose
       outcome: detection
     schedule:
       frequency: 1h

@@ -414,7 +414,13 @@ fn created_and_modified_must_be_dates() {
             "{field}: {value}"
         );
     }
-    for value in ["2026-01-01", "'2026-01-01'", "2026-01-01T10:00:00Z"] {
+    for value in [
+        "2026-01-01",
+        "'2026-01-01'",
+        "2026-01-01T10:00:00Z",
+        // Without an offset, as 0.28.1 took it.
+        "2026-01-01 10:00:00",
+    ] {
         let rule: RuleV1_1 = read(&with("created", value)).unwrap();
         assert!(rule.metadata.created.starts_with("2026-01-01"), "{value}");
     }

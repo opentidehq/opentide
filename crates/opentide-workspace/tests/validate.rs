@@ -635,13 +635,13 @@ mod validate {
             .find(|d| d.value() == Some("Windows"))
             .unwrap_or_else(|| panic!("{:?}", validation.report.issues));
         assert_eq!(finding.suggestion.as_deref(), Some("OS::Windows"));
-        assert_eq!(finding.help.as_deref(), Some("did you mean \"OS::Windows\"?"));
+        assert_eq!(
+            finding.help.as_deref(),
+            Some("did you mean \"OS::Windows\"?")
+        );
         assert!(
-            finding
-                .notes
-                .iter()
-                .any(|(label, text)| label == "note"
-                    && text.contains("opentide migrate vocab-scope --apply")),
+            finding.notes.iter().any(|(label, text)| label == "note"
+                && text.contains("opentide migrate vocab-scope --apply")),
             "{:?}",
             finding.notes
         );
@@ -651,7 +651,8 @@ mod validate {
     #[test]
     fn a_chaining_link_holds_vector_and_relation_and_never_itself() {
         // B15 (smoke test): a link with `vectr:`/`relaton:` and a link to
-        // the threat itself passed `validate`.
+        // the threat itself passed `validate`. A `description`, which
+        // 0.28.x reads, still passes; another key is a warning.
         let fs = workspace();
         fs.write(
             "/ws/objects/threats/b.yaml",
@@ -664,41 +665,49 @@ mod validate {
                  - vector: {U1}\n      relation: sequence::preceeds\n    \
                  - vectr: {U2}\n      relaton: sequence::preceeds\n    \
                  - vector: {U2}\n    \
-                 - vector: {U2}\n      relation: sequence::preceeds\n"
+                 - vector: {U2}\n      relation: sequence::preceeds\n      description: then this\n    \
+                 - vector: {U2}\n      relation: sequence::preceeds\n      weight: high\n"
             ),
         );
         let validation = run(&fs, &Options::default());
-        let found: Vec<(String, String)> = with_code(&validation, "schema_validation")
+        let found: Vec<(String, Severity, String)> = with_code(&validation, "schema_validation")
             .into_iter()
             .filter(|d| d.field_path.get(1).map(String::as_str) == Some("chaining"))
-            .map(|d| (d.field_path.join("."), d.message.clone()))
+            .map(|d| (d.field_path.join("."), d.severity, d.message.clone()))
             .collect();
+        let row = |path: &str, severity: Severity, message: &str| {
+            (path.to_owned(), severity, message.to_owned())
+        };
         assert_eq!(
             found,
             [
-                (
-                    "threat.chaining.0.vector".to_owned(),
-                    "threat.chaining.0: the threat chains to itself; `vector` names another \
-                     threat"
-                        .to_owned()
+                row(
+                    "threat.chaining.0.vector",
+                    Severity::Error,
+                    "the threat chains to itself; `vector` names another threat"
                 ),
-                (
-                    "threat.chaining.1.vectr".to_owned(),
-                    "threat.chaining.1: unknown key \"vectr\"; a link has `vector` and \
-                     `relation`"
-                        .to_owned()
+                row(
+                    "threat.chaining.1.vectr",
+                    Severity::Error,
+                    "unknown key \"vectr\"; did you mean `vector`? A link has \
+                     `vector` and `relation`"
                 ),
-                (
-                    "threat.chaining.1.relaton".to_owned(),
-                    "threat.chaining.1: unknown key \"relaton\"; a link has `vector` and \
-                     `relation`"
-                        .to_owned()
+                row(
+                    "threat.chaining.1.relaton",
+                    Severity::Error,
+                    "unknown key \"relaton\"; did you mean `relation`? A link \
+                     has `vector` and `relation`"
                 ),
-                (
-                    "threat.chaining.2".to_owned(),
-                    "threat.chaining.2: a link needs `vector` and `relation`; `relation` is \
-                     missing"
-                        .to_owned()
+                row(
+                    "threat.chaining.2",
+                    Severity::Warning,
+                    "a link needs `vector` and `relation`; `relation` is missing"
+                ),
+                row(
+                    "threat.chaining.4.weight",
+                    Severity::Warning,
+                    "opentide does not read the key \"weight\"; a link has \
+                     `vector`, `relation` and an optional `description`"
                 ),
             ],
             "{:?}",

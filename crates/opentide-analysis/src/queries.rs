@@ -986,10 +986,20 @@ fn is_secops_section(query: &CheckedQuery) -> bool {
 fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
     let mut out: Vec<CheckedQuery> = Vec::with_capacity(checked.len());
     let mut rule: Option<usize> = None;
-    for query in checked {
+    for mut query in checked {
         if !is_secops_section(&query) {
             out.push(query);
             continue;
+        }
+        // A section still the stand-in `opentide new` wrote has nothing to
+        // check: its findings are the stand-in's. The rule is a placeholder
+        // when its `events` is one (B6: `events: ...` beside the template's
+        // `outcome` counted as "1 query valid"); its written sections are
+        // checked otherwise.
+        let stand_in = query.placeholder;
+        let events = query.field_path.last().map(String::as_str) == Some("events");
+        if stand_in {
+            query.findings.clear();
         }
         match rule {
             Some(index) => {
@@ -997,14 +1007,11 @@ fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
                 if (query.line, query.column) < (merged.line, merged.column) {
                     (merged.line, merged.column) = (query.line, query.column);
                 }
-                // A section still the stand-in `opentide new` wrote makes
-                // the whole rule one (B6: `events: ...` beside the template's
-                // `outcome` counted as "1 query valid").
-                merged.placeholder |= query.placeholder;
+                merged.placeholder |= stand_in && events;
                 merged.findings.extend(query.findings);
             }
             None => {
-                let mut query = query;
+                query.placeholder = stand_in && events;
                 query.field_path.truncate(2);
                 rule = Some(out.len());
                 out.push(query);
@@ -1154,12 +1161,47 @@ mod tests {
             .find(|query| query.platform == "google_secops")
             .unwrap_or_else(|| panic!("{queries:?}"));
         assert!(rule.placeholder, "{rule:?}");
+        // Only `condition` the stand-in: the rule is checked, and the
+        // written `events` keeps its finding.
+        let events_written = text.replace(
+            "events: |  # opentide:placeholder\n      ...",
+            "events: |\n      $e.metadata.event_type = $nowhere",
+        );
+        let queries = profiles.check_object(&events_written);
+        let rule = queries
+            .iter()
+            .find(|query| query.platform == "google_secops")
+            .unwrap();
+        assert!(!rule.placeholder, "{rule:?}");
+        assert!(
+            rule.findings
+                .iter()
+                .any(|finding| finding.field_path.last().map(String::as_str) == Some("events")),
+            "{:?}",
+            rule.findings
+        );
+        assert!(
+            rule.findings
+                .iter()
+                .all(|finding| finding.field_path.last().map(String::as_str) != Some("condition")),
+            "{:?}",
+            rule.findings
+        );
         // Written out, it is a query again.
         let written = text
-            .replace("      ...\n    outcome", "      $e.metadata.event_type = \"USER_LOGIN\"\n    outcome")
-            .replace("condition: |  # opentide:placeholder\n      ...", "condition: |\n      $e");
+            .replace(
+                "      ...\n    outcome",
+                "      $e.metadata.event_type = \"USER_LOGIN\"\n    outcome",
+            )
+            .replace(
+                "condition: |  # opentide:placeholder\n      ...",
+                "condition: |\n      $e",
+            );
         let queries = profiles.check_object(&written);
-        assert!(queries.iter().all(|query| !query.placeholder), "{queries:?}");
+        assert!(
+            queries.iter().all(|query| !query.placeholder),
+            "{queries:?}"
+        );
     }
 
     #[test]

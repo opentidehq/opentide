@@ -109,13 +109,36 @@ fn status_is_required_on_every_block() {
 }
 
 #[test]
+fn crowdstrike_trigger_and_outcome_take_what_deploy_takes() {
+    // B2 (smoke test): `trigger: sometimes` and `outcome: banana` passed
+    // `validate` and the dry run, and failed the deploy.
+    let block = |trigger: &str, outcome: &str| {
+        json!({"status": "S", "query": "x",
+               "details": {"trigger": trigger, "outcome": outcome},
+               "schedule": {"frequency": "1h", "lookback": "1h"}})
+    };
+    assert_eq!(
+        errors("crowdstrike", &block("sometimes", "banana")),
+        "details.trigger: deploy takes verbose or summary (any case), not \"sometimes\"\n\
+         details.outcome: deploy takes detection or incident (any case), not \"banana\""
+    );
+    for (trigger, outcome) in [("verbose", "detection"), ("Summary", "INCIDENT")] {
+        assert_eq!(
+            errors("crowdstrike", &block(trigger, outcome)),
+            "",
+            "{trigger}"
+        );
+    }
+}
+
+#[test]
 fn every_query_text_refuses_a_blank_query() {
     for (platform, block) in [
         ("splunk", json!({"status": "S"})),
         ("carbon_black_cloud", json!({"status": "S"})),
         (
             "crowdstrike",
-            json!({"status": "S", "details": {"trigger": "t", "outcome": "o"},
+            json!({"status": "S", "details": {"trigger": "verbose", "outcome": "detection"},
                    "schedule": {"frequency": "1h", "lookback": "1h"}}),
         ),
         (
@@ -495,7 +518,10 @@ fn elastic_bad_duration_names_its_field_value_and_form() {
         "{found}"
     );
     assert!(found.contains("scheduling.lookback \"soon\""), "{found}");
-    assert!(found.contains("scheduling.interval \"5 minutes\""), "{found}");
+    assert!(
+        found.contains("scheduling.interval \"5 minutes\""),
+        "{found}"
+    );
 }
 
 #[test]

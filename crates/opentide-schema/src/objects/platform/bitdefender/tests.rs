@@ -631,7 +631,8 @@ fn validate_reports_the_code_at_its_path_under_the_rule() {
             "bitdefender",
             "detection",
             "criteria",
-            "0"
+            "0",
+            "field"
         ])
     );
     assert_eq!(

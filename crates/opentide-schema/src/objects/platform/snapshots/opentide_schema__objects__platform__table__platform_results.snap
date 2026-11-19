@@ -756,22 +756,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration"
+          "error": "ElasticConfig validation failed with code(s): duration (scheduling.interval 5 is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
-          "elastic"
+          "elastic",
+          "scheduling",
+          "interval"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration (scheduling.interval 5 is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
-          11,
-          3,
-          10,
+          15,
+          28,
+          29,
           true
         ],
         "type": "value_error",
-        "yaml_line": 11
+        "yaml_line": 14
       }
     ]
   },
@@ -779,14 +781,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration"
+          "error": "ElasticConfig validation failed with code(s): duration (scheduling.lookback \"-1m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`; scheduling.interval \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
           "elastic"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration (scheduling.lookback \"-1m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`; scheduling.interval \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
           11,
           3,
@@ -1386,22 +1388,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration"
+          "error": "ElasticConfig validation failed with code(s): duration (scheduling.interval \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
-          "elastic"
+          "elastic",
+          "scheduling",
+          "interval"
         ],
-        "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration",
+        "input": "0m",
+        "msg": "ElasticConfig validation failed with code(s): duration (scheduling.interval \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
-          11,
-          3,
-          10,
+          15,
+          28,
+          30,
           true
         ],
         "type": "value_error",
-        "yaml_line": 11
+        "yaml_line": 14
       }
     ]
   },
@@ -1622,14 +1626,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration, new_terms_fields"
+          "error": "ElasticConfig validation failed with code(s): duration, new_terms_fields (new_terms.history_window_start \"7x\" is not a duration: a number and a unit, s, m, h or d, such as `14d`; deploy adds `now-`)"
         },
         "field_path": [
           "configurations",
           "elastic"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration, new_terms_fields",
+        "msg": "ElasticConfig validation failed with code(s): duration, new_terms_fields (new_terms.history_window_start \"7x\" is not a duration: a number and a unit, s, m, h or d, such as `14d`; deploy adds `now-`)",
         "span": [
           11,
           3,
@@ -2364,22 +2368,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration"
+          "error": "ElasticConfig validation failed with code(s): duration (suppression.duration \"\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
-          "elastic"
+          "elastic",
+          "suppression",
+          "duration"
         ],
-        "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration",
+        "input": "",
+        "msg": "ElasticConfig validation failed with code(s): duration (suppression.duration \"\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
-          11,
-          3,
-          10,
+          15,
+          34,
+          42,
           true
         ],
         "type": "value_error",
-        "yaml_line": 11
+        "yaml_line": 14
       }
     ]
   },
@@ -2387,22 +2393,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration"
+          "error": "ElasticConfig validation failed with code(s): duration (suppression.duration \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
-          "elastic"
+          "elastic",
+          "suppression",
+          "duration"
         ],
-        "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration",
+        "input": "0m",
+        "msg": "ElasticConfig validation failed with code(s): duration (suppression.duration \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
-          11,
-          3,
-          10,
+          15,
+          44,
+          46,
           true
         ],
         "type": "value_error",
-        "yaml_line": 11
+        "yaml_line": 14
       }
     ]
   },

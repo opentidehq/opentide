@@ -55,13 +55,17 @@ fn default_help(code: &str) -> Option<&'static str> {
 
 /// `yaml_parse` problems that are not syntax: the indentation hint would
 /// mislead.
-const YAML_PARSE_HELP: [(&str, &str); 5] = [
+const YAML_PARSE_HELP: [(&str, &str); 6] = [
     (
         "is repeated (first written on line",
         "keep one of the two: a mapping holds each key once",
     ),
     (
-        " tab",
+        "tab cannot be used as indentation",
+        "indent with spaces: YAML does not allow a tab in indentation",
+    ),
+    (
+        "tabs disallowed within this context (block indentation)",
         "indent with spaces: YAML does not allow a tab in indentation",
     ),
     (
@@ -515,6 +519,13 @@ fn annotate_one(
                     .to_owned(),
             );
         }
+    } else if help.is_none()
+        && let Some(expected) = diagnostic
+            .context
+            .get("expected")
+            .and_then(ContextValue::as_str)
+    {
+        help = Some(format!("write {expected}"));
     } else if help.is_none() {
         help = default_help(&diagnostic.code).map(str::to_owned);
     }
@@ -560,7 +571,10 @@ fn scoped_value(diagnostic: &Diagnostic, value: &str) -> Option<String> {
     if value.contains("::") {
         return None;
     }
-    let vocab = diagnostic.context.get("vocab").and_then(ContextValue::as_str)?;
+    let vocab = diagnostic
+        .context
+        .get("vocab")
+        .and_then(ContextValue::as_str)?;
     let vocab = vocab.split("::").next().unwrap_or(vocab);
     let field = SCOPED_FIELDS.iter().find(|field| field.vocab == vocab)?;
     let vocabulary = opentide_schema::vocab::bundled::get(field.vocab)?;

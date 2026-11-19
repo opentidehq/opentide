@@ -1709,15 +1709,15 @@ exit: 0
     {
       "check": "filenames",
       "code": "yaml_parse",
-      "column": 18,
-      "end_column": 19,
-      "end_line": 44,
+      "column": 1,
+      "end_column": 2,
+      "end_line": 45,
       "explain": "opentide explain yaml_parse",
       "field_path": [],
       "fix": null,
       "help": null,
-      "line": 44,
-      "message": "Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18",
+      "line": 45,
+      "message": "Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1",
       "path": "objects/rules/hidden-loader-rule-0024.yaml",
       "severity": "error",
       "uuid": null,
@@ -3103,16 +3103,16 @@ exit: 0
   {
     "type": "issue",
     "check_name": "yaml_parse",
-    "description": "Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18",
+    "description": "Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1",
     "categories": [
       "Bug Risk"
     ],
     "severity": "major",
-    "fingerprint": "d88c922798402d11a014cadedc14ad428739c981984020059da395610138b5fd",
+    "fingerprint": "afebd6fce858fd2d0381eee9393fe4e17cbd4263532a723145d725373f2c8913",
     "location": {
       "path": "objects/rules/hidden-loader-rule-0024.yaml",
       "lines": {
-        "begin": 44
+        "begin": 45
       }
     }
   },

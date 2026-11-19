@@ -17,22 +17,25 @@ const TRIGGERS: [&str; 2] = ["verbose", "summary"];
 /// The values `details.outcome` takes, in any case.
 const OUTCOMES: [&str; 2] = ["detection", "incident"];
 
-/// `details.<field>` is one of `choices` in any case, as deploy lowercases
+/// A `details` value is one of `choices` in any case, as deploy lowercases
 /// it and then refuses anything else (B2: `trigger: sometimes` passed
 /// `validate` and the dry run, and failed the deploy).
-fn check_one_of(field: &str, value: &str, choices: &[&str]) -> Result<(), Violation> {
+fn check_one_of(value: &str, choices: &[&str]) -> Result<(), Violation> {
     if choices.contains(&value.to_lowercase().as_str()) {
         return Ok(());
     }
-    Err(Violation::value_error(format!(
-        "details.{field} is {}, not {value:?}",
-        choices.join(" or ")
-    )))
+    // The CLI puts the field's path before the message, and its help names
+    // the values from `expected` (the template lists none).
+    let expected = choices.join(" or ");
+    let mut violation =
+        Violation::value_error(format!("deploy takes {expected} (any case), not {value:?}"));
+    violation.context.push(("expected", expected));
+    Err(violation)
 }
 
-fn one_of(field: &str, choices: &[&str], node: &Node, cx: &mut Context) -> Option<String> {
+fn one_of(choices: &[&str], node: &Node, cx: &mut Context) -> Option<String> {
     let value = String::from_node(node, cx)?;
-    match check_one_of(field, &value, choices) {
+    match check_one_of(&value, choices) {
         Ok(()) => Some(value),
         Err(violation) => {
             violation.report(node, cx);
@@ -42,19 +45,19 @@ fn one_of(field: &str, choices: &[&str], node: &Node, cx: &mut Context) -> Optio
 }
 
 fn trigger(node: &Node, cx: &mut Context) -> Option<String> {
-    one_of("trigger", &TRIGGERS, node, cx)
+    one_of(&TRIGGERS, node, cx)
 }
 
 fn outcome(node: &Node, cx: &mut Context) -> Option<String> {
-    one_of("outcome", &OUTCOMES, node, cx)
+    one_of(&OUTCOMES, node, cx)
 }
 
 fn garde_trigger(value: &str, _pins: &Pins) -> garde::Result {
-    check_one_of("trigger", value, &TRIGGERS).map_err(Violation::into_garde)
+    check_one_of(value, &TRIGGERS).map_err(Violation::into_garde)
 }
 
 fn garde_outcome(value: &str, _pins: &Pins) -> garde::Result {
-    check_one_of("outcome", value, &OUTCOMES).map_err(Violation::into_garde)
+    check_one_of(value, &OUTCOMES).map_err(Violation::into_garde)
 }
 
 /// Correlation outcome, trigger mode, and alert metadata (`CrowdstrikeDetails`).

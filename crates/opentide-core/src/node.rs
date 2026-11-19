@@ -674,24 +674,72 @@ fn from_scalar(scalar: Scalar<'_>) -> Value {
 /// The first character YAML 1.2 does not allow in a stream (§5.1: C0
 /// controls other than tab and line breaks, DEL, C1 controls other than NEL,
 /// U+FFFE and U+FFFF), with its position. saphyr reads them as text.
-/// The tab at or after `from` with only blanks and line breaks before it:
-/// where the scanner, which reports a tab used for indentation at the end of
-/// the line before, means.
+/// Whether the `[` or `{` at character `at` of `source` is never closed:
+/// its brackets counted to the end of the text, those in a quoted scalar
+/// or a comment left out. An error inside a collection that closes later
+/// names no bracket (B9).
+fn never_closes(source: &str, at: usize) -> bool {
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut comment = false;
+    let mut previous = ' ';
+    for character in source.chars().skip(at) {
+        if comment {
+            comment = character != '\n' && character != '\r';
+        } else if let Some(open) = quote {
+            if character == open {
+                quote = None;
+            }
+        } else {
+            match character {
+                '[' | '{' => depth += 1,
+                ']' | '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return false;
+                    }
+                }
+                '\'' | '"' => quote = Some(character),
+                '#' if previous.is_whitespace() => comment = true,
+                _ => {}
+            }
+        }
+        previous = character;
+    }
+    true
+}
+
+/// The tab the scanner means when it reports one at `from`: the first tab
+/// at or after `from` with only blanks before it on its line, within the
+/// next lines. The scanner reports a tab used for indentation where it was
+/// reading on the line before (B9: `4:14` for a tab at `5:1`).
 fn tab_after(source: &str, from: Mark) -> Option<Mark> {
     let mut line = from.line();
     let mut column = from.column();
     let mut previous = '\0';
+    let mut indent = false;
+    let mut breaks = 0;
     for (offset, character) in source.chars().skip(from.index()).enumerate() {
         match character {
-            '\t' => return Some(Mark::new(from.index() + offset, line, column)),
+            '\t' if indent || offset == 0 => {
+                return Some(Mark::new(from.index() + offset, line, column));
+            }
             '\n' if previous == '\r' => {}
             '\n' | '\r' => {
+                breaks += 1;
+                if breaks > 2 {
+                    return None;
+                }
                 line += 1;
                 column = 1;
+                indent = true;
+                previous = character;
+                continue;
             }
-            ' ' => column += 1,
-            _ => return None,
+            ' ' | '\t' => {}
+            _ => indent = false,
         }
+        column += 1;
         previous = character;
     }
     None
@@ -741,7 +789,8 @@ impl Builder {
                 Frame::Seq { start, .. } | Frame::Map { start, .. } => *start,
             };
             let opener = source.chars().nth(start.index())?;
-            matches!(opener, '[' | '{').then_some((opener, start))
+            (matches!(opener, '[' | '{') && never_closes(source, start.index()))
+                .then_some((opener, start))
         });
         if let Some((opener, start)) = open {
             found.note = Some(format!(
@@ -1065,13 +1114,15 @@ mod tests {
         // B9 (smoke test): a tab indenting line 5 was reported at the end
         // of line 4; an unclosed `[` had no note; the repeated key read as
         // one run-on sentence once a place was added.
-        let tab = load("name: X\nconfigurations:\n  splunk:\n    enabled: true\n\tstatus: STAGING\n")
-            .unwrap_err();
+        let tab =
+            load("name: X\nconfigurations:\n  splunk:\n    enabled: true\n\tstatus: STAGING\n")
+                .unwrap_err();
         assert!(tab.problem.contains("tab"), "{tab}");
         assert_eq!(tab.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
-        let unclosed =
-            load("name: X\nmetadata:\n  uuid: u\n  tags: [a, b\nresponse:\n  alert_severity: High\n")
-                .unwrap_err();
+        let unclosed = load(
+            "name: X\nmetadata:\n  uuid: u\n  tags: [a, b\nresponse:\n  alert_severity: High\n",
+        )
+        .unwrap_err();
         assert_eq!(
             unclosed.note.as_deref(),
             Some("the `[` opened at line 4, column 9 is not closed")
@@ -1081,8 +1132,11 @@ mod tests {
             mapping.note.as_deref(),
             Some("the `{` opened at line 1, column 4 is not closed")
         );
-        // A block that fails names no bracket.
+        // A block that fails names no bracket, nor does a collection that
+        // closes after the error.
         assert_eq!(load("a: 'x\n").unwrap_err().note, None);
+        let closed = load("a: [x: y: z]\n").unwrap_err();
+        assert_eq!(closed.note, None, "{closed}");
         let repeated = load("a: 1\nb: 2\na: 3\n").unwrap_err();
         assert_eq!(
             repeated.problem,

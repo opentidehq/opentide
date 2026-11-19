@@ -522,7 +522,7 @@ index=main
 | Setting | Value | Description |
 | --- | --- | --- |
 | `name` | CrowdStrike Deploy Rule | Platform-specific rule name. |
-| `details.trigger` | `event` | `verbose` or `summary`, any case. |
+| `details.trigger` | `verbose` | `verbose` or `summary`, any case. |
 | `details.outcome` | `detection` | `detection` or `incident`, any case. |
 | `schedule.frequency` | `1h` | Run interval. |
 | `schedule.lookback` | `2h` | How far back each run searches. |

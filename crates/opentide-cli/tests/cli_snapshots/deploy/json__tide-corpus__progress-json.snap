@@ -129,7 +129,7 @@ exit: 0
         "api_request": {
           "details": {
             "outcome": "detection",
-            "trigger": "event"
+            "trigger": "verbose"
           },
           "enabled": true,
           "name": "CrowdStrike Deploy Rule",

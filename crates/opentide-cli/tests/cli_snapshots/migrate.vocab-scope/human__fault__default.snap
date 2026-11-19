@@ -13,6 +13,6 @@ exit: 1
 ␛[1m␛[33mwarning:␛[0m objects/rules/encoded-beacon-rule-0034.yaml: unreadable: while parsing a flow sequence,
          expected ',' or ']' (line 83, column 1)
 ␛[1m␛[33mwarning:␛[0m objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar,
-         found a tab (line 44, column 18)
+         found a tab (line 45, column 1)
 ␛[1m␛[33mwarning:␛[0m objects/rules/staged-exfiltration-rule-0021.yaml: unreadable: while parsing a flow
          sequence, expected ',' or ']' (line 72, column 1)

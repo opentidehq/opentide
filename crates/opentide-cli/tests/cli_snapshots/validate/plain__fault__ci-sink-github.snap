@@ -149,6 +149,7 @@ error[config_enum_unknown]: "Night Shift" is not a configured responder
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 83, column 1
   ╭─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ├─ note: the `[` opened at line 82, column 9 is not closed
   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
 
 error[invalid_uuid]: UUID "not-a-uuid" is not a valid UUIDv4
@@ -278,12 +279,12 @@ error[schema_validation]: missing required field "description"
   │
   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18
-   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:44:18
+error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1
+   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:45:1
    │
-43 │       group_by: source
 44 │       condition: count() >= 3
-   │                  ━
+45 │    indent: tab
+   │ ━━━
    │
    ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
 
@@ -713,6 +714,7 @@ error[esql_pattern]: LIKE escapes only `*`, `?`, and `\`; a backslash before `b`
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
   ╭─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ├─ note: the `[` opened at line 71, column 9 is not closed
   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
 
 error[falco_misplaced_list]: `corpus_shells_416` is a list, not a macro: use it in a value list, `in (corpus_shells_416)`
@@ -871,7 +873,7 @@ warning[asset_unknown]: visibility.toml.logsources.11.assets.0: logsource "Ghost
 | error | [`eql_maxspan_unit`](https://opentide.org/docs/cli/diagnostics#eql_maxspan_unit) | `objects/rules/hidden-dropper-rule-0194.yaml:100:29` | unrecognized time unit \[w\] in \`maxspan\`; use one of ms, s, m, h, d — help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql |
 | error | [`missing_uuid`](https://opentide.org/docs/cli/diagnostics#missing_uuid) | `objects/rules/hidden-implant-rule-0006.yaml` | Object YAML has no uuid: hidden-implant-rule-0006.yaml — help: add metadata.uuid with a fresh UUID v4 |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/hidden-loader-rule-0008.yaml:1:1` | missing required field "description" — help: the template in .opentide/templates/ shows the field and its values |
-| error | [`yaml_parse`](https://opentide.org/docs/cli/diagnostics#yaml_parse) | `objects/rules/hidden-loader-rule-0024.yaml:44:18` | Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18 — help: look at the indentation, a missing ':' or an unclosed quote at or just before this position |
+| error | [`yaml_parse`](https://opentide.org/docs/cli/diagnostics#yaml_parse) | `objects/rules/hidden-loader-rule-0024.yaml:45:1` | Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1 — help: look at the indentation, a missing ':' or an unclosed quote at or just before this position |
 | error | [`kql_unknown_table`](https://opentide.org/docs/cli/diagnostics#kql_unknown_table) | `objects/rules/hidden-pivot-rule-0041.yaml:41:7` | unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender\_for\_endpoint in visibility.toml — help: did you mean "DeviceProcessEvents"? |
 | error | [`falco_unknown_event`](https://opentide.org/docs/cli/diagnostics#falco_unknown_event) | `objects/rules/lateral-downgrade-rule-0139.yaml:58:18` | unknown event type opne — help: did you mean "open"? |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/lateral-dropper-rule-0026.yaml:1:1` | missing required field "description" — help: the template in .opentide/templates/ shows the field and its values |

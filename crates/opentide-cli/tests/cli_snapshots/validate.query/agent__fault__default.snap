@@ -407,7 +407,7 @@ error[eql_unsupported]: Elasticsearch EQL does not support the `unique` pipe; on
 error: Malformed object yaml · path: objects/threats/encoded-exfiltration-threat-0030.yaml · error: expected a mapping at the top of the file, found an empty file
 error: Malformed object yaml · path: objects/rules/encoded-beacon-rule-0034.yaml · error: while parsing a flow sequence, expected ',' or ']' at line 83, column 1
 error: Missing identifier from model · file: <WS>/objects/rules/hidden-implant-rule-0006.yaml
-error: Malformed object yaml · path: objects/rules/hidden-loader-rule-0024.yaml · error: while scanning a plain scalar, found a tab at line 44, column 18
+error: Malformed object yaml · path: objects/rules/hidden-loader-rule-0024.yaml · error: while scanning a plain scalar, found a tab at line 45, column 1
 error: Malformed object yaml · path: objects/rules/staged-exfiltration-rule-0021.yaml · error: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
 ✗ 44 errors in 44 files · 1162 queries checked
 → opentide explain falco_output_syntax · how to fix it

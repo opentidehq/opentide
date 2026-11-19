@@ -127,13 +127,19 @@ pub const REVIEWED_SHAPE: &str =
     clippy::expect_used,
     reason = "regex literals, tested by every reviewed case"
 )]
-fn review_patterns() -> &'static (Regex, Regex) {
-    static PATTERNS: OnceLock<(Regex, Regex)> = OnceLock::new();
+fn review_patterns() -> &'static (Regex, Regex, Regex) {
+    static PATTERNS: OnceLock<(Regex, Regex, Regex)> = OnceLock::new();
     PATTERNS.get_or_init(|| {
         (
             Regex::new(r"^([0-9]{4})-([0-9]{2})-([0-9]{2})$").expect("a valid pattern"),
             Regex::new(
                 r"^([0-9]{4})-([0-9]{2})-([0-9]{2})[T ]([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(?:(Z)|([+-])([0-9]{2}):([0-9]{2}))$",
+            )
+            .expect("a valid pattern"),
+            // `created` and `modified` take a datetime without its offset
+            // too, as 0.28.1 did (`2026-11-19 10:00:00`).
+            Regex::new(
+                r"^([0-9]{4})-([0-9]{2})-([0-9]{2})[T ]([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(?:(Z)|([+-])([0-9]{2}):([0-9]{2}))?$",
             )
             .expect("a valid pattern"),
         )
@@ -154,7 +160,12 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
 /// [`check_reviewed`]'s test for the date or datetime at `field`
 /// (`metadata.created`): its messages name the field.
 pub fn check_instant(field: &str, text: &str) -> Result<(), Violation> {
-    let (date, datetime) = review_patterns();
+    let (date, with_offset, any_offset) = review_patterns();
+    let datetime = if field == "metadata.reviewed" {
+        with_offset
+    } else {
+        any_offset
+    };
     let number = |capture: Option<regex::Match<'_>>| -> i32 {
         capture
             .and_then(|digits| digits.as_str().parse().ok())
