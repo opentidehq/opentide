@@ -186,7 +186,12 @@ pub fn advisories(rule: &Node) -> Vec<Advisory> {
                 .into_iter()
                 .map(|index| Advisory {
                     code: UNKNOWN_FIELD,
-                    field_path: block_path(&["detection", "criteria", &index.to_string()]),
+                    field_path: block_path(&[
+                        "detection",
+                        "criteria",
+                        &index.to_string(),
+                        "field",
+                    ]),
                     message: format!(
                         "the criteria catalogue lists no such field for target {}; GravityZone may \
                      refuse it",

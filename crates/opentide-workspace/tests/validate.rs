@@ -620,6 +620,93 @@ mod validate {
     }
 
     #[test]
+    fn a_value_written_before_stages_suggests_its_scoped_form_and_the_migration() {
+        // B18 (smoke test): a pre-0.14 `surface: [Windows]` was only
+        // "not a surface value", with no route to `migrate vocab-scope`.
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!("name: T\nmetadata:\n  uuid: {U1}\n  schema: threat::1.0\nthreat:\n  surface:\n    - Windows\n"),
+        );
+        let validation = run(&fs, &Options::default());
+        let unknown = with_code(&validation, "vocab_unknown");
+        let finding = unknown
+            .iter()
+            .find(|d| d.value() == Some("Windows"))
+            .unwrap_or_else(|| panic!("{:?}", validation.report.issues));
+        assert_eq!(finding.suggestion.as_deref(), Some("OS::Windows"));
+        assert_eq!(finding.help.as_deref(), Some("did you mean \"OS::Windows\"?"));
+        assert!(
+            finding
+                .notes
+                .iter()
+                .any(|(label, text)| label == "note"
+                    && text.contains("opentide migrate vocab-scope --apply")),
+            "{:?}",
+            finding.notes
+        );
+        assert!(finding.fix.is_some(), "validate --fix offers it");
+    }
+
+    #[test]
+    fn a_chaining_link_holds_vector_and_relation_and_never_itself() {
+        // B15 (smoke test): a link with `vectr:`/`relaton:` and a link to
+        // the threat itself passed `validate`.
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/threats/b.yaml",
+            format!("name: B\nmetadata:\n  uuid: {U2}\n  schema: threat::1.0\nthreat:\n  cve: [CVE-2024-3400]\n"),
+        );
+        fs.write(
+            "/ws/objects/threats/a.yaml",
+            format!(
+                "name: A\nmetadata:\n  uuid: {U1}\n  schema: threat::1.0\nthreat:\n  chaining:\n    \
+                 - vector: {U1}\n      relation: sequence::preceeds\n    \
+                 - vectr: {U2}\n      relaton: sequence::preceeds\n    \
+                 - vector: {U2}\n    \
+                 - vector: {U2}\n      relation: sequence::preceeds\n"
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<(String, String)> = with_code(&validation, "schema_validation")
+            .into_iter()
+            .filter(|d| d.field_path.get(1).map(String::as_str) == Some("chaining"))
+            .map(|d| (d.field_path.join("."), d.message.clone()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                (
+                    "threat.chaining.0.vector".to_owned(),
+                    "threat.chaining.0: the threat chains to itself; `vector` names another \
+                     threat"
+                        .to_owned()
+                ),
+                (
+                    "threat.chaining.1.vectr".to_owned(),
+                    "threat.chaining.1: unknown key \"vectr\"; a link has `vector` and \
+                     `relation`"
+                        .to_owned()
+                ),
+                (
+                    "threat.chaining.1.relaton".to_owned(),
+                    "threat.chaining.1: unknown key \"relaton\"; a link has `vector` and \
+                     `relation`"
+                        .to_owned()
+                ),
+                (
+                    "threat.chaining.2".to_owned(),
+                    "threat.chaining.2: a link needs `vector` and `relation`; `relation` is \
+                     missing"
+                        .to_owned()
+                ),
+            ],
+            "{:?}",
+            validation.report.issues
+        );
+    }
+
+    #[test]
     fn an_unknown_reference_names_the_listing_and_a_dangling_detection_model_too() {
         let fs = workspace();
         fs.write(

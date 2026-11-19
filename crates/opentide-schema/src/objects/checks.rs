@@ -148,6 +148,12 @@ fn review_patterns() -> &'static (Regex, Regex) {
 /// the instant in UTC (year 0 is refused, and so is an offset that moves the
 /// instant out of that range).
 pub fn check_reviewed(text: &str) -> Result<(), Violation> {
+    check_instant("metadata.reviewed", text)
+}
+
+/// [`check_reviewed`]'s test for the date or datetime at `field`
+/// (`metadata.created`): its messages name the field.
+pub fn check_instant(field: &str, text: &str) -> Result<(), Violation> {
     let (date, datetime) = review_patterns();
     let number = |capture: Option<regex::Match<'_>>| -> i32 {
         capture
@@ -155,9 +161,7 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
             .unwrap_or_default()
     };
     let invalid = |error: &dyn std::fmt::Display| {
-        Violation::value_error(format!(
-            "metadata.reviewed is not a valid date or time: {error}"
-        ))
+        Violation::value_error(format!("{field} is not a valid date or time: {error}"))
     };
     if let Some(parts) = date.captures(text) {
         return civil_date(
@@ -169,7 +173,11 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
         .map_err(|error| invalid(&error));
     }
     let Some(parts) = datetime.captures(text) else {
-        return Err(Violation::value_error(REVIEWED_SHAPE));
+        return Err(Violation::value_error(if field == "metadata.reviewed" {
+            REVIEWED_SHAPE.to_owned()
+        } else {
+            format!("{field} must be an ISO 8601 date (YYYY-MM-DD) or datetime")
+        }));
     };
     let day = civil_date(
         number(parts.get(1)),
@@ -254,6 +262,28 @@ fn to_i8(value: i32) -> i8 {
 pub fn schema_identifier(node: &Node, cx: &mut Context) -> Option<String> {
     let value = String::from_node(node, cx)?;
     match check_schema_identifier(&value) {
+        Ok(()) => Some(value),
+        Err(violation) => {
+            violation.report(node, cx);
+            None
+        }
+    }
+}
+
+/// `metadata.created`: a string ([`String::from_node`]) that is a date or a
+/// datetime ([`check_instant`]), placed at the value (B1).
+pub fn created(node: &Node, cx: &mut Context) -> Option<String> {
+    instant("metadata.created", node, cx)
+}
+
+/// `metadata.modified`, as [`created`].
+pub fn modified(node: &Node, cx: &mut Context) -> Option<String> {
+    instant("metadata.modified", node, cx)
+}
+
+fn instant(field: &str, node: &Node, cx: &mut Context) -> Option<String> {
+    let value = String::from_node(node, cx)?;
+    match check_instant(field, &value) {
         Ok(()) => Some(value),
         Err(violation) => {
             violation.report(node, cx);
@@ -411,6 +441,18 @@ pub fn garde_reviewed(value: &Option<String>, _pins: &Pins) -> garde::Result {
         )),
         Some(text) => check_reviewed(text).map_err(Violation::into_garde),
     }
+}
+
+/// garde: `metadata.created` is a date (or a datetime, as `reviewed` takes):
+/// the JSON Schema says `format: date`, and a value such as `yesterday` or
+/// `2026-02-30` passed and reached the generated docs (B1).
+pub fn garde_created(value: &str, _pins: &Pins) -> garde::Result {
+    check_instant("metadata.created", value).map_err(Violation::into_garde)
+}
+
+/// garde: `metadata.modified`, as [`garde_created`].
+pub fn garde_modified(value: &str, _pins: &Pins) -> garde::Result {
+    check_instant("metadata.modified", value).map_err(Violation::into_garde)
 }
 
 /// garde: [`check_single_vocab_name`] on each item.

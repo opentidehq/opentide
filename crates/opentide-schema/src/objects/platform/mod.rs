@@ -529,8 +529,31 @@ pub(crate) fn before(model: &'static str, node: &Node, cx: &mut Context) -> bool
     if codes.is_empty() {
         return true;
     }
-    Violation::value_error(codes_message(model, &codes)).report(node, cx);
+    let mut message = codes_message(model, &codes);
+    // Elastic's durations: the message names each value and the form it
+    // takes, and a block whose only fault is one duration is placed at it
+    // (B3: "code(s): duration" at the block, with no hint of `14d`).
+    if model == "ElasticConfig" && codes.contains("duration") {
+        let bad = elastic::bad_durations(node);
+        message = format!("{message} ({})", elastic::duration_detail(node));
+        if let [(path, value)] = bad.as_slice()
+            && codes.len() == 1
+        {
+            let keys: Vec<&str> = path.split('.').collect();
+            report_at(&keys, &Violation::value_error(message), value, cx);
+            return false;
+        }
+    }
+    Violation::value_error(message).report(node, cx);
     false
+}
+
+/// `violation` on `node`, at `keys` below the current path.
+fn report_at(keys: &[&str], violation: &Violation, node: &Node, cx: &mut Context) {
+    match keys.split_first() {
+        None => violation.report(node, cx),
+        Some((key, rest)) => cx.at_key(key, |cx| report_at(rest, violation, node, cx)),
+    }
 }
 
 /// One finding as an error typed by its code, at its path under the block.

@@ -997,7 +997,10 @@ fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
                 if (query.line, query.column) < (merged.line, merged.column) {
                     (merged.line, merged.column) = (query.line, query.column);
                 }
-                merged.placeholder &= query.placeholder;
+                // A section still the stand-in `opentide new` wrote makes
+                // the whole rule one (B6: `events: ...` beside the template's
+                // `outcome` counted as "1 query valid").
+                merged.placeholder |= query.placeholder;
                 merged.findings.extend(query.findings);
             }
             None => {
@@ -1130,6 +1133,33 @@ mod tests {
                 .all(|query| query.platform != "google_secops"),
             "{queries:?}"
         );
+    }
+
+    #[test]
+    fn a_google_secops_rule_with_a_stand_in_section_is_a_placeholder() {
+        // B6 (smoke test): as `opentide new` writes the block, `events` and
+        // `condition` the stand-in, `outcome` a value.
+        let text = "name: A\nconfigurations:\n  google_secops:\n    events: |  # opentide:placeholder\n      \
+                    ...\n    outcome: |  # opentide:placeholder\n      $risk_score = 40\n    \
+                    condition: |  # opentide:placeholder\n      ...\n";
+        let profiles = Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            datasets: crate::Datasets::of_workspace(None).unwrap(),
+            visibility_problem: None,
+            graylog_tenants: Vec::new(),
+        };
+        let queries = profiles.check_object(text);
+        let rule = queries
+            .iter()
+            .find(|query| query.platform == "google_secops")
+            .unwrap_or_else(|| panic!("{queries:?}"));
+        assert!(rule.placeholder, "{rule:?}");
+        // Written out, it is a query again.
+        let written = text
+            .replace("      ...\n    outcome", "      $e.metadata.event_type = \"USER_LOGIN\"\n    outcome")
+            .replace("condition: |  # opentide:placeholder\n      ...", "condition: |\n      $e");
+        let queries = profiles.check_object(&written);
+        assert!(queries.iter().all(|query| !query.placeholder), "{queries:?}");
     }
 
     #[test]

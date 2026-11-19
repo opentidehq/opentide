@@ -983,35 +983,69 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     if present(score) && !int_within(score, &(0..=100)) {
         codes.insert("risk_score");
     }
+    if !bad_durations(raw).is_empty() {
+        codes.insert("duration");
+    }
+    codes
+}
+
+/// The block's durations that do not parse, as `(key path, node)`:
+/// `scheduling.lookback` (which may be zero), `scheduling.interval`,
+/// `suppression.duration` and `new_terms.history_window_start`. The
+/// `duration` code's places, which its message names (B3: it named the
+/// block alone).
+pub fn bad_durations(raw: &Node) -> Vec<(&'static str, &Node)> {
+    let field = |key: &str| get(Some(raw), key);
     // A non-object `scheduling` is a shape fault, not a duration one: left to
     // the field type, which names `scheduling` and the expected shape.
     let scheduling = field("scheduling").filter(|node| is_map(Some(node)));
-    let duration_ok = |node: &Node, allow_zero: bool| {
-        node.value
-            .as_str()
-            .is_some_and(|text| duration_seconds(text, allow_zero).is_ok())
-    };
-    if let Some(lookback) = get(scheduling, "lookback").filter(|node| present(Some(node)))
-        && !duration_ok(lookback, true)
-    {
-        codes.insert("duration");
-    }
+    let suppression = field("suppression").filter(|node| present(Some(node)) && is_map(Some(node)));
+    let new_terms = field("new_terms");
     let history = if is_map(new_terms) {
         get(new_terms, "history_window_start")
     } else {
         None
     };
+    let duration_ok = |node: &Node, allow_zero: bool| {
+        node.value
+            .as_str()
+            .is_some_and(|text| duration_seconds(text, allow_zero).is_ok())
+    };
     // `None` is absent (#557); every other value, "" included, must parse.
-    for value in [
-        get(scheduling, "interval"),
-        get(suppression, "duration"),
-        history,
-    ] {
-        if let Some(value) = value.filter(|node| present(Some(node)))
-            && !duration_ok(value, false)
-        {
-            codes.insert("duration");
-        }
-    }
-    codes
+    [
+        ("scheduling.lookback", get(scheduling, "lookback"), true),
+        ("scheduling.interval", get(scheduling, "interval"), false),
+        ("suppression.duration", get(suppression, "duration"), false),
+        ("new_terms.history_window_start", history, false),
+    ]
+    .into_iter()
+    .filter_map(|(path, node, allow_zero)| {
+        node.filter(|node| present(Some(node)) && !duration_ok(node, allow_zero))
+            .map(|node| (path, node))
+    })
+    .collect()
+}
+
+/// What the `duration` code's message adds: each bad duration, its value
+/// and the form it takes.
+pub fn duration_detail(raw: &Node) -> String {
+    bad_durations(raw)
+        .iter()
+        .map(|(path, node)| {
+            let value = match &node.value {
+                Value::Str(text) => format!("{:?}", text.as_str()),
+                other => other.to_string(),
+            };
+            let extra = if *path == "new_terms.history_window_start" {
+                "; deploy adds `now-`"
+            } else {
+                ""
+            };
+            format!(
+                "{path} {value} is not a duration: a number and a unit, s, m, h or d, such as \
+                 `14d`{extra}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }

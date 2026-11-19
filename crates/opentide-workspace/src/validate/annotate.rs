@@ -55,7 +55,15 @@ fn default_help(code: &str) -> Option<&'static str> {
 
 /// `yaml_parse` problems that are not syntax: the indentation hint would
 /// mislead.
-const YAML_PARSE_HELP: [(&str, &str); 3] = [
+const YAML_PARSE_HELP: [(&str, &str); 5] = [
+    (
+        "is repeated (first written on line",
+        "keep one of the two: a mapping holds each key once",
+    ),
+    (
+        " tab",
+        "indent with spaces: YAML does not allow a tab in indentation",
+    ),
     (
         "found an empty file",
         "fill it in from a template with opentide new, or delete it",
@@ -274,7 +282,11 @@ impl<'a> Sources<'a> {
                         text: String::new(),
                         found: true,
                     },
-                    Vec::new(),
+                    // What the parser was reading: an unclosed `[` or `{`.
+                    error
+                        .note
+                        .map(|note| vec![("note".to_owned(), note)])
+                        .unwrap_or_default(),
                 ))
             }
             Ok(document) => {
@@ -434,6 +446,22 @@ fn annotate_one(
     if let Some(place) = &span {
         line = Some(place.line);
     }
+    // A value written before its vocabulary had stages (`Windows` for
+    // `OS::Windows`): the scoped value is the suggestion, and the note names
+    // the command that rewrites them all (B18).
+    if diagnostic.code == "vocab_unknown"
+        && let Some(scoped) = value
+            .as_deref()
+            .and_then(|value| scoped_value(diagnostic, value))
+    {
+        diagnostic.suggestion = Some(scoped);
+        notes.push((
+            "note".to_owned(),
+            "written before the vocabulary's stages: `opentide migrate vocab-scope --apply` \
+             rewrites every such value"
+                .to_owned(),
+        ));
+    }
     let mut help = diagnostic.suggestion.clone();
     if diagnostic.code == "platform_not_enabled"
         && help.is_none()
@@ -521,6 +549,25 @@ fn annotate_one(
     diagnostic.label = label;
     diagnostic.notes = notes;
     diagnostic.headline = (message != diagnostic.message).then_some(message);
+}
+
+/// The stage-scoped value `value` stands for when it was written before
+/// its vocabulary had stages (`Windows` for `OS::Windows`), as
+/// `opentide migrate vocab-scope` resolves it: `None` for a value it
+/// cannot place on its own.
+fn scoped_value(diagnostic: &Diagnostic, value: &str) -> Option<String> {
+    use opentide_schema::migration::vocab_scope::{SCOPED_FIELDS, ScopeIndex, Status};
+    if value.contains("::") {
+        return None;
+    }
+    let vocab = diagnostic.context.get("vocab").and_then(ContextValue::as_str)?;
+    let vocab = vocab.split("::").next().unwrap_or(vocab);
+    let field = SCOPED_FIELDS.iter().find(|field| field.vocab == vocab)?;
+    let vocabulary = opentide_schema::vocab::bundled::get(field.vocab)?;
+    let outcome = ScopeIndex::new(&vocabulary).resolve(value);
+    matches!(outcome.status, Status::Prefixed | Status::Rescoped)
+        .then_some(outcome.resolved)
+        .flatten()
 }
 
 /// `"clearr" is not a TLP value`, `"x" is not a configured status`: the

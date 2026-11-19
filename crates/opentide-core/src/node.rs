@@ -295,6 +295,9 @@ pub struct LoadError {
     pub problem: String,
     /// Where the problem is, when the text has a place for it.
     pub mark: Option<Mark>,
+    /// What the parser was reading when it gave up, when that helps more
+    /// than the place it stopped: the `[` or `{` that is never closed.
+    pub note: Option<String>,
 }
 
 impl LoadError {
@@ -303,6 +306,7 @@ impl LoadError {
             kind,
             problem: problem.into(),
             mark,
+            note: None,
         }
     }
 
@@ -670,6 +674,29 @@ fn from_scalar(scalar: Scalar<'_>) -> Value {
 /// The first character YAML 1.2 does not allow in a stream (§5.1: C0
 /// controls other than tab and line breaks, DEL, C1 controls other than NEL,
 /// U+FFFE and U+FFFF), with its position. saphyr reads them as text.
+/// The tab at or after `from` with only blanks and line breaks before it:
+/// where the scanner, which reports a tab used for indentation at the end of
+/// the line before, means.
+fn tab_after(source: &str, from: Mark) -> Option<Mark> {
+    let mut line = from.line();
+    let mut column = from.column();
+    let mut previous = '\0';
+    for (offset, character) in source.chars().skip(from.index()).enumerate() {
+        match character {
+            '\t' => return Some(Mark::new(from.index() + offset, line, column)),
+            '\n' if previous == '\r' => {}
+            '\n' | '\r' => {
+                line += 1;
+                column = 1;
+            }
+            ' ' => column += 1,
+            _ => return None,
+        }
+        previous = character;
+    }
+    None
+}
+
 fn non_printable(source: &str) -> Option<(char, Mark)> {
     let mut line = 1;
     let mut column = 1;
@@ -698,6 +725,34 @@ fn non_printable(source: &str) -> Option<(char, Mark)> {
 }
 
 impl Builder {
+    /// The parser's `error`, placed where a person looks, with what it was
+    /// reading (B9): a tab the scanner reports at the end of the line before
+    /// it moves onto the tab, and a `[` or `{` still open is named.
+    fn scan_error(&self, error: &ScanError, source: &str) -> LoadError {
+        let mut found = LoadError::from_scan(error);
+        if error.info().contains("tab")
+            && let Some(mark) = found.mark
+            && let Some(tab) = tab_after(source, mark)
+        {
+            found.mark = Some(tab);
+        }
+        let open = self.frames.iter().rev().find_map(|frame| {
+            let start = match frame {
+                Frame::Seq { start, .. } | Frame::Map { start, .. } => *start,
+            };
+            let opener = source.chars().nth(start.index())?;
+            matches!(opener, '[' | '{').then_some((opener, start))
+        });
+        if let Some((opener, start)) = open {
+            found.note = Some(format!(
+                "the `{opener}` opened at line {}, column {} is not closed",
+                start.line(),
+                start.column()
+            ));
+        }
+        found
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "the node builder's single pass over the parsed document, kept whole; split when next touched"
@@ -724,7 +779,7 @@ impl Builder {
         let last_line = source.rsplit(['\n', '\r']).next().unwrap_or_default();
         let unterminated_content = !last_line.trim_matches([' ', '\t']).is_empty();
         for event in Parser::new_from_str(source) {
-            let (event, span) = event.map_err(|error| LoadError::from_scan(&error))?;
+            let (event, span) = event.map_err(|error| self.scan_error(&error, source))?;
             let start = Mark::from_saphyr(span.start);
             let end = Mark::from_saphyr(span.end);
             match event {
@@ -902,7 +957,7 @@ impl Builder {
                             return Err(LoadError::at(
                                 LoadErrorKind::DuplicateKey,
                                 format!(
-                                    "the key '{}' is repeated; it is first written on line {}",
+                                    "the key '{}' is repeated (first written on line {})",
                                     node.value,
                                     first.get()
                                 ),
@@ -1003,6 +1058,36 @@ mod tests {
         assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
         assert_eq!(error.mark.map(|m| (m.line(), m.column())), Some((2, 1)));
         assert!(error.problem.contains("first written on line 1"), "{error}");
+    }
+
+    #[test]
+    fn a_syntax_error_is_placed_where_a_person_looks_and_names_what_is_open() {
+        // B9 (smoke test): a tab indenting line 5 was reported at the end
+        // of line 4; an unclosed `[` had no note; the repeated key read as
+        // one run-on sentence once a place was added.
+        let tab = load("name: X\nconfigurations:\n  splunk:\n    enabled: true\n\tstatus: STAGING\n")
+            .unwrap_err();
+        assert!(tab.problem.contains("tab"), "{tab}");
+        assert_eq!(tab.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
+        let unclosed =
+            load("name: X\nmetadata:\n  uuid: u\n  tags: [a, b\nresponse:\n  alert_severity: High\n")
+                .unwrap_err();
+        assert_eq!(
+            unclosed.note.as_deref(),
+            Some("the `[` opened at line 4, column 9 is not closed")
+        );
+        let mapping = load("a: {x: 1\nb: 2\n").unwrap_err();
+        assert_eq!(
+            mapping.note.as_deref(),
+            Some("the `{` opened at line 1, column 4 is not closed")
+        );
+        // A block that fails names no bracket.
+        assert_eq!(load("a: 'x\n").unwrap_err().note, None);
+        let repeated = load("a: 1\nb: 2\na: 3\n").unwrap_err();
+        assert_eq!(
+            repeated.problem,
+            "the key 'a' is repeated (first written on line 1)"
+        );
     }
 
     #[test]

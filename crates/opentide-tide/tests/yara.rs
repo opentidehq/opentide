@@ -731,3 +731,27 @@ fn decomposed_raw_quotes_are_parse_errors_in_their_field() {
         );
     }
 }
+
+/// B4 (smoke test): the assembled rule's place in the file is its block's,
+/// not the `metadata.uuid` its `id` meta line quotes: `validate query
+/// --json` placed a decomposed HarfangLab rule at line 4, column 9.
+#[test]
+fn a_decomposed_rule_is_placed_in_its_block() {
+    let source = decomposed(
+        "        $a = \"cmd.exe\"\n",
+        "        $a\n",
+        "",
+    );
+    let injection = opentide_tide::extract_injections(&source)
+        .into_iter()
+        .find(|query| query.field_path.join(".") == "configurations.harfanglab.yara")
+        .expect("the decomposed rule");
+    let start = injection.host_span.start;
+    let strings = source.find("$a = ").expect("the strings");
+    let block = source.find("    yara:\n").expect("the yara key");
+    assert!(
+        start > block && start <= strings,
+        "starts at byte {start}: {:?}",
+        &source[start..]
+    );
+}

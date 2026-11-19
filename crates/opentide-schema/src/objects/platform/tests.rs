@@ -469,6 +469,36 @@ fn elastic_empty_duration_reports_duration() {
 }
 
 #[test]
+fn elastic_bad_duration_names_its_field_value_and_form() {
+    // B3 (smoke test): `history_window_start: now-14d` was "ElasticConfig
+    // validation failed with code(s): duration" at the block, with no hint
+    // of the form (`14d`; deploy adds `now-`).
+    let block = merged(
+        &elastic_base(),
+        &json!({"type": "new_terms",
+                "new_terms": {"fields": ["user.name"], "history_window_start": "now-14d"}}),
+    );
+    assert_eq!(
+        errors("elastic", &block),
+        "new_terms.history_window_start: ElasticConfig validation failed with code(s): duration \
+         (new_terms.history_window_start \"now-14d\" is not a duration: a number and a unit, s, \
+         m, h or d, such as `14d`; deploy adds `now-`)"
+    );
+    // Two at once, or with another code: named, and placed at the block.
+    let block = merged(
+        &elastic_base(),
+        &json!({"scheduling": {"interval": "5 minutes", "lookback": "soon"}}),
+    );
+    let found = errors("elastic", &block);
+    assert!(
+        found.starts_with(": ElasticConfig validation failed with code(s): duration ("),
+        "{found}"
+    );
+    assert!(found.contains("scheduling.lookback \"soon\""), "{found}");
+    assert!(found.contains("scheduling.interval \"5 minutes\""), "{found}");
+}
+
+#[test]
 fn elastic_non_object_scheduling_is_a_shape_error() {
     for scheduling in [json!("5m"), json!(["5m"]), json!(5)] {
         let found = errors(

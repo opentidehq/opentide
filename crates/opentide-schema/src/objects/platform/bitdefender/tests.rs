@@ -561,7 +561,7 @@ fn each_code_is_reported_at_its_field_path() {
             vec![
                 (
                     "bitdefender_criterion_field",
-                    path(&["detection", "criteria", "1"]),
+                    path(&["detection", "criteria", "1", "field"]),
                 ),
                 (
                     "bitdefender_criterion_shape",
@@ -699,7 +699,9 @@ fn an_unknown_field_is_an_error_on_a_closed_target_and_a_warning_elsewhere() {
         errors(&closed),
         [(
             "bitdefender_criterion_field".to_owned(),
-            path(&["detection", "criteria", "0"])
+            // B5 (smoke test): at the field, so the frame underlines its
+            // name, not the `f` of the criterion's first key.
+            path(&["detection", "criteria", "0", "field"])
         )]
     );
     let open = json!({"target": "email", "criteria": [{"field": "Email.Nonexistent", "is": "x"}], "alert": "a"});
@@ -718,7 +720,8 @@ fn an_unknown_field_is_an_error_on_a_closed_target_and_a_warning_elsewhere() {
                 "bitdefender",
                 "detection",
                 "criteria",
-                "0"
+                "0",
+                "field"
             ])
         )]
     );
@@ -790,7 +793,10 @@ fn the_alert_field_as_a_criterion_is_an_error_on_every_target() {
             found[0].kind,
             ErrorKind::Constraint("bitdefender_criterion_field")
         );
-        assert_eq!(found[0].field_path(), path(&["detection", "criteria", "0"]));
+        assert_eq!(
+            found[0].field_path(),
+            path(&["detection", "criteria", "0", "field"])
+        );
         assert!(found[0].message.contains("alert"));
     }
 }
