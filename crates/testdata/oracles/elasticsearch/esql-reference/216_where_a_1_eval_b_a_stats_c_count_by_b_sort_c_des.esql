@@ -1,0 +1,1 @@
+FROM logs | WHERE a == 1 | EVAL b = a | STATS c = COUNT(*) BY b | SORT c DESC | LIMIT 5

@@ -1,0 +1,45 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/089_eval_b_date_diff_day_a_c.esql
+---
+SOURCE_FILE@0..44
+  QUERY@0..43
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..43
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..43
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..43
+          IDENTIFIER@21..30
+            IDENT@21..30 "DATE_DIFF"
+          L_PAREN@30..31 "("
+          STRING@31..36
+            STRING_LIT@31..36 "\"day\""
+          COMMA@36..37 ","
+          WHITESPACE@37..38 " "
+          QUALIFIED_NAME@38..39
+            IDENTIFIER@38..39
+              IDENT@38..39 "a"
+          COMMA@39..40 ","
+          WHITESPACE@40..41 " "
+          QUALIFIED_NAME@41..42
+            IDENTIFIER@41..42
+              IDENT@41..42 "c"
+          R_PAREN@42..43 ")"
+  WHITESPACE@43..44 "\n"
+--- errors

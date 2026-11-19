@@ -1,0 +1,1 @@
+FROM logs | IP_LOCATION geo = client.ip

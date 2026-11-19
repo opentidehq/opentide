@@ -1,0 +1,1 @@
+FROM logs | INLINE STATS c = COUNT(*) BY host

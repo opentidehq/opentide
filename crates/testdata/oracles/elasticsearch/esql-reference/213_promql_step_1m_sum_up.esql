@@ -1,0 +1,1 @@
+PROMQL step=1m (sum(up))

@@ -1,0 +1,1 @@
+FROM logs | EVAL b = DATE_FORMAT("yyyy-MM-dd", @timestamp)

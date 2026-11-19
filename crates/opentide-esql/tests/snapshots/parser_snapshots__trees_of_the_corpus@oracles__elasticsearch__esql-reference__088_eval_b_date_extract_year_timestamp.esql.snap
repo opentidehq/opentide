@@ -1,0 +1,40 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/088_eval_b_date_extract_year_timestamp.esql
+---
+SOURCE_FILE@0..54
+  QUERY@0..53
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..53
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..53
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..53
+          IDENTIFIER@21..33
+            IDENT@21..33 "DATE_EXTRACT"
+          L_PAREN@33..34 "("
+          STRING@34..40
+            STRING_LIT@34..40 "\"year\""
+          COMMA@40..41 ","
+          WHITESPACE@41..42 " "
+          QUALIFIED_NAME@42..52
+            IDENTIFIER@42..52
+              IDENT@42..52 "@timestamp"
+          R_PAREN@52..53 ")"
+  WHITESPACE@53..54 "\n"
+--- errors

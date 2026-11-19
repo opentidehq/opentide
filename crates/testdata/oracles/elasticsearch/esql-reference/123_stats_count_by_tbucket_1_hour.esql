@@ -1,0 +1,1 @@
+FROM logs | STATS COUNT(*) BY TBUCKET(1 hour)

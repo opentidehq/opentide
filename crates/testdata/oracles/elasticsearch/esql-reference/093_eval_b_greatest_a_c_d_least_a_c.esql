@@ -1,0 +1,1 @@
+FROM logs | EVAL b = GREATEST(a, c), d = LEAST(a, c)

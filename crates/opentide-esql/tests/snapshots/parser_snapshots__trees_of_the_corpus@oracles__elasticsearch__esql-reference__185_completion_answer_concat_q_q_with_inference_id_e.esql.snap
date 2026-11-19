@@ -1,0 +1,62 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/185_completion_answer_concat_q_q_with_inference_id_e.esql
+---
+SOURCE_FILE@0..94
+  QUERY@0..93
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    COMPLETION_COMMAND@12..93
+      COMPLETION_KW@12..22 "COMPLETION"
+      WHITESPACE@22..23 " "
+      QUALIFIED_NAME@23..29
+        IDENTIFIER@23..29
+          IDENT@23..29 "answer"
+      WHITESPACE@29..30 " "
+      EQ@30..31 "="
+      WHITESPACE@31..32 " "
+      FUNCTION_CALL@32..48
+        IDENTIFIER@32..38
+          IDENT@32..38 "CONCAT"
+        L_PAREN@38..39 "("
+        STRING@39..44
+          STRING_LIT@39..44 "\"Q: \""
+        COMMA@44..45 ","
+        WHITESPACE@45..46 " "
+        QUALIFIED_NAME@46..47
+          IDENTIFIER@46..47
+            IDENT@46..47 "q"
+        R_PAREN@47..48 ")"
+      WHITESPACE@48..49 " "
+      NAMED_PARAMETERS@49..93
+        WITH_KW@49..53 "WITH"
+        WHITESPACE@53..54 " "
+        MAP_EXPRESSION@54..93
+          L_BRACE@54..55 "{"
+          MAP_ENTRY@55..74
+            STRING@55..69
+              STRING_LIT@55..69 "\"inference_id\""
+            COLON@69..70 ":"
+            WHITESPACE@70..71 " "
+            STRING@71..74
+              STRING_LIT@71..74 "\"e\""
+          COMMA@74..75 ","
+          WHITESPACE@75..76 " "
+          MAP_ENTRY@76..92
+            STRING@76..85
+              STRING_LIT@76..85 "\"timeout\""
+            COLON@85..86 ":"
+            WHITESPACE@86..87 " "
+            STRING@87..92
+              STRING_LIT@87..92 "\"10s\""
+          R_BRACE@92..93 "}"
+  WHITESPACE@93..94 "\n"
+--- errors

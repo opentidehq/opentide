@@ -1,0 +1,42 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/049_where_a_not_in_1_2_3.esql
+---
+SOURCE_FILE@0..37
+  QUERY@0..36
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..36
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      IN_EXPRESSION@18..36
+        QUALIFIED_NAME@18..19
+          IDENTIFIER@18..19
+            IDENT@18..19 "a"
+        WHITESPACE@19..20 " "
+        NOT_KW@20..23 "NOT"
+        WHITESPACE@23..24 " "
+        IN_KW@24..26 "IN"
+        WHITESPACE@26..27 " "
+        L_PAREN@27..28 "("
+        NUMBER@28..29
+          NUMBER_LIT@28..29 "1"
+        COMMA@29..30 ","
+        WHITESPACE@30..31 " "
+        NUMBER@31..32
+          NUMBER_LIT@31..32 "2"
+        COMMA@32..33 ","
+        WHITESPACE@33..34 " "
+        NUMBER@34..35
+          NUMBER_LIT@34..35 "3"
+        R_PAREN@35..36 ")"
+  WHITESPACE@36..37 "\n"
+--- errors

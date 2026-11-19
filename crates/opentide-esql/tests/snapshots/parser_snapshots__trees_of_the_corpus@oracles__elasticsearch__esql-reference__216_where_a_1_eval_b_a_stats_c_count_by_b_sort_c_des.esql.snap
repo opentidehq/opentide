@@ -1,0 +1,93 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/216_where_a_1_eval_b_a_stats_c_count_by_b_sort_c_des.esql
+---
+SOURCE_FILE@0..88
+  QUERY@0..87
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..24
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      COMPARISON@18..24
+        QUALIFIED_NAME@18..19
+          IDENTIFIER@18..19
+            IDENT@18..19 "a"
+        WHITESPACE@19..20 " "
+        EQ_EQ@20..22 "=="
+        WHITESPACE@22..23 " "
+        NUMBER@23..24
+          NUMBER_LIT@23..24 "1"
+    WHITESPACE@24..25 " "
+    PIPE@25..26 "|"
+    WHITESPACE@26..27 " "
+    EVAL_COMMAND@27..37
+      EVAL_KW@27..31 "EVAL"
+      WHITESPACE@31..32 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@32..37
+        QUALIFIED_NAME@32..33
+          IDENTIFIER@32..33
+            IDENT@32..33 "b"
+        WHITESPACE@33..34 " "
+        EQ@34..35 "="
+        WHITESPACE@35..36 " "
+        QUALIFIED_NAME@36..37
+          IDENTIFIER@36..37
+            IDENT@36..37 "a"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    STATS_COMMAND@40..63
+      STATS_KW@40..45 "STATS"
+      WHITESPACE@45..46 " "
+      AGGREGATE_FIELD@46..58
+        QUALIFIED_NAME@46..47
+          IDENTIFIER@46..47
+            IDENT@46..47 "c"
+        WHITESPACE@47..48 " "
+        EQ@48..49 "="
+        WHITESPACE@49..50 " "
+        FUNCTION_CALL@50..58
+          IDENTIFIER@50..55
+            IDENT@50..55 "COUNT"
+          L_PAREN@55..56 "("
+          STAR@56..57
+            STAR_TOKEN@56..57 "*"
+          R_PAREN@57..58 ")"
+      WHITESPACE@58..59 " "
+      BY_KW@59..61 "BY"
+      WHITESPACE@61..62 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@62..63
+        QUALIFIED_NAME@62..63
+          IDENTIFIER@62..63
+            IDENT@62..63 "b"
+    WHITESPACE@63..64 " "
+    PIPE@64..65 "|"
+    WHITESPACE@65..66 " "
+    SORT_COMMAND@66..77
+      SORT_KW@66..70 "SORT"
+      WHITESPACE@70..71 " "
+      ORDER_EXPRESSION@71..77
+        QUALIFIED_NAME@71..72
+          IDENTIFIER@71..72
+            IDENT@71..72 "c"
+        WHITESPACE@72..73 " "
+        DESC_KW@73..77 "DESC"
+    WHITESPACE@77..78 " "
+    PIPE@78..79 "|"
+    WHITESPACE@79..80 " "
+    LIMIT_COMMAND@80..87
+      LIMIT_KW@80..85 "LIMIT"
+      WHITESPACE@85..86 " "
+      NUMBER@86..87
+        NUMBER_LIT@86..87 "5"
+  WHITESPACE@87..88 "\n"
+--- errors

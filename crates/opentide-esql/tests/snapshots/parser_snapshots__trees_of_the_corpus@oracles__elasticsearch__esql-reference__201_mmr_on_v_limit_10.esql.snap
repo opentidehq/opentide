@@ -1,0 +1,31 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/201_mmr_on_v_limit_10.esql
+---
+SOURCE_FILE@0..30
+  QUERY@0..29
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    MMR_COMMAND@12..29
+      MMR_KW@12..15 "MMR"
+      WHITESPACE@15..16 " "
+      ON_KW@16..18 "ON"
+      WHITESPACE@18..19 " "
+      QUALIFIED_NAME@19..20
+        IDENTIFIER@19..20
+          IDENT@19..20 "v"
+      WHITESPACE@20..21 " "
+      LIMIT_KW@21..26 "LIMIT"
+      WHITESPACE@26..27 " "
+      NUMBER@27..29
+        NUMBER_LIT@27..29 "10"
+  WHITESPACE@29..30 "\n"
+--- errors

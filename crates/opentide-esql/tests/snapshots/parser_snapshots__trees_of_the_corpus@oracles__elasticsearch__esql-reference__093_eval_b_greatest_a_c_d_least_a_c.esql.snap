@@ -1,0 +1,63 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/093_eval_b_greatest_a_c_d_least_a_c.esql
+---
+SOURCE_FILE@0..53
+  QUERY@0..52
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..52
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..35
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..35
+          IDENTIFIER@21..29
+            IDENT@21..29 "GREATEST"
+          L_PAREN@29..30 "("
+          QUALIFIED_NAME@30..31
+            IDENTIFIER@30..31
+              IDENT@30..31 "a"
+          COMMA@31..32 ","
+          WHITESPACE@32..33 " "
+          QUALIFIED_NAME@33..34
+            IDENTIFIER@33..34
+              IDENT@33..34 "c"
+          R_PAREN@34..35 ")"
+      COMMA@35..36 ","
+      WHITESPACE@36..37 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@37..52
+        QUALIFIED_NAME@37..38
+          IDENTIFIER@37..38
+            IDENT@37..38 "d"
+        WHITESPACE@38..39 " "
+        EQ@39..40 "="
+        WHITESPACE@40..41 " "
+        FUNCTION_CALL@41..52
+          IDENTIFIER@41..46
+            IDENT@41..46 "LEAST"
+          L_PAREN@46..47 "("
+          QUALIFIED_NAME@47..48
+            IDENTIFIER@47..48
+              IDENT@47..48 "a"
+          COMMA@48..49 ","
+          WHITESPACE@49..50 " "
+          QUALIFIED_NAME@50..51
+            IDENTIFIER@50..51
+              IDENT@50..51 "c"
+          R_PAREN@51..52 ")"
+  WHITESPACE@52..53 "\n"
+--- errors

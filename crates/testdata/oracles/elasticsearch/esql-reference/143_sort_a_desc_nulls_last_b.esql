@@ -1,0 +1,1 @@
+FROM logs | SORT a DESC NULLS LAST, b
