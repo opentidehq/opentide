@@ -120,7 +120,7 @@ The root options apply to the whole run, and reach the runs a long-lived command
 
 ## Terminal output
 
-Interactive terminals receive colour. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
+Interactive terminals receive colour. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly (at a terminal, bold and dim text stay); set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
