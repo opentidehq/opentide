@@ -802,7 +802,11 @@ mod tests {
             let error = mapping_macro(&es_tenant(&format!(r#""mdr_mapping_macro": {value}"#)))
                 .err()
                 .unwrap_or_else(|| panic!("{value} was accepted"));
-            assert!(error.reason.contains("mdr_mapping_macro"), "{}", error.reason);
+            assert!(
+                error.reason.contains("mdr_mapping_macro"),
+                "{}",
+                error.reason
+            );
         }
         let document = opentide_schema::node::load(
             "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000aa\n\

@@ -2212,10 +2212,12 @@ mod tests {
                 setup,
             }
         };
-        let named =
-            "index=main\n| eval MDR_UUID=\"00000000-0000-4000-8000-0000000000aa\", MDR_status=\"STAGING\"";
+        let named = "index=main\n| eval MDR_UUID=\"00000000-0000-4000-8000-0000000000aa\", MDR_status=\"STAGING\"";
         assert_eq!(tenant_text(item, &tenant(None)).unwrap(), item.text);
-        assert!(item.text.ends_with("|`soc_macro_auto_mdr_mapping(MDR_UUID)`"));
+        assert!(
+            item.text
+                .ends_with("|`soc_macro_auto_mdr_mapping(MDR_UUID)`")
+        );
         assert_eq!(
             tenant_text(item, &tenant(Some(J::Bool(true)))).unwrap(),
             item.text
