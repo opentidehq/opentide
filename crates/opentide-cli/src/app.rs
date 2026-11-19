@@ -1402,7 +1402,12 @@ impl Run<'_> {
     /// matched no rule (`emit_warning`), on stdout before the result; none
     /// in the machine modes or outside CI.
     fn no_rules_warning(&self, report: &mut crate::commands::Report) {
-        if report.outcome.message != opentide_compile::dry_run::NO_RULES_MATCHED {
+        if ![
+            opentide_compile::dry_run::NO_RULES_MATCHED,
+            opentide_compile::dry_run::NO_RULE_FILE_CHANGED,
+        ]
+        .contains(&report.outcome.message.as_str())
+        {
             return;
         }
         let provider = crate::render::ci::active_provider(self.mode, self.env);
