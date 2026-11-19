@@ -908,7 +908,9 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
 #[test]
 fn a_refused_tenant_is_named_when_the_next_one_is_unreachable() {
     let ws = splunk_rules(1);
-    let config = ws.path().join(".opentide/configurations/platforms/splunk.toml");
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
     let text = std::fs::read_to_string(&config).unwrap();
     std::fs::write(
         &config,
@@ -1029,8 +1031,9 @@ fn an_elastic_refusal_after_a_timeout_is_a_refusal() {
 #[test]
 fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
     use opentide_cassette::cassette::Body;
-    let text = std::fs::read_to_string(repo().join("tests/cassettes/golden/validate-live-splunk.json"))
-        .unwrap();
+    let text =
+        std::fs::read_to_string(repo().join("tests/cassettes/golden/validate-live-splunk.json"))
+            .unwrap();
     let recorded = Cassette::parse(&text).unwrap();
     let mut interactions = recorded.interactions[..=2].to_vec();
     let answer = &mut interactions[2].response;
@@ -1039,8 +1042,16 @@ fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
     answer.body = Body::Text(
         r#"{"messages":[{"type":"WARN","text":"call not properly authenticated"}]}"#.into(),
     );
-    let cassette = Cassette::new(&recorded.scenario, recorded.recorded_from.clone(), interactions);
-    let proxy = Proxy::start(Mode::Replay { cassette }, Redaction::new([SECRET.to_owned()])).unwrap();
+    let cassette = Cassette::new(
+        &recorded.scenario,
+        recorded.recorded_from.clone(),
+        interactions,
+    );
+    let proxy = Proxy::start(
+        Mode::Replay { cassette },
+        Redaction::new([SECRET.to_owned()]),
+    )
+    .unwrap();
     let scratch = tempfile::tempdir().unwrap();
     let ws = scratch.path().join("ws");
     copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), &ws);
@@ -1077,7 +1088,17 @@ fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
     let keys: Vec<&str> = live.result.iter().map(|(key, _)| key.as_str()).collect();
     assert_eq!(
         keys,
-        ["platform", "mode", "status", "supported", "tenant", "host", "message", "advice", "_exit_code"]
+        [
+            "platform",
+            "mode",
+            "status",
+            "supported",
+            "tenant",
+            "host",
+            "message",
+            "advice",
+            "_exit_code"
+        ]
     );
     assert_eq!(
         value(&live, "message"),

@@ -820,7 +820,12 @@ fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
 
 /// The tenants' names, as a JSON list.
 fn refused_names(refused: &[Refused]) -> Json {
-    Json::Array(refused.iter().map(|refused| Json::str(&refused.tenant)).collect())
+    Json::Array(
+        refused
+            .iter()
+            .map(|refused| Json::str(&refused.tenant))
+            .collect(),
+    )
 }
 
 /// The result of a check a tenant refused: the first refusal's tenant, host,
@@ -829,12 +834,7 @@ fn refused_names(refused: &[Refused]) -> Json {
 /// refusal) counted, their rejections having been logged as they came; and
 /// the checks that timed out and the warnings, as a check every tenant
 /// answered reports them.
-fn refused_result(
-    platform: &str,
-    refused: &Refused,
-    report: &CheckReport,
-    timeout: f64,
-) -> Fields {
+fn refused_result(platform: &str, refused: &Refused, report: &CheckReport, timeout: f64) -> Fields {
     let mut result = refused.result(platform);
     let at = result.len() - 1;
     let mut extra: Fields = Vec::new();

@@ -574,7 +574,9 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
         let detail = detail.or((!text.is_empty()).then_some(text));
         if answer.status == 401 {
             // The API token, not the query: the tenant's failure (#1658, E8).
-            let reason = detail.map(|detail| format!(": {detail}")).unwrap_or_default();
+            let reason = detail
+                .map(|detail| format!(": {detail}"))
+                .unwrap_or_default();
             return Err(ConnectorError::authentication(
                 PLATFORM,
                 tenant,
