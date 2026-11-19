@@ -4,7 +4,10 @@
 //! the YAML data it holds (the jobs, steps, commands and triggers), then as
 //! text, line for line. GitLab's oracle wrote its pipeline with PyYAML's
 //! dumper; the template writes the same layout, quoting a value only where
-//! YAML would read it as something else.
+//! YAML would read it as something else. The oracle is retired (#1142): a
+//! deliberate change to a pipeline updates its `.yml` here in the same
+//! change (`OPENTIDE_CI_RENDERED=<dir>` writes what the templates render),
+//! as the tenants' own credential variables did (#1655).
 
 #![expect(
     clippy::unwrap_used,
@@ -59,6 +62,7 @@ fn options(inputs: &toml::Table) -> Options {
         docs_output: "docs".into(),
         rules_folder: text("rules_folder"),
         credentials,
+        sharing_credentials: Vec::new(),
     }
 }
 

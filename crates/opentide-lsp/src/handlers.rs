@@ -254,6 +254,37 @@ impl Dispatcher<'_> {
         self
     }
 
+    /// [`Dispatcher::on`] for a handler that checks its params further than
+    /// they deserialize (an unknown `language`): its refusal is
+    /// `InvalidParams`, as params that do not parse are.
+    fn on_checked<R: lsp_types::request::Request>(
+        mut self,
+        handler: impl FnOnce(&mut Session, R::Params) -> Result<R::Result, String>,
+    ) -> Self {
+        let Some(request) = self.request.take() else {
+            return self;
+        };
+        if request.method != R::METHOD {
+            self.request = Some(request);
+            return self;
+        }
+        let refused = |id, problem: String| {
+            Response::new_err(
+                id,
+                ErrorCode::InvalidParams as i32,
+                format!("invalid params for {}: {problem}", R::METHOD),
+            )
+        };
+        self.response = Some(match serde_json::from_value::<R::Params>(request.params) {
+            Ok(params) => match handler(self.session, params) {
+                Ok(result) => Response::new_ok(request.id, result),
+                Err(problem) => refused(request.id, problem),
+            },
+            Err(err) => refused(request.id, err.to_string()),
+        });
+        self
+    }
+
     #[expect(
         clippy::expect_used,
         reason = "`on` either answers the request or puts it back, so one of the two is set"
@@ -326,8 +357,8 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<InlayHintRequest>(handle_inlay)
         .on::<DocumentLinkRequest>(handle_document_link)
         .on::<CodeLensRequest>(handle_code_lens)
-        .on::<custom::Analyze>(handle_custom_analyze)
-        .on::<custom::Highlight>(|_, p| handle_custom_highlight(p))
+        .on_checked::<custom::Analyze>(handle_custom_analyze)
+        .on_checked::<custom::Highlight>(|_, p| handle_custom_highlight(p))
         .on::<custom::Catalog>(handle_catalog)
         .on::<custom::CompiledKql>(|_, p| custom::Compiled {
             compiled: compiled_kql(&p.query, &p.tenant),
@@ -336,7 +367,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             compiled: compiled_spl(&p.query),
         })
         .on::<custom::FsRead>(|s, p| custom::Text {
-            text: s.host_for(&p.path).document(&p.path).unwrap_or_default(),
+            text: fs_read(s, &p.path),
         })
         .finish()
 }
@@ -1173,7 +1204,12 @@ fn handle_completion(
         c.trigger_kind == lsp::CompletionTriggerKind::TRIGGER_CHARACTER
             && c.trigger_character.as_deref() == Some(" ")
     });
-    if typed_space && doc.language == LanguageId::TideYaml {
+    // A space typed in YAML prose opens no list (P2.6); in a query inside a
+    // rule it does, as in a query file: `| ` lists the operators.
+    if typed_space
+        && doc.language == LanguageId::TideYaml
+        && opentide_tide::injection_at_offset(&doc.text, offset).is_none()
+    {
         return None;
     }
     let position = params.text_document_position.position;
@@ -2373,12 +2409,63 @@ fn content_indent(line: &str) -> Option<usize> {
 // ---------------------------------------------------------------------------
 // `opentide/*`.
 
-fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> Value {
-    let language = params
-        .language
-        .as_deref()
-        .and_then(LanguageId::parse)
-        .unwrap_or(LanguageId::TideYaml);
+/// The language a custom request names, `default` when it names none; a
+/// name that is no language id or alias is refused, rather than read as the
+/// default (which would answer "no findings" for a query never analysed).
+/// `opentide-config` is refused too: a configuration file is checked as a
+/// file the editor opens (its path names its model), not as a text.
+fn requested_language(language: Option<&str>, default: LanguageId) -> Result<LanguageId, String> {
+    let Some(name) = language else {
+        return Ok(default);
+    };
+    match LanguageId::parse(name) {
+        Some(LanguageId::Config) => Err(format!(
+            "language {name:?} is checked as a file under .opentide/configurations/, which the \
+             editor opens, not by this request"
+        )),
+        Some(language) => Ok(language),
+        None => {
+            let known: Vec<&str> = std::iter::once(LanguageId::TideYaml)
+                .chain(LanguageId::QUERY_LANGUAGES)
+                .map(LanguageId::as_str)
+                .collect();
+            Err(format!(
+                "unknown language {name:?}: one of {}, or an alias of one",
+                known.join(", ")
+            ))
+        }
+    }
+}
+
+/// `opentide/fs/read`: the file at `path` as the server sees it, the open
+/// buffer first. A relative path is a workspace file: it is looked up in each
+/// workspace folder, in order.
+fn fs_read(session: &Session, path: &str) -> String {
+    let read = |path: &str| session.host_for(path).document(path);
+    if let Some(text) = read(path) {
+        return text;
+    }
+    let given = std::path::Path::new(path);
+    if path.contains("://") || given.is_absolute() || path.is_empty() {
+        return String::new();
+    }
+    // `./objects/a.yaml` is `objects/a.yaml`: the `.` parts name nothing.
+    let relative: std::path::PathBuf = given
+        .components()
+        .filter(|part| !matches!(part, std::path::Component::CurDir))
+        .collect();
+    session
+        .roots
+        .iter()
+        .find_map(|root| read(&root.path.join(&relative).to_string_lossy()))
+        .unwrap_or_default()
+}
+
+fn handle_custom_analyze(
+    session: &mut Session,
+    params: custom::TextParams,
+) -> Result<Value, String> {
+    let language = requested_language(params.language.as_deref(), LanguageId::TideYaml)?;
     let uri = params.uri.unwrap_or_else(|| "memory".to_string());
     // The object checks are validate's, as for an open document.
     let mut diagnostics = if language == LanguageId::TideYaml {
@@ -2396,7 +2483,7 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
         },
     );
     diagnostics.extend(response.diagnostics);
-    json!({ "diagnostics": diagnostics })
+    Ok(json!({ "diagnostics": diagnostics }))
 }
 
 /// `opentide/catalog` (#198): each root's indexed objects, with their
@@ -2453,13 +2540,9 @@ fn handle_catalog(session: &mut Session, params: Option<custom::CatalogParams>) 
     json!({ "roots": entries })
 }
 
-fn handle_custom_highlight(params: custom::TextParams) -> Value {
-    let language = params
-        .language
-        .as_deref()
-        .and_then(LanguageId::parse)
-        .unwrap_or(LanguageId::Kql);
-    json!(opentide_analysis::highlight(language, &params.text))
+fn handle_custom_highlight(params: custom::TextParams) -> Result<Value, String> {
+    let language = requested_language(params.language.as_deref(), LanguageId::Kql)?;
+    Ok(json!(opentide_analysis::highlight(language, &params.text)))
 }
 
 #[cfg(test)]
