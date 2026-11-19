@@ -7,7 +7,7 @@
 //! words anywhere ([`global`]), and a name by where it stands: a call, a
 //! type, a member, a table, a variable.
 
-use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
+use crate::syntax::{SyntaxElement, SyntaxKind as K, SyntaxToken};
 use opentide_core::ByteSpan;
 use rowan::NodeOrToken;
 
@@ -199,44 +199,53 @@ pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
 /// The `(span, capture)` of every coloured token of the tree, in order. The
 /// captures are the spec's names, borrowed: a copy per token was a few
 /// percent of a query's analysis.
-pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
+#[cfg(test)]
+pub(crate) fn highlight_spans(root: &crate::syntax::SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
     let mut out = Vec::new();
     for element in root.descendants_with_tokens() {
-        match element {
-            NodeOrToken::Node(node) if node.kind() == K::COLUMN_PATTERN => {
-                let range = node.text_range();
-                out.push((
-                    ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                    "variable",
-                ));
-            }
-            NodeOrToken::Token(token) => {
-                let Some(parent) = token.parent() else {
-                    continue;
-                };
-                if parent.kind() == K::COLUMN_PATTERN {
-                    continue;
-                }
-                if let Some(capture) = capture(&token, parent.kind()) {
-                    let range = token.text_range();
-                    if !range.is_empty() {
-                        out.push((
-                            ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                            capture,
-                        ));
-                    }
-                }
-            }
-            NodeOrToken::Node(_) => {}
-        }
+        highlight_span(&element, &mut out);
     }
     out
+}
+
+/// [`highlight_spans`] one element at a time, in preorder, as
+/// `opentide_parse::walk_once` gives them (ADR 0014 §5a: the analysis walks
+/// its tree once, and the highlight reads that walk as it goes).
+pub(crate) fn highlight_span(element: &SyntaxElement, out: &mut Vec<(ByteSpan, &'static str)>) {
+    match element {
+        NodeOrToken::Node(node) if node.kind() == K::COLUMN_PATTERN => {
+            let range = node.text_range();
+            out.push((
+                ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
+                "variable",
+            ));
+        }
+        NodeOrToken::Token(token) => {
+            let Some(parent) = token.parent() else {
+                return;
+            };
+            if parent.kind() == K::COLUMN_PATTERN {
+                return;
+            }
+            if let Some(capture) = capture(token, parent.kind()) {
+                let range = token.text_range();
+                if !range.is_empty() {
+                    out.push((
+                        ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
+                        capture,
+                    ));
+                }
+            }
+        }
+        NodeOrToken::Node(_) => {}
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::parse;
+    use crate::syntax::SyntaxNode;
 
     fn captures(source: &str) -> Vec<(&str, &'static str)> {
         let root = SyntaxNode::new_root(parse(source).green);

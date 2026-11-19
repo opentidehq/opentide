@@ -4,7 +4,7 @@
 //! tables, the column pass, the performance checks), the HIR and the
 //! highlight tokens, from one parse and one line index.
 
-use crate::highlight::highlight_spans;
+use crate::highlight::highlight_span;
 use crate::parser::parse_once;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use crate::syntax_util::{is_operator, legacy_kind, span, text, token_at};
@@ -36,30 +36,58 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let parsed = parse_once(source);
     let root = SyntaxNode::new_root(parsed.green);
     let lines = LineIndex::new(source);
+    // One walk of the tree (ADR 0014 §5a): the HIR, the node checks below,
+    // the syntax error's position and the highlight read it, in preorder,
+    // where each walked the tree again and rowan allocated a cursor for every
+    // node of every walk. The tokens, most of the elements, are read as the
+    // walk meets them and not kept, so their cursors are freed as they were;
+    // only the nodes are kept, until the passes that read them are done. The
+    // tables' scope, the column pass and the error path's own lookups still
+    // walk the tree themselves.
+    let mut nodes: Vec<SyntaxNode> = Vec::new();
+    let mut spans = Vec::new();
+    let at = parsed.errors.first().map(|error| error.gap.end());
+    let mut error_tokens = ErrorTokens::default();
+    opentide_parse::walk_once(&root, |element, _| {
+        #[cfg(test)]
+        tests::VISITS.set(tests::VISITS.get() + 1);
+        highlight_span(&element, &mut spans);
+        match element {
+            NodeOrToken::Node(node) => nodes.push(node),
+            NodeOrToken::Token(token) => {
+                if let Some(at) = at {
+                    error_tokens.see(&token, at);
+                }
+            }
+        }
+    });
     let mut diagnostics = Vec::new();
     if let Some(error) = parsed.errors.first() {
-        diagnostics.push(syntax_error(&lines, &root, error));
+        diagnostics.push(syntax_error(&lines, &error_tokens, error));
     }
-    let hir = lower(&root, source);
-    control_commands(&root, &lines, &mut diagnostics);
-    operators(&root, &lines, catalog, &mut diagnostics);
-    let lets = let_names(&root);
-    functions(&root, &lines, catalog, &lets, &mut diagnostics);
-    scalar_operators(&root, &lines, catalog, &mut diagnostics);
+    let hir = lower_nodes(&nodes, source);
+    control_commands(&nodes, &lines, &mut diagnostics);
+    operators(&nodes, &lines, catalog, &mut diagnostics);
+    let lets = let_names(&nodes);
+    functions(&nodes, &lines, catalog, &lets, &mut diagnostics);
+    scalar_operators(&nodes, &lines, catalog, &mut diagnostics);
+    // What the later passes need of the nodes, taken now, so that the nodes
+    // are freed before the tables' and the column pass's own walks.
+    let pipes = pipelines(&nodes, parsed.errors.is_empty());
+    let whole = if parsed.errors.is_empty() {
+        Vec::new()
+    } else {
+        whole_unknown_operators(&nodes, &lines)
+    };
+    drop(nodes);
     let _ = tables(&root, &lines, catalog, &lets, &mut diagnostics);
     let columns =
         schema::new_tree::analyze(&root, source, &lines, catalog, parsed.errors.is_empty());
     diagnostics.extend(columns.diagnostics.iter().cloned());
-    perf::check(
-        &pipelines(&root, parsed.errors.is_empty()),
-        &lines,
-        &columns,
-        &mut diagnostics,
-    );
+    perf::check(&pipes, &lines, &columns, &mut diagnostics);
     if let Some(error) = parsed.errors.first() {
         with_typed_literal_hint(&mut diagnostics);
         let boundary = lines.position(usize::from(quiet_from(&root, error)));
-        let whole = whole_unknown_operators(&root, &lines);
         quiet_after_the_error(&mut diagnostics, boundary, &whole);
     }
     // The scope checks scan tokens, not the tree: the old engine gave them on
@@ -67,7 +95,6 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     // reject, are the shapes they exist for.
     perf::check_scope(source, &lines, &mut diagnostics);
     let spec = HighlightSpec::shared().expect("highlight spec");
-    let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
     let tokens = tokens_from_spans(spec, source, &spans).unwrap_or_default();
     Analysis {
@@ -105,8 +132,9 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
 /// them and every bracket closed (`summarzie count()`, not `summarzie
 /// count(`). The syntax error that follows one is what its mistyped name
 /// caused, so its "did you mean" stays ([`quiet_after_the_error`]).
-fn whole_unknown_operators(root: &SyntaxNode, lines: &LineIndex) -> Vec<Range> {
-    root.descendants()
+fn whole_unknown_operators(nodes: &[SyntaxNode], lines: &LineIndex) -> Vec<Range> {
+    nodes
+        .iter()
         .filter(|n| n.kind() == K::UNKNOWN_OPERATOR)
         .filter(|n| {
             let mut depth = 0_i64;
@@ -247,11 +275,12 @@ fn same_catalog(a: &CatalogRef, b: &CatalogRef) -> bool {
 /// performance checks read them; none in a query that does not parse
 /// (`clean`), whose operators recovery may have made of fragments: broken
 /// input gets no performance hint (the text-based scope checks still run).
-fn pipelines(root: &SyntaxNode, clean: bool) -> Vec<perf::Pipeline> {
-    root.descendants()
+fn pipelines(nodes: &[SyntaxNode], clean: bool) -> Vec<perf::Pipeline> {
+    nodes
+        .iter()
         .filter(|n| clean && n.kind() == K::TABULAR_EXPRESSION)
         .map(|expr| perf::Pipeline {
-            span: span(&expr),
+            span: span(expr),
             ops: expr
                 .children()
                 .filter(|op| is_operator(op.kind()))
@@ -267,13 +296,23 @@ fn pipelines(root: &SyntaxNode, clean: bool) -> Vec<perf::Pipeline> {
 /// The HIR (`opentide_kql::lower`): the `let`s, the first source, and every
 /// operator with its text, in source order; a control command alone.
 pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
+    // Walked lazily: a control command ends the walk at its node.
+    lower_nodes(root.descendants(), source)
+}
+
+/// [`lower`] of a tree's nodes in preorder.
+fn lower_nodes<N: std::borrow::Borrow<SyntaxNode>>(
+    nodes: impl IntoIterator<Item = N>,
+    source: &str,
+) -> Hir {
     let mut lets = Vec::new();
     let mut source_name = String::new();
     let mut operators = Vec::new();
-    for node in root.descendants() {
+    for node in nodes {
+        let node = node.borrow();
         match node.kind() {
             K::LET_STATEMENT => {
-                let name = name_of(&node)
+                let name = name_of(node)
                     .map(|t| t.text().to_owned())
                     .unwrap_or_default();
                 let value = node
@@ -283,17 +322,17 @@ pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
                 lets.push((name, value));
             }
             K::CONTROL_COMMAND => {
-                let name = name_of(&node)
+                let name = name_of(node)
                     .map(|t| t.text().to_owned())
                     .unwrap_or_default();
                 return Hir::ControlCommand { name };
             }
             K::TABULAR_SOURCE if source_name.is_empty() => {
-                text(source, &node).trim().clone_into(&mut source_name);
+                text(source, node).trim().clone_into(&mut source_name);
             }
             kind if is_operator(kind) => {
                 let name = if kind == K::KEYWORD_OPERATOR {
-                    crate::syntax_util::tokens(&node)
+                    crate::syntax_util::tokens(node)
                         .next()
                         .map_or_else(|| "unknown".to_owned(), |t| t.text().to_owned())
                 } else {
@@ -303,7 +342,7 @@ pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
                 };
                 operators.push(HirOp {
                     name,
-                    args: text(source, &node).to_owned(),
+                    args: text(source, node).to_owned(),
                 });
             }
             _ => {}
@@ -356,7 +395,28 @@ fn expected_phrase(error: &SyntaxError) -> Option<String> {
 
 /// The one syntax error the old engine reported, with what the parser
 /// expected: at the token the error stands before.
-fn syntax_error(lines: &LineIndex, root: &SyntaxNode, error: &SyntaxError) -> Diagnostic {
+/// The tokens a syntax error is placed on, met in document order: the first
+/// significant one from the error's end on, and the last significant one.
+#[derive(Default)]
+struct ErrorTokens {
+    next: Option<rowan::TextRange>,
+    last: Option<rowan::TextRange>,
+}
+
+impl ErrorTokens {
+    fn see(&mut self, token: &SyntaxToken, at: rowan::TextSize) {
+        if matches!(token.kind(), K::WHITESPACE | K::COMMENT) {
+            return;
+        }
+        let range = token.text_range();
+        if self.next.is_none() && range.start() >= at {
+            self.next = Some(range);
+        }
+        self.last = Some(range);
+    }
+}
+
+fn syntax_error(lines: &LineIndex, tokens: &ErrorTokens, error: &SyntaxError) -> Diagnostic {
     let mut message = format!("KQL syntax error: {}", error.message);
     if !error.message.starts_with("expected")
         && let Some(expected) = expected_phrase(error)
@@ -364,30 +424,22 @@ fn syntax_error(lines: &LineIndex, root: &SyntaxNode, error: &SyntaxError) -> Di
         message.push_str(&format!("; expected {expected}"));
     }
     let at = error.gap.end();
-    // The first significant token from `at` on, by an iterative scan: rowan's
-    // `token_at_offset` and `next_token` recurse once per tree level.
-    let next = root
-        .descendants_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-        .find(|t| !matches!(t.kind(), K::WHITESPACE | K::COMMENT) && t.text_range().start() >= at);
-    // Past the last token, the error is on that token: an empty range at the end
-    // of the text, often a blank line, is not visible in an editor.
-    let range = next
-        .or_else(|| {
-            // Not `last_token`: it stops at an empty last node.
-            root.descendants_with_tokens()
-                .filter_map(NodeOrToken::into_token)
-                .filter(|t| !matches!(t.kind(), K::WHITESPACE | K::COMMENT))
-                .last()
-        })
-        .map_or_else(|| rowan::TextRange::empty(at), |t| t.text_range());
+    // The first significant token from `at` on, from the walk: rowan's
+    // `token_at_offset` and `next_token` recurse once per tree level. Past the
+    // last token, the error is on that token (not `last_token`, which stops
+    // at an empty last node): an empty range at the end of the text, often a
+    // blank line, is not visible in an editor.
+    let range = tokens
+        .next
+        .or(tokens.last)
+        .unwrap_or_else(|| rowan::TextRange::empty(at));
     Diagnostic::error(codes::KQL_PARSE_ERROR, message, range_of(lines, range))
 }
 
 /// `.show tables`: reported once.
-fn control_commands(root: &SyntaxNode, lines: &LineIndex, out: &mut Vec<Diagnostic>) {
-    if let Some(node) = root.descendants().find(|n| n.kind() == K::CONTROL_COMMAND) {
-        let name = name_of(&node).map_or_else(|| ".".into(), |t| t.text().to_owned());
+fn control_commands(nodes: &[SyntaxNode], lines: &LineIndex, out: &mut Vec<Diagnostic>) {
+    if let Some(node) = nodes.iter().find(|n| n.kind() == K::CONTROL_COMMAND) {
+        let name = name_of(node).map_or_else(|| ".".into(), |t| t.text().to_owned());
         out.push(Diagnostic::error(
             codes::KQL_CONTROL_COMMAND_UNSUPPORTED,
             format!("KQL control command '.{name}' is not valid in detections"),
@@ -397,11 +449,16 @@ fn control_commands(root: &SyntaxNode, lines: &LineIndex, out: &mut Vec<Diagnost
 }
 
 /// Unknown operators, and `render`.
-fn operators(root: &SyntaxNode, lines: &LineIndex, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    for node in root.descendants() {
+fn operators(
+    nodes: &[SyntaxNode],
+    lines: &LineIndex,
+    catalog: &Catalog,
+    out: &mut Vec<Diagnostic>,
+) {
+    for node in nodes {
         match node.kind() {
             K::UNKNOWN_OPERATOR => {
-                let name = name_of(&node)
+                let name = name_of(node)
                     .map(|t| t.text().to_owned())
                     .unwrap_or_default();
                 if catalog.operator(&name).is_none() {
@@ -429,24 +486,25 @@ fn operators(root: &SyntaxNode, lines: &LineIndex, catalog: &Catalog, out: &mut 
 }
 
 /// Names bound by `let` anywhere in the query.
-fn let_names(root: &SyntaxNode) -> BTreeSet<String> {
-    root.descendants()
+fn let_names(nodes: &[SyntaxNode]) -> BTreeSet<String> {
+    nodes
+        .iter()
         .filter(|n| n.kind() == K::LET_STATEMENT)
-        .filter_map(|n| name_of(&n).map(|t| t.text().to_owned()))
+        .filter_map(|n| name_of(n).map(|t| t.text().to_owned()))
         .collect()
 }
 
 /// Calls: typed literals written as calls, plugins, deprecated and
 /// misspelled functions.
 fn functions(
-    root: &SyntaxNode,
+    nodes: &[SyntaxNode],
     lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
-    for node in root.descendants().filter(|n| n.kind() == K::FUNCTION_CALL) {
-        let Some(name_token) = name_of(&node) else {
+    for node in nodes.iter().filter(|n| n.kind() == K::FUNCTION_CALL) {
+        let Some(name_token) = name_of(node) else {
             continue;
         };
         let name = name_token.text().to_owned();
@@ -520,13 +578,13 @@ fn functions(
 
 /// The legacy spellings of scalar operators (`containscs`, `notcontains`).
 fn scalar_operators(
-    root: &SyntaxNode,
+    nodes: &[SyntaxNode],
     lines: &LineIndex,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    for node in root
-        .descendants()
+    for node in nodes
+        .iter()
         .filter(|n| matches!(n.kind(), K::COMPARISON_EXPR | K::IN_EXPR | K::BETWEEN_EXPR))
     {
         for token in node
@@ -655,6 +713,50 @@ mod tests {
     use super::*;
     use crate::Profile;
 
+    thread_local! {
+        /// The elements `analyze`'s walk visited on this thread.
+        pub(super) static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// One walk serves the HIR, the node checks, the syntax error and the
+    /// highlight (ADR 0014 §5a): an analysis visits each element of the tree
+    /// once, where a walk per check visited it once per check. Broken input
+    /// too, whose error path read the elements again.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for source in [
+            "let n = 5;\nSecurityEvent\n| where EventID == 4624 and Account !has \"svc\"\n\
+             | summarize count() by Account, bin(TimeGenerated, 1h)\n| top n by count_",
+            "SigninLogs | where UserPrincipalName =~ \"a\" | summ",
+            ".show tables",
+        ] {
+            let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+            let elements = SyntaxNode::new_root(parse_once(source).green)
+                .descendants_with_tokens()
+                .count();
+            let before = VISITS.get();
+            let _ = analyze(source, &catalog);
+            assert_eq!(VISITS.get() - before, elements, "{source:?}");
+        }
+    }
+
+    /// `lower` stops at a control command, as it did before the walk merge:
+    /// the same HIR from the lazy walk as from every node.
+    #[test]
+    fn lower_stops_at_a_control_command() {
+        let source = ".show tables | where x == 1";
+        let root = SyntaxNode::new_root(parse_once(source).green);
+        let lazy = lower(&root, source);
+        assert!(matches!(lazy, Hir::ControlCommand { .. }), "{lazy:?}");
+        assert_eq!(
+            format!("{lazy:?}"),
+            format!(
+                "{:?}",
+                lower_nodes(root.descendants().collect::<Vec<_>>(), source)
+            )
+        );
+    }
+
     /// The scopes of `tables` hold each tabular parameter once, however many
     /// `let` names are in scope (#1424): copying them per function was
     /// quadratic, 4.7 s for 4,000 functions in a debug build.
@@ -671,7 +773,7 @@ mod tests {
         let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
         let parsed = parse_once(&source);
         let root = SyntaxNode::new_root(parsed.green.clone());
-        let lets = let_names(&root);
+        let lets = let_names(&root.descendants().collect::<Vec<_>>());
         let mut out = Vec::new();
         let held = tables(&root, &LineIndex::new(&source), &catalog, &lets, &mut out);
         assert_eq!(held, n + 2);
