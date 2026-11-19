@@ -335,9 +335,9 @@ impl<'i> P<'i> {
         // For the `(` at `n + k` (k < run): the index after its group, and
         // whether a `|` stands at its top level.
         let mut ends: Vec<Option<usize>> = vec![None; run];
-        // The first `|` and the first `,` at each group's top level.
-        let mut pipes: Vec<Option<usize>> = vec![None; run];
-        let mut commas: Vec<Option<usize>> = vec![None; run];
+        // The first `|` and the first `,` at each group's top level, in one
+        // allocation (the parser's allocation budget counts each).
+        let mut marks: Vec<(Option<usize>, Option<usize>)> = vec![(None, None); run];
         let mut open: Vec<usize> = Vec::new();
         let mut at = n;
         let end = loop {
@@ -355,13 +355,13 @@ impl<'i> P<'i> {
                     }
                 }
                 K::PIPE => {
-                    if let Some(slot) = open.last().and_then(|&o| pipes.get_mut(o - n)) {
-                        slot.get_or_insert(at);
+                    if let Some((pipe, _)) = open.last().and_then(|&o| marks.get_mut(o - n)) {
+                        pipe.get_or_insert(at);
                     }
                 }
                 K::COMMA => {
-                    if let Some(slot) = open.last().and_then(|&o| commas.get_mut(o - n)) {
-                        slot.get_or_insert(at);
+                    if let Some((_, comma)) = open.last().and_then(|&o| marks.get_mut(o - n)) {
+                        comma.get_or_insert(at);
                     }
                 }
                 _ => {}
@@ -372,9 +372,9 @@ impl<'i> P<'i> {
         let end_of = |k: usize| ends[k].unwrap_or(end);
         let mut k = 0;
         loop {
-            if let Some(pipe) = pipes[k] {
+            if let (Some(pipe), comma) = marks[k] {
                 return ends[k].is_some()
-                    || !self.value_list(n + k + 1, commas[k].filter(|&comma| comma < pipe));
+                    || !self.value_list(n + k + 1, comma.filter(|&comma| comma < pipe));
             }
             let close = end_of(k).saturating_sub(1);
             if k + 1 < run {

@@ -623,6 +623,8 @@ fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
     }
     // A sub-query that never closes is still read as one, whatever names
     // its source: only the `)` is missing.
+    // The `)` is missing at the end of the input; read as a list instead,
+    // the error would stand inside it (round 1 of the review).
     for source in [
         "T | where a in (S | project a",
         "T | where a in (database(\"d\").S | project a",
@@ -630,7 +632,13 @@ fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
         "T | where a in ((S | project a)\n| project b",
         "T | where a in (union A, B | project a",
     ] {
-        let found = errors(source);
+        let parsed = parse(source);
+        let found: Vec<&str> = parsed.errors.iter().map(|e| e.message.as_str()).collect();
         assert_eq!(found, ["expected `)`"], "{source}: {found:?}");
+        assert_eq!(
+            usize::from(parsed.errors[0].gap.start()),
+            source.len(),
+            "{source}"
+        );
     }
 }
