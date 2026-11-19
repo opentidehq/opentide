@@ -25,7 +25,7 @@ rule = "unset"
 platforms = ["defender_for_endpoint", "splunk", "sentinel_one", "crowdstrike", "harfanglab", "carbon_black_cloud"]
 reason = "A dry run's preview of a block opentide builds no request body for leaves out `enabled` and `name` when the block does not write them: their model defaults (enabled: false, name: \"\") are not what the block says and no deployer reads them. Every other member, defaults a deploy sends included, is the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/1662"
-changelog = "**A dry run's preview shows only what the block sets**"
+changelog = "**A dry run's preview leaves out unset fields**"
 
 [[diff]]
 corpus = "payloads"

@@ -136,8 +136,9 @@ fn without_nulls(value: Json) -> Json {
 /// The class a model-dump preview that differs falls in: `nulls` (the
 /// oracle's `null` members left out, it is the candidate), `order` (the
 /// same value, keys in another order) or `wrapped` (the oracle's request
-/// as the candidate's `payload`, beside the block the candidate adds);
-/// `None` for any other difference.
+/// as the candidate's `payload`, beside the block the candidate adds) or
+/// `unset` (the oracle's `enabled` and `name` left out where the rule's
+/// block does not write them); `None` for any other difference.
 fn dump_class(oracle: &str, mine: &str, writes: &dyn Fn(&str) -> bool) -> Option<&'static str> {
     let oracle: Json = serde_json::from_str(oracle).ok()?;
     if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
