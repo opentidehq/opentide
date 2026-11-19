@@ -412,6 +412,17 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
             ));
         }
         K::JOIN_COMMAND => {
+            // `LOOKUP JOIN index AS qualifier`: the grammar the catalog is
+            // generated from (elastic/elasticsearch@2c85bbdf) parses it, but
+            // 9.5.6, the newest release, rejects it ("no viable alternative
+            // at input"): 9.6 at the earliest, as DEDUP and HIGHLIGHT.
+            if let Some(qualifier) = nodes.iter().find(|n| n.kind() == K::JOIN_QUALIFIER) {
+                out.push(Gate::new(
+                    "a `LOOKUP JOIN … AS` qualifier",
+                    Availability::since_9(6),
+                    span_of(qualifier),
+                ));
+            }
             // The conditions follow `ON`; the parser reads the index before it
             // (`processing.rs`, `join`).
             let conditions: Vec<&SyntaxNode> = first_token(&parts, &[K::ON_KW])
@@ -688,6 +699,12 @@ mod tests {
             one("a LIKE pattern that is not a string literal", "b", None)
         );
         assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
+        // Rejected by 9.5.6 ("no viable alternative at input"), as the
+        // Elastic parser reported for the syntax-gap hunt.
+        assert_eq!(
+            gates("FROM a | LOOKUP JOIN t AS q ON x"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
         let join = "a `LOOKUP JOIN` condition with several fields or an expression";
         let q = "FROM a | LOOKUP JOIN t ON x, y";
         assert_eq!(gates(q), one(join, &q[9..], None));
