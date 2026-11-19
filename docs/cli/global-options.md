@@ -112,11 +112,14 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 
 ## Environment propagation
 
-The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
+The root options apply to the whole run, and reach the runs a long-lived command starts:
+
+- `opentide mcp start` hands them to the commands its tools run as variables: `--repo` as `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE`, `--data` as `OPENTIDE_DATA_ROOT`, `--proxy` as `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings (as [Proxy](#proxy) sets them for any run), and `--debug` as `OPENTIDE_DEBUG`.
+- `opentide serve` hands each run the same `--repo`, `--data` and `--debug` variables, and `--proxy` as `OPENTIDE_PROXY`, which that run reads as its own `--proxy`.
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
+Interactive terminals receive colour. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
