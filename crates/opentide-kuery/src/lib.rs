@@ -15,7 +15,7 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 use opentide_core::{ByteSpan, CompletionItem, Diagnostic, LineIndex, Range, Severity, codes};
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_in};
 use opentide_parse::TokenSet;
 use regex::Regex;
 use rowan::{NodeOrToken, TextRange, TextSize};
@@ -147,7 +147,7 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     if let Some(d) = looks_like_lucene(lucene_only, source, &lines, &lucene_signals) {
         diagnostics.push(d);
     }
-    let tokens = tokens_from_spans(spec, source, &walked.spans).unwrap_or_default();
+    let tokens = tokens_in(spec, &lines, &walked.spans).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         tokens,
