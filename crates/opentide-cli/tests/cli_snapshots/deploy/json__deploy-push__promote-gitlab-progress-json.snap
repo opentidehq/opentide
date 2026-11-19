@@ -87,23 +87,3 @@ exit: 1
 {"event":"progress","step":"status promotion","done":1,"total":1}
 {"platform":"splunk","tenant":"***","error":"Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"tenant_deployment_failed","level":"critical","timestamp":"0000-00-00 00:00:00"}
 {"event":"progress","step":"splunk","done":1,"total":1}
-
-━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644
-name: Splunk create rule
-metadata:
-  uuid: 00000000-0000-4000-8047-000000000041
-  schema: rule::1.0
-  version: 1
-  created: 2026-01-01
-  modified: 2026-01-02
-  tlp: clear
-description: A changed rule the splunk stand-in tenant receives in a deploy that sends.
-response:
-  alert_severity: High
-configurations:
-  splunk:
-    status: PRODUCTION
-    query: index=main EventCode=4688
-    scheduling:
-      schedule:
-        cron: "0 * * * *"
