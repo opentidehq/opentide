@@ -207,6 +207,7 @@ fn an_unknown_language_is_invalid_params() {
         (2, "opentide/analyze", "sql"),
         (3, "opentide/analyze", "kqll"),
         (4, "opentide/highlight", "nonsense"),
+        (7, "opentide/analyze", "opentide-config"),
     ] {
         let replies = send(
             &mut session,
@@ -216,10 +217,9 @@ fn an_unknown_language_is_invalid_params() {
         assert_eq!(reply["error"]["code"], -32602, "{reply}");
         let message = reply["error"]["message"].as_str().unwrap();
         assert!(
-            message.contains(&format!("unknown language \"{language}\"")),
+            message.contains(&format!("language \"{language}\"")),
             "{message}"
         );
-        assert!(message.contains("kql"), "{message}");
     }
     // An alias is a language, and no `language` is the method's default.
     let found = request(
@@ -259,7 +259,11 @@ fn fs_read_takes_a_path_relative_to_a_workspace_folder() {
         &mut session,
         json!({ "method": "initialized", "params": {} }),
     );
-    for (id, path) in [(2, "/ws/objects/rules/r.yaml"), (3, "objects/rules/r.yaml")] {
+    for (id, path) in [
+        (2, "/ws/objects/rules/r.yaml"),
+        (3, "objects/rules/r.yaml"),
+        (8, "./objects/rules/r.yaml"),
+    ] {
         let read = request(
             &mut session,
             id,

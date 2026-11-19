@@ -117,10 +117,10 @@ The server answers a few requests of its own, for editor extensions and tools th
 | `opentide/highlight` | `{ text, language? }` | `{ language_id, legend, tokens }`: the highlight tokens, each with its `capture`, `range`, `span` (bytes) and `token_type` (an index into `legend`) |
 | `opentide/compiledKql` | `{ query, tenant? }` | `{ compiled }`: the KQL Sentinel runs for the query |
 | `opentide/compiledSpl` | `{ query }` | `{ compiled }`: the search Splunk runs, which is the search as written |
-| `opentide/fs/read` | `{ path }` | `{ text }`: a workspace file as the server sees it, the open buffer first; empty when there is none. `path` is absolute, or relative to a workspace folder (each folder is tried in order) |
+| `opentide/fs/read` | `{ path }` | `{ text }`: a workspace file as the server sees it, the open buffer first; empty when there is none. `path` is absolute, or relative to a workspace folder (each folder is tried in order; `./` parts are dropped) |
 | `opentide/catalog` | `{ root? }`, or none | `{ roots: [{ root, objects }] }`: each workspace folder's indexed objects (`uuid`, `object_type`, `schema`, `name`, `uri`, `range`, and the `refs` each makes), open documents read as edited. `root`, a folder's URI, narrows it to that folder |
 
-`language` takes the ids and aliases of [Languages](#languages). Without it, `opentide/analyze` reads the text as Tide YAML and `opentide/highlight` as KQL; a `language` that is none of them (`sql`) is `InvalidParams`, never "no diagnostics". A method the server does not know is `MethodNotFound` (`-32601`), and params that do not parse are `InvalidParams` (`-32602`).
+`language` takes the ids and aliases of [Languages](#languages). Without it, `opentide/analyze` reads the text as Tide YAML and `opentide/highlight` as KQL; a `language` that is none of them (`sql`) is `InvalidParams`, never "no diagnostics", and so is `opentide-config`: a configuration file is checked as the file the editor opens. A method the server does not know is `MethodNotFound` (`-32601`), and params that do not parse are `InvalidParams` (`-32602`).
 
 Two notifications go with `opentide/catalog`: the client sends `opentide/didChangeWorkspace` (`{ documents?, objects?, removed?, visibility? }`) when the workspace it supplied on `initialize` changes, and the server sends `opentide/catalogChanged` (`{ root }`) when a folder's index changes after the client asked for its catalog. Their shapes are in the engine's [editor notes](https://github.com/opentidehq/opentide/blob/development/docs/engine/EDITORS.md#custom-rpcs).
 
@@ -143,7 +143,7 @@ The `opentide-lsp` binary on its own checks configuration files the same way, wi
 
 Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`, `.yaral`, `.yl2`), and for `.opentide/configurations/**/*.toml`. The completion triggers are `|`, space, `:`, `.`, `(`, `,`, `` ` `` and `=`; signature help opens on `(`, `,`, `=` and `` ` ``. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
 
-Neovim (0.11 or later). Neovim knows none of the query file types, so name them first:
+Neovim (0.11 or later). Neovim knows few of the query file types, and reads `.cql` as Cassandra's `cqlang`, so name them first:
 
 ```lua
 vim.filetype.add({

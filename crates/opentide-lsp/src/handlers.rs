@@ -2412,21 +2412,29 @@ fn content_indent(line: &str) -> Option<usize> {
 /// The language a custom request names, `default` when it names none; a
 /// name that is no language id or alias is refused, rather than read as the
 /// default (which would answer "no findings" for a query never analysed).
+/// `opentide-config` is refused too: a configuration file is checked as a
+/// file the editor opens (its path names its model), not as a text.
 fn requested_language(language: Option<&str>, default: LanguageId) -> Result<LanguageId, String> {
     let Some(name) = language else {
         return Ok(default);
     };
-    LanguageId::parse(name).ok_or_else(|| {
-        let known: Vec<&str> = std::iter::once(LanguageId::TideYaml)
-            .chain(LanguageId::QUERY_LANGUAGES)
-            .chain(std::iter::once(LanguageId::Config))
-            .map(LanguageId::as_str)
-            .collect();
-        format!(
-            "unknown language {name:?}: one of {}, or an alias of one",
-            known.join(", ")
-        )
-    })
+    match LanguageId::parse(name) {
+        Some(LanguageId::Config) => Err(format!(
+            "language {name:?} is checked as a file under .opentide/configurations/, which the \
+             editor opens, not by this request"
+        )),
+        Some(language) => Ok(language),
+        None => {
+            let known: Vec<&str> = std::iter::once(LanguageId::TideYaml)
+                .chain(LanguageId::QUERY_LANGUAGES)
+                .map(LanguageId::as_str)
+                .collect();
+            Err(format!(
+                "unknown language {name:?}: one of {}, or an alias of one",
+                known.join(", ")
+            ))
+        }
+    }
 }
 
 /// `opentide/fs/read`: the file at `path` as the server sees it, the open
@@ -2437,14 +2445,19 @@ fn fs_read(session: &Session, path: &str) -> String {
     if let Some(text) = read(path) {
         return text;
     }
-    let relative = std::path::Path::new(path);
-    if path.contains("://") || relative.is_absolute() || path.is_empty() {
+    let given = std::path::Path::new(path);
+    if path.contains("://") || given.is_absolute() || path.is_empty() {
         return String::new();
     }
+    // `./objects/a.yaml` is `objects/a.yaml`: the `.` parts name nothing.
+    let relative: std::path::PathBuf = given
+        .components()
+        .filter(|part| !matches!(part, std::path::Component::CurDir))
+        .collect();
     session
         .roots
         .iter()
-        .find_map(|root| read(&root.path.join(relative).to_string_lossy()))
+        .find_map(|root| read(&root.path.join(&relative).to_string_lossy()))
         .unwrap_or_default()
 }
 
