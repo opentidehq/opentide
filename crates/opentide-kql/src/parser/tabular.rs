@@ -280,6 +280,22 @@ fn operator(p: &mut P<'_>) {
         K::RENDER_KW => {
             p.bump();
             p.expect_name();
+            // The legacy properties before `with`: `render barchart kind=stacked`.
+            // Kusto.Language reads `kind` and `accumulate` as an option value,
+            // `title` as a primary expression with no operator after it.
+            loop {
+                if at_named_option(p, &["kind", "accumulate"]) {
+                    option_after_name(p, K::OPERATOR_OPTION);
+                } else if at_named_option(p, &["title"]) {
+                    let property = p.start();
+                    p.bump_as(K::IDENT);
+                    p.bump();
+                    expr::postfix(p);
+                    p.done(property, K::NAMED_ARGUMENT);
+                } else {
+                    break;
+                }
+            }
             if p.at(K::WITH_KW) {
                 render_with(p);
             }
@@ -515,7 +531,14 @@ fn at_option(p: &P<'_>) -> bool {
 fn option_value(p: &mut P<'_>) {
     let v = p.start();
     match p.current() {
-        K::BOOLEAN | K::NUMBER | K::STRING => p.bump(),
+        // `threshold=-0.1`: Kusto.Language takes a sign that touches its number.
+        K::MINUS | K::PLUS
+            if matches!(p.nth(1), K::NUMBER | K::TIMESPAN) && p.tokens_touch(0, 1) =>
+        {
+            p.bump();
+            p.bump();
+        }
+        K::BOOLEAN | K::NUMBER | K::TIMESPAN | K::STRING => p.bump(),
         _ if p.name_at(0) => p.bump_as(K::IDENT),
         _ => p.error("expected an option value"),
     }

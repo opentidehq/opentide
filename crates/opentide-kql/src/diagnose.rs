@@ -494,18 +494,25 @@ fn operators(
 
 /// Names bound by `let` or `declare query_parameters` anywhere in the query.
 fn let_names(nodes: &[SyntaxNode]) -> BTreeSet<String> {
-    let parameters = nodes
-        .iter()
-        .filter(|n| n.kind() == K::QUERY_PARAMETERS_STATEMENT)
-        .flat_map(SyntaxNode::children)
-        .filter(|n| n.kind() == K::PARAMETER);
-    nodes
-        .iter()
-        .filter(|n| n.kind() == K::LET_STATEMENT)
-        .cloned()
-        .chain(parameters)
-        .filter_map(|n| name_of(&n).map(|t| t.text().to_owned()))
-        .collect()
+    let mut names = BTreeSet::new();
+    let mut add = |node: &SyntaxNode| {
+        if let Some(name) = name_of(node) {
+            names.insert(name.text().to_owned());
+        }
+    };
+    // One walk over the nodes: a second one, for the parameters alone, cost
+    // every query (#1646).
+    for node in nodes {
+        match node.kind() {
+            K::LET_STATEMENT => add(node),
+            K::QUERY_PARAMETERS_STATEMENT => node
+                .children()
+                .filter(|c| c.kind() == K::PARAMETER)
+                .for_each(|c| add(&c)),
+            _ => {}
+        }
+    }
+    names
 }
 
 /// Calls: typed literals written as calls, plugins, deprecated and

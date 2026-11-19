@@ -23,11 +23,11 @@
 
 SourceFile = (LetStatement | QueryParametersStatement)* (Query | ControlCommand)?
 
-LetStatement = 'let' name:'ident' '=' value:LetValue ';'
+LetStatement = 'let' name:'ident' '=' value:LetValue ';'?
 
 // `declare query_parameters(p: string = "x");`
 QueryParametersStatement =
-  'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'
+  'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?
 
 LetValue = Expr | TabularExpression | FunctionDefinition
 
@@ -96,7 +96,7 @@ ExternaldataExpression =
 
 // `kind=inner`, `isfuzzy=true`, `hint.strategy=shuffle`.
 OperatorOption = name:('ident' | 'hint_name') '=' value:OptionValue
-OptionValue = value:('ident' | 'boolean' | 'number' | 'string')
+OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')
 // mv-expand and mv-apply options are a fixed set of names.
 MvOption = name:('kind' | 'bagexpansion' | 'with_itemindex' | 'hint_name') '=' value:OptionValue
 // summarize, make-series and evaluate take `hint.*` options only.
@@ -231,7 +231,7 @@ SeriesDefault = 'default' '=' Expr
 EvaluateOperator = 'evaluate' HintOption* plugin:FunctionCall
 DistinctOperator = 'distinct' HintOption* (StarArg | ColumnItem (',' ColumnItem)*)?
 // `render timechart with (title = "x", ycolumns = a, b)`.
-RenderOperator = 'render' kind:'ident' RenderWith?
+RenderOperator = 'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?
 RenderWith = 'with' '(' (RenderProperty (',' RenderProperty)*)? ')'
 RenderProperty = NamedArgument | NameRef
 PrintOperator = 'print' ColumnItem (',' ColumnItem)*

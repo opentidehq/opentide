@@ -150,6 +150,14 @@ fn unary(p: &mut P<'_>) -> Option<CompletedMarker> {
     Some(p.done(m, K::UNARY_EXPR))
 }
 
+/// A primary expression and its `.member`, `[index]`: no sign and no binary
+/// operator (a legacy `render … title=` value), or an error.
+pub(super) fn postfix(p: &mut P<'_>) {
+    if primary(p).is_none() {
+        p.error(NOT_AN_EXPRESSION);
+    }
+}
+
 /// A primary expression and the `.member` and `[index]` that follow it.
 fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
     let mut lhs = match p.current() {

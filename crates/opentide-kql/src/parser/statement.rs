@@ -52,7 +52,7 @@ fn query_parameters(p: &mut P<'_>) {
         }
     }
     p.expect(K::R_PAREN);
-    p.expect(K::SEMICOLON);
+    statement_end(p);
     p.done(m, K::QUERY_PARAMETERS_STATEMENT);
 }
 
@@ -63,8 +63,16 @@ fn let_statement(p: &mut P<'_>) {
     p.expect_name();
     p.expect(K::EQ);
     let_value(p);
-    p.expect(K::SEMICOLON);
+    statement_end(p);
     p.done(m, K::LET_STATEMENT);
+}
+
+/// The `;` after a statement, which the last one of the text may leave out:
+/// `let x = 1` alone is a query to Kusto.Language.
+fn statement_end(p: &mut P<'_>) {
+    if !p.at_eof() {
+        p.expect(K::SEMICOLON);
+    }
 }
 
 /// What a `let` binds: a function, a tabular expression or a scalar. A lone
