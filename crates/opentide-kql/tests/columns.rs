@@ -505,3 +505,19 @@ fn operators_kusto_does_not_define_for_a_type_are_errors() {
         vec!["`has` is not defined for `EventID`, an int column; Kusto rejects the query"]
     );
 }
+
+/// `serialize` adds the columns it assigns, `as` passes its input through, and
+/// a query parameter is a scalar, not a column: the column checks after each
+/// still run.
+#[test]
+fn serialize_as_and_query_parameters_keep_the_column_checks() {
+    // `UserPrincipalNam` would be a misspelt column, but the query declares it.
+    let src = "declare query_parameters(UserPrincipalNam:string = \"a\");\n\
+               SigninLogs | where UserPrincipalName == UserPrincipalNam\n\
+               | serialize rn = row_number() | as hint.materialized=true S\n\
+               | where rn > 1 and IPAddres == \"x\"";
+    let unknown: Vec<String> = column_errors(src).into_iter().map(|(m, _)| m).collect();
+    assert_eq!(unknown.len(), 1, "{unknown:?}");
+    assert!(unknown[0].contains("IPAddres"), "{unknown:?}");
+    assert!(output("SigninLogs | serialize rn = row_number()").contains(&"rn".to_owned()));
+}

@@ -1,0 +1,1 @@
+SigninLogs | sort by TimeGenerated asc | serialize rn = row_number(), Previous = prev(IPAddress)

@@ -442,3 +442,42 @@ fn parse_kv_takes_its_keys_and_options() {
     assert!(!errors("T | parse-kv Text as (a long)").is_empty());
     assert!(!errors("T | parse-kv Text with (pair_delimiter)").is_empty());
 }
+
+// The operator forms Kusto.Language 12.4.1 accepts that were syntax errors.
+snapshots! {
+    serialize_assignment: "T | serialize rn = row_number(), x";
+    render_with_properties: "T | render timechart with (title=\"x\", ycolumns=a, b, ymin=-1)";
+    as_hint_materialized: "T | as hint.materialized=true T2 | take 1";
+    top_hitters_of_by: "T | top-hitters 5 of x by y";
+    reduce_kind_by_with: "T | reduce kind=source by x with threshold=0.1, characters=\"ab\"";
+    declare_query_parameters: "declare query_parameters(p:string = \"x\", n:int);\nlet y = 1;\nT | where c == p";
+}
+
+#[test]
+fn operator_forms_parse_and_their_broken_twins_do_not() {
+    for source in [
+        "T | serialize",
+        "T | as T2",
+        "T | render barchart",
+        "T | render barchart with ()",
+        "T | reduce by x",
+        "T | top-hitters 5 of x",
+        "T | reduce by x with",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "T | top-hitters 5",
+        "T | top-hitters 5 of x by",
+        "T | reduce x",
+        "T | reduce by x with threshold=0.1,",
+        "T | render barchart with (title=\"x\",)",
+        "T | render barchart with title=\"x\"",
+        "T | as hint.materialized=true",
+        "declare query_parameters(p:string)\nT",
+        "declare query_parameters(p);\nT",
+        "declare query_parameters();\nT",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}

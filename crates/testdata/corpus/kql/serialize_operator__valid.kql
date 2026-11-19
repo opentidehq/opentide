@@ -1,0 +1,2 @@
+// prod:serialize_operator valid
+SecurityEvent | sort by TimeGenerated asc | serialize rn = row_number(), PreviousAccount = prev(Account)

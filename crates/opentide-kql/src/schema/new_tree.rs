@@ -55,6 +55,13 @@ fn run<'a>(
     for child in root.children() {
         match child.kind() {
             K::LET_STATEMENT => pass.let_statement(&child, &mut scope),
+            K::QUERY_PARAMETERS_STATEMENT => {
+                for parameter in child.children().filter(|c| c.kind() == K::PARAMETER) {
+                    if let Some(name) = ident(&parameter) {
+                        scope.scalars.insert(Pass::token_text(&name));
+                    }
+                }
+            }
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
                     pass.tabular(&body, &scope);
@@ -559,7 +566,7 @@ impl<'a> Pass<'a> {
                 }
                 input
             }
-            K::TAKE_OPERATOR | K::LIMIT_OPERATOR | K::RENDER_OPERATOR => input,
+            K::TAKE_OPERATOR | K::LIMIT_OPERATOR | K::RENDER_OPERATOR | K::AS_OPERATOR => input,
             K::COUNT_OPERATOR => {
                 let mut out = Schema::closed(
                     vec![Column {
@@ -668,7 +675,8 @@ impl<'a> Pass<'a> {
                 out.rename_all(renames, kind);
                 out
             }
-            K::EXTEND_OPERATOR => {
+            // `serialize rn = row_number()` adds columns as `extend` does.
+            K::EXTEND_OPERATOR | K::SERIALIZE_OPERATOR => {
                 let mut out = input.clone();
                 let mut defined = Defined::default();
                 comma_quirk(&mut out, op.children().count());
@@ -777,15 +785,12 @@ impl<'a> Pass<'a> {
                     .next()
                     .map(|k| k.text().to_ascii_lowercase())
                     .unwrap_or_default();
-                let bare = op.first_child().is_none();
-                match keyword.as_str() {
-                    "as" | "sample" => input,
-                    "serialize" if bare => input,
-                    _ => {
-                        let mut out = input;
-                        out.make_open();
-                        out
-                    }
+                if keyword == "sample" {
+                    input
+                } else {
+                    let mut out = input;
+                    out.make_open();
+                    out
                 }
             }
             _ => {

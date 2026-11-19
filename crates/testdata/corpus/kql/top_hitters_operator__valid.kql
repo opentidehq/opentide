@@ -1,0 +1,2 @@
+// prod:top_hitters_operator prod:top_hitters_by valid
+SecurityEvent | extend Failed = toint(EventID == 4625) | top-hitters 10 of Account by Failed

@@ -1,0 +1,60 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"declare query_parameters(p:string = \\\"x\\\", n:int);\\nlet y = 1;\\nT | where c == p\")"
+---
+SOURCE_FILE@0..76
+  QUERY_PARAMETERS_STATEMENT@0..48
+    DECLARE_KW@0..7 "declare"
+    WHITESPACE@7..8 " "
+    IDENT@8..24 "query_parameters"
+    L_PAREN@24..25 "("
+    PARAMETER@25..39
+      IDENT@25..26 "p"
+      COLON@26..27 ":"
+      TYPE@27..33
+        IDENT@27..33 "string"
+      WHITESPACE@33..34 " "
+      EQ@34..35 "="
+      WHITESPACE@35..36 " "
+      LITERAL@36..39
+        STRING@36..39 "\"x\""
+    COMMA@39..40 ","
+    WHITESPACE@40..41 " "
+    PARAMETER@41..46
+      IDENT@41..42 "n"
+      COLON@42..43 ":"
+      TYPE@43..46
+        IDENT@43..46 "int"
+    R_PAREN@46..47 ")"
+    SEMICOLON@47..48 ";"
+  WHITESPACE@48..49 "\n"
+  LET_STATEMENT@49..59
+    LET_KW@49..52 "let"
+    WHITESPACE@52..53 " "
+    IDENT@53..54 "y"
+    WHITESPACE@54..55 " "
+    EQ@55..56 "="
+    WHITESPACE@56..57 " "
+    LITERAL@57..58
+      NUMBER@57..58 "1"
+    SEMICOLON@58..59 ";"
+  WHITESPACE@59..60 "\n"
+  QUERY@60..76
+    TABULAR_EXPRESSION@60..76
+      TABULAR_SOURCE@60..61
+        TABLE_REF@60..61
+          IDENT@60..61 "T"
+      WHITESPACE@61..62 " "
+      PIPE@62..63 "|"
+      WHITESPACE@63..64 " "
+      WHERE_OPERATOR@64..76
+        WHERE_KW@64..69 "where"
+        WHITESPACE@69..70 " "
+        COMPARISON_EXPR@70..76
+          NAME_REF@70..71
+            IDENT@70..71 "c"
+          WHITESPACE@71..72 " "
+          CMP_OP@72..74 "=="
+          WHITESPACE@74..75 " "
+          NAME_REF@75..76
+            IDENT@75..76 "p"

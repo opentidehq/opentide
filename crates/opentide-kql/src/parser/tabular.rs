@@ -215,8 +215,38 @@ fn operator(p: &mut P<'_>) {
         K::RENDER_KW => {
             p.bump();
             p.expect_name();
+            if p.at(K::WITH_KW) {
+                render_with(p);
+            }
             K::RENDER_OPERATOR
         }
+        K::SERIALIZE_KW => {
+            p.bump();
+            if expr::at_expr_start(p) {
+                list(p, assignment_or_expr);
+            }
+            K::SERIALIZE_OPERATOR
+        }
+        K::AS_KW => {
+            p.bump();
+            hint_options(p);
+            p.expect_name();
+            K::AS_OPERATOR
+        }
+        K::TOP_HITTERS_KW => {
+            p.bump();
+            expr::expr(p);
+            p.expect(K::OF_KW);
+            expr::expr(p);
+            if p.at(K::BY_KW) {
+                let by = p.start();
+                p.bump();
+                expr::expr(p);
+                p.done(by, K::TOP_HITTERS_BY);
+            }
+            K::TOP_HITTERS_OPERATOR
+        }
+        K::REDUCE_KW => reduce(p),
         K::TOP_NESTED_KW => {
             list(p, top_nested_clause);
             K::TOP_NESTED_OPERATOR
@@ -243,19 +273,15 @@ fn operator(p: &mut P<'_>) {
         K::SEARCH_KW
         | K::FIND_KW
         | K::INVOKE_KW
-        | K::SERIALIZE_KW
-        | K::AS_KW
         | K::GETSCHEMA_KW
         | K::SAMPLE_KW
         | K::EXTERNALDATA_KW
         | K::CONSUME_KW
-        | K::REDUCE_KW
         | K::MAKE_GRAPH_KW
         | K::GRAPH_MATCH_KW
         | K::GRAPH_SHORTEST_PATHS_KW
         | K::GRAPH_TO_TABLE_KW
-        | K::GRAPH_MARK_COMPONENTS_KW
-        | K::TOP_HITTERS_KW => {
+        | K::GRAPH_MARK_COMPONENTS_KW => {
             p.bump();
             if expr::at_expr_start(p) {
                 expr::expr(p);
@@ -933,4 +959,53 @@ fn search_source(p: &mut P<'_>) {
     p.eat(K::WHERE_KW);
     expr::expr(p);
     p.done(m, K::SEARCH_SOURCE);
+}
+
+// ------------------------------------------------- render, reduce
+
+/// `with (title = "x", ycolumns = a, b)`: a property's value is an expression,
+/// and a bare name after it continues its column list.
+fn render_with(p: &mut P<'_>) {
+    let m = p.start();
+    p.bump();
+    p.expect(K::L_PAREN);
+    if !p.at(K::R_PAREN) {
+        list(p, render_property);
+    }
+    p.expect(K::R_PAREN);
+    p.done(m, K::RENDER_WITH);
+}
+
+fn render_property(p: &mut P<'_>) {
+    if p.name_at(0) && p.nth(1) == K::EQ {
+        let m = p.start();
+        p.bump_as(K::IDENT);
+        p.bump();
+        expr::expr(p);
+        p.done(m, K::NAMED_ARGUMENT);
+    } else {
+        name_ref(p);
+    }
+}
+
+/// `reduce kind=source by x with threshold=0.1, characters="ab"`
+fn reduce(p: &mut P<'_>) -> K {
+    p.bump();
+    options(p);
+    p.expect(K::BY_KW);
+    expr::expr(p);
+    // Kusto.Language accepts a `with` that no option follows.
+    if p.eat(K::WITH_KW) && at_option(p) {
+        loop {
+            option_after_name(p, K::OPERATOR_OPTION);
+            if !p.eat(K::COMMA) {
+                break;
+            }
+            if !at_option(p) {
+                p.error("expected `threshold` or `characters`");
+                break;
+            }
+        }
+    }
+    K::REDUCE_OPERATOR
 }

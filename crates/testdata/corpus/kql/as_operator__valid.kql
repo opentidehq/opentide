@@ -1,0 +1,2 @@
+// prod:as_operator valid
+SecurityEvent | where EventID == 4625 | as hint.materialized=true Failures | summarize count() by Account
