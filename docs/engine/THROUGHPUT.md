@@ -138,14 +138,14 @@ libraries on the same machine in one run, release builds, µs per call:
 | Kusto without the classifications | 6.25 µs | 6.85 µs |
 
 opentide's analysis always includes its highlight (the semantic tokens), so it is the full row on
-both lines. An earlier run, before the KQL work of #1571 step 4 and on a busier machine, had the
-one-line pair at 9.3 µs against Kusto's 8.7 µs; that gap is closed.
+both lines. An earlier run, on another machine, had the one-line pair at 9.3 µs against Kusto's
+8.7 µs; measured on one machine, opentide is now ahead.
 
-| KQL, earlier run (before #1571 step 4) | opentide | Kusto.Language 12.4.1 (.NET 8) |
+| KQL, the earlier run (another machine) | opentide | Kusto.Language 12.4.1 (.NET 8) |
 |---|---:|---:|
 | 10,000 analyses in one process, time and peak memory, runtime start-up included | 3.0 s, 27.6 MiB | 4.7 s, 207 MiB |
 
-Caveats, from ADR 0014:
+Caveats:
 
 - None of these rows can be set against the wall-time table above, which is another machine and
   another input set.
@@ -160,7 +160,7 @@ What the numbers mean against other parsers, as rough orders of magnitude, not a
 None of these parsers was run here.
 
 - **Measured here:** only Kusto.Language, above. Kusto.Language is hand-written C#, not generated,
-  and opentide's KQL parse is about a fifth faster on the same detections.
+  and opentide's KQL parse takes about a fifth less time on the same detections.
 - **Not measured here:** the other vendors' parsers. They are a mix: Lucene's classic query parser
   is JavaCC-generated, Elastic's ES|QL and EQL parsers are ANTLR-generated, and others are closed.
   Whether a generated parser's fixed cost per call (building the lexer, the parser and their caches)
