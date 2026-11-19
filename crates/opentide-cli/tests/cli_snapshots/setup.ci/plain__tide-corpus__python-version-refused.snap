@@ -8,4 +8,4 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: --python-version: "2.7" is not a Python version opentide installs on; use 3.10 or later, as 3.12 or 3.12.4
+error: --python-version: "2.7" is not a Python version opentide installs on; use 3.10 or later, as 3.12, 3.12.4 or 3.x

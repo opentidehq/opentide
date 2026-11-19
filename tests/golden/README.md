@@ -143,6 +143,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `tide-corpus` | [`tests/fixtures/tide_corpus/current`](../fixtures/tide_corpus/), moved to the `.opentide/` layout as `tests/corpus_support.py` does |
 | `vscode` | the VS Code extension's fixture workspace, vendored unchanged in [`fixtures/vscode-workspace/`](fixtures/vscode-workspace/) (source and commit in `vscode-workspace.SOURCE.toml`, MIT licence in `vscode-workspace.LICENSE`) |
 | `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is snapshotted |
+| `vscode-own-pipeline` | `vscode` with one declared edit: a `.gitlab-ci.yml` of the user's own, which `setup ci gitlab` and `setup --ci gitlab` keep (#1656) |
 | `vscode-unscoped` | `vscode` with one declared edit: signal entities written without their stage or in the wrong case (`hostname`, `'host::command line'`, `Process`), so the file `migrate vocab-scope --apply` rewrites is snapshotted (`tide-corpus` links its object folders, which the command does not follow) |
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |

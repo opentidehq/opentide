@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "setup ci",
   "duration_ms": 0,
-  "error": "--python-version: \"2.7\" is not a Python version opentide installs on; use 3.10 or later, as 3.12 or 3.12.4",
+  "error": "--python-version: \"2.7\" is not a Python version opentide installs on; use 3.10 or later, as 3.12, 3.12.4 or 3.x",
   "exit_code": 2,
   "failure": {
     "argument": "--python-version",
     "code": "usage_invalid_value",
     "crash_log": null,
-    "message": "--python-version: \"2.7\" is not a Python version opentide installs on; use 3.10 or later, as 3.12 or 3.12.4",
+    "message": "--python-version: \"2.7\" is not a Python version opentide installs on; use 3.10 or later, as 3.12, 3.12.4 or 3.x",
     "suggestion": null
   },
-  "message": "--python-version: \"2.7\" is not a Python version opentide installs on; use 3.10 or later, as 3.12 or 3.12.4",
+  "message": "--python-version: \"2.7\" is not a Python version opentide installs on; use 3.10 or later, as 3.12, 3.12.4 or 3.x",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

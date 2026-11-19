@@ -1523,20 +1523,32 @@ fn ci_step(
     super::check_pipeline_values(args)?;
     let run = super::prepare(stage, args, root, cx)?;
     let mut written = Vec::new();
+    let mut skipped = Vec::new();
     for (relative, bytes, _) in &run.files {
         if let Some(bytes) = bytes {
             stage.write(&root.join(relative), bytes.clone());
             written.push(relative.clone());
+        } else {
+            skipped.push(relative.clone());
         }
     }
+    // A pipeline the user wrote is kept (`prepare`): nothing generated.
+    let message = if written.is_empty() && !skipped.is_empty() {
+        "CI pipeline kept: the file there is not opentide's"
+    } else {
+        "CI pipeline generated"
+    };
     let mut result = StepResult::new([
-        ("message", Json::str("CI pipeline generated")),
+        ("message", Json::str(message)),
         ("path", Json::str(files::shown(root))),
         ("ci", Json::str(args.provider.name())),
         ("platforms", strings(&run.platforms)),
         ("default_branch", Json::str(&run.branch)),
         ("files", strings(&written)),
     ]);
+    if !skipped.is_empty() {
+        result.set("skipped", strings(&skipped));
+    }
     if !run.warnings.is_empty() {
         result.set("warnings", strings(&run.warnings));
     }
