@@ -33,7 +33,7 @@ opentide mcp start
 ```
 
 MCP hosts spawn the process automatically; you rarely run it manually.
-`opentide setup mcp` warns when it writes a config for a server you cannot yet start.
+`opentide setup mcp` warns when it writes a config for a server you cannot yet start: every config runs a bare `opentide`, so it warns when `opentide` is not on the `PATH` it runs with (a virtual environment that is not activated, for instance).
 
 Logging on `opentide mcp start` goes to stderr. stdout is JSON-RPC only.
 

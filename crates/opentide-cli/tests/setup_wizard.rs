@@ -513,6 +513,30 @@ fn new_asks_for_the_name_and_the_platform_blocks() {
     assert!(!text.contains("  sentinel:"), "{text}");
 }
 
+/// An empty answer to `new`'s name question asks again, saying why, and
+/// does not end the run as if no terminal could be asked (#1670, smoke B8).
+#[test]
+fn an_empty_name_at_news_question_asks_again() {
+    let dir = tempfile::tempdir().unwrap();
+    enabled_workspace(dir.path());
+    let mut session = spawn(dir.path(), &["new", "threat"]);
+    answer(&mut session, "Threat name", &[ENTER]);
+    answer(
+        &mut session,
+        "the field cannot be empty",
+        &["Asked Twice", ENTER],
+    );
+    let (printed, code) = finish(session, "opentide validate --file");
+    assert_eq!(code, 0, "{printed}");
+    assert!(!printed.contains("prompts only"), "{printed}");
+    assert!(
+        dir.path()
+            .join("objects/threats/asked-twice.yaml")
+            .is_file(),
+        "{printed}"
+    );
+}
+
 /// Ctrl-C at `new`'s question is an interruption: exit 130, nothing written.
 #[test]
 fn ctrl_c_at_news_question_is_an_interruption() {
