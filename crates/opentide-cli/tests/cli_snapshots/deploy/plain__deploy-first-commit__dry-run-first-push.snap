@@ -13,7 +13,7 @@ splunk · 1 tenant
     + create or update  Splunk create rule  …000000000041  status STAGING
 
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
-  note: not in the plan: 11 rules left out: 7 in REMOVED, 2 in PRODUCTION, 2 in DISABLED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it
+  note: not in the plan: 1 rule in REMOVED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it
 dry run, nothing sent
 
 ━━━ stderr

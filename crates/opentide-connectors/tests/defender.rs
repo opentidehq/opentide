@@ -222,10 +222,14 @@ fn defender_query_sends_what_the_python_runner_sent() {
         first.sent.as_deref(),
         Some("DeviceProcessEvents\n| where FileName =~ 'powershell.exe'\n| take 2")
     );
+    // The 403 is the app registration's, not the query's: an
+    // authentication failure, which `validate query --live` reports as the
+    // tenant's (#1658, E8); the others are the query's refusals.
     let refusals: Vec<String> = outcomes[1..]
         .iter()
         .map(|outcome| match outcome {
             Err(refused @ ConnectorError::Refused { .. }) => refused.text(),
+            Err(ConnectorError::Authentication { message, .. }) => format!("auth: {message}"),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -233,8 +237,8 @@ fn defender_query_sends_what_the_python_runner_sent() {
         refusals,
         [
             "Graph refused the hunting query on replayed (HTTP 400): Syntax error near 'whre'",
-            "Graph refused the hunting query on replayed (HTTP 403): the app registration needs \
-             ThreatHunting.Read.All: Insufficient privileges to complete the operation.",
+            "auth: Graph refused the hunting query on replayed (HTTP 403): the app registration \
+             needs ThreatHunting.Read.All: Insufficient privileges to complete the operation.",
             "Graph refused the hunting query on replayed (HTTP 502): HTTP 502 with an HTML page \
              titled \"502 Bad Gateway\": HTTP 502 Bad Gateway is what a gateway or proxy in front \
              of the tenant answers when the tenant does not answer it in time, so the url and \

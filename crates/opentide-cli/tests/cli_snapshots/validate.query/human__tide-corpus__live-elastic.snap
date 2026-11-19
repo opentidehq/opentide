@@ -10,5 +10,5 @@ exit: 1
 ━━━ stderr
 error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
   ␛[1m␛[31m✗␛[0m  ␛[1mElastic Security queries␛[0m  ␛[2m1 rule␛[0m ␛[2m<SECONDS>␛[0m
-␛[1m␛[31merror:␛[0m Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables before a
-       live check.
+␛[1m␛[31merror:␛[0m Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables, then run
+       the command again.

@@ -28,7 +28,7 @@ opentide setup ci gitlab --yes
 opentide setup ci azure --python-version 3.12 --yes
 ```
 
-`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines pin the version that generated them once, as the pipeline variable `OPENTIDE_VERSION`, and every job installs `opentide==$OPENTIDE_VERSION`; they also set `OPENTIDE_REPO_ROOT` for every job (both in the GitHub workflow `env`, GitLab `variables` and Azure pipeline `variables`). Re-run `opentide setup ci github --yes` (or `gitlab` or `azure`) after you upgrade to pin the new release, or change that one value. A GitLab project or group CI/CD variable named `OPENTIDE_VERSION` overrides the file's, as GitLab variables do; delete it once the file is regenerated. Through 0.20.1 the version was a literal in every job's install command.
+`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines pin the version that generated them once, as the pipeline variable `OPENTIDE_VERSION`, and every job installs `opentide==$OPENTIDE_VERSION`; they also set `OPENTIDE_REPO_ROOT` for every job (both in the GitHub workflow `env`, GitLab `variables` and Azure pipeline `variables`). Re-run `opentide setup ci github --yes` (or `gitlab` or `azure`) after you upgrade to pin the new release. Changing that one value is enough within a release line, but not across 1.0: a GitLab pipeline written by 0.28.1 or earlier merges its Code Quality reports with `python -m opentide.ci.codequality`, which 1.0 does not ship, so regenerate it. A GitLab project or group CI/CD variable named `OPENTIDE_VERSION` overrides the file's, as GitLab variables do; delete it once the file is regenerated. Through 0.20.1 the version was a literal in every job's install command.
 
 <Callout type="info">
 Hand-written examples below pin `pip install 'opentide==0.28.1'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
@@ -376,11 +376,13 @@ opentide lint --strict --format codequality --output opentide-reports/lint.codeq
 
 Regenerate an existing pipeline with `opentide setup ci <github|gitlab|azure> --yes` to get them.
 
-GitLab Runner uploads a Code Quality report as a single file and fails a job that declares more (`failed to copy content to form: only one file can be sent as raw`, seen on Runner 18.9). The generated validate job therefore writes `validate.codequality.json` and `lint.codequality.json`, and its `after_script` merges them:
+GitLab Runner uploads a Code Quality report as a single file and fails a job that declares more (`failed to copy content to form: only one file can be sent as raw`, seen on Runner 18.9). The generated validate job therefore writes `validate.codequality.json` and `lint.codequality.json`, and its `after_script` merges them into `opentide-reports/codequality.json` with a short Python script written into the pipeline, which runs on the job's `python` image:
 
 ```bash
-python -m opentide.ci.codequality --output opentide-reports/codequality.json \
-  opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json
+python3 - opentide-reports/codequality.json \
+  opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json <<'PY'
+# … reads each report, keeps each fingerprint once, writes the first path
+PY
 ```
 
 `after_script` runs after a failed command too, so the merge request shows the findings of the command that failed. A report that is missing (`lint` never ran because `validate` failed), empty, or cut short by a crash is skipped with a note in the log, so the merged file is always a valid report; an issue whose fingerprint is already in it is kept once. Through 0.20.1 the job declared both files, and on GitLab Runner 18.9 it failed after both commands had passed; regenerate it with `opentide setup ci gitlab --yes`.

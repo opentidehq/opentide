@@ -183,6 +183,48 @@ def test_a_window_that_ends_before_it_starts_is_refused(connection: Connection) 
     assert raised.value.code == "usage_invalid_value"
 
 
+def test_a_window_takes_rfc_3339_strings(connection: Connection) -> None:
+    # As the Node SDK takes them; a string was an AttributeError (smoke D14).
+    # The engine reads them, as the Node SDK's: a fraction of a second too.
+    result = run(connection.query("x", start="2026-11-12T09:00:00.5Z", end="2026-11-12T10:00:00Z"))
+    assert result.rows
+    # Only an end: the 24 hours before it.
+    assert run(connection.query("x", end="2026-11-12T10:00:00Z")).rows
+    run(connection.validate_query("x", end="2026-11-12T10:00:00+00:00"))
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [("yesterday", None), ("2026-11-12T09:00:00", None), (None, "2026-13-40T00:00:00Z"), (5, None)],
+)
+def test_a_window_that_does_not_read_is_refused(
+    connection: Connection, start: object, end: object
+) -> None:
+    with pytest.raises(OpentideError) as raised:
+        run(connection.query("x", start=start, end=end))  # ty: ignore[invalid-argument-type]  # a wrong type on purpose
+    assert raised.value.code == "usage_invalid_value"
+
+
+@pytest.mark.parametrize("limit", [0, -1, 5001])
+def test_a_limit_the_command_line_refuses_is_refused(connection: Connection, limit: int) -> None:
+    # opentide query --limit takes 1 to 5000 (smoke D13); nothing is sent.
+    for operation in (connection.query, connection.validate_query):
+        with pytest.raises(OpentideError) as raised:
+            run(operation("x", limit=limit))
+        assert raised.value.code == "usage_invalid_value"
+        assert "between 1 and 5000" in raised.value.message
+
+
+def test_tenants_of_a_platform_that_is_none_is_refused() -> None:
+    ws = Workspace.from_files(
+        "/ws", {".opentide/configurations/platforms/splunk.toml": SPLUNK_TOML}
+    )
+    with pytest.raises(OpentideError) as raised:
+        ws.tenants("splunck")
+    assert raised.value.code == "usage_invalid_choice"
+    assert ws.tenants("elastic") == []
+
+
 def test_a_live_check_accepts_and_refuses(connection: Connection) -> None:
     check = run(connection.validate_query("event.type = 'Process Creation'"))
     assert isinstance(check, LiveCheck)

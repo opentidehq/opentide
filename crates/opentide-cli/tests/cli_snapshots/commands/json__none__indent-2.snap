@@ -5,7 +5,7 @@ description: commands/json/none/indent-2
 args: opentide --json commands
 exit: 0
 
-━━━ stdout · json, 15532 lines
+━━━ stdout · json, 15528 lines
 {
   "$defs": {
     "AttackSkeleton": {
@@ -15328,10 +15328,6 @@ exit: 0
     {
       "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal; json writes progress events on stderr",
       "name": "OPENTIDE_PROGRESS"
-    },
-    {
-      "meaning": "Where opentide caches the language-server catalogs it generates",
-      "name": "OPENTIDE_CACHE_DIR"
     },
     {
       "meaning": "Set by a coding agent: selects agent output mode",

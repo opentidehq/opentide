@@ -91,9 +91,11 @@ pub fn repository_path(diagnostic: &Diagnostic, root: Option<&Path>) -> Option<S
 
 /// The message, then `help: …` on its own line when there is help.
 pub fn annotation_text(diagnostic: &Diagnostic) -> String {
+    // A message the size of its query (B22) is cut as the frame cuts it.
+    let message = super::codeframe::shortened(&diagnostic.message, super::codeframe::MAX_MESSAGE);
     match diagnostic.help.as_ref().filter(|help| !help.is_empty()) {
-        Some(help) => format!("{}\nhelp: {help}", diagnostic.message),
-        None => diagnostic.message.clone(),
+        Some(help) => format!("{message}\nhelp: {help}"),
+        None => message.into_owned(),
     }
 }
 

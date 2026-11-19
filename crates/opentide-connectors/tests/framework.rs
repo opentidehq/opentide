@@ -97,6 +97,52 @@ fn tls_server(ca: &TestCa) -> (tokio::runtime::Runtime, u16) {
     (runtime, port)
 }
 
+/// A request whose TLS handshake refused the tenant's certificate, or whose
+/// connection was refused, never left (`unsent`); one whose connection
+/// dropped after the request was written may have been taken (#1658, D6).
+#[test]
+fn framework_send_or_unsent_tells_a_request_never_sent() {
+    let send = |url: &str| {
+        let client = HttpClient::new(
+            &label("unsent"),
+            &HttpSettings::default(),
+            &Environment::default(),
+            None,
+        )
+        .unwrap();
+        let cancel = CancellationToken::new();
+        block_on(async {
+            let request = client
+                .request(reqwest::Method::POST, url)
+                .build()
+                .expect("a request");
+            client.send_or_unsent(request, &cancel).await.map(|_| ())
+        })
+        .unwrap()
+    };
+    // An untrusted certificate: the handshake fails, nothing is sent.
+    let ca = TestCa::new().unwrap();
+    let (_tls, port) = tls_server(&ca);
+    let refused = send(&format!("https://localhost:{port}/")).unwrap_err();
+    assert!(refused.unsent, "{:?}", refused.error);
+    assert!(refused.error.is_unreachable(), "{:?}", refused.error);
+    // Nothing listens: the connection is refused.
+    let closed = send("http://127.0.0.1:1/").unwrap_err();
+    assert!(closed.unsent, "{:?}", closed.error);
+    // Connected, the request read, then the connection dropped unanswered.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        use std::io::Read as _;
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buffer = [0_u8; 1024];
+        let _ = stream.read(&mut buffer);
+        drop(stream);
+    });
+    let dropped = send(&format!("http://{address}/")).unwrap_err();
+    assert!(!dropped.unsent, "{:?}", dropped.error);
+}
+
 /// A certificate the tenant does not trust is refused once, not retried: a
 /// second handshake would be refused the same way. A connection refused
 /// outright still is retried (the request never left).
@@ -1095,7 +1141,7 @@ fn framework_credentials_placeholders_and_errors() {
         Tenant::from_setup("mock", "prod", &setup, &env, Resolve::Required, &defaults).unwrap_err();
     assert_eq!(
         unset.to_string(),
-        "mock tenant 'prod' setup: ssl is unset ($MOCK_SSL). Set that environment variable to true or false before a live check."
+        "mock tenant 'prod' setup: ssl is unset ($MOCK_SSL). Set that environment variable to true or false."
     );
     let counted =
         Tenant::from_setup("mock", "prod", &setup, &env, Resolve::Counting, &defaults).unwrap();

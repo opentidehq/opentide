@@ -96,5 +96,10 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+#: Module-level names that are not the package's: the `TYPE_CHECKING` flag
+#: above and the `annotations` feature of `from __future__ import annotations`.
+_NOT_PUBLIC = frozenset({"TYPE_CHECKING", "annotations"})
+
+
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(__all__))
+    return sorted((set(globals()) - _NOT_PUBLIC) | set(__all__))
