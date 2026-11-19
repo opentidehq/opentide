@@ -39,6 +39,19 @@ ignore = [
     { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; transitive through rmcp and schemars; #1513" },
     # humantime wraps chrono; it comes only through trycmd, a dev-dependency.
     { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained; dev-only through trycmd; #1513" },
+    # heapless 0.8.0 is unsound (nine informational advisories, 2026-11-18). It comes only through
+    # faster-hex 0.10, through gix-hash and gix-packetline, and faster-hex uses it only without its
+    # `alloc` feature, which both always enable (`std`): compiled, never run. No upgrade yet: both
+    # (latest 0.28.1 and 0.24.1) need faster-hex ^0.10; faster-hex 1.0 makes heapless optional. #1675.
+    { id = "RUSTSEC-2026-0574", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0575", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0576", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0577", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0578", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0579", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0580", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0581", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
+    { id = "RUSTSEC-2026-0582", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
 ]
 
 # Licences of what we distribute. opentide is EUPL-1.2; every crate compiled
