@@ -8,7 +8,8 @@
 //!
 //! The diff is the run's commits: a pull or merge request against its target
 //! branch, a push against the branch's previous tip, outside CI the last
-//! commit against its first parent. Added, renamed and modified files count;
+//! commit against its first parent. A repository's first commit, which has no
+//! parent, added every file it holds. Added, renamed and modified files count;
 //! deleted ones do not (there is nothing left to deploy). Paths are relative
 //! to the git top level, as git writes them, non-ASCII paths included.
 //!
@@ -460,8 +461,13 @@ fn origin_request(
 }
 
 /// The paths added, renamed or modified from `base` to `head`, relative to
-/// the git top level, sorted.
-fn changed_between(repo: &Repo, base: ObjectId, head: ObjectId) -> Result<Vec<String>, GitError> {
+/// the git top level, sorted. With no `base` (`head` is a root commit, the
+/// first of a repository), every file of `head` is added.
+fn changed_between(
+    repo: &Repo,
+    base: Option<ObjectId>,
+    head: ObjectId,
+) -> Result<Vec<String>, GitError> {
     let tree = |id: ObjectId| -> Result<Vec<u8>, GitError> {
         let commit = repo
             .commit(id)
@@ -477,7 +483,12 @@ fn changed_between(repo: &Repo, base: ObjectId, head: ObjectId) -> Result<Vec<St
             })?;
         Ok(buf)
     };
-    let (old, new) = (tree(base)?, tree(head)?);
+    // The empty tree: no entry, so each of `head`'s files is an addition.
+    let old = match base {
+        Some(base) => tree(base)?,
+        None => Vec::new(),
+    };
+    let new = tree(head)?;
     let mut recorder = gix_diff::tree::Recorder::default();
     gix_diff::tree(
         gix_object::TreeRefIter::from_bytes(&old, gix_hash::Kind::Sha1),
@@ -529,10 +540,8 @@ pub fn changed_paths(
         let Some(head) = head_commit(&repo) else {
             return Ok(Vec::new());
         };
-        return match production_base(&repo, head)? {
-            None => Ok(Vec::new()),
-            Some(base) => changed_between(&repo, base, head),
-        };
+        // A root commit (no parent) added every file it holds.
+        return changed_between(&repo, production_base(&repo, head)?, head);
     }
     let variable = match platform {
         Ci::GitHub => "GITHUB_WORKSPACE",
@@ -560,7 +569,7 @@ pub fn changed_paths(
             Some(before) => Some(before),
             None => match first_parent()? {
                 Some(base) => Some(base.to_string()),
-                None => return Ok(Vec::new()),
+                None => return root_changes(&repo, latest.as_deref(), tip_name),
             },
         },
         (Ci::GitHub, DiffSource::ChangeRequest) => {
@@ -606,7 +615,7 @@ pub fn changed_paths(
                 Some(before) => Some(before),
                 None => match first_parent()? {
                     Some(base) => Some(base.to_string()),
-                    None => return Ok(Vec::new()),
+                    None => return root_changes(&repo, latest.as_deref(), tip_name),
                 },
             }
         }
@@ -629,7 +638,7 @@ pub fn changed_paths(
         }
         (Ci::Azure, DiffSource::Push) => match first_parent()? {
             Some(base) => Some(base.to_string()),
-            None => return Ok(Vec::new()),
+            None => return root_changes(&repo, latest.as_deref(), tip_name),
         },
         (Ci::Azure, DiffSource::ChangeRequest) => {
             let (Some(source_branch), Some(target_branch)) = (
@@ -663,7 +672,24 @@ pub fn changed_paths(
     })?;
     let latest = commit_id(&repo, &latest)
         .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
-    changed_between(&repo, source_commit, latest)
+    changed_between(&repo, Some(source_commit), latest)
+}
+
+/// A push whose commit has no parent (the repository's first): every file
+/// of `latest`, the run's commit named by `tip_name`, is new.
+fn root_changes(
+    repo: &Repo,
+    latest: Option<&str>,
+    tip_name: &str,
+) -> Result<Vec<String>, GitError> {
+    let latest = latest.ok_or_else(|| {
+        failed(format!(
+            "{tip_name} is required to compute the changed rules"
+        ))
+    })?;
+    let head = commit_id(repo, latest)
+        .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
+    changed_between(repo, None, head)
 }
 
 // --- the push's diff up to HEAD (`changed_through_head`) -------------------
@@ -827,10 +853,8 @@ pub fn changed_through_head(
         Some(since) => Some(since_commit(&repo, since)?),
         None => push_baseline(&repo, platform, env)?,
     };
-    match base {
-        None => Ok(Vec::new()),
-        Some(base) => changed_between(&repo, base, head),
-    }
+    // No base: HEAD is the repository's first commit, which added every file.
+    changed_between(&repo, base, head)
 }
 
 /// Splits changed paths into the rule files directly in `folder` (the rules

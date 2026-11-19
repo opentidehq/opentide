@@ -971,15 +971,20 @@ fn the_push_is_read_up_to_head_from_its_base() {
         through_head(&h.root, &azure, None).unwrap(),
         ["objects/rules/r3.yaml"]
     );
-    // The first commit has nothing to diff.
-    assert!(
+    // A push of the first commit started from nothing: every file up to
+    // HEAD is new (smoke E9/D10).
+    let every: Vec<String> = git_cmd(&h.root, &["ls-files"])
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(
         through_head(
             &h.root,
             &[("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", &h.a)],
             None
         )
-        .unwrap()
-        .is_empty()
+        .unwrap(),
+        every
     );
 }
 
@@ -1127,4 +1132,44 @@ fn a_checkout_is_read_as_git_reads_it() {
     assert_eq!(git::checkout(root).unwrap().current_branch, None);
     let outside = tempfile::tempdir().unwrap();
     assert_eq!(git::checkout(outside.path()), None);
+}
+
+/// A repository's first commit has no parent: it added every file it holds,
+/// so a run on it reads them all (smoke E9/D10, the first push of a new
+/// detection repository), outside CI, on a CI push and up to HEAD.
+#[test]
+fn the_first_commit_added_every_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "objects/rules/r1.yaml", "a: 1\n");
+    write(&root, "objects/rules/sub/r2.yaml", "b: 1\n");
+    let first = commit(&root, "first");
+    let every = ["objects/rules/r1.yaml", "objects/rules/sub/r2.yaml"];
+    assert_eq!(changed(&root, &[]).unwrap(), every);
+    // GitHub's first push names an all-zero `before`.
+    let event = root.join("event.json");
+    std::fs::write(&event, format!("{{\"before\": \"{}\"}}", "0".repeat(40))).unwrap();
+    let event = event.to_string_lossy().into_owned();
+    let github = [
+        ("GITHUB_ACTIONS", "true"),
+        ("GITHUB_SHA", first.as_str()),
+        ("GITHUB_EVENT_PATH", event.as_str()),
+    ];
+    assert_eq!(changed(&root, &github).unwrap(), every);
+    let gitlab = [
+        ("CI", "true"),
+        ("CI_COMMIT_SHA", first.as_str()),
+        (
+            "CI_COMMIT_BEFORE_SHA",
+            "0000000000000000000000000000000000000000",
+        ),
+    ];
+    assert_eq!(changed(&root, &gitlab).unwrap(), every);
+    let azure = [
+        ("TF_BUILD", "True"),
+        ("BUILD_SOURCEVERSION", first.as_str()),
+    ];
+    assert_eq!(changed(&root, &azure).unwrap(), every);
+    assert_eq!(through_head(&root, &github, None).unwrap(), every);
 }
