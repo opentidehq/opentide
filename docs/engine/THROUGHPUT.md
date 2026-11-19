@@ -118,11 +118,11 @@ the file, so the other languages' budgets stay as they are.
 
 ## One walk per analysis
 
-ADR 0014 §5a: one walk of the tree serves a language's checks and its highlight, with
-`opentide_parse::walk_once`. Lucene, Kibana KQL, ES|QL, EQL, SPL, CQL and YARA-L walk once.
-Exabeam and Falco already did: their rowan tree is walked once, for the highlight, and their checks
-read a parse of their own. That second parse is the cost left in both, and moving the checks onto
-the tree is its own change.
+ADR 0014 §5a: one walk of the tree serves a language's checks and its highlight. KQL, ES|QL,
+Lucene and Kibana KQL walk with `opentide_parse::walk_once`; EQL, SPL, CQL and YARA-L walk once
+with preorder walks of their own, written before it. Exabeam and Falco already walked their rowan
+tree once, for the highlight, and their checks read a parse of their own. That second parse is the
+cost left in both, and moving the checks onto the tree is its own change.
 
 ## Against the vendors
 
