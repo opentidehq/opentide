@@ -743,12 +743,34 @@ mod tests {
             "{:?}",
             gates(completion)
         );
+        // `timeout` in the prompt, or in a nested map, is not the option.
+        for q in [
+            "FROM a | COMPLETION c = \"timeout\" WITH {\"inference_id\": \"e\"}",
+            "FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\", \"task_settings\": {\"timeout\": 1}}",
+        ] {
+            assert!(
+                !gates(q)
+                    .iter()
+                    .any(|g| g.0 == "the `COMPLETION` option `timeout`"),
+                "{q}"
+            );
+        }
         assert!(
             !gates("FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\"}")
                 .iter()
                 .any(|g| g.0 == "the `COMPLETION` option `timeout`")
         );
         assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
+        // `AS` is optional before the qualifier, and a join inside FORK is
+        // its own command.
+        assert_eq!(
+            gates("FROM a | LOOKUP JOIN t q ON x"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
+        assert_eq!(
+            gates("FROM a | FORK (LOOKUP JOIN t AS q ON x) (WHERE y)"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
         assert!(
             !gates("FROM a | LOOKUP JOIN ON source.ip")
                 .iter()
