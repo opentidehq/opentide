@@ -6,15 +6,6 @@ args: opentide validate query
 exit: 1
 
 ━━━ stdout
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/covert-exfiltration-rule-0157.yaml:45:33
-   │
-44 │     query: |
-45 │       search in (SecurityEvent, *) "error"
-   │                                 ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
 error[falco_output_syntax]: invalid formatting syntax: formatting cannot end with a % (libsinsp)
    ╭─▶ objects/rules/covert-implant-rule-0165.yaml:43:30
    │
@@ -41,15 +32,6 @@ error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects th
    │                   ━━━
    │
    ╰─ help: try: "cannot run"
-
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/covert-tunnel-rule-0170.yaml:49:13
-   │
-48 │     query: |
-49 │       union * | take 1
-   │             ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
 error[spl_search_operator]: '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
    ╭─▶ objects/rules/elevated-dropper-rule-0068.yaml:59:22
@@ -249,15 +231,6 @@ error[esql_unknown_type]: `foo` is not an ES|QL type Elasticsearch can cast to; 
    │
    ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
 
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/remote-dropper-rule-0140.yaml:75:13
-   │
-74 │     query: |
-75 │       union * | take 1
-   │             ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
 error[eql_not_boolean]: integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
    ╭─▶ objects/rules/remote-dropper-rule-0197.yaml:59:21
    │
@@ -436,6 +409,6 @@ error: Malformed object yaml · path: objects/rules/encoded-beacon-rule-0034.yam
 error: Missing identifier from model · file: <WS>/objects/rules/hidden-implant-rule-0006.yaml
 error: Malformed object yaml · path: objects/rules/hidden-loader-rule-0024.yaml · error: while scanning a plain scalar, found a tab at line 44, column 18
 error: Malformed object yaml · path: objects/rules/staged-exfiltration-rule-0021.yaml · error: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
-✗ 47 errors in 47 files · 1162 queries checked
-→ opentide explain kql_parse_error · how to fix it
+✗ 44 errors in 44 files · 1162 queries checked
+→ opentide explain falco_output_syntax · how to fix it
 → opentide validate query · check again
