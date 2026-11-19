@@ -1343,9 +1343,6 @@ struct RuleQuery {
     exclusions: Option<CJson>,
     /// The streams a Graylog query is checked against (the block's aliases).
     index: Vec<String>,
-    /// A Splunk search ending with the mapping macro, which a tenant with
-    /// `mdr_mapping_macro = false` does not get.
-    mapping_macro: bool,
 }
 
 impl RuleQuery {
@@ -1356,7 +1353,6 @@ impl RuleQuery {
             label: None,
             exclusions: None,
             index: Vec::new(),
-            mapping_macro: false,
         }
     }
 
@@ -1411,10 +1407,9 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
         }
         "splunk" => {
             required(block, "query", name, platform)?;
-            Ok(vec![RuleQuery {
-                mapping_macro: true,
-                ..RuleQuery::plain(opentide_compile::splunk::create_query(rule, block, true))
-            }])
+            Ok(vec![RuleQuery::plain(
+                opentide_compile::splunk::create_query(block),
+            )])
         }
         "sentinel_one" => {
             let condition = block.get("condition");
@@ -1601,15 +1596,6 @@ async fn generic(
         let host = tenant_host(platform, tenant);
         let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
         let mut connection: Option<Result<Connection, String>> = None;
-        // Whether the tenant's Splunk searches end with the mapping macro,
-        // as deploy compiles them; a value that is no boolean fails the
-        // check, as it fails the deploy.
-        let mapping_macro = if platform == opentide_compile::splunk::PLATFORM {
-            opentide_compile::splunk::mapping_macro(&batch.table)
-                .map_err(|error| Early::Failed(error.to_string()))?
-        } else {
-            true
-        };
         for sent in &batch.rules {
             let rule = &sent.rule;
             if rule.block(platform).is_none() {
@@ -1625,11 +1611,8 @@ async fn generic(
                 }
             };
             for item in queries {
-                let mut text = item.text_for(&tenant.name);
-                if item.mapping_macro {
-                    text = opentide_compile::splunk::for_tenant(&text, mapping_macro).to_owned();
-                }
-                let mut request = QueryRequest::new(text, &item.language, window);
+                let mut request =
+                    QueryRequest::new(item.text_for(&tenant.name), &item.language, window);
                 request.limit = 1;
                 request.timeout = seconds(timeout);
                 request.index = item.index.clone();

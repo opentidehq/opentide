@@ -39,7 +39,7 @@ fn replay(scenario: &str) -> Replayed {
 /// The settings `_apply_saved_search` sends for one step of `client.py`:
 /// the rule's, its actions', then `search`.
 fn settings(step: &Json) -> Object {
-    let mut settings = step.get("mdr_config").unwrap().as_object().unwrap().clone();
+    let mut settings = step.get("config").unwrap().as_object().unwrap().clone();
     for (key, value) in step.get("actions_config").unwrap().as_object().unwrap() {
         settings.insert(key.clone(), value.clone());
     }
@@ -84,18 +84,13 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
 fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
     use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
     let inputs = fixture("splunk");
-    // The recording is the Python client's, which looked for no old saved
-    // search: after each write the deployer now lists the saved searches
-    // naming the rule's MDR_UUID (#1657), answered with the one it wrote.
+    // The recording is the client's, which looked for no old saved search:
+    // after each write the deployer now lists the saved searches whose
+    // description names the rule (#1657), answered with the one it wrote.
     let recorded = support::cassette("splunk/deploy");
-    let created = &recorded.interactions[1].request;
-    let Body::Text(form) = &created.body else {
-        panic!("a form body")
-    };
-    let uuid = form
-        .split("MDR_UUID%3D%22")
-        .nth(1)
-        .and_then(|rest| rest.split("%22").next())
+    let first = &items(inputs.get("deploy").unwrap())[0];
+    let description = text(first.get("config").unwrap().get("description").unwrap());
+    let uuid = opentide_compile::splunk::marked_rule(description)
         .unwrap()
         .to_owned();
     let listing = |found: &opentide_cassette::Interaction| {

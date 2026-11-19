@@ -63,16 +63,11 @@ const ADVANCED: &str = "    advanced:
 ";
 
 fn workspace(block: &str) -> Workspace {
-    workspace_with(SPLUNK_TOML, block)
-}
-
-/// A workspace whose `splunk.toml` is *platform*, its one rule *block*.
-fn workspace_with(platform: &str, block: &str) -> Workspace {
     let fs = Arc::new(MemoryFs::new());
     fs.create_dir("/ws/.opentide/configurations/platforms");
     fs.write(
         "/ws/.opentide/configurations/platforms/splunk.toml",
-        platform.to_owned(),
+        SPLUNK_TOML.to_owned(),
     );
     fs.create_dir("/ws/objects/rules");
     fs.write(
@@ -94,59 +89,6 @@ fn workspace_with(platform: &str, block: &str) -> Workspace {
         },
     )
     .unwrap()
-}
-
-/// The writes a deploy of the rule sends to the tenant of *platform*.
-fn writes(platform: &str, block: &str) -> Vec<opentide_compile::deploy::Write> {
-    let workspace = workspace_with(platform, block);
-    let owned = Owned::new(
-        &Vocabularies::bundled(),
-        &workspace.configuration().resolved,
-    );
-    let index = workspace.index().clone();
-    let cx = owned.context(&index);
-    let object = index.get("rule", UUID).unwrap();
-    let rule = Rule::new(object.root().unwrap(), None);
-    let tenant = deploy::tenants(&cx, splunk::PLATFORM)[0];
-    let clock = splunk::Clock {
-        random: (7, 7),
-        now: (4, 3),
-    };
-    splunk::compile(&cx, &rule, tenant, clock).unwrap()
-}
-
-/// The saved search's `search` in each write that sets it.
-fn searches(platform: &str) -> Vec<String> {
-    writes(platform, "")
-        .iter()
-        .filter_map(|write| write.body.get("search").and_then(Json::as_str))
-        .map(str::to_owned)
-        .collect()
-}
-
-/// A tenant with `mdr_mapping_macro = false` gets searches without the
-/// mapping macro, which a plain Splunk does not have (smoke E5, #1657);
-/// the `eval` naming the rule stays. Unset, the macro ends every search,
-/// as in every earlier release.
-#[test]
-fn a_tenant_can_leave_the_mapping_macro_out() {
-    let named = format!(
-        "index=main sourcetype=canarytokens\n| eval MDR_UUID=\"{UUID}\", MDR_status=\"PRODUCTION\""
-    );
-    let by_default = searches(SPLUNK_TOML);
-    assert_eq!(by_default.len(), 2, "{by_default:?}");
-    for search in &by_default {
-        assert_eq!(
-            search,
-            &format!("{named} \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`")
-        );
-    }
-    let off = SPLUNK_TOML.replace(
-        "default_actions = [\"notable\"]\n",
-        "default_actions = [\"notable\"]\nmdr_mapping_macro = false\n",
-    );
-    let without = searches(&off);
-    assert_eq!(without, [named.clone(), named]);
 }
 
 /// The settings update a deploy of the block sends (the second write):
@@ -235,8 +177,12 @@ fn an_advanced_key_wins_over_the_block_and_yields_to_an_overriding_modifier() {
         text(&body, "alert.digest_mode").as_deref(),
         Some("modifier")
     );
-    // `description` is the rule's, written after the table.
-    assert_eq!(text(&body, "description").as_deref(), Some("Canary token"));
+    // `description` is the rule's, written after the table, and names the
+    // rule on its last line (#1657).
+    assert_eq!(
+        text(&body, "description"),
+        Some(format!("Canary token\n\nopentide rule {UUID}"))
+    );
 }
 
 #[test]
@@ -249,4 +195,36 @@ fn without_the_table_nothing_of_it_is_sent() {
     );
     assert_eq!(text(&body, "alert.track").as_deref(), Some("default"));
     assert_eq!(text(&body, "actions").as_deref(), Some("notable"));
+}
+
+/// The saved search is the author's SPL: the block's `query`, trimmed, with
+/// nothing appended (no `MDR_UUID`/`MDR_status` `eval`, no mapping macro),
+/// and opentide sets no `alert.managedBy` (0.28.1 set the rule's
+/// responders there). Its description names the rule (#1657).
+#[test]
+fn the_saved_search_is_the_query_as_written() {
+    let body = settings("");
+    assert_eq!(
+        text(&body, "search").as_deref(),
+        Some("index=main sourcetype=canarytokens")
+    );
+    assert!(!body.contains_key("alert.managedBy"), "{body:?}");
+    let description = text(&body, "description").unwrap();
+    assert_eq!(splunk::marked_rule(&description), Some(UUID));
+}
+
+/// The marker is the description's last line only: a description that
+/// mentions it elsewhere names no rule, and an empty one is the marker.
+#[test]
+fn the_rule_marker_is_the_last_line() {
+    assert_eq!(splunk::described("", UUID), format!("opentide rule {UUID}"));
+    assert_eq!(
+        splunk::marked_rule(&splunk::described("A rule.\n\n", UUID)),
+        Some(UUID)
+    );
+    assert_eq!(
+        splunk::marked_rule(&format!("opentide rule {UUID}\nmore")),
+        None
+    );
+    assert_eq!(splunk::marked_rule("opentide rule "), None);
 }

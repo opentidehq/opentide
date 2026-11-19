@@ -755,8 +755,8 @@ pub fn run(
 
 /// What a dry run says of the Splunk saved searches it cannot see.
 pub const SPLUNK_RENAMED_NOTE: &str = "splunk: once a rule's saved search is written, any other \
-    saved search in the tenant's app whose search names the rule's MDR_UUID (one an earlier name \
-    of the rule left) is deleted";
+    saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` \
+    for the rule (one an earlier name of the rule left) is deleted";
 
 /// A compile failure as the plan's diagnostic (`compile_diagnostics`).
 fn diagnostic(platform: &str, entry: &Json, root: &Path) -> Json {

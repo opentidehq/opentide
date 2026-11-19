@@ -255,7 +255,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "splunk/deploy"
-description = "Splunk: the tide corpus's rule through the deployer: looked up (404), created and its settings set in two updates; deployed again (found, updated); retired (deleted); retired again (absent)."
+description = "Splunk: the tide corpus's rule through the deployer: looked up (404), created and its settings set in two updates; deployed again (found, updated); retired (deleted); retired again (absent). Re-recorded from the Rust connector through the proxy, the fixture's search as written and its description naming the rule (#1657)."
 client = ["{python}", "tests/cassettes/splunk/client.py", "deploy"]
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]
@@ -359,7 +359,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "golden/query-splunk-rule"
-description = "opentide query --rule on Splunk's stand-in, the golden cases' cassette: the saved search a deploy of the rule creates, as a one-shot search (UC-4.4c)."
+description = "opentide query --rule on Splunk's stand-in, the golden cases' cassette: the saved search a deploy of the rule creates, as a one-shot search (UC-4.4c). Re-recorded from the Rust command line through the proxy, the search as written (#1657)."
 client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]
@@ -396,7 +396,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "golden/validate-live-splunk-parsed"
-description = "validate query --live on Splunk's stand-in, the golden cases' cassette: server/info read twice, then the parser accepts the one rule --uuid selects."
+description = "validate query --live on Splunk's stand-in, the golden cases' cassette: server/info read twice, then the parser accepts the one rule --uuid selects. Re-recorded from the Rust command line through the proxy, the search as written (#1657)."
 client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]
@@ -405,7 +405,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "golden/validate-live-splunk"
-description = "validate query --live on Splunk's stand-in, the golden cases' cassette: three rules through the parser: one parsed, one unknown command refused, one the gateway answers for (a check that timed out)."
+description = "validate query --live on Splunk's stand-in, the golden cases' cassette: three rules through the parser: one parsed, one unknown command refused, one the gateway answers for (a check that timed out). Re-recorded from the Rust command line through the proxy, the search as written (#1657)."
 client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "splunk"]
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]
@@ -503,7 +503,7 @@ exit = 1
 
 [[scenario]]
 name = "golden/deploy-splunk"
-description = "deploy on Splunk's stand-in, the golden cases' cassette: a saved search looked up (404), created and its settings set in two updates, then the saved searches naming its MDR_UUID listed (none other to delete); a retired one already absent. Re-recorded from the Rust command line through the proxy (#1657)."
+description = "deploy on Splunk's stand-in, the golden cases' cassette: a saved search looked up (404), created and its settings set in two updates, then the saved searches whose description names the rule listed (none other to delete); a retired one already absent. Re-recorded from the Rust command line through the proxy (#1657)."
 client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform splunk --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]

@@ -85,7 +85,7 @@ Sources: `processes`, `binary`, `network`, `eventlog`, `dns`, `windows_authentic
 `--rule` and `--file` send the query `deploy` would send:
 
 - Sentinel and Defender: the query with the `exclusions` that apply to each tenant, compiled as deploy compiles them; `sent` shows the result.
-- Splunk: the query with the `eval` naming the rule and the mapping macro that deploy appends, unless the tenant sets `mdr_mapping_macro = false` ([Splunk's mapping macro](../usage/concepts/platforms.md#splunks-mapping-macro)); `sent` shows the search without it.
+- Splunk: the block's `query`, as written; deploy appends nothing to it.
 - SentinelOne correlation rules: each sub-query, as its own result labelled `sub-query 1`, `sub-query 2`… The correlation itself is not applied, and each result says so.
 - Carbon Black: the lines of a multiline query joined with spaces.
 - Elastic: the rule's language (`esql`, `eql`, or `kuery`/`lucene` for the other types) and its index or data view. For `threshold`, `new_terms` and `threat_match` rules only the event query runs, and a rule's `filters` are not applied; the result says so in both cases; `machine_learning` rules have no query.

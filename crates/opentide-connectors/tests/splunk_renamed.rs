@@ -1,6 +1,7 @@
 //! A renamed Splunk rule's old saved search (#1657): once the rule is
 //! written under its name now, the saved searches of the tenant's app whose
-//! search names the rule's `MDR_UUID` under another name are deleted. Served
+//! description names the rule (its last line, `opentide rule <uuid>`) under
+//! another name are deleted. Served
 //! by an in-memory Splunk installed as the run's transport, so each test
 //! scripts the saved searches the tenant holds and the calls it refuses. A
 //! test binary of its own: the transport is the process's while installed.
@@ -12,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use opentide_compile::json::{Json, Object};
+use opentide_compile::splunk as splunk_rule;
 use opentide_connectors::connector::{
     BoxFuture, DeployRequest, Deployer, Operation, TenantContext,
 };
@@ -27,7 +29,7 @@ use tokio_util::sync::CancellationToken;
 
 const SAVED: &str = "/servicesNS/nobody/search/saved/searches";
 
-/// The tenant's saved searches (name, search), the calls it saw, and the
+/// The tenant's saved searches (name, description), the calls it saw, and the
 /// (method, name) it refuses with a 500.
 #[derive(Debug, Default)]
 struct State {
@@ -41,14 +43,14 @@ struct FakeSplunk(Arc<Mutex<State>>);
 
 fn feed(entries: &[(&String, &String)]) -> Vec<u8> {
     let mut text = String::new();
-    for (name, search) in entries {
+    for (name, description) in entries {
         let path = format!("{SAVED}/{}", urlencoding(name));
         text.push_str(&format!(
             "<entry><title>{name}</title><link href=\"{path}\" rel=\"alternate\"/>\
-             <content type=\"text/xml\"><s:dict><s:key name=\"search\">{}</s:key>\
+             <content type=\"text/xml\"><s:dict><s:key name=\"description\">{}</s:key>\
              <s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key>\
              </s:dict></s:key></s:dict></content></entry>",
-            search.replace('&', "&amp;").replace('<', "&lt;")
+            description.replace('&', "&amp;").replace('<', "&lt;")
         ));
     }
     let entries = text;
@@ -103,7 +105,9 @@ impl FakeSplunk {
                 let found: Vec<(&String, &String)> = state
                     .saved
                     .iter()
-                    .filter(|(name, search)| name.contains(&needle) || search.contains(&needle))
+                    .filter(|(name, description)| {
+                        name.contains(&needle) || description.contains(&needle)
+                    })
                     .collect();
                 (200, feed(&found))
             }
@@ -113,17 +117,17 @@ impl FakeSplunk {
             },
             (Method::POST, "") => {
                 let name = form.get("name").cloned().unwrap();
-                let search = form.get("search").cloned().unwrap_or_default();
-                state.saved.insert(name.clone(), search);
+                let description = form.get("description").cloned().unwrap_or_default();
+                state.saved.insert(name.clone(), description);
                 let found = state.saved.get_key_value(&name).unwrap();
                 (201, feed(&[found]))
             }
             (Method::POST, name) => {
-                let Some(search) = state.saved.get_mut(name) else {
+                let Some(description) = state.saved.get_mut(name) else {
                     return (404, Vec::new());
                 };
-                if let Some(updated) = form.get("search") {
-                    search.clone_from(updated);
+                if let Some(updated) = form.get("description") {
+                    description.clone_from(updated);
                 }
                 let found = state.saved.get_key_value(name).unwrap();
                 (200, feed(&[found]))
@@ -201,11 +205,10 @@ fn deploy(fake: &FakeSplunk, steps: &[(&str, &str, &str)]) -> Vec<Done> {
         .iter()
         .map(|(name, uuid, query)| {
             let mut settings = Object::new();
+            settings.insert("search".into(), Json::Str((*query).to_owned()));
             settings.insert(
-                "search".into(),
-                Json::Str(format!(
-                    "{query}\n| eval MDR_UUID=\"{uuid}\", MDR_status=\"PRODUCTION\""
-                )),
+                "description".into(),
+                Json::Str(splunk_rule::described("A rule.", uuid)),
             );
             settings.insert("is_scheduled".into(), Json::Int(1));
             let request = DeployRequest::new(
@@ -238,12 +241,7 @@ fn holding(saved: &[(&str, &str)]) -> FakeSplunk {
     let fake = FakeSplunk::default();
     fake.0.lock().unwrap().saved = saved
         .iter()
-        .map(|(name, uuid)| {
-            (
-                (*name).to_owned(),
-                format!("index=main\n| eval MDR_UUID=\"{uuid}\", MDR_status=\"STAGING\""),
-            )
-        })
+        .map(|(name, uuid)| ((*name).to_owned(), splunk_rule::described("Old.", uuid)))
         .collect();
     fake
 }
@@ -346,4 +344,25 @@ fn a_refused_delete_fails_the_rule_and_the_next_deploy_retries() {
         )])]
     );
     assert_eq!(names(&fake), ["New name"]);
+}
+
+/// Only a description whose last line is the rule's marker counts: a saved
+/// search that merely mentions the rule's UUID (a note, another rule's
+/// description) is left alone.
+#[test]
+fn a_saved_search_that_only_mentions_the_uuid_is_kept() {
+    let fake = holding(&[("Old name", A)]);
+    fake.0.lock().unwrap().saved.insert(
+        "Mentions it".to_owned(),
+        format!("Tuned after rule {A} fired.\n\nopentide rule {B}"),
+    );
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(names(&fake), ["Mentions it", "New name"]);
 }

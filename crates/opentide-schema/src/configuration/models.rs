@@ -790,11 +790,6 @@ pub struct SplunkSetup {
     /// a `$NAME` placeholder, which `deploy` does not resolve for it.
     #[serde(default)]
     pub enterprise_security: bool,
-    /// End every search with the `soc_macro_auto_mdr_mapping(MDR_UUID)`
-    /// macro, which must exist on the tenant: `true` (the default) or
-    /// `false`, not a `$NAME` placeholder.
-    #[serde(default = "yes")]
-    pub mdr_mapping_macro: bool,
 }
 tenant!(
     /// `[[tenants]]` for Splunk.

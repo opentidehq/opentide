@@ -932,39 +932,22 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             if (cx.interrupted)() {
                 break 'tenants;
             }
-            let mut outcome = match tenant_text(item, tenant) {
-                Ok(text) => {
-                    let language = item.language.as_deref().unwrap_or(default_language);
-                    let mut request = QueryRequest::new(text.clone(), language, window);
-                    request.limit = usize::try_from(args.limit).unwrap_or(1);
-                    request.index.clone_from(&item.index);
-                    request.data_view.clone_from(&item.data_view);
-                    request.timeout =
-                        Duration::try_from_secs_f64(args.timeout).unwrap_or(Duration::MAX);
-                    let mut outcome = run_on_tenant(platform, tenant, &request, cx, &environment);
-                    if let Some(result) = outcome.result.as_mut()
-                        && result.sent.is_none()
-                        && text != item.text
-                    {
-                        // The tenant's exclusions or mapping macro changed
-                        // the query: show what was sent.
-                        result.sent = Some(text);
-                    }
-                    outcome
-                }
-                // A setting the tenant's search depends on is unusable:
-                // nothing is sent to it.
-                Err(error) => TenantResult {
-                    tenant: tenant.name.clone(),
-                    label: None,
-                    warnings: Vec::new(),
-                    result: None,
-                    error: Some(error),
-                    detail: None,
-                    elapsed_ms: 0,
-                },
-            };
+            let text = item.text_for(&tenant.name);
+            let language = item.language.as_deref().unwrap_or(default_language);
+            let mut request = QueryRequest::new(text.clone(), language, window);
+            request.limit = usize::try_from(args.limit).unwrap_or(1);
+            request.index.clone_from(&item.index);
+            request.data_view.clone_from(&item.data_view);
+            request.timeout = Duration::try_from_secs_f64(args.timeout).unwrap_or(Duration::MAX);
+            let mut outcome = run_on_tenant(platform, tenant, &request, cx, &environment);
             outcome.label.clone_from(&item.label);
+            if let Some(result) = outcome.result.as_mut()
+                && result.sent.is_none()
+                && text != item.text
+            {
+                // The tenant's exclusions changed the query: show what was sent.
+                result.sent = Some(text);
+            }
             if let Some(note) = &item.note {
                 outcome.warnings.insert(0, note.clone());
             }
@@ -1009,25 +992,6 @@ enum Source<'s> {
         name: &'s str,
         queries: Vec<&'s str>,
     },
-}
-
-/// The query `item` sends to `tenant`: with the tenant's exclusions, and a
-/// Splunk search without the mapping macro when the tenant sets
-/// `mdr_mapping_macro = false`, as deploy compiles it. `Err` is a setting
-/// that cannot be read, as deploy refuses it.
-fn tenant_text(item: &RuleQuery, tenant: &Configured) -> Result<String, String> {
-    let text = item.text_for(&tenant.name);
-    if !item.mapping_macro {
-        return Ok(text);
-    }
-    let mut table = opentide_compile::json::Object::new();
-    table.insert(
-        "setup".into(),
-        opentide_compile::Json::Object(tenant.setup.clone()),
-    );
-    let on = opentide_compile::splunk::mapping_macro(&opentide_compile::Json::Object(table))
-        .map_err(|error| error.to_string())?;
-    Ok(opentide_compile::splunk::for_tenant(&text, on).to_owned())
 }
 
 /// The queries of `rule` for `platform`, with an explicit `--language` or
@@ -2175,51 +2139,6 @@ mod tests {
             http_settings("sysdig", Duration::from_secs(5)).timeout,
             Duration::from_secs(30)
         );
-    }
-
-    #[test]
-    fn a_splunk_rule_query_follows_the_tenants_mapping_macro() {
-        // Smoke E5 (#1657): `query --rule` sends the search deploy writes to
-        // each tenant, without the mapping macro where the tenant sets
-        // `mdr_mapping_macro = false`; a value that is no boolean fails the
-        // tenant, as it fails the deploy.
-        use opentide_compile::Json as J;
-        let document = opentide_schema::node::load(
-            "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000aa\n\
-             configurations:\n  splunk:\n    status: STAGING\n    query: index=main\n",
-        )
-        .unwrap();
-        let rule = opentide_compile::Rule::new(document.root().unwrap(), None);
-        let [item] = &crate::commands::query_rule::rule_queries(&rule, "splunk").unwrap()[..]
-        else {
-            panic!("one query");
-        };
-        let tenant = |value: Option<J>| {
-            let mut setup = opentide_compile::json::Object::new();
-            if let Some(value) = value {
-                setup.insert("mdr_mapping_macro".into(), value);
-            }
-            Configured {
-                name: "es".into(),
-                setup,
-            }
-        };
-        let named = "index=main\n| eval MDR_UUID=\"00000000-0000-4000-8000-0000000000aa\", MDR_status=\"STAGING\"";
-        assert_eq!(tenant_text(item, &tenant(None)).unwrap(), item.text);
-        assert!(
-            item.text
-                .ends_with("|`soc_macro_auto_mdr_mapping(MDR_UUID)`")
-        );
-        assert_eq!(
-            tenant_text(item, &tenant(Some(J::Bool(true)))).unwrap(),
-            item.text
-        );
-        assert_eq!(
-            tenant_text(item, &tenant(Some(J::Bool(false)))).unwrap(),
-            named
-        );
-        let refused = tenant_text(item, &tenant(Some(J::Str("no".into())))).unwrap_err();
-        assert!(refused.contains("mdr_mapping_macro"), "{refused}");
     }
 
     #[test]

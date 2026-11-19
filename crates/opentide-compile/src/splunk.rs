@@ -132,7 +132,6 @@ struct Settings {
     skew: f64,
     offset: i64,
     enterprise_security: bool,
-    mapping_macro: bool,
 }
 
 fn strings(value: Option<&Json>) -> Vec<String> {
@@ -173,7 +172,6 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
         skew,
         offset,
         enterprise_security: enterprise_security(tenant)?,
-        mapping_macro: mapping_macro(tenant)?,
     })
 }
 
@@ -204,79 +202,51 @@ fn flag(value: &Json) -> Json {
     Json::Int(i64::from(value.is_true()))
 }
 
-/// The tenant setup key that turns the mapping macro off.
-pub const MAPPING_MACRO_KEY: &str = "mdr_mapping_macro";
-
-/// Whether the tenant's searches end with the mapping macro
-/// ([`MAPPING_SUFFIX`], which must exist on the tenant with one argument,
-/// `MDR_UUID`): its setup's
-/// `mdr_mapping_macro`, `true` when unset (what every earlier release sent).
-/// Any value but a boolean, a `$NAME` placeholder included, is an error
-/// that names the key.
-pub fn mapping_macro(tenant: &Json) -> Result<bool, CompileError> {
-    deploy::setup_switch(tenant, MAPPING_MACRO_KEY, true).map_err(|message| invalid(&message))
-}
-
-/// The search a rule deploys (`create_query`): its query, the `eval` that
-/// names the rule (`MDR_UUID`, `MDR_status`) and, with `mapping_macro`, the
-/// tenant's mapping macro ([`MAPPING_SUFFIX`]).
-pub fn create_query(rule: &Rule, block: &Json, mapping_macro: bool) -> String {
-    let status = block.get("status").map(deploy::text).unwrap_or_default();
-    let spl = block
+/// The search a rule deploys: its block's `query`, trimmed, exactly as
+/// the author wrote it. Nothing is appended (0.28.1 appended an `eval` of
+/// `MDR_UUID` and `MDR_status` and a site's mapping macro).
+pub fn create_query(block: &Json) -> String {
+    block
         .get("query")
         .and_then(Json::as_str)
         .unwrap_or_default()
-        .trim();
-    let mut query = format!(
-        "{spl}\n| eval MDR_UUID=\"{}\", MDR_status=\"{status}\"",
-        rule.uuid
-    );
-    if mapping_macro {
-        query.push_str(MAPPING_SUFFIX);
-    }
-    query
-}
-
-/// What [`create_query`] appends for the mapping macro.
-pub const MAPPING_SUFFIX: &str = " \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`";
-
-/// A search [`create_query`] wrote with the mapping macro, as a tenant
-/// with `mapping_macro` gets it: unchanged, or without the macro.
-pub fn for_tenant(query: &str, mapping_macro: bool) -> &str {
-    if mapping_macro {
-        query
-    } else {
-        query.strip_suffix(MAPPING_SUFFIX).unwrap_or(query)
-    }
-}
-
-/// `response.responders`, or `[deployment] default_responders`
-/// (`resolve_responders`).
-fn responders(cx: &Context<'_>, rule: &Rule) -> String {
-    if let Some(authored) = rule
-        .response()
-        .and_then(|response| response.get("responders"))
-        .filter(|value| !value.is_null())
-    {
-        let text = deploy::text(authored);
-        if !text.trim().is_empty() {
-            return text.trim().to_owned();
-        }
-    }
-    cx.config
-        .get("deployment")
-        .and_then(|deployment| deployment.get("default_responders"))
-        .and_then(Json::as_str)
-        .unwrap_or_default()
+        .trim()
         .to_owned()
 }
 
-/// The saved search's settings from the block (`config_mdr`).
+/// What starts the last line of a saved search's `description`, before the
+/// rule's UUID: how a deploy finds the saved searches an earlier name of the
+/// rule left (#1657), with no state and nothing added to the search.
+pub const RULE_MARKER: &str = "opentide rule ";
+
+/// *description* with the line that names the rule *uuid* after it.
+pub fn described(description: &str, uuid: &str) -> String {
+    let description = description.trim_end();
+    if description.is_empty() {
+        format!("{RULE_MARKER}{uuid}")
+    } else {
+        format!("{description}\n\n{RULE_MARKER}{uuid}")
+    }
+}
+
+/// The rule a saved search's *description* names ([`described`]): the
+/// UUID on its last line, when that line is the marker's.
+pub fn marked_rule(description: &str) -> Option<&str> {
+    description
+        .lines()
+        .last()?
+        .trim()
+        .strip_prefix(RULE_MARKER)
+        .map(str::trim)
+        .filter(|uuid| !uuid.is_empty())
+}
+
+/// The saved search's settings from the block (0.28.1's `config_mdr`).
 #[expect(
     clippy::too_many_lines,
     reason = "one setting after another, in the oracle's order"
 )]
-fn config_mdr(
+fn saved_search_settings(
     cx: &Context<'_>,
     rule: &Rule,
     block: &Json,
@@ -512,7 +482,6 @@ fn config_mdr(
             }
         }
     }
-    config.insert("alert.managedBy".into(), responders(cx, rule).into());
     if let Some(Json::Object(advanced)) = block.get("advanced") {
         for (key, value) in advanced {
             config.insert(key.clone(), saved_search_value(value).into());
@@ -684,10 +653,10 @@ pub fn compile(
         Some(Json::Bool(set)) => *set,
         _ => settings.enterprise_security,
     };
-    let mut config = config_mdr(cx, rule, block, &settings, clock, correlation)?;
+    let mut config = saved_search_settings(cx, rule, block, &settings, clock, correlation)?;
     let mut name = rule.name.trim().to_owned();
     let status = block.get("status").map(deploy::text).unwrap_or_default();
-    let query = create_query(rule, block, settings.mapping_macro);
+    let query = create_query(block);
     if correlation {
         name.push_str(" - Rule");
     }
@@ -713,6 +682,14 @@ pub fn compile(
     for (key, value) in actions {
         first.insert(key, value);
     }
+    let description = first
+        .get("description")
+        .map(deploy::text)
+        .unwrap_or_default();
+    first.insert(
+        "description".into(),
+        described(&description, &crate::rule::canonical_uuid(&rule.uuid)).into(),
+    );
     first.insert("search".into(), query.clone().into());
     let mut second = Object::new();
     for key in ["alert.suppress", "is_scheduled", "actions", "search"] {
@@ -785,48 +762,6 @@ mod tests {
             "{}",
             error.reason
         );
-    }
-
-    /// The mapping macro ends every search unless the tenant sets
-    /// `mdr_mapping_macro = false` (smoke E5, #1657): a plain Splunk has no
-    /// `soc_macro_auto_mdr_mapping` macro and refuses a search that calls
-    /// it. The `eval` naming the rule stays either way; only a boolean is a
-    /// switch.
-    #[test]
-    fn the_mapping_macro_is_on_unless_the_tenant_turns_it_off() {
-        let on = |setup: &str| mapping_macro(&es_tenant(setup)).unwrap();
-        assert!(on(""));
-        assert!(on(r#""mdr_mapping_macro": true"#));
-        assert!(!on(r#""mdr_mapping_macro": false"#));
-        for value in [r#""no""#, "0", r#""$MACRO""#] {
-            let error = mapping_macro(&es_tenant(&format!(r#""mdr_mapping_macro": {value}"#)))
-                .err()
-                .unwrap_or_else(|| panic!("{value} was accepted"));
-            assert!(
-                error.reason.contains("mdr_mapping_macro"),
-                "{}",
-                error.reason
-            );
-        }
-        let document = opentide_schema::node::load(
-            "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000aa\n\
-             configurations:\n  splunk:\n    status: STAGING\n    query: ' index=main '\n",
-        )
-        .unwrap();
-        let rule = Rule::new(document.root().unwrap(), None);
-        let block = rule.block(PLATFORM).unwrap();
-        let named = "index=main\n| eval MDR_UUID=\"00000000-0000-4000-8000-0000000000aa\", \
-                     MDR_status=\"STAGING\"";
-        assert_eq!(
-            create_query(&rule, block, true),
-            format!("{named} \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`")
-        );
-        assert_eq!(create_query(&rule, block, false), named);
-        let full = create_query(&rule, block, true);
-        assert_eq!(for_tenant(&full, true), full);
-        assert_eq!(for_tenant(&full, false), named);
-        let configured = settings(&es_tenant(r#""mdr_mapping_macro": false"#)).unwrap();
-        assert!(!configured.mapping_macro);
     }
 
     #[test]

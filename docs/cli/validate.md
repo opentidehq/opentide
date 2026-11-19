@@ -467,7 +467,7 @@ A query file (`--file hunting/lsass.kql`) holds one query in the language its ex
 `--live` sends the catalogue queries to the platform's tenants, so it needs
 tenant credentials. Each query goes through the platform's
 [`opentide query`](./query.md) runner, as deploy would send it (with the
-tenant's exclusions, Splunk's mapping macro unless the tenant turns it off, each SentinelOne correlation
+tenant's exclusions, Splunk's MDR mapping macro, each SentinelOne correlation
 sub-query on its own), and is checked one way per platform:
 
 | Platform | Live check |

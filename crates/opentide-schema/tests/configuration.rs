@@ -661,29 +661,6 @@ fn splunk_enterprise_security_is_a_boolean_and_never_a_placeholder() {
 }
 
 #[test]
-fn splunk_mdr_mapping_macro_is_a_boolean_and_never_a_placeholder() {
-    // `deploy` reads `mdr_mapping_macro` as a switch (smoke E5, #1657), as
-    // it reads `enterprise_security`: `validate` refuses anything else.
-    let path = "/w/.opentide/configurations/platforms/splunk.toml";
-    let splunk = |value: &str| {
-        format!(
-            "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nport = 8089\n\
-             app = \"search\"\nmdr_mapping_macro = {value}\n"
-        )
-    };
-    for value in ["true", "false"] {
-        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
-        assert!(issues.is_empty(), "{value}: {issues:?}");
-    }
-    for value in ["\"$SPLUNK_MACRO\"", "\"no\"", "0"] {
-        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
-        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
-        let shown = format!("{:?}", issues[0]);
-        assert!(shown.contains("mdr_mapping_macro"), "{value}: {shown}");
-    }
-}
-
-#[test]
 fn splunk_schedule_offset_is_an_integer_and_never_a_placeholder() {
     // `deploy` refuses a `$NAME` placeholder in `schedule_offset` (it
     // resolves placeholders in credentials and `ssl` only), so `validate`

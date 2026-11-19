@@ -84,18 +84,16 @@ impl Reply {
         if found.is_empty() {
             self.http_error()
         } else {
-            with_macro_advice(found)
+            found
         }
     }
 
     /// A searched answer's `ERROR` and `FATAL` messages, masked: a body
     /// that is not JSON is one message holding its text.
     fn search_errors(&self, body: &Object) -> String {
-        with_macro_advice(
-            self.answer
-                .credentials
-                .mask_text(&messages(body, &["ERROR", "FATAL"])),
-        )
+        self.answer
+            .credentials
+            .mask_text(&messages(body, &["ERROR", "FATAL"]))
     }
 
     /// What a failed parser check is (`_validate`), read from the masked
@@ -161,25 +159,8 @@ impl Reply {
         if detail.is_empty() {
             format!("Splunk answered HTTP {status}{reason}")
         } else {
-            with_macro_advice(format!("Splunk answered HTTP {status}{reason}: {detail}"))
+            format!("Splunk answered HTTP {status}{reason}: {detail}")
         }
-    }
-}
-
-/// What to do when Splunk cannot find the mapping macro every search ends
-/// with by default (smoke E5, #1657): define it, or turn it off.
-pub const MAPPING_MACRO_ADVICE: &str = "every search opentide writes ends with the \
-    soc_macro_auto_mdr_mapping(MDR_UUID) macro unless the tenant sets mdr_mapping_macro = false \
-    in [tenants.setup]: define the macro in the tenant's app (one argument, MDR_UUID; for \
-    example `eval opentide_rule_uuid=$MDR_UUID$`) or turn it off";
-
-/// *text*, with [`MAPPING_MACRO_ADVICE`] when it is Splunk saying the
-/// mapping macro does not exist.
-fn with_macro_advice(text: String) -> String {
-    if text.contains("soc_macro_auto_mdr_mapping") && text.contains("cannot be found") {
-        format!("{text} ({MAPPING_MACRO_ADVICE})")
-    } else {
-        text
     }
 }
 
@@ -648,12 +629,13 @@ impl Splunk {
         Ok(())
     }
 
-    /// The saved searches of the tenant's app, but *keep*, whose search
-    /// names the rule *uuid* (`MDR_UUID="<uuid>"`): the ones an earlier
-    /// name of the rule left (#1657). One listing, narrowed by Splunk's
-    /// `search` filter to the UUID, then to the exact `MDR_UUID` and the
-    /// app here; keyed by the rule's own UUID, so another rule's saved search
-    /// is never among them, whatever its name.
+    /// The saved searches of the tenant's app, but *keep*, whose
+    /// description names the rule *uuid* on its last line
+    /// ([`opentide_compile::splunk::described`]): the ones an earlier name of
+    /// the rule left (#1657). One listing, narrowed by Splunk's `search`
+    /// filter to the UUID, then to the exact marker, the app and its
+    /// `nobody` owner here; keyed by the rule's own UUID, so another rule's
+    /// saved search is never among them, whatever its name.
     pub async fn other_saved_searches(
         &self,
         cx: TenantContext<'_>,
@@ -669,16 +651,16 @@ impl Splunk {
         if reply.failed() {
             return Err(refused_call(cx, &reply));
         }
-        let marker = format!("MDR_UUID=\"{uuid}\"");
         let app = Self::app(cx)?;
         Ok(entries(&reply.answer.body)
             .iter()
             .filter(|entry| {
-                entry
-                    .key("search")
-                    .is_some_and(|search| search.contains(&marker))
+                entry.key("description").is_some_and(|description| {
+                    opentide_compile::splunk::marked_rule(&description) == Some(uuid)
+                })
             })
-            .filter(|entry| entry.key("app").is_none_or(|owner| owner == app))
+            .filter(|entry| entry.key("app").is_none_or(|found| found == app))
+            .filter(|entry| entry.key("owner").is_none_or(|owner| owner == "nobody"))
             .filter_map(SavedSearch::from_entry)
             .filter_map(|saved| {
                 saved
@@ -742,14 +724,15 @@ impl Splunk {
         self.apply_saved_search(cx, &request.rule_id, &settings, false)
             .await?;
         // The saved searches an earlier name of the rule left (a rename,
-        // or ` - Rule` added or dropped), found by the rule's UUID in
-        // their search, are deleted once the new one is written (#1657).
+        // or ` - Rule` added or dropped), found by the rule's UUID on the
+        // last line of their description, are deleted once the new one is
+        // written (#1657).
         let mut warnings = Vec::new();
-        if let Some(uuid) = settings
-            .get("search")
-            .map(json_text)
+        let description = settings.get("description").map(json_text);
+        if let Some(uuid) = description
             .as_deref()
-            .and_then(mdr_uuid)
+            .and_then(opentide_compile::splunk::marked_rule)
+            .map(str::to_owned)
         {
             let written = &request.rule_id;
             let others = self
@@ -1066,13 +1049,6 @@ pub const RENAMED_DELETED: &str = "splunk_renamed_search_deleted";
 /// not be looked up or deleted.
 pub const RENAMED_CLEANUP_FAILED: &str = "splunk_renamed_search_not_deleted";
 
-/// The rule `MDR_UUID="<uuid>"` in *search* names (`create_query`'s `eval`).
-fn mdr_uuid(search: &str) -> Option<String> {
-    let (_, rest) = search.split_once("MDR_UUID=\"")?;
-    let (uuid, _) = rest.split_once('"')?;
-    Some(uuid.to_owned()).filter(|uuid| !uuid.is_empty())
-}
-
 /// The rule's failure when the saved search *written* is in place but an old
 /// one (*old*, when known) of the same rule could not be found or deleted:
 /// the next deploy finds it again.
@@ -1357,23 +1333,6 @@ mod tests {
         assert_eq!(
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),
             "1793088000.250"
-        );
-        // A missing mapping macro says what to do (smoke E5, #1657), in a
-        // deploy's refusal and a search's alike; any other error is as is.
-        let missing = b"<response><messages><msg type=\"ERROR\">Error in 'SearchParser': The \
-            search specifies a macro 'soc_macro_auto_mdr_mapping' that cannot be found. Reasons \
-            include: the macro name is misspelled</msg></messages></response>";
-        let refused = reply(400, missing).http_error();
-        assert!(
-            refused.ends_with(&format!("misspelled ({MAPPING_MACRO_ADVICE})")),
-            "{refused}"
-        );
-        assert!(MAPPING_MACRO_ADVICE.contains("mdr_mapping_macro = false"));
-        let searched = br#"{"messages":[{"type":"FATAL","text":"The search specifies a macro 'soc_macro_auto_mdr_mapping' that cannot be found."}]}"#;
-        assert!(
-            reply(400, searched)
-                .search_refusal()
-                .contains(MAPPING_MACRO_ADVICE)
         );
     }
 }

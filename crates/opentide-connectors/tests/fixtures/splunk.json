@@ -3,52 +3,48 @@
     {
       "name": "Splunk SPL Rule",
       "status": "STAGING",
-      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
-      "mdr_config": {
+      "query": "index=main | head 1",
+      "config": {
         "is_scheduled": 1,
         "cron_schedule": "0 * * * *",
         "alert.severity": 5,
-        "alert.managedBy": "",
-        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
       },
       "actions_config": {}
     },
     {
       "name": "Splunk SPL Rule",
       "status": "STAGING",
-      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
-      "mdr_config": {
+      "query": "index=main | head 1",
+      "config": {
         "is_scheduled": 1,
         "cron_schedule": "0 * * * *",
         "alert.severity": 5,
-        "alert.managedBy": "",
-        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
       },
       "actions_config": {}
     },
     {
       "name": "Splunk SPL Rule",
       "status": "REMOVED",
-      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"REMOVED\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
-      "mdr_config": {
+      "query": "index=main | head 1",
+      "config": {
         "is_scheduled": 1,
         "cron_schedule": "0 * * * *",
         "alert.severity": 5,
-        "alert.managedBy": "",
-        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
       },
       "actions_config": {}
     },
     {
       "name": "Splunk SPL Rule",
       "status": "REMOVED",
-      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"REMOVED\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
-      "mdr_config": {
+      "query": "index=main | head 1",
+      "config": {
         "is_scheduled": 1,
         "cron_schedule": "0 * * * *",
         "alert.severity": 5,
-        "alert.managedBy": "",
-        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
       },
       "actions_config": {}
     }
