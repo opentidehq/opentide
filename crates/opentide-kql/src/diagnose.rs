@@ -516,11 +516,13 @@ fn functions(
         };
         let name = name_token.text().to_owned();
         let name_range = range_of(lines, name_token.text_range());
-        let is_plugin = node
-            .parent()
-            .is_some_and(|p| p.kind() == K::EVALUATE_OPERATOR);
+        let parent = node.parent().map(|p| p.kind());
+        let is_plugin = parent == Some(K::EVALUATE_OPERATOR);
         let function = catalog.function(&name);
-        if lets.contains(&name) {
+        if parent == Some(K::QUALIFIED_TABLE) {
+            // A scope of a table in another database (`cluster("c")`,
+            // `database("d")`, `workspace("w")`, `app("a")`), not a function.
+        } else if lets.contains(&name) {
             // A function the query declares with `let`.
         } else if !is_plugin && TYPED_LITERAL_TYPES.contains(&name.as_str()) {
             out.push(Diagnostic::error(
@@ -712,9 +714,15 @@ fn tables(
                     .map(|&i| &nodes[i]);
                 let fuzzy =
                     parent.is_some_and(|p| p.kind() == K::UNION_OPERATOR && is_fuzzy_union(p));
-                if !fuzzy && let Some(name) = name_of(node) {
+                // Another database's table (`database("d").T`) is not this
+                // workspace's to check.
+                let elsewhere = parent.is_some_and(|p| p.kind() == K::QUALIFIED_TABLE);
+                if !fuzzy
+                    && !elsewhere
+                    && let Some(name) = crate::syntax_util::table_token(node)
+                {
                     check_table_named(
-                        name.text(),
+                        crate::schema::unquote_name(name.text()),
                         range_of(lines, node.text_range()),
                         catalog,
                         |name| binds(&scopes, scope, name),
@@ -1031,6 +1039,38 @@ mod tests {
         assert_eq!(
             unknown_tables("union isfuzzy=false Nope1, Sign*"),
             ["Nope1"]
+        );
+    }
+
+    /// A table in another scope (`database("d").T`, `cluster("c").database("d").T`,
+    /// `workspace("w").T`, `app("a").T`) or by quoted name (`['T']`) parses, in
+    /// a query's source, a union leg and a join's side, as Kusto takes it.
+    /// Another database's table is not this workspace's to check; a quoted
+    /// name is checked as its name.
+    #[test]
+    fn qualified_and_quoted_tables_parse() {
+        for source in [
+            "database(\"d\").T | take 1",
+            "cluster(\"c\").database(\"d\").T | take 1",
+            "workspace(\"w\").SecurityEvent | take 1",
+            "app(\"a\").requests | take 1",
+            "union database(\"db\").T1, cluster(\"c\").database(\"db\").T2",
+            "union workspace(\"w\").Sec*, SigninLogs",
+            "cluster(\"c\").database(\"d\").['My Table'] | take 1",
+            "SecurityEvent | join (database(\"d\").T) on Key",
+            "['SecurityEvent'] | take 1",
+            "search in (['SecurityEvent'], Sec*) \"x\"",
+        ] {
+            assert!(
+                codes_of(source).is_empty(),
+                "{source}: {:?}",
+                codes_of(source)
+            );
+        }
+        assert_eq!(unknown_tables("['NopeTable'] | take 1"), ["NopeTable"]);
+        assert_eq!(
+            unknown_tables("union ['SecurityEvent'], ['Nope2']"),
+            ["Nope2"]
         );
     }
 

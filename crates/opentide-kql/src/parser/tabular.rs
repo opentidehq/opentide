@@ -88,15 +88,58 @@ fn source(p: &mut P<'_>) {
             p.done(m, K::MATERIALIZE_EXPRESSION);
         }
         K::SEARCH_KW | K::FIND_KW => search_source(p),
-        _ if p.name_at(0) && next == K::L_PAREN => {
+        _ if p.name_at(0) && next == K::L_PAREN => call_or_qualified_table(p),
+        _ => table_name(p),
+    }
+}
+
+/// A table by name, quoted (`['My Table']`) or not, or "expected a name".
+fn table_name(p: &mut P<'_>) {
+    let m = p.start();
+    if p.at(K::L_BRACKET) && p.nth(1) == K::STRING && p.nth(2) == K::R_BRACKET {
+        // `.['My Table']` after a scope: the lexer reads a `[` after a dot
+        // as an index, so the quoted name comes as its three tokens.
+        p.bump();
+        p.bump();
+        p.bump();
+    } else if !p.eat(K::QUOTED_IDENT) {
+        p.expect_name();
+    }
+    p.done(m, K::TABLE_REF);
+}
+
+/// A call (`f(x)`), or a table in another scope: one or more scope calls
+/// (`cluster("c")`, `database("d")`, `workspace("w")`, `app("a")`) joined by
+/// dots, then the table's name or pattern (`database("d").SecurityEvent`,
+/// `cluster("c").database("d").['T']`, `workspace("w").Sec*`).
+fn call_or_qualified_table(p: &mut P<'_>) {
+    let is_scope = |p: &P<'_>| {
+        p.name_at(0)
+            && p.nth(1) == K::L_PAREN
+            && ["cluster", "database", "workspace", "app"]
+                .iter()
+                .any(|scope| p.0.nth_text(0).eq_ignore_ascii_case(scope))
+    };
+    if !is_scope(p) {
+        expr::function_call(p);
+        return;
+    }
+    let call = expr::function_call(p);
+    if !p.at(K::DOT) {
+        return;
+    }
+    let m = p.precede(call);
+    while p.eat(K::DOT) {
+        if is_scope(p) {
             expr::function_call(p);
-        }
-        _ => {
-            let m = p.start();
-            p.expect_name();
-            p.done(m, K::TABLE_REF);
+        } else {
+            if !table_run(p, Some(K::TABLE_REF)) {
+                table_name(p);
+            }
+            break;
         }
     }
+    p.done(m, K::QUALIFIED_TABLE);
 }
 
 /// One operator after a pipe.
@@ -521,11 +564,9 @@ fn union_leg(p: &mut P<'_>) {
         p.expect(K::R_PAREN);
         p.done(m, K::PAREN_TABULAR);
     } else if p.name_at(0) && p.nth(1) == K::L_PAREN {
-        expr::function_call(p);
+        call_or_qualified_table(p);
     } else if !table_run(p, Some(K::TABLE_REF)) {
-        let m = p.start();
-        p.expect_name();
-        p.done(m, K::TABLE_REF);
+        table_name(p);
     }
 }
 
@@ -575,7 +616,7 @@ fn table_run(p: &mut P<'_>, plain: Option<K>) -> bool {
 
 /// One table of a search's `in` list: a name, or a pattern.
 fn search_table(p: &mut P<'_>) {
-    if !table_run(p, None) {
+    if !table_run(p, None) && !p.eat(K::QUOTED_IDENT) {
         p.expect_name();
     }
 }
