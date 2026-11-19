@@ -1927,7 +1927,7 @@ impl DatatableColumn {
     }
 }
 
-/// `OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'string')`
+/// `OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OptionValue {
     syntax: SyntaxNode,
@@ -1955,7 +1955,7 @@ impl OptionValue {
     pub fn value(&self) -> Option<SyntaxToken> {
         support::token_in(
             &self.syntax,
-            &[T![ident], T![boolean], T![number], T![string]],
+            &[T![ident], T![boolean], T![number], T![timespan], T![string]],
         )
     }
 }
@@ -2992,7 +2992,7 @@ impl DistinctOperator {
     }
 }
 
-/// `RenderOperator = 'render' kind:'ident' NamedArgument* RenderWith?`
+/// `RenderOperator = 'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderOperator {
     syntax: SyntaxNode,
@@ -3019,6 +3019,10 @@ impl RenderOperator {
     /// The token child.
     pub fn kind(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![ident])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
     }
     /// The `NamedArgument` children.
     pub fn named_arguments(&self) -> AstChildren<NamedArgument> {
@@ -6279,7 +6283,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::OPTION_VALUE as u16,
         name: "OptionValue",
-        text: "sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'string')",
+        text: "sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')",
         rule: Rule::Seq(&[
             Rule::Opt(&Rule::Alt(&[
                 Rule::Kind(T![-] as u16),
@@ -6289,6 +6293,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(T![ident] as u16),
                 Rule::Kind(T![boolean] as u16),
                 Rule::Kind(T![number] as u16),
+                Rule::Kind(T![timespan] as u16),
                 Rule::Kind(T![string] as u16),
             ]),
         ]),
@@ -7288,11 +7293,14 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::RENDER_OPERATOR as u16,
         name: "RenderOperator",
-        text: "'render' kind:'ident' NamedArgument* RenderWith?",
+        text: "'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?",
         rule: Rule::Seq(&[
             Rule::Kind(T![render] as u16),
             Rule::Kind(T![ident] as u16),
-            Rule::Rep(&Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16)),
+            Rule::Rep(&Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+                Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
+            ])),
             Rule::Opt(&Rule::Kind(SyntaxKind::RENDER_WITH as u16)),
         ]),
     },

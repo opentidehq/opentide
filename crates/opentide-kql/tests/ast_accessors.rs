@@ -200,7 +200,7 @@ accessors! {
         EvaluateOperator => [evaluate_token, hint_options, plugin],
         SortOperator => [name, by_token, sort_items, comma_token],
         DistinctOperator => [distinct_token, hint_options, star_arg, column_items, comma_token],
-        RenderOperator => [render_token, kind, named_arguments, render_with],
+        RenderOperator => [render_token, kind, operator_options, named_arguments, render_with],
         TopNestedOperator => [top_nested_clauses, comma_token],
         SampleDistinctOperator => [keyword, hint_options, count, of_token, column],
         ForkOperator => [fork_token, fork_branches],

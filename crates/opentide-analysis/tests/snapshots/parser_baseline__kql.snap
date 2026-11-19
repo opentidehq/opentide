@@ -13591,7 +13591,7 @@ kql_render_not_valid warning 0:75-0:121 `render` is not valid in detection queri
 73..74 operator.pipe
 75..81 keyword
 82..91 variable
-92..96 variable
+92..96 keyword
 96..97 operator
 97..104 variable
 105..110 variable

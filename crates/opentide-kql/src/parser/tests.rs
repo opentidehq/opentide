@@ -508,6 +508,10 @@ fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
         "declare query_parameters(p:string = \"x\")",
         "let x = 1",
         "let x = 1;\nlet y = 2",
+        "T | render timechart kind=-1 accumulate=true title=a.b[0]",
+        "T | render timechart title=strcat(\"a\", \"b\") kind=1h",
+        "T | reduce by x with threshold=-1h",
+        "T | join kind=1h (U) on x",
     ] {
         assert_eq!(errors(source), Vec::<String>::new(), "{source}");
     }
@@ -521,6 +525,13 @@ fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
         "declare query_parameters(p:string = \"x\")\nT",
         "let x = 1\nT",
         "let f = () { let y = 1 y };\nT",
+        "T | render timechart title=\"a\" + \"b\"",
+        "T | render timechart kind=1+2",
+        "T | render timechart kind=strcat(\"a\")",
+        "T | render timechart accumulate=f(1)",
+        "T | render timechart title=-1",
+        "T | render timechart title=a==b",
+        "T | render timechart title=a has \"b\"",
     ] {
         assert!(!errors(source).is_empty(), "{source} parses");
     }
