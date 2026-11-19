@@ -148,10 +148,6 @@ impl<'i> P<'i> {
         self.0.current_range()
     }
 
-    pub(crate) fn nth_range(&self, n: usize) -> Option<rowan::TextRange> {
-        self.0.nth_range(n)
-    }
-
     /// Notes a quoted name right after an expression: the old grammar read
     /// it as an index ([`parse`]).
     pub(crate) fn quoted_name_after_value(&mut self) {
@@ -225,6 +221,12 @@ impl<'i> P<'i> {
 
     pub(crate) fn start(&mut self) -> Marker {
         self.0.start()
+    }
+
+    /// Lets go of a node `start` opened: what it took stays in the node
+    /// around it.
+    pub(crate) fn abandon(&mut self, marker: Marker) {
+        marker.abandon(&mut self.0);
     }
 
     pub(crate) fn enter(&mut self) -> bool {

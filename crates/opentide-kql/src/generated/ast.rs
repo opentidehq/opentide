@@ -1676,7 +1676,7 @@ impl SearchSource {
     }
 }
 
-/// `TablePattern = pieces:('ident' | 'number' | '*')*`
+/// `TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TablePattern {
     syntax: SyntaxNode,
@@ -1698,7 +1698,7 @@ impl AstNode for TablePattern {
 impl TablePattern {
     /// The token children, in order.
     pub fn pieces(&self) -> Vec<SyntaxToken> {
-        support::tokens_in(&self.syntax, &[T![ident], T![number], T![*]])
+        support::tokens_in(&self.syntax, &[T![ident], T![number], T![timespan], T![*]])
     }
 }
 
@@ -5741,10 +5741,11 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::TABLE_PATTERN as u16,
         name: "TablePattern",
-        text: "pieces:('ident' | 'number' | '*')*",
+        text: "pieces:('ident' | 'number' | 'timespan' | '*')*",
         rule: Rule::Rep(&Rule::Alt(&[
             Rule::Kind(T![ident] as u16),
             Rule::Kind(T![number] as u16),
+            Rule::Kind(T![timespan] as u16),
             Rule::Kind(T![*] as u16),
         ])),
     },

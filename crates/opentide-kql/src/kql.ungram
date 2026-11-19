@@ -65,7 +65,7 @@ TabularPrimary =
 
 TableRef = table:'ident'
 // A union leg's or a search's tables by pattern: `Sec*`, `*Events`, `*`.
-TablePattern = pieces:('ident' | 'number' | '*')*
+TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*
 ParenTabular = '(' TabularExpression ')'
 
 // `search "x"`, `search in (A, B) Account == "a"`, `find in (T) where x`.

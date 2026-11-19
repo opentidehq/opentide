@@ -522,48 +522,60 @@ fn union_leg(p: &mut P<'_>) {
         p.done(m, K::PAREN_TABULAR);
     } else if p.name_at(0) && p.nth(1) == K::L_PAREN {
         expr::function_call(p);
-    } else if !table_pattern(p) {
+    } else if !table_run(p, Some(K::TABLE_REF)) {
         let m = p.start();
         p.expect_name();
         p.done(m, K::TABLE_REF);
     }
 }
 
-/// A table pattern (`Sec*`, `*Events`, `Sec*Events`, `*`): a run of touching
-/// words, numbers and stars that starts with a word or a star and holds a
-/// star, as Kusto takes in a union and a search's `in` list. Returns false,
-/// consuming nothing, at anything else: a name stays a name.
-fn table_pattern(p: &mut P<'_>) -> bool {
-    let touching = |p: &P<'_>, n: usize| {
-        let (Some(a), Some(b)) = (p.nth_range(n), p.nth_range(n + 1)) else {
-            return false;
-        };
-        a.end() == b.start() && (matches!(p.nth(n + 1), K::STAR | K::NUMBER) || p.name_at(n + 1))
-    };
+/// A table or a table pattern (`Sec*`, `*Events`, `Sec*Events`, `*`): a run
+/// of touching words, numbers, timespans and stars that starts with a word or
+/// a star, consumed as it is read, as [`column_ref`] reads a column pattern.
+/// With a star it is a pattern, as Kusto takes in a union and a search's `in`
+/// list; without one it is a single name, closed as `plain`, or left a bare
+/// token when `plain` is `None`. Returns false, consuming nothing, at
+/// anything else.
+fn table_run(p: &mut P<'_>, plain: Option<K>) -> bool {
     if !(p.at(K::STAR) || p.name_at(0)) {
         return false;
     }
-    let mut last = 0;
-    while touching(p, last) {
-        last += 1;
-    }
-    if !(0..=last).any(|n| p.nth(n) == K::STAR) {
-        return false;
-    }
     let m = p.start();
-    for _ in 0..=last {
+    let mut star = false;
+    let mut end = None;
+    loop {
+        let range = p.current_range();
+        if end.is_some()
+            && (range.map(|r| r.start()) != end
+                || !(matches!(p.current(), K::STAR | K::NUMBER | K::TIMESPAN) || p.name_at(0)))
+        {
+            break;
+        }
+        end = range.map(|r| r.end());
         match p.current() {
-            K::STAR | K::NUMBER => p.bump(),
+            K::STAR => {
+                star = true;
+                p.bump();
+            }
+            K::NUMBER | K::TIMESPAN => p.bump(),
             _ => p.bump_as(K::IDENT),
         }
     }
-    p.done(m, K::TABLE_PATTERN);
+    match (star, plain) {
+        (true, _) => {
+            p.done(m, K::TABLE_PATTERN);
+        }
+        (false, Some(kind)) => {
+            p.done(m, kind);
+        }
+        (false, None) => p.abandon(m),
+    }
     true
 }
 
 /// One table of a search's `in` list: a name, or a pattern.
 fn search_table(p: &mut P<'_>) {
-    if !table_pattern(p) {
+    if !table_run(p, None) {
         p.expect_name();
     }
 }
