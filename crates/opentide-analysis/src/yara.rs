@@ -176,6 +176,75 @@ mod tests {
         assert!(rename(LanguageId::TideYaml, text, at, "shell").is_err());
     }
 
+    /// Completion in a decomposed `condition` while it is typed, as in the
+    /// same rule in a `.yar` file (#1685): at the end of a line, after a
+    /// blank the block drops (`$cmd ` lists operators, not `$cmd` again), and
+    /// on a new line of the block.
+    #[test]
+    fn completion_in_a_decomposed_condition_matches_a_yar_file() {
+        let host = crate::MemoryWorkspace::default();
+        let labels = |items: Vec<crate::CompletionItem>| -> Vec<String> {
+            items.into_iter().map(|item| item.label).collect()
+        };
+        let head = RULE.replace("        $cmd and #cmd > 1\n", "");
+        let raw_head = "rule a {\n  strings:\n    $cmd = \"cmd.exe\" ascii\n  condition:\n";
+        for typed in ["$cmd and #cmd > 1 and ", "$cmd ", "$cmd", "$cmd and\n"] {
+            let tide = format!("{head}        {}", typed.replace('\n', "\n        "));
+            let raw = format!("{raw_head}    {}", typed.replace('\n', "\n    "));
+            let got = labels(crate::completions(
+                &host,
+                LanguageId::TideYaml,
+                &tide,
+                tide.len(),
+            ));
+            let want = labels(crate::completions(&host, LanguageId::Yara, &raw, raw.len()));
+            assert!(!want.is_empty(), "{typed:?}");
+            assert_eq!(got, want, "{typed:?}");
+        }
+    }
+
+    /// The end of a value deploy quotes into the rule's `meta` (`os:
+    /// Windows`, a tag, the UUID) is not a line of YARA (#1702 review):
+    /// completion and hover there are the Tide object's, also after a blank
+    /// typed into a value of several words.
+    #[test]
+    fn a_meta_value_end_is_tide_not_yara() {
+        let host = crate::MemoryWorkspace::default();
+        let labels = |items: Vec<crate::CompletionItem>| -> Vec<String> {
+            items.into_iter().map(|item| item.label).collect()
+        };
+        let typed = RULE.replace("os: Windows\n", "os: Windows \n");
+        for (text, value) in [
+            (RULE, "os: Windows"),
+            (typed.as_str(), "os: Windows "),
+            (RULE, "uuid: 00000000-0000-4000-8003-000000000001"),
+        ] {
+            let at = text.find(value).unwrap() + value.len();
+            assert!(
+                opentide_tide::injection_typed_at(text, at).is_none(),
+                "{value:?}"
+            );
+            assert!(
+                opentide_tide::injection_at_offset(text, at).is_none(),
+                "{value:?}"
+            );
+            let workspace = crate::workspace_index(&host);
+            assert_eq!(
+                labels(crate::completions(&host, LanguageId::TideYaml, text, at)),
+                labels(opentide_tide::completions_tide(text, at, &workspace)),
+                "{value:?}"
+            );
+            assert_eq!(
+                crate::hover(&host, LanguageId::TideYaml, text, at),
+                opentide_tide::hover_tide(text, at, &workspace),
+                "{value:?}"
+            );
+        }
+        // The YARA lines still are.
+        let at = RULE.find("#cmd > 1").unwrap() + "#cmd > 1".len();
+        assert!(opentide_tide::injection_typed_at(RULE, at).is_some());
+    }
+
     #[test]
     fn raw_files_format_and_fold() {
         assert_eq!(
