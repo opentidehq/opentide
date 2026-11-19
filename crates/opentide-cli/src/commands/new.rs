@@ -617,7 +617,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     let generated = missing(&paths);
     let mut steps = Vec::new();
     if !generated.is_empty() {
-        let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version);
+        let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version, false);
         steps = run.steps;
         if let Some((phase, detail)) = run.failed {
             return super::generate::phase_failed(&command, &phase, &detail, Vec::new(), steps);

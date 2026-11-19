@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
+use opentide_compile::generate::docs::flavor::Flavor;
 use opentide_compile::generate::docs::render::Pages;
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
@@ -28,7 +29,7 @@ use opentide_compile::strategy::Statuses;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, OsFs, Workspace};
 
-use super::{Report, open, placement};
+use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
@@ -195,7 +196,7 @@ pub(crate) fn phase_failed(
 /// The workspace a generate command reads, or the report of why it cannot.
 fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    open(options).map_err(|message| Box::new(Report::error(command, message)))
+    super::open_for(command, options)
 }
 
 /// The workspace a generate command reads, opened as the first work of its
@@ -210,11 +211,64 @@ fn workspace_in_step(
     cx: &Context<'_>,
 ) -> Result<Workspace, Box<Report>> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    open(options).map_err(|detail| {
+    super::open_for(command, options).map_err(|opened| {
+        let detail = opened.outcome.message.clone();
         let ran = run_phase(step, cx.cwd, cx.cwd, |_| Err(detail));
         let detail = ran.error.clone().unwrap_or_default();
-        Box::new(phase_failed(command, phase, &detail, extra, vec![ran.step]))
+        let mut report = phase_failed(command, phase, &detail, extra, vec![ran.step]);
+        // A TOML file that does not parse keeps its code and its place.
+        if let Some(failure) = &opened.outcome.failure
+            && failure.code == super::CONFIG_PARSE
+            && let Some(own) = report.outcome.failure.as_mut()
+        {
+            own.code.clone_from(&failure.code);
+            report.outcome.data.extend(
+                opened
+                    .outcome
+                    .data
+                    .iter()
+                    .filter(|(key, _)| key == "diagnostics")
+                    .cloned(),
+            );
+        }
+        Box::new(report)
     })
+}
+
+/// The object files the index could not load, as a phase that logged an
+/// error and carried on reports them (`generate.md`, "When a phase fails"):
+/// `logged an error: malformed_object_yaml (path=…, error=…)`, or
+/// `logged 3 errors, first: …`. A phase that reads the registry fails on
+/// them (D1: `generate` skipped a broken rule and exited 0).
+fn logged_errors(workspace: &Workspace) -> Result<(), String> {
+    let errors = &workspace.index().load_errors;
+    let Some(first) = errors.first() else {
+        return Ok(());
+    };
+    let root = workspace.root();
+    let path = first
+        .path
+        .strip_prefix(root)
+        .unwrap_or(&first.path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let event = if first.code == "yaml_parse" {
+        "malformed_object_yaml"
+    } else {
+        first.code
+    };
+    let first = format!("{event} (path={path}, error={})", first.error);
+    Err(if errors.len() == 1 {
+        format!("logged an error: {first}")
+    } else {
+        format!("logged {} errors, first: {first}", errors.len())
+    })
+}
+
+/// Whether the phase `name` reads the object registry: a malformed object
+/// file fails it ([`logged_errors`]). `snippets` reads the templates only.
+fn reads_registry(name: &str) -> bool {
+    matches!(name, "docs" | "exports" | "schemas" | "templates" | "vocabs")
 }
 
 /// Writes `outputs`, as one phase's work.
@@ -263,7 +317,8 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
                 }
             }
         }
-        write(changes, &outputs)
+        write(changes, &outputs)?;
+        logged_errors(&workspace)
     });
     match phase.error {
         Some(detail) => phase_failed(
@@ -282,6 +337,10 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
         }
     }
 }
+
+/// The values `--flavor` takes, as the help spells them; `azure-devops`
+/// is read as `azure_devops` too.
+const FLAVORS: [&str; 4] = ["generic", "github", "gitlab", "azure_devops"];
 
 /// The page family a `generate docs` subcommand writes, or the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -469,6 +528,22 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         failure.argument = Some("--changed".into());
         return Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
     }
+    // A flavour no forge has is a usage error before anything is read (D8:
+    // it failed the docs phase with `command_failed`, exit 1).
+    if let Some(flavor) = args.flavor.as_deref().filter(|name| !name.is_empty())
+        && Flavor::from_name(flavor).is_none()
+    {
+        return Report::usage(
+            &command,
+            format!(
+                "Unknown docs flavor `{flavor}`: choose generic, github, gitlab or azure_devops"
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "--flavor",
+            Some(flavor),
+            &FLAVORS,
+        );
+    }
     let workspace = match workspace_in_step(&command, "docs", "docs", Vec::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
@@ -476,7 +551,8 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
     let root = workspace.root().to_path_buf();
     let mut run = DocsRun::default();
     let phase = run_phase("docs", cx.cwd, &root, |changes| {
-        docs_phase(args, &workspace, cx, &mut run, changes)
+        docs_phase(args, &workspace, cx, &mut run, changes)?;
+        logged_errors(&workspace)
     });
     let warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
     if let Some(detail) = phase.error {
@@ -1235,12 +1311,16 @@ pub(crate) fn phase_outputs(
 }
 
 /// Runs `phases` (each `schemas`, `templates`, `vocabs` or `snippets`) on `workspace`
-/// in order, each as a checklist step, until one fails.
+/// in order, each as a checklist step, until one fails. With `loaded`, a
+/// phase that reads the registry also fails on an object file the index
+/// could not load ([`logged_errors`]): `opentide generate` does, `opentide
+/// new` (which only fills in a missing template) does not.
 pub fn run_phases(
     phases: &[String],
     workspace: &Workspace,
     cwd: &Path,
     version: &str,
+    loaded: bool,
 ) -> PhasesRun {
     let root = workspace.root().to_path_buf();
     let mut steps = Vec::new();
@@ -1252,7 +1332,12 @@ pub fn run_phases(
             phase.as_str()
         };
         let ran = run_phase(name, cwd, &root, |changes| {
-            write(changes, &phase_outputs(phase, workspace, &root, version)?)
+            write(changes, &phase_outputs(phase, workspace, &root, version)?)?;
+            if loaded && reads_registry(phase) {
+                logged_errors(workspace)
+            } else {
+                Ok(())
+            }
         });
         steps.push(ran.step);
         if let Some(detail) = ran.error {
@@ -1300,7 +1385,8 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let mut steps = Vec::new();
     let mut run = DocsRun::default();
     let docs = run_phase("docs", cx.cwd, &root, |changes| {
-        docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes)
+        docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes)?;
+        logged_errors(&workspace)
     });
     steps.push(docs.step);
     if let Some(detail) = docs.error {
@@ -1319,7 +1405,8 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
                 }
             }
         }
-        write(changes, &outputs)
+        write(changes, &outputs)?;
+        logged_errors(&workspace)
     });
     steps.push(exports.step);
     if let Some(detail) = exports.error {
@@ -1329,7 +1416,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
         .iter()
         .map(|phase| (*phase).to_owned())
         .collect();
-    let run = run_phases(&named, &workspace, cx.cwd, version);
+    let run = run_phases(&named, &workspace, cx.cwd, version, true);
     steps.extend(run.steps);
     if let Some((phase, detail)) = run.failed {
         return phase_failed(command, &phase, &detail, Vec::new(), steps);
@@ -1394,7 +1481,7 @@ fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
-    let run = run_phases(names, &workspace, cx.cwd, version);
+    let run = run_phases(names, &workspace, cx.cwd, version, true);
     if let Some((phase, detail)) = run.failed {
         return phase_failed(command, &phase, &detail, Vec::new(), run.steps);
     }
@@ -1790,6 +1877,99 @@ mod tests {
         let written = walk(&absolute);
         assert!(written > 1);
         assert_eq!(report.steps[0].count, Some(written));
+    }
+
+    #[test]
+    fn a_malformed_object_file_fails_the_first_phase_that_reads_the_registry() {
+        // D1 (smoke test): `generate` skipped a rule file that does not
+        // parse, said "Generated 63 files" and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::write(root.join("objects/rules/broken.yaml"), "name: [\n").unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let phase_of = |report: &Report| {
+            report
+                .outcome
+                .data
+                .iter()
+                .find(|(key, _)| key == "phase")
+                .map(|(_, value)| value.clone())
+        };
+        let all = phases(&[], &cx, "0.0.0");
+        assert_eq!(all.outcome.exit_code, 1, "{}", all.outcome.message);
+        assert!(
+            all.outcome.message.starts_with(
+                "docs: logged an error: malformed_object_yaml (path=objects/rules/broken.yaml, error="
+            ),
+            "{}",
+            all.outcome.message
+        );
+        assert_eq!(phase_of(&all), Some(Json::str("docs")));
+        let named: Vec<String> = ["schemas", "templates", "vocabs", "snippets"]
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        let editor = phases(&named, &cx, "0.0.0");
+        assert_eq!(editor.outcome.exit_code, 1, "{}", editor.outcome.message);
+        assert_eq!(phase_of(&editor), Some(Json::str("schemas")));
+        assert_eq!(editor.steps.len(), 1, "it stops at schemas");
+        for report in [docs(&DocsArgs::default(), &cx), exports(None, &cx)] {
+            assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
+        }
+        let templates = phases(&["templates".to_owned()], &cx, "0.0.0");
+        assert_eq!(phase_of(&templates), Some(Json::str("templates")));
+        // A second broken file: counted, the first named.
+        std::fs::write(root.join("objects/rules/also.yaml"), "a: b: c\n").unwrap();
+        let two = phases(&["schemas".to_owned()], &cx, "0.0.0");
+        assert!(
+            two.outcome.message.starts_with("schemas: logged 2 errors, first: "),
+            "{}",
+            two.outcome.message
+        );
+    }
+
+    #[test]
+    fn an_unknown_docs_flavor_is_a_usage_error() {
+        // D8 (smoke test): `generate docs --flavor bogus` failed the phase,
+        // exit 1 `command_failed`, naming `azure-devops`.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects")).unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let args = DocsArgs {
+            flavor: Some("gitlabb".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&args, &cx);
+        assert_eq!(report.outcome.exit_code, 2);
+        let failure = report.outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, "usage_invalid_choice");
+        assert_eq!(failure.argument.as_deref(), Some("--flavor"));
+        assert_eq!(failure.suggestion.as_deref(), Some("gitlab"));
+        assert!(report.outcome.message.contains("azure_devops"));
+        assert!(!root.join("docs").exists(), "nothing is written");
+        for name in ["azure-devops", "azure_devops", "github"] {
+            let args = DocsArgs {
+                flavor: Some(name.into()),
+                ..DocsArgs::default()
+            };
+            assert_eq!(docs(&args, &cx).outcome.exit_code, 0, "{name}");
+        }
     }
 
     /// The files under `dir`, at any depth.

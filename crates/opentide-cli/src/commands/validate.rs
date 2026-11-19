@@ -438,9 +438,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let format = args.format;
     let queries = args.queries.unwrap_or_default();
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
-    let mut ws = match super::open(root_options) {
+    let mut ws = match super::open_for(COMMAND, root_options) {
         Ok(ws) => ws,
-        Err(message) => return Report::error(COMMAND, message),
+        Err(report) => return *report,
     };
     let cve = match online_cve(args, &ws, cx) {
         Ok(cve) => cve,
