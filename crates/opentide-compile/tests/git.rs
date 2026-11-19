@@ -1147,8 +1147,10 @@ fn the_first_commit_added_every_file() {
     let first = commit(&root, "first");
     let every = ["objects/rules/r1.yaml", "objects/rules/sub/r2.yaml"];
     assert_eq!(changed(&root, &[]).unwrap(), every);
-    // GitHub's first push names an all-zero `before`.
-    let event = root.join("event.json");
+    // GitHub's first push names an all-zero `before` (the event file sits
+    // outside the checkout, as the runner's does).
+    let events = tempfile::tempdir().unwrap();
+    let event = events.path().join("event.json");
     std::fs::write(&event, format!("{{\"before\": \"{}\"}}", "0".repeat(40))).unwrap();
     let event = event.to_string_lossy().into_owned();
     let github = [
@@ -1172,4 +1174,35 @@ fn the_first_commit_added_every_file() {
     ];
     assert_eq!(changed(&root, &azure).unwrap(), every);
     assert_eq!(through_head(&root, &github, None).unwrap(), every);
+    // The run's commit decides, not HEAD: a push of the second commit, read
+    // from a checkout of the first, diffs it from its own parent.
+    write(&root, "objects/rules/r3.yaml", "c: 1\n");
+    let second = commit(&root, "second");
+    git_cmd(&root, &["checkout", "-q", "--detach", &first]);
+    let pushed = [("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", second.as_str())];
+    assert_eq!(changed(&root, &pushed).unwrap(), ["objects/rules/r3.yaml"]);
+}
+
+/// A CI push from a checkout whose HEAD names no commit fails with the
+/// documented message, not with the run's commit that is not there.
+#[test]
+fn a_ci_push_without_a_commit_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    let sha = "1".repeat(40);
+    for env in [
+        vec![("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", sha.as_str())],
+        vec![("CI", "true"), ("CI_COMMIT_SHA", sha.as_str())],
+        vec![("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", sha.as_str())],
+    ] {
+        assert_eq!(
+            changed(&root, &env).unwrap_err(),
+            GitError::Failed(format!(
+                "The git repository at {} has no commits yet",
+                root.display()
+            )),
+            "{env:?}"
+        );
+    }
 }

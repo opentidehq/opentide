@@ -557,10 +557,12 @@ pub fn changed_paths(
         Ci::GitLab => ("CI_COMMIT_SHA", set(env, "CI_COMMIT_SHA")),
         _ => ("BUILD_SOURCEVERSION", set(env, "BUILD_SOURCEVERSION")),
     };
+    // A push diffs from HEAD's first parent when its event names no base: a
+    // checkout without a commit has none, which a CI run never is.
     let first_parent = || -> Result<Option<ObjectId>, GitError> {
         match head {
             Some(head) => production_base(&repo, head),
-            None => Ok(None),
+            None => Err(no_commits_yet(&searched)),
         }
     };
     let base: Option<String> = match (platform, source) {
@@ -675,8 +677,9 @@ pub fn changed_paths(
     changed_between(&repo, Some(source_commit), latest)
 }
 
-/// A push whose commit has no parent (the repository's first): every file
-/// of `latest`, the run's commit named by `tip_name`, is new.
+/// A push whose HEAD has no parent: the files `latest`, the run's commit
+/// named by `tip_name`, changed against its own first parent, or, when it
+/// has none (the repository's first commit), every file it holds.
 fn root_changes(
     repo: &Repo,
     latest: Option<&str>,
@@ -687,9 +690,18 @@ fn root_changes(
             "{tip_name} is required to compute the changed rules"
         ))
     })?;
-    let head = commit_id(repo, latest)
+    let commit = commit_id(repo, latest)
         .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
-    changed_between(repo, None, head)
+    changed_between(repo, production_base(repo, commit)?, commit)
+}
+
+/// The failure of a CI checkout at `searched` whose HEAD names no commit.
+fn no_commits_yet(searched: &Path) -> GitError {
+    let top = discover(searched).map_or_else(|| searched.to_path_buf(), |(top, _)| top);
+    failed(format!(
+        "The git repository at {} has no commits yet",
+        dunce::simplified(&top).display()
+    ))
 }
 
 // --- the push's diff up to HEAD (`changed_through_head`) -------------------
