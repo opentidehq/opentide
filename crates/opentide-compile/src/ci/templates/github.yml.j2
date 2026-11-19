@@ -15,10 +15,10 @@
     python-version: "[[ python ]]"
 - run: [[ pip ]]
 {%- endmacro %}
-{% macro secrets() -%}
+{% macro secrets(names) -%}
 env:
-{% for name in credentials %}
-  [[ name ]]: ${{ secrets.[[ name ]] }}
+{% for name in names %}
+  [[ name | scalar(2) ]]: ${{ secrets.[[ name ]] }}
 {% endfor %}
 {%- endmacro %}
 {% macro reviewed(name, commands, cond=none) -%}
@@ -53,7 +53,7 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    [[ secrets() | indent(4) ]]
+    [[ secrets(credentials) | indent(4) ]]
     steps:
       [[ setup(full_history=(queries or lint_changed)) | indent(6) ]]
 {% for command in validate_sarif %}
@@ -104,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: generate
     if: ${{ [[ premerge ]] && [[ not_skipped ]] }}
-    [[ secrets() | indent(4) ]]
+    [[ secrets(credentials) | indent(4) ]]
     steps:
       [[ setup(full_history=true) | indent(6) ]]
       [[ reviewed("Deploy staging to reviewed tenants", staging_commands) | indent(6) ]]
@@ -170,7 +170,7 @@ jobs:
     if: ${{ [[ production ]] && [[ not_skipped ]] }}
     permissions:
       contents: write
-    [[ secrets() | indent(4) ]]
+    [[ secrets(credentials) | indent(4) ]]
     steps:
       [[ setup(full_history=true) | indent(6) ]]
       - name: Use the default branch's deployment state
@@ -192,6 +192,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [generate, deploy_production]
     if: ${{ !cancelled() && needs.generate.result == 'success' && [[ production ]] && [[ not_skipped ]] }}
+{% if sharing_credentials %}
+    [[ secrets(sharing_credentials) | indent(4) ]]
+{% endif %}
     steps:
       [[ setup(ref=branch) | indent(6) ]]
       # API key environment variables named in sharing.toml come from the CI secret store.

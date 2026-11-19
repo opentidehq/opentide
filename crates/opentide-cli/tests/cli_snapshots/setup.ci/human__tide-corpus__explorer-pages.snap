@@ -1,5 +1,6 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
+assertion_line: 875
 description: setup.ci/human/tide-corpus/explorer-pages
 ---
 args: opentide setup ci github --default-branch main --explorer-pages --yes
@@ -27,6 +28,9 @@ exit: 0
 #   CBC_ORG_KEY
 #   CBC_TOKEN
 #   CBC_URL
+#   CROWDSTRIKE_CLIENT_ID
+#   CROWDSTRIKE_CLIENT_SECRET
+#   ELASTIC_API_KEY
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
 #   EXABEAM_CLIENT_ID
@@ -72,6 +76,9 @@ jobs:
       CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
       CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
       CBC_URL: ${{ secrets.CBC_URL }}
+      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
+      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
+      ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
       EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
@@ -170,6 +177,9 @@ jobs:
       CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
       CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
       CBC_URL: ${{ secrets.CBC_URL }}
+      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
+      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
+      ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
       EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
@@ -315,6 +325,9 @@ jobs:
       CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
       CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
       CBC_URL: ${{ secrets.CBC_URL }}
+      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
+      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
+      ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
       EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}

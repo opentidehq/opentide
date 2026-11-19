@@ -1,5 +1,6 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
+assertion_line: 875
 description: setup.ci/agent/tide-corpus/gitlab
 ---
 args: opentide setup ci gitlab --yes
@@ -23,6 +24,9 @@ exit: 0
 #   CBC_ORG_KEY
 #   CBC_TOKEN
 #   CBC_URL
+#   CROWDSTRIKE_CLIENT_ID
+#   CROWDSTRIKE_CLIENT_SECRET
+#   ELASTIC_API_KEY
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
 #   EXABEAM_CLIENT_ID
