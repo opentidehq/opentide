@@ -88,7 +88,7 @@ fn source(p: &mut P<'_>) {
             p.done(m, K::MATERIALIZE_EXPRESSION);
         }
         K::SEARCH_KW | K::FIND_KW => search_source(p),
-        _ if p.name_at(0) && next == K::L_PAREN => call_or_qualified_table(p),
+        _ if p.name_at(0) && next == K::L_PAREN => call_or_qualified_table(p, false),
         _ => table_name(p),
     }
 }
@@ -96,7 +96,18 @@ fn source(p: &mut P<'_>) {
 /// A table by name, quoted (`['My Table']`) or not, or "expected a name".
 fn table_name(p: &mut P<'_>) {
     let m = p.start();
-    if p.at(K::L_BRACKET) && p.nth(1) == K::STRING && p.nth(2) == K::R_BRACKET {
+    let touching = |p: &P<'_>, n: usize| {
+        p.0.nth_range(n)
+            .zip(p.0.nth_range(n + 1))
+            .is_some_and(|(a, b)| a.end() == b.start())
+    };
+    if p.at(K::L_BRACKET)
+        && p.nth(1) == K::STRING
+        && p.nth(2) == K::R_BRACKET
+        && touching(p, 0)
+        && touching(p, 1)
+        && p.0.nth_text(1).starts_with(['\'', '"'])
+    {
         // `.['My Table']` after a scope: the lexer reads a `[` after a dot
         // as an index, so the quoted name comes as its three tokens.
         p.bump();
@@ -108,36 +119,47 @@ fn table_name(p: &mut P<'_>) {
     p.done(m, K::TABLE_REF);
 }
 
-/// A call (`f(x)`), or a table in another scope: one or more scope calls
-/// (`cluster("c")`, `database("d")`, `workspace("w")`, `app("a")`) joined by
-/// dots, then the table's name or pattern (`database("d").SecurityEvent`,
-/// `cluster("c").database("d").['T']`, `workspace("w").Sec*`).
-fn call_or_qualified_table(p: &mut P<'_>) {
-    let is_scope = |p: &P<'_>| {
-        p.name_at(0)
-            && p.nth(1) == K::L_PAREN
-            && ["cluster", "database", "workspace", "app"]
-                .iter()
-                .any(|scope| p.0.nth_text(0).eq_ignore_ascii_case(scope))
+/// A call (`f(x)`), or a table in another scope: a scope call, then a
+/// dot and the table's name (`database("d").SecurityEvent`,
+/// `workspace("w").['T']`, `app("a").requests`), with `cluster("c")`
+/// before a `database(...)` (`cluster("c").database("d").T`). A pattern
+/// (`database("d").Sec*`) only where a union takes one (`patterns`). Kusto's
+/// scope functions are spelled in lower case; a scope call with no dot after
+/// it stays a call, and one with a dot but no table after it is an error.
+fn call_or_qualified_table(p: &mut P<'_>, patterns: bool) {
+    let scope = |p: &P<'_>| {
+        if !(p.name_at(0) && p.nth(1) == K::L_PAREN) {
+            return None;
+        }
+        ["cluster", "database", "workspace", "app"]
+            .into_iter()
+            .find(|scope| p.0.nth_text(0) == *scope)
     };
-    if !is_scope(p) {
+    let Some(first) = scope(p) else {
         expr::function_call(p);
         return;
-    }
+    };
     let call = expr::function_call(p);
     if !p.at(K::DOT) {
         return;
     }
     let m = p.precede(call);
-    while p.eat(K::DOT) {
-        if is_scope(p) {
+    p.bump();
+    // `cluster(...)` names the cluster a `database(...)` is in.
+    if first == "cluster" {
+        if scope(p) == Some("database") {
             expr::function_call(p);
         } else {
-            if !table_run(p, Some(K::TABLE_REF)) {
-                table_name(p);
-            }
-            break;
+            p.error("expected `database(...)` after `cluster(...)`");
         }
+        if !p.eat(K::DOT) {
+            p.error("expected `.` and a table name");
+            p.done(m, K::QUALIFIED_TABLE);
+            return;
+        }
+    }
+    if !(patterns && table_run(p, Some(K::TABLE_REF))) {
+        table_name(p);
     }
     p.done(m, K::QUALIFIED_TABLE);
 }
@@ -564,7 +586,7 @@ fn union_leg(p: &mut P<'_>) {
         p.expect(K::R_PAREN);
         p.done(m, K::PAREN_TABULAR);
     } else if p.name_at(0) && p.nth(1) == K::L_PAREN {
-        call_or_qualified_table(p);
+        call_or_qualified_table(p, true);
     } else if !table_run(p, Some(K::TABLE_REF)) {
         table_name(p);
     }

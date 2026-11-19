@@ -1072,6 +1072,24 @@ mod tests {
             unknown_tables("union ['SecurityEvent'], ['Nope2']"),
             ["Nope2"]
         );
+        // Not tables Kusto takes: a scope with no table, scopes out of order
+        // or in another case, a pattern outside a union, a quoted name that
+        // is not a plain string in touching brackets.
+        for broken in [
+            "cluster(\"c\").database(\"d\")",
+            "cluster(\"c\").database(\"d\") | take 1",
+            "cluster(\"c\").T",
+            "cluster(\"c\").cluster(\"d\").T",
+            "workspace(\"w\").database(\"d\").T",
+            "DATABASE(\"d\").T",
+            "database(\"d\").Sec* | take 1",
+            "database(\"d\").[ 'T' ]",
+            "database(\"d\").[@'T']",
+        ] {
+            assert_eq!(codes_of(broken), [codes::KQL_PARSE_ERROR], "{broken}");
+        }
+        // A scope call with no dot after it is still a call.
+        assert!(codes_of("print database(\"d\")").is_empty());
     }
 
     fn codes_of(source: &str) -> Vec<String> {
