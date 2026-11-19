@@ -442,3 +442,51 @@ fn parse_kv_takes_its_keys_and_options() {
     assert!(!errors("T | parse-kv Text as (a long)").is_empty());
     assert!(!errors("T | parse-kv Text with (pair_delimiter)").is_empty());
 }
+
+// The operator forms Kusto.Language 12.4.1 accepts that were syntax errors.
+snapshots! {
+    serialize_assignment: "T | serialize rn = row_number(), x";
+    render_with_properties: "T | render timechart with (title=\"x\", ycolumns=a, b, ymin=-1)";
+    as_hint_materialized: "T | as hint.materialized=true T2 | take 1";
+    top_hitters_of_by: "T | top-hitters 5 of x by y";
+    reduce_kind_by_with: "T | reduce kind=source by x with threshold=0.1, characters=\"ab\"";
+    declare_query_parameters: "declare query_parameters(p:string = \"x\", n:int);\nlet y = 1;\nT | where c == p";
+}
+
+#[test]
+fn operator_forms_parse_and_their_broken_twins_do_not() {
+    for source in [
+        "T | serialize",
+        "T | as T2",
+        "T | render barchart",
+        "T | render barchart with ()",
+        "T | reduce by x",
+        "T | top-hitters 5 of x",
+        "T | reduce by x with",
+        "T | reduce by x with kind=source, characters=\"a\", threshold=0.2",
+        "T | render barchart with (ycolumns=a, b, title=\"x\", series=c, d)",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "T | top-hitters 5",
+        "T | top-hitters 5 of x by",
+        "T | reduce x",
+        "T | reduce by x with threshold=0.1,",
+        "T | render barchart with (title=\"x\",)",
+        "T | render barchart with title=\"x\"",
+        "T | as hint.materialized=true",
+        "declare query_parameters(p:string)\nT",
+        "declare query_parameters(p);\nT",
+        "declare query_parameters();\nT",
+        "T | reduce foo=1 by x",
+        "T | reduce Kind=source by x",
+        "T | reduce by x with foo=1",
+        "T | reduce by x with Threshold=0.1",
+        "T | render barchart with (a)",
+        "T | render barchart with (title=\"x\", a)",
+        "T | as hint.progressive_fetch=true T2",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}
