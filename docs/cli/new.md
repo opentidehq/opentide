@@ -25,7 +25,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | Option | Purpose |
 |--------|---------|
 | `--name` | The object's `name`. The filename is its slug, or follows the `style` set in `lint.toml` (see below) |
-| `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`) |
+| `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`). opentide reads a family's objects from that folder only: a file written anywhere else (a folder below it, or outside the workspace) gets a warning that opentide will not index, validate, share, document or deploy it, and no `opentide validate --file` next step |
 | `--platform` | `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `sysdig`, `bitdefender`, `graylog`, `exabeam` or `google_secops` |
 | `--objective`, `--threat` | The UUID of an object already in the catalogue. A malformed UUID exits `2` with `usage_invalid_value`; one no object carries exits `2` with `reference_not_found` |
 
@@ -60,7 +60,7 @@ Every line holding a placeholder ends in `# opentide:placeholder`. The file vali
 
 ## Prompts
 
-At an interactive terminal in `human` mode, `new` asks for a missing `--name` (`Threat name`, `Objective name`, `Rule name`), and for `new rule`, which enabled platforms to add blocks for (`Platform blocks`; space selects, enter for none). An empty name exits `2` with `usage_needs_input`; Ctrl-C at a question stops the run (exit `130`). Everywhere else it never prompts: with `--json`, without a terminal, or under a coding agent, a missing `--name` exits `2` with `failure.code` `usage_needs_input` and `failure.argument` `--name`. `--platform`, `--objective` and `--threat` are optional and never block.
+At an interactive terminal in `human` mode, `new` asks for a missing `--name` (`Threat name`, `Objective name`, `Rule name`), and for `new rule`, which enabled platforms to add blocks for (`Platform blocks`; space selects, enter for none). An empty answer is refused and the question asked again; Ctrl-C at a question stops the run (exit `130`). Everywhere else it never prompts: with `--json`, without a terminal, or under a coding agent, a missing `--name` exits `2` with `failure.code` `usage_needs_input` and `failure.argument` `--name`. A `--name` that is empty or only spaces is never asked for again: it exits `2` with `usage_invalid_value` (`--name cannot be empty`). `--platform`, `--objective` and `--threat` are optional and never block.
 
 ## Output
 

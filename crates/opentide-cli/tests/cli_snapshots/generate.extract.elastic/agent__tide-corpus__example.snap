@@ -8,7 +8,7 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
+error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before an extract.
 ✗ import from elastic · <SECONDS>
 error: No Elastic tenant is configured for Kibana space 'default'
 tip: add --json for machine-readable output

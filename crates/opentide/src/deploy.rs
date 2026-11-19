@@ -186,10 +186,14 @@ impl Workspace {
     ///
     /// # Errors
     ///
-    /// [`Error::Usage`] when `options` has no strategy (`usage_missing_option`)
-    /// or a strategy the configured statuses refuse (`usage_invalid_choice`).
+    /// [`Error::Usage`] when `options` has no strategy (`usage_missing_option`),
+    /// or a strategy the configured statuses refuse or a `platform` that
+    /// `opentide deploy --platform` refuses (`usage_invalid_choice`).
     pub fn deploy_plan(&self, options: &DeployPlanOptions) -> Result<DeployPlan, Error> {
         let ws = self.inner();
+        if let Some(platform) = &options.platform {
+            crate::workspace::known_platform(platform)?;
+        }
         let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
         let request = Request {
             strategies: options

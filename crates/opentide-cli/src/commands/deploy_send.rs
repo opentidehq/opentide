@@ -350,7 +350,7 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
         set(&mut result, "warnings", Json::Array(all));
     }
     if !skipped.is_empty() {
-        report_skipped(&mut result, &skipped, &workspace);
+        report_skipped(&mut result, &skipped, &workspace, &args.strategies);
     }
     let skipped_run = text_of(&result, "status").as_deref() == Some("skipped");
     if skipped_run
@@ -425,9 +425,20 @@ fn report_skipped(
     result: &mut Vec<(String, Json)>,
     skipped: &[plan::Skipped],
     workspace: &Workspace,
+    strategies: &[String],
 ) {
     let (rules, in_status) = left_out(skipped);
-    let runs = run_strategies(result);
+    let owned = opentide_compile::Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    // The result's `strategies`, else `--strategy`'s: a run that planned
+    // nothing for its `--platform` names the platform instead (#1662, D11).
+    let mut runs = run_strategies(result);
+    if runs.is_empty() {
+        runs = strategy::parse_strategies(strategies, &owned.statuses, "--strategy")
+            .unwrap_or_default();
+    }
     let run_names = if runs.is_empty() {
         "this run".to_owned()
     } else {
@@ -451,10 +462,6 @@ fn report_skipped(
     };
     summary.insert("skipped".into(), Json::from(rules));
     set(result, "_summary", Json::Object(summary));
-    let owned = opentide_compile::Owned::new(
-        &Vocabularies::bundled(),
-        &workspace.configuration().resolved,
-    );
     let deployable = if runs.is_empty() {
         Vec::new()
     } else {
@@ -707,7 +714,15 @@ fn deploy(
         }
     };
     plan_warnings.extend(selection.warnings.iter().cloned());
-    plan_skipped.extend(selection.skipped.iter().cloned());
+    // `--platform`: another platform's blocks are not this run's to count
+    // as left out (#1662, D11).
+    plan_skipped.extend(
+        selection
+            .skipped
+            .iter()
+            .filter(|entry| args.platform.as_ref().is_none_or(|p| p == &entry.platform))
+            .cloned(),
+    );
     // The commits changed no rule file: say so, rather than blame a status.
     let unchanged = !selecting && !args.all && scope.files.is_empty() && scope.nested.is_empty();
     let refused = !selection.refused.is_empty();
@@ -823,7 +838,7 @@ fn deploy(
                     .unwrap_or_default(),
             })
             .collect();
-        log_unset(&configured, cx.env);
+        log_unset(&configured, cx.env, "a deploy");
         let tenants: Vec<plan::Tenant> = tables
             .iter()
             .map(|table| plan::Tenant::from_json(table))
@@ -1443,6 +1458,17 @@ impl<'l> DeployLog<'l> {
         }
         self.print(&result);
         self.results.push(result);
+    }
+
+    /// The plan's action for a rule on a tenant (else on its platform).
+    fn planned_action(&self, platform: &str, tenant: Option<&str>, id: &str) -> Option<&str> {
+        [tenant.map(str::to_owned), None]
+            .into_iter()
+            .find_map(|tenant| {
+                self.actions
+                    .get(&(platform.to_owned(), tenant, id.to_owned()))
+            })
+            .map(String::as_str)
     }
 
     /// A rule planning refused before anything was sent (`refused`).
@@ -3333,6 +3359,11 @@ impl Sender<'_, '_> {
         match deployed {
             Ok(done) => {
                 self.elastic_warnings(rule, &done);
+                // An `upsert` reads as what Kibana did: a create, or an
+                // update (#1662, E10).
+                if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert") {
+                    result.action = elastic_done_action(&done).map(str::to_owned);
+                }
                 log.finished(result);
             }
             // The rule itself failed: the other rules go on.
@@ -4753,6 +4784,18 @@ fn operation_of(action: &Planned, strategy: StatusStrategy) -> (Operation, Optio
         Planned::Update(id) => (Operation::Update, Some(id.as_str())),
         Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
     }
+}
+
+/// What an Elastic deploy did to a rule, as a plan's action: `create` for a
+/// rule Kibana did not have, `update` for one it replaced or recreated.
+fn elastic_done_action(done: &DeployOutcome) -> Option<&'static str> {
+    done.events
+        .iter()
+        .find_map(|event| match event.name.as_str() {
+            "elastic_rule_created" => Some("create"),
+            "elastic_rule_updated" | "elastic_rule_recreated" => Some("update"),
+            _ => None,
+        })
 }
 
 /// What an Elastic tenant's rules share: its `setup`, whether it turns

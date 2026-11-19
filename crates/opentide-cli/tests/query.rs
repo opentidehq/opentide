@@ -412,8 +412,8 @@ fn an_unset_key_fails_its_tenant_without_a_request() {
     let document = ran.document();
     assert_eq!(
         document["results"][0]["error"],
-        "Elastic credentials are unset ($GOLDEN_ES_KEY). Set those environment variables \
-         before a live check."
+        "Elastic credentials are unset ($GOLDEN_ES_KEY). Set those environment variables, \
+         then run the command again."
     );
     assert!(seen.lock().unwrap().is_empty());
     assert!(

@@ -13,7 +13,7 @@
 //! use opentide::connectors::{self, ConnectOptions, Connection, QueryRequest, TimeWindow, Timestamp};
 //!
 //! let ws = opentide::Workspace::open("path/to/workspace", &opentide::Options::default())?;
-//! let tenant = &ws.tenants("splunk")[0];
+//! let tenant = &ws.tenants("splunk")?[0];
 //! let connection = Connection::open(tenant, &ConnectOptions::default())?;
 //! let request = QueryRequest::new("index=main | head 5", "spl", TimeWindow::check(Timestamp::now()));
 //! let outcome = connectors::block_on(connection.query(&request))??;
@@ -47,13 +47,28 @@ pub use jiff::Timestamp;
 pub use opentide_compile::Json;
 pub use opentide_connectors::connector::{
     DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployError, DeployEvent, DeployFailure, DeployOutcome,
-    DeployRequest, DeployScope, DeployWarning, LiveCheck, Operation, QueryColumn, QueryOutcome,
-    QueryRequest, Row, TimeWindow,
+    DeployRequest, DeployScope, DeployWarning, LiveCheck, MAX_QUERY_LIMIT, Operation, QueryColumn,
+    QueryOutcome, QueryRequest, Row, TimeWindow,
 };
 
 /// The code of an operation the platform's connector does not have (a live
 /// check on CrowdStrike), or of a platform without a connector.
 pub const OPERATION_UNSUPPORTED: &str = "operation_unsupported";
+
+/// Refuses a `limit` outside 1 to [`MAX_QUERY_LIMIT`], as `opentide query
+/// --limit` refuses it: before anything is sent.
+fn check_limit(request: &QueryRequest) -> Result<(), Error> {
+    if (1..=MAX_QUERY_LIMIT).contains(&request.limit) {
+        return Ok(());
+    }
+    Err(Error::Usage {
+        code: "usage_invalid_value",
+        message: format!(
+            "limit must be between 1 and {MAX_QUERY_LIMIT}, not {}",
+            request.limit
+        ),
+    })
+}
 
 /// The platforms with a connector, in the order opentide lists them.
 ///
@@ -176,20 +191,29 @@ impl Workspace {
     ///         "enabled = true\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\nurl = \"$SPLUNK_URL\"\n",
     ///     )],
     /// )?;
-    /// let tenants = ws.tenants("splunk");
+    /// let tenants = ws.tenants("splunk")?;
     /// assert_eq!(tenants[0].name(), "prod");
+    /// assert!(ws.tenants("elastic")?.is_empty());
+    /// assert_eq!(ws.tenants("splunck").unwrap_err().code(), "usage_invalid_choice");
     /// # Ok::<(), opentide::Error>(())
     /// ```
-    pub fn tenants(&self, platform: &str) -> Vec<TenantConfig> {
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Usage`] (`usage_invalid_choice`) for a `platform` the command
+    /// line's `--platform` refuses: neither built in nor a loaded platform
+    /// plugin's.
+    pub fn tenants(&self, platform: &str) -> Result<Vec<TenantConfig>, Error> {
+        crate::workspace::known_platform(platform)?;
         let config = opentide_compile::Json::from_node(&self.inner().configuration().resolved.tree);
-        opentide_connectors::tenant::configured(&config, platform)
+        Ok(opentide_connectors::tenant::configured(&config, platform)
             .into_iter()
             .map(|(name, setup)| TenantConfig {
                 platform: platform.to_owned(),
                 name,
                 setup,
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -424,8 +448,12 @@ impl Connection {
     /// query (its message, the vendor's in `detail`), `query_timed_out`,
     /// `tenant_unreachable`, `authentication_failed`, `interrupted`, ...
     /// (the table on [`Error`]); `operation_unsupported` on a platform
-    /// without a query runner (Sysdig).
+    /// without a query runner (Sysdig). [`Error::Usage`]
+    /// (`usage_invalid_value`) when `request.limit` is not between 1 and
+    /// [`MAX_QUERY_LIMIT`], as the command line's `--limit` refuses it;
+    /// nothing is sent then.
     pub async fn query(&self, request: &QueryRequest) -> Result<QueryOutcome, Error> {
+        check_limit(request)?;
         let runner = self
             .connector()
             .and_then(Platform::query_runner)
@@ -445,7 +473,10 @@ impl Connection {
     /// query, and the other codes of [`Connection::query`];
     /// `operation_unsupported` on a platform that cannot check a query live
     /// (CrowdStrike, HarfangLab, Sysdig): never a faked verdict.
+    /// [`Error::Usage`] (`usage_invalid_value`) for a `limit` outside 1 to
+    /// [`MAX_QUERY_LIMIT`], before anything is sent.
     pub async fn validate_query(&self, request: &QueryRequest) -> Result<LiveCheck, Error> {
+        check_limit(request)?;
         let validator = self
             .connector()
             .and_then(Platform::live_validator)

@@ -67,14 +67,27 @@ impl Workspace {
     ///
     /// # Errors
     ///
-    /// [`Error::Io`] when `path` cannot be made absolute;
-    /// [`Error::Configuration`] when the configuration does not resolve.
+    /// [`Error::Usage`] (`usage_invalid_value`) when `path` is not a folder,
+    /// as the command line's `--repo` refuses it; [`Error::Io`] when `path`
+    /// cannot be made absolute; [`Error::Configuration`] when the
+    /// configuration does not resolve.
     pub fn open(path: impl AsRef<Path>, options: &Options) -> Result<Self, Error> {
         let path = path.as_ref();
         let absolute = std::path::absolute(path).map_err(|error| Error::Io {
             path: path.to_path_buf(),
             message: error.to_string(),
         })?;
+        if !absolute.is_dir() {
+            let problem = if absolute.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Err(Error::Usage {
+                code: "usage_invalid_value",
+                message: format!("{} {problem}", path.display()),
+            });
+        }
         let cwd = match &options.cwd {
             Some(cwd) => std::path::absolute(cwd).map_err(|error| Error::Io {
                 path: cwd.clone(),
@@ -140,6 +153,11 @@ impl Workspace {
     /// nothing else failed, and reports what the platform's offline compiler
     /// refuses (`compile_missing_field`, ...), as `opentide validate` does.
     ///
+    /// An option the command line refuses before it runs (an object type
+    /// that is not `rule`, `threat` or `objective`) checks nothing: the
+    /// result's `refused` holds its usage failure (`usage_invalid_choice`),
+    /// and its exit code is 2, as `validate --type` exits.
+    ///
     /// ```
     /// use opentide::validate::QueriesMode;
     ///
@@ -151,6 +169,10 @@ impl Workspace {
     /// let validation = ws.validate(&options);
     /// assert!(validation.failed);
     /// assert!(validation.report.issues.iter().any(|d| d.code == "invalid_uuid"));
+    ///
+    /// let refused = ws.validate(&opentide::ValidateOptions::default().object_type("rules"));
+    /// assert_eq!(refused.exit_code(), 2);
+    /// assert_eq!(refused.refused.unwrap().code, "usage_invalid_choice");
     /// # Ok::<(), opentide::Error>(())
     /// ```
     pub fn validate(&self, options: &ValidateOptions) -> Validation {
@@ -395,6 +417,37 @@ impl ValidateOptions {
         self.queries = queries;
         self
     }
+}
+
+/// Refuses `platform` unless the command line's `--platform` takes it: a
+/// built-in platform, or (with the `plugins` feature) one a loaded platform
+/// plugin adds. A plan or a tenant lookup for any other name would find
+/// nothing and say so only by being empty.
+#[cfg_attr(
+    all(not(feature = "compile"), not(test)),
+    expect(dead_code, reason = "deploy_plan's and tenants'")
+)]
+pub(crate) fn known_platform(platform: &str) -> Result<(), Error> {
+    if opentide_schema::platforms::get(platform).is_some() {
+        return Ok(());
+    }
+    #[cfg(feature = "plugins")]
+    if crate::plugins::configurations()
+        .is_some_and(|plugins| plugins.platforms().iter().any(|name| name == platform))
+    {
+        return Ok(());
+    }
+    let known: Vec<&str> = opentide_schema::platforms::PLATFORMS
+        .iter()
+        .map(|known| known.id)
+        .collect();
+    Err(Error::Usage {
+        code: "usage_invalid_choice",
+        message: format!(
+            "platform: {platform:?} is not a platform: choose {}, or a platform plugin's",
+            known.join(", ")
+        ),
+    })
 }
 
 /// What [`Workspace::lint`] runs: `opentide lint`'s options, without `--fix`

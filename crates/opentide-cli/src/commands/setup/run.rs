@@ -99,7 +99,7 @@ impl Step {
                 stage,
                 root,
                 hosts,
-                Some(&files::McpServer::probe()),
+                Some(&files::McpServer::probe(cx.env, cx.cwd)),
             )),
             Step::Vscode(options) => {
                 super::vscode::run(stage, root, *options, cx).map(|done| done.result)
@@ -1425,7 +1425,7 @@ fn run_steps(
             &mut recorder.stage,
             &root,
             &args.mcp,
-            Some(&files::McpServer::probe()),
+            Some(&files::McpServer::probe(cx.env, cx.cwd)),
         );
         recorder.record("mcp", result).map_err(failed)?;
     }

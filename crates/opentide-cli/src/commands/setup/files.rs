@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::jsonc;
 use super::stage::Stage;
+use crate::env::Env;
 use crate::json::{Json, Object};
 
 /// A step's result: its members, in order.
@@ -358,6 +359,15 @@ pub fn platforms(
     } else {
         "Platform configuration files already present"
     };
+    // The README `setup repo` wrote lists the platforms it enabled: list
+    // these too, unless the section is no longer the one setup wrote.
+    let readme_path = target.join("README.md");
+    if let Ok(Some(current)) = read_text(stage, &readme_path)
+        && let Some(listed) = readme_with_platforms(&current, chosen)
+    {
+        stage.write(&readme_path, listed);
+        updated.push("README.md".to_owned());
+    }
     let mut result = StepResult::new([
         ("message", Json::str(message)),
         ("path", Json::str(shown(target))),
@@ -371,6 +381,45 @@ pub fn platforms(
         result.set("skipped", strings(&skipped));
     }
     Ok(result)
+}
+
+/// The line a README lists no platform with.
+fn readme_no_platform() -> String {
+    format!("- (configure platforms in {OPENTIDE_DIR}/configurations/)")
+}
+
+/// `text`, a README, with each of `chosen` added to the `## Platforms` list
+/// [`readme`] writes; `None` when nothing is missing or the section is not
+/// that list (a heading other than the last, a line other than `- <platform>`).
+fn readme_with_platforms(text: &str, chosen: &[String]) -> Option<String> {
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let heading = format!("{newline}## Platforms{newline}{newline}");
+    let at = text.rfind(&heading)? + heading.len();
+    let section = &text[at..];
+    let empty = readme_no_platform();
+    let mut listed: Vec<String> = Vec::new();
+    for line in section.split(newline).filter(|line| !line.is_empty()) {
+        if line == empty {
+            continue;
+        }
+        let platform = line.strip_prefix("- ")?;
+        opentide_schema::platforms::get(platform)?;
+        listed.push(platform.to_owned());
+    }
+    let before = listed.len();
+    for platform in chosen {
+        if opentide_schema::platforms::get(platform).is_some() && !listed.contains(platform) {
+            listed.push(platform.clone());
+        }
+    }
+    if listed.len() == before {
+        return None;
+    }
+    let lines: Vec<String> = listed
+        .iter()
+        .map(|platform| format!("- {platform}"))
+        .collect();
+    Some(format!("{}{}{newline}", &text[..at], lines.join(newline)))
 }
 
 // ---------------------------------------------------------------- repo
@@ -435,7 +484,7 @@ fn readme(target: &Path, options: &RepoOptions) -> String {
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| folder_name(target));
     let platforms = if options.platforms.is_empty() {
-        format!("- (configure platforms in {OPENTIDE_DIR}/configurations/)")
+        readme_no_platform()
     } else {
         options
             .platforms
@@ -708,16 +757,37 @@ pub struct McpServer {
     pub missing: Vec<String>,
     /// The command that repairs the installation.
     pub hint: String,
+    /// `opentide`, the command every configuration runs, is not on `PATH`.
+    pub not_on_path: bool,
 }
 
 impl McpServer {
     /// The server `opentide mcp start` runs: this program's own
     /// ([`crate::mcp`]), compiled in with everything it serves, so it starts
     /// wherever this program does and needs nothing installed beside it
-    /// (UC-6.0d, #841).
-    pub fn probe() -> McpServer {
-        McpServer::default()
+    /// (UC-6.0d, #841). What can be missing is the command itself: the
+    /// configurations run a bare `opentide`, which a host finds on `PATH`
+    /// only, and a virtual environment's is not there until it is activated.
+    pub fn probe(env: &Env, cwd: &Path) -> McpServer {
+        McpServer {
+            not_on_path: command_not_on_path(env, cwd),
+            ..McpServer::default()
+        }
     }
+}
+
+/// `opentide` cannot be found on `env`'s `PATH`.
+#[cfg(not(target_os = "wasi"))]
+fn command_not_on_path(env: &Env, cwd: &Path) -> bool {
+    let path = env.search_path().unwrap_or_default();
+    crate::commands::doctor::on_path("opentide", path, cwd).is_none()
+}
+
+/// WASI (the VS Code extension): the host's `PATH` is not this program's,
+/// so nothing is said about it.
+#[cfg(target_os = "wasi")]
+fn command_not_on_path(_: &Env, _: &Path) -> bool {
+    false
 }
 
 /// `setup mcp`: each host's configuration; `server` is what
@@ -765,17 +835,23 @@ pub fn mcp(
     }
     // Every configuration runs `opentide mcp start`. Say so now rather than
     // leaving the user to debug a server their editor silently fails to start.
-    match server.filter(|server| !server.missing.is_empty()) {
-        Some(server) => {
-            result.set("mcp_available", Json::Bool(false));
-            warnings.push(format!(
-                "These configs launch opentide mcp start, which cannot import {} in this environment. Repair it with: {}",
-                server.missing.join(", "),
-                server.hint
-            ));
-        }
-        None => result.set("mcp_available", Json::Bool(true)),
+    let mut available = true;
+    if let Some(server) = server.filter(|server| !server.missing.is_empty()) {
+        available = false;
+        warnings.push(format!(
+            "These configs launch opentide mcp start, which cannot import {} in this environment. Repair it with: {}",
+            server.missing.join(", "),
+            server.hint
+        ));
     }
+    if server.is_some_and(|server| server.not_on_path) {
+        available = false;
+        warnings.push(
+            "These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command."
+                .to_owned(),
+        );
+    }
+    result.set("mcp_available", Json::Bool(available));
     if !warnings.is_empty() {
         result.set("warnings", strings(&warnings));
     }
@@ -1107,6 +1183,7 @@ mod tests {
         let broken = McpServer {
             missing: vec!["mcp.server.mcpserver".into()],
             hint: "pip install 'mcp>=2.3,<3'".into(),
+            not_on_path: false,
         };
         let result = mcp(&mut Stage::new(), root, &["cursor".into()], Some(&broken));
         assert_eq!(result.get("mcp_available"), Some(&Json::Bool(false)));
@@ -1122,7 +1199,107 @@ mod tests {
             assert_eq!(result.get("mcp_available"), Some(&Json::Bool(true)));
             assert_eq!(result.get("warnings"), None);
         }
-        // The server is this program's: nothing is ever missing.
-        assert_eq!(McpServer::probe(), McpServer::default());
+        // The server is this program's: nothing is ever missing but the
+        // command, which is found on PATH.
+        let dir = tempfile::tempdir().unwrap();
+        let found = dir.path().join(if cfg!(windows) {
+            "opentide.exe"
+        } else {
+            "opentide"
+        });
+        std::fs::write(&found, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&found, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let on_path = Env::from_pairs([("PATH".to_owned(), dir.path().display().to_string())]);
+        assert_eq!(McpServer::probe(&on_path, dir.path()), McpServer::default());
+    }
+
+    /// Every configuration runs a bare `opentide`: without one on `PATH`
+    /// (a virtual environment not activated), the editor cannot start the
+    /// server, and setup says so (#1670, smoke C6).
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn a_command_not_on_path_is_reported_unavailable() {
+        let dir = tempfile::tempdir().unwrap();
+        let empty = dir.path().join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let env = Env::from_pairs([("PATH".to_owned(), empty.display().to_string())]);
+        let server = McpServer::probe(&env, dir.path());
+        assert!(server.not_on_path);
+        let result = mcp(
+            &mut Stage::new(),
+            dir.path(),
+            &["cursor".into()],
+            Some(&server),
+        );
+        assert_eq!(result.get("mcp_available"), Some(&Json::Bool(false)));
+        let warnings = result.strings("warnings");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].contains("opentide is not on PATH, so the editor cannot start the server"),
+            "{warnings:?}"
+        );
+        // The configuration is still written.
+        assert_eq!(result.strings("files"), [".cursor/mcp.json"]);
+    }
+
+    fn written(mut stage: Stage, path: &Path) -> String {
+        stage.commit().unwrap();
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    /// `setup platforms` adds what it enables to the README's platform
+    /// list `setup repo` wrote (#1670, smoke B17), keeping its line endings.
+    #[test]
+    fn enabling_platforms_lists_them_in_the_readme_setup_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path();
+        let options = RepoOptions {
+            platforms: vec!["sentinel".into()],
+            ..RepoOptions::default()
+        };
+        let readme_path = target.join("README.md");
+        std::fs::write(&readme_path, readme(target, &options)).unwrap();
+        let mut stage = Stage::new();
+        let chosen = [
+            "splunk".to_owned(),
+            "sentinel".to_owned(),
+            "elastic".to_owned(),
+        ];
+        let result = platforms(&mut stage, target, &chosen).unwrap();
+        assert!(
+            result.strings("updated").contains(&"README.md".to_owned()),
+            "{result:?}"
+        );
+        let text = written(stage, &readme_path);
+        assert!(
+            text.ends_with("## Platforms\n\n- sentinel\n- splunk\n- elastic\n"),
+            "{text}"
+        );
+        // Nothing new to list: the README is left alone.
+        let mut stage = Stage::new();
+        let again = platforms(&mut stage, target, &chosen).unwrap();
+        assert!(!again.strings("updated").contains(&"README.md".to_owned()));
+
+        // The placeholder line of a README written with no platform goes.
+        let none = readme(target, &RepoOptions::default()).replace('\n', "\r\n");
+        assert_eq!(
+            readme_with_platforms(&none, &["graylog".to_owned()]).unwrap(),
+            none.replace(
+                "- (configure platforms in .opentide/configurations/)",
+                "- graylog"
+            )
+        );
+        // A section the user rewrote is not setup's list: left alone.
+        for edited in [
+            "# X\n\n## Platforms\n\n- sentinel (our main SIEM)\n",
+            "# X\n\n## Platforms\n\n- sentinel\n\n## Contact\n\nus\n",
+            "# X\n\nNo platform section.\n",
+        ] {
+            assert_eq!(readme_with_platforms(edited, &["splunk".to_owned()]), None);
+        }
     }
 }

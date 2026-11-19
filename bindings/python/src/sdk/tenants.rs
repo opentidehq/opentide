@@ -192,8 +192,9 @@ impl Connection {
     /// Runs *text* on the tenant (`opentide query`): an awaitable of the
     /// rows' document, `{columns, rows, truncated, partial, warnings,
     /// vendor_query_id, sent, language}`, as JSON. *start* and *end* are
-    /// RFC 3339 instants (default: the minute before now).
-    #[pyo3(signature = (text, language, *, start=None, end=None, limit=DEFAULT_LIMIT, index=Vec::new(), data_view=None, timeout=DEFAULT_QUERY_TIMEOUT.as_secs_f64()))]
+    /// RFC 3339 instants (default: the 24 hours before *end*, which is now by
+    /// default), as the Node SDK reads them.
+    #[pyo3(signature = (text, language, *, start=None, end=None, limit=DEFAULT_ROWS, index=Vec::new(), data_view=None, timeout=DEFAULT_QUERY_TIMEOUT.as_secs_f64()))]
     #[expect(
         clippy::too_many_arguments,
         reason = "the query request's fields, one keyword each, as the facade has them"
@@ -205,12 +206,17 @@ impl Connection {
         language: String,
         start: Option<String>,
         end: Option<String>,
-        limit: usize,
+        limit: i64,
         index: Vec<String>,
         data_view: Option<String>,
         timeout: f64,
     ) -> PyResult<Pending<'py>> {
-        let request = request(text, language, start, end, limit, index, data_view, timeout)?;
+        let window = Window {
+            start,
+            end,
+            since: QUERY_SINCE,
+        };
+        let request = request(text, language, window, limit, index, data_view, timeout)?;
         let connection = Arc::clone(&self.inner);
         pending(py, async move {
             let outcome = connection
@@ -225,7 +231,7 @@ impl Connection {
     /// awaitable of `{result, errors, warnings}`, as JSON. A query the tenant
     /// refuses raises `tenant_refused`; a platform that cannot check a query
     /// live raises `operation_unsupported`.
-    #[pyo3(signature = (text, language, *, start=None, end=None, limit=DEFAULT_LIMIT, index=Vec::new(), data_view=None, timeout=DEFAULT_QUERY_TIMEOUT.as_secs_f64()))]
+    #[pyo3(signature = (text, language, *, start=None, end=None, limit=DEFAULT_ROWS, index=Vec::new(), data_view=None, timeout=DEFAULT_QUERY_TIMEOUT.as_secs_f64()))]
     #[expect(
         clippy::too_many_arguments,
         reason = "the query request's fields, one keyword each, as the facade has them"
@@ -237,12 +243,17 @@ impl Connection {
         language: String,
         start: Option<String>,
         end: Option<String>,
-        limit: usize,
+        limit: i64,
         index: Vec<String>,
         data_view: Option<String>,
         timeout: f64,
     ) -> PyResult<Pending<'py>> {
-        let request = request(text, language, start, end, limit, index, data_view, timeout)?;
+        let window = Window {
+            start,
+            end,
+            since: CHECK_SINCE,
+        };
+        let request = request(text, language, window, limit, index, data_view, timeout)?;
         let connection = Arc::clone(&self.inner);
         pending(py, async move {
             let check = connection
@@ -371,40 +382,66 @@ fn instant(name: &str, text: &str) -> PyResult<Timestamp> {
     })
 }
 
-/// The facade's request; a missing *end* is now, a missing *start* the
-/// minute before *end* ([`TimeWindow::check`]).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the query request's fields, as the facade has them"
-)]
+/// The facade's request; a missing *end* is now, a missing *start*
+/// `window.since` before *end* (a day for a query, a minute for a live
+/// check); a negative *limit* is refused here, one above
+/// [`connectors::MAX_QUERY_LIMIT`] by the facade.
 fn request(
     text: String,
     language: String,
-    start: Option<String>,
-    end: Option<String>,
-    limit: usize,
+    window: Window,
+    limit: i64,
     index: Vec<String>,
     data_view: Option<String>,
     timeout: f64,
 ) -> PyResult<QueryRequest> {
-    let end = match end {
+    let end = match window.end {
         Some(end) => instant("end", &end)?,
         None => Timestamp::now(),
     };
-    let mut window = TimeWindow::check(end);
-    if let Some(start) = start {
-        window.start = instant("start", &start)?;
+    let mut span = TimeWindow::check(end);
+    span.start = end.checked_sub(window.since).unwrap_or(span.start);
+    if let Some(start) = window.start {
+        span.start = instant("start", &start)?;
     }
+    let window = span;
     if window.start > window.end {
         return Err(invalid("start: the window starts after it ends".to_owned()));
     }
     let mut request = QueryRequest::new(text, language, window);
-    request.limit = limit;
+    // The facade refuses a limit outside 1 to MAX_QUERY_LIMIT; one that is
+    // no row count at all (negative) is refused here, in the same words.
+    request.limit = usize::try_from(limit).map_err(|_| {
+        invalid(format!(
+            "limit must be between 1 and {}, not {limit}",
+            connectors::MAX_QUERY_LIMIT
+        ))
+    })?;
     request.index = index;
     request.data_view = data_view;
     request.timeout = duration("timeout", timeout)?;
     Ok(request)
 }
+
+/// A query's window as the caller gave it: RFC 3339 instants, and how far
+/// before `end` it starts when `start` is not given.
+struct Window {
+    start: Option<String>,
+    end: Option<String>,
+    since: Duration,
+}
+
+/// [`DEFAULT_LIMIT`] as the `limit` argument's type, which also reads a
+/// negative number so that it is refused in opentide's words.
+#[expect(clippy::cast_possible_wrap, reason = "100 fits an i64")]
+const DEFAULT_ROWS: i64 = DEFAULT_LIMIT as i64;
+
+/// `query`'s default window: the 24 hours before its end, as `opentide query`
+/// and the Node SDK search.
+const QUERY_SINCE: Duration = Duration::from_hours(24);
+/// A live check's default window: the minute before its end
+/// ([`TimeWindow::check`]).
+const CHECK_SINCE: Duration = Duration::from_secs(60);
 
 /// A query's document, in this order.
 #[derive(Serialize)]
@@ -528,14 +565,21 @@ mod tests {
     use super::*;
     use opentide::connectors::{DeployEvent, DeployWarning};
 
+    fn window(start: Option<&str>, end: Option<&str>, since: Duration) -> Window {
+        Window {
+            start: start.map(str::to_owned),
+            end: end.map(str::to_owned),
+            since,
+        }
+    }
+
     #[test]
     fn a_window_defaults_to_the_minute_before_its_end() {
         let at = "2026-11-12T10:00:00Z";
         let request = request(
             "x".into(),
             "s1ql".into(),
-            None,
-            Some(at.into()),
+            window(None, Some(at), CHECK_SINCE),
             7,
             vec!["logs".into()],
             None,
@@ -550,15 +594,42 @@ mod tests {
 
         let request = request_from("2026-11-11T10:00:00+00:00", at).unwrap();
         assert_eq!(request.window.seconds(), 86_400);
+        // A query's window: the 24 hours before its end, as the Node SDK's.
+        let day = |end| {
+            super::request(
+                "x".into(),
+                String::new(),
+                window(None, end, QUERY_SINCE),
+                1,
+                Vec::new(),
+                None,
+                1.0,
+            )
+        };
+        assert_eq!(day(Some(at)).unwrap().window.seconds(), 86_400);
+        assert_eq!(day(None).unwrap().window.seconds(), 86_400);
+    }
+
+    #[test]
+    fn a_negative_limit_is_refused() {
+        let refused = request(
+            "x".into(),
+            String::new(),
+            window(None, None, QUERY_SINCE),
+            -1,
+            Vec::new(),
+            None,
+            1.0,
+        );
+        assert!(refused.is_err());
     }
 
     fn request_from(start: &str, end: &str) -> PyResult<QueryRequest> {
         request(
             "x".into(),
             String::new(),
-            Some(start.into()),
-            Some(end.into()),
-            DEFAULT_LIMIT,
+            window(Some(start), Some(end), CHECK_SINCE),
+            DEFAULT_ROWS,
             Vec::new(),
             None,
             1.0,
