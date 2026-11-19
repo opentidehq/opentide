@@ -727,7 +727,7 @@ impl TabularSource {
     }
 }
 
-/// `TabularOperator = WhereOperator | FilterOperator | ProjectOperator | ProjectAwayOperator | ProjectRenameOperator | ProjectKeepOperator | ProjectReorderOperator | ExtendOperator | SummarizeOperator | JoinOperator | UnionOperator | ParseOperator | ParseWhereOperator | ParseKvOperator | LookupOperator | TakeOperator | LimitOperator | TopOperator | CountOperator | MvExpandOperator | MvApplyOperator | MakeSeriesOperator | EvaluateOperator | SortOperator | DistinctOperator | RenderOperator | RangeOperator | TopNestedOperator | SampleDistinctOperator | ForkOperator | FacetOperator | PartitionOperator | ScanOperator | SerializeOperator | AsOperator | TopHittersOperator | ReduceOperator | KeywordOperator | UnknownOperator`
+/// `TabularOperator = WhereOperator | FilterOperator | ProjectOperator | ProjectAwayOperator | ProjectRenameOperator | ProjectKeepOperator | ProjectReorderOperator | ExtendOperator | SummarizeOperator | JoinOperator | UnionOperator | ParseOperator | ParseWhereOperator | ParseKvOperator | LookupOperator | TakeOperator | LimitOperator | TopOperator | CountOperator | MvExpandOperator | MvApplyOperator | MakeSeriesOperator | EvaluateOperator | SortOperator | DistinctOperator | RenderOperator | RangeOperator | TopNestedOperator | SampleDistinctOperator | ForkOperator | FacetOperator | PartitionOperator | ScanOperator | SerializeOperator | AsOperator | TopHittersOperator | ReduceOperator | SearchOperator | KeywordOperator | UnknownOperator`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TabularOperator {
     /// A `WhereOperator`.
@@ -804,6 +804,8 @@ pub enum TabularOperator {
     TopHittersOperator(TopHittersOperator),
     /// A `ReduceOperator`.
     ReduceOperator(ReduceOperator),
+    /// A `SearchOperator`.
+    SearchOperator(SearchOperator),
     /// A `KeywordOperator`.
     KeywordOperator(KeywordOperator),
     /// A `UnknownOperator`.
@@ -850,6 +852,7 @@ impl AstNode for TabularOperator {
             || AsOperator::can_cast(kind)
             || TopHittersOperator::can_cast(kind)
             || ReduceOperator::can_cast(kind)
+            || SearchOperator::can_cast(kind)
             || KeywordOperator::can_cast(kind)
             || UnknownOperator::can_cast(kind)
     }
@@ -910,6 +913,7 @@ impl AstNode for TabularOperator {
                 Self::TopHittersOperator(TopHittersOperator { syntax })
             }
             SyntaxKind::REDUCE_OPERATOR => Self::ReduceOperator(ReduceOperator { syntax }),
+            SyntaxKind::SEARCH_OPERATOR => Self::SearchOperator(SearchOperator { syntax }),
             SyntaxKind::KEYWORD_OPERATOR => Self::KeywordOperator(KeywordOperator { syntax }),
             SyntaxKind::UNKNOWN_OPERATOR => Self::UnknownOperator(UnknownOperator { syntax }),
             _ => return None,
@@ -955,6 +959,7 @@ impl AstNode for TabularOperator {
             Self::AsOperator(it) => it.syntax(),
             Self::TopHittersOperator(it) => it.syntax(),
             Self::ReduceOperator(it) => it.syntax(),
+            Self::SearchOperator(it) => it.syntax(),
             Self::KeywordOperator(it) => it.syntax(),
             Self::UnknownOperator(it) => it.syntax(),
         }
@@ -1180,6 +1185,12 @@ impl From<TopHittersOperator> for TabularOperator {
 impl From<ReduceOperator> for TabularOperator {
     fn from(node: ReduceOperator) -> Self {
         Self::ReduceOperator(node)
+    }
+}
+
+impl From<SearchOperator> for TabularOperator {
+    fn from(node: SearchOperator) -> Self {
+        Self::SearchOperator(node)
     }
 }
 
@@ -1771,7 +1782,7 @@ impl MaterializeExpression {
     }
 }
 
-/// `SearchSource = name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr`
+/// `SearchSource = name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr FindProject?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SearchSource {
     syntax: SyntaxNode,
@@ -1829,6 +1840,10 @@ impl SearchSource {
     }
     /// The `Expr` child.
     pub fn predicate(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    /// The `FindProject` child.
+    pub fn find_project(&self) -> Option<FindProject> {
         support::child(&self.syntax)
     }
 }
@@ -1889,6 +1904,82 @@ impl OperatorOption {
     }
     /// The `OptionValue` child.
     pub fn value(&self) -> Option<OptionValue> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `FindProject = 'project' ((FindColumn (',' FindColumn)*) | ('-' smart:'ident'))`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FindProject {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for FindProject {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::FIND_PROJECT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl FindProject {
+    /// The token child.
+    pub fn project_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![project])
+    }
+    /// The `FindColumn` children.
+    pub fn find_columns(&self) -> AstChildren<FindColumn> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn minus_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn smart(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+}
+
+/// `FindColumn = name:('ident' | 'quoted_ident') (':' Type)?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FindColumn {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for FindColumn {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::FIND_COLUMN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl FindColumn {
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The token child.
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![:])
+    }
+    /// The `Type` child.
+    pub fn r#type(&self) -> Option<Type> {
         support::child(&self.syntax)
     }
 }
@@ -3486,7 +3577,69 @@ impl ReduceOperator {
     }
 }
 
-/// `KeywordOperator = name:('search' | 'find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?`
+/// `SearchOperator = 'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SearchOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for SearchOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::SEARCH_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl SearchOperator {
+    /// The token child.
+    pub fn search_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![search])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn in_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![in])
+    }
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The token children, in order.
+    pub fn table(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The `TablePattern` children.
+    pub fn table_patterns(&self) -> AstChildren<TablePattern> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
+    }
+    /// The token child.
+    pub fn where_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![where])
+    }
+    /// The `Expr` child.
+    pub fn predicate(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `KeywordOperator = name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct KeywordOperator {
     syntax: SyntaxNode,
@@ -3511,7 +3664,6 @@ impl KeywordOperator {
         support::token_in(
             &self.syntax,
             &[
-                T![search],
                 T![find],
                 T![invoke],
                 T![getschema],
@@ -5678,6 +5830,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                 ]),
@@ -6186,7 +6339,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::SEARCH_SOURCE as u16,
         name: "SearchSource",
-        text: "name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr",
+        text: "name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr FindProject?",
         rule: Rule::Seq(&[
             Rule::Alt(&[Rule::Kind(T![search] as u16), Rule::Kind(T![find] as u16)]),
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
@@ -6232,6 +6385,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
             ]),
+            Rule::Opt(&Rule::Kind(SyntaxKind::FIND_PROJECT as u16)),
         ]),
     },
     NodeRule {
@@ -6256,6 +6410,39 @@ pub static RULES: &[NodeRule] = &[
             ]),
             Rule::Kind(T![=] as u16),
             Rule::Kind(SyntaxKind::OPTION_VALUE as u16),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::FIND_PROJECT as u16,
+        name: "FindProject",
+        text: "'project' ((FindColumn (',' FindColumn)*) | ('-' smart:'ident'))",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![project] as u16),
+            Rule::Alt(&[
+                Rule::Seq(&[
+                    Rule::Kind(SyntaxKind::FIND_COLUMN as u16),
+                    Rule::Rep(&Rule::Seq(&[
+                        Rule::Kind(T![,] as u16),
+                        Rule::Kind(SyntaxKind::FIND_COLUMN as u16),
+                    ])),
+                ]),
+                Rule::Seq(&[Rule::Kind(T![-] as u16), Rule::Kind(T![ident] as u16)]),
+            ]),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::FIND_COLUMN as u16,
+        name: "FindColumn",
+        text: "name:('ident' | 'quoted_ident') (':' Type)?",
+        rule: Rule::Seq(&[
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![quoted_ident] as u16),
+            ]),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![:] as u16),
+                Rule::Kind(SyntaxKind::TYPE as u16),
+            ])),
         ]),
     },
     NodeRule {
@@ -7409,6 +7596,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                     ]),
@@ -7698,12 +7886,62 @@ pub static RULES: &[NodeRule] = &[
         ]),
     },
     NodeRule {
+        kind: SyntaxKind::SEARCH_OPERATOR as u16,
+        name: "SearchOperator",
+        text: "'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![search] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![in] as u16),
+                Rule::Kind(T!['('] as u16),
+                Rule::Alt(&[
+                    Rule::Alt(&[
+                        Rule::Kind(T![ident] as u16),
+                        Rule::Kind(T![quoted_ident] as u16),
+                    ]),
+                    Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                ]),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Alt(&[
+                        Rule::Alt(&[
+                            Rule::Kind(T![ident] as u16),
+                            Rule::Kind(T![quoted_ident] as u16),
+                        ]),
+                        Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                    ]),
+                ])),
+                Rule::Kind(T![')'] as u16),
+            ])),
+            Rule::Opt(&Rule::Kind(T![where] as u16)),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+            ]),
+        ]),
+    },
+    NodeRule {
         kind: SyntaxKind::KEYWORD_OPERATOR as u16,
         name: "KeywordOperator",
-        text: "name:('search' | 'find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?",
+        text: "name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?",
         rule: Rule::Seq(&[
             Rule::Alt(&[
-                Rule::Kind(T![search] as u16),
                 Rule::Kind(T![find] as u16),
                 Rule::Kind(T![invoke] as u16),
                 Rule::Kind(T![getschema] as u16),
@@ -7807,6 +8045,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
             ]),
@@ -7850,6 +8089,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                 ]),

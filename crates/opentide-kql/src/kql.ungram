@@ -79,6 +79,10 @@ ParenTabular = '(' TabularExpression ')'
 SearchSource =
   name:('search' | 'find') OperatorOption*
   ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr
+  FindProject?
+// `find … project a, b:long` or `find … project-smart`.
+FindProject = 'project' (FindColumn (',' FindColumn)* | '-' smart:'ident')
+FindColumn = name:('ident' | 'quoted_ident') (':' Type)?
 
 MaterializeExpression = 'materialize' '(' body:TabularExpression ')'
 
@@ -140,6 +144,7 @@ TabularOperator =
 | AsOperator
 | TopHittersOperator
 | ReduceOperator
+| SearchOperator
 | KeywordOperator
 | UnknownOperator
 
@@ -288,10 +293,15 @@ ReduceOperator =
   'reduce' OperatorOption* 'by' value:Expr
   ('with' (OperatorOption (',' OperatorOption)*)?)?
 
+// `T | search kind=case_sensitive in (U) "x"`.
+SearchOperator =
+  'search' OperatorOption*
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr
+
 // `invoke`, `getschema`, `sample`, `consume`, `make-graph`, ...: an operator
 // that takes at most one argument.
 KeywordOperator =
-  name:('search' | 'find' | 'invoke' | 'getschema' | 'sample'
+  name:('find' | 'invoke' | 'getschema' | 'sample'
       | 'externaldata' | 'consume' | 'make-graph' | 'graph-match'
       | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components')
   args:Expr?

@@ -338,8 +338,17 @@ fn operator(p: &mut P<'_>) {
         K::FACET_KW => facet(p),
         K::PARTITION_KW => partition(p),
         K::SCAN_KW => scan(p),
-        K::SEARCH_KW
-        | K::FIND_KW
+        K::SEARCH_KW => {
+            // `T | search kind=case_sensitive in (U) "x"`: a source's grammar,
+            // its one option `kind`.
+            p.bump();
+            while at_named_option(p, &["kind"]) {
+                option_after_name(p, K::OPERATOR_OPTION);
+            }
+            search_body(p);
+            K::SEARCH_OPERATOR
+        }
+        K::FIND_KW
         | K::INVOKE_KW
         | K::GETSCHEMA_KW
         | K::SAMPLE_KW
@@ -1012,8 +1021,18 @@ fn with_options(p: &mut P<'_>) {
 /// `search "x"`, `search in (A, B) where x`, `find in (T) where x`.
 fn search_source(p: &mut P<'_>) {
     let m = p.start();
+    let find = p.at(K::FIND_KW);
     p.bump();
     options(p);
+    search_body(p);
+    if find && p.at(K::PROJECT_KW) {
+        find_project(p);
+    }
+    p.done(m, K::SEARCH_SOURCE);
+}
+
+/// What follows a search's options: its tables, then its predicate.
+fn search_body(p: &mut P<'_>) {
     // `in` after `search` starts the table list, as in the old grammar.
     if p.at(K::IN_KW) {
         p.bump();
@@ -1024,7 +1043,47 @@ fn search_source(p: &mut P<'_>) {
     }
     p.eat(K::WHERE_KW);
     expr::expr(p);
-    p.done(m, K::SEARCH_SOURCE);
+}
+
+/// `project a, ['b c']:long` or `project-smart` after a `find`: the columns
+/// are names with an optional scalar type, no expressions. `project-smart`
+/// is three tokens here, which must touch, as Kusto.Language reads them.
+fn find_project(p: &mut P<'_>) {
+    let m = p.start();
+    let smart = p.nth(1) == K::MINUS
+        && p.nth(2) == K::IDENT
+        && p.nth_text(2) == "smart"
+        && touching(p, 0, 1)
+        && touching(p, 1, 2);
+    p.bump();
+    if smart {
+        p.bump();
+        p.bump();
+    } else {
+        list(p, find_column);
+    }
+    p.done(m, K::FIND_PROJECT);
+}
+
+/// Whether the tokens `a` and `b` ahead touch, no blank or comment between.
+fn touching(p: &P<'_>, a: usize, b: usize) -> bool {
+    matches!((p.nth_range(a), p.nth_range(b)), (Some(a), Some(b)) if a.end() == b.start())
+}
+
+/// `name` or `name: type`, the type a scalar one.
+fn find_column(p: &mut P<'_>) {
+    let m = p.start();
+    if !p.eat(K::QUOTED_IDENT) {
+        p.expect_name();
+    }
+    if p.eat(K::COLON) {
+        let t = p.start();
+        if !p.eat(K::DYNAMIC_KW) {
+            p.expect_name();
+        }
+        p.done(t, K::TYPE);
+    }
+    p.done(m, K::FIND_COLUMN);
 }
 
 // ------------------------------------------------- render, reduce

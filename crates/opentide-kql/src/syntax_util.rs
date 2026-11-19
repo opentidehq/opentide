@@ -202,6 +202,7 @@ pub(crate) fn legacy_kind(kind: K) -> &'static str {
         K::AS_OPERATOR => "as_operator",
         K::TOP_HITTERS_OPERATOR => "top_hitters_operator",
         K::REDUCE_OPERATOR => "reduce_operator",
+        K::SEARCH_OPERATOR => "search_operator",
         K::KEYWORD_OPERATOR => "keyword_operator",
         K::PRINT_OPERATOR => "print_operator",
         K::UNKNOWN_OPERATOR => "unknown_operator",
