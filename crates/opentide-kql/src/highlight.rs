@@ -15,7 +15,6 @@ use rowan::NodeOrToken;
 #[rustfmt::skip]
 const PARENT_RULES: &[(K, K, &str)] = &[
     (K::LET_STATEMENT, K::LET_KW, "keyword"),
-    (K::QUERY_PARAMETERS_STATEMENT, K::DECLARE_KW, "keyword"),
     (K::COUNT_OPERATOR, K::COUNT_KW, "keyword"),
     (K::WHERE_OPERATOR, K::WHERE_KW, "keyword"),
     (K::FILTER_OPERATOR, K::FILTER_KW, "keyword"),
@@ -117,7 +116,21 @@ const PARENT_RULES: &[(K, K, &str)] = &[
     (K::DYNAMIC_LITERAL, K::DYNAMIC_KW, "type"),
     (K::TYPE, K::DYNAMIC_KW, "type"),
     (K::CONTROL_COMMAND, K::DOT, "error"),
+    (K::QUERY_PARAMETERS_STATEMENT, K::DECLARE_KW, "keyword"),
 ];
+
+/// Whether some rule of [`PARENT_RULES`] names a token kind: the many tokens
+/// no rule names (names, blanks, brackets) skip the scan of the table, which
+/// otherwise cost every token an entry's compare per rule (#1646).
+const HAS_PARENT_RULE: [bool; K::ERROR as usize] = {
+    let mut table = [false; K::ERROR as usize];
+    let mut i = 0;
+    while i < PARENT_RULES.len() {
+        table[PARENT_RULES[i].1 as usize] = true;
+        i += 1;
+    }
+    table
+};
 
 /// The capture of a token wherever it stands: operators, brackets, a few
 /// keywords.
@@ -157,9 +170,10 @@ fn global(kind: K) -> Option<&'static str> {
 /// grammar; [`highlight_span`] colours it as one span and never asks.
 pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
     let kind = token.kind();
-    if let Some((_, _, capture)) = PARENT_RULES
-        .iter()
-        .find(|(p, k, _)| *p == parent && *k == kind)
+    if HAS_PARENT_RULE.get(kind as usize).copied().unwrap_or(false)
+        && let Some((_, _, capture)) = PARENT_RULES
+            .iter()
+            .find(|(p, k, _)| *p == parent && *k == kind)
     {
         return Some(capture);
     }

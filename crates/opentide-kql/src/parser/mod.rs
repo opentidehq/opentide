@@ -148,9 +148,13 @@ impl<'i> P<'i> {
         self.0.current_range()
     }
 
-    /// The range of the significant token `n` ahead.
-    pub(crate) fn nth_range(&self, n: usize) -> Option<rowan::TextRange> {
-        self.0.nth_range(n)
+    /// Whether the significant tokens `a` and `b` ahead touch: no blank or
+    /// comment between them.
+    pub(crate) fn tokens_touch(&self, a: usize, b: usize) -> bool {
+        matches!(
+            (self.0.nth_range(a), self.0.nth_range(b)),
+            (Some(a), Some(b)) if a.end() == b.start()
+        )
     }
 
     /// Notes a quoted name right after an expression: the old grammar read

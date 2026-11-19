@@ -490,3 +490,49 @@ fn operator_forms_parse_and_their_broken_twins_do_not() {
         assert!(!errors(source).is_empty(), "{source} parses");
     }
 }
+
+// Forms Kusto.Language 12.4.1 accepts that were syntax errors after #1646.
+snapshots! {
+    render_legacy_properties: "T | render barchart kind=stacked title=\"x\" accumulate=true with (ymin=0)";
+    option_signed_number: "T | reduce by x with threshold=-0.1, characters=\"a\"";
+    statement_without_semicolon: "declare query_parameters(p:string = \"x\");\nlet y = 1";
+}
+
+#[test]
+fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
+    for source in [
+        "T | render timechart kind=stacked",
+        "T | render barchart title=strcat(\"a\") | take 1",
+        "T | reduce by x with threshold=+0.1",
+        "T | join kind=-1 (U) on x",
+        "declare query_parameters(p:string = \"x\")",
+        "let x = 1",
+        "let x = 1;\nlet y = 2",
+        "T | render timechart kind=-1 accumulate=true title=a.b[0]",
+        "T | render timechart title=strcat(\"a\", \"b\") kind=1h",
+        "T | reduce by x with threshold=-1h",
+        "T | join kind=1h (U) on x",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "T | render barchart ytitle=\"y\"",
+        "T | render barchart Kind=stacked",
+        "T | render barchart kind=stacked, title=\"x\"",
+        "T | render barchart with (title=\"x\") kind=stacked",
+        "T | reduce by x with threshold=- 0.1",
+        "T | reduce by x with threshold=-x",
+        "declare query_parameters(p:string = \"x\")\nT",
+        "let x = 1\nT",
+        "let f = () { let y = 1 y };\nT",
+        "T | render timechart title=\"a\" + \"b\"",
+        "T | render timechart kind=1+2",
+        "T | render timechart kind=strcat(\"a\")",
+        "T | render timechart accumulate=f(1)",
+        "T | render timechart title=-1",
+        "T | render timechart title=a==b",
+        "T | render timechart title=a has \"b\"",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}
