@@ -168,9 +168,15 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
             p.done(m, K::PAREN_EXPR)
         }
         K::QUOTED_IDENT => name_ref(p),
-        // `* has "x"`: every column, the left side of a comparison or a set
-        // test, as Kusto's term search takes it.
-        K::STAR if matches!(p.nth(1), K::CMP_OP | K::SET_OP | K::IN_KW) => {
+        // `* has "x"`: every column, as Kusto's term search takes it, on the
+        // left of a string operator (`has`, `contains`, `startswith`, `=~`,
+        // `matches regex`, ...) or `==`, and of nothing else: not `!=`, `<`
+        // or `>=`, not `in` or `has_any`.
+        K::STAR
+            if p.nth(1) == K::MATCHES_KW
+                || (p.nth(1) == K::CMP_OP
+                    && !matches!(p.0.nth_text(1), "!=" | "<>" | "<" | "<=" | ">" | ">=")) =>
+        {
             let m = p.start();
             p.bump();
             p.done(m, K::STAR_EXPR)

@@ -12312,12 +12312,13 @@ kql_parse_error error 0:16-0:20 KQL syntax error: expected an expression
 28..38 string
 39..41 operator
 42..43 operator
-44..51 operator
-52..53 punctuation.bracket
-53..56 string
-56..57 punctuation.delimiter
-58..61 string
-61..62 punctuation.bracket
+44..52 operator
+53..61 string
+62..64 operator
+65..66 operator
+67..74 operator
+75..80 operator
+81..84 string
 == corpus/kql/string__invalid.kql
 kql_parse_error error 0:6-0:19 KQL syntax error: expected an expression
 0..5 keyword
