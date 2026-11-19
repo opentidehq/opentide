@@ -82,3 +82,61 @@ fn a_misspelled_provider_suggests_the_closest() {
     );
     assert!(!ws.join(".gitlab-ci.yml").exists());
 }
+
+/// Every enabled platform's tenants reach the jobs, not only the platforms
+/// with a live query check (#1655): a CrowdStrike tenant's own `$FALCON_SECRET`
+/// is listed and mapped into GitHub's deploy jobs and Azure's deploy steps,
+/// `sharing.toml`'s `$MISP_API_KEY` into the share job, and `$PATH`, which
+/// the runner sets itself, is never mapped but warned about.
+#[test]
+fn the_tenants_own_variables_are_mapped() {
+    let (_scratch, ws) = tide_corpus();
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::write(
+        platforms.join("crowdstrike.toml"),
+        "[platform]\nenabled = true\n\n[[tenants]]\nname = \"falcon\"\n[tenants.setup]\napi = \"https://api.crowdstrike.invalid\"\ncustomer_id = \"$PATH\"\nclient_id = \"$FALCON_ID\"\nclient_secret = \"$FALCON_SECRET\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        ws.join(".opentide/configurations/sharing.toml"),
+        "[[misp]]\nname = \"misp\"\nurl = \"https://misp.invalid\"\napi_key = \"${MISP_API_KEY}\"\n",
+    )
+    .unwrap();
+    let words = ["--default-branch", "main", "--sharing", "--yes"];
+
+    let (code, stdout, stderr) = opentide(&ws, &[&["setup", "ci", "github"][..], &words].concat());
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stderr.contains(".opentide/configurations/platforms/crowdstrike.toml reads $PATH, a variable the CI runner sets itself"),
+        "{stderr}"
+    );
+    let github = std::fs::read_to_string(ws.join(".github/workflows/opentide.yml")).unwrap();
+    assert!(github.contains("#   FALCON_SECRET\n"), "{github}");
+    // validate, deploy_staging and deploy_production
+    for name in ["FALCON_ID", "FALCON_SECRET"] {
+        let mapped = format!("      {name}: ${{{{ secrets.{name} }}}}\n");
+        assert_eq!(github.matches(&mapped).count(), 3, "{github}");
+    }
+    let share = &github[github.find("\n  share:\n").unwrap()..];
+    assert!(
+        share.contains("      MISP_API_KEY: ${{ secrets.MISP_API_KEY }}\n"),
+        "{share}"
+    );
+    assert!(!github.contains(" PATH:"), "{github}");
+
+    let (code, stdout, stderr) = opentide(&ws, &[&["setup", "ci", "azure"][..], &words].concat());
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let azure = std::fs::read_to_string(ws.join("azure-pipelines.yml")).unwrap();
+    assert!(azure.contains("#   FALCON_SECRET\n"), "{azure}");
+    let production = &azure[azure.find("- job: deploy_production").unwrap()..];
+    assert!(
+        production.contains("            FALCON_SECRET: $(FALCON_SECRET)\n"),
+        "{production}"
+    );
+    let share = &azure[azure.find("- job: share").unwrap()..];
+    assert!(
+        share.contains("            MISP_API_KEY: $(MISP_API_KEY)\n"),
+        "{share}"
+    );
+    assert!(!azure.contains(" PATH:"), "{azure}");
+}
