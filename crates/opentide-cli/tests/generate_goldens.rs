@@ -632,7 +632,9 @@ fn setup_ci_detects_the_default_branch() {
     assert_eq!(
         written["warnings"],
         serde_json::json!([
-            "origin/HEAD is not set, so the pipeline targets the checked-out branch \"feature\". Re-run with --default-branch <branch> if another branch deploys."
+            "origin/HEAD is not set, so the pipeline targets the checked-out branch \"feature\". Re-run with --default-branch <branch> if another branch deploys.",
+            // The first run wrote it for "trunk" (#1656).
+            ".github/workflows/opentide.yml differs from what this run generates; it is replaced, and any hand edits in it are replaced too (`git diff -- .github/workflows/opentide.yml` shows them after the write)."
         ])
     );
 }
