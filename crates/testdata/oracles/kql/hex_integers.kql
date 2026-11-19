@@ -1,3 +1,4 @@
 SecurityEvent
 | where EventID == 0x1210
 | extend Mask = 0xFFFFFFFF, Flags = binary_and(tolong(EventID), 0x0F)
+| extend Upper = 0X1F, Lower = 0x1f, Negative = -0x1F, Cast = long(0x1F), Max = 0xFFFFFFFFFFFFFFFF, Bare = 0x

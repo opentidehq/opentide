@@ -45,9 +45,9 @@ enum Token {
     #[regex(r"hint\.[A-Za-z_][A-Za-z0-9_]*")]
     HintName,
     /// A decimal, or a hexadecimal integer (`0x1F`, `0X1f`: an `int` or a
-    /// `long`, as Kusto reads it).
+    /// `long`, as Kusto reads it). Kusto.Language also takes a bare `0x`.
     #[regex(r"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?")]
-    #[regex(r"0[xX][0-9A-Fa-f]+")]
+    #[regex(r"0[xX][0-9A-Fa-f]*")]
     Number,
     #[regex(
         r"[0-9]+(\.[0-9]+)?(days?|d|hours?|hrs?|h|minutes?|min|m|seconds?|sec|s|milliseconds?|ms|microseconds?|tick|ticks)"
@@ -484,15 +484,14 @@ pub(crate) mod tests {
             ]
         );
         assert_eq!(
-            kinds("0x1F 0X1f 0xdeadBEEF 0x 0xg"),
+            kinds("0x1F 0X1f 0xFFFFFFFFFFFFFFFF 0x 0xg"),
             vec![
                 (K::NUMBER, "0x1F"),
                 (K::NUMBER, "0X1f"),
-                (K::NUMBER, "0xdeadBEEF"),
-                (K::NUMBER, "0"),
-                (K::IDENT, "x"),
-                (K::NUMBER, "0"),
-                (K::IDENT, "xg"),
+                (K::NUMBER, "0xFFFFFFFFFFFFFFFF"),
+                (K::NUMBER, "0x"),
+                (K::NUMBER, "0x"),
+                (K::IDENT, "g"),
             ]
         );
         assert_eq!(

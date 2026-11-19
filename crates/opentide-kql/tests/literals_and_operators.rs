@@ -327,9 +327,12 @@ fn obfuscated_strings_and_hex_integers_are_literals() {
         "print x = H~~~multi\nline~~~",
         "SecurityEvent | where EventID == 0x1210",
         "print mask = 0xFFFFFFFF, low = 0X0f",
+        "print a = -0x1F, b = long(0x1F), c = 0xFFFFFFFFFFFFFFFF, d = 0x",
     ] {
         assert_clean(source);
     }
+    // The prefix must touch the quote: `h "x"` is a name, then a string.
+    assert_parse_error("print h \"x\"");
     // A table named by an obfuscated string is that table: its columns.
     let columns = |source: &str| -> Vec<String> {
         let analysis = columns(source, Profile::Sentinel);
