@@ -215,6 +215,7 @@ impl Workspace {
         for family in types {
             options = options.object_type(family);
         }
+        options.verify().map_err(|error| from_facade(&error))?;
         // The platform plugins' own checks of their blocks, as the command
         // line's validate runs them (UC-4.5b).
         let validation = py.detach(|| match opentide::plugins::configurations() {
@@ -282,12 +283,17 @@ impl Workspace {
     }
 
     /// The tenants the workspace configures for *platform*, in file order;
-    /// empty when it configures none.
-    fn tenants(&self, py: Python<'_>, platform: String) -> Vec<tenants::TenantConfig> {
-        py.detach(|| self.inner.tenants(&platform))
+    /// empty when it configures none. A *platform* that is neither built in
+    /// nor configured is refused (`usage_invalid_choice`).
+    fn tenants(&self, py: Python<'_>, platform: String) -> PyResult<Vec<tenants::TenantConfig>> {
+        self.inner
+            .check_platform(&platform)
+            .map_err(|error| from_facade(&error))?;
+        Ok(py
+            .detach(|| self.inner.tenants(&platform))
             .into_iter()
             .map(tenants::TenantConfig::from)
-            .collect()
+            .collect())
     }
 
     /// `opentide deploy --dry-run`: `(document, summary, ok)`, the documents

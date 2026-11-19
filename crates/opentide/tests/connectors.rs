@@ -343,6 +343,20 @@ async fn a_cancelled_operation_stops() {
     assert!(canceller.is_cancelled());
 }
 
+/// A limit `opentide query --limit` refuses is refused before anything is
+/// sent (smoke D13): the tenant here would not answer.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_limit_outside_one_to_five_thousand_is_refused() {
+    let connection = Connection::open(&harfanglab("http://127.0.0.1:1"), &options()).unwrap();
+    for limit in [0, connectors::MAX_QUERY_LIMIT + 1] {
+        let mut request = QueryRequest::new("processes", "telemetry", window());
+        request.limit = limit;
+        let error = connection.query(&request).await.unwrap_err();
+        assert_eq!(error.code(), "usage_invalid_value", "{error}");
+        assert!(error.to_string().contains("between 1 and 5000"), "{error}");
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn an_unreachable_tenant_is_named_by_its_address() {
     // Port 1 of the loopback: nothing listens there, and no test can take it,

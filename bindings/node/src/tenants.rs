@@ -1348,12 +1348,17 @@ mod tests {
         )]);
         let ws = crate::workspace_from_files("/ws".into(), files).unwrap();
         let names: Vec<String> = ws
-            .tenants("splunk".into())
+            .tenant_configs("splunk")
+            .unwrap()
             .iter()
             .map(TenantConfig::name)
             .collect();
         assert_eq!(names, ["prod", "lab"]);
-        assert!(ws.tenants("elastic".into()).is_empty());
+        assert!(ws.tenant_configs("elastic").unwrap().is_empty());
+        let Err(failure) = ws.tenant_configs("splunck") else {
+            panic!("a platform that is none is refused");
+        };
+        assert_eq!(failure.code, "usage_invalid_choice");
     }
 
     #[test]

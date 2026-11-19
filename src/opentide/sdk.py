@@ -530,6 +530,29 @@ def _instant(at: datetime) -> str:
     return at.isoformat()
 
 
+def _moment(name: str, at: object) -> datetime | None:
+    """*at*, a ``start`` or ``end`` argument, as a datetime: a datetime as it
+    is, an RFC 3339 string (``"2026-11-12T09:00:00Z"``) parsed, ``None`` as
+    ``None``. Anything else, or a string with no offset, is refused with
+    ``usage_invalid_value``, as the Node SDK and the command line refuse it."""
+    if at is None or isinstance(at, datetime):
+        return at
+    if isinstance(at, str):
+        text = at.strip()
+        try:
+            # Python 3.10's fromisoformat takes no `Z`.
+            parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text[-1:] in "Zz" else text)
+        except ValueError:
+            parsed = None
+        if parsed is not None and parsed.tzinfo is not None:
+            return parsed
+        raise OpentideError("usage_invalid_value", f"{name}: `{at}` is not an RFC 3339 instant")
+    raise OpentideError(
+        "usage_invalid_value",
+        f"{name}: a datetime or an RFC 3339 string, not {type(at).__name__}",
+    )
+
+
 def platforms() -> list[str]:
     """The platforms with a connector, in the order opentide lists them."""
     _load()
@@ -685,8 +708,8 @@ class Connection:
         text: str,
         language: str = "",
         *,
-        start: datetime | None = None,
-        end: datetime | None = None,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
         limit: int = DEFAULT_LIMIT,
         index: Sequence[str] = (),
         data_view: str | None = None,
@@ -699,15 +722,18 @@ class Connection:
         *language* is the query's (``kql``, ``esql``, ``s1ql``); empty takes the
         platform's first. *index* is the Elastic indices, the HarfangLab
         telemetry source or the CrowdStrike repository; *data_view* Elastic's;
-        *timeout* how long, in seconds, an asynchronous search may run. A naive
-        datetime is taken as UTC.
+        *timeout* how long, in seconds, an asynchronous search may run. *start*
+        and *end* are datetimes (a naive one is taken as UTC) or RFC 3339
+        strings (``"2026-11-12T09:00:00Z"``). *limit* is 1 to 5000, as
+        ``opentide query --limit`` takes it.
 
         Raises :class:`OpentideError` (``tenant_refused``, ``query_timed_out``,
         ``tenant_unreachable``, ``authentication_failed``, ``interrupted``,
-        ``operation_unsupported``, ...).
+        ``operation_unsupported``, ...; ``usage_invalid_value`` for a *start*,
+        *end* or *limit* the command line would refuse).
         """
-        end = end or datetime.now(timezone.utc)
-        start = start or end - DEFAULT_SINCE
+        end = _moment("end", end) or datetime.now(timezone.utc)
+        start = _moment("start", start) or end - DEFAULT_SINCE
         data = await _document(
             self._inner.query,
             text,
@@ -726,8 +752,8 @@ class Connection:
         text: str,
         language: str = "",
         *,
-        start: datetime | None = None,
-        end: datetime | None = None,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
         limit: int = DEFAULT_LIMIT,
         index: Sequence[str] = (),
         data_view: str | None = None,
@@ -743,6 +769,8 @@ class Connection:
         check a query live (CrowdStrike, HarfangLab, Sysdig): never a faked
         verdict.
         """
+        start = _moment("start", start)
+        end = _moment("end", end)
         data = await _document(
             self._inner.validate_query,
             text,

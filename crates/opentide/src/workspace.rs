@@ -67,14 +67,27 @@ impl Workspace {
     ///
     /// # Errors
     ///
-    /// [`Error::Io`] when `path` cannot be made absolute;
-    /// [`Error::Configuration`] when the configuration does not resolve.
+    /// [`Error::Usage`] (`usage_invalid_value`) when `path` is not a folder,
+    /// as the command line's `--repo` refuses it; [`Error::Io`] when `path`
+    /// cannot be made absolute; [`Error::Configuration`] when the
+    /// configuration does not resolve.
     pub fn open(path: impl AsRef<Path>, options: &Options) -> Result<Self, Error> {
         let path = path.as_ref();
         let absolute = std::path::absolute(path).map_err(|error| Error::Io {
             path: path.to_path_buf(),
             message: error.to_string(),
         })?;
+        if !absolute.is_dir() {
+            let problem = if absolute.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Err(Error::Usage {
+                code: "usage_invalid_value",
+                message: format!("{} {problem}", path.display()),
+            });
+        }
         let cwd = match &options.cwd {
             Some(cwd) => std::path::absolute(cwd).map_err(|error| Error::Io {
                 path: cwd.clone(),
@@ -394,6 +407,43 @@ impl ValidateOptions {
     pub fn queries(mut self, queries: QueriesMode) -> Self {
         self.queries = queries;
         self
+    }
+
+    /// Refuses what `opentide validate` refuses before it runs: an object
+    /// type that is not `rule`, `threat` or `objective`. A binding checks its
+    /// caller's options with it; [`Workspace::validate`] itself reports an
+    /// unknown type as a selection that matches nothing (`scope_no_match`).
+    ///
+    /// ```
+    /// let options = opentide::ValidateOptions::default().object_type("rules");
+    /// let error = options.verify().unwrap_err();
+    /// assert_eq!(error.code(), "usage_invalid_choice");
+    /// assert!(opentide::ValidateOptions::default().object_type("rule").verify().is_ok());
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Usage`] (`usage_invalid_choice`), naming the unknown types.
+    pub fn verify(&self) -> Result<(), Error> {
+        const TYPES: [&str; 3] = ["rule", "threat", "objective"];
+        let mut unknown: Vec<&str> = self
+            .types
+            .iter()
+            .map(String::as_str)
+            .filter(|family| !TYPES.contains(family))
+            .collect();
+        unknown.sort_unstable();
+        unknown.dedup();
+        if unknown.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Usage {
+            code: "usage_invalid_choice",
+            message: format!(
+                "Unknown object type(s): {}. Choose rule, threat, or objective.",
+                unknown.join(", ")
+            ),
+        })
     }
 }
 

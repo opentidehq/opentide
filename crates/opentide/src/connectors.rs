@@ -55,6 +55,10 @@ pub use opentide_connectors::connector::{
 /// check on CrowdStrike), or of a platform without a connector.
 pub const OPERATION_UNSUPPORTED: &str = "operation_unsupported";
 
+/// The most rows [`Connection::query`] returns per tenant: the command
+/// line's `opentide query --limit` takes 1 to this.
+pub const MAX_QUERY_LIMIT: usize = 5_000;
+
 /// The platforms with a connector, in the order opentide lists them.
 ///
 /// ```
@@ -424,8 +428,20 @@ impl Connection {
     /// query (its message, the vendor's in `detail`), `query_timed_out`,
     /// `tenant_unreachable`, `authentication_failed`, `interrupted`, ...
     /// (the table on [`Error`]); `operation_unsupported` on a platform
-    /// without a query runner (Sysdig).
+    /// without a query runner (Sysdig). [`Error::Usage`]
+    /// (`usage_invalid_value`) when `request.limit` is not between 1 and
+    /// [`MAX_QUERY_LIMIT`], as the command line's `--limit` refuses it;
+    /// nothing is sent then.
     pub async fn query(&self, request: &QueryRequest) -> Result<QueryOutcome, Error> {
+        if !(1..=MAX_QUERY_LIMIT).contains(&request.limit) {
+            return Err(Error::Usage {
+                code: "usage_invalid_value",
+                message: format!(
+                    "limit must be between 1 and {MAX_QUERY_LIMIT}, not {}",
+                    request.limit
+                ),
+            });
+        }
         let runner = self
             .connector()
             .and_then(Platform::query_runner)

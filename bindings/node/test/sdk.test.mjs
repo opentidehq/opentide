@@ -103,6 +103,11 @@ test('an option the command line would refuse throws usage_invalid_choice', asyn
   }
   // deployPlan returns a promise, which rejects.
   await assert.rejects(ws.deployPlan({ strategies: ['LATER'] }), { code: 'usage_invalid_choice' })
+  // As --type, --platform and --repo refuse them (smoke D13).
+  assert.throws(() => ws.validate({ types: ['bogus'] }), { code: 'usage_invalid_choice' })
+  assert.throws(() => ws.tenants('bogus'), { code: 'usage_invalid_choice' })
+  await assert.rejects(ws.deployPlan({ platform: 'bogus' }), { code: 'usage_invalid_choice' })
+  await assert.rejects(opentide.Workspace.open('/nonexistent/x'), { code: 'usage_invalid_value' })
 })
 
 test('a configuration that does not resolve throws its code', () => {

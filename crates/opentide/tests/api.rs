@@ -334,6 +334,41 @@ fn rules_objectives_and_threats_are_the_catalogues_rows_of_each_family() {
     assert_eq!(listed, catalogue);
 }
 
+/// What the command line refuses, the SDK refuses (smoke D13): a path that
+/// is no folder (`--repo`), an unknown object type (`--type`), a platform
+/// that is none (`--platform`).
+#[test]
+fn what_the_command_line_refuses_is_refused() {
+    let dir = common::tide_corpus();
+    let missing = Workspace::open(dir.path().join("nowhere"), &Options::default()).unwrap_err();
+    assert_eq!(missing.code(), "usage_invalid_value", "{missing}");
+    assert!(missing.to_string().ends_with("does not exist"), "{missing}");
+    let file = dir.path().join("README.md");
+    std::fs::write(&file, "x").unwrap();
+    let not_a_folder = Workspace::open(&file, &Options::default()).unwrap_err();
+    assert!(
+        not_a_folder.to_string().ends_with("is not a directory"),
+        "{not_a_folder}"
+    );
+
+    let ws = Workspace::open(dir.path(), &Options::default()).unwrap();
+    let types = ValidateOptions::default()
+        .object_type("bogus")
+        .object_type("rules");
+    let error = types.verify().unwrap_err();
+    assert_eq!(error.code(), "usage_invalid_choice");
+    assert_eq!(
+        error.to_string(),
+        "Unknown object type(s): bogus, rules. Choose rule, threat, or objective."
+    );
+    let plan = ws.deploy_plan(&DeployPlanOptions::new(Strategy::Preview).platform("bogus"));
+    let Err(error) = plan else {
+        panic!("a plan for no platform is refused");
+    };
+    assert_eq!(error.code(), "usage_invalid_choice", "{error}");
+    assert!(ws.check_platform("sentinel").is_ok());
+}
+
 #[test]
 fn a_deploy_plan_compiles_every_rule_and_sends_nothing() {
     let (dir, ws) = corpus();
