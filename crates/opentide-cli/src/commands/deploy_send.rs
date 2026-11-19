@@ -4316,7 +4316,8 @@ impl Sender<'_, '_> {
         .map_err(|error| {
             // An alias the tenant does not define (or any other compile
             // failure) fails the rule with its own code
-            // (`_deployment_error(exc.code)`).
+            // (`_deployment_error(exc.code)`), and the reason keeps the
+            // hint the dry run shows (what to add to which table).
             tracing::error!(
                 uuid = rule.uuid.as_str(),
                 tenant,
@@ -4326,7 +4327,7 @@ impl Sender<'_, '_> {
                 "{}",
                 error.code
             );
-            error.reason
+            error.to_string()
         })?;
         // The version's own warnings (a field it cannot take, a priority it
         // collapses).

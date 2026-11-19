@@ -22,20 +22,49 @@ use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
 use opentide_connectors::ConnectorError;
 use opentide_connectors::connector::{
-    BoxFuture, DeployError, DeployOutcome, DeployRequest, Deployer, Operation, Platform,
-    TenantContext,
+    BoxFuture, DeployError, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryRequest, TenantContext,
 };
 use opentide_connectors::plugin::{PluginError, PluginHost};
 use serde_json::{Value, json};
 
 const RULE: &str = "7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a01";
+/// The rule the setup-tables test deploys, a copy of [`RULE`].
+const ROUTED: &str = "7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a07";
 /// The rule the fake platform creates without answering an id.
 const SILENT: &str = "7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a03";
 
 /// What the plugin was sent: the operation and the request's body.
 static SENT: Mutex<Vec<(Operation, String, Value)>> = Mutex::new(Vec::new());
 
+/// A tenant's setup table, as `Tenant::table` gives it.
+type Table = Vec<(String, String)>;
+
+/// Each tenant's `routing` setup table, as the plugin's deploy and live
+/// check received it.
+static TABLES: Mutex<Vec<(&'static str, Table)>> = Mutex::new(Vec::new());
+
 struct Acme;
+
+impl LiveValidator for Acme {
+    fn validate<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        _request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
+        TABLES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(("validate", cx.tenant.table("routing").to_vec()));
+        Box::pin(async move {
+            Ok(LiveCheck {
+                result: None,
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            })
+        })
+    }
+}
 
 impl Deployer for Acme {
     fn deploy<'a>(
@@ -43,6 +72,10 @@ impl Deployer for Acme {
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        TABLES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(("deploy", cx.tenant.table("routing").to_vec()));
         opentide_connectors::connector::deploying(async move {
             let body: Value = serde_json::from_slice(&request.body).unwrap();
             SENT.lock()
@@ -78,6 +111,9 @@ impl Platform for Acme {
         "acme"
     }
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+    fn live_validator(&self) -> Option<&dyn LiveValidator> {
         Some(self)
     }
     fn is_plugin(&self) -> bool {
@@ -308,4 +344,46 @@ fn a_plugin_deploy_needs_a_strategy() {
     let (code, document) = opentide(&ws, &["deploy", "--platform", "acme", "--all"]);
     assert_eq!(code, 2, "{document}");
     assert_eq!(document["failure"]["code"], "usage_missing_option");
+}
+
+/// A plugin tenant's setup tables reach the plugin's connector, in its
+/// deploy and its live check (a review of #1654: the command line dropped
+/// every nested `[tenants.setup.<table>]` before it built the tenant).
+#[test]
+fn a_plugin_tenants_setup_tables_reach_its_deploy_and_live_check() {
+    let (_scratch, ws) = workspace();
+    let platform = ws.join(".opentide/configurations/platforms/acme.toml");
+    let mut text = std::fs::read_to_string(&platform).unwrap();
+    text.push_str("[tenants.setup.routing]\nqueue = \"soc-tier-2\"\n");
+    std::fs::write(&platform, text).unwrap();
+    let routing = vec![("queue".to_owned(), "soc-tier-2".to_owned())];
+    // A rule of its own, so the other tests' `sent(RULE)` never sees it.
+    let routed = ws.join("Objects/Detection Rules/rule-acme-routed.yaml");
+    let text = std::fs::read_to_string(rule_file(&ws)).unwrap();
+    assert_eq!(text.matches(RULE).count(), 1);
+    std::fs::write(&routed, text.replace(RULE, ROUTED)).unwrap();
+    let (code, document) = opentide(
+        &ws,
+        &[
+            "deploy",
+            "--platform",
+            "acme",
+            "--strategy",
+            "PREVIEW",
+            "--file",
+            routed.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{document}");
+    assert_eq!(sent(ROUTED).len(), 1, "{document}");
+    let (code, document) = opentide(&ws, &["validate", "query", "--platform", "acme", "--live"]);
+    assert_eq!(code, 0, "{document}");
+    // Copied out, so a failed assertion poisons no lock the other tests use.
+    let tables = TABLES.lock().unwrap().clone();
+    for step in ["deploy", "validate"] {
+        assert!(
+            tables.contains(&(step, routing.clone())),
+            "{step}: {tables:?}"
+        );
+    }
 }

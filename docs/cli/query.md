@@ -89,6 +89,7 @@ Sources: `processes`, `binary`, `network`, `eventlog`, `dns`, `windows_authentic
 - SentinelOne correlation rules: each sub-query, as its own result labelled `sub-query 1`, `sub-query 2`… The correlation itself is not applied, and each result says so.
 - Carbon Black: the lines of a multiline query joined with spaces.
 - Elastic: the rule's language (`esql`, `eql`, or `kuery`/`lucene` for the other types) and its index or data view. For `threshold`, `new_terms` and `threat_match` rules only the event query runs, and a rule's `filters` are not applied; the result says so in both cases; `machine_learning` rules have no query.
+- Graylog: the event definition's Lucene query, on the block's `streams` (else the tenant's), each alias resolved through the tenant's `stream_ids`. A block's `aggregation` and `stream_categories` are not applied.
 - Exabeam: each sequence's filter, as its own result labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows and grouping are not applied, and a result whose sequence has them says so.
 
 `--language` and `--index` override the rule's own.

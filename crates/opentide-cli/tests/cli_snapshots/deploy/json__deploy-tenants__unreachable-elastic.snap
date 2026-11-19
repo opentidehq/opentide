@@ -42,18 +42,16 @@ exit: 1
     }
   ],
   "command": "deploy",
-  "deployed": [
-    "elastic"
-  ],
+  "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to elastic failed on Elastic create rule: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>) (and 3 more failures)",
+  "error": "Deployment to elastic failed on Elastic create rule: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment to elastic failed on Elastic create rule: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>) (and 3 more failures)",
+    "message": "Deployment to elastic failed on Elastic create rule: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
     "suggestion": null
   },
   "failures": [
@@ -63,30 +61,9 @@ exit: 1
       "name": "Elastic create rule",
       "platform": "elastic",
       "tenant": "soc"
-    },
-    {
-      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
-      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
-      "name": "Elastic update rule",
-      "platform": "elastic",
-      "tenant": "soc"
-    },
-    {
-      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
-      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
-      "name": "Elastic prebuilt rule",
-      "platform": "elastic",
-      "tenant": "soc"
-    },
-    {
-      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
-      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
-      "name": "Elastic retire rule",
-      "platform": "elastic",
-      "tenant": "soc"
     }
   ],
-  "message": "Deployment failed · 4 failed, 0 not attempted · <SECONDS>",
+  "message": "Deployment failed · 1 failed, 3 not attempted · <SECONDS>",
   "next_actions": [],
   "ok": false,
   "plan": {
@@ -111,35 +88,35 @@ exit: 1
     },
     {
       "action": "upsert",
-      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "error": null,
       "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
       "name": "Elastic update rule",
       "platform": "elastic",
-      "reason": null,
+      "reason": "not attempted: tenant soc failed",
       "seconds": 0.0,
-      "status": "failed",
+      "status": "not_attempted",
       "tenant": "soc"
     },
     {
       "action": "upsert",
-      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "error": null,
       "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
       "name": "Elastic prebuilt rule",
       "platform": "elastic",
-      "reason": null,
+      "reason": "not attempted: tenant soc failed",
       "seconds": 0.0,
-      "status": "failed",
+      "status": "not_attempted",
       "tenant": "soc"
     },
     {
       "action": "delete",
-      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "error": null,
       "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
       "name": "Elastic retire rule",
       "platform": "elastic",
-      "reason": null,
+      "reason": "not attempted: tenant soc failed",
       "seconds": 0.0,
-      "status": "failed",
+      "status": "not_attempted",
       "tenant": "soc"
     }
   ],
@@ -153,8 +130,8 @@ exit: 1
     "create": 0,
     "delete": 0,
     "disable": 0,
-    "failed": 4,
-    "not_attempted": 0,
+    "failed": 1,
+    "not_attempted": 3,
     "platforms": 1,
     "seconds": 0.0,
     "skipped": 0,
@@ -164,8 +141,11 @@ exit: 1
   }
 }
 
-━━━ stderr
-{"rule_id":"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001","error":"Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"get_elastic_rule_failed","level":"error","timestamp":"0000-00-00 00:00:00"}
-{"rule_id":"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002","error":"Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"get_elastic_rule_failed","level":"error","timestamp":"0000-00-00 00:00:00"}
-{"rule_id":"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004","error":"Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"get_elastic_rule_failed","level":"error","timestamp":"0000-00-00 00:00:00"}
-{"rule_id":"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005","error":"Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"delete_elastic_rule_failed","level":"error","timestamp":"0000-00-00 00:00:00"}
+━━━ stderr · json, 1 lines
+{
+  "error": "Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "event": "elastic_tenant_deployment_failed",
+  "level": "critical",
+  "tenant": "***",
+  "timestamp": "0000-00-00 00:00:00"
+}

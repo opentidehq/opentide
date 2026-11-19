@@ -218,7 +218,7 @@ export interface OpentideClient {
 /** The languages `analyze` and `highlight` take: not `opentide-config`, which only a host checks. */
 const LANGUAGE_IDS = new Set(LANGUAGES.map((l) => l.id).filter((id) => id !== "opentide-config"));
 
-/** The server reads an unknown id as a default language; refuse it here instead. */
+/** The server refuses an unknown id (and `opentide-config`) with InvalidParams; refusing it here saves the round trip. */
 function checkLanguage(languageId: string): void {
   if (languageId === "opentide-config") {
     throw new Error(
