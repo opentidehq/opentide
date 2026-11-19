@@ -10,111 +10,111 @@
 # Recorded on: valgrind-3.22.0, glibc 2.39, x86_64
 
 [cql]
-analyze_corpus = 7532586
-analyze_corpus_allocations = 17055
-analyze_external = 32004187
-analyze_external_allocations = 58624
-parse_corpus = 4373351
+analyze_corpus = 7206072
+analyze_corpus_allocations = 16831
+analyze_external = 30525726
+analyze_external_allocations = 58362
+parse_corpus = 4373422
 parse_corpus_allocations = 6105
-parse_external = 17125983
+parse_external = 17126029
 parse_external_allocations = 10743
 
 [eql]
-analyze_corpus = 2193091
-analyze_corpus_allocations = 7011
-analyze_external = 1721256
-analyze_external_allocations = 4924
-parse_corpus = 964636
+analyze_corpus = 2102270
+analyze_corpus_allocations = 6896
+analyze_external = 1656659
+analyze_external_allocations = 4888
+parse_corpus = 964673
 parse_corpus_allocations = 2056
-parse_external = 728109
+parse_external = 728122
 parse_external_allocations = 1079
 
 [esql]
-analyze_corpus = 9837416
+analyze_corpus = 8644767
 analyze_corpus_allocations = 30161
-analyze_external = 2199148
+analyze_external = 1903673
 analyze_external_allocations = 5398
-parse_corpus = 3493928
+parse_corpus = 3493921
 parse_corpus_allocations = 7246
-parse_external = 879541
+parse_external = 879554
 parse_external_allocations = 1182
 
 [exabeam]
-analyze_corpus = 6403454
-analyze_corpus_allocations = 9992
-analyze_external = 893301
-analyze_external_allocations = 1776
-parse_corpus = 2758294
+analyze_corpus = 6138375
+analyze_corpus_allocations = 9866
+analyze_external = 878171
+analyze_external_allocations = 1762
+parse_corpus = 2758337
 parse_corpus_allocations = 3846
-parse_external = 482774
+parse_external = 482779
 parse_external_allocations = 587
 
 [falco]
-analyze_corpus = 2814916
-analyze_corpus_allocations = 4951
-analyze_external = 315564844
-analyze_external_allocations = 81877
-parse_corpus = 1046916
+analyze_corpus = 2792369
+analyze_corpus_allocations = 4855
+analyze_external = 51049411
+analyze_external_allocations = 81136
+parse_corpus = 1046949
 parse_corpus_allocations = 2441
-parse_external = 7323190
+parse_external = 7323432
 parse_external_allocations = 13748
 
 [kql]
-analyze_corpus = 10713624
+analyze_corpus = 10727042
 analyze_corpus_allocations = 26013
-analyze_external = 35847433
+analyze_external = 35864251
 analyze_external_allocations = 78078
-parse_corpus = 2562924
+parse_corpus = 2563618
 parse_corpus_allocations = 4950
-parse_external = 10074249
+parse_external = 10105850
 parse_external_allocations = 5032
 
 [kuery]
-analyze_corpus = 2571293
-analyze_corpus_allocations = 4983
-analyze_external = 1024541
-analyze_external_allocations = 3084
-parse_corpus = 713900
+analyze_corpus = 2006133
+analyze_corpus_allocations = 4893
+analyze_external = 905914
+analyze_external_allocations = 2974
+parse_corpus = 719408
 parse_corpus_allocations = 1706
-parse_external = 508394
+parse_external = 512641
 parse_external_allocations = 1491
 
 [lucene]
-analyze_corpus = 1992377
-analyze_corpus_allocations = 5737
-analyze_external = 8699279
-analyze_external_allocations = 30580
-parse_corpus = 628968
+analyze_corpus = 1486420
+analyze_corpus_allocations = 5665
+analyze_external = 7424073
+analyze_external_allocations = 29883
+parse_corpus = 630216
 parse_corpus_allocations = 1341
-parse_external = 3529976
+parse_external = 3541279
 parse_external_allocations = 9580
 
 [spl]
-analyze_corpus = 7081393
+analyze_corpus = 7083189
 analyze_corpus_allocations = 16140
-analyze_external = 7262241
+analyze_external = 7263241
 analyze_external_allocations = 11452
-parse_corpus = 3257020
+parse_corpus = 3257112
 parse_corpus_allocations = 5313
-parse_external = 2823605
+parse_external = 2823620
 parse_external_allocations = 2157
 
 [yara]
-analyze_corpus = 16418157
+analyze_corpus = 16417982
 analyze_corpus_allocations = 22057
-analyze_external = 354325515
+analyze_external = 354330960
 analyze_external_allocations = 314370
-parse_corpus = 5588332
+parse_corpus = 5588090
 parse_corpus_allocations = 3163
-parse_external = 123043714
+parse_external = 123043020
 parse_external_allocations = 77153
 
 [yaral]
-analyze_corpus = 9043984
+analyze_corpus = 7812520
 analyze_corpus_allocations = 23239
-analyze_external = 127339422
+analyze_external = 104713175
 analyze_external_allocations = 269108
-parse_corpus = 3124856
+parse_corpus = 3124946
 parse_corpus_allocations = 5906
-parse_external = 35311519
+parse_external = 35311599
 parse_external_allocations = 25188
