@@ -937,8 +937,10 @@ impl Elastic {
     /// its Elasticsearch checks, then creates it, replaces it (keeping the
     /// remote's fields the block leaves out) or, when its type changes,
     /// deletes and creates it. A prebuilt rule is never modified. A 401 or
-    /// 403 fails the tenant ([`ElasticError::Tenant`]); any other refusal
-    /// fails the rule ([`Deployed::Failed`]).
+    /// 403 fails the tenant ([`ElasticError::Tenant`]), and so does a
+    /// connection never made ([`ConnectorError::Unreachable`]: the other
+    /// rules would only wait on the same retries); any other refusal fails
+    /// the rule ([`Deployed::Failed`]).
     pub async fn deploy_rule(
         &self,
         cx: TenantContext<'_>,
@@ -958,7 +960,9 @@ impl Elastic {
         if rule.strategy == Strategy::Deletion {
             let answer = match client.delete_rule(cx, rule_id).await {
                 Ok(answer) => answer,
-                Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
+                Err(error @ (ConnectorError::Cancelled | ConnectorError::Unreachable { .. })) => {
+                    return Err(error.into());
+                }
                 Err(error) => {
                     return Ok(failed(
                         "delete_elastic_rule_failed",
@@ -1019,7 +1023,9 @@ impl Elastic {
         );
         let get = match client.get_rule(cx, rule_id).await {
             Ok(answer) => answer,
-            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
+            Err(error @ (ConnectorError::Cancelled | ConnectorError::Unreachable { .. })) => {
+                return Err(error.into());
+            }
             Err(error) => {
                 return Ok(with(Deployed::Failed {
                     event: "get_elastic_rule_failed".into(),
@@ -1037,7 +1043,9 @@ impl Elastic {
         if get.status == 404 {
             let answer = match client.create_rule(cx, &Json::Object(compiled)).await {
                 Ok(answer) => answer,
-                Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
+                Err(error @ (ConnectorError::Cancelled | ConnectorError::Unreachable { .. })) => {
+                    return Err(error.into());
+                }
                 Err(error) => {
                     return Ok(with(Deployed::Failed {
                         event: "create_elastic_rule_failed".into(),
@@ -1354,9 +1362,10 @@ impl Deployer for Elastic {
     /// [`DeployError::partial`] (and, when a rule whose type changed was
     /// deleted but not created again, its `elastic_rule_deleted` event). A
     /// key Kibana or Elasticsearch refuses (401, 403) fails the tenant
-    /// (`tenant_refused`), and so does a connection failure during the
-    /// checks, a replace or a type change; one on the lookup, a create or a
-    /// delete fails the rule with that step's code, as `opentide deploy`
+    /// (`tenant_refused`), and so does a connection never made, on any step,
+    /// and any connection failure during the checks, a replace or a type
+    /// change; a read timeout or an unreadable answer on the lookup, a create
+    /// or a delete fails the rule with that step's code, as `opentide deploy`
     /// reports it.
     fn deploy<'a>(
         &'a self,

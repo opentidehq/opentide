@@ -504,8 +504,17 @@ fn a_bare_payload_skips_the_checks_and_says_so() {
 
 /// A tenant on `server` (Kibana and Elasticsearch both), `index` `logs-*`.
 fn stand_tenant(server: &str) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
+    stand_tenant_at(server, server)
+}
+
+/// A tenant whose Kibana is `kibana` and Elasticsearch `elasticsearch`,
+/// `index` `logs-*`.
+fn stand_tenant_at(
+    kibana: &str,
+    elasticsearch: &str,
+) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
     let setup: toml::Table = toml::from_str(&format!(
-        "url = \"{server}\"\nelasticsearch_url = \"{server}\"\nindex = [\"logs-*\"]\n"
+        "url = \"{kibana}\"\nelasticsearch_url = \"{elasticsearch}\"\nindex = [\"logs-*\"]\n"
     ))
     .unwrap();
     let env = opentide_connectors::Environment::default();
@@ -704,4 +713,48 @@ fn an_interrupted_deploy_fails_the_tenant() {
     let error = outcome.unwrap_err();
     assert_eq!(error.scope, DeployScope::Tenant);
     assert!(error.is_interrupted(), "{error:?}");
+}
+
+/// A Kibana that refuses the connection fails the tenant, not the rule
+/// (#1658, E7): the lookup of an update, a create or a delete never reached
+/// the tenant, so its other rules would only wait on the same retries. The
+/// Elasticsearch checks, on a reachable cluster, ran first.
+#[test]
+fn an_unreachable_kibana_fails_the_tenant_on_every_operation() {
+    use wiremock::matchers::{method, path_regex};
+    for operation in [Operation::Update, Operation::Create, Operation::Delete] {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let elasticsearch = runtime.block_on(wiremock::MockServer::start());
+        runtime.block_on(async {
+            wiremock::Mock::given(method("GET"))
+                .and(path_regex("/_field_caps$"))
+                .respond_with(
+                    wiremock::ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+                )
+                .mount(&elasticsearch)
+                .await;
+        });
+        // Port 1 on the loopback: nothing listens there.
+        let (tenant, http) = stand_tenant_at("http://127.0.0.1:1", &elasticsearch.uri());
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cx = opentide_connectors::connector::TenantContext {
+            tenant: &tenant,
+            http: &http,
+            cancel: &cancel,
+        };
+        let (rule_id, body) = overridden_rule("query");
+        let request = DeployRequest::new(rule_id, operation, body);
+        let error = runtime.block_on(Elastic.deploy(cx, &request)).unwrap_err();
+        assert_eq!(error.scope, DeployScope::Tenant, "{operation:?}: {error:?}");
+        assert_eq!(error.failure.code, "tenant_unreachable", "{operation:?}");
+        assert!(
+            error
+                .failure
+                .message
+                .starts_with("Cannot reach elastic tenant 'lab' at http://127.0.0.1:1"),
+            "{operation:?}: {}",
+            error.failure.message
+        );
+    }
 }
