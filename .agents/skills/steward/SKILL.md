@@ -75,5 +75,5 @@ A conflict with `development`: merge `origin/development` into the branch, regen
 (base is another branch) merge in the order the stack comment shows.
 
 When several sessions feed one base, the steward's loop (update one PR at a time, merge,
-message every owner the merge unblocks, close the fixed issue) is in
+message every owner the merge unblocks, close an issue the PR fully fixes) is in
 [`orchestration`](../orchestration/SKILL.md).

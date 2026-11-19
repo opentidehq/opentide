@@ -1,16 +1,16 @@
 ---
 name: orchestration
-description: Run several agent sessions on opentide at once without making them wait on each other - branches per PR rather than per session, the merge steward's loop (update, merge, notify the owner), changelog series, review tiers sized to the change, environment prerequisites set up front, how blocked sessions surface, and when to re-plan. Use when starting, steering or reviewing multi-session work, or when work feels sequential.
+description: Run several agent sessions on opentide at once without making them wait on each other - branches per PR rather than per session, the merge steward's loop (update, merge, notify the owner), changelog series, review tiers chosen by what a change touches, environment prerequisites set up front, how blocked sessions surface, and when to re-plan. Use when starting, steering or reviewing multi-session work, or when work feels sequential.
 ---
 
 # Orchestration - parallel sessions, one quality bar
 
 The quality bar does not change with the number of sessions: every fix still has a regression
-test that fails without it ([`review-checklist`](../review-checklist/SKILL.md)), every engine
-change still proves its output identical and its cost measured. What this skill removes is the
-waiting **between** those steps. Each rule below comes from a loss measured on the
-unified-core performance and syntax-gap series (#1571), where a 30-minute fix routinely took
-2 hours end to end.
+test that fails without it ([`review-checklist`](../review-checklist/SKILL.md)); an engine change
+still proves its output unchanged with a differential, or, when it means to change output, shows
+the reviewed snapshot changes; performance work still brings its numbers. What this skill removes
+is the waiting **between** those steps: sessions idle on merges they were not told about, fixes
+queued behind each other on one branch, every queued PR conflicting on the changelog.
 
 ## 1. Branches belong to PRs, not to sessions
 
@@ -25,30 +25,44 @@ unified-core performance and syntax-gap series (#1571), where a 30-minute fix ro
 One session merges; owners never wait on it silently.
 
 1. Take PRs in priority order: blockers of other PRs first, then the oldest green and reviewed PR.
-2. When a green, reviewed PR's only gap is newer base commits with no conflict, update it
-   (GitHub "Update branch", a merge commit, never a force-push) and merge it when its gate passes.
-   Update one PR at a time; updating every PR after each merge only wastes gate runs.
-3. **After every merge, message the owner of every PR or branch waiting on it**: "merged #N
+2. When a green, reviewed PR's only gap is newer base commits with no conflict, update it with
+   GitHub's "Update branch" **merge** option (never "Update with rebase", which force-pushes),
+   and only when the owner has no push in flight (no commit in the last ten minutes). Tell the
+   owner to `git pull` before their next push. Update one PR at a time; updating every PR after
+   each merge only wastes gate runs.
+3. Merge with the base's method: merge commits on `integration/*`
+   ([`unified-core.md`](../../../docs/internal/unified-core.md)), the repository's setting on
+   `development`. Pin the head SHA so a late push is never merged unreviewed.
+4. **After every merge, message the owner of every PR or branch waiting on it**: "merged #N
    (sha); you're unblocked". An owner never discovers a merge by polling.
-4. A conflict or a red gate after an update goes back to the owner with the failing check.
-5. Close the issue a merged PR fixes, with a one-line comment naming the PR and its merge commit.
-   "Closes #N" does not fire on non-default bases.
+5. A conflict or a red gate after an update goes back to the owner with the failing check.
+6. "Closes #N" does not fire on a non-default base. Close an issue by hand only when the merged
+   PR's body says it fixes the issue in full: reason "completed", and a comment naming the PR, its
+   merge commit and the base (on `integration/*` the fix reaches `development` later). A partial
+   fix gets a progress comment and the issue stays open.
 
 ## 3. Changelog series
 
-A series of related PRs that each add an entry at the same spot in `CHANGELOG.md` or
-`crates/CHANGELOG.md` conflict on every merge. For a performance or refactor series, the PRs
-carry no changelog hunk and say "changelog: deferred to the consolidated entry"; one
-consolidated PR, written to [`release-notes`](../release-notes/SKILL.md), lands last. Fixes and
-features that change user-visible behaviour keep their own entry.
+[`release-notes`](../release-notes/SKILL.md) decides what gets an entry: refactors get none. A
+series of user-visible performance PRs that would each add an entry at the same spot in
+`CHANGELOG.md` or `crates/CHANGELOG.md` conflicts on every merge. Such a series may instead defer
+to one consolidated entry, when:
 
-## 4. Review sized to the change
+- a tracking issue lists the series, and each PR body says "changelog: deferred to #<issue>";
+- the consolidated PR, written to `release-notes`, lands before the next release candidate, and
+  the release checklist blocks on it.
+
+Fixes and features that change user-visible behaviour keep their own entry in their own PR.
+
+## 4. Review chosen by what a change touches
+
+Pick the row by the **paths and kind** of the change first; size only matters within row 1.
 
 | Change | Review |
 |---|---|
-| Docs, comments, a test-only change, or a fix under ~50 lines with its regression test | The author's own adversarial pass against [`review-checklist`](../review-checklist/SKILL.md), noted in the PR body |
-| Engine logic, a parser or grammar, the CLI/MCP/SDK surface, CI and gates | An independent adversarial review, posted on the PR, before merge |
-| Performance work | The above plus the numbers: instructions and allocations from `cargo xtask throughput`, wall time at 1 and N threads, a work-count test that fails on the old path, and a byte-identical differential |
+| Only `docs/`, skills, comments, or a fix under about 50 lines **outside** the paths of row 2, with its regression test | The author's own adversarial pass against [`review-checklist`](../review-checklist/SKILL.md), noted in the PR body |
+| Anything under `crates/`, `bindings/`, `src/opentide/`, `xtask/`, `.github/`, `tests/bench/`, `tests/golden/` or `crates/testdata/`; the CLI, MCP or SDK surface; accepted snapshots, raised budgets, oracle exceptions, removed assertions or grown ledgers; a change to this skill, the steward skill or `review-checklist` | An independent adversarial review, posted on the PR, before merge |
+| Performance work | Row 2 plus the numbers: instructions and allocations from `cargo xtask throughput`, wall time at one thread and at the default thread count, a work-count test that fails on the old path, and a byte-identical differential against the base commit |
 
 Run the review while CI runs, not after it.
 
@@ -56,38 +70,42 @@ Run the review while CI runs, not after it.
 
 Set these up before the first session starts, not when a session hits them:
 
-- **Vendor oracles:** .NET (Kusto.Language), Java and Maven (Elasticsearch's ES|QL parser), and
-  Docker (live Elasticsearch for `probes.py`). See [`catalogs`](../catalogs/SKILL.md).
-- **Network:** the doc sites the work reads (learn.microsoft.com, www.elastic.co) and the
-  registries on the allow list.
+- **Vendor oracles:** what [`scripts/engine/oracles/README.md`](../../../scripts/engine/oracles/README.md)
+  lists for the languages in scope (.NET for Kusto.Language, Java and Maven for Elasticsearch's
+  parser, Docker for the live servers).
+- **Network:** the hosts the work needs on the environment's allow list, such as
+  learn.microsoft.com and www.elastic.co for the vendors' references, and the package
+  registries the toolchains fetch from.
 - **Disk:** one Cargo target pool per worktree ("Parallel agents" in [`AGENTS.md`](../../../AGENTS.md)),
   sized to the disk; delete pools a finished worktree left.
-- **Push permissions:** the branches a session will push are allowed in its settings, so a push
-  never waits on a human approval nobody is watching.
+- **Push permissions:** each session may push its own `<type>/*` branches without a prompt, and
+  never `development` or `integration/*`. The user sets these; an agent never changes its own
+  permission settings.
 
 ## 6. Blocked is a message, never a prompt
 
-- A worker that needs a decision messages the orchestrator with the question, the options and
-  its recommendation, then continues with whatever does not depend on the answer. It never waits
-  on an interactive question nobody is watching.
-- The orchestrator answers within one turn and decides what it can; only decisions that are the
-  user's (product scope, outward actions, publishing) go to the user.
-- Workers that share files agree on ownership directly with each other, not through the
-  orchestrator.
-- A session silent for an hour with work left gets a check; the check reads its status rather
-  than waiting for the next scheduled round.
+- A worker that needs a decision messages the orchestrator with the question, the options and its
+  recommendation, then continues with whatever does not depend on the answer. It never waits on an
+  interactive question nobody is watching.
+- The orchestrator answers promptly (by default within its next turn) and decides what it can;
+  only decisions that are the user's (product scope, outward actions, publishing) go to the user.
+- Workers that share files may agree ownership directly. The owner of the file records the
+  agreement in its PR body and tells the orchestrator; a disagreement goes to the orchestrator.
+- A session silent with work left (by default for an hour) gets a check, which reads its status
+  rather than waiting for the next scheduled round.
 
 ## 7. Re-plan when scope grows
 
 Profiling and oracles find real problems, and fixing them before a release is right. When a
-finding adds more than two PRs, re-plan instead of queueing them behind one session: split by
-file ownership across free sessions, and say what moves the finish line.
+finding adds more than two PRs, re-plan instead of queueing them behind one session: split by file
+ownership across free sessions, and say what moves the finish line.
 
-## Anti-patterns seen
+## Anti-patterns
 
-- One push branch per session, so six fixes went up one after another.
-- Owners idle for hours after the PR they waited on had merged.
+- One push branch per session, so a session's independent fixes go up one after another.
+- Owners idle after the PR they waited on has merged.
 - Every queued PR conflicting on the changelog after each merge.
-- A full independent review on a six-line fix.
-- Relaying vendor-oracle runs through another session because a container lacked .NET.
-- A worker blocked on an interactive question in a session nobody was watching.
+- A full independent review on a docs fix while CI also waits; or, the other way, a small parser
+  fix merged on the author's review alone.
+- Relaying vendor-oracle runs through another session because a container lacks a toolchain.
+- A worker blocked on an interactive question in a session nobody is watching.
