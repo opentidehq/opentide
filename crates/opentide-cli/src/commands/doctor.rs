@@ -1641,6 +1641,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         assert_eq!(doctor.lsp_catalog().status, "pass");
@@ -1671,6 +1672,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         let check = doctor.proxy(false);
@@ -1890,6 +1892,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         doctor.proxy(false)
