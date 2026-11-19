@@ -4064,9 +4064,10 @@ mod tests {
         );
         assert!(unknown.stdout.contains("\"code\":\"usage_invalid_choice\""));
         assert!(unknown.stdout.contains("\"argument\":\"phase\""));
-        // The full pipeline runs here (UC-6.0): its six phases, in a folder
-        // of its own.
+        // The full pipeline runs here (UC-6.0): its six phases, in a fresh
+        // workspace of its own (outside one, generate writes nothing).
         let folder = tempfile::tempdir().unwrap();
+        std::fs::create_dir(folder.path().join(".opentide")).unwrap();
         let line = format!("--json --repo {} generate", folder.path().display());
         let pipeline = dispatched(&line, &[], false);
         assert_eq!(pipeline.code, 0, "{}", pipeline.stdout);

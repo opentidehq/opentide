@@ -585,6 +585,43 @@ mod tests {
     }
 
     #[test]
+    fn a_configuration_file_that_does_not_parse_is_config_parse() {
+        // D9, B10 (smoke test): MCP answered `command_failed` with an
+        // absolute path and no position, where the command line says
+        // `config_parse` and `path:line:column`.
+        let dir = tempfile::tempdir().unwrap();
+        let platforms = dir.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
+        let server = Server::new(
+            Env::from_pairs::<&str, &str>([]),
+            Some(dir.path().to_path_buf()),
+            None,
+            "1",
+            None,
+        );
+        for (tool, arguments) in [
+            ("validation_report", json!({})),
+            ("search", json!({"query": "x"})),
+        ] {
+            let arguments = serde_json::from_value(arguments).unwrap();
+            let Answer::Result(result) = server.call(tool, &arguments) else {
+                panic!("not a result");
+            };
+            let said = result["content"][0]["text"].as_str().unwrap_or("");
+            assert_eq!(result["isError"], true, "{tool}: {said}");
+            assert!(
+                said.contains("config_parse: .opentide/configurations/platforms/sentinel.toml:2:"),
+                "{tool}: {said}"
+            );
+        }
+    }
+
+    #[test]
     fn a_catalogue_tool_hears_the_launchs_workspace_problem() {
         let server = Server::new(
             Env::from_pairs::<&str, &str>([]),
