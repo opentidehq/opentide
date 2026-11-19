@@ -42,7 +42,11 @@ CRATES: dict[str, tuple[str, list[tuple[str, str | None]]]] = {
             ("opentide-schema", None),
         ],
     ),
-    "opentide-cli": ("crates/opentide-cli", [("opentide-analysis", None)]),
+    "opentide-compile": ("crates/opentide-compile", [("opentide-schema", None)]),
+    "opentide-cli": (
+        "crates/opentide-cli",
+        [("opentide-analysis", None), ("opentide-compile", None)],
+    ),
     "opentide": ("crates/opentide", [("opentide-cli", None)]),
     "opentide-native": ("bindings/python", [("opentide", None)]),
     "opentide-node": ("bindings/node", [("opentide", None)]),
@@ -174,6 +178,23 @@ def test_the_webassembly_and_typescript_jobs_run_on_their_inputs(
         assert outputs["rust"] == "false"  # no Rust job for a script or a client
     if wasm and not ts_packages and not path.startswith(("scripts/", "vendor/")):
         assert outputs["node"] == "false"  # the parser layer runs no other specialised job
+
+
+@pytest.mark.parametrize(
+    ("path", "gitlab"),
+    [
+        # What `setup ci gitlab` renders: the command, the templates, the
+        # annotations.
+        ("crates/opentide-cli/src/commands/setup/mod.rs", True),
+        ("crates/opentide-compile/src/ci/mod.rs", True),
+        ("crates/opentide-compile/src/ci/templates/gitlab-ci.yml.j2", True),
+        ("crates/opentide-cli/src/render/ci.rs", True),
+        # Elsewhere in the crate, no GitLab lint.
+        ("crates/opentide-compile/src/plan.rs", False),
+    ],
+)
+def test_the_gitlab_lint_runs_when_the_pipeline_can_change(path: str, gitlab: bool) -> None:
+    assert plan(path)["gitlab"] == str(gitlab).lower()
 
 
 def test_build_wasm_runs_its_own_tests_in_the_python_job() -> None:
