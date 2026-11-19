@@ -188,6 +188,10 @@ fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
             DEFENDER,
         ),
         (
+            ".opentide/configurations/platforms/sentinel.toml",
+            "[platform]\nenabled = true\n",
+        ),
+        (
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",

@@ -4779,11 +4779,13 @@ fn operation_of(action: &Planned, strategy: StatusStrategy) -> (Operation, Optio
 /// What an Elastic deploy did to a rule, as a plan's action: `create` for a
 /// rule Kibana did not have, `update` for one it replaced or recreated.
 fn elastic_done_action(done: &DeployOutcome) -> Option<&'static str> {
-    done.events.iter().find_map(|event| match event.name.as_str() {
-        "elastic_rule_created" => Some("create"),
-        "elastic_rule_updated" | "elastic_rule_recreated" => Some("update"),
-        _ => None,
-    })
+    done.events
+        .iter()
+        .find_map(|event| match event.name.as_str() {
+            "elastic_rule_created" => Some("create"),
+            "elastic_rule_updated" | "elastic_rule_recreated" => Some("update"),
+            _ => None,
+        })
 }
 
 /// What an Elastic tenant's rules share: its `setup`, whether it turns

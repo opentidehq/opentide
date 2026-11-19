@@ -20,6 +20,13 @@ reason = "An Elastic preview's api_request is the deploy body, {\"payload\": <th
 issue = "https://github.com/opentidehq/opentide/issues/1142"
 changelog = "**A dry run's Elastic entry is the deploy body**"
 
+[[dump]]
+rule = "unset"
+platforms = ["defender_for_endpoint", "splunk", "sentinel_one", "crowdstrike", "harfanglab", "carbon_black_cloud"]
+reason = "A dry run's preview of a block opentide builds no request body for leaves out the fields the block does not set: the model's defaults (enabled: false, name: \"\") are neither what the block says nor what a deploy sends, and docs/cli/deploy.md promises the block without them. The oracle's model_dump wrote every default; every value the block sets is the same."
+issue = "https://github.com/opentidehq/opentide/issues/1662"
+changelog = "**A dry run's preview shows only what the block sets**"
+
 [[diff]]
 corpus = "payloads"
 uuid = "00000000-0000-4000-8005-000000000106"

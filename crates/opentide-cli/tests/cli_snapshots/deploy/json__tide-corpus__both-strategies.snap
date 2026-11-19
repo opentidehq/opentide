@@ -233,9 +233,7 @@ exit: 0
       {
         "api_request": {
           "action": "Alert",
-          "confidence": "Moderate",
           "enabled": true,
-          "maturity": "Experimental",
           "name": "HarfangLab Deploy Rule",
           "sigma": {
             "condition": "selection",

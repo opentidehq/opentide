@@ -209,7 +209,7 @@ fn only_set(dumped: Json, written: &Json, top: bool) -> Json {
 /// The block read by `platform`'s model, or `None` when the model refuses
 /// it or there is none.
 fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
-    let dumped = match platform {
+    match platform {
         "sentinel" => model_dump::<SentinelConfig>(block),
         "defender_for_endpoint" => model_dump::<DefenderConfig>(block),
         "splunk" => model_dump::<SplunkConfig>(block),
@@ -224,8 +224,7 @@ fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
         "google_secops" => model_dump::<GoogleSecopsConfig>(block),
         "graylog" => model_dump::<GraylogConfig>(block),
         _ => None,
-    };
-    dumped
+    }
 }
 
 /// The entry of a rule shown as its block's dump (`_config_preview`).

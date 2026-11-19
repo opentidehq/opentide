@@ -950,7 +950,7 @@ fn a_platform_with_no_rule_to_deploy_is_skipped_and_counts_the_blocks_left_out()
     assert_eq!(report.outcome.exit_code, 0);
     assert_eq!(
         report.outcome_line.as_deref(),
-        Some("No rule has a status this run deploys · 1 rule in DESIGN")
+        Some("No rule has a status PREVIEW or RELEASE deploys · 1 rule in DESIGN")
     );
 }
 
@@ -2769,8 +2769,9 @@ fn elastic_creates_updates_refuses_and_deletes_as_it_deploys() {
     assert_eq!(code, 1, "{err}");
     let ordered = [
         "Timestamp field 'event.ingested' not found in mappings yet",
-        "✓ deployed  Fresh rule",
-        "✓ deployed  Present rule",
+        // Kibana said which: a create, an update (#1662, E10).
+        "✓ created   Fresh rule",
+        "✓ updated   Present rule",
         "refusing to modify prebuilt rule",
         "✓ deleted   Removed rule",
         // The checks' warning, then Kibana's refusal.
@@ -3054,7 +3055,8 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
         panic!("advice")
     };
     assert!(
-        advice.starts_with("set a platform block's status to ") && advice.ends_with(" for PREVIEW to deploy it"),
+        advice.starts_with("set a platform block's status to ")
+            && advice.ends_with(" for PREVIEW to deploy it"),
         "{advice}"
     );
     assert_eq!(

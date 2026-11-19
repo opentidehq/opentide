@@ -170,7 +170,25 @@ fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
         return Some("nulls");
     }
     let value = |text: &str| serde_json::from_str::<Value>(text).ok();
-    (value(&trimmed)? == value(mine)?).then_some("order")
+    let (trimmed, mine) = (value(&trimmed)?, value(mine)?);
+    if trimmed == mine {
+        return Some("order");
+    }
+    // `unset`: the oracle's entry with members left out, at any depth (the
+    // model's defaults the block does not set), every value kept the same.
+    pruned_from(&trimmed, &mine).then_some("unset")
+}
+
+/// Whether `mine` is `oracle` with object members left out, at any depth.
+fn pruned_from(oracle: &Value, mine: &Value) -> bool {
+    match (oracle, mine) {
+        (Value::Object(oracle), Value::Object(mine)) => mine.iter().all(|(key, value)| {
+            oracle
+                .get(key)
+                .is_some_and(|known| pruned_from(known, value))
+        }),
+        _ => oracle == mine,
+    }
 }
 
 /// The approved differences of the compile corpus (`[[diff]]` entries of
