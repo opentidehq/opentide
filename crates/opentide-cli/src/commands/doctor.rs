@@ -133,8 +133,9 @@ struct Doctor<'a> {
     workspace: PathBuf,
     explicit: bool,
     cwd: PathBuf,
-    /// `OPENTIDE_TIDE_WORKSPACE`, resolved against the working directory,
-    /// when it is set.
+    /// The Tide workspace `placement` resolves, against the working
+    /// directory: `OPENTIDE_TIDE_WORKSPACE` when it is set, else the
+    /// repository path.
     tide_workspace: Option<PathBuf>,
     /// The merged configuration, when it loads.
     config: Option<Node>,
