@@ -4,6 +4,10 @@
 
 use std::path::{Path, PathBuf};
 
+use opentide_schema::generate::router::template_artifact_name;
+use opentide_schema::generate::workspace::{
+    identifiers_for_families, schema_id_from_template_filename,
+};
 use opentide_schema::node::{Node, Value};
 use opentide_schema::vocab::{KeyKind, OBJECT_TYPES, Vocabularies, Vocabulary};
 use opentide_workspace::{FileSystem, OsFs, Workspace};
@@ -344,13 +348,20 @@ fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
     );
     let mut out: Vec<(String, Json)> = Vec::new();
     if OsFs.is_dir(&dir) {
+        let read = |file: &str| {
+            OsFs.read(&dir.join(file))
+                .ok()
+                .map(|bytes| Json::Str(String::from_utf8_lossy(&bytes).into_owned()))
+        };
         for (family, file) in artifacts(config, "templates") {
-            let path = dir.join(&file);
-            if let Ok(bytes) = OsFs.read(&path) {
-                out.push((
-                    family,
-                    Json::Str(String::from_utf8_lossy(&bytes).into_owned()),
-                ));
+            // The family's newest revision, which `opentide new` starts an
+            // object on; the configured file (the editor's default revision,
+            // which can be older) only when that one was not generated.
+            let newest = identifiers_for_families(&[family.as_str()])
+                .last()
+                .and_then(|id| read(&template_artifact_name(id)));
+            if let Some(text) = newest.or_else(|| read(&file)) {
+                out.push((family, text));
             }
         }
     }
@@ -376,35 +387,49 @@ fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
     out
 }
 
-/// The current revision of each object family (`MetaSchemas.Index`'s keys).
-fn metaschema_keys(workspace: &Workspace) -> Vec<String> {
-    let families: Vec<&str> = workspace
-        .configuration()
-        .families
-        .iter()
-        .map(String::as_str)
-        .collect();
-    opentide_schema::generate::workspace::identifiers_for_families(&families)
-        .iter()
-        .map(ToString::to_string)
+/// The generated template of each object revision in the workspace
+/// (`rule.1.0.template.yaml` as `rule::1.0`).
+fn revision_templates(workspace: &Workspace) -> Vec<(String, Json)> {
+    let config = &workspace.configuration().resolved.tree;
+    let dir = workspace_dir(
+        workspace,
+        &paths_value(config, "opentide", "templates")
+            .unwrap_or_else(|| ".opentide/templates/".into()),
+    );
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let identifier = schema_id_from_template_filename(&name)?;
+            let bytes = OsFs.read(&dir.join(&name)).ok()?;
+            Some((
+                identifier,
+                Json::Str(String::from_utf8_lossy(&bytes).into_owned()),
+            ))
+        })
         .collect()
 }
 
+/// `opentide://templates/{object_type}`: a family (`rule`, `rules`) is its
+/// newest revision's template, as `opentide new` writes it; a revision
+/// (`rule::1.0`, `rule.1.1`) is that revision's generated template.
 fn template(workspace: &Workspace, object_type: &str) -> Json {
-    let templates = templates(workspace);
-    let names: Vec<String> = templates.iter().map(|(name, _)| name.clone()).collect();
-    let key = resolve_family_key(names.iter().map(String::as_str), object_type).or_else(|| {
-        // Templates are rendered from the current model: a versioned request
-        // matches only the current version.
-        let (family, version) = split_schema_id(object_type);
-        let version = version?;
-        if !names.contains(&family) {
-            return None;
+    let mut templates = templates(workspace);
+    for (identifier, text) in revision_templates(workspace) {
+        if !templates.iter().any(|(name, _)| *name == identifier) {
+            templates.push((identifier, text));
         }
-        let keys = metaschema_keys(workspace);
-        let current = resolve_family_key(keys.iter().map(String::as_str), &family)?;
-        (split_schema_id(&current).1.as_deref() == Some(version.as_str())).then_some(family)
-    });
+    }
+    let names: Vec<String> = templates.iter().map(|(name, _)| name.clone()).collect();
+    let key = resolve_family_key(names.iter().map(String::as_str), object_type);
     match key.and_then(|key| templates.into_iter().find(|(name, _)| *name == key)) {
         Some((_, text)) => text,
         None => Json::object([

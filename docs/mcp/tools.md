@@ -33,7 +33,7 @@ Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when yo
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `query` | string | required | Search term |
-| `type` | string | `""` | Object type filter: `rule`, `threat`, `objective` |
+| `type` | string | `""` | Object type filter: `rule`, `threat`, `objective`. Any other value is refused (`isError`), naming the three |
 | `platform` | string | `""` | Platform filter |
 | `status` | string | `""` | Rule status filter: a rule matches when one of its platform blocks has this `status` |
 | `technique` | string | `""` | ATT&CK technique ID |
@@ -190,7 +190,7 @@ Validate a single rule against its schema and cross-object checks.
 }
 ```
 
-`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for its first error code (each issue's `explain` field names its own code), and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for, unless its status there maps to `INERT`. The `command` passes the `--strategy` values that deploy the rule's status (`PREVIEW` for a `STAGING` rule, `RELEASE` for a `PRODUCTION` one) and `--all`, because the CLI has no `--uuid`: it previews every rule those strategies deploy, this one among them. An unknown UUID points at `search` with an empty query, which lists every rule with its title (the `command`, `opentide --json info rules`, lists UUIDs only).
+`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for its first error code (each issue's `explain` field names its own code), and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for, unless its status there maps to `INERT`. The `command` passes the `--strategy` values that deploy the rule's status (`PREVIEW` for a `STAGING` rule, `RELEASE` for a `PRODUCTION` one) and `--all`: it previews every rule those strategies deploy, this one among them (`--uuid <uuid>` in place of `--all` previews this rule alone). An unknown UUID points at `search` with an empty query, which lists every rule with its title (the `command`, `opentide --json info rules`, lists UUIDs only).
 
 ## validation_report
 
@@ -319,9 +319,9 @@ Checks a query offline with the analysis engine, the same engine as `opentide va
 | `platform` | string | | Platform key: picks the language and its profile (Defender tables for `defender_for_endpoint`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, a YARA-L rule for `google_secops`) |
 | `live` | boolean | `false` | `true` calls the tenant |
 | `language` | string | `""` | Empty: the platform's language. Elastic, the one platform with several: `esql`, `eql`, `kuery` (the default) or `lucene` |
-| `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, such as `9.5` or `serverless`. Empty: every supported stack |
+| `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, `MAJOR.MINOR` such as `9.5`, or `serverless`. Empty: every supported stack. Any other value is refused with `status: "failed"` and `valid: null`, as an unknown `language` is |
 
-Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and the `engine` versions. Warnings (slow query shapes) leave `valid` true. The offline check knows the tables, indexes and index patterns the workspace's [`visibility.toml`](../usage/configuration.md#the-datasets-a-log-source-fills) declares, read afresh on each call as `opentide validate` and `lint` read it, so a declared table is known and, once a platform declares one, an undeclared one is a warning (`kql_table_not_declared`). A server with no workspace declares nothing. `next_actions` names the first finding's `explain` page, then the live check, for a platform that has one (CrowdStrike's CQL and Sysdig's Falco are checked offline only, so `live: true` returns `supported: false` for them).
+Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and `engine`, the version of the engine that checked it. Warnings (slow query shapes) leave `valid` true. The offline check knows the tables, indexes and index patterns the workspace's [`visibility.toml`](../usage/configuration.md#the-datasets-a-log-source-fills) declares, read afresh on each call as `opentide validate` and `lint` read it, so a declared table is known and, once a platform declares one, an undeclared one is a warning (`kql_table_not_declared`). A server with no workspace declares nothing. `next_actions` names the first finding's `explain` page, then the live check, for a platform that has one (CrowdStrike's CQL and Sysdig's Falco are checked offline only, so `live: true` returns `supported: false` for them).
 
 ```json
 {
@@ -362,8 +362,7 @@ Offline, the result has `valid` (`false` when the engine found an error), `statu
     }
   ],
   "engine": {
-    "package": "0.6.0",
-    "engine": "0.6.0"
+    "engine": "0.12.0"
   },
   "next_actions": [
     {
@@ -388,7 +387,7 @@ Offline, the result has `valid` (`false` when the engine found an error), `statu
 }
 ```
 
-SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). A missing SDK, a missing plan or a tenant it cannot reach is a failed live check.
+SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed. A missing SDK, a missing plan or a tenant it cannot reach is a failed live check.
 
 **Unsupported platforms** return:
 
@@ -464,13 +463,13 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
   "status": "STAGING",
   "dry_run": true,
   "platform": "sentinel",
-  "message": ""
+  "message": "dry-run"
 }
 ```
 
-`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing). `status` is the `status` of the rule's block for `platform` (the status deploy reads), not a planned-action label, or `null` when the rule has no block for it. Through 0.20.1 it was the rule-level `status`, which no command reads and which defaulted to `STAGING` when left out.
+`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing, or has no block for `platform`). `status` is the `status` of the rule's block for `platform` (the status deploy reads), not a planned-action label. A rule with no block for `platform` (or a block with no `status`) is refused the same way with or without `dry_run`: `"action": "error"`, `"status": "error"` and a `message` such as `Rule "Sentinel KQL Rule" has no splunk status to deploy`, so the preview says what the real call would. Through 0.20.1 it was the rule-level `status`, which no command reads and which defaulted to `STAGING` when left out.
 
-A real deploy the deployer refused or failed returns `"action": "error"`, `"status": "failed"` and `"error": "deployment_failed"`, with no vendor call for a refused rule: for example a rule that still carries `rule_id` (`external_id_in_rule`), or a create whose id could not be written (`deployment_state_write_failed`). The server log names the code. Each call starts from a clean outcome, so one failed call does not mark the next as failed.
+A real deploy the deployer refused or failed returns `"action": "error"`, `"status": "failed"` and `"error": "deployment_failed"`, with no vendor call for a refused rule: for example a rule that still carries `rule_id` (`external_id_in_rule`), or a create whose id could not be written (`deployment_state_write_failed`). `message` is the cause, as the `error` of `opentide --json deploy` gives it: the platform, the rule and the tenant's or the platform's own words. Each call starts from a clean outcome, so one failed call does not mark the next as failed.
 
 ```json
 {
@@ -480,7 +479,7 @@ A real deploy the deployer refused or failed returns `"action": "error"`, `"stat
   "status": "failed",
   "dry_run": false,
   "platform": "sentinel",
-  "message": "Deployment failed: the deployer reported a rule error (see the log for its code, for example external_id_in_rule)",
+  "message": "Deployment to sentinel failed on Sentinel KQL Rule: sentinel tenant 'lab' setup: azure_client_secret names the environment variable AZURE_CLIENT_SECRET, which is unset",
   "error": "deployment_failed"
 }
 ```
@@ -556,12 +555,12 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 2. Apply `fix.edits` from the issue rather than guessing; `safe: true` edits need no review, the others need a look at `help`. Call `explain` for a code you do not know.
 3. Use `search` before `get_chaining` when the UUID is unknown.
 4. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy. People review and merge changes.
-5. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant. Ask a person before `run_query` with `live: true`, which queries a tenant with real credentials.
+5. Never claim query validation for unsupported platforms. `validate_query` checks the query offline; with `live: true` it checks the catalogue's rules against the tenant instead, so ask a person first. Ask a person before `run_query` with `live: true`, which queries a tenant with real credentials.
 6. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
 
 ## Troubleshooting
 
 - **Empty results everywhere** — the server likely started with the wrong `OPENTIDE_REPO_ROOT`, or schemas were never generated. See [Configuration](./configuration.md) and run `opentide generate` in the repo.
-- **`validate_query` refuses** — the default does not scan. Pass `live: true` to check the catalogue rules against the tenant. A missing SDK, a missing plan or an unreachable tenant fails that check.
+- **`validate_query` refuses** — SentinelOne's S1QL has no offline engine: pass `live: true` to check the catalogue rules against the tenant. On the other platforms the default checks the query offline. A missing plan or an unreachable tenant fails the live check.
 - **A resource returns `{"error": "… not found"}`** — the UUID is wrong or the object type does not match; confirm with `search`.
 - **`deploy_rule` crashes, or `deployment_status` says an undeployed rule is deployed** — through 0.6.3 an unknown platform raised `KeyError`, and any authoring config counted as deployed. 0.6.4 returns a structured failure for an unknown platform or a platform with no tenants. `deployed` is false when the config has no `external_id` and no tenants.

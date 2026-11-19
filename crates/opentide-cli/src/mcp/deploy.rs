@@ -103,18 +103,8 @@ pub fn deploy_rule(
         .and_then(|blocks| blocks.get(platform))
         .and_then(|block| block.get("status"))
         .and_then(|status| fields::text(Some(status)));
-    let status_json = block_status.clone().map_or(Json::Null, Json::Str);
-    if dry_run {
-        return Ok(Json::object([
-            ("action", Json::str("dry-run")),
-            ("tenant", Json::Null),
-            ("rule_id", Json::str(uuid)),
-            ("status", status_json),
-            ("dry_run", Json::Bool(true)),
-            ("platform", Json::str(platform)),
-            ("message", Json::str("dry-run")),
-        ]));
-    }
+    // Checked before the dry run returns: the preview says what the real
+    // call would, and a rule with no block for `platform` deploys nothing.
     let Some(status) = block_status else {
         let name = rule
             .root()
@@ -127,7 +117,7 @@ pub fn deploy_rule(
         return Ok(error(
             uuid,
             "error",
-            false,
+            dry_run,
             vec![
                 ("platform", Json::str(platform)),
                 (
@@ -137,6 +127,17 @@ pub fn deploy_rule(
             ],
         ));
     };
+    if dry_run {
+        return Ok(Json::object([
+            ("action", Json::str("dry-run")),
+            ("tenant", Json::Null),
+            ("rule_id", Json::str(uuid)),
+            ("status", Json::str(&status)),
+            ("dry_run", Json::Bool(true)),
+            ("platform", Json::str(platform)),
+            ("message", Json::str("dry-run")),
+        ]));
+    }
     let statuses = Statuses::from_resolved(&workspace.configuration().resolved);
     let strategy = statuses
         .strategy(&status)
@@ -184,18 +185,27 @@ pub fn deploy_rule(
         context.interrupt.cloned().unwrap_or_default(),
     );
     let document = Json::parse(String::from_utf8_lossy(&run.stdout).trim()).ok();
-    let message = document
-        .as_ref()
-        .and_then(|document| document.get("message"))
-        .and_then(Json::as_str)
-        .unwrap_or_default()
-        .to_owned();
+    let text_of = |key: &str| {
+        document
+            .as_ref()
+            .and_then(|document| document.get(key))
+            .and_then(Json::as_str)
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let message = text_of("message");
     if run.exit_code != 0 {
+        // The run's `error` names the cause (the rule and the tenant's or the
+        // platform's own words); its `message` is only the tally.
+        let cause = text_of("error");
         let mut rest = vec![
             ("platform", Json::str(platform)),
             (
                 "message",
-                Json::Str(if message.is_empty() {
+                Json::Str(if !cause.is_empty() {
+                    cause
+                } else if message.is_empty() {
                     "Deployment failed: the deployer reported a rule error (see the log for its \
                      code, for example external_id_in_rule)"
                         .to_owned()

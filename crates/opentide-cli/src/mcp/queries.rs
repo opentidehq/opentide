@@ -146,6 +146,20 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
     }
 }
 
+/// Whether `stack` is a stack the ES|QL checks read: `MAJOR.MINOR` or
+/// `serverless`, as `opentide_esql::StackTarget::parse` reads it. Anything
+/// else would be checked as no stack at all, against every one.
+fn known_stack(stack: &str) -> bool {
+    let stack = stack.trim();
+    if stack.eq_ignore_ascii_case("serverless") {
+        return true;
+    }
+    let digits = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    stack
+        .split_once('.')
+        .is_some_and(|(major, minor)| digits(major) && digits(minor))
+}
+
 /// `validate_query`: `query` checked offline, or with `live` the
 /// catalogue's rules for `platform` on its tenants.
 pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json, String> {
@@ -164,7 +178,9 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
         ]));
     }
     if check.live {
-        let (result, exit_code) = command_result(
+        // The command's document without its envelope: `status` says
+        // whether the check failed, so no exit code is added (smoke C7).
+        let (result, _) = command_result(
             &[
                 "validate".to_owned(),
                 "query".to_owned(),
@@ -174,15 +190,7 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
             ],
             context,
         )?;
-        // The service's exit code stays in the payload (`_exit_code`); its
-        // failure code does not.
-        let Json::Object(mut members) = result else {
-            return Ok(result);
-        };
-        if exit_code != 0 {
-            members.insert("_exit_code".to_owned(), Json::Int(i64::from(exit_code)));
-        }
-        return Ok(Json::Object(members));
+        return Ok(result);
     }
     Ok(offline(check, context))
 }
@@ -236,6 +244,15 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         return Json::object(failed(
             payload,
             "query is empty: pass the query text to check".to_owned(),
+        ));
+    }
+    if !stack.trim().is_empty() && !known_stack(stack) {
+        return Json::object(failed(
+            payload,
+            format!(
+                "stack is an Elastic stack version, MAJOR.MINOR (such as 8.19 or 9.5), or \
+                 serverless, not {stack:?}"
+            ),
         ));
     }
     let chosen = match language.trim().to_lowercase() {

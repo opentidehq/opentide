@@ -365,18 +365,46 @@ impl ServerHandler for Server {
     }
 
     /// A method the server has no handler for: `Method not found`, with the
-    /// method as its data.
+    /// method as its data. A method of MCP's whose params rmcp could not read
+    /// (`tools/call` without `params`, a `resources/read` without its `uri`)
+    /// comes here too: it exists, so its answer is `Invalid params`.
     fn on_custom_request(
         &self,
         request: CustomRequest,
         _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CustomResult, ErrorData>> + Send + '_ {
-        std::future::ready(Err(ErrorData::new(
-            ErrorCode::METHOD_NOT_FOUND,
-            "Method not found",
-            Some(Value::String(request.method)),
-        )))
+        std::future::ready(Err(unhandled(request.method)))
     }
+}
+
+/// MCP's methods that take params: a request for one that reaches
+/// [`Server::on_custom_request`] had params rmcp could not read.
+const METHODS_WITH_PARAMS: [&str; 7] = [
+    "tools/call",
+    "resources/read",
+    "resources/subscribe",
+    "resources/unsubscribe",
+    "prompts/get",
+    "completion/complete",
+    "logging/setLevel",
+];
+
+/// The error for a request no handler took: `Invalid params` for a method of
+/// MCP's whose params did not read, else `Method not found`.
+fn unhandled(method: String) -> ErrorData {
+    if METHODS_WITH_PARAMS.contains(&method.as_str()) {
+        let message = format!("Invalid params: {method} needs its params (missing or malformed)");
+        return ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            message,
+            Some(Value::String(method)),
+        );
+    }
+    ErrorData::new(
+        ErrorCode::METHOD_NOT_FOUND,
+        "Method not found",
+        Some(Value::String(method)),
+    )
 }
 
 #[cfg(test)]
@@ -408,6 +436,18 @@ mod tests {
         );
         assert!(!manifest.resources.resources.is_empty());
         assert!(!manifest.templates.resource_templates.is_empty());
+    }
+
+    #[test]
+    fn a_known_method_with_unreadable_params_is_invalid_params() {
+        for method in ["tools/call", "resources/read"] {
+            let error = unhandled(method.to_owned());
+            assert_eq!(error.code, ErrorCode::INVALID_PARAMS, "{method}");
+            assert_eq!(error.data, Some(json!(method)));
+        }
+        let error = unhandled("tools/nothing".to_owned());
+        assert_eq!(error.code, ErrorCode::METHOD_NOT_FOUND);
+        assert_eq!(error.message, "Method not found");
     }
 
     #[test]

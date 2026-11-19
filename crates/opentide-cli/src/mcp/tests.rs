@@ -255,6 +255,159 @@ fn deployment_status_reads_platforms_past_a_configurations_that_is_not_a_table()
     );
 }
 
+/// `opentide://templates/rule` is the newest revision's template, the one
+/// `opentide new rule` starts from, and each revision `generate` wrote is
+/// served by its id (smoke C3); the configured file stays the fallback.
+#[test]
+fn the_rule_template_is_the_newest_revision_and_each_revision_is_served() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let templates = ws.join(".opentide/templates");
+    std::fs::create_dir_all(&templates).unwrap();
+    std::fs::write(
+        templates.join("rule.1.0.template.yaml"),
+        "schema: rule::1.0\n",
+    )
+    .unwrap();
+    std::fs::write(
+        templates.join("rule.1.1.template.yaml"),
+        "schema: rule::1.1\n",
+    )
+    .unwrap();
+    let server = server(&ws);
+    let text = |uri: &str| {
+        let Answer::Result(result) = server.read(uri) else {
+            panic!("{uri}: not a result");
+        };
+        result["contents"][0]["text"].as_str().unwrap().to_owned()
+    };
+    for uri in [
+        "opentide://templates/rule",
+        "opentide://templates/rules",
+        "opentide://templates/rule::1.1",
+        "opentide://templates/rule.1.1",
+    ] {
+        assert_eq!(text(uri), "\"schema: rule::1.1\\n\"", "{uri}");
+    }
+    assert_eq!(
+        text("opentide://templates/rule::1.0"),
+        "\"schema: rule::1.0\\n\""
+    );
+    let unknown = read(&server, "opentide://templates/rule::9.9");
+    assert!(unknown["error"].is_string(), "{unknown}");
+    assert_eq!(
+        read(&server, "opentide://index")["templates"]["rule"],
+        "schema: rule::1.1\n"
+    );
+}
+
+/// An unknown `stack` or search `type` is refused, naming what is known,
+/// rather than read as no filter at all (smoke C9).
+#[test]
+fn an_unknown_stack_or_object_type_is_refused() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
+    let check = |stack: &str| {
+        call(
+            &server,
+            "validate_query",
+            json!({"query": "FROM logs-* | LIMIT 10", "platform": "elastic",
+                   "language": "esql", "stack": stack}),
+        )
+    };
+    let refused = check("bogus");
+    assert_eq!(refused["status"], "failed", "{refused}");
+    assert_eq!(refused["valid"], Value::Null, "{refused}");
+    assert!(
+        refused["message"]
+            .as_str()
+            .unwrap()
+            .contains("not \"bogus\""),
+        "{refused}"
+    );
+    for known in ["9.5", "8.19", "Serverless", ""] {
+        assert_eq!(check(known)["valid"], true, "{known}");
+    }
+    let Answer::Result(result) =
+        server.call("search", &arguments(json!({"query": "", "type": "bogus"})))
+    else {
+        panic!("not a result");
+    };
+    assert_eq!(result["isError"], true, "{result}");
+    assert_eq!(
+        result["content"][0]["text"],
+        "Error executing tool search: argument type must be one of rule, threat, objective, \
+         not \"bogus\""
+    );
+}
+
+/// A live `validate_query` answers the command's document: `status` says it
+/// failed, and no `_exit_code` is added (smoke C7).
+#[test]
+fn a_failed_live_query_check_carries_no_exit_code() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let live = call(
+        &server(&ws),
+        "validate_query",
+        json!({"query": "index=main", "platform": "splunk", "live": true}),
+    );
+    assert_eq!(live["status"], "failed", "{live}");
+    assert!(live.get("_exit_code").is_none(), "{live}");
+}
+
+/// A real `deploy_rule` that fails says why, as `opentide --json deploy`
+/// does in its `error`, not only the run's tally (smoke C2). The tenant's
+/// secret names an environment variable that is unset, so nothing is sent.
+#[test]
+fn a_failed_deploy_names_its_cause() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let config = ws.join(".opentide/configurations/platforms/sentinel.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[[tenants]]\nname = \"lab\"\n[tenants.setup]\nresource_group = \"rg\"\n\
+         workspace_name = \"soc\"\nworkspace_id = \"11111111-2222-4333-8444-555555555555\"\n\
+         azure_tenant_id = \"t\"\nazure_subscription_id = \"s\"\nazure_client_id = \"c\"\n\
+         azure_client_secret = \"$OPENTIDE_TEST_UNSET_SECRET\"\n",
+    );
+    std::fs::write(&config, text).unwrap();
+    let failed = call(
+        &server(&ws),
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel", "dry_run": false}),
+    );
+    assert_eq!(failed["status"], "failed", "{failed}");
+    assert_eq!(failed["error"], "deployment_failed", "{failed}");
+    let message = failed["message"].as_str().unwrap();
+    assert!(
+        message.starts_with("Deployment to sentinel failed on Sentinel KQL Rule: ")
+            && message.contains("OPENTIDE_TEST_UNSET_SECRET"),
+        "{message}"
+    );
+}
+
+/// The dry run of a rule with no block for the platform says what the real
+/// call says, not `dry-run` (smoke C16).
+#[test]
+fn a_dry_run_without_the_platforms_block_is_refused_as_the_deploy_is() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
+    let preview = call(
+        &server,
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "splunk"}),
+    );
+    assert_eq!(preview["action"], "error", "{preview}");
+    assert_eq!(preview["dry_run"], true, "{preview}");
+    assert_eq!(
+        preview["message"], "Rule \"Sentinel KQL Rule\" has no splunk status to deploy",
+        "{preview}"
+    );
+}
+
 /// A client that sends its next message only once the answer it waits for
 /// has been written: reading on before that is the hang an interactive
 /// client sees under WASI, where a read blocks the one thread.
