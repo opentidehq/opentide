@@ -347,6 +347,15 @@ fn assert_case_sensitive(root: &Path) {
     );
 }
 
+/// An executable `name` in `folder` that exits 0.
+fn stub_program(folder: &Path, name: &str) {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::create_dir_all(folder).unwrap();
+    let program = folder.join(name);
+    std::fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
 /// Runs `case` and renders what it did as the snapshot's text.
 pub fn run_case(case: &Case) -> String {
     let scratch = replay::case_root();
@@ -354,9 +363,13 @@ pub fn run_case(case: &Case) -> String {
     // (`$TMPDIR`), as the retired `cargo xtask golden` laid it out.
     let root = std::fs::canonicalize(scratch.path()).unwrap();
     let (home, tmp, ws) = (root.join("home"), root.join("tmp"), root.join("ws"));
-    for folder in [&home, &tmp, &ws] {
+    for folder in [&home, &tmp, &ws, &root.join("empty")] {
         std::fs::create_dir_all(folder).unwrap();
     }
+    // `<TMP>/bin/opentide`, a stand-in for the installed program, which a
+    // case finds on its PATH when it names `<TMP>/bin` (`setup mcp` looks
+    // for it); `<TMP>/empty`, a PATH that has no program.
+    stub_program(&root.join("bin"), "opentide");
     if case.fixture.starts_with("tide-corpus") {
         assert_case_sensitive(&root);
     }

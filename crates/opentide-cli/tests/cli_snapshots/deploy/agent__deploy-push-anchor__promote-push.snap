@@ -6,8 +6,8 @@ args: opentide deploy --platform splunk --strategy RELEASE
 exit: 0
 
 ━━━ stdout
-Skipped: No rule has a status this run deploys · 1 rule in STAGING
-  help: no configured status deploys with this run
+Skipped: No rule has a status RELEASE deploys · 1 rule in STAGING
+  help: set a platform block's status to PRODUCTION, DISABLED or REMOVED for RELEASE to deploy it
 
 ━━━ stderr
 warning: Rule not promoted · path: <WS>/objects/rules/splunk-a-create.yaml · detail: configurations.splunk.status is an anchor or an alias · advice: Write each platform block's status as a plain value, then deploy again

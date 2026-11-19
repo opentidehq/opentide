@@ -150,7 +150,7 @@ fn main() -> Result<(), opentide::Error> {
 
 ## Query, check and deploy on tenants
 
-With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment, `ConnectOptions::environment` when it names one, Google SecOps's Application Default Credentials too (an unset `$NAME` is an error naming the variable, never sent). TLS roots are the system's store, which the process's `SSL_CERT_FILE` and `SSL_CERT_DIR` replace (read once per process, whatever the options say), plus the CA bundles the options' environment names (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`); `TenantConfig::new` describes one in code.
+With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment, `ConnectOptions::environment` when it names one, Google SecOps's Application Default Credentials too (an unset `$NAME` is an error naming the variable, never sent). TLS roots are the system's store, which the process's `SSL_CERT_FILE` and `SSL_CERT_DIR` replace (read once per process, whatever the options say), plus the CA bundles the options' environment names (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`), and returns `Error::Usage` (`usage_invalid_choice`) for a platform that is neither built in nor a loaded plugin's; `TenantConfig::new` describes one in code. `Connection::query` refuses a `limit` outside 1 to `connectors::MAX_QUERY_LIMIT` (5000) with `usage_invalid_value`.
 
 | Operation | Command line | Returns |
 |-----------|--------------|---------|
@@ -184,7 +184,7 @@ pub fn run(
     out: &mut dyn Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let ws = Workspace::open(path, &Options::default())?;
-    let Some(tenant) = ws.tenants(platform).into_iter().next() else {
+    let Some(tenant) = ws.tenants(platform)?.into_iter().next() else {
         return Err(format!("{} configures no {platform} tenant", path.display()).into());
     };
     let connection = Connection::open(&tenant, options)?;

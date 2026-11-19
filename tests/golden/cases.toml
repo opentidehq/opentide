@@ -2224,6 +2224,7 @@ command = "setup"
 variant = "plan"
 args = ["setup", "--plan", "--platform", "sentinel", "--ci", "github", "--mcp", "vscode", "--hooks", "--env"]
 fixtures = ["none", "empty"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
 
 [[case]]
 command = "setup"
@@ -2354,12 +2355,23 @@ command = "setup mcp"
 variant = "example"
 args = ["setup", "mcp", "--vscode", "--yes"]
 fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+
+# `opentide` not on PATH: every configuration runs it, so setup warns and
+# reports mcp_available: false (#1670, smoke C6). `<TMP>/empty` holds nothing.
+[[case]]
+command = "setup mcp"
+variant = "not-on-path"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/empty" }
 
 [[case]]
 command = "setup mcp"
 variant = "cursor-vscode"
 args = ["setup", "mcp", "--cursor", "--vscode", "--yes"]
 fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
 
 # An existing configuration with a byte-order mark and comments, merged into (#743).
 [[case]]
@@ -2367,6 +2379,7 @@ command = "setup mcp"
 variant = "merge"
 args = ["setup", "mcp", "--vscode", "--yes"]
 fixtures = ["setup-merge"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
 
 # An existing platform file, enabled in place.
 [[case]]
