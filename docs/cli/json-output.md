@@ -185,7 +185,7 @@ opentide decides once per command who is reading. The first rule that matches wi
 
 `OPENTIDE_OUTPUT=json` is the same as passing `--json` to every command.
 
-`plain` is `human` without colour or animation. Lines are never wrapped, so a long path stays on one line.
+`plain` is `human` without colour or animation. Lines are never wrapped, so a long path stays on one line. At a terminal (`NO_COLOR`, `FORCE_COLOR=0` or `--no-color`), `plain` keeps bold and dim text, as [NO_COLOR](https://no-color.org/) allows: those turn colour off, not emphasis. Redirected to a pipe or a file, it writes no escape codes at all.
 
 `agent` is `plain`, plus: a command that would prompt exits `2` at once with `usage_needs_input` and names the flags that answer the prompt, and a failure ends with `tip: add --json for machine-readable output`. Agents are detected from `AI_AGENT` first, then `CLAUDECODE`, `CURSOR_AGENT`, `GEMINI_CLI`, `CODEX_CI`, `COPILOT_AGENT`, `COPILOT_CLI`, `OPENCODE`, `AMP_CURRENT_THREAD_ID`, `AUGMENT_AGENT` and `CLINE_ACTIVE`. Detection changes presentation only: it never relaxes a confirmation, a `--yes` requirement or a strategy check.
 

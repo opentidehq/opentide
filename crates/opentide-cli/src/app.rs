@@ -1720,7 +1720,13 @@ impl Run<'_> {
             }
         }
         let stdout = self.console(self.host.stdout_tty);
-        let width = self.stdout_width();
+        // `plain` and `agent` lines are never wrapped, so a long path stays
+        // on one line (`docs/cli/json-output.md`, Output modes): 0 is no wrap.
+        let width = if self.mode == Mode::Human {
+            self.stdout_width()
+        } else {
+            0
+        };
         if let Some(whole) = &report.whole_stdout {
             if self.mode != Mode::Mcp {
                 out.write_all(whole.as_bytes())?;
@@ -4110,5 +4116,35 @@ mod tests {
             "{}",
             subcommand.stdout
         );
+    }
+
+    #[test]
+    fn plain_output_keeps_each_line_whole() {
+        // A13/B11 (smoke test): a redirected `setup` broke its summary rows
+        // at 80 columns, the purpose on a line of its own.
+        let scratch = tempfile::tempdir().unwrap();
+        let path = scratch.path().join("w");
+        let line = format!(
+            "setup --yes --path {} --name X --platform sentinel --platform defender_for_endpoint",
+            path.display()
+        );
+        for (pairs, mode) in [
+            (&[][..], "plain"),
+            (&[("OPENTIDE_OUTPUT", "agent")][..], "agent"),
+        ] {
+            let _ = std::fs::remove_dir_all(&path);
+            let ran = dispatched(&line, pairs, false);
+            assert_eq!(ran.code, 0, "{mode}: {}{}", ran.stdout, ran.stderr);
+            let row = ran
+                .stdout
+                .lines()
+                .find(|row| row.contains("platforms/defender_for_endpoint.toml"))
+                .unwrap_or_else(|| panic!("{mode}: {}", ran.stdout));
+            assert!(row.len() > 80, "{mode}: {row:?}");
+            assert!(
+                row.trim_end().ends_with("platform configuration"),
+                "{mode}: {row:?}"
+            );
+        }
     }
 }
