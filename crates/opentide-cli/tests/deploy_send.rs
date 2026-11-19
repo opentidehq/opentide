@@ -2332,9 +2332,11 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
 }
 
 /// A deploy resolves the tenant's stream and notification aliases through
-/// its `stream_ids` and `notification_ids`, as the dry run does: the
-/// definition Graylog receives names the ids, never an empty list (which
-/// Graylog reads as every stream and no notification).
+/// its `stream_ids` and `notification_ids`, as the dry run does, in every
+/// request it builds from the rule: the query check, a create and an update
+/// name the ids, never an empty list (which Graylog reads as every stream and
+/// no notification). An alias the tenant does not define fails its rule
+/// alone, before any request for it.
 #[test]
 fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
     const STREAM: &str = "65f1c0de2a3b4c5d6e7f2222";
@@ -2347,42 +2349,73 @@ fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
          [tenants.setup.notification_ids]\npager = \"{NOTIFICATION}\"\n",
         server.uri()
     );
-    let uuid = "00000000-0000-4000-8099-000000000127";
-    let block = format!(
-        "{}    notifications:\n      - pager\n",
-        graylog_block("STAGING", "EventID:1")
+    let (created, recorded, unknown) = (
+        "00000000-0000-4000-8099-000000000127",
+        "00000000-0000-4000-8099-000000000128",
+        "00000000-0000-4000-8099-000000000129",
     );
-    let ws = workspace(
+    let notify = |alias: &str| {
+        format!(
+            "{}    notifications:\n      - {alias}\n",
+            graylog_block("STAGING", "EventID:1")
+        )
+    };
+    let ws = stated(
         "graylog",
-        "lab",
         &setup,
-        &[("a.yaml", rule("Aliased rule", uuid, "Aliased.", &block))],
+        &[("b.yaml", recorded, notify("pager"), GRAYLOG_KEPT)],
     );
+    let rules = ws.path().join("objects/rules");
+    std::fs::write(
+        rules.join("a.yaml"),
+        rule("Aliased rule", created, "Aliased.", &notify("pager")),
+    )
+    .unwrap();
+    std::fs::write(
+        rules.join("c.yaml"),
+        rule("Unknown alias rule", unknown, "Unknown.", &notify("nobody")),
+    )
+    .unwrap();
     let (code, err) = graylog_deploy(ws.path());
     rt.block_on(server.verify());
-    assert_eq!(code, 0, "{err}");
+    // The unknown alias fails its rule, and the run; the others deploy.
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("graylog_alias_unknown"), "{err}");
+    assert!(err.contains("nobody"), "{err}");
     let received = rt.block_on(server.received_requests()).unwrap();
-    let created: Vec<serde_json::Value> = received
-        .iter()
-        .filter(|request| {
-            request.method == wiremock::http::Method::POST
-                && request.url.path() == "/api/events/definitions"
-        })
-        .map(|request| serde_json::from_slice(&request.body).unwrap())
-        .collect();
-    assert_eq!(created.len(), 1, "{err}");
-    // Graylog 7 takes the definition under `entity`.
-    let definition = &created[0]["entity"];
-    assert_eq!(
-        definition["config"]["streams"],
-        serde_json::json!([STREAM]),
-        "{definition}"
+    let bodies = |verb: wiremock::http::Method, prefix: &str| -> Vec<serde_json::Value> {
+        received
+            .iter()
+            .filter(|request| request.method == verb && request.url.path().starts_with(prefix))
+            .map(|request| serde_json::from_slice(&request.body).unwrap())
+            .collect()
+    };
+    // Graylog 7 takes a created definition under `entity`; an update is bare.
+    let created_bodies = bodies(wiremock::http::Method::POST, "/api/events/definitions");
+    let updated = bodies(
+        wiremock::http::Method::PUT,
+        &format!("/api/events/definitions/{GRAYLOG_KEPT}"),
     );
-    assert_eq!(
-        definition["notifications"],
-        serde_json::json!([{"notification_id": NOTIFICATION}]),
-        "{definition}"
-    );
+    let checked = bodies(wiremock::http::Method::POST, "/api/search/validate");
+    assert_eq!((created_bodies.len(), updated.len()), (1, 1), "{err}");
+    // The query is checked for the two rules that resolve, never the third.
+    assert_eq!(checked.len(), 2, "{err}");
+    for definition in [&created_bodies[0]["entity"], &updated[0]] {
+        assert_eq!(
+            definition["config"]["streams"],
+            serde_json::json!([STREAM]),
+            "{definition}"
+        );
+        assert_eq!(
+            definition["notifications"],
+            serde_json::json!([{"notification_id": NOTIFICATION}]),
+            "{definition}"
+        );
+    }
+    for body in &checked {
+        assert_eq!(body["streams"], serde_json::json!([STREAM]), "{body}");
+    }
+    assert!(shard_of(ws.path(), unknown).is_empty(), "{err}");
 }
 
 /// A definition the tenant lost while git ignores deployment state is not
