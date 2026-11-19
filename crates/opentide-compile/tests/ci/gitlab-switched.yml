@@ -69,7 +69,33 @@ validate:
     - opentide validate --strict --format codequality --output opentide-reports/validate.codequality.json
     - opentide lint --strict --changed --format codequality --output opentide-reports/lint.codequality.json
   after_script:
-    - python -m opentide.ci.codequality --output opentide-reports/codequality.json opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json
+    - |
+      python3 - opentide-reports/codequality.json opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json <<'PY'
+      import json, os, sys
+      output, *reports = sys.argv[1:]
+      issues, seen = [], set()
+      for path in reports:
+          try:
+              with open(path, encoding="utf-8") as stream:
+                  document = json.load(stream)
+          except (OSError, ValueError) as error:
+              print(f"opentide codequality: {path} skipped ({error})", file=sys.stderr)
+              continue
+          if not isinstance(document, list):
+              print(f"opentide codequality: {path} is not a Code Quality report; skipped", file=sys.stderr)
+              continue
+          for issue in (item for item in document if isinstance(item, dict)):
+              fingerprint = issue.get("fingerprint")
+              if isinstance(fingerprint, str):
+                  if fingerprint in seen:
+                      continue
+                  seen.add(fingerprint)
+              issues.append(issue)
+      os.makedirs(os.path.dirname(output), exist_ok=True)
+      with open(output, "w", encoding="utf-8") as stream:
+          json.dump(issues, stream, indent=2, ensure_ascii=False)
+          stream.write("\n")
+      PY
 
 generate:
   stage: generate
