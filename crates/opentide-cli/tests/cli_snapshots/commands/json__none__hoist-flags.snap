@@ -15330,10 +15330,6 @@ exit: 0
       "name": "OPENTIDE_PROGRESS"
     },
     {
-      "meaning": "Where opentide caches the language-server catalogs it generates",
-      "name": "OPENTIDE_CACHE_DIR"
-    },
-    {
       "meaning": "Set by a coding agent: selects agent output mode",
       "name": "AI_AGENT"
     },

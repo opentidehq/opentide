@@ -32,8 +32,6 @@ exit: 0
     "splunk": [
       {
         "api_request": {
-          "enabled": false,
-          "name": "",
           "query": "index=main EventCode=4688",
           "scheduling": {
             "schedule": {

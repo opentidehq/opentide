@@ -84,7 +84,8 @@ class Connection:
         Runs *text* on the tenant (`opentide query`): an awaitable of the
         rows' document, `{columns, rows, truncated, partial, warnings,
         vendor_query_id, sent, language}`, as JSON. *start* and *end* are
-        RFC 3339 instants (default: the minute before now).
+        RFC 3339 instants (default: the 24 hours before *end*, which is now by
+        default), as the Node SDK reads them.
         """
     @property
     def tenant(self, /) -> str:
@@ -184,7 +185,8 @@ class Workspace:
     def tenants(self, /, platform: str) -> list[TenantConfig]:
         """
         The tenants the workspace configures for *platform*, in file order;
-        empty when it configures none.
+        empty when it configures none. A *platform* that is neither built in
+        nor a loaded plugin's is refused (`usage_invalid_choice`).
         """
     def threats(self, /) -> str:
         """

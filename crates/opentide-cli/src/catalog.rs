@@ -88,10 +88,6 @@ pub fn environment() -> Vec<(String, String)> {
              progress events on stderr"
                 .into(),
         ),
-        (
-            "OPENTIDE_CACHE_DIR",
-            "Where opentide caches the language-server catalogs it generates".into(),
-        ),
     ]
     .into_iter()
     .map(|(name, meaning)| (name.to_owned(), meaning))
