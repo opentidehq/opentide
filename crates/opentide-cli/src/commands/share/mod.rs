@@ -888,7 +888,13 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
                 .collect();
             all.sort_unstable();
             all.dedup();
-            format!("{} on {targets}", plural(all.len(), "object", None))
+            // Status compares each object with the local ledger only: nothing
+            // says an object is on the target. `to create` counts the objects
+            // the ledger has no line for (#1661).
+            format!(
+                "Status of {} for {targets}",
+                plural(all.len(), "object", None)
+            )
         }
     };
     if done == 0
@@ -912,10 +918,14 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
     let facts: Vec<String> = order
         .iter()
         .filter_map(|word| {
-            counts
-                .get(word)
-                .filter(|count| **count > 0)
-                .map(|count| format!("{count} {word}"))
+            counts.get(word).filter(|count| **count > 0).map(|count| {
+                let said = match (mode, *word) {
+                    (Mode::Status, "new") => "to create",
+                    (Mode::Status, "updated") => "to update",
+                    (_, said) => said,
+                };
+                format!("{count} {said}")
+            })
         })
         .collect();
     let mut summary: Vec<(String, Json)> = vec![("objects".into(), Json::from(done))];
@@ -942,7 +952,7 @@ fn from_run(
 ) -> Payload {
     if let Some(preflight) = &outcome.preflight {
         let mut payload = Payload::preflight(preflight, sharing, &outcome.records, None);
-        payload.body = rows(&outcome.records, false, names);
+        payload.body = rows(&outcome.records, Rows::Done, names);
         return payload;
     }
     let code = outcome.exit_code();
@@ -968,9 +978,19 @@ fn from_run(
     } else if mode == Mode::Preview {
         payload.plan = true;
     }
-    // A preview's rows say what would happen only when it is a plan: one with
-    // a failure is rendered as a result (`_outcome_kind`).
-    payload.body = rows(&outcome.records, payload.plan, names);
+    // A preview sends nothing, with or without a failure: its rows always
+    // use the planned words and the dry-run note, even when a failure makes
+    // the run a result rather than a plan (`_outcome_kind`). Status sends
+    // nothing either: its rows compare each object with the local ledger
+    // (#1661).
+    let words = if payload.plan || mode == Mode::Preview {
+        Rows::Preview
+    } else if mode == Mode::Status {
+        Rows::Status
+    } else {
+        Rows::Done
+    };
+    payload.body = rows(&outcome.records, words, names);
     payload
 }
 
@@ -1024,8 +1044,22 @@ fn skip_reason(reason: &str) -> String {
     }
 }
 
+/// Which words a share's rows use.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Rows {
+    /// What a run did: `created`, `updated`, ...
+    Done,
+    /// What a push would do, in a preview: `create`, `update`, ...
+    Preview,
+    /// Each object compared with the local ledger (`share status`): `create`
+    /// where the ledger has no line for it, `update` where its content
+    /// changed since. Not a prediction of a push, which `share preview` is.
+    Status,
+}
+
 /// The records as plan rows, by destination (`render_share`).
-fn rows(records: &[Record], preview: bool, names: &BTreeMap<String, String>) -> Vec<BodyBlock> {
+fn rows(records: &[Record], words: Rows, names: &BTreeMap<String, String>) -> Vec<BodyBlock> {
+    let planned_words = words != Rows::Done;
     let mut targets: Vec<(&str, Vec<&Record>)> = Vec::new();
     for record in records {
         match targets.iter_mut().find(|(name, _)| *name == record.target) {
@@ -1037,11 +1071,13 @@ fn rows(records: &[Record], preview: bool, names: &BTreeMap<String, String>) -> 
     let mut body = Vec::new();
     for (target, members) in targets {
         let mut title = Text::styled(target, &bold);
-        if preview {
-            title.append(
-                &format!(" {} dry run, nothing is sent", glyphs::SEPARATOR),
-                &bold.dimmed(),
-            );
+        let note = match words {
+            Rows::Done => None,
+            Rows::Preview => Some("dry run, nothing is sent"),
+            Rows::Status => Some("local ledger, no remote call"),
+        };
+        if let Some(note) = note {
+            title.append(&format!(" {} {note}", glyphs::SEPARATOR), &bold.dimmed());
         }
         body.push(BodyBlock::Hanging(vec![(title, 0)]));
         let lines: Vec<Vec<Text>> = members
@@ -1055,7 +1091,7 @@ fn rows(records: &[Record], preview: bool, names: &BTreeMap<String, String>) -> 
                     .unwrap_or_default();
                 vec![
                     Text::styled(
-                        &format!("{mark} {}", if preview { planned } else { done }),
+                        &format!("{mark} {}", if planned_words { planned } else { done }),
                         &style,
                     ),
                     Text::styled(
@@ -1093,7 +1129,11 @@ pub(crate) fn documents_for_test(texts: &[(&str, &str)]) -> Vec<document::TideDo
 mod from_cli_tests {
     use clap::Parser as _;
 
-    use super::{Args, Mode};
+    use std::collections::BTreeMap;
+
+    use super::engine::Record;
+    use super::{Args, BodyBlock, Mode, Rows, rows, share_outcome};
+    use crate::render::text::Colour;
     use crate::tree::{Cli, RootCommand};
 
     /// `args` as `Args::from_cli` reads them; `group` names the options
@@ -1158,5 +1198,54 @@ mod from_cli_tests {
         let args = parse(&["share", "push", "--no-publish"], &[]);
         assert_eq!(args.publish, Some(false));
         assert_eq!(parse(&["share", "push"], &[]).publish, None);
+    }
+
+    fn record(uuid: &str, action: &str) -> Record {
+        Record {
+            object_uuid: uuid.to_owned(),
+            target: "misp-prod".to_owned(),
+            action: action.to_owned(),
+            remote_event_uuid: None,
+            remote_event_id: None,
+            reason: None,
+            notes: Vec::new(),
+            kind: None,
+        }
+    }
+
+    fn plain(body: &[BodyBlock]) -> String {
+        body.iter()
+            .flat_map(|block| match block {
+                BodyBlock::Hanging(lines) => lines
+                    .iter()
+                    .map(|(line, _)| line.render(Colour::None, false))
+                    .collect(),
+                _ => Vec::new(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// #1661: `share status` reads the ledger only, so an object with no
+    /// ledger line is one a push would create, never one already created on
+    /// the target.
+    #[test]
+    fn status_never_says_an_unshared_object_was_created() {
+        let records = [record("a", "created"), record("b", "updated")];
+        let (message, _) = share_outcome(Mode::Status, &records);
+        assert_eq!(
+            message,
+            "Status of 2 objects for misp-prod · 1 to create, 1 to update"
+        );
+        let body = plain(&rows(&records, Rows::Status, &BTreeMap::new()));
+        assert!(body.contains("local ledger, no remote call"), "{body}");
+        assert!(body.contains("+ create"), "{body}");
+        assert!(body.contains("~ update"), "{body}");
+        assert!(!body.contains("created"), "{body}");
+        // A push still says what it did.
+        let (message, _) = share_outcome(Mode::Push, &records);
+        assert_eq!(message, "Shared 2 objects to misp-prod · 1 new, 1 updated");
+        let body = plain(&rows(&records, Rows::Done, &BTreeMap::new()));
+        assert!(body.contains("+ created"), "{body}");
     }
 }

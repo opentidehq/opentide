@@ -6,14 +6,14 @@ args: opentide share status --type rule --target misp-locked
 exit: 0
 
 ━━━ stdout
-misp-locked
-  ○ skipped  Rule still in staging  …000000000014  status not shared
-  ○ skipped  Rule marked red        …000000000015  TLP above max_tlp
-  + created  Shared rule to create  …000000000011
-  + created  Shared rule to update  …000000000012
-  + created  Shared rule unchanged  …000000000013
+misp-locked · local ledger, no remote call
+  ○ skip    Rule still in staging  …000000000014  status not shared
+  ○ skip    Rule marked red        …000000000015  TLP above max_tlp
+  + create  Shared rule to create  …000000000011
+  + create  Shared rule to update  …000000000012
+  + create  Shared rule unchanged  …000000000013
 
-✓ 5 objects on misp-locked · 3 new, 2 skipped
+✓ Status of 5 objects for misp-locked · 3 to create, 2 skipped
 
 ━━━ stderr
 warning: [[misp]] block "misp-lab" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].
