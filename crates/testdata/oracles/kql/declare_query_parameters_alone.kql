@@ -1,0 +1,1 @@
+declare query_parameters(user:string = "alice@contoso.com")

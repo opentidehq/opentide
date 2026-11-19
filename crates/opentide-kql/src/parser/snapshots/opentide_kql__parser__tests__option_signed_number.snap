@@ -1,0 +1,36 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | reduce by x with threshold=-0.1, characters=\\\"a\\\"\")"
+---
+SOURCE_FILE@0..51
+  QUERY@0..51
+    TABULAR_EXPRESSION@0..51
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      REDUCE_OPERATOR@4..51
+        REDUCE_KW@4..10 "reduce"
+        WHITESPACE@10..11 " "
+        BY_KW@11..13 "by"
+        WHITESPACE@13..14 " "
+        NAME_REF@14..15
+          IDENT@14..15 "x"
+        WHITESPACE@15..16 " "
+        WITH_KW@16..20 "with"
+        WHITESPACE@20..21 " "
+        OPERATOR_OPTION@21..35
+          IDENT@21..30 "threshold"
+          EQ@30..31 "="
+          OPTION_VALUE@31..35
+            MINUS@31..32 "-"
+            NUMBER@32..35 "0.1"
+        COMMA@35..36 ","
+        WHITESPACE@36..37 " "
+        OPERATOR_OPTION@37..51
+          IDENT@37..47 "characters"
+          EQ@47..48 "="
+          OPTION_VALUE@48..51
+            STRING@48..51 "\"a\""
