@@ -1566,13 +1566,39 @@ pub(crate) mod tests {
         batch.rename_all(renames.iter().map(|(n, o)| column_for(n, o)).collect(), "r");
         assert_eq!(names(&batch), names(&one));
 
-        let gone = ["a", "zz", "d", "a", "j"];
+        // Past the threshold too, with names twice and names not there.
+        for gone in [
+            &["a", "zz", "d", "a", "j"][..],
+            &["a", "zz", "d", "a", "j", "b", "yy", "e", "f", "e", "i"][..],
+        ] {
+            let mut one = start();
+            for name in gone {
+                one.remove(name, "r");
+            }
+            let mut batch = start();
+            batch.remove_all(gone.iter().map(ToString::to_string).collect(), "r");
+            assert_eq!(names(&batch), names(&one), "{gone:?}");
+        }
+
+        // A rename onto a name two columns have: the first is replaced.
+        let renames: Vec<(&str, &str)> = vec![
+            ("a", "f"),
+            ("a", "g"),
+            ("q", "a"),
+            ("a", "h"),
+            ("b", "c"),
+            ("b", "i"),
+            ("j", "b"),
+            ("d", "d"),
+            ("e", "zz"),
+        ];
         let mut one = start();
-        for name in gone {
-            one.remove(name, "r");
+        for (new, old) in &renames {
+            one.remove(old, "r");
+            one.set(column_for(new, old));
         }
         let mut batch = start();
-        batch.remove_all(gone.iter().map(ToString::to_string).collect(), "r");
+        batch.rename_all(renames.iter().map(|(n, o)| column_for(n, o)).collect(), "r");
         assert_eq!(names(&batch), names(&one));
     }
 
@@ -1665,6 +1691,25 @@ pub(crate) mod tests {
             assert_eq!(
                 shape(&merge_union(&legs, None)),
                 shape(&one_at_a_time(&legs))
+            );
+            // The same legs past the threshold, with nine more conflicts
+            // after them, so the batched path meets the same edge cases.
+            let padded: Vec<Schema> = legs
+                .iter()
+                .enumerate()
+                .map(|(i, leg)| {
+                    let mut leg = leg.clone();
+                    for p in 0..9 {
+                        let ty = if i % 2 == 0 { "long" } else { "string" };
+                        Arc::make_mut(&mut leg.columns)
+                            .push(Column::new(format!("P{p}"), Some(ty.into())));
+                    }
+                    leg
+                })
+                .collect();
+            assert_eq!(
+                shape(&merge_union(&padded, None)),
+                shape(&one_at_a_time(&padded))
             );
         }
         // Past the few a pass each handles: many conflicts, with the same
