@@ -991,27 +991,25 @@ fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
             out.push(query);
             continue;
         }
-        // A section still the stand-in `opentide new` wrote has nothing to
-        // check: its findings are the stand-in's. The rule is a placeholder
-        // when its `events` is one (B6: `events: ...` beside the template's
-        // `outcome` counted as "1 query valid"); its written sections are
-        // checked otherwise.
-        let stand_in = query.placeholder;
-        let events = query.field_path.last().map(String::as_str) == Some("events");
-        if stand_in {
-            query.findings.clear();
-        }
+        // The rule is the placeholder `opentide new` wrote, skipped as
+        // 0.28.1 skipped it, while its `events` is the stand-in (B6: `events:
+        // ...` beside the template's written `outcome` counted as "1 query
+        // valid"). Once `events` is written the rule is checked, and a
+        // section still the stand-in keeps the parse error the engine finds
+        // in it (opentide-tide's `analyze_queries`): the rule cannot deploy.
+        let stand_in_events =
+            query.placeholder && query.field_path.last().map(String::as_str) == Some("events");
         match rule {
             Some(index) => {
                 let merged = &mut out[index];
                 if (query.line, query.column) < (merged.line, merged.column) {
                     (merged.line, merged.column) = (query.line, query.column);
                 }
-                merged.placeholder |= stand_in && events;
+                merged.placeholder |= stand_in_events;
                 merged.findings.extend(query.findings);
             }
             None => {
-                query.placeholder = stand_in && events;
+                query.placeholder = stand_in_events;
                 query.field_path.truncate(2);
                 rule = Some(out.len());
                 out.push(query);
@@ -1161,29 +1159,59 @@ mod tests {
             .find(|query| query.platform == "google_secops")
             .unwrap_or_else(|| panic!("{queries:?}"));
         assert!(rule.placeholder, "{rule:?}");
-        // Only `condition` the stand-in: the rule is checked, and the
-        // written `events` keeps its finding.
-        let events_written = text.replace(
-            "events: |  # opentide:placeholder\n      ...",
-            "events: |\n      $e.metadata.event_type = $nowhere",
+        let secops = |text: &str| -> CheckedQuery {
+            let queries = profiles.check_object(text);
+            queries
+                .into_iter()
+                .find(|query| query.platform == "google_secops")
+                .unwrap_or_else(|| panic!("no google_secops query in {text}"))
+        };
+        let section = |finding: &Finding| finding.field_path.last().cloned().unwrap_or_default();
+        // `events` the stand-in and `condition` written with an error: still
+        // the placeholder, skipped as 0.28.1 skipped it.
+        let bad_condition = text.replace(
+            "condition: |  # opentide:placeholder\n      ...",
+            "condition: |\n      $e and and",
         );
-        let queries = profiles.check_object(&events_written);
-        let rule = queries
-            .iter()
-            .find(|query| query.platform == "google_secops")
-            .unwrap();
+        assert!(secops(&bad_condition).placeholder);
+        // `events` written with an engine error and `condition` the
+        // stand-in: the rule is checked, and the error in the written
+        // `events` is reported.
+        let events_wrong = text.replace(
+            "events: |  # opentide:placeholder\n      ...",
+            "events: |\n      $e.metadata.event_type = = \"USER_LOGIN\"",
+        );
+        let rule = secops(&events_wrong);
         assert!(!rule.placeholder, "{rule:?}");
         assert!(
             rule.findings
                 .iter()
-                .any(|finding| finding.field_path.last().map(String::as_str) == Some("events")),
+                .any(|finding| section(finding) == "events" && finding.code == "yaral_parse_error"),
+            "{:?}",
+            rule.findings
+        );
+        // `events` written and right, `condition` still the stand-in: the
+        // rule cannot deploy, and 0.28.1 refused it with
+        // `yaral_parse_error` at `condition`.
+        let events_written = text.replace(
+            "events: |  # opentide:placeholder\n      ...",
+            "events: |\n      $e.metadata.event_type = \"USER_LOGIN\"",
+        );
+        let rule = secops(&events_written);
+        assert!(!rule.placeholder, "{rule:?}");
+        assert!(
+            rule.findings
+                .iter()
+                .any(|finding| section(finding) == "condition"
+                    && finding.code == "yaral_parse_error"
+                    && finding.severity == EngineSeverity::Error),
             "{:?}",
             rule.findings
         );
         assert!(
             rule.findings
                 .iter()
-                .all(|finding| finding.field_path.last().map(String::as_str) != Some("condition")),
+                .all(|finding| section(finding) == "condition"),
             "{:?}",
             rule.findings
         );

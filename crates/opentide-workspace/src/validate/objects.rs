@@ -655,13 +655,58 @@ fn schema_issue(error: &SchemaError, subject: &Subject<'_>, graph: &Graph<'_>) -
     {
         diagnostic = diagnostic.with("value", value);
     }
-    // The values a field takes, when its check names them (CrowdStrike's
-    // `details.trigger`): annotate's help writes them.
+    // What a field takes, when its check names it (an enum's or a literal's
+    // values, a union's shapes, CrowdStrike's `details.trigger`): annotate's
+    // help writes it, spelt as YAML.
     if let Some(expected) = error.context.get("expected") {
-        diagnostic = diagnostic.with("expected", expected.clone());
+        diagnostic = diagnostic.with("expected", yaml_spelling(expected));
     }
     diagnostic.yaml_line = error.yaml_line;
     diagnostic
+}
+
+/// `expected` as a person writes it in YAML: the models' messages keep
+/// Pydantic's Python spelling (`False, 'Malicious' or 'Suspicious'`), which
+/// reads `false, "Malicious" or "Suspicious"` here. A double-quoted value
+/// is kept as it is.
+fn yaml_spelling(expected: &str) -> String {
+    let mut out = String::with_capacity(expected.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        out.push_str(match word.as_str() {
+            "False" => "false",
+            "True" => "true",
+            "None" => "null",
+            other => other,
+        });
+        word.clear();
+    };
+    let mut characters = expected.chars();
+    while let Some(character) = characters.next() {
+        match character {
+            '\'' | '"' => {
+                flush(&mut word, &mut out);
+                out.push('"');
+                for inner in characters.by_ref() {
+                    if inner == character {
+                        break;
+                    }
+                    if inner == '"' || (inner == '\\' && character == '\'') {
+                        out.push('\\');
+                    }
+                    out.push(inner);
+                }
+                out.push('"');
+            }
+            character if character.is_alphanumeric() || character == '_' => word.push(character),
+            other => {
+                flush(&mut word, &mut out);
+                out.push(other);
+            }
+        }
+    }
+    flush(&mut word, &mut out);
+    out
 }
 
 /// A schema node with its local `$ref` followed (`_deref_schema_node`).
@@ -1298,6 +1343,25 @@ mod tests {
 
     use super::*;
     use crate::diagnostic::Severity;
+
+    #[test]
+    fn expected_values_are_spelt_as_yaml() {
+        assert_eq!(
+            yaml_spelling("False, 'Malicious' or 'Suspicious'"),
+            "false, \"Malicious\" or \"Suspicious\""
+        );
+        assert_eq!(yaml_spelling("True or None"), "true or null");
+        assert_eq!(
+            yaml_spelling("\"NRT\", \"1H\" or \"24H\""),
+            "\"NRT\", \"1H\" or \"24H\""
+        );
+        // Words inside a value and other words are kept.
+        assert_eq!(
+            yaml_spelling("'False' or a string, \"say \" or Falsey"),
+            "\"False\" or a string, \"say \" or Falsey"
+        );
+        assert_eq!(yaml_spelling("'it\"s'"), "\"it\\\"s\"");
+    }
 
     #[test]
     fn a_deprecated_field_is_a_warning_on_the_object_at_its_field() {

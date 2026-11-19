@@ -55,10 +55,16 @@ fn default_help(code: &str) -> Option<&'static str> {
 
 /// `yaml_parse` problems that are not syntax: the indentation hint would
 /// mislead.
-const YAML_PARSE_HELP: [(&str, &str); 6] = [
+const YAML_PARSE_HELP: [(&str, &str); 7] = [
     (
         "is repeated (first written on line",
         "keep one of the two: a mapping holds each key once",
+    ),
+    // saphyr raises it only for a tab in the indentation columns (saphyr-parser
+    // 0.3.3, scanner.rs: `self.mark.col < indent && peek() == '\t'`).
+    (
+        "while scanning a plain scalar, found a tab",
+        "indent with spaces: YAML does not allow a tab in indentation",
     ),
     (
         "tab cannot be used as indentation",

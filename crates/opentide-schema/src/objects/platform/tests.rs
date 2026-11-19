@@ -504,8 +504,8 @@ fn elastic_bad_duration_names_its_field_value_and_form() {
     assert_eq!(
         errors("elastic", &block),
         "new_terms.history_window_start: ElasticConfig validation failed with code(s): duration \
-         (new_terms.history_window_start \"now-14d\" is not a duration: a number and a unit, s, \
-         m, h or d, such as `14d`; deploy adds `now-`)"
+         (\"now-14d\" is not a duration: a number and a unit, s, m, h or d, such as `14d`; \
+         deploy adds `now-`)"
     );
     // Two at once, or with another code: named, and placed at the block.
     let block = merged(

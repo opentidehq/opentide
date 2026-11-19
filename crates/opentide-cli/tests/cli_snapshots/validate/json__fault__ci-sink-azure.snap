@@ -1247,7 +1247,7 @@ exit: 1
         "field_path": [],
         "file_path": "<WS>/objects/rules/hidden-loader-rule-0024.yaml",
         "fix": null,
-        "help": "look at the indentation, a missing ':' or an unclosed quote at or just before this position",
+        "help": "indent with spaces: YAML does not allow a tab in indentation",
         "line": 45,
         "message": "Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1",
         "object_type": "rule",

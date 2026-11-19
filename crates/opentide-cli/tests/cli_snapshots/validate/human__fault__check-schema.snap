@@ -155,8 +155,7 @@ exit: 1
 ␛[34m45 │␛[0m    indent: tab
 ␛[34m   │␛[0m ␛[1m␛[31m━━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
-   ␛[34m ␛[0m        position
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m indent with spaces: YAML does not allow a tab in indentation
 
 ␛[1m␛[31merror[schema_validation]␛[0m␛[1m: missing required field "description"␛[0m
   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/lateral-dropper-rule-0026.yaml␛\objects/rules/lateral-dropper-rule-0026.yaml:1:1␛]8;;␛\

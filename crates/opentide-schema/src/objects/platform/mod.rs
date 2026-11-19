@@ -535,10 +535,10 @@ pub(crate) fn before(model: &'static str, node: &Node, cx: &mut Context) -> bool
     // (B3: "code(s): duration" at the block, with no hint of `14d`).
     if model == "ElasticConfig" && codes.contains("duration") {
         let bad = elastic::bad_durations(node);
-        message = format!("{message} ({})", elastic::duration_detail(node));
-        if let [(path, value)] = bad.as_slice()
-            && codes.len() == 1
-        {
+        let lone = bad.len() == 1 && codes.len() == 1;
+        // Placed at its value, the finding's path names the field already.
+        message = format!("{message} ({})", elastic::duration_detail(node, !lone));
+        if lone && let [(path, value)] = bad.as_slice() {
             let keys: Vec<&str> = path.split('.').collect();
             report_at(&keys, &Violation::value_error(message), value, cx);
             return false;

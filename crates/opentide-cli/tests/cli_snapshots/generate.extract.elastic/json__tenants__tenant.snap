@@ -21,7 +21,7 @@ exit: 0
   "skipped": [
     {
       "name": "New service name",
-      "reason": "does not validate as platform::elastic::1.0: configurations.elastic.scheduling.interval: ElasticConfig validation failed with code(s): duration (scheduling.interval \"bogus\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
+      "reason": "does not validate as platform::elastic::1.0: configurations.elastic.scheduling.interval: ElasticConfig validation failed with code(s): duration (\"bogus\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
     },
     {
       "name": "Rule with a legacy id",
@@ -43,7 +43,7 @@ exit: 0
 {"rule":"Encoded PowerShell: \"-enc\" flag","reason":"osquery response action has no inline query (pack/saved query)","event":"skipping_unsupported_osquery_response_action","level":"warning","timestamp":"0000-00-00 00:00:00"}
 {"rule":"Encoded PowerShell: \"-enc\" flag","interval":"5m","from":"now-3m","event":"elastic_import_window_widened","level":"warning","timestamp":"0000-00-00 00:00:00"}
 {"rule":"New service name","interval":"bogus","from":"now-6m","event":"elastic_import_schedule_defaulted","level":"warning","timestamp":"0000-00-00 00:00:00"}
-{"rule":"New service name","reason":"does not validate as platform::elastic::1.0: configurations.elastic.scheduling.interval: ElasticConfig validation failed with code(s): duration (scheduling.interval \"bogus\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)","event":"elastic_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"New service name","reason":"does not validate as platform::elastic::1.0: configurations.elastic.scheduling.interval: ElasticConfig validation failed with code(s): duration (\"bogus\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)","event":"elastic_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
 {"rule":"Rule with a legacy id","reason":"Kibana rule_id \"legacy-rule-7\" is not a UUID","event":"elastic_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
 
 ━━━ ws/Imported/ · created 0755

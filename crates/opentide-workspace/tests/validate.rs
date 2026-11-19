@@ -12,6 +12,7 @@ mod validate {
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
+    use opentide_workspace::diagnostic::ContextValue;
     use opentide_workspace::validate::objects::merge_reference_findings;
     use opentide_workspace::validate::{
         Check, Options, QueriesMode, QueryCheck, QueryFindings, QueryObject, Selection, Validation,
@@ -716,6 +717,58 @@ mod validate {
     }
 
     #[test]
+    fn a_value_the_model_does_not_take_names_what_to_write() {
+        // An enum, a literal or a union error and CrowdStrike's `trigger`
+        // say what the field takes, in the help and in `--json`'s
+        // `context.expected`, spelt as YAML (`false`, not Python's `False`).
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  defender_for_endpoint:\n    status: X\n    scheduling: weekly\n  \
+                 crowdstrike:\n    status: X\n    details:\n      trigger: sometimes\n  \
+                 sentinel_one:\n    status: X\n    response:\n      treat_as_threat: maybe\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let at = |path: &str| -> (Option<String>, Option<String>) {
+            let finding = with_code(&validation, "schema_validation")
+                .into_iter()
+                .find(|d| d.field_path.join(".") == path)
+                .unwrap_or_else(|| panic!("{path}: {:?}", validation.report.issues));
+            (
+                finding.help.clone(),
+                finding
+                    .context
+                    .get("expected")
+                    .and_then(ContextValue::as_str)
+                    .map(str::to_owned),
+            )
+        };
+        let expect =
+            |help: &str, expected: &str| (Some(help.to_owned()), Some(expected.to_owned()));
+        assert_eq!(
+            at("configurations.defender_for_endpoint.scheduling"),
+            expect(
+                "write \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
+                "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
+            )
+        );
+        assert_eq!(
+            at("configurations.crowdstrike.details.trigger"),
+            expect("write verbose or summary", "verbose or summary")
+        );
+        assert_eq!(
+            at("configurations.sentinel_one.response.treat_as_threat"),
+            expect(
+                "write false, \"Malicious\" or \"Suspicious\"",
+                "false, \"Malicious\" or \"Suspicious\""
+            )
+        );
+    }
+
+    #[test]
     fn an_unknown_reference_names_the_listing_and_a_dangling_detection_model_too() {
         let fs = workspace();
         fs.write(
@@ -821,6 +874,32 @@ mod validate {
                 .as_deref()
                 .is_some_and(|h| h.starts_with("look at the indentation"))
         );
+    }
+
+    #[test]
+    fn a_tab_indenting_a_line_is_helped_to_spaces() {
+        // B9: saphyr's "while scanning a plain scalar, found a tab" is a tab
+        // in the indentation columns; CRLF files the same.
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", "name: A\n\tindent: tab\n");
+        fs.write("/ws/objects/rules/b.yaml", "name: B\r\n\tindent: tab\r\n");
+        let validation = run(&fs, &Options::default());
+        let parse = with_code(&validation, "yaml_parse");
+        assert_eq!(parse.len(), 2, "{parse:?}");
+        for finding in parse {
+            assert!(
+                finding
+                    .message
+                    .contains("while scanning a plain scalar, found a tab"),
+                "{finding:?}"
+            );
+            assert_eq!((finding.line, finding.column), (Some(2), Some(1)));
+            assert_eq!(
+                finding.help.as_deref(),
+                Some("indent with spaces: YAML does not allow a tab in indentation"),
+                "{finding:?}"
+            );
+        }
     }
 
     fn narrowed(fs: &Arc<MemoryFs>, check: Option<Check>, selection: &Selection) -> Validation {

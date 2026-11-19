@@ -181,7 +181,7 @@ The validator catches these, but designing against them keeps your graph healthy
 - **Orphan rule** — a rule whose `detection_model` points at no existing objective (or omits it when your policy requires one). It deploys, but nobody can say what threat it addresses.
 - **Dangling reference** — an `objective.threats` UUID that no threat file defines. Usually a typo or a deleted object.
 - **Duplicate UUID** — two objects sharing a UUID. Uniqueness is enforced; regenerate UUIDs, never hand-copy them.
-- **Circular chain** — a threat whose `chaining` links to itself, which `validate` refuses, as it refuses a link without `vector` and `relation` or with another key. Keep the references a DAG: threat ← objective ← rule.
+- **Circular chain** — a threat whose `chaining` links to itself, which `validate` refuses. A link holds `vector`, `relation` and an optional `description`: `validate` refuses a key one or two letters away from `vector` or `relation` (`vectr`) and suggests the right one, and warns about a link missing `vector` or `relation` and about any other key, which opentide does not read. Keep the references a DAG: threat ← objective ← rule.
 - **Coverage island** — a threat that no objective covers. Valid, but it is a visible gap in your coverage report — often intentional, sometimes a to-do.
 
 ## Typed Python access

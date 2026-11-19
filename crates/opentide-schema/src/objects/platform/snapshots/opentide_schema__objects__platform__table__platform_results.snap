@@ -756,7 +756,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration (scheduling.interval 5 is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
+          "error": "ElasticConfig validation failed with code(s): duration (5 is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
@@ -765,7 +765,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "interval"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): duration (scheduling.interval 5 is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
+        "msg": "ElasticConfig validation failed with code(s): duration (5 is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
           15,
           28,
@@ -1388,7 +1388,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration (scheduling.interval \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
+          "error": "ElasticConfig validation failed with code(s): duration (\"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
@@ -1397,7 +1397,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "interval"
         ],
         "input": "0m",
-        "msg": "ElasticConfig validation failed with code(s): duration (scheduling.interval \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
+        "msg": "ElasticConfig validation failed with code(s): duration (\"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
           15,
           28,
@@ -2368,7 +2368,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration (suppression.duration \"\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
+          "error": "ElasticConfig validation failed with code(s): duration (\"\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
@@ -2377,7 +2377,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "duration"
         ],
         "input": "",
-        "msg": "ElasticConfig validation failed with code(s): duration (suppression.duration \"\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
+        "msg": "ElasticConfig validation failed with code(s): duration (\"\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
           15,
           34,
@@ -2393,7 +2393,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): duration (suppression.duration \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
+          "error": "ElasticConfig validation failed with code(s): duration (\"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
         },
         "field_path": [
           "configurations",
@@ -2402,7 +2402,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "duration"
         ],
         "input": "0m",
-        "msg": "ElasticConfig validation failed with code(s): duration (suppression.duration \"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
+        "msg": "ElasticConfig validation failed with code(s): duration (\"0m\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)",
         "span": [
           15,
           44,

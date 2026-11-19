@@ -671,24 +671,34 @@ fn from_scalar(scalar: Scalar<'_>) -> Value {
     }
 }
 
-/// The first character YAML 1.2 does not allow in a stream (§5.1: C0
-/// controls other than tab and line breaks, DEL, C1 controls other than NEL,
-/// U+FFFE and U+FFFF), with its position. saphyr reads them as text.
 /// Whether the `[` or `{` at character `at` of `source` is never closed:
 /// its brackets counted to the end of the text, those in a quoted scalar
 /// or a comment left out. An error inside a collection that closes later
-/// names no bracket (B9).
+/// names no bracket (B9). A quote opens a scalar only where a flow item
+/// starts (after `[`, `{`, `,` or `:`), so an apostrophe in a plain
+/// scalar (`[don't, x]`) is text; `''` in a single-quoted scalar is one
+/// quote.
 fn never_closes(source: &str, at: usize) -> bool {
     let mut depth = 0usize;
     let mut quote: Option<char> = None;
     let mut comment = false;
     let mut previous = ' ';
-    for character in source.chars().skip(at) {
+    // The last character outside blanks, a quoted scalar and a comment.
+    let mut significant = ' ';
+    let mut characters = source.chars().skip(at).peekable();
+    while let Some(character) = characters.next() {
         if comment {
             comment = character != '\n' && character != '\r';
         } else if let Some(open) = quote {
             if character == open {
-                quote = None;
+                if open == '\'' && characters.peek() == Some(&'\'') {
+                    characters.next();
+                } else {
+                    quote = None;
+                    significant = character;
+                }
+            } else if open == '"' && character == '\\' {
+                characters.next();
             }
         } else {
             match character {
@@ -699,9 +709,14 @@ fn never_closes(source: &str, at: usize) -> bool {
                         return false;
                     }
                 }
-                '\'' | '"' => quote = Some(character),
+                '\'' | '"' if matches!(significant, '[' | '{' | ',' | ':') => {
+                    quote = Some(character);
+                }
                 '#' if previous.is_whitespace() => comment = true,
                 _ => {}
+            }
+            if !character.is_whitespace() && !comment && quote.is_none() {
+                significant = character;
             }
         }
         previous = character;
@@ -724,7 +739,11 @@ fn tab_after(source: &str, from: Mark) -> Option<Mark> {
             '\t' if indent || offset == 0 => {
                 return Some(Mark::new(from.index() + offset, line, column));
             }
-            '\n' if previous == '\r' => {}
+            // The `\n` of a CRLF: the line was counted at its `\r`.
+            '\n' if previous == '\r' => {
+                previous = character;
+                continue;
+            }
             '\n' | '\r' => {
                 breaks += 1;
                 if breaks > 2 {
@@ -745,6 +764,9 @@ fn tab_after(source: &str, from: Mark) -> Option<Mark> {
     None
 }
 
+/// The first character YAML 1.2 does not allow in a stream (§5.1: C0
+/// controls other than tab and line breaks, DEL, C1 controls other than NEL,
+/// U+FFFE and U+FFFF), with its position. saphyr reads them as text.
 fn non_printable(source: &str) -> Option<(char, Mark)> {
     let mut line = 1;
     let mut column = 1;
@@ -1119,6 +1141,13 @@ mod tests {
                 .unwrap_err();
         assert!(tab.problem.contains("tab"), "{tab}");
         assert_eq!(tab.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
+        // The same with CRLF line endings, as an editor on Windows writes it.
+        let crlf = load(
+            "name: X\r\nconfigurations:\r\n  splunk:\r\n    enabled: true\r\n\tstatus: STAGING\r\n",
+        )
+        .unwrap_err();
+        assert!(crlf.problem.contains("tab"), "{crlf}");
+        assert_eq!(crlf.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
         let unclosed = load(
             "name: X\nmetadata:\n  uuid: u\n  tags: [a, b\nresponse:\n  alert_severity: High\n",
         )
@@ -1137,6 +1166,17 @@ mod tests {
         assert_eq!(load("a: 'x\n").unwrap_err().note, None);
         let closed = load("a: [x: y: z]\n").unwrap_err();
         assert_eq!(closed.note, None, "{closed}");
+        // An apostrophe in a plain scalar opens no quote: the `]` after it
+        // still closes the `[`; a quoted `]` does not.
+        let apostrophe = load("a: [don't, x: y: z]\n").unwrap_err();
+        assert_eq!(apostrophe.note, None, "{apostrophe}");
+        let quoted = load("a: ['it''s ]', \"\\\" ]\", x: y: z]\n").unwrap_err();
+        assert_eq!(quoted.note, None, "{quoted}");
+        let open = load("a: [don't, b\nc: 1\n").unwrap_err();
+        assert_eq!(
+            open.note.as_deref(),
+            Some("the `[` opened at line 1, column 4 is not closed")
+        );
         let repeated = load("a: 1\nb: 2\na: 3\n").unwrap_err();
         assert_eq!(
             repeated.problem,

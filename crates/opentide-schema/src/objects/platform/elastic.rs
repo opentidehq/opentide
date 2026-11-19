@@ -1027,8 +1027,9 @@ pub fn bad_durations(raw: &Node) -> Vec<(&'static str, &Node)> {
 }
 
 /// What the `duration` code's message adds: each bad duration, its value
-/// and the form it takes.
-pub fn duration_detail(raw: &Node) -> String {
+/// and the form it takes. `named` puts each field's path before its value;
+/// a finding placed at the one bad value already names its field.
+pub fn duration_detail(raw: &Node, named: bool) -> String {
     bad_durations(raw)
         .iter()
         .map(|(path, node)| {
@@ -1041,8 +1042,13 @@ pub fn duration_detail(raw: &Node) -> String {
             } else {
                 ""
             };
+            let field = if named {
+                format!("{path} ")
+            } else {
+                String::new()
+            };
             format!(
-                "{path} {value} is not a duration: a number and a unit, s, m, h or d, such as \
+                "{field}{value} is not a duration: a number and a unit, s, m, h or d, such as \
                  `14d`{extra}"
             )
         })

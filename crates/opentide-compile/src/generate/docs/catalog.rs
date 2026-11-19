@@ -1151,7 +1151,7 @@ mod tests {
     #[test]
     fn a_model_error_names_the_rule_its_first_error_and_how_many_more() {
         let document = opentide_schema::node::load(
-            "name: R\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  created: x\n  modified: x\n  tlp: clear\nconfigurations:\n  sentinel:\n    query: q\n",
+            "name: R\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nconfigurations:\n  sentinel:\n    query: q\n",
         )
         .unwrap();
         let error = typed::<RuleV1_1>(&document).unwrap_err().detail;
@@ -1161,7 +1161,7 @@ mod tests {
              validate shows each finding"
         );
         let document = opentide_schema::node::load(
-            "name: R\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  created: x\n  modified: x\n  tlp: clear\n",
+            "name: R\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n",
         )
         .unwrap();
         let error = typed::<RuleV1_1>(&document).unwrap_err().detail;
