@@ -612,7 +612,8 @@ fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
         ),
         ("SecurityEvent\n| where EventID in (4688, 4689", "4689"),
         ("T | where a in (\"x\", \"y\" | take 1", "\"y\""),
-        ("T | where (a == 1\n| take 1", "1"),
+        ("T | where x has_any (\"x\", \"y\"\n| take 1", "\"y\""),
+        ("T | where x in (a, b\n| take 1", "b"),
     ] {
         let parsed = parse(source);
         let first = parsed.errors.first().expect("an error");
@@ -620,7 +621,16 @@ fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
         let at = source.find(after).expect("in the source") + after.len();
         assert_eq!(usize::from(first.gap.start()), at, "{source}");
     }
-    // A sub-query that never closes is still read as one.
-    let found = errors("T | where a in (S | project a");
-    assert_eq!(found, ["expected `)`"], "{found:?}");
+    // A sub-query that never closes is still read as one, whatever names
+    // its source: only the `)` is missing.
+    for source in [
+        "T | where a in (S | project a",
+        "T | where a in (database(\"d\").S | project a",
+        "T | where a in (['My Table'] | project a",
+        "T | where a in ((S | project a)\n| project b",
+        "T | where a in (union A, B | project a",
+    ] {
+        let found = errors(source);
+        assert_eq!(found, ["expected `)`"], "{source}: {found:?}");
+    }
 }

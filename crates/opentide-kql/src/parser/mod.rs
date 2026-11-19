@@ -320,9 +320,10 @@ impl<'i> P<'i> {
     ///
     /// A group that never closes reaches the end of the input, so the pipes
     /// of the pipeline around it fall inside it: `in (4688, 4689` then
-    /// `| project Account` on the next line. Its pipe makes it tabular only
-    /// when what comes before that pipe is one tabular source, as in
-    /// `(T | where`; otherwise the group is a list that misses its `)`.
+    /// `| project Account` on the next line. Before its first pipe, such a
+    /// group that reads as a list of values ([`P::value_list`]) is a list
+    /// that misses its `)`; any other is still a sub-query (`(T | where`,
+    /// `(database("d").T | …`, `(['My Table'] | …`, `((S | …) | …`).
     pub(crate) fn paren_is_tabular(&self, n: usize) -> bool {
         if self.nth(n) != K::L_PAREN {
             return false;
@@ -334,8 +335,9 @@ impl<'i> P<'i> {
         // For the `(` at `n + k` (k < run): the index after its group, and
         // whether a `|` stands at its top level.
         let mut ends: Vec<Option<usize>> = vec![None; run];
-        // The first `|` at each group's top level.
+        // The first `|` and the first `,` at each group's top level.
         let mut pipes: Vec<Option<usize>> = vec![None; run];
+        let mut commas: Vec<Option<usize>> = vec![None; run];
         let mut open: Vec<usize> = Vec::new();
         let mut at = n;
         let end = loop {
@@ -357,6 +359,11 @@ impl<'i> P<'i> {
                         slot.get_or_insert(at);
                     }
                 }
+                K::COMMA => {
+                    if let Some(slot) = open.last().and_then(|&o| commas.get_mut(o - n)) {
+                        slot.get_or_insert(at);
+                    }
+                }
                 _ => {}
             }
             at += 1;
@@ -366,7 +373,8 @@ impl<'i> P<'i> {
         let mut k = 0;
         loop {
             if let Some(pipe) = pipes[k] {
-                return ends[k].is_some() || self.tabular_item(n + k + 1, pipe);
+                return ends[k].is_some()
+                    || !self.value_list(n + k + 1, commas[k].filter(|&comma| comma < pipe));
             }
             let close = end_of(k).saturating_sub(1);
             if k + 1 < run {
@@ -379,6 +387,34 @@ impl<'i> P<'i> {
                 continue;
             }
             return self.tabular_item(n + k + 1, close);
+        }
+    }
+
+    /// Whether the group content that starts at `from` reads as a list of
+    /// values: it starts with a literal (`4688`, `"x"`, `true`, `-1`), or
+    /// it has a top-level `,` (`comma`) and starts with no source operator
+    /// (`union A, B` and `print a, b` are tabular).
+    fn value_list(&self, from: usize, comma: Option<usize>) -> bool {
+        match self.nth(from) {
+            K::STRING
+            | K::NUMBER
+            | K::TIMESPAN
+            | K::TYPED_LITERAL
+            | K::BOOLEAN
+            | K::NULL_KW
+            | K::MINUS
+            | K::DYNAMIC_KW => true,
+            K::PRINT_KW
+            | K::UNION_KW
+            | K::DATATABLE_KW
+            | K::EXTERNALDATA_KW
+            | K::EXTERNAL_DATA_KW
+            | K::SEARCH_KW
+            | K::FIND_KW
+            | K::RANGE_KW
+            | K::MATERIALIZE_KW
+            | K::L_PAREN => false,
+            _ => comma.is_some(),
         }
     }
 
