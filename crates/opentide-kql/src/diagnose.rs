@@ -1106,6 +1106,40 @@ mod tests {
         assert!(codes_of("print database(\"d\")").is_empty());
     }
 
+    /// `where * has "x"`: a star on the left of a string operator or `==`
+    /// searches every column, as Kusto takes it; on the left of anything else
+    /// (`!=`, `<`, `in`, `has_any`) it is still an error, as in Kusto.
+    /// `2 * 3`, `count(*)` and a bare `where *` are as before.
+    #[test]
+    fn a_star_searches_every_column() {
+        for source in [
+            "SecurityEvent | where * has \"x\"",
+            "SecurityEvent | where * contains \"x\"",
+            "SecurityEvent | where * !has \"x\"",
+            "SecurityEvent | where * =~ \"x\"",
+            "SecurityEvent | where * matches regex \"x\"",
+            "SecurityEvent | where * == \"x\"",
+            "SecurityEvent | where * startswith \"x\" and EventID == 1",
+            "SecurityEvent | extend y = 2 * 3",
+            "SecurityEvent | summarize count(*)",
+        ] {
+            assert!(
+                codes_of(source).is_empty(),
+                "{source}: {:?}",
+                codes_of(source)
+            );
+        }
+        for not_kusto in [
+            "SecurityEvent | where *",
+            "SecurityEvent | where * != \"x\"",
+            "SecurityEvent | where * < 5",
+            "SecurityEvent | where * in (\"a\")",
+            "SecurityEvent | where * has_any (\"a\", \"b\")",
+        ] {
+            assert_eq!(codes_of(not_kusto), [codes::KQL_PARSE_ERROR], "{not_kusto}");
+        }
+    }
+
     fn codes_of(source: &str) -> Vec<String> {
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
         analyze(source, &catalog)

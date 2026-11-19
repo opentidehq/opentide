@@ -257,6 +257,7 @@ accessors! {
         ParenExpr => [l_paren_token, expr, r_paren_token],
         Literal => [value],
         DynamicLiteral => [dynamic_token, l_paren_token, json_value, r_paren_token],
+        StarExpr => [star_token],
         ExpressionList => [l_paren_token, exprs, comma_token, tabular_expression, r_paren_token],
         Range => [l_paren_token, from, dotdot_token, to, r_paren_token],
         Argument => [],

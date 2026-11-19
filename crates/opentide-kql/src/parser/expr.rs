@@ -190,6 +190,19 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
             p.done(m, K::PAREN_EXPR)
         }
         K::QUOTED_IDENT => name_ref(p),
+        // `* has "x"`: every column, as Kusto's term search takes it, on the
+        // left of a string operator (`has`, `contains`, `startswith`, `=~`,
+        // `matches regex`, ...) or `==`, and of nothing else: not `!=`, `<`
+        // or `>=`, not `in` or `has_any`.
+        K::STAR
+            if p.nth(1) == K::MATCHES_KW
+                || (p.nth(1) == K::CMP_OP
+                    && !matches!(p.0.nth_text(1), "!=" | "<>" | "<" | "<=" | ">" | ">=")) =>
+        {
+            let m = p.start();
+            p.bump();
+            p.done(m, K::STAR_EXPR)
+        }
         // In an expression, `dynamic` and `toscalar` only open
         // `dynamic(...)` and `toscalar(...)`: never a column, as in the old
         // grammar (found by the switch's full differential, seed 3).
