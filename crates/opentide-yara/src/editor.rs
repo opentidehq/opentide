@@ -43,6 +43,8 @@ struct StringUse {
     span: Span,
     wildcard: bool,
     definition: bool,
+    /// Where a definition ends (its value and modifiers); 0 for a use.
+    end: usize,
 }
 
 struct RuleInfo {
@@ -99,6 +101,7 @@ fn rule_info(rule: &Rule) -> RuleInfo {
             span: span_of(&ident.span()),
             wildcard: false,
             definition: true,
+            end: span_of(&pattern.span()).1,
         });
     }
     walk(&rule.condition, &mut info);
@@ -111,6 +114,7 @@ fn string_use(name: &str, span: Span) -> StringUse {
         span,
         wildcard: false,
         definition: false,
+        end: 0,
     }
 }
 
@@ -122,6 +126,7 @@ fn pattern_set(set: &PatternSet, info: &mut RuleInfo) {
                 span: span_of(&item.span()),
                 wildcard: item.wildcard,
                 definition: false,
+                end: 0,
             });
         }
     }
@@ -209,7 +214,7 @@ pub(crate) fn symbols_of(source: &str, ast: &AST<'_>) -> Vec<Symbol> {
         rules
             .iter()
             .flat_map(|r| r.strings.iter().filter(|s| s.definition))
-            .map(|s| s.span.0)
+            .map(|s| (s.span.0, s.end))
     };
     let mut details = StringDetails::new(source, definitions().count(), definitions());
     let mut out = Vec::new();
@@ -245,12 +250,13 @@ fn line_at(source: &str, offset: usize) -> Option<&str> {
 }
 
 /// The outline's detail of each string definition, in order: its line,
-/// trimmed, or where the line defines several strings, its part of the line,
-/// from its identifier to the next one's. A search back and forth from each
+/// trimmed, or where the line defines several strings, its own definition
+/// (its identifier, value and modifiers): not the condition or the next
+/// rule after it. A search back and forth from each
 /// string, and a copy of its whole line, made n strings on one line O(n²) in
 /// time and memory (16,000 took 7 GB): past a few strings, the lines' ends
 /// come from one table of line starts.
-struct StringDetails<'a, I: Iterator<Item = usize>> {
+struct StringDetails<'a, I: Iterator<Item = (usize, usize)>> {
     source: &'a str,
     starts: std::iter::Peekable<I>,
     /// Line starts, for a document of many definitions; empty for a few.
@@ -259,7 +265,7 @@ struct StringDetails<'a, I: Iterator<Item = usize>> {
     previous: Option<(usize, usize)>,
 }
 
-impl<'a, I: Iterator<Item = usize>> StringDetails<'a, I> {
+impl<'a, I: Iterator<Item = (usize, usize)>> StringDetails<'a, I> {
     /// A document of at most this many definitions searches each line's
     /// ends, as a table costs more.
     const SEARCHED: usize = 8;
@@ -298,21 +304,20 @@ impl<'a, I: Iterator<Item = usize>> StringDetails<'a, I> {
     }
 }
 
-impl<I: Iterator<Item = usize>> Iterator for StringDetails<'_, I> {
+impl<I: Iterator<Item = (usize, usize)>> Iterator for StringDetails<'_, I> {
     type Item = Option<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let at = self.starts.next()?;
+        let (at, end) = self.starts.next()?;
         let line = self.line(at);
         let shared_before = self.previous == Some(line);
         let next_here = self
             .starts
             .peek()
-            .copied()
-            .filter(|&next| next < line.1 && next >= line.0);
+            .is_some_and(|&(next, _)| next < line.1 && next >= line.0);
         self.previous = Some(line);
-        let (from, to) = if shared_before || next_here.is_some() {
-            (at, next_here.unwrap_or(line.1))
+        let (from, to) = if (shared_before || next_here) && end > at {
+            (at, end)
         } else {
             line
         };
@@ -1089,6 +1094,21 @@ mod tests {
                 Some("$a = \"x\" ascii // first".to_string()),
                 Some("$b = { 4D 5A }".to_string()),
                 Some("$c = /re/".to_string()),
+            ]
+        );
+        // Rules on one line: each string's own definition, not the
+        // condition or the next rule after it.
+        let src = "rule a { strings: $x = \"1\" wide condition: $x } rule b { strings: $y = { 4D } condition: $y }";
+        let details: Vec<Option<String>> = symbols(src)
+            .into_iter()
+            .filter(|s| s.parent.is_some())
+            .map(|s| s.detail)
+            .collect();
+        assert_eq!(
+            details,
+            [
+                Some("$x = \"1\" wide".to_string()),
+                Some("$y = { 4D }".to_string())
             ]
         );
         for n in [1_000, 2_000] {

@@ -142,6 +142,9 @@ struct RuleState {
     /// rule of n strings O(n²) (16,000 took seconds). Anonymous `$` strings
     /// are not in it.
     named: foldhash::HashMap<String, usize>,
+    /// `named` is in use: the rule has more than a few strings. Not
+    /// `named.is_empty()`, which stays true for anonymous strings only.
+    indexed: bool,
     uses_them: bool,
 }
 
@@ -151,7 +154,7 @@ impl RuleState {
 
     /// The named string `name` (sigil included).
     fn position(&self, name: &str) -> Option<usize> {
-        if self.named.is_empty() {
+        if !self.indexed {
             return self.patterns.iter().position(|p| {
                 visited();
                 p.name == name
@@ -168,8 +171,10 @@ impl RuleState {
         if len <= Self::SCANNED {
             return;
         }
-        let from = if self.named.is_empty() { 0 } else { len - 1 };
+        let from = if self.indexed { len - 1 } else { 0 };
+        self.indexed = true;
         for (i, p) in self.patterns.iter().enumerate().skip(from) {
+            visited();
             if p.name != "$" {
                 self.named.entry(p.name.clone()).or_insert(i);
             }
@@ -231,6 +236,7 @@ impl<'a> Checker<'a> {
             rule: RuleState {
                 patterns: Vec::new(),
                 named: foldhash::HashMap::default(),
+                indexed: false,
                 uses_them: false,
             },
             findings: Vec::new(),
@@ -443,6 +449,7 @@ impl<'a> Checker<'a> {
         self.rule = RuleState {
             patterns: Vec::new(),
             named: foldhash::HashMap::default(),
+            indexed: false,
             uses_them: false,
         };
         if let Some(patterns) = &rule.patterns {
@@ -882,7 +889,7 @@ impl<'a> Checker<'a> {
                     let at = span(&item.span());
                     let id = item.identifier.trim_start_matches('$');
                     let mut matched = 0;
-                    if item.wildcard || id.is_empty() || self.rule.named.is_empty() {
+                    if item.wildcard || id.is_empty() || !self.rule.indexed {
                         for p in &mut self.rule.patterns {
                             visited();
                             let pid = p.name.trim_start_matches('$');
@@ -2427,6 +2434,19 @@ mod tests {
                 format!("all of ({})", names.join(", "))
             }),
         ];
+        // Anonymous strings, which the index leaves out.
+        let anonymous = |n: usize| {
+            let strings = vec!["$ = \"x\""; n].join(" ");
+            let source = format!("rule r {{ strings: {strings} condition: any of them }}");
+            let before = STRINGS_VISITED.get();
+            let _ = crate::diagnostics(&source, &crate::Context::default());
+            STRINGS_VISITED.get() - before
+        };
+        let (small, large) = (anonymous(1_000), anonymous(2_000));
+        assert!(
+            large * 10 <= small * 21,
+            "anonymous: {small} strings looked at for 1,000, {large} for 2,000"
+        );
         for (name, condition) in conditions {
             let visited = |n: usize| {
                 let source = rule(n, condition);
