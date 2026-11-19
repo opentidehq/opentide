@@ -3,7 +3,7 @@
 //! operators with their own syntax (opentidehq/language-server#125).
 
 use opentide_core::{Diagnostic, Severity, codes};
-use opentide_kql::{Hir, Profile, analyze, lower};
+use opentide_kql::{Hir, Profile, analyze, columns, lower};
 
 fn diagnostics(source: &str) -> Vec<Diagnostic> {
     analyze(source, Profile::Sentinel).diagnostics
@@ -312,4 +312,36 @@ fn malformed_operators_still_fail() {
     ] {
         assert_parse_error(source);
     }
+}
+
+#[test]
+fn obfuscated_strings_and_hex_integers_are_literals() {
+    // Kusto reads `h` or `H` right before any string as an obfuscated string,
+    // and `0x` digits as an int or a long: both are one literal.
+    for source in [
+        "SecurityEvent | where CommandLine has h\"secret\"",
+        "SecurityEvent | where CommandLine has H'secret'",
+        "SecurityEvent | where Account == h@\"CONTOSO\\svc\"",
+        "SecurityEvent | where Account == H@'CONTOSO\\svc'",
+        "print x = h```multi\nline```",
+        "print x = H~~~multi\nline~~~",
+        "SecurityEvent | where EventID == 0x1210",
+        "print mask = 0xFFFFFFFF, low = 0X0f",
+    ] {
+        assert_clean(source);
+    }
+    // A table named by an obfuscated string is that table: its columns.
+    let columns = |source: &str| -> Vec<String> {
+        let analysis = columns(source, Profile::Sentinel);
+        let pipeline = analysis.pipelines.last().expect("a pipeline");
+        pipeline
+            .source
+            .columns
+            .iter()
+            .map(|c| c.name.clone())
+            .collect()
+    };
+    let plain = columns("table(\"SigninLogs\") | take 1");
+    assert!(plain.iter().any(|c| c == "UserPrincipalName"), "{plain:?}");
+    assert_eq!(columns("table(h\"SigninLogs\") | take 1"), plain);
 }

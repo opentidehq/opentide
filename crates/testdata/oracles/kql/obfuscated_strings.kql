@@ -1,0 +1,6 @@
+SecurityEvent
+| where CommandLine has h"secret-token"
+| where Account != H@'CONTOSO\svc'
+| extend Note = h'hidden'
+| extend Block = h```multi
+line```

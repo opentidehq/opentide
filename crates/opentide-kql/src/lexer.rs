@@ -44,7 +44,10 @@ enum Token {
     BangWord,
     #[regex(r"hint\.[A-Za-z_][A-Za-z0-9_]*")]
     HintName,
+    /// A decimal, or a hexadecimal integer (`0x1F`, `0X1f`: an `int` or a
+    /// `long`, as Kusto reads it).
     #[regex(r"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?")]
+    #[regex(r"0[xX][0-9A-Fa-f]+")]
     Number,
     #[regex(
         r"[0-9]+(\.[0-9]+)?(days?|d|hours?|hrs?|h|minutes?|min|m|seconds?|sec|s|milliseconds?|ms|microseconds?|tick|ticks)"
@@ -52,7 +55,9 @@ enum Token {
     Timespan,
     /// `"a\"b"`, `'a'`, `@"a""b"`, `@'a''b'`, and the multi-line
     /// ```` ```a``` ```` and `~~~a~~~`, which hold anything but their own
-    /// closing fence.
+    /// closing fence. Each may be obfuscated, `h` or `H` before it
+    /// (`h"secret"`, `H@'x'`, ```` h```x``` ````): one string token, the
+    /// prefix included.
     /// `false` when it never closes: the rest of the input is one error
     /// token, so that a broken string costs one scan, not one per character.
     #[token("\"", |lex| quoted(lex, b'"'))]
@@ -61,6 +66,18 @@ enum Token {
     #[token("@'", |lex| verbatim(lex, b'\''))]
     #[token("```", |lex| fenced(lex, b'`'))]
     #[token("~~~", |lex| fenced(lex, b'~'))]
+    #[token("h\"", |lex| quoted(lex, b'"'))]
+    #[token("H\"", |lex| quoted(lex, b'"'))]
+    #[token("h'", |lex| quoted(lex, b'\''))]
+    #[token("H'", |lex| quoted(lex, b'\''))]
+    #[token("h@\"", |lex| verbatim(lex, b'"'))]
+    #[token("H@\"", |lex| verbatim(lex, b'"'))]
+    #[token("h@'", |lex| verbatim(lex, b'\''))]
+    #[token("H@'", |lex| verbatim(lex, b'\''))]
+    #[token("h```", |lex| fenced(lex, b'`'))]
+    #[token("H```", |lex| fenced(lex, b'`'))]
+    #[token("h~~~", |lex| fenced(lex, b'~'))]
+    #[token("H~~~", |lex| fenced(lex, b'~'))]
     String(bool),
     #[regex(r"==|!=|<>|<=|>=|<|>|=~|!~")]
     CmpOp,
@@ -467,6 +484,18 @@ pub(crate) mod tests {
             ]
         );
         assert_eq!(
+            kinds("0x1F 0X1f 0xdeadBEEF 0x 0xg"),
+            vec![
+                (K::NUMBER, "0x1F"),
+                (K::NUMBER, "0X1f"),
+                (K::NUMBER, "0xdeadBEEF"),
+                (K::NUMBER, "0"),
+                (K::IDENT, "x"),
+                (K::NUMBER, "0"),
+                (K::IDENT, "xg"),
+            ]
+        );
+        assert_eq!(
             kinds("1..3 2.x"),
             vec![
                 (K::NUMBER, "1"),
@@ -490,7 +519,28 @@ pub(crate) mod tests {
             "~~~a\n~b~~c~~~",
         ] {
             assert_eq!(kinds(text), vec![(K::STRING, text)], "{text}");
+            // Obfuscated: `h` or `H` before any of them is the same string.
+            for prefix in ["h", "H"] {
+                let obfuscated = format!("{prefix}{text}");
+                assert_eq!(
+                    kinds(&obfuscated),
+                    vec![(K::STRING, obfuscated.as_str())],
+                    "{obfuscated}"
+                );
+            }
         }
+        // Only right before the quote: `h "a"` is a name and a string, and a
+        // longer word before a quote stays a word.
+        assert_eq!(
+            kinds(r#"h "a" ah"b""#),
+            vec![
+                (K::IDENT, "h"),
+                (K::STRING, r#""a""#),
+                (K::IDENT, "ah"),
+                (K::STRING, r#""b""#),
+            ]
+        );
+        assert_eq!(kinds("h'a"), vec![(K::ERROR_TOKEN, "h'a")]);
         // The fence ends at its first three characters.
         assert_eq!(
             kinds("```a````"),
