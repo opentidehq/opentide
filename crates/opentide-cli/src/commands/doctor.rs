@@ -1586,6 +1586,36 @@ mod tests {
         );
     }
 
+    /// A committed catalog from another opentide warns, naming both versions
+    /// and nothing that reads it (#1684); one from this opentide, or none,
+    /// passes.
+    #[test]
+    fn a_committed_catalog_from_another_opentide_warns() {
+        let env = Env::default();
+        let dir = tempfile::tempdir().unwrap();
+        let generated = dir.path().join(".opentide/lsp/catalogs/generated");
+        std::fs::create_dir_all(&generated).unwrap();
+        let cx = context(&env, dir.path());
+        let doctor = Doctor {
+            cx: &cx,
+            workspace: dir.path().to_path_buf(),
+            explicit: false,
+            cwd: dir.path().to_path_buf(),
+            config: None,
+        };
+        assert_eq!(doctor.lsp_catalog().status, "pass");
+        std::fs::write(generated.join("fields.json"), r#"{"opentide": "0.18.0"}"#).unwrap();
+        let check = doctor.lsp_catalog();
+        assert_eq!(check.status, "warn");
+        assert_eq!(
+            check.message,
+            "The language-server catalog committed in .opentide/lsp/catalogs/generated is from \
+             opentide 0.18.0, not 9.9.9"
+        );
+        std::fs::write(generated.join("fields.json"), r#"{"opentide": "9.9.9"}"#).unwrap();
+        assert_eq!(doctor.lsp_catalog().status, "pass");
+    }
+
     #[test]
     fn a_proxy_that_accepts_passes_and_names_a_no_proxy_bypass() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
