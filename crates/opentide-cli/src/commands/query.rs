@@ -572,8 +572,9 @@ fn reference(value: &opentide_compile::Json) -> Option<&str> {
 
 /// Logs each tenant's unset `$NAME` credentials once, in file order, as the
 /// configuration loader does (`fetch_config_envvar`:
-/// `environment_variable_missing`, critical).
-pub(crate) fn log_unset(tenants: &[Configured], env: &Env) {
+/// `environment_variable_missing`, critical), the advice naming what the
+/// command is about to do (`before`: "a live check", "a deploy").
+pub(crate) fn log_unset(tenants: &[Configured], env: &Env, before: &str) {
     let mut reported: Vec<String> = Vec::new();
     for tenant in tenants {
         let mut pending: Vec<String> = Vec::new();
@@ -589,9 +590,10 @@ pub(crate) fn log_unset(tenants: &[Configured], env: &Env) {
         }
         if !pending.is_empty() {
             let joined: Vec<String> = pending.iter().map(|name| format!("${name}")).collect();
+            let advice = format!("Set those environment variables before {before}.");
             tracing::error!(
                 detail = format!("Unset configuration variables: {}", joined.join(", ")).as_str(),
-                advice = "Set those environment variables before a live check.",
+                advice = advice.as_str(),
                 critical = true,
                 "environment_variable_missing"
             );
@@ -611,8 +613,8 @@ pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) 
         .collect();
     (!missing.is_empty()).then(|| {
         format!(
-            "{client} credentials are unset ({}). Set those environment variables before a live \
-             check.",
+            "{client} credentials are unset ({}). Set those environment variables, then run \
+             the command again.",
             missing.join(", ")
         )
     })
@@ -913,7 +915,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             }
         };
     let (available, config_path) = configured(cx, platform);
-    log_unset(&available, cx.env);
+    log_unset(&available, cx.env, "a query");
     let selected = match select(platform, &args.tenants, &available, &config_path) {
         Ok(selected) => selected,
         Err((message, value, choices)) => {
@@ -1638,7 +1640,7 @@ mod tests {
             unset_credentials("sentinel_one", &tenant, &Env::from_pairs([("S1_URL", "x")])),
             Some(
                 "SentinelOne credentials are unset (${S1_TOKEN}). Set those environment \
-                 variables before a live check."
+                 variables, then run the command again."
                     .to_owned()
             )
         );
@@ -2282,7 +2284,7 @@ mod tests {
         assert_eq!(
             unset_credentials("elastic", &tenant, &env).as_deref(),
             Some(
-                "Elastic credentials are unset ($KEY). Set those environment variables before a live check."
+                "Elastic credentials are unset ($KEY). Set those environment variables, then run the command again."
             )
         );
         assert_eq!(unset_credentials("splunk", &tenant, &env), None);

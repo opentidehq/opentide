@@ -8,5 +8,5 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Environment variable missing · detail: Unset configuration variables: $S1_API_TOKEN · advice: Set those environment variables before a live check.
-error: 1 of 1 queries failed on 1 sentinel_one tenant: lab: SentinelOne credentials are unset ($S1_API_TOKEN). Set those environment variables before a live check.
+error: Environment variable missing · detail: Unset configuration variables: $S1_API_TOKEN · advice: Set those environment variables before a query.
+error: 1 of 1 queries failed on 1 sentinel_one tenant: lab: SentinelOne credentials are unset ($S1_API_TOKEN). Set those environment variables, then run the command again.

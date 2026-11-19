@@ -100,7 +100,8 @@ impl Reply {
 
     /// What a failed parser check is (`_validate`), read from the masked
     /// text: a 307 "Network Error" is the parser's timeout, a 502 to 504
-    /// that is not JSON a gateway's, anything else a refusal.
+    /// that is not JSON a gateway's, a 401 the credential's, anything else a
+    /// refusal.
     fn check_failure(&self, tenant: &str) -> Result<LiveCheck, ConnectorError> {
         let status = self.answer.status;
         let text = self.answer.text();
@@ -122,7 +123,20 @@ impl Reply {
                 status,
             });
         }
-        let all = with_macro_advice(all_messages(&parse(text.as_bytes())));
+        let all = all_messages(&parse(text.as_bytes()));
+        if status == 401 {
+            // The credential, not the query: no query was checked (#1658, E8).
+            let reason = if all.is_empty() {
+                String::new()
+            } else {
+                format!(": {all}")
+            };
+            return Err(ConnectorError::authentication(
+                PLATFORM,
+                tenant,
+                format!("Splunk refused the credential (HTTP 401){reason}"),
+            ));
+        }
         Err(ConnectorError::refused(
             PLATFORM,
             tenant,
@@ -1272,7 +1286,12 @@ mod tests {
             reply(200, plain.clone()).search_errors(&parse(plain.as_bytes())),
             reply(200, messages.clone()).search_errors(&parse(messages.as_bytes())),
         ];
-        for (status, body) in [(503, plain.clone()), (400, plain), (400, messages)] {
+        for (status, body) in [
+            (503, plain.clone()),
+            (400, plain),
+            (401, messages.clone()),
+            (400, messages),
+        ] {
             let error = reply(status, body).check_failure("t").unwrap_err();
             shown.push(format!("{error} {}", error.text()));
         }
@@ -1280,6 +1299,32 @@ mod tests {
             assert!(!text.contains(TOKEN), "{text}");
             assert!(text.contains("***"), "{text}");
         }
+    }
+
+    /// A parser check refused with HTTP 401 is the credential's, not the
+    /// query's: the live check fails the tenant (#1658, E8).
+    #[test]
+    fn a_parser_check_refused_with_401_is_the_credentials() {
+        let reply = |status, body: &[u8]| Reply {
+            answer: Answer {
+                status,
+                content_type: None,
+                body: body.to_vec(),
+                elapsed: Duration::ZERO,
+                credentials: crate::answer::Credentials::default(),
+            },
+        };
+        let body = br#"{"messages":[{"type":"WARN","text":"call not properly authenticated"}]}"#;
+        let error = reply(401, body).check_failure("lab").unwrap_err();
+        let ConnectorError::Authentication { message, .. } = &error else {
+            panic!("{error:?}")
+        };
+        assert_eq!(
+            message,
+            "Splunk refused the credential (HTTP 401): call not properly authenticated"
+        );
+        let error = reply(400, body).check_failure("lab").unwrap_err();
+        assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
     }
 
     #[test]
