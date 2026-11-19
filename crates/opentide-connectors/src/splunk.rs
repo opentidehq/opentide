@@ -84,16 +84,18 @@ impl Reply {
         if found.is_empty() {
             self.http_error()
         } else {
-            found
+            with_macro_advice(found)
         }
     }
 
     /// A searched answer's `ERROR` and `FATAL` messages, masked: a body
     /// that is not JSON is one message holding its text.
     fn search_errors(&self, body: &Object) -> String {
-        self.answer
-            .credentials
-            .mask_text(&messages(body, &["ERROR", "FATAL"]))
+        with_macro_advice(
+            self.answer
+                .credentials
+                .mask_text(&messages(body, &["ERROR", "FATAL"])),
+        )
     }
 
     /// What a failed parser check is (`_validate`), read from the masked
@@ -120,7 +122,7 @@ impl Reply {
                 status,
             });
         }
-        let all = all_messages(&parse(text.as_bytes()));
+        let all = with_macro_advice(all_messages(&parse(text.as_bytes())));
         Err(ConnectorError::refused(
             PLATFORM,
             tenant,
@@ -145,8 +147,25 @@ impl Reply {
         if detail.is_empty() {
             format!("Splunk answered HTTP {status}{reason}")
         } else {
-            format!("Splunk answered HTTP {status}{reason}: {detail}")
+            with_macro_advice(format!("Splunk answered HTTP {status}{reason}: {detail}"))
         }
+    }
+}
+
+/// What to do when Splunk cannot find the mapping macro every search ends
+/// with by default (smoke E5, #1657): define it, or turn it off.
+pub const MAPPING_MACRO_ADVICE: &str = "every search opentide writes ends with the \
+    soc_macro_auto_mdr_mapping(MDR_UUID) macro unless the tenant sets mdr_mapping_macro = false \
+    in [tenants.setup]: define the macro in the tenant's app (one argument, MDR_UUID; for \
+    example `eval opentide_rule_uuid=$MDR_UUID$`) or turn it off";
+
+/// *text*, with [`MAPPING_MACRO_ADVICE`] when it is Splunk saying the
+/// mapping macro does not exist.
+fn with_macro_advice(text: String) -> String {
+    if text.contains("soc_macro_auto_mdr_mapping") && text.contains("cannot be found") {
+        format!("{text} ({MAPPING_MACRO_ADVICE})")
+    } else {
+        text
     }
 }
 
@@ -1179,6 +1198,23 @@ mod tests {
         assert_eq!(
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),
             "1793088000.250"
+        );
+        // A missing mapping macro says what to do (smoke E5, #1657), in a
+        // deploy's refusal and a search's alike; any other error is as is.
+        let missing = b"<response><messages><msg type=\"ERROR\">Error in 'SearchParser': The \
+            search specifies a macro 'soc_macro_auto_mdr_mapping' that cannot be found. Reasons \
+            include: the macro name is misspelled</msg></messages></response>";
+        let refused = reply(400, missing).http_error();
+        assert!(
+            refused.ends_with(&format!("misspelled ({MAPPING_MACRO_ADVICE})")),
+            "{refused}"
+        );
+        assert!(MAPPING_MACRO_ADVICE.contains("mdr_mapping_macro = false"));
+        let searched = br#"{"messages":[{"type":"FATAL","text":"The search specifies a macro 'soc_macro_auto_mdr_mapping' that cannot be found."}]}"#;
+        assert!(
+            reply(400, searched)
+                .search_refusal()
+                .contains(MAPPING_MACRO_ADVICE)
         );
     }
 }

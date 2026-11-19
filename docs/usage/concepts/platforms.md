@@ -204,6 +204,29 @@ configurations:
 
 `opentide deploy` sends each key as written: a `null` value as the empty value, a boolean as `1` or `0`, any other value as text. A list or table is refused, as `savedsearches.conf` cannot hold one, and so is a blank key. A key the block also sets (`alert_threshold`, `cron_schedule`) takes the `advanced` value; the `[[modifiers]]` of `platforms/splunk.toml` still apply after it. An action whose parameters are set here is triggered when it is in the tenant's `[tenants.setup] actions_enabled`. The table is left out of the generated templates and of editor completion.
 
+### Splunk's mapping macro
+
+Every saved search `opentide deploy` writes ends with two lines after the rule's `query`. The first is an `eval` that names the rule. By default, the second calls the `soc_macro_auto_mdr_mapping` macro:
+
+```text
+index=main sourcetype=canarytokens
+| eval MDR_UUID="<the rule's uuid>", MDR_status="<the block's status>"
+|`soc_macro_auto_mdr_mapping(MDR_UUID)`
+```
+
+`opentide query --rule` and `validate query --live` send the same search. Splunk refuses a search that calls a macro it does not have ("The search specifies a macro 'soc_macro_auto_mdr_mapping' that cannot be found"), so the macro must exist in the tenant's app. A fresh Splunk has none, so pick one of these:
+
+- **Turn it off** for the tenant. The search then ends with the `eval`:
+
+  ```toml
+  [tenants.setup]
+  mdr_mapping_macro = false
+  ```
+
+- **Define it** in the tenant's app (Settings, Advanced search, Search macros), shared with the app. Its name is `soc_macro_auto_mdr_mapping(1)`, it takes one argument, `MDR_UUID`, and its definition is any search command, for example `eval opentide_rule_uuid=$MDR_UUID$`. A SOC that maps alerts to rules puts that mapping here, such as a `lookup`.
+
+`mdr_mapping_macro` is `true` when unset, as in every earlier release, and takes `true` or `false` only. When Splunk cannot find the macro, the error tells you to define it or turn it off.
+
 ### Upgrading to 0.4.0
 
 This is a **breaking change** for objects that previously passed validation:

@@ -36,6 +36,10 @@ pub struct RuleQuery {
     /// The KQL exclusions deploy compiles into the query per tenant
     /// (Sentinel, Defender for Endpoint).
     pub exclusions: Option<CJson>,
+    /// A Splunk search ending with the mapping macro, which a tenant with
+    /// `mdr_mapping_macro = false` does not get
+    /// (`opentide_compile::splunk::for_tenant`).
+    pub mapping_macro: bool,
 }
 
 impl RuleQuery {
@@ -221,9 +225,10 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
         )]),
         "splunk" => {
             required(block.get("query"), rule, platform)?;
-            Ok(vec![plain(opentide_compile::splunk::create_query(
-                rule, block,
-            ))])
+            Ok(vec![RuleQuery {
+                mapping_macro: true,
+                ..plain(opentide_compile::splunk::create_query(rule, block, true))
+            }])
         }
         "sentinel_one" => sentinel_one(block, rule),
         "elastic" => elastic(block, rule).map(|query| vec![query]),

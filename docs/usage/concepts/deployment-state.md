@@ -34,6 +34,16 @@ CrowdStrike, Sysdig, and Exabeam), or to a [platform plugin](../../sdk/platforms
 platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black, and Elastic
 address rules by `metadata.uuid` or by title and never get one.
 
+Splunk is the one that addresses a rule by title: its saved search is named
+after the rule's `name` (with ` - Rule` for a correlation search). Renaming a
+rule therefore creates a second saved search on the next deploy, and the old
+one keeps running, so each alert fires twice. To rename a Splunk rule, retire
+the old saved search first: deploy the rule with a status that maps to
+`DELETION` (`REMOVED` by default), then rename it and deploy it again. Or
+delete the old saved search in Splunk after the deploy. Both searches carry
+the rule's `MDR_UUID`, so `| rest /servicesNS/-/-/saved/searches | search
+search="*MDR_UUID=\"<uuid>\"*" | table title` finds every copy.
+
 ```json
 {
   "object_uuid": "00000000-0000-4000-8003-000000000010",
