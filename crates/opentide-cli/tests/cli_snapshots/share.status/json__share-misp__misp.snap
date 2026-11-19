@@ -11,7 +11,7 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "7 objects on misp-locked, misp-prod · 6 new, 1 updated, 1 unchanged, 6 skipped",
+  "message": "Status of 7 objects for misp-locked, misp-prod · 6 to create, 1 to update, 1 unchanged, 6 skipped",
   "next_actions": [],
   "ok": true,
   "records": [

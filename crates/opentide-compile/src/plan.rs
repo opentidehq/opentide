@@ -576,6 +576,44 @@ pub fn rule_tenants<'t>(
         .collect()
 }
 
+/// Why [`rule_tenants`] reaches no tenant of `platform` for a block of
+/// `status` (strategy `strategy`): no tenant accepts the strategy, or the
+/// block's `tenants` list names none that does, or those that do are
+/// `manual` and the block lists none (#1653).
+pub fn unrouted_reason(
+    platform: &str,
+    tenants: &[Tenant],
+    block: &Json,
+    status: &str,
+    strategy: StatusStrategy,
+    runs: &[StatusStrategy],
+    wide: bool,
+) -> String {
+    let takes = |tenant: &&Tenant| {
+        if wide {
+            runs.iter().any(|run| tenant.strategies.contains(run))
+        } else {
+            tenant.accepts(strategy, runs)
+        }
+    };
+    let strategy = strategy.name();
+    let accepting: Vec<&Tenant> = tenants.iter().filter(takes).collect();
+    let listed = matches!(block.get("tenants"), Some(Json::Array(items)) if !items.is_empty());
+    if accepting.is_empty() {
+        format!("not sent: no {platform} tenant takes its status {status} ({strategy} strategy)")
+    } else if listed {
+        format!(
+            "not sent: its tenants list names no {platform} tenant that takes its status \
+             {status} ({strategy} strategy)"
+        )
+    } else {
+        format!(
+            "not sent: the {platform} tenants that take its status {status} ({strategy} \
+             strategy) are manual, and its tenants list does not name them"
+        )
+    }
+}
+
 /// One rule on one tenant (`PlannedChange`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {

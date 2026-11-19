@@ -1259,6 +1259,7 @@ impl Run<'_> {
                 interrupted: &interrupted,
                 now: jiff::Timestamp::now(),
                 registry: &registry,
+                debug: self.globals.debug,
             },
         );
         let mut report = live.report(self.env);
@@ -1336,6 +1337,7 @@ impl Run<'_> {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
                 cwd: &cwd,
+                debug: self.globals.debug || self.env.opentide_debug(),
             },
         )
     }
@@ -2398,18 +2400,22 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
 }
 
 /// Ctrl-C: `interrupt` is set, and the run stops ([`Interrupt`]). The
-/// process ends with `error: interrupted` and 130 on a second Ctrl-C, or when
-/// the run has not stopped after [`INTERRUPT_GRACE`].
+/// process ends with `error: interrupted` and 130 on a second Ctrl-C, or
+/// when the run has not stopped after [`INTERRUPT_GRACE`]; a deploy's
+/// promoted rule files no tenant received are put back first, since no
+/// destructor runs then.
 #[cfg(not(target_os = "wasi"))]
 pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
     let _ignored = ctrlc::set_handler(move || {
         if let Some(code) = on_interrupt(&interrupt, &mut std::io::stderr().lock()) {
+            crate::commands::deploy_promote::restore_pending();
             std::process::exit(code);
         }
         let interrupt = interrupt.clone();
         std::thread::spawn(move || {
             std::thread::sleep(INTERRUPT_GRACE);
+            crate::commands::deploy_promote::restore_pending();
             std::process::exit(interrupt.report(&mut std::io::stderr().lock()));
         });
     });
@@ -2429,6 +2435,11 @@ pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
 
 /// Set by [`exit`]: the process ends when the run returns.
 static PROCESS_ENDS: AtomicBool = AtomicBool::new(false);
+
+/// Whether opentide is the whole process ([`exit`]), not a host's call.
+pub(crate) fn process_ends() -> bool {
+    PROCESS_ENDS.load(Ordering::Relaxed)
+}
 
 /// `opentide` as the whole process: [`main`], then exit with its status.
 /// The `opentide` binary calls it; a host that runs commands in its own
