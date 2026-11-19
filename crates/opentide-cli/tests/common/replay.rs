@@ -115,6 +115,8 @@ pub const FIXTURES: &[&str] = &[
     "share-misp-broken",
     "share-misp-push",
     "share-misp-push-config",
+    "deploy-first-commit",
+    "share-misp-first-commit",
 ];
 
 pub fn repo() -> PathBuf {
@@ -265,6 +267,8 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         // UC-4.4e (#834): `share-misp` as a checkout whose last commit is a push.
         "share-misp-push" | "share-misp-push-config" => pushed_from_cases(name, ws),
+        // #1662: a checkout of one commit, a new repository's first push.
+        "deploy-first-commit" | "share-misp-first-commit" => pushed_from_cases(name, ws),
         // UC-6.2e: pushes the status promotion fails the run on.
         "deploy-push-no-target" | "deploy-push-key" | "deploy-push-unreadable" => {
             pushed_from_cases(name, ws);
@@ -349,7 +353,8 @@ fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
 }
 
 /// The copy fixture `name` of `tests/golden/cases.toml` as a git checkout of
-/// two commits: its `source` with its `edits`, then its `pushed` edits.
+/// two commits: its `source` with its `edits`, then its `pushed` edits; of
+/// one commit when `pushed` is empty.
 fn pushed_from_cases(name: &str, ws: &Path) {
     let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
     let spec: toml::Table = toml::from_str(&text).unwrap();
@@ -396,7 +401,8 @@ pub fn fix_modes(dir: &Path) {
 }
 
 /// Commits `ws` as it is, then `edits` (path, find, replace) as a second
-/// commit, with the fixed author and time of the retired `xtask/src/golden/fixture.rs`.
+/// commit when there are any, with the fixed author and time of the retired
+/// `xtask/src/golden/fixture.rs`.
 fn commit_push(ws: &Path, edits: &[(String, String, String)]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
@@ -430,6 +436,9 @@ fn commit_push(ws: &Path, edits: &[(String, String, String)]) {
     git(&["init", "-q"]);
     git(&["add", "-A"]);
     git(&["commit", "-q", "--no-verify", "-m", "The fixture"]);
+    if edits.is_empty() {
+        return;
+    }
     for (path, find, replace) in edits {
         let file = ws.join(path);
         let text = std::fs::read_to_string(&file).unwrap();

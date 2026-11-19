@@ -242,6 +242,18 @@ source = "tests/golden/fixtures/share-misp"
 about = "`share-misp` as a git checkout whose last commit, a push, changed sharing.toml and no object: nothing for `share push --changed` to share (UC-4.4e)"
 pushed = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"clear\"", replace = "max_tlp = \"green\"" }]
 
+[fixtures.deploy-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout of one commit, a new repository's first push: every rule file is new, so a deploy without --all reads them all (#1662)"
+pushed = []
+
+[fixtures.share-misp-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout of one commit, a new repository's first push: every object is new to `share push --changed` (#1662)"
+pushed = []
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -2110,6 +2122,34 @@ fixtures = ["deploy-push"]
 modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
+# #1662: a repository's first commit has no parent, so every rule file it
+# holds is new: outside CI (the last commit) and on a GitHub push (an
+# all-zero `before`, HEAD's first parent missing), the dry run plans them all.
+[[case]]
+command = "deploy"
+variant = "dry-run-first-commit"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "deploy"
+variant = "dry-run-first-push"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push whose commits changed no rule file reads none, and says so rather
+# than blame a status (#1662).
+[[case]]
+command = "deploy"
+variant = "dry-run-no-rule-changed"
+args = ["deploy", "--dry-run", "--strategy", "PREVIEW"]
+fixtures = ["share-misp-push-config"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
 [[case]]
 command = "generate docs"
 variant = "changed-push"
@@ -3139,6 +3179,15 @@ fixtures = ["share-misp-push"]
 modes = ["plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 cassette = "golden/share-push-changed"
+
+# #1662: the first push of a new repository shares every object it holds.
+[[case]]
+command = "share push"
+variant = "changed-first-push"
+args = ["share", "push", "--changed", "--dry-run"]
+fixtures = ["share-misp-first-commit"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
 command = "share push"
