@@ -171,6 +171,7 @@ Deploying to sentinel / contoso · 14 rules
 | Line | Meaning |
 |------|---------|
 | `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. Elastic's word is what Kibana did (`created` or `updated`); a platform that keeps vendor ids shows the planned action; any other platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
+| `✓ unchanged` | The tenant already held the rule as this run would write it, so nothing was written (Elastic and Splunk, below) |
 | `✗ failed` | The platform, or planning, refused the rule. The line carries the platform's own message and its HTTP status when it has one, so the cause is readable without a traceback. A long message continues on the lines below it on a terminal and stays on one line in a log |
 | `· skipped` | The rule was not sent, with the reason: an `INERT` status, a Sigma rule on a YARA tenant, a retirement of a rule that never reached the tenant (`external_id_missing`) |
 | `· skipped … not attempted: tenant <name> failed` | The tenant failed (it could not be reached or signed in to, or it refused the key on an earlier rule), so this rule was never sent to it. The tenant's other rules are listed right after its failed rule; the other tenants go on |
@@ -233,7 +234,20 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 }
 ```
 
-`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`), except that an `upsert` the platform reports as a create or an update once sent reads `create` or `update` (Elastic), and counts as one in the tally. `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
+`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`), except that an `upsert` the platform reports as a create or an update once sent reads `create` or `update` (Elastic), and counts as one in the tally, and a rule the tenant already held as the run would write it reads `unchanged` (its `status` is `deployed`). `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `unchanged` (rules the tenant already held, nothing written), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
+
+### Unchanged rules
+
+A deploy does not rewrite a rule the tenant already holds as the run would write it, whether the run selected the rule from the commit or with `--all`. It compares what it would send with what the lookup it makes anyway answered, field by field, on the fields opentide sends:
+
+| Platform | Compared | Not a difference |
+|----------|----------|------------------|
+| Elastic | Kibana's rule against the replace a deploy would send | the fields Kibana writes itself (`id`, `created_at`, `updated_at`, `revision`, `version`, …), a field holding Kibana's default (empty, `max_signals: 100`, `interval: 5m`, `from: now-6m`, `to: now`), an empty member Kibana adds inside a sent object, `73` against `73.0` |
+| Splunk | the saved search's settings against each setting a deploy sends (an update writes no other) | Splunk's `1` and `0` for `true` and `false` |
+
+A field opentide sent before and no longer sends, while the tenant still holds a value in it, is a change: the rule is replaced, which drops it. A Splunk schedule opentide draws (a `frequency` with no `custom_time`) takes its minute and hour from the rule's UUID, so it is the same on every deploy; a `frequency_scheduling = "current"` tenant draws it from the deploy's time, so its rules are rewritten on every deploy.
+
+The other platforms still write each selected rule: their deploy makes no lookup to compare with, and comparing would cost a request per rule and a reading of each vendor's own form of the rule.
 
 ### Connectors and status promotion
 

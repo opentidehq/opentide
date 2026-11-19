@@ -18,9 +18,9 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::{Answer, describe_answer, gateway_answer, page_title};
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
-    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
-    columns_of,
+    BoxFuture, DeployEvent, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck,
+    LiveValidator, Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner,
+    RULE_UNCHANGED, Row, TenantContext, columns_of,
 };
 use crate::error::ConnectorError;
 use crate::text::json_text;
@@ -291,6 +291,9 @@ pub struct SavedSearch {
     pub path: String,
     /// Its search as the tenant answered it (`content.search`).
     pub search: Option<String>,
+    /// Its settings as the tenant answered them (`content`), by name: the
+    /// first of a name wins.
+    pub content: Vec<(String, String)>,
 }
 
 impl SavedSearch {
@@ -298,7 +301,43 @@ impl SavedSearch {
         Some(Self {
             path: entity_path(entry.alternate.as_deref()?),
             search: entry.key("search"),
+            content: entry.keys.clone(),
         })
+    }
+
+    /// Whether the saved search already has every one of *settings*, as
+    /// an update would write them (#1711): an update only writes the
+    /// settings it sends, so the others are not compared. Splunk answers a
+    /// boolean as `1` or `0`; a list (sent as one value per item) is never
+    /// taken as held, nor is a setting the tenant does not answer.
+    pub fn holds(&self, settings: &Object) -> bool {
+        settings.iter().all(|(key, value)| {
+            let Some(held) = self
+                .content
+                .iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, held)| held.as_str())
+            else {
+                return false;
+            };
+            let sent = match value {
+                Json::Array(_) => return false,
+                Json::Null => String::new(),
+                other => json_text(other),
+            };
+            sent == held
+                || matches!((flag(&sent), flag(held)), (Some(sent), Some(held)) if sent == held)
+        })
+    }
+}
+
+/// A Splunk boolean as text (`1`, `true`, `0`, `false`, any case), for
+/// [`SavedSearch::holds`].
+fn flag(text: &str) -> Option<bool> {
+    match text.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" => Some(true),
+        "0" | "false" => Some(false),
+        _ => None,
     }
 }
 
@@ -650,7 +689,9 @@ impl Splunk {
     /// *deletion*, deleted instead (nothing when it is already gone). The
     /// settings Splunk takes only once the others are set
     /// ([`SECOND_STAGE`]) go in a second update. `Some(true)` when the saved
-    /// search was written, `None` when it was deleted or already absent.
+    /// search was written, `Some(false)` when the tenant already had it with
+    /// these settings ([`SavedSearch::holds`]), so nothing was written
+    /// (#1711), `None` when it was deleted or already absent.
     pub async fn apply_saved_search(
         &self,
         cx: TenantContext<'_>,
@@ -674,6 +715,9 @@ impl Splunk {
         if deletion {
             self.delete_saved_search(cx, name).await?;
             return Ok(None);
+        }
+        if saved.holds(settings) {
+            return Ok(Some(false));
         }
         self.update_saved_search(cx, &saved, &first).await?;
         if !second.is_empty() {
@@ -966,12 +1010,18 @@ impl Deployer for Splunk {
                 }
                 return Ok(DeployOutcome::new(None, request.operation).with_warnings(warnings));
             }
-            self.apply_saved_search(cx, &request.rule_id, &settings, false)
+            let written = self
+                .apply_saved_search(cx, &request.rule_id, &settings, false)
                 .await?;
-            Ok(DeployOutcome::new(
-                Some(request.rule_id.clone()),
-                request.operation,
-            ))
+            let done = DeployOutcome::new(Some(request.rule_id.clone()), request.operation);
+            // The tenant had it as it is: nothing was written (#1711).
+            Ok(if written == Some(false) {
+                done.with_events(vec![
+                    DeployEvent::new(RULE_UNCHANGED).with_field("name", request.rule_id.as_str()),
+                ])
+            } else {
+                done
+            })
         })
     }
 }
@@ -1020,6 +1070,52 @@ impl Platform for Splunk {
 mod tests {
     use super::*;
 
+    /// A saved search the tenant has with every setting a deploy sends is
+    /// not written again (#1711): Splunk's `1` and `0` are booleans, and
+    /// only the settings sent are compared, since an update writes no other.
+    /// A changed value, a list or a setting the tenant does not answer is a
+    /// change.
+    #[test]
+    fn a_saved_search_is_held_when_every_setting_sent_is_the_same() {
+        let saved = SavedSearch {
+            path: "saved/searches/r".into(),
+            search: Some("index=main".into()),
+            content: [
+                ("search", "index=main"),
+                ("is_scheduled", "1"),
+                ("alert.suppress", "0"),
+                ("alert.severity", "5"),
+                ("cron_schedule", "7 * * * *"),
+                ("dispatch.earliest_time", "-1h"),
+            ]
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .to_vec(),
+        };
+        let settings = |pairs: &[(&str, Json)]| -> Object {
+            pairs
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), value.clone()))
+                .collect()
+        };
+        let sent = settings(&[
+            ("search", Json::Str("index=main".into())),
+            ("is_scheduled", Json::Bool(true)),
+            ("alert.suppress", Json::Str("false".into())),
+            ("alert.severity", Json::Int(5)),
+            ("cron_schedule", Json::Str("7 * * * *".into())),
+        ]);
+        assert!(saved.holds(&sent));
+        let mut changed = sent.clone();
+        changed.insert("cron_schedule".into(), Json::Str("8 * * * *".into()));
+        assert!(!saved.holds(&changed));
+        let mut unknown = sent.clone();
+        unknown.insert("action.email".into(), Json::Str("1".into()));
+        assert!(!saved.holds(&unknown));
+        let mut listed = sent;
+        listed.insert("alert.severity".into(), Json::Array(vec![Json::Int(5)]));
+        assert!(!saved.holds(&listed));
+    }
+
     #[test]
     fn a_name_is_one_form_encoded_segment() {
         assert_eq!(entity_name("Splunk SPL Rule"), "Splunk+SPL+Rule");
@@ -1054,6 +1150,7 @@ mod tests {
             Some(SavedSearch {
                 path: "saved/searches/a b".into(),
                 search: Some("index=x & y <z>".into()),
+                content: vec![("search".into(), "index=x & y <z>".into())],
             })
         );
         assert!(entries(b"not xml at all").is_empty());

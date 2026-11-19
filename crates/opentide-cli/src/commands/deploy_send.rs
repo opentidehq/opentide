@@ -65,21 +65,27 @@ const MAX_ERROR_LINES: usize = 4;
 /// Set by `--persist-state-externally` for the run (`PERSIST_EXTERNALLY_ENV`).
 pub const PERSIST_EXTERNALLY_ENV: &str = "OPENTIDE_PERSIST_STATE_EXTERNALLY";
 /// The actions in tally order, with what each reads as once done (`_DONE`).
-const DONE: [(&str, &str); 5] = [
+/// `unchanged`: the tenant already held the rule as the run would write it,
+/// so nothing was written (#1711).
+const DONE: [(&str, &str); 6] = [
     ("create", "created"),
     ("update", "updated"),
     ("upsert", "created or updated"),
     ("disable", "disabled"),
     ("delete", "deleted"),
+    ("unchanged", "unchanged"),
 ];
 /// What a sent rule is called by planned action (`_VERBS`).
-const VERBS: [(&str, &str); 5] = [
+const VERBS: [(&str, &str); 6] = [
     ("create", "created"),
     ("update", "updated"),
     ("upsert", "deployed"),
     ("disable", "disabled"),
     ("delete", "deleted"),
+    ("unchanged", "unchanged"),
 ];
+/// The action of a rule the tenant already held as the run would write it.
+const UNCHANGED: &str = "unchanged";
 /// Codes that skip the rule on that tenant without failing the run.
 const WARNING_CODES: [&str; 1] = ["external_id_missing"];
 
@@ -2372,7 +2378,14 @@ impl Sender<'_, '_> {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         let splunk_cx = self.compile;
-        let bytes: [u8; 16] = *uuid::Uuid::new_v4().as_bytes();
+        // A schedule drawn at random takes its minute and hour from the
+        // rule's UUID: the same on every deploy, so a rule redeployed as it
+        // is stays unchanged on the tenant (#1711), and rules still spread
+        // over the hour and the day.
+        let bytes: [u8; 16] = uuid::Uuid::parse_str(&rule.uuid).map_or_else(
+            |_| *uuid::Uuid::new_v4().as_bytes(),
+            |uuid| *uuid.as_bytes(),
+        );
         let civil = jiff::tz::Offset::UTC.to_datetime(self.cx.now);
         let clock = opentide_compile::splunk::Clock {
             random: (u32::from(bytes[0]) % 60, u32::from(bytes[1]) % 24),
@@ -2540,7 +2553,10 @@ impl Sender<'_, '_> {
                 _ => {}
             }
         }
-        let _ = result;
+        // The tenant already held it: nothing was written (#1711).
+        if outcome.unchanged() {
+            result.action = Some(UNCHANGED.to_owned());
+        }
         Ok(())
     }
 
@@ -3360,8 +3376,12 @@ impl Sender<'_, '_> {
             Ok(done) => {
                 self.elastic_warnings(rule, &done);
                 // An `upsert` reads as what Kibana did: a create, or an
-                // update (#1662, E10).
-                if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert") {
+                // update (#1662, E10); a rule Kibana already held as it is,
+                // whatever the plan, is unchanged (#1711).
+                if done.unchanged() {
+                    result.action = Some(UNCHANGED.to_owned());
+                } else if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert")
+                {
                     result.action = elastic_done_action(&done).map(str::to_owned);
                 }
                 log.finished(result);
