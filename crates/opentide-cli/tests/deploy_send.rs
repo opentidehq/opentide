@@ -3778,3 +3778,56 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
     assert_eq!(skipped.len(), 1, "{skipped:?}");
     assert_eq!(skipped[0].get("platform"), Some(&Json::str("splunk")));
 }
+
+/// The summary's `skipped` counts the rows the run skipped (a rule no
+/// tenant takes) besides the rules a status left out of the plan, which
+/// once replaced them (#1653).
+#[test]
+fn the_summary_counts_skipped_rows_and_rules_left_out() {
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "Elsewhere",
+                    "00000000-0000-4000-8047-000000000923",
+                    "A rule.",
+                    "  splunk:\n    status: STAGING\n    query: index=main\n    tenants: [other]\n",
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Released",
+                    "00000000-0000-4000-8047-000000000924",
+                    "A rule.",
+                    "  splunk:\n    status: PRODUCTION\n    query: index=main\n",
+                ),
+            ),
+        ],
+    );
+    let (registry, _) = scripted("splunk", Vec::new());
+    let args = Args {
+        strategies: vec!["PREVIEW".into()],
+        all: true,
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs(Vec::<(String, String)>::new()),
+        &registry,
+        0,
+    );
+    assert_eq!(rows(&sent), [("skipped".to_owned(), None)], "{text}");
+    assert_eq!(
+        value(&sent, "_summary").get("skipped"),
+        Some(&Json::Int(2)),
+        "{:?}",
+        sent.result
+    );
+}
