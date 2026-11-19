@@ -2938,6 +2938,7 @@ name = "opentide-kql"
 version = "0.12.0"
 dependencies = [
  "foldhash",
+ "hashbrown 0.17.1",
  "logos",
  "opentide-core",
  "opentide-highlight",

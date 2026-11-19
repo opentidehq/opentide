@@ -26,7 +26,9 @@ use crate::{Catalog, Profile, tables};
 use foldhash::{HashMap, HashMapExt, HashSet};
 use opentide_core::{ByteSpan, Diagnostic, codes};
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::hash::BuildHasher;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 
 pub(crate) mod new_tree;
 
@@ -121,12 +123,261 @@ pub enum Source {
     Unknown,
 }
 
+/// A schema's columns, in order, with an index from name to position once
+/// the schema is changed often enough to need one.
+///
+/// An operator looks up each column it sets: a scan per lookup made a
+/// `project` of n columns compare n²/2 names (150k columns took 48 s,
+/// #1628), and the references to such a schema m·n. The index holds
+/// positions, not names. The changes that look a name up (`set`, `get_mut`)
+/// count the columns they scan and build it once that passes
+/// `SCANNED_BEFORE_INDEX` times the schema's length. A schema that gained
+/// `PUSHED_BEFORE_INDEX` columns (`summarize`, `join`, `union`, `mv-apply`
+/// push theirs) counts its lookups' scans too, and builds it the same way:
+/// built on the push, it cost the corpus analysis 1.2%, as a join or a union
+/// pushes a whole table its query reads a few times. Then every change keeps
+/// it in step, a copy keeps it, and every lookup uses it. A schema
+/// that is only read (a catalog table's, shared between analyses, as long
+/// as the catalog says) is scanned: a lookup that counted or built cost
+/// every reference of every query 0.5% of the analysis.
+#[derive(Default)]
+pub struct Columns {
+    list: Vec<Arc<Column>>,
+    /// The position of the first column of each name.
+    index: OnceLock<Index>,
+    /// The columns scanned toward building the index: by the changes, and by
+    /// the lookups once [`Self::pushed`] says the schema is wide.
+    scanned: AtomicUsize,
+    /// The columns added while the schema had no index.
+    pushed: usize,
+}
+
+/// Schemas up to this long are always scanned: hashing costs about as much.
+const SCAN_ONLY: usize = 8;
+/// How many times its length the changes scan before a schema's index is
+/// built: hashing every name and inserting it costs about as much as
+/// comparing that many names, and an `extend` of a few columns to a long
+/// table costs less than building it.
+const SCANNED_BEFORE_INDEX: usize = 8;
+/// How many columns added make a schema count its lookups toward the index:
+/// below it, the counting costs more than the scans it would save.
+const PUSHED_BEFORE_INDEX: usize = 64;
+
+/// A schema's name index: positions in its list, hashed with a seed of its
+/// own. Column names come from the query, so a fixed seed would let a query
+/// pick names that collide and bring the n² back (ADR 0014 §5b).
+#[derive(Clone)]
+struct Index {
+    table: hashbrown::HashTable<usize>,
+    hasher: foldhash::fast::RandomState,
+}
+
+impl Index {
+    fn hash(&self, name: &str) -> u64 {
+        self.hasher.hash_one(name)
+    }
+
+    fn find(&self, list: &[Arc<Column>], name: &str) -> Option<usize> {
+        #[cfg(test)]
+        tests::count_name_compared();
+        self.table
+            .find(self.hash(name), |&i| list[i].name == name)
+            .copied()
+    }
+
+    /// Record position `i` for `name` unless an earlier column has the name;
+    /// `list` may not hold the column yet (`i == list.len()`).
+    fn insert(&mut self, list: &[Arc<Column>], i: usize, name: &str) {
+        let hash = self.hash(name);
+        if self.table.find(hash, |&j| list[j].name == name).is_none() {
+            let hasher = &self.hasher;
+            self.table.insert_unique(hash, i, |&j| {
+                hasher.hash_one(list.get(j).map_or(name, |c| c.name.as_str()))
+            });
+        }
+    }
+}
+
+impl Columns {
+    /// The column named `name`.
+    #[must_use]
+    #[inline]
+    pub fn get(&self, name: &str) -> Option<&Arc<Column>> {
+        self.position(name).map(|i| &self.list[i])
+    }
+
+    /// The position of the first column named `name`.
+    #[must_use]
+    #[inline]
+    pub fn position(&self, name: &str) -> Option<usize> {
+        if let Some(index) = self.index.get() {
+            return index.find(&self.list, name);
+        }
+        let found = self.list.iter().position(|c| {
+            #[cfg(test)]
+            tests::count_name_compared();
+            c.name == name
+        });
+        if self.pushed >= PUSHED_BEFORE_INDEX {
+            self.count_scanned(found);
+        }
+        found
+    }
+
+    /// Count a scan that found `found`, and build the index once the scans
+    /// pass [`SCANNED_BEFORE_INDEX`] times the schema's length. A load and a
+    /// store, not an atomic add: a count lost to a race only builds it later.
+    #[cold]
+    fn count_scanned(&self, found: Option<usize>) {
+        let len = self.list.len();
+        let scanned = self.scanned.load(Ordering::Relaxed) + found.map_or(len, |i| i + 1);
+        self.scanned.store(scanned, Ordering::Relaxed);
+        if scanned >= SCANNED_BEFORE_INDEX * len {
+            self.index.get_or_init(|| self.build_index());
+        }
+    }
+
+    /// [`Self::position`] for a change: counts what it scans, and builds the
+    /// index once that is enough.
+    fn position_to_change(&mut self, name: &str) -> Option<usize> {
+        let found = self.position(name);
+        let len = self.list.len();
+        if self.index.get().is_none() && len > SCAN_ONLY && self.pushed < PUSHED_BEFORE_INDEX {
+            let scanned = self.scanned.get_mut();
+            *scanned += found.map_or(len, |i| i + 1);
+            if *scanned >= SCANNED_BEFORE_INDEX * len {
+                let index = self.build_index();
+                self.index = OnceLock::from(index);
+            }
+        }
+        found
+    }
+
+    fn build_index(&self) -> Index {
+        let mut index = Index {
+            table: hashbrown::HashTable::with_capacity(self.list.len()),
+            hasher: foldhash::fast::RandomState::default(),
+        };
+        for (i, column) in self.list.iter().enumerate() {
+            #[cfg(test)]
+            tests::count_name_compared();
+            index.insert(&self.list, i, &column.name);
+        }
+        index
+    }
+
+    /// Add `column` at the end.
+    pub(crate) fn push(&mut self, column: impl Into<Arc<Column>>) {
+        let column = column.into();
+        if let Some(index) = self.index.get_mut() {
+            // Before the push: `list` does not hold the column yet.
+            index.insert(&self.list, self.list.len(), &column.name);
+        } else {
+            self.pushed += 1;
+        }
+        self.list.push(column);
+    }
+
+    /// Add `column`, replacing the first one of the same name.
+    pub(crate) fn set(&mut self, column: Column) {
+        match self.position_to_change(&column.name) {
+            Some(i) => self.list[i] = Arc::new(column),
+            None => self.push(column),
+        }
+    }
+
+    /// The column named `name`, to change it. Not its name: the index would
+    /// no longer find it.
+    pub(crate) fn get_mut(&mut self, name: &str) -> Option<&mut Column> {
+        let i = self.position_to_change(name)?;
+        Some(Arc::make_mut(&mut self.list[i]))
+    }
+
+    /// Keep the columns `keep` accepts.
+    pub(crate) fn retain(&mut self, keep: impl FnMut(&Arc<Column>) -> bool) {
+        let before = self.list.len();
+        self.list.retain(keep);
+        if self.list.len() != before {
+            self.forget_index();
+        }
+    }
+
+    /// Remove every column.
+    pub(crate) fn clear(&mut self) {
+        self.list.clear();
+        self.forget_index();
+    }
+
+    fn forget_index(&mut self) {
+        self.index = OnceLock::new();
+        *self.scanned.get_mut() = 0;
+        self.pushed = 0;
+    }
+}
+
+impl From<Vec<Arc<Column>>> for Columns {
+    fn from(list: Vec<Arc<Column>>) -> Self {
+        Self {
+            list,
+            index: OnceLock::new(),
+            scanned: AtomicUsize::new(0),
+            pushed: 0,
+        }
+    }
+}
+
+impl Clone for Columns {
+    fn clone(&self) -> Self {
+        Self {
+            list: self.list.clone(),
+            index: self.index.clone(),
+            scanned: AtomicUsize::new(self.scanned.load(Ordering::Relaxed)),
+            pushed: self.pushed,
+        }
+    }
+}
+
+impl FromIterator<Arc<Column>> for Columns {
+    fn from_iter<I: IntoIterator<Item = Arc<Column>>>(columns: I) -> Self {
+        Self::from(columns.into_iter().collect::<Vec<_>>())
+    }
+}
+
+impl std::fmt::Debug for Columns {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.list.fmt(f)
+    }
+}
+
+impl std::ops::Deref for Columns {
+    type Target = [Arc<Column>];
+    fn deref(&self) -> &Self::Target {
+        &self.list
+    }
+}
+
+impl IntoIterator for Columns {
+    type Item = Arc<Column>;
+    type IntoIter = std::vec::IntoIter<Arc<Column>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.list.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Columns {
+    type Item = &'a Arc<Column>;
+    type IntoIter = std::slice::Iter<'a, Arc<Column>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.list.iter()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Schema {
     /// Shared between the copies of a schema each stage of a pipeline
     /// records, until one of them changes its columns (`Arc::make_mut`):
     /// a deep copy per stage was a third of a short query's analysis.
-    pub columns: Arc<Vec<Arc<Column>>>,
+    pub columns: Arc<Columns>,
     pub known: Known,
     pub source: Source,
     /// `project`, `summarize` or `distinct` narrowed the columns (in this
@@ -159,7 +410,9 @@ impl Schema {
 
     fn closed(columns: Vec<Column>, source: Source) -> Self {
         Self {
-            columns: Arc::new(columns.into_iter().map(Arc::new).collect()),
+            columns: Arc::new(Columns::from(
+                columns.into_iter().map(Arc::new).collect::<Vec<_>>(),
+            )),
             known: Known::Closed,
             source,
             ..Self::open()
@@ -167,11 +420,7 @@ impl Schema {
     }
 
     pub fn column(&self, name: &str) -> Option<&Column> {
-        self.columns.iter().map(|c| &**c).find(|c| {
-            #[cfg(test)]
-            tests::count_name_compared();
-            c.name == name
-        })
+        self.columns.get(name).map(|c| &**c)
     }
 
     fn has(&self, name: &str) -> bool {
@@ -181,14 +430,7 @@ impl Schema {
     /// Add `column`, replacing one of the same name (as `extend` does).
     fn set(&mut self, column: Column) {
         self.removed.remove(&column.name);
-        if let Some(existing) = Arc::make_mut(&mut self.columns)
-            .iter_mut()
-            .find(|c| c.name == column.name)
-        {
-            *existing = Arc::new(column);
-        } else {
-            Arc::make_mut(&mut self.columns).push(Arc::new(column));
-        }
+        Arc::make_mut(&mut self.columns).set(column);
     }
 
     /// Add `columns`, in order, each under a name not yet taken: `Name`,
@@ -594,7 +836,7 @@ fn build_asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
                 )
             })
             .map(Arc::new)
-            .collect::<Vec<_>>()
+            .collect::<Columns>()
             .into(),
         known: Known::Typos,
         source: Source::Asim {
@@ -925,7 +1167,8 @@ pub(crate) fn unknown_column(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::glob_matches;
-    use super::{Column, Schema};
+    use super::{Column, Columns, Schema};
+    use std::sync::Arc;
 
     /// A workspace's catalog with declared columns keeps the schemas it
     /// builds, as a bundled catalog does: the second lookup of a table shares
@@ -1014,7 +1257,7 @@ pub(crate) mod tests {
         static NAMES_COMPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 
-    pub(super) fn count_name_compared() {
+    pub(crate) fn count_name_compared() {
         NAMES_COMPARED.with(|n| n.set(n.get() + 1));
     }
 
@@ -1056,6 +1299,155 @@ pub(crate) mod tests {
                 "{name}: {compared} names compared for {made} columns"
             );
         }
+    }
+
+    /// A `project`, `extend` or `summarize` of n columns, an `extend` whose
+    /// items read the ones before, and n references to an n-column schema
+    /// compare or look up a number of names that grows with n, not n²:
+    /// `Schema::set` and `Schema::column` scanned the columns per lookup, and
+    /// an operator's names defined so far were a slice scanned per reference;
+    /// a 150k-column `project` took 48 s (#1628). A work count, not a clock
+    /// (the rule of #1459).
+    #[test]
+    fn many_columns_compare_names_in_proportion() {
+        let list = |n: usize, item: &dyn Fn(usize) -> String| {
+            (0..n).map(item).collect::<Vec<_>>().join(", ")
+        };
+        let queries: [(&str, &dyn Fn(usize) -> String); 7] = [
+            ("project", &|n| {
+                format!("T | project {}", list(n, &|i| format!("x{i}=1")))
+            }),
+            ("extend", &|n| {
+                format!("print a=1 | extend {}", list(n, &|i| format!("x{i}=1")))
+            }),
+            ("print", &|n| {
+                format!("print {}", list(n, &|i| format!("x{i}=1")))
+            }),
+            ("summarize", &|n| {
+                format!(
+                    "T | summarize {} by k",
+                    list(n, &|i| format!("x{i}=count()"))
+                )
+            }),
+            ("an extend reading its earlier items", &|n| {
+                format!(
+                    "print x0=1 | extend {}",
+                    list(n, &|i| format!("x{}=x{i}", i + 1))
+                )
+            }),
+            ("references after a summarize", &|n| {
+                format!(
+                    "T | summarize {} by k | where {}",
+                    list(n, &|i| format!("x{i}=count()")),
+                    list(n, &|i| format!("isnotnull(x{i})")).replace(", ", " and ")
+                )
+            }),
+            ("references", &|n| {
+                format!(
+                    "T | project {} | where {}",
+                    list(n, &|i| format!("x{i}=1")),
+                    list(n, &|i| format!("isnotnull(x{i})")).replace(", ", " and ")
+                )
+            }),
+        ];
+        for (name, query) in queries {
+            let compared = |n: usize| {
+                let q = query(n);
+                NAMES_COMPARED.with(|c| c.set(0));
+                let _ = crate::columns(&q, crate::Profile::Core);
+                NAMES_COMPARED.with(std::cell::Cell::get)
+            };
+            let (small, large) = (compared(1_000), compared(2_000));
+            assert!(
+                small >= 1_000,
+                "{name}: {small} names compared for 1,000 columns"
+            );
+            // Twice the columns, at most 2.1 times the work: a scan per lookup
+            // makes it 4 times.
+            assert!(
+                large * 10 <= small * 21,
+                "{name}: {small} names compared for 1,000 columns, {large} for 2,000"
+            );
+        }
+    }
+
+    /// The index answers as a scan would, with repeated names (the first
+    /// wins), after columns are replaced, removed, cleared and pushed again,
+    /// and on a copy.
+    #[test]
+    fn the_index_answers_as_a_scan() {
+        fn scan<'a>(columns: &'a Columns, name: &str) -> Option<&'a Arc<Column>> {
+            columns.iter().find(|c| c.name == name)
+        }
+        fn check(columns: &Columns, names: &[String]) {
+            for name in names {
+                assert_eq!(
+                    columns.position(name),
+                    columns.iter().position(|c| c.name == *name),
+                    "{name}"
+                );
+                assert!(
+                    columns.get(name).map(Arc::as_ptr) == scan(columns, name).map(Arc::as_ptr),
+                    "{name}"
+                );
+            }
+        }
+        let column = |name: &str, ty: &str| Column::new(name, Some(ty.to_string()));
+        let names: Vec<String> = (0..40)
+            .map(|i| format!("c{i}"))
+            .chain(["zz".into()])
+            .collect();
+        let mut columns: Columns = (0..30)
+            .map(|i| Arc::new(column(&format!("c{}", i % 20), "long")))
+            .collect();
+        // Changes that miss, past the scans that build the index.
+        let build = |columns: &mut Columns| {
+            check(columns, &names);
+            while columns.index.get().is_none() {
+                assert!(columns.get_mut("zz").is_none());
+            }
+            check(columns, &names);
+        };
+        build(&mut columns);
+        columns.set(column("c3", "string"));
+        columns.set(column("c35", "string"));
+        columns.push(column("c35", "real"));
+        columns.push(column("c36", "real"));
+        check(&columns, &names);
+        assert_eq!(
+            columns.get("c3").and_then(|c| c.type_name.as_deref()),
+            Some("string")
+        );
+        assert_eq!(
+            columns.get("c35").and_then(|c| c.type_name.as_deref()),
+            Some("string")
+        );
+        if let Some(c) = columns.get_mut("c4") {
+            c.type_name = Some("bool".into());
+        }
+        assert_eq!(
+            scan(&columns, "c4").and_then(|c| c.type_name.as_deref()),
+            Some("bool")
+        );
+        let copy = columns.clone();
+        assert!(copy.index.get().is_some(), "a copy keeps the index");
+        // Each index has a seed of its own (ADR 0014 §5b): names a query
+        // picks cannot be made to collide in every analysis.
+        let mut other = columns.iter().cloned().collect::<Columns>();
+        build(&mut other);
+        let seed = |c: &Columns| c.index.get().map(|i| i.hash("c1"));
+        assert_ne!(seed(&columns), seed(&other), "seeded per index");
+        check(&copy, &names);
+        columns.retain(|c| c.name != "c5" && c.name != "c0");
+        assert!(columns.index.get().is_none(), "a removal forgets the index");
+        build(&mut columns);
+        columns.clear();
+        check(&columns, &names);
+        for i in (0..40).rev() {
+            columns.push(column(&format!("c{}", i % 25), "long"));
+        }
+        build(&mut columns);
+        check(&copy, &names);
     }
 
     /// Adding `n` columns to a schema of `n` compares or looks up about one

@@ -15,7 +15,7 @@ use crate::syntax_util::{
     child as child_of, ident, legacy_kind, literal_kind, name, simple_call, simple_ident,
     simple_primary, span, text, token_span, tokens,
 };
-use foldhash::{HashMap, HashMapExt};
+use foldhash::{HashMap, HashMapExt, HashSet};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 use rowan::TextRange;
 use std::collections::BTreeSet;
@@ -143,6 +143,44 @@ const BUDGET: u32 = 480;
 /// than the 35 levels the tree-sitter engine took.
 const PIPELINE: u32 = 12;
 
+/// The names an operator's earlier items defined, which its later items may
+/// read (`extend a = 1, b = a * 2`). One per operator: a slice copied for each
+/// item and scanned for each reference made an operator of n items O(n²)
+/// (#1628). A few names are scanned, as hashing costs more; past
+/// [`Defined::SCAN_ONLY`] they are also kept in a set.
+#[derive(Default)]
+struct Defined {
+    names: Vec<String>,
+    set: HashSet<String>,
+}
+
+impl Defined {
+    const SCAN_ONLY: usize = 8;
+
+    fn insert(&mut self, name: String) {
+        if self.names.len() == Self::SCAN_ONLY {
+            self.set.extend(self.names.iter().cloned());
+        }
+        if self.names.len() >= Self::SCAN_ONLY {
+            self.set.insert(name.clone());
+        }
+        self.names.push(name);
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        if self.names.len() > Self::SCAN_ONLY {
+            #[cfg(test)]
+            crate::schema::tests::count_name_compared();
+            return self.set.contains(name);
+        }
+        self.names.iter().any(|n| {
+            #[cfg(test)]
+            crate::schema::tests::count_name_compared();
+            n == name
+        })
+    }
+}
+
 /// Matches a quirk of the tree-sitter pass: it read the items of `project`,
 /// `extend` and either list of `summarize` by a field that also holds the
 /// commas between them, and took each comma for an item it cannot name, so
@@ -234,7 +272,7 @@ impl<'a> Pass<'a> {
                         return;
                     }
                 }
-                self.expression(&value, Ctx::One(&Schema::open()), scope, span(node), &[]);
+                self.expression(&value, Ctx::One(&Schema::open()), scope, span(node), None);
                 scope.scalars.insert(name);
             }
         }
@@ -290,7 +328,7 @@ impl<'a> Pass<'a> {
         {
             return Some(schema);
         }
-        self.expression(&body, Ctx::One(&Schema::open()), &scope, span(&body), &[]);
+        self.expression(&body, Ctx::One(&Schema::open()), &scope, span(&body), None);
         None
     }
 
@@ -394,7 +432,7 @@ impl<'a> Pass<'a> {
                 Some(arg.clone())
             };
             if let Some(value) = value {
-                self.expression(&value, Ctx::One(&Schema::open()), scope, call_span, &[]);
+                self.expression(&value, Ctx::One(&Schema::open()), scope, call_span, None);
             }
         }
         if name == "table" {
@@ -450,7 +488,7 @@ impl<'a> Pass<'a> {
         let mut schema = Schema::closed(Vec::new(), Source::Print);
         let node_span = span(node);
         for (index, item) in node.children().enumerate() {
-            match self.column_item(&item, &Schema::open(), scope, node_span, &[]) {
+            match self.column_item(&item, &Schema::open(), scope, node_span, None) {
                 Item::Named(names, type_name) => {
                     for name in names {
                         schema.set(Column::new(name, type_name.clone()));
@@ -512,7 +550,7 @@ impl<'a> Pass<'a> {
         match op.kind() {
             K::WHERE_OPERATOR | K::FILTER_OPERATOR => {
                 if let Some(p) = op.first_child() {
-                    self.expression(&p, ctx, scope, op_span, &[]);
+                    self.expression(&p, ctx, scope, op_span, None);
                 }
                 input
             }
@@ -532,7 +570,7 @@ impl<'a> Pass<'a> {
             }
             K::SORT_OPERATOR | K::TOP_OPERATOR => {
                 for key in op.children() {
-                    self.expression(&key, ctx, scope, op_span, &[]);
+                    self.expression(&key, ctx, scope, op_span, None);
                 }
                 input
             }
@@ -616,11 +654,10 @@ impl<'a> Pass<'a> {
             }
             K::EXTEND_OPERATOR => {
                 let mut out = input.clone();
-                let mut defined: Vec<String> = Vec::new();
+                let mut defined = Defined::default();
                 comma_quirk(&mut out, op.children().count());
                 for item in op.children() {
-                    let extra: Vec<&str> = defined.iter().map(String::as_str).collect();
-                    match self.column_item(&item, &input, scope, op_span, &extra) {
+                    match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                         Item::Named(names, type_name) => {
                             for (name, node) in names.into_iter().zip(assigned_names(&item)) {
                                 let column = Column {
@@ -628,7 +665,7 @@ impl<'a> Pass<'a> {
                                     ..Column::new(name.clone(), type_name.clone())
                                 };
                                 self.define(span(&node), &column);
-                                defined.push(name);
+                                defined.insert(name);
                                 out.set(column);
                             }
                         }
@@ -672,7 +709,7 @@ impl<'a> Pass<'a> {
                 )
                 .first()
                 {
-                    self.expression(column, ctx, scope, op_span, &[]);
+                    self.expression(column, ctx, scope, op_span, None);
                 }
                 for part in op.children().filter(|c| c.kind() == K::PARSE_COLUMN) {
                     let Some(name) = ident(&part) else {
@@ -694,7 +731,7 @@ impl<'a> Pass<'a> {
                 let range = node_after(op, K::IN_KW);
                 for child in nodes_but(op, &[K::MV_OPTION]) {
                     if Some(&child) != range.as_ref() {
-                        self.expression(&child, ctx, scope, op_span, &[]);
+                        self.expression(&child, ctx, scope, op_span, None);
                     }
                 }
                 let mut out = input;
@@ -788,7 +825,7 @@ impl<'a> Pass<'a> {
             ..input.clone()
         };
         for item in items {
-            match self.column_item(&item, &input, scope, op_span, &[]) {
+            match self.column_item(&item, &input, scope, op_span, None) {
                 Item::Named(names, type_name) => {
                     for (name, node) in names.into_iter().zip(assigned_names(&item)) {
                         let column = Column {
@@ -823,11 +860,10 @@ impl<'a> Pass<'a> {
             removed: HashMap::new(),
             ..input.clone()
         };
-        let mut defined: Vec<String> = Vec::new();
+        let mut defined = Defined::default();
         comma_quirk(&mut out, op.children().count());
         for item in op.children() {
-            let extra: Vec<&str> = defined.iter().map(String::as_str).collect();
-            match self.column_item(&item, &input, scope, op_span, &extra) {
+            match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                 Item::Named(names, type_name) => {
                     let from = value_of(&item)
                         .filter(|_| is_assignment(&item))
@@ -841,7 +877,7 @@ impl<'a> Pass<'a> {
                             ..Column::new(name.clone(), type_name.clone())
                         };
                         self.define(span(&node), &column);
-                        defined.push(name);
+                        defined.insert(name);
                         out.set(column);
                     }
                 }
@@ -885,7 +921,7 @@ impl<'a> Pass<'a> {
         comma_quirk(&mut out, aggregates.len());
         let mut by_columns = Vec::new();
         for item in &by_items {
-            match self.column_item(item, &ctx_input, scope, op_span, &[]) {
+            match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, type_name) => {
                     for name in names {
                         by_columns.push(Column {
@@ -926,7 +962,7 @@ impl<'a> Pass<'a> {
         // quadratic in the items (#1424). The items read the input, not `out`.
         let mut made = by_columns;
         for item in &aggregates {
-            match self.column_item(item, &ctx_input, scope, op_span, &[]) {
+            match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
                     let Some(mut columns) = self.aggregate_columns(item, &ctx_input) else {
                         out.make_open();
@@ -1016,7 +1052,7 @@ impl<'a> Pass<'a> {
                 Ctx::Join(&left, &right),
                 scope,
                 made_by.span,
-                &[],
+                None,
             );
         }
         let mut out = match kind.as_str() {
@@ -1047,7 +1083,7 @@ impl<'a> Pass<'a> {
                 Ctx::Join(&left, &right),
                 scope,
                 made_by.span,
-                &[],
+                None,
             );
             if let Some(ident) = simple_ident(&condition) {
                 keys.insert(self.text(&ident).to_string());
@@ -1113,7 +1149,7 @@ impl<'a> Pass<'a> {
                     };
                     if is_assignment(&first) {
                         if let Some(value) = value_of(&first) {
-                            self.expression(&value, Ctx::One(&input), scope, op_span, &[]);
+                            self.expression(&value, Ctx::One(&input), scope, op_span, None);
                         }
                         for name in assigned_names(&first) {
                             let column = Column {
@@ -1124,15 +1160,12 @@ impl<'a> Pass<'a> {
                             out.set(column);
                         }
                     } else {
-                        self.expression(&first, Ctx::One(&input), scope, op_span, &[]);
+                        self.expression(&first, Ctx::One(&input), scope, op_span, None);
                         match simple_ident(&first) {
                             Some(ident) => {
                                 let name = self.text(&ident);
-                                if let Some(column) = Arc::make_mut(&mut out.columns)
-                                    .iter_mut()
-                                    .find(|c| c.name == name)
+                                if let Some(column) = Arc::make_mut(&mut out.columns).get_mut(name)
                                 {
-                                    let column = Arc::make_mut(column);
                                     column.type_name = Some(to_type.clone());
                                     column.made_by = Some(made_by);
                                 }
@@ -1145,7 +1178,7 @@ impl<'a> Pass<'a> {
             }
         }
         if let Some(limit) = node_after(op, K::LIMIT_KW) {
-            self.expression(&limit, Ctx::One(&input), scope, op_span, &[]);
+            self.expression(&limit, Ctx::One(&input), scope, op_span, None);
         }
         out
     }
@@ -1172,7 +1205,7 @@ impl<'a> Pass<'a> {
         input: &Schema,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) -> Item {
         if is_assignment(item) {
             let value = value_of(item);
@@ -1228,7 +1261,7 @@ impl<'a> Pass<'a> {
         ctx: Ctx,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) {
         self.deeper(1, |pass| pass.expression_at(node, ctx, scope, op, extra));
     }
@@ -1239,7 +1272,7 @@ impl<'a> Pass<'a> {
         ctx: Ctx,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) {
         match node.kind() {
             K::NAME_REF => {
@@ -1319,7 +1352,7 @@ impl<'a> Pass<'a> {
 
     fn reference(&mut self, ident: &SyntaxNode, ctx: Ctx, scope: &Scope, op: ByteSpan) {
         let name = self.text(ident).to_string();
-        self.reference_in(&name, span(ident), ctx, scope, op, &[]);
+        self.reference_in(&name, span(ident), ctx, scope, op, None);
     }
 
     /// A name read where a column is expected.
@@ -1330,9 +1363,9 @@ impl<'a> Pass<'a> {
         ctx: Ctx,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) {
-        if name.starts_with('$') || scope.binds(name) || extra.contains(&name) {
+        if name.starts_with('$') || scope.binds(name) || extra.is_some_and(|e| e.contains(name)) {
             return;
         }
         if self.catalog.table(name).is_some() || self.catalog.asim_parser(name).is_some() {
