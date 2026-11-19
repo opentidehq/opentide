@@ -33,28 +33,6 @@ warning: This folder is not a git repository yet, so the pipeline targets "main"
 #   AZURE_SUBSCRIPTION_ID
 #   AZURE_TENANT_ID
 #   AZURE_WORKSPACE_ID
-#   CBC_ORG_KEY
-#   CBC_TOKEN
-#   CBC_URL
-#   CROWDSTRIKE_CLIENT_ID
-#   CROWDSTRIKE_CLIENT_SECRET
-#   ELASTIC_PROD_API_KEY
-#   ELASTIC_STAGING_API_KEY
-#   EXABEAM_CLIENT_ID
-#   EXABEAM_CLIENT_SECRET
-#   GOOGLE_SECOPS_CREDENTIALS
-#   GRAVITYZONE_API_KEY
-#   GRAYLOG_TOKEN
-#   HARFANGLAB_API_TOKEN
-#   MDE_CLIENT_ID
-#   MDE_CLIENT_SECRET
-#   MDE_TENANT_ID
-#   SENTINEL_ONE_API_TOKEN
-#   SPLUNK_APP
-#   SPLUNK_PORT
-#   SPLUNK_TOKEN
-#   SPLUNK_URL
-#   SYSDIG_SECURE_API_TOKEN
 name: opentide
 
 on:
@@ -71,34 +49,6 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
-      CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
-      CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
-      CBC_URL: ${{ secrets.CBC_URL }}
-      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
-      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
-      ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
-      ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
-      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
-      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
-      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
-      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
-      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
-      HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
-      MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
-      MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
-      MDE_TENANT_ID: ${{ secrets.MDE_TENANT_ID }}
-      SENTINEL_ONE_API_TOKEN: ${{ secrets.SENTINEL_ONE_API_TOKEN }}
-      SPLUNK_APP: ${{ secrets.SPLUNK_APP }}
-      SPLUNK_PORT: ${{ secrets.SPLUNK_PORT }}
-      SPLUNK_TOKEN: ${{ secrets.SPLUNK_TOKEN }}
-      SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
-      SYSDIG_SECURE_API_TOKEN: ${{ secrets.SYSDIG_SECURE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,8 +59,14 @@ jobs:
       - run: pip install "opentide==$OPENTIDE_VERSION"
       - run: opentide validate --strict --format sarif --output opentide-reports/validate.sarif
       - run: opentide lint --strict --format sarif --output opentide-reports/lint.sarif
-      - name: Validate queries on reviewed tenants
+      - name: Validate sentinel queries on reviewed tenants
         if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
         run: |
           rm -rf -- .opentide/configurations
           if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -172,28 +128,6 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
-      CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
-      CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
-      CBC_URL: ${{ secrets.CBC_URL }}
-      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
-      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
-      ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
-      ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
-      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
-      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
-      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
-      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
-      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
-      HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
-      MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
-      MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
-      MDE_TENANT_ID: ${{ secrets.MDE_TENANT_ID }}
-      SENTINEL_ONE_API_TOKEN: ${{ secrets.SENTINEL_ONE_API_TOKEN }}
-      SPLUNK_APP: ${{ secrets.SPLUNK_APP }}
-      SPLUNK_PORT: ${{ secrets.SPLUNK_PORT }}
-      SPLUNK_TOKEN: ${{ secrets.SPLUNK_TOKEN }}
-      SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
-      SYSDIG_SECURE_API_TOKEN: ${{ secrets.SYSDIG_SECURE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -319,28 +253,6 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
-      CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
-      CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
-      CBC_URL: ${{ secrets.CBC_URL }}
-      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
-      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
-      ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
-      ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
-      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
-      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
-      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
-      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
-      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
-      HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
-      MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
-      MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
-      MDE_TENANT_ID: ${{ secrets.MDE_TENANT_ID }}
-      SENTINEL_ONE_API_TOKEN: ${{ secrets.SENTINEL_ONE_API_TOKEN }}
-      SPLUNK_APP: ${{ secrets.SPLUNK_APP }}
-      SPLUNK_PORT: ${{ secrets.SPLUNK_PORT }}
-      SPLUNK_TOKEN: ${{ secrets.SPLUNK_TOKEN }}
-      SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
-      SYSDIG_SECURE_API_TOKEN: ${{ secrets.SYSDIG_SECURE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:

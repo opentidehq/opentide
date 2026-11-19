@@ -85,7 +85,8 @@ fn a_misspelled_provider_suggests_the_closest() {
 
 /// Every enabled platform's tenants reach the jobs, not only the platforms
 /// with a live query check (#1655): a CrowdStrike tenant's own `$FALCON_SECRET`
-/// is listed and mapped into GitHub's deploy jobs and Azure's deploy steps,
+/// is listed and mapped into GitHub's deploy jobs and Azure's deploy steps
+/// (and, since #1689, into no other platform's step),
 /// `sharing.toml`'s `$MISP_API_KEY` into the share job, and `$PATH`, which
 /// the runner sets itself, is never mapped but warned about.
 #[test]
@@ -112,10 +113,11 @@ fn the_tenants_own_variables_are_mapped() {
     );
     let github = std::fs::read_to_string(ws.join(".github/workflows/opentide.yml")).unwrap();
     assert!(github.contains("#   FALCON_SECRET\n"), "{github}");
-    // validate, deploy_staging and deploy_production
+    // deploy_staging and deploy_production: CrowdStrike has no live query
+    // check, so no validate step maps its variables (#1689).
     for name in ["FALCON_ID", "FALCON_SECRET"] {
         let mapped = format!("      {name}: ${{{{ secrets.{name} }}}}\n");
-        assert_eq!(github.matches(&mapped).count(), 3, "{github}");
+        assert_eq!(github.matches(&mapped).count(), 2, "{github}");
     }
     let share = &github[github.find("\n  share:\n").unwrap()..];
     assert!(

@@ -145,6 +145,16 @@ pub struct RenderError {
     source: minijinja::Error,
 }
 
+/// The opentidehq/explorer release `--explorer-pages` builds the site from:
+/// the one that reads the bundle this opentide's `generate explorer` writes
+/// (#1693). The job checks out [`EXPLORER_COMMIT`], the tag's commit, so a
+/// later push to the explorer, or a moved tag, never changes a user's pages.
+/// Bump both together when an explorer release reads a new bundle.
+pub const EXPLORER_RELEASE: &str = "v0.6.0";
+
+/// The commit [`EXPLORER_RELEASE`] tags.
+pub const EXPLORER_COMMIT: &str = "7a34f7bcb0bfc24f40d222298d5fca9f30e00e3e";
+
 /// The pipeline `options` describe, as its file holds it.
 ///
 /// # Errors
@@ -344,31 +354,45 @@ fn gate(format: &str, lint_changed: bool) -> Vec<String> {
         .collect()
 }
 
-/// Every variable the bundled platform files reference (`$NAME`), sorted:
-/// the secrets the header lists and GitHub's deploy jobs map
-/// (`platform_credential_names`).
-pub fn bundled_variables() -> Vec<String> {
+/// The variables a step that reaches `platform`'s tenants maps from the CI
+/// secret store, sorted: those its bundled platform file references and
+/// those the repository's tenants of that platform name
+/// ([`Options::credentials`]), so a tenant that names its own `$NAME` gets
+/// its credential in CI as it does locally. No other platform's variable is
+/// in it (#1689). A name the CI runner sets itself ([`runner_owned`]) is
+/// left out: mapping it from the secret store would replace the runner's
+/// own value.
+pub fn platform_secret_names(options: &Options, platform: &str) -> Vec<String> {
+    let bundled = format!("platforms/{platform}.toml");
     let mut names: Vec<String> = opentide_schema::configuration::bundled::FILES
         .iter()
-        .filter(|(path, _)| path.starts_with("platforms/"))
+        .filter(|(path, _)| *path == bundled)
         .flat_map(|(_, text)| references(text))
+        .collect();
+    names.extend(
+        options
+            .credentials
+            .get(platform)
+            .into_iter()
+            .flatten()
+            .cloned(),
+    );
+    mappable(names)
+}
+
+/// The variables the deploy steps map, sorted: [`platform_secret_names`] of
+/// every platform the repository enables, as a deploy reaches each of them.
+/// A platform it does not enable contributes nothing.
+pub fn secret_names(options: &Options) -> Vec<String> {
+    let mut names: Vec<String> = options
+        .platforms
+        .iter()
+        .chain(options.credentials.keys())
+        .flat_map(|platform| platform_secret_names(options, platform))
         .collect();
     names.sort();
     names.dedup();
     names
-}
-
-/// The variables a pipeline maps from the CI secret store into the jobs that
-/// reach a tenant, sorted: every variable the bundled platform files
-/// reference ([`bundled_variables`]) and every variable the repository's
-/// tenants name ([`Options::credentials`]), so a tenant that names its own
-/// `$NAME` gets its credential in CI as it does locally.
-/// A name the CI runner sets itself ([`runner_owned`]) is left out: mapping
-/// it from the secret store would replace the runner's own value.
-pub fn secret_names(options: &Options) -> Vec<String> {
-    let mut names = bundled_variables();
-    names.extend(options.credentials.values().flatten().cloned());
-    mappable(names)
 }
 
 /// The variables the share job maps: `sharing.toml`'s, as [`secret_names`].
@@ -556,13 +580,9 @@ fn values(options: &Options) -> Value {
                 platform => platform,
                 id => platform.replace('_', "-"),
                 command => reviewed_query_check(platform, variables),
+                secrets => platform_secret_names(options, platform),
             }
         })
-        .collect();
-    let query_commands: Vec<String> = queries
-        .iter()
-        .filter_map(|query| query.get_attr("command").ok())
-        .map(|command| command.to_string())
         .collect();
     let docs = vec![format!(
         "opentide generate docs --output {}",
@@ -590,7 +610,7 @@ fn values(options: &Options) -> Value {
         ),
         pip => PIP_INSTALL,
         restore => restore,
-        queries => if options.provider == Provider::GitHub { Value::from(query_commands) } else { Value::from(queries) },
+        queries => queries,
         lint_changed => options.lint_changed,
         validate_sarif => gate("sarif", options.lint_changed),
         validate_codequality => gate("codequality", options.lint_changed),
@@ -622,6 +642,8 @@ fn values(options: &Options) -> Value {
         inflight => options.inflight,
         sharing => options.sharing,
         explorer_pages => options.explorer_pages,
+        explorer_release => EXPLORER_RELEASE,
+        explorer_commit => EXPLORER_COMMIT,
         docs => docs,
         docs_output => options.docs_output,
         docs_path => serde_json::to_string(&format!("{}/", options.docs_output)).unwrap_or_default(),
@@ -709,27 +731,145 @@ mod tests {
         let written = render(&github).unwrap();
         assert!(written.contains("#   FALCON_SECRET\n"), "{written}");
         let mapped = "      FALCON_SECRET: ${{ secrets.FALCON_SECRET }}\n";
-        // validate, deploy_staging and deploy_production
-        assert_eq!(written.matches(mapped).count(), 3, "{written}");
+        // deploy_staging and deploy_production: CrowdStrike has no live
+        // query check, so no validate step maps it (#1689).
+        assert_eq!(written.matches(mapped).count(), 2, "{written}");
 
         let mut azure = options(Provider::Azure);
         azure.credentials = github.credentials.clone();
         let written = render(&azure).unwrap();
         assert!(written.contains("#   FALCON_SECRET\n"), "{written}");
         let mapped = "            FALCON_SECRET: $(FALCON_SECRET)\n";
-        // the sentinel and splunk query checks, deploy_staging and
-        // deploy_production
-        assert_eq!(written.matches(mapped).count(), 4, "{written}");
+        // deploy_staging and deploy_production: neither query check is
+        // CrowdStrike's (#1689).
+        assert_eq!(written.matches(mapped).count(), 2, "{written}");
+        // The sentinel query check and the two deploys.
         assert_eq!(
             written
                 .matches("AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)")
                 .count(),
-            4
+            3
         );
         // A variable the pipeline does not define is left unset, not `$(NAME)`.
         let unset = "for name; do if [ \"$(printenv \"$name\")\" = \"\\$($name)\" ]; then unset \"$name\"; fi; done";
         assert_eq!(written.matches(unset).count(), 4, "{written}");
         assert!(written.contains("set -- AZURE_CLIENT_ID "), "{written}");
+    }
+
+    /// #1689: a live query check maps only its own platform's variables, the
+    /// gate maps none, and a deploy maps only the enabled platforms'.
+    #[test]
+    fn each_step_maps_only_the_variables_its_platforms_name() {
+        let mut options = options(Provider::GitHub);
+        options.credentials = IndexMap::from([
+            ("sentinel".to_owned(), vec!["MY_SENTINEL_SECRET".to_owned()]),
+            ("splunk".to_owned(), vec!["MY_SPLUNK_TOKEN".to_owned()]),
+        ]);
+        options.sharing_credentials = vec!["MISP_API_KEY".to_owned()];
+        // The text of the job or step that starts at `start`, up to `end`.
+        let part = |written: &str, start: &str, end: &str| -> String {
+            let from = written
+                .find(start)
+                .unwrap_or_else(|| panic!("{start}: {written}"));
+            let rest = &written[from + start.len()..];
+            rest[..rest.find(end).unwrap_or(rest.len())].to_owned()
+        };
+        let sentinel = ["AZURE_CLIENT_SECRET", "MY_SENTINEL_SECRET"];
+        let splunk = ["SPLUNK_TOKEN", "MY_SPLUNK_TOKEN"];
+
+        let written = render(&options).unwrap();
+        // Elastic is not enabled: its bundled variables are neither mapped
+        // nor listed.
+        assert!(!written.contains("ELASTIC_PROD_API_KEY"), "{written}");
+        let gate = part(&written, "\n  validate:\n", "- name: Validate sentinel");
+        assert!(!gate.contains("secrets."), "{gate}");
+        let checks = [
+            ("- name: Validate sentinel queries", sentinel, splunk),
+            ("- name: Validate splunk queries", splunk, sentinel),
+        ];
+        for (start, own, other) in checks {
+            let step = part(&written, start, "\n      - ");
+            for name in own {
+                assert!(
+                    step.contains(&format!("{name}: ${{{{ secrets.{name} }}}}")),
+                    "{step}"
+                );
+            }
+            for name in other.iter().chain(&["MISP_API_KEY"]) {
+                assert!(!step.contains(name), "{name} in {step}");
+            }
+        }
+        let deploy = part(&written, "\n  deploy_production:\n", "    steps:");
+        for name in sentinel.iter().chain(&splunk) {
+            assert!(deploy.contains(name), "{name}: {deploy}");
+        }
+        assert!(!deploy.contains("MISP_API_KEY"), "{deploy}");
+        let share = part(&written, "\n  share:\n", "    steps:");
+        assert!(share.contains("MISP_API_KEY"), "{share}");
+        assert!(
+            !share.contains("AZURE_") && !share.contains("SPLUNK_"),
+            "{share}"
+        );
+
+        options.provider = Provider::Azure;
+        let written = render(&options).unwrap();
+        assert!(!written.contains("ELASTIC_PROD_API_KEY"), "{written}");
+        let checks = [
+            ("- job: validate_query_sentinel\n", sentinel, splunk),
+            ("- job: validate_query_splunk\n", splunk, sentinel),
+        ];
+        for (start, own, other) in checks {
+            let job = part(&written, start, "- job:");
+            for name in own {
+                assert!(job.contains(&format!("{name}: $({name})")), "{job}");
+            }
+            for name in other.iter().chain(&["MISP_API_KEY"]) {
+                assert!(!job.contains(name), "{name} in {job}");
+            }
+        }
+        let deploy = part(&written, "- job: deploy_production\n", "- stage:");
+        for name in sentinel.iter().chain(&splunk) {
+            assert!(
+                deploy.contains(&format!("{name}: $({name})")),
+                "{name}: {deploy}"
+            );
+        }
+
+        // With no platform enabled, a deploy maps nothing, and GitHub writes
+        // no empty `env:`, which Actions refuses.
+        options.provider = Provider::GitHub;
+        options.platforms.clear();
+        options.credentials.clear();
+        let written = render(&options).unwrap();
+        assert!(!written.contains("secrets.AZURE_"), "{written}");
+        assert!(!written.contains("env:\n    steps:"), "{written}");
+    }
+
+    /// #1693: the explorer site is built from the explorer release this
+    /// opentide records, at its commit, never from a branch.
+    #[test]
+    fn the_explorer_checkout_is_pinned() {
+        let written = render(&options(Provider::GitHub)).unwrap();
+        let checkout = written
+            .split("- name: Checkout explorer\n")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .unwrap_or_default();
+        assert!(
+            checkout.contains("repository: opentidehq/explorer"),
+            "{checkout}"
+        );
+        let reference = checkout
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("ref: "))
+            .unwrap_or_default();
+        // A commit, which no push can move, not a branch such as `main`.
+        assert_eq!(reference, EXPLORER_COMMIT, "{checkout}");
+        assert_eq!(reference.len(), 40, "{checkout}");
+        assert!(
+            reference.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "{checkout}"
+        );
     }
 
     /// The share job maps the variables `sharing.toml` names; a name the

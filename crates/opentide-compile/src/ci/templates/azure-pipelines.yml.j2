@@ -107,7 +107,7 @@ stages:
     jobs:
       [[ job("validate", "Validate objects", validate) | indent(6) ]]
 {% for query in queries %}
-      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true, secrets=credentials)) | indent(6) ]]
+      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true, secrets=query.secrets)) | indent(6) ]]
 {% endfor %}
 
   - stage: Generate
