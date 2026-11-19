@@ -579,44 +579,54 @@ impl<'a> Pass<'a> {
                 let mut out = input.clone();
                 out.reshaped_by = Some(kind);
                 let (names, patterns) = self.column_refs(op);
+                let mut away = Vec::with_capacity(names.len());
                 for ident in names {
-                    let name = self.text(&ident).to_string();
+                    away.push(self.text(&ident).to_string());
                     self.reference(&ident, ctx, scope, op_span);
-                    out.remove(&name, kind);
                 }
+                out.remove_all(away, kind);
                 let dropped: Vec<String> = out
                     .columns
                     .iter()
                     .filter(|c| patterns.iter().any(|p| glob_matches(p, &c.name)))
                     .map(|c| c.name.clone())
                     .collect();
-                for name in dropped {
-                    out.remove(&name, kind);
-                }
+                out.remove_all(dropped, kind);
                 out
             }
             K::PROJECT_KEEP_OPERATOR | K::PROJECT_REORDER_OPERATOR => {
                 let keep = op.kind() == K::PROJECT_KEEP_OPERATOR;
                 let (names, patterns) = self.column_refs(op);
-                let mut kept = Vec::new();
+                let mut kept: Vec<&str> = Vec::with_capacity(names.len());
                 for ident in names {
                     self.reference(&ident, ctx, scope, op_span);
-                    kept.push(self.text(&ident).to_string());
+                    kept.push(self.text(&ident));
                 }
+                // Past a few names, a set: the list scanned per column made
+                // `project-keep` of k names over n columns O(k·n).
+                let kept_set: HashSet<&str> = if kept.len() > Defined::SCAN_ONLY {
+                    kept.iter().copied().collect()
+                } else {
+                    HashSet::default()
+                };
+                let is_kept = |name: &str| {
+                    if kept.len() > Defined::SCAN_ONLY {
+                        kept_set.contains(name)
+                    } else {
+                        kept.contains(&name)
+                    }
+                };
                 let mut out = input.clone();
                 if keep {
                     let dropped: Vec<String> = out
                         .columns
                         .iter()
                         .filter(|c| {
-                            !kept.contains(&c.name)
-                                && !patterns.iter().any(|p| glob_matches(p, &c.name))
+                            !is_kept(&c.name) && !patterns.iter().any(|p| glob_matches(p, &c.name))
                         })
                         .map(|c| c.name.clone())
                         .collect();
-                    for name in dropped {
-                        out.remove(&name, kind);
-                    }
+                    out.remove_all(dropped, kind);
                     out.narrowed = true;
                     out.reshaped_by = Some(kind);
                     if patterns.is_empty() {
@@ -629,6 +639,7 @@ impl<'a> Pass<'a> {
             K::PROJECT_RENAME_OPERATOR => {
                 let mut out = input.clone();
                 out.reshaped_by = Some(kind);
+                let mut renames = Vec::new();
                 for item in op.children().filter(|c| c.kind() == K::RENAME_ITEM) {
                     let names: Vec<SyntaxNode> = item
                         .children()
@@ -641,15 +652,15 @@ impl<'a> Pass<'a> {
                     let new_name = self.text(new).to_string();
                     self.reference(old, ctx, scope, op_span);
                     let type_name = input.column(&old_name).and_then(|c| c.type_name.clone());
-                    out.remove(&old_name, kind);
                     let column = Column {
                         made_by: Some(made_by),
                         renamed_from: Some(old_name),
                         ..Column::new(new_name, type_name)
                     };
                     self.define(span(new), &column);
-                    out.set(column);
+                    renames.push(column);
                 }
+                out.rename_all(renames, kind);
                 out
             }
             K::EXTEND_OPERATOR => {

@@ -294,9 +294,13 @@ impl Columns {
     }
 
     /// Keep the columns `keep` accepts.
-    pub(crate) fn retain(&mut self, keep: impl FnMut(&Arc<Column>) -> bool) {
+    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Arc<Column>) -> bool) {
         let before = self.list.len();
-        self.list.retain(keep);
+        self.list.retain(|c| {
+            #[cfg(test)]
+            tests::count_name_compared();
+            keep(c)
+        });
         if self.list.len() != before {
             self.forget_index();
         }
@@ -471,6 +475,75 @@ impl Schema {
             Arc::make_mut(&mut self.columns).retain(|c| c.name != name);
         }
         self.removed.insert(name.to_string(), by);
+    }
+
+    /// [`Self::remove`] each of `names`, in one pass over the columns: a pass
+    /// per name made `project-away` or `project-keep` of k names over n
+    /// columns O(k·n) (#1628's follow-up).
+    pub(crate) fn remove_all(&mut self, names: Vec<String>, by: &'static str) {
+        // A few names are removed one at a time, as hashing costs more.
+        if names.len() <= SCAN_ONLY {
+            for name in names {
+                self.remove(&name, by);
+            }
+            return;
+        }
+        let gone: HashSet<&str> = names.iter().map(String::as_str).collect();
+        // Copied on write only when there is a column to remove.
+        if self.columns.iter().any(|c| gone.contains(c.name.as_str())) {
+            Arc::make_mut(&mut self.columns).retain(|c| !gone.contains(c.name.as_str()));
+        }
+        drop(gone);
+        for name in names {
+            self.removed.insert(name, by);
+        }
+    }
+
+    /// `project-rename`'s renames, `(new, old)` in order, as many
+    /// [`Self::remove`] of `old` then [`Self::set`] of the renamed column
+    /// would leave the schema, in one pass: a pass per rename made k renames
+    /// over n columns O(k·n). A few are applied one at a time, as hashing
+    /// every column costs more.
+    pub(crate) fn rename_all(&mut self, renames: Vec<Column>, by: &'static str) {
+        if renames.len() <= SCAN_ONLY {
+            for column in renames {
+                if let Some(old) = &column.renamed_from {
+                    self.remove(old, by);
+                }
+                self.set(column);
+            }
+            return;
+        }
+        // The columns, with a hole where one was removed, and where each
+        // name's live columns are, first to last.
+        let mut slots: Vec<Option<Arc<Column>>> = self.columns.iter().cloned().map(Some).collect();
+        let mut at: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, column) in self.columns.iter().enumerate() {
+            at.entry(column.name.clone()).or_default().push(i);
+        }
+        for column in renames {
+            if let Some(old) = &column.renamed_from {
+                #[cfg(test)]
+                tests::count_name_compared();
+                if let Some(positions) = at.remove(old) {
+                    for i in positions {
+                        slots[i] = None;
+                    }
+                }
+                self.removed.insert(old.clone(), by);
+            }
+            self.removed.remove(&column.name);
+            #[cfg(test)]
+            tests::count_name_compared();
+            match at.get(&column.name).and_then(|p| p.first()) {
+                Some(&i) => slots[i] = Some(Arc::new(column)),
+                None => {
+                    at.insert(column.name.clone(), vec![slots.len()]);
+                    slots.push(Some(Arc::new(column)));
+                }
+            }
+        }
+        self.columns = Arc::new(slots.into_iter().flatten().collect());
     }
 
     fn weaken(&mut self, known: Known) {
@@ -871,21 +944,65 @@ pub(crate) fn merge_union(legs: &[Schema], withsource: Option<String>) -> Schema
     }
     // A name with two types becomes one column per type (`A_string`,
     // `A_long`); with a type the pass does not know, it cannot name them.
-    for name in conflicts {
-        let mut kinds: Vec<Option<String>> = legs
-            .iter()
-            .filter_map(|leg| leg.column(&name).map(|c| c.type_name.clone()))
-            .collect();
-        kinds.dedup();
-        Arc::make_mut(&mut out.columns).retain(|c| c.name != name);
-        if kinds.iter().any(Option::is_none) {
-            out.make_open();
-            continue;
+    if conflicts.len() <= SCAN_ONLY {
+        // A few: a pass per conflict, as hashing every column costs more.
+        for name in conflicts {
+            let mut kinds: Vec<Option<String>> = legs
+                .iter()
+                .filter_map(|leg| leg.column(&name).map(|c| c.type_name.clone()))
+                .collect();
+            kinds.dedup();
+            Arc::make_mut(&mut out.columns).retain(|c| c.name != name);
+            if kinds.iter().any(Option::is_none) {
+                out.make_open();
+                continue;
+            }
+            for kind in kinds.into_iter().flatten() {
+                let renamed = format!("{name}_{kind}");
+                if !out.has(&renamed) {
+                    Arc::make_mut(&mut out.columns)
+                        .push(Arc::new(Column::new(renamed, Some(kind))));
+                }
+            }
         }
-        for kind in kinds.into_iter().flatten() {
-            let renamed = format!("{name}_{kind}");
-            if !out.has(&renamed) {
-                Arc::make_mut(&mut out.columns).push(Arc::new(Column::new(renamed, Some(kind))));
+    } else {
+        // Many: one pass over the legs and one over the columns for them
+        // all, as a pass per conflict made n conflicts O(n²).
+        // Each conflict's type in each leg that has it, in leg order: the
+        // first column of that name in the leg, as `Schema::column` finds.
+        let mut kinds: HashMap<&str, Vec<Option<String>>> = HashMap::new();
+        for leg in legs {
+            let mut seen: HashSet<&str> = HashSet::default();
+            for column in leg.columns.iter() {
+                #[cfg(test)]
+                tests::count_name_compared();
+                if let Some(name) = conflicts.get(column.name.as_str())
+                    && seen.insert(name.as_str())
+                {
+                    kinds
+                        .entry(name.as_str())
+                        .or_default()
+                        .push(column.type_name.clone());
+                }
+            }
+        }
+        Arc::make_mut(&mut out.columns).retain(|c| !conflicts.contains(&c.name));
+        for name in &conflicts {
+            let mut kinds = kinds.remove(name.as_str()).unwrap_or_default();
+            kinds.dedup();
+            if kinds.iter().any(Option::is_none) {
+                out.make_open();
+                continue;
+            }
+            for kind in kinds.into_iter().flatten() {
+                let renamed = format!("{name}_{kind}");
+                // A renamed column that is a later conflict's name: the pass
+                // per conflict found that conflict's column still there and
+                // added none (and then removed the conflict's).
+                if !conflicts.contains(&renamed) && !out.has(&renamed) {
+                    Arc::make_mut(&mut out.columns)
+                        .push(Arc::new(Column::new(renamed, Some(kind))));
+                }
             }
         }
     }
@@ -1167,7 +1284,7 @@ pub(crate) fn unknown_column(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::glob_matches;
-    use super::{Column, Columns, Schema};
+    use super::{Column, Columns, Schema, Source, merge_union};
     use std::sync::Arc;
 
     /// A workspace's catalog with declared columns keeps the schemas it
@@ -1313,7 +1430,7 @@ pub(crate) mod tests {
         let list = |n: usize, item: &dyn Fn(usize) -> String| {
             (0..n).map(item).collect::<Vec<_>>().join(", ")
         };
-        let queries: [(&str, &dyn Fn(usize) -> String); 7] = [
+        let queries: [(&str, &dyn Fn(usize) -> String); 11] = [
             ("project", &|n| {
                 format!("T | project {}", list(n, &|i| format!("x{i}=1")))
             }),
@@ -1340,6 +1457,34 @@ pub(crate) mod tests {
                     "T | summarize {} by k | where {}",
                     list(n, &|i| format!("x{i}=count()")),
                     list(n, &|i| format!("isnotnull(x{i})")).replace(", ", " and ")
+                )
+            }),
+            ("project-away", &|n| {
+                format!(
+                    "print {} | project-away {}",
+                    list(n, &|i| format!("x{i}=1")),
+                    list(n / 2, &|i| format!("x{}", 2 * i))
+                )
+            }),
+            ("project-keep", &|n| {
+                format!(
+                    "print {} | project-keep {}",
+                    list(n, &|i| format!("x{i}=1")),
+                    list(n / 2, &|i| format!("x{}", 2 * i))
+                )
+            }),
+            ("project-rename", &|n| {
+                format!(
+                    "print {} | project-rename {}",
+                    list(n, &|i| format!("x{i}=1")),
+                    list(n, &|i| format!("y{i}=x{i}"))
+                )
+            }),
+            ("a union's conflicting columns", &|n| {
+                format!(
+                    "union (print {}), (print {})",
+                    list(n, &|i| format!("a{i}=1")),
+                    list(n, &|i| format!("a{i}='s'"))
                 )
             }),
             ("references", &|n| {
@@ -1369,6 +1514,186 @@ pub(crate) mod tests {
                 "{name}: {small} names compared for 1,000 columns, {large} for 2,000"
             );
         }
+    }
+
+    /// `remove_all` and `rename_all` leave a schema as `remove` and `remove`
+    /// then `set`, one at a time, do: chains (`b=a, c=b`), a name renamed
+    /// to itself, onto a column that exists, twice, and names removed twice
+    /// or not there.
+    #[test]
+    fn batched_removals_and_renames_match_one_at_a_time() {
+        let start = || {
+            let mut s = Schema::open();
+            for name in ["a", "b", "c", "a", "d", "e", "f", "g", "h", "i", "j"] {
+                Arc::make_mut(&mut s.columns).push(Column::new(name, Some("long".into())));
+            }
+            s
+        };
+        let names = |s: &Schema| {
+            let mut removed: Vec<_> = s.removed.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            removed.sort();
+            (
+                s.columns
+                    .iter()
+                    .map(|c| (c.name.clone(), c.renamed_from.clone()))
+                    .collect::<Vec<_>>(),
+                removed,
+            )
+        };
+        let column_for = |new: &str, old: &str| Column {
+            renamed_from: Some(old.into()),
+            ..Column::new(new, Some("string".into()))
+        };
+        let renames: Vec<(&str, &str)> = vec![
+            ("b", "a"),
+            ("x", "b"),
+            ("c", "c"),
+            ("d", "e"),
+            ("y", "zz"),
+            ("y", "f"),
+            ("g", "x"),
+            ("h", "h"),
+            ("k", "i"),
+            ("a", "k"),
+            ("j", "d"),
+        ];
+        let mut one = start();
+        for (new, old) in &renames {
+            one.remove(old, "r");
+            one.set(column_for(new, old));
+        }
+        let mut batch = start();
+        batch.rename_all(renames.iter().map(|(n, o)| column_for(n, o)).collect(), "r");
+        assert_eq!(names(&batch), names(&one));
+
+        let gone = ["a", "zz", "d", "a", "j"];
+        let mut one = start();
+        for name in gone {
+            one.remove(name, "r");
+        }
+        let mut batch = start();
+        batch.remove_all(gone.iter().map(ToString::to_string).collect(), "r");
+        assert_eq!(names(&batch), names(&one));
+    }
+
+    /// A union's conflicts name their columns as one pass per conflict did
+    /// (`one_at_a_time`, the code before), a renamed column that is a later
+    /// conflict's name, a leg with a name twice and an untyped leg included.
+    #[test]
+    fn union_conflicts_as_one_at_a_time() {
+        use foldhash::HashMap;
+        use std::collections::BTreeSet;
+        fn one_at_a_time(legs: &[Schema]) -> Schema {
+            let mut out = Schema::closed(Vec::new(), Source::Union);
+            let mut types: HashMap<String, Option<String>> = HashMap::default();
+            let mut conflicts = BTreeSet::new();
+            for leg in legs {
+                for column in leg.columns.iter() {
+                    match types.get(&column.name) {
+                        None => {
+                            types.insert(column.name.clone(), column.type_name.clone());
+                            Arc::make_mut(&mut out.columns).push(column.clone());
+                        }
+                        Some(t) if *t != column.type_name => {
+                            conflicts.insert(column.name.clone());
+                        }
+                        Some(_) => {}
+                    }
+                }
+            }
+            for name in conflicts {
+                let mut kinds: Vec<Option<String>> = legs
+                    .iter()
+                    .filter_map(|leg| leg.column(&name).map(|c| c.type_name.clone()))
+                    .collect();
+                kinds.dedup();
+                Arc::make_mut(&mut out.columns).retain(|c| c.name != name);
+                if kinds.iter().any(Option::is_none) {
+                    out.make_open();
+                    continue;
+                }
+                for kind in kinds.into_iter().flatten() {
+                    let renamed = format!("{name}_{kind}");
+                    if !out.has(&renamed) {
+                        Arc::make_mut(&mut out.columns)
+                            .push(Arc::new(Column::new(renamed, Some(kind))));
+                    }
+                }
+            }
+            out
+        }
+        let leg = |cols: &[(&str, Option<&str>)]| {
+            Schema::closed(
+                cols.iter()
+                    .map(|(n, t)| Column::new(*n, t.map(ToString::to_string)))
+                    .collect(),
+                Source::Literal,
+            )
+        };
+        let shape = |s: &Schema| {
+            let columns: Vec<_> = s
+                .columns
+                .iter()
+                .map(|c| (c.name.clone(), c.type_name.clone()))
+                .collect();
+            (columns, s.known)
+        };
+        for legs in [
+            vec![
+                leg(&[
+                    ("A", Some("long")),
+                    ("A_string", Some("long")),
+                    ("B", Some("int")),
+                ]),
+                leg(&[
+                    ("A", Some("string")),
+                    ("A_string", Some("real")),
+                    ("B", Some("int")),
+                ]),
+                leg(&[("A", Some("long")), ("C", Some("bool")), ("C", Some("int"))]),
+            ],
+            vec![
+                leg(&[("A", Some("long")), ("D", None)]),
+                leg(&[
+                    ("A_long", Some("int")),
+                    ("A", Some("real")),
+                    ("D", Some("int")),
+                ]),
+                leg(&[("A", Some("real")), ("A", Some("long"))]),
+            ],
+        ] {
+            assert_eq!(
+                shape(&merge_union(&legs, None)),
+                shape(&one_at_a_time(&legs))
+            );
+        }
+        // Past the few a pass each handles: many conflicts, with the same
+        // edge cases (a renamed column that is a later conflict's name, an
+        // untyped leg, a leg with a name twice).
+        let mut names: Vec<String> = (0..12).map(|i| format!("N{i}")).collect();
+        names.extend(["A", "A_string", "C", "D", "N3_long"].map(String::from));
+        let many = |types: &[Option<&str>], extra: &[(&str, Option<&str>)]| {
+            let mut columns: Vec<Column> = names
+                .iter()
+                .zip(types.iter().cycle())
+                .map(|(n, t)| Column::new(n.clone(), t.map(ToString::to_string)))
+                .collect();
+            columns.extend(
+                extra
+                    .iter()
+                    .map(|(n, t)| Column::new(*n, t.map(ToString::to_string))),
+            );
+            Schema::closed(columns, Source::Literal)
+        };
+        let legs = [
+            many(&[Some("long")], &[]),
+            many(&[Some("string"), Some("real"), None], &[]),
+            many(&[Some("long"), Some("int")], &[("C", Some("bool"))]),
+        ];
+        assert_eq!(
+            shape(&merge_union(&legs, None)),
+            shape(&one_at_a_time(&legs))
+        );
     }
 
     /// The index answers as a scan would, with repeated names (the first
