@@ -294,7 +294,10 @@ fn operator(p: &mut P<'_>) {
         }
         K::AS_KW => {
             p.bump();
-            hint_options(p);
+            // `hint.materialized` is the one hint `as` takes.
+            while p.at(K::HINT_NAME) && p.nth_text(0) == "hint.materialized" && p.nth(1) == K::EQ {
+                option_after_name(p, K::HINT_OPTION);
+            }
             p.expect_name();
             K::AS_OPERATOR
         }
@@ -1033,39 +1036,55 @@ fn render_with(p: &mut P<'_>) {
     p.bump();
     p.expect(K::L_PAREN);
     if !p.at(K::R_PAREN) {
-        list(p, render_property);
+        // Whether a bare name may come: only after a property whose value is
+        // a list of columns, as Kusto.Language reads them.
+        let mut in_list = false;
+        loop {
+            if p.name_at(0) && p.nth(1) == K::EQ {
+                in_list = matches!(p.nth_text(0), "ycolumns" | "series" | "anomalycolumns");
+                let property = p.start();
+                p.bump_as(K::IDENT);
+                p.bump();
+                expr::expr(p);
+                p.done(property, K::NAMED_ARGUMENT);
+            } else if in_list && p.name_at(0) {
+                name_ref(p);
+            } else {
+                p.error("expected `name = value`");
+                break;
+            }
+            if !p.eat(K::COMMA) {
+                break;
+            }
+        }
     }
     p.expect(K::R_PAREN);
     p.done(m, K::RENDER_WITH);
 }
 
-fn render_property(p: &mut P<'_>) {
-    if p.name_at(0) && p.nth(1) == K::EQ {
-        let m = p.start();
-        p.bump_as(K::IDENT);
-        p.bump();
-        expr::expr(p);
-        p.done(m, K::NAMED_ARGUMENT);
-    } else {
-        name_ref(p);
-    }
+/// Whether `name = value` starts here with one of `names`, spelt exactly.
+fn at_named_option(p: &P<'_>, names: &[&str]) -> bool {
+    p.name_at(0) && p.nth(1) == K::EQ && names.contains(&p.nth_text(0))
 }
 
 /// `reduce kind=source by x with threshold=0.1, characters="ab"`
 fn reduce(p: &mut P<'_>) -> K {
+    const WITH: &[&str] = &["kind", "threshold", "characters"];
     p.bump();
-    options(p);
+    while at_named_option(p, &["kind"]) {
+        option_after_name(p, K::OPERATOR_OPTION);
+    }
     p.expect(K::BY_KW);
     expr::expr(p);
     // Kusto.Language accepts a `with` that no option follows.
-    if p.eat(K::WITH_KW) && at_option(p) {
+    if p.eat(K::WITH_KW) && p.name_at(0) && p.nth(1) == K::EQ {
         loop {
-            option_after_name(p, K::OPERATOR_OPTION);
-            if !p.eat(K::COMMA) {
+            if !at_named_option(p, WITH) {
+                p.error("expected `threshold`, `characters` or `kind`");
                 break;
             }
-            if !at_option(p) {
-                p.error("expected `threshold` or `characters`");
+            option_after_name(p, K::OPERATOR_OPTION);
+            if !p.eat(K::COMMA) {
                 break;
             }
         }

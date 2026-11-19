@@ -463,6 +463,8 @@ fn operator_forms_parse_and_their_broken_twins_do_not() {
         "T | reduce by x",
         "T | top-hitters 5 of x",
         "T | reduce by x with",
+        "T | reduce by x with kind=source, characters=\"a\", threshold=0.2",
+        "T | render barchart with (ycolumns=a, b, title=\"x\", series=c, d)",
     ] {
         assert_eq!(errors(source), Vec::<String>::new(), "{source}");
     }
@@ -477,6 +479,13 @@ fn operator_forms_parse_and_their_broken_twins_do_not() {
         "declare query_parameters(p:string)\nT",
         "declare query_parameters(p);\nT",
         "declare query_parameters();\nT",
+        "T | reduce foo=1 by x",
+        "T | reduce Kind=source by x",
+        "T | reduce by x with foo=1",
+        "T | reduce by x with Threshold=0.1",
+        "T | render barchart with (a)",
+        "T | render barchart with (title=\"x\", a)",
+        "T | as hint.progressive_fetch=true T2",
     ] {
         assert!(!errors(source).is_empty(), "{source} parses");
     }

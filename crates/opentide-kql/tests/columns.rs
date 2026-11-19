@@ -521,3 +521,17 @@ fn serialize_as_and_query_parameters_keep_the_column_checks() {
     assert!(unknown[0].contains("IPAddres"), "{unknown:?}");
     assert!(output("SigninLogs | serialize rn = row_number()").contains(&"rn".to_owned()));
 }
+
+/// A tabular query parameter is a table, not an unknown one (#1646 review).
+#[test]
+fn a_tabular_query_parameter_is_a_table() {
+    let src = "declare query_parameters(Events:(a:int));\nEvents | where a > 1";
+    assert!(
+        analyze(src, Profile::Sentinel)
+            .diagnostics
+            .iter()
+            .all(|d| d.code != codes::KQL_UNKNOWN_TABLE && d.severity != Severity::Error),
+        "{:?}",
+        analyze(src, Profile::Sentinel).diagnostics
+    );
+}

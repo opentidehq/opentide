@@ -13564,7 +13564,7 @@ kql_render_not_valid warning 0:75-0:140 `render` is not valid in detection queri
 138..139 number
 139..140 punctuation.bracket
 == oracles/kql/render_with_trailing_comma.broken.kql
-kql_parse_error error 0:53-0:54 KQL syntax error: expected a name
+kql_parse_error error 0:53-0:54 KQL syntax error: expected `name = value`
 0..10 type
 11..12 operator.pipe
 13..19 keyword

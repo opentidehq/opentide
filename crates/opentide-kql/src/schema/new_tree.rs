@@ -55,13 +55,7 @@ fn run<'a>(
     for child in root.children() {
         match child.kind() {
             K::LET_STATEMENT => pass.let_statement(&child, &mut scope),
-            K::QUERY_PARAMETERS_STATEMENT => {
-                for parameter in child.children().filter(|c| c.kind() == K::PARAMETER) {
-                    if let Some(name) = ident(&parameter) {
-                        scope.scalars.insert(Pass::token_text(&name));
-                    }
-                }
-            }
+            K::QUERY_PARAMETERS_STATEMENT => pass.query_parameters(&child, &mut scope),
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
                     pass.tabular(&body, &scope);
@@ -251,6 +245,25 @@ impl<'a> Pass<'a> {
     }
 
     // --- bindings ---------------------------------------------------------
+
+    /// `declare query_parameters(p: string, t: (a: int))`: a scalar is a value
+    /// and a tabular parameter a table of unknown columns, as in a function.
+    fn query_parameters(&self, node: &SyntaxNode, scope: &mut Scope) {
+        for parameter in node.children().filter(|c| c.kind() == K::PARAMETER) {
+            let Some(name) = ident(&parameter).map(|t| Self::token_text(&t)) else {
+                continue;
+            };
+            let tabular = child_of(&parameter, K::TYPE)
+                .is_some_and(|t| self.text(&t).trim_start().starts_with('('));
+            if tabular {
+                let mut schema = Schema::open();
+                schema.source = Source::Let(name.clone());
+                scope.tabular.insert(name, schema);
+            } else {
+                scope.scalars.insert(name);
+            }
+        }
+    }
 
     fn let_statement(&mut self, node: &SyntaxNode, scope: &mut Scope) {
         let Some(name) = ident(node).map(|t| Self::token_text(&t)) else {
