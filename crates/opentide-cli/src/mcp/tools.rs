@@ -54,7 +54,7 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
         "search" => (|| {
             let query = args.required("query")?;
             let filters = catalog::Filters {
-                family: args.string("type", "")?,
+                family: object_type(&args)?,
                 platform: args.string("platform", "")?,
                 status: args.string("status", "")?,
                 technique: args.string("technique", "")?,
@@ -135,6 +135,19 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
         // As MCPServer reports a tool that raised.
         Err(message) => error_result(&format!("Error executing tool {name}: {message}")),
     }
+}
+
+/// `search`'s `type`: empty, or one of the object families; any other value
+/// is refused, naming them, rather than matching nothing.
+fn object_type(args: &Args<'_>) -> Result<String, String> {
+    let family = args.string("type", "")?;
+    if family.is_empty() || catalog::FAMILIES.contains(&family.as_str()) {
+        return Ok(family);
+    }
+    Err(format!(
+        "argument type must be one of {}, not {family:?}",
+        catalog::FAMILIES.join(", ")
+    ))
 }
 
 /// A list payload as MCPServer returns one: a text block per item, and the

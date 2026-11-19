@@ -5,7 +5,7 @@ description: opentide:// resource URIs for catalogue indexes, objects, schemas, 
 
 # MCP resources
 
-Read-only JSON resources registered on the opentide MCP server.
+Read-only resources registered on the opentide MCP server. Each is served as `text/plain`: a JSON document; for an object template, its YAML as a JSON string; for `templates/systems`, a JSON object of each platform's block template, a YAML string each.
 
 ## URI catalogue
 
@@ -19,7 +19,7 @@ Read-only JSON resources registered on the opentide MCP server.
 | `opentide://objectives` | All objectives |
 | `opentide://objectives/{uuid}` | Single objective body |
 | `opentide://schemas/{object_type}` | JSON Schema for `rule`, `threat`, or `objective` |
-| `opentide://templates/{object_type}` | Template metadata for object type |
+| `opentide://templates/{object_type}` | The YAML template of an object family or revision (`rule`, `rule::1.0`); `systems`, every configured platform's block template |
 | `opentide://vocabularies` | Vocabulary index: `{name: {metadata, entry_count, uri}}` — entries are **not** inlined |
 | `opentide://vocabularies/{+name}` | Named vocabulary: `{metadata, entries}`. `{+name}` keeps the `&` in `att&ck` literal |
 | `opentide://platforms` | Platform capability list |
@@ -94,12 +94,13 @@ When nothing matches, the resource returns a diagnostic rather than an empty obj
 
 Resources reflect the workspace the server read — run `opentide generate schemas` in the client repo if schemas are empty.
 
-`opentide://templates/{object_type}` accepts the same forms. Templates are
-rendered from the current model, so a versioned id resolves only when it names
-the current schema version: `rule::1.1` returns the rule template, `rule::1.0`
-and `rule::9.9` return an `error` with the `available` templates. Run
-`opentide generate templates` if the template list is empty. Generated files
-still include `rule.1.0.template.yaml` for objects that stay on `rule::1.0`.
+`opentide://templates/{object_type}` accepts the same forms. A family (`rule`,
+`rules`) is the template of its newest revision, the one `opentide new rule`
+starts from (`rule::1.1`); a revision (`rule::1.0`, `rule.1.1`) is that
+revision's generated template (`.opentide/templates/rule.1.0.template.yaml`).
+A revision with no generated template, such as `rule::9.9`, returns an `error`
+with the `available` templates. Run `opentide generate templates` if the
+template list is empty.
 
 ## Vocabulary resources
 
