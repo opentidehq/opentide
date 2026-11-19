@@ -216,6 +216,78 @@ impl InjectedQuery {
 /// lands on a character boundary (before the character on `\` and `u`,
 /// after it on the hex digits).
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
+    injection_at(source, offset, false).map(|(inj, inner, _)| (inj, inner))
+}
+
+/// [`injection_at_offset`] for completion, which also needs what is being
+/// typed after a line of an assembled injection (HarfangLab's decomposed
+/// YARA) but is not in its text: the blanks after the line's last
+/// character, which the assembled text drops, or a new line of the field's
+/// block, its indentation included. The third value is that text, empty
+/// elsewhere: completion reads the injection's text with it inserted at the
+/// inner offset (#1685).
+pub fn injection_typed_at(source: &str, offset: usize) -> Option<(InjectedQuery, usize, String)> {
+    injection_at(source, offset, true)
+}
+
+/// Whether `field` holds YARA as the author types it: the decomposed
+/// HarfangLab `strings`, `condition` and `imports`. The other written parts
+/// of the assembled rule are values deploy quotes into its `meta`
+/// (`metadata.uuid`, `tags` items, `yara.meta.os`): the end of one is not
+/// the end of a line of YARA.
+fn typed_as_yara(field: &[String]) -> bool {
+    matches!(
+        field,
+        [a, b, c, d, ..] if a == "configurations"
+            && b == "harfanglab"
+            && c == "yara"
+            && matches!(d.as_str(), "strings" | "condition" | "imports")
+    )
+}
+
+/// The end of the line of `inj`, an assembled injection, that `offset` is
+/// typed after, and the text typed: blanks after the line, or with
+/// `new_lines` a new line at the field's indentation or deeper. Only a
+/// line of YARA ([`typed_as_yara`]) counts.
+fn assembled_line_end<'s>(
+    source: &'s str,
+    inj: &InjectedQuery,
+    offset: usize,
+    new_lines: bool,
+) -> Option<(usize, &'s str)> {
+    let column = |at: usize| at - source[..at].rfind('\n').map_or(0, |i| i + 1);
+    let written =
+        |p: &&InjectionPart| !p.synthetic && p.end > p.start && typed_as_yara(&p.field_path);
+    inj.parts.iter().rev().filter(written).find_map(|p| {
+        let last = *inj.host_map.get(p.end - 1)?;
+        // Past the last character, whichever of its bytes it maps onto.
+        let after = (last + 1..=source.len()).find(|&i| source.is_char_boundary(i))?;
+        let gap = source.get(after..offset)?;
+        if gap.chars().all(|c| c == ' ' || c == '\t') {
+            return Some((p.end, gap));
+        }
+        if !new_lines || !gap.chars().all(|c| matches!(c, ' ' | '\t' | '\r' | '\n')) {
+            return None;
+        }
+        // A new line still in the field's block: indented as far as its
+        // lines are (a line less indented is the next key's).
+        let indent = inj
+            .parts
+            .iter()
+            .filter(written)
+            .filter(|q| q.field_path == p.field_path)
+            .filter_map(|q| inj.host_map.get(q.start).map(|&at| column(at)))
+            .min()?;
+        let typed = gap.len() - gap.rfind('\n').map_or(0, |i| i + 1);
+        (typed >= indent).then_some((p.end, gap))
+    })
+}
+
+fn injection_at(
+    source: &str,
+    offset: usize,
+    new_lines: bool,
+) -> Option<(InjectedQuery, usize, String)> {
     let (source, offset) = opentide_core::strip_bom_at(source, offset);
     for inj in extract_injections(source) {
         if let Some(inner) = inj
@@ -225,10 +297,17 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
             .position(|(i, &h)| h == offset && !inj.is_synthetic(i))
         {
             let inner = inj.inner.floor_char_boundary(inner);
-            return Some((inj, inner));
+            return Some((inj, inner, String::new()));
         }
-        // An assembled injection covers only its parts' text.
+        // An assembled injection covers only its parts' text, and the end
+        // of each line a field contributes: right after its last character
+        // (blanks typed after it count too), where the cursor is while the
+        // line is typed. The newline there is text deploy writes.
         if !inj.parts.is_empty() {
+            if let Some((end, typed)) = assembled_line_end(source, &inj, offset, new_lines) {
+                let typed = typed.to_owned();
+                return Some((inj, end, typed));
+            }
             continue;
         }
         // Right after the query's last character: where the cursor is while
@@ -242,7 +321,7 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
                     .is_some_and(|gap| gap.chars().all(|c| c == ' ' || c == '\t'))
         }) {
             let end = inj.inner.len();
-            return Some((inj, end));
+            return Some((inj, end, String::new()));
         }
         if offset >= inj.host_span.start && offset < inj.host_span.end {
             let inner = inj.host_map.iter().position(|&h| h >= offset).unwrap_or(
@@ -252,7 +331,7 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
                     .min(inj.host_map.len().saturating_sub(1)),
             );
             let inner = inj.inner.floor_char_boundary(inner);
-            return Some((inj, inner));
+            return Some((inj, inner, String::new()));
         }
     }
     None
@@ -2407,6 +2486,61 @@ configurations:
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
             assert_eq!(&inj.inner[inner..], "\u{e9}", "{offset}");
         }
+    }
+
+    /// The end of a HarfangLab `yara.condition` line, where the cursor is
+    /// while it is typed, is in the assembled rule (#1685): no injection
+    /// covered it, so completion there offered nothing.
+    #[test]
+    fn a_cursor_at_the_end_of_a_decomposed_yara_line_is_in_the_rule() {
+        let source = "name: R\nconfigurations:\n  harfanglab:\n    yara:\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
+        let end = source.find("> 1").unwrap() + "> 1".len();
+        let (inj, inner) = injection_at_offset(source, end).unwrap();
+        assert!(inj.inner[..inner].ends_with("$cmd and #cmd > 1"), "{inner}");
+        assert!(!inj.is_synthetic(inner.saturating_sub(1)));
+        // The end of the strings line, too; not a byte past the newline.
+        let strings_end = source.find("ascii").unwrap() + "ascii".len();
+        let (inj, inner) = injection_at_offset(source, strings_end).unwrap();
+        assert!(inj.inner[..inner].ends_with("\"cmd.exe\" ascii"), "{inner}");
+        assert!(injection_at_offset(source, end + 1).is_none());
+    }
+
+    /// What is typed after a decomposed line and not in the assembled text
+    /// (#1685 review): the blanks the block drops, and a new line of the
+    /// block at its indentation; not a line less indented, which is the
+    /// next key's. The end of the first of two lines, and of a line ending
+    /// in a character of several bytes, map too.
+    #[test]
+    fn completion_sees_what_is_typed_after_a_decomposed_line() {
+        let head = "name: R\nconfigurations:\n  harfanglab:\n    yara:\n      strings: |\n        $cmd = \"cmd.exe\" ascii // café\n      condition: |\n";
+        // Blanks after `$cmd`: the block keeps them, the assembled text not.
+        let source = format!("{head}        $cmd \n");
+        let at = source.rfind("$cmd ").unwrap() + "$cmd ".len();
+        let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
+        assert!(inj.inner[..inner].ends_with("$cmd"), "{inner}");
+        assert_eq!(typed, " ");
+        // A new line in the block, indented as its lines are.
+        let source = format!("{head}        $cmd and\n        ");
+        let (inj, inner, typed) = injection_typed_at(&source, source.len()).unwrap();
+        assert!(inj.inner[..inner].ends_with("$cmd and"), "{inner}");
+        assert_eq!(typed, "\n        ");
+        // Hover and definition do not take it: nothing is written there.
+        assert!(injection_at_offset(&source, source.len()).is_none());
+        // Less indented than the block: the next key's line, not the rule.
+        let source = format!("{head}        $cmd and\n      ");
+        assert!(injection_typed_at(&source, source.len()).is_none());
+        // The end of the first of two lines.
+        let source = format!("{head}        $cmd and\n        #cmd > 1\n");
+        let at = source.find("$cmd and").unwrap() + "$cmd and".len();
+        let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
+        assert!(inj.inner[..inner].ends_with("$cmd and"), "{inner}");
+        assert_eq!(typed, "");
+        assert!(inj.inner[inner..].starts_with('\n'));
+        // A line ending in `é`, two bytes.
+        let at = source.find("café").unwrap() + "café".len();
+        let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
+        assert!(inj.inner[..inner].ends_with("// café"), "{inner}");
+        assert_eq!(typed, "");
     }
 
     #[test]

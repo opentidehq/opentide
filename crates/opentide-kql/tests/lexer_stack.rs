@@ -9,7 +9,18 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_kql::inspect::lex_spans;
+use opentide_kql::inspect::{lex_spans, typed_literal_bytes_scanned};
+
+/// The bytes the typed-literal scan read lexing `source` (on a thread of
+/// its own, so the count is this lex's alone).
+fn typed_literal_scan(source: String) -> usize {
+    std::thread::spawn(move || {
+        let _ = lex_spans(&source);
+        typed_literal_bytes_scanned()
+    })
+    .join()
+    .expect("the lexer panicked")
+}
 
 /// Lexes `source` on a 1 MB stack thread; the process aborts on an overflow.
 fn lex_on_small_stack(source: String) -> Vec<(usize, usize, bool)> {
@@ -22,29 +33,6 @@ fn lex_on_small_stack(source: String) -> Vec<(usize, usize, bool)> {
 }
 
 const N: usize = 1_000_000;
-
-/// Fails unless `run(4 * n)` takes less than 8 times `run(n)`: linear work
-/// takes 4 times as long, quadratic 16 times. Each is the best of three runs,
-/// the sizes alternated, so a busy machine slows both alike; a run under 50 ms passes whatever the
-/// ratio, its noise being larger than it.
-fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
-    let time = |k: usize| {
-        let started = std::time::Instant::now();
-        run(k);
-        started.elapsed()
-    };
-    // Alternated, so that a busy spell slows both sizes alike.
-    let (mut small, mut large) = (std::time::Duration::MAX, std::time::Duration::MAX);
-    for _ in 0..3 {
-        small = small.min(time(n));
-        large = large.min(time(4 * n));
-    }
-    assert!(
-        large < std::time::Duration::from_millis(50) || large < small * 8,
-        "{name}: {small:?} for {n}, {large:?} for {}: not linear",
-        4 * n
-    );
-}
 
 #[test]
 fn long_tokens_do_not_recurse_per_repetition() {
@@ -105,15 +93,36 @@ fn long_tokens_do_not_recurse_per_repetition() {
 
 /// Found by review (#1314): an unclosed typed literal scanned to the end of
 /// its line at every `datetime(`, so 20,000 of them on one line (220 KB)
-/// took 22.8 s. Each line is scanned once now.
+/// took 22.8 s. Each line is scanned once now. The work is counted, not
+/// timed (#1694: a wall-clock ratio failed on a busy CI runner): the bytes
+/// the scan reads stay within the input's length, and four times the input
+/// reads four times the bytes; scanning per `datetime(` read 16 times.
 #[test]
 fn unclosed_typed_literals_are_linear() {
     let source = "datetime(a ".repeat(20_000);
     let spans = lex_on_small_stack(source.clone());
     assert_eq!(spans.last().map(|s| s.1), Some(source.len()));
-    assert_linear("unclosed typed literals", 5_000, |n| {
-        let _ = lex_on_small_stack("datetime(a ".repeat(n));
-    });
+    let n = 5_000;
+    let (small, large) = (
+        typed_literal_scan("datetime(a ".repeat(n)),
+        typed_literal_scan("datetime(a ".repeat(4 * n)),
+    );
+    assert!(small > 0, "the scan ran");
+    assert!(
+        large <= "datetime(a ".len() * 4 * n,
+        "{large} bytes read for {} of input: a scan per literal",
+        "datetime(a ".len() * 4 * n
+    );
+    assert!(
+        large < small * 8,
+        "{small} bytes read for {n} literals, {large} for {}: not linear",
+        4 * n
+    );
+    // Each line is scanned once, from its first `datetime(` to its end: 14
+    // bytes a line (`(a datetime(b` and the newline). Scanning again at the
+    // second `datetime(` reads 17.
+    let lines = "datetime(a datetime(b\n".repeat(n);
+    assert_eq!(typed_literal_scan(lines), 14 * n);
     // A closed one on a later line is still a literal.
     let spans = lex_on_small_stack(format!("{source}\ndatetime(2024-01-01)"));
     assert_eq!(

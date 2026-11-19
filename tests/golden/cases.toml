@@ -116,6 +116,12 @@ source = "tests/golden/fixtures/vscode-workspace"
 about = "vscode with the Sentinel query written as a folded `>-` block holding a `//` line, which comments out the filter after it (`query_folded_comment`, B16)"
 edits = [{ path = "detections/rules/custom-folder-rule.yaml", find = "    query: |\n      DeviceProcessEvents\n", replace = "    query: >-\n      DeviceProcessEvents\n      // procdump only\n" }]
 
+[fixtures.vscode-long-query]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with `long.lucene`, a 807-character Lucene query on one line whose `(` never closes: the frame shows the line in part (B22)"
+edits = [{ path = "long.lucene", find = "", replace = "(process.name:proc00.exe OR process.name:proc01.exe OR process.name:proc02.exe OR process.name:proc03.exe OR process.name:proc04.exe OR process.name:proc05.exe OR process.name:proc06.exe OR process.name:proc07.exe OR process.name:proc08.exe OR process.name:proc09.exe OR process.name:proc10.exe OR process.name:proc11.exe OR process.name:proc12.exe OR process.name:proc13.exe OR process.name:proc14.exe OR process.name:proc15.exe OR process.name:proc16.exe OR process.name:proc17.exe OR process.name:proc18.exe OR process.name:proc19.exe OR process.name:proc20.exe OR process.name:proc21.exe OR process.name:proc22.exe OR process.name:proc23.exe OR process.name:proc24.exe OR process.name:proc25.exe OR process.name:proc26.exe OR process.name:proc27.exe OR process.name:proc28.exe OR process.name:proc29.exe\n" }]
+
 [fixtures.vscode-ambiguous]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -241,6 +247,18 @@ kind = "copy"
 source = "tests/golden/fixtures/share-misp"
 about = "`share-misp` as a git checkout whose last commit, a push, changed sharing.toml and no object: nothing for `share push --changed` to share (UC-4.4e)"
 pushed = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"clear\"", replace = "max_tlp = \"green\"" }]
+
+[fixtures.deploy-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout of one commit, a new repository's first push: every rule file is new, so a deploy without --all reads them all (#1662)"
+pushed = []
+
+[fixtures.share-misp-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout of one commit, a new repository's first push: every object is new to `share push --changed` (#1662)"
+pushed = []
 
 [fixtures.empty]
 kind = "skeleton"
@@ -2110,6 +2128,34 @@ fixtures = ["deploy-push"]
 modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
+# #1662: a repository's first commit has no parent, so every rule file it
+# holds is new: outside CI (the last commit) and on a GitHub push (an
+# all-zero `before`, HEAD's first parent missing), the dry run plans them all.
+[[case]]
+command = "deploy"
+variant = "dry-run-first-commit"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "deploy"
+variant = "dry-run-first-push"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push whose commits changed no rule file reads none, and says so rather
+# than blame a status (#1662).
+[[case]]
+command = "deploy"
+variant = "dry-run-no-rule-changed"
+args = ["deploy", "--dry-run", "--strategy", "PREVIEW"]
+fixtures = ["share-misp-push-config"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
 [[case]]
 command = "generate docs"
 variant = "changed-push"
@@ -2252,6 +2298,21 @@ command = "setup ci"
 variant = "promotion-target"
 args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
 fixtures = ["vscode-docs-folder"]
+
+# GitLab merges its Code Quality reports on the job's Python, with no module
+# the release does not ship (#1656).
+[[case]]
+command = "setup ci"
+variant = "gitlab"
+args = ["setup", "ci", "gitlab", "--yes"]
+fixtures = ["tide-corpus"]
+
+# The explorer job installs the pinned release, as every job does (#1656).
+[[case]]
+command = "setup ci"
+variant = "explorer-pages"
+args = ["setup", "ci", "github", "--default-branch", "main", "--explorer-pages", "--yes"]
+fixtures = ["tide-corpus"]
 
 # The tenants name their own variables ($ELASTIC_API_KEY, $S1_API_TOKEN,
 # $DEFENDER_CLIENT_SECRET, ...): the jobs that reach a tenant map each one,
@@ -3140,6 +3201,15 @@ modes = ["plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 cassette = "golden/share-push-changed"
 
+# #1662: the first push of a new repository shares every object it holds.
+[[case]]
+command = "share push"
+variant = "changed-first-push"
+args = ["share", "push", "--changed", "--dry-run"]
+fixtures = ["share-misp-first-commit"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
 [[case]]
 command = "share push"
 variant = "changed-key-unset"
@@ -3245,3 +3315,10 @@ command = "lint"
 variant = "folded-comment-strict"
 args = ["lint", "--strict"]
 fixtures = ["vscode-folded-comment"]
+
+# B22: a finding on a line longer than a frame shows.
+[[case]]
+command = "validate query"
+variant = "long-line"
+args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
+fixtures = ["vscode-long-query"]

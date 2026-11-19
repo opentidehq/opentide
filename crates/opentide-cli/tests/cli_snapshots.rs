@@ -105,12 +105,12 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "setup.skills.show",
             "setup.vscode",
         ],
-        291,
+        299,
     ),
     // Dry runs, and sends to tenants served from cassettes.
-    ("deploy", &["deploy", "deploy.migrate-state"], 157),
+    ("deploy", &["deploy", "deploy.migrate-state"], 163),
     // Offline, and against tenants served from cassettes.
-    ("query", &["query", "validate.query"], 218),
+    ("query", &["query", "validate.query"], 222),
     // The MISP destinations served from cassettes.
     (
         "share",
@@ -122,7 +122,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "share.status",
             "share.targets",
         ],
-        158,
+        160,
     ),
 ];
 
