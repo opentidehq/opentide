@@ -42,18 +42,24 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     // node of every walk. The tokens, most of the elements, are read as the
     // walk meets them and not kept, so their cursors are freed as they were;
     // only the nodes are kept, until the passes that read them are done. The
-    // tables' scope, the column pass and the error path's own lookups still
-    // walk the tree themselves.
+    // column pass (which follows each pipeline's structure with its scope,
+    // not the tree's order) and the error path's lookups still step through
+    // the tree themselves.
     let mut nodes: Vec<SyntaxNode> = Vec::new();
     let mut spans = Vec::new();
     let at = parsed.errors.first().map(|error| error.gap.end());
     let mut error_tokens = ErrorTokens::default();
-    opentide_parse::walk_once(&root, |element, _| {
+    // Each node's depth, beside it: the tables' scopes are rebuilt from it.
+    let mut depths: Vec<usize> = Vec::new();
+    opentide_parse::walk_once(&root, |element, depth| {
         #[cfg(test)]
         tests::VISITS.set(tests::VISITS.get() + 1);
         highlight_span(&element, &mut spans);
         match element {
-            NodeOrToken::Node(node) => nodes.push(node),
+            NodeOrToken::Node(node) => {
+                nodes.push(node);
+                depths.push(depth);
+            }
             NodeOrToken::Token(token) => {
                 if let Some(at) = at {
                     error_tokens.see(&token, at);
@@ -71,8 +77,9 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let lets = let_names(&nodes);
     functions(&nodes, &lines, catalog, &lets, &mut diagnostics);
     scalar_operators(&nodes, &lines, catalog, &mut diagnostics);
+    let _ = tables(&nodes, &depths, &lines, catalog, &lets, &mut diagnostics);
     // What the later passes need of the nodes, taken now, so that the nodes
-    // are freed before the tables' and the column pass's own walks.
+    // are freed before the column pass.
     let pipes = pipelines(&nodes, parsed.errors.is_empty());
     let whole = if parsed.errors.is_empty() {
         Vec::new()
@@ -80,7 +87,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
         whole_unknown_operators(&nodes, &lines)
     };
     drop(nodes);
-    let _ = tables(&root, &lines, catalog, &lets, &mut diagnostics);
+    drop(depths);
     let columns =
         schema::new_tree::analyze(&root, source, &lines, catalog, parsed.errors.is_empty());
     diagnostics.extend(columns.diagnostics.iter().cloned());
@@ -647,14 +654,16 @@ fn is_fuzzy_union(node: &SyntaxNode) -> bool {
 }
 
 /// The tables a query reads: a source, a join or lookup side, a union leg.
-/// Walks the tree with a stack of scopes: a function definition with tabular
-/// parameters adds their names to its body's `let` names, as a layer over
-/// the scope it is in. Each layer holds its own parameters only: copying the
-/// scope's names for each function made `n` functions with tabular
-/// parameters quadratic (#1424). Returns how many names the layers hold, the
-/// work count a test bounds.
+/// Reads the walk's nodes, in preorder with their depths, with a stack of
+/// scopes: a function definition with tabular parameters adds their names to
+/// its body's `let` names, as a layer over the scope it is in, for the nodes
+/// below it (deeper, until the depth comes back to its own). Each layer holds
+/// its own parameters only: copying the scope's names for each function made
+/// `n` functions with tabular parameters quadratic (#1424). Returns how many
+/// names the layers hold, the work count a test bounds.
 fn tables(
-    root: &SyntaxNode,
+    nodes: &[SyntaxNode],
+    depths: &[usize],
     lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
@@ -675,22 +684,33 @@ fn tables(
         }
         at = scopes[at].0;
     };
-    // Children go on the stack reversed, so they come off in document order.
-    let mut stack: Vec<(SyntaxNode, usize)> = vec![(root.clone(), 0)];
-    while let Some((node, scope)) = stack.pop() {
-        let mut scope = scope;
+    // The open function scopes, (the depth of their definition, the layer),
+    // and the node at each depth of the path to the current one.
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    let mut path: Vec<usize> = Vec::new();
+    for (index, (node, &depth)) in nodes.iter().zip(depths).enumerate() {
+        while open.last().is_some_and(|&(at, _)| at >= depth) {
+            open.pop();
+        }
+        path.truncate(depth);
+        path.push(index);
+        let scope = open.last().map_or(0, |&(_, layer)| layer);
         match node.kind() {
             K::FUNCTION_DEFINITION => {
-                let params = tabular_parameters(&node);
+                let params = tabular_parameters(node);
                 if !params.is_empty() {
                     scopes.push((scope, params.into_iter().collect()));
-                    scope = scopes.len() - 1;
+                    open.push((depth, scopes.len() - 1));
                 }
             }
             K::TABLE_REF => {
-                let in_union = node.parent().is_some_and(|p| p.kind() == K::UNION_OPERATOR);
-                let fuzzy = in_union && node.parent().is_some_and(|p| is_fuzzy_union(&p));
-                if !fuzzy && let Some(name) = name_of(&node) {
+                let parent = depth
+                    .checked_sub(1)
+                    .and_then(|d| path.get(d))
+                    .map(|&i| &nodes[i]);
+                let fuzzy =
+                    parent.is_some_and(|p| p.kind() == K::UNION_OPERATOR && is_fuzzy_union(p));
+                if !fuzzy && let Some(name) = name_of(node) {
                     check_table_named(
                         name.text(),
                         range_of(lines, node.text_range()),
@@ -702,8 +722,6 @@ fn tables(
             }
             _ => {}
         }
-        let children: Vec<SyntaxNode> = node.children().collect();
-        stack.extend(children.into_iter().rev().map(|c| (c, scope)));
     }
     scopes.iter().map(|(_, names)| names.len()).sum()
 }
@@ -713,6 +731,19 @@ mod tests {
     use super::*;
     use crate::Profile;
 
+    /// A tree's nodes in preorder and their depths, as `analyze`'s walk
+    /// gives them.
+    fn nodes_and_depths(root: &SyntaxNode) -> (Vec<SyntaxNode>, Vec<usize>) {
+        let (mut nodes, mut depths) = (Vec::new(), Vec::new());
+        opentide_parse::walk_once(root, |element, depth| {
+            if let NodeOrToken::Node(node) = element {
+                nodes.push(node);
+                depths.push(depth);
+            }
+        });
+        (nodes, depths)
+    }
+
     thread_local! {
         /// The elements `analyze`'s walk visited on this thread.
         pub(super) static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -721,9 +752,10 @@ mod tests {
     /// One walk serves the HIR, the node checks, the syntax error and the
     /// highlight (ADR 0014 §5a): `analyze`'s walk visits each element of the
     /// tree once, on broken input too. What it holds is that one walk, not
-    /// the others: the tables' scope, the column pass and the error path's
-    /// lookups still walk the tree themselves and are not counted here; the
-    /// node checks are held to the one walk by taking its nodes as a slice.
+    /// the others: the column pass and the error path's lookups still step
+    /// through the tree themselves and are not counted here; the node checks
+    /// and the tables' scopes are held to the one walk by taking its nodes as
+    /// a slice.
     #[test]
     fn an_analysis_visits_each_element_once() {
         for source in [
@@ -772,9 +804,17 @@ mod tests {
         let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
         let parsed = parse_once(&source);
         let root = SyntaxNode::new_root(parsed.green.clone());
-        let lets = let_names(&root.descendants().collect::<Vec<_>>());
+        let (nodes, depths) = nodes_and_depths(&root);
+        let lets = let_names(&nodes);
         let mut out = Vec::new();
-        let held = tables(&root, &LineIndex::new(&source), &catalog, &lets, &mut out);
+        let held = tables(
+            &nodes,
+            &depths,
+            &LineIndex::new(&source),
+            &catalog,
+            &lets,
+            &mut out,
+        );
         assert_eq!(held, n + 2);
         // A parameter is not a table; an unknown name still is reported.
         assert!(out.iter().all(|d| !d.message.contains("'T'")), "{out:?}");
