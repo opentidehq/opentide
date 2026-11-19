@@ -370,8 +370,8 @@ export interface QueryOptions {
   /** Where the search ends: a `Date` or an RFC 3339 instant. Default: now. */
   end?: Date | string
   /**
-   * The most rows to return (default 100); `truncated` says there were
-   * more.
+   * The most rows to return, 1 to 5000 (default 100); `truncated` says
+   * there were more. Anything else rejects with `usage_invalid_value`.
    */
   limit?: number
   /**
