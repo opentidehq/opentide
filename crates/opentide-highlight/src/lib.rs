@@ -843,6 +843,16 @@ pub fn tm_scope_name(language: LanguageId) -> String {
     }
 }
 
+/// A KQL string on one line in the TextMate grammar: `"..."`, `'...'`,
+/// `@"..."` and `@'...'`, each with an optional obfuscating `h` or `H` that
+/// starts a name, as the lexer reads it (`ah"b"` and `$h"b"` are a name
+/// and a string).
+const KQL_STRING_MATCH: &str = r#"(?:(?<![A-Za-z0-9_$])[hH])?(?:@"(?:[^"]|"")*"|@'(?:[^']|'')*'|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')"#;
+
+/// A KQL number in the TextMate grammar: hexadecimal (`0x1F`, `0X1f`, `0x`)
+/// or decimal, with an exponent (`1.5e3`). Timespans (`5m`) stay plain.
+const KQL_NUMBER_MATCH: &str = r"\b(?:0[xX][0-9A-Fa-f]*|[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\b";
+
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
 ///
 /// The keywords and punctuation come from the language's `KEYWORDS` table
@@ -905,16 +915,41 @@ fn generate_tm_language_from(
             "comment": "capture:macro",
         }));
     }
-    patterns.push(serde_json::json!({
-        "name": string_tm,
-        "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
-        "comment": "capture:string",
-    }));
-    patterns.push(serde_json::json!({
-        "name": number_tm,
-        "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
-        "comment": "capture:number",
-    }));
+    if language == LanguageId::Kql {
+        // KQL's literals as its lexer reads them: any string may be
+        // obfuscated (`h` or `H` right before it), the multi-line ```` ``` ````
+        // and `~~~` strings span lines, `@"..."` doubles its quote, and an
+        // integer may be hexadecimal (`0x1F`, a bare `0x`).
+        for fence in ["```", "~~~"] {
+            patterns.push(serde_json::json!({
+                "name": string_tm,
+                "begin": format!("(?:(?<![A-Za-z0-9_$])[hH])?{fence}"),
+                "end": fence,
+                "comment": "capture:string",
+            }));
+        }
+        patterns.push(serde_json::json!({
+            "name": string_tm,
+            "match": KQL_STRING_MATCH,
+            "comment": "capture:string",
+        }));
+        patterns.push(serde_json::json!({
+            "name": number_tm,
+            "match": KQL_NUMBER_MATCH,
+            "comment": "capture:number",
+        }));
+    } else {
+        patterns.push(serde_json::json!({
+            "name": string_tm,
+            "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+            "comment": "capture:string",
+        }));
+        patterns.push(serde_json::json!({
+            "name": number_tm,
+            "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+            "comment": "capture:number",
+        }));
+    }
     if language == LanguageId::TideYaml {
         for capture in ["tide.property", "tide.keyword"] {
             let keys = tide_keys_for_capture(capture);
@@ -1380,6 +1415,60 @@ mod tests {
                 .iter()
                 .any(|field| field.path == "description" && field.required)
         );
+    }
+}
+
+#[cfg(test)]
+mod kql_tm_literals {
+    use opentide_core::LanguageId;
+
+    /// The KQL grammar's one-line rules of `capture`, compiled.
+    fn rules(capture: &str) -> Vec<regex::Regex> {
+        let spec = crate::HighlightSpec::load().expect("spec");
+        let tm = crate::generate_tm_language(LanguageId::Kql, &spec);
+        tm["patterns"]
+            .as_array()
+            .expect("patterns")
+            .iter()
+            .filter(|p| p["comment"] == format!("capture:{capture}"))
+            .filter_map(|p| p["match"].as_str())
+            .map(|m| regex::Regex::new(m).expect("a regex"))
+            .collect()
+    }
+
+    fn found<'t>(capture: &str, text: &'t str) -> Vec<&'t str> {
+        rules(capture)
+            .iter()
+            .flat_map(|rule| rule.find_iter(text).map(|m| m.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn hexadecimal_integers_are_numbers() {
+        assert_eq!(
+            found(
+                "number",
+                "x == 0x1F or y == 0X1f or z == 0x or w == 12.5 or v == 0xFFFFFFFFFFFFFFFF or u == 1.5e3"
+            ),
+            ["0x1F", "0X1f", "0x", "12.5", "0xFFFFFFFFFFFFFFFF", "1.5e3"]
+        );
+    }
+
+    // The string and fence rules use a lookbehind, which the `regex` crate
+    // lacks: `highlights/test/embedded.test.mjs` runs them in vscode-textmate,
+    // as an editor does.
+
+    #[test]
+    fn kql_literal_rules_snapshot() {
+        let spec = crate::HighlightSpec::load().expect("spec");
+        let tm = crate::generate_tm_language(LanguageId::Kql, &spec);
+        let literals: Vec<&serde_json::Value> = tm["patterns"]
+            .as_array()
+            .expect("patterns")
+            .iter()
+            .filter(|p| p["comment"] == "capture:string" || p["comment"] == "capture:number")
+            .collect();
+        insta::assert_snapshot!(serde_json::to_string_pretty(&literals).expect("json"));
     }
 }
 

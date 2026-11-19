@@ -8,13 +8,25 @@
       "name": "comment.line.opentide"
     },
     {
+      "begin": "(?:(?<![A-Za-z0-9_$])[hH])?```",
       "comment": "capture:string",
-      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "end": "```",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "begin": "(?:(?<![A-Za-z0-9_$])[hH])?~~~",
+      "comment": "capture:string",
+      "end": "~~~",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:string",
+      "match": "(?:(?<![A-Za-z0-9_$])[hH])?(?:@\"(?:[^\"]|\"\")*\"|@'(?:[^']|'')*'|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')",
       "name": "string.quoted.opentide"
     },
     {
       "comment": "capture:number",
-      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "match": "\\b(?:0[xX][0-9A-Fa-f]*|[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\\b",
       "name": "constant.numeric.opentide"
     },
     {
