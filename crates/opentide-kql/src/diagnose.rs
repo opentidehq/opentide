@@ -393,8 +393,6 @@ fn expected_phrase(error: &SyntaxError) -> Option<String> {
     })
 }
 
-/// The one syntax error the old engine reported, with what the parser
-/// expected: at the token the error stands before.
 /// The tokens a syntax error is placed on, met in document order: the first
 /// significant one from the error's end on, and the last significant one.
 #[derive(Default)]
@@ -416,6 +414,8 @@ impl ErrorTokens {
     }
 }
 
+/// The one syntax error the old engine reported, with what the parser
+/// expected: at the token the error stands before.
 fn syntax_error(lines: &LineIndex, tokens: &ErrorTokens, error: &SyntaxError) -> Diagnostic {
     let mut message = format!("KQL syntax error: {}", error.message);
     if !error.message.starts_with("expected")
@@ -719,9 +719,11 @@ mod tests {
     }
 
     /// One walk serves the HIR, the node checks, the syntax error and the
-    /// highlight (ADR 0014 §5a): an analysis visits each element of the tree
-    /// once, where a walk per check visited it once per check. Broken input
-    /// too, whose error path read the elements again.
+    /// highlight (ADR 0014 §5a): `analyze`'s walk visits each element of the
+    /// tree once, on broken input too. What it holds is that one walk, not
+    /// the others: the tables' scope, the column pass and the error path's
+    /// lookups still walk the tree themselves and are not counted here; the
+    /// node checks are held to the one walk by taking its nodes as a slice.
     #[test]
     fn an_analysis_visits_each_element_once() {
         for source in [
@@ -741,20 +743,17 @@ mod tests {
     }
 
     /// `lower` stops at a control command, as it did before the walk merge:
-    /// the same HIR from the lazy walk as from every node.
+    /// its lazy walk yields the nodes up to the command's, not the tree's.
     #[test]
     fn lower_stops_at_a_control_command() {
-        let source = ".show tables | where x == 1";
+        let source = ".show tables | where x == 1 and y == 2 | project a, b, c";
         let root = SyntaxNode::new_root(parse_once(source).green);
-        let lazy = lower(&root, source);
-        assert!(matches!(lazy, Hir::ControlCommand { .. }), "{lazy:?}");
-        assert_eq!(
-            format!("{lazy:?}"),
-            format!(
-                "{:?}",
-                lower_nodes(root.descendants().collect::<Vec<_>>(), source)
-            )
-        );
+        let all = root.descendants().count();
+        let mut yielded = 0;
+        let hir = lower_nodes(root.descendants().inspect(|_| yielded += 1), source);
+        assert!(matches!(hir, Hir::ControlCommand { .. }), "{hir:?}");
+        assert!(yielded < all, "{yielded} of {all} nodes");
+        assert_eq!(format!("{:?}", lower(&root, source)), format!("{hir:?}"));
     }
 
     /// The scopes of `tables` hold each tabular parameter once, however many

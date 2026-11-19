@@ -152,8 +152,9 @@ Lucene's short queries that, and the per-node vectors around it, was most of the
   holds it to the tree's element count: the two-walk path visits more.
 - **Keep the nodes, not the tokens.** A language whose checks read the nodes after the walk keeps
   those, and reads each token as the walk meets it: kept, the tokens' cursors (most of the
-  elements) stay alive together and malloc stops reusing freed blocks, which on a 1.8 MB KQL query
-  cost 12% more peak memory and 18% more time for fewer instructions.
+  elements) stay alive together, and malloc's slow path takes over (`_int_malloc` nearly doubled):
+  #1626, which kept them, cost 12% more peak memory and 18% more time on a 1.8 MB KQL query for
+  fewer instructions.
 - **KQL, in part.** KQL's HIR, node checks, syntax error and highlight read one walk; the tables'
   scope, the column pass and the error path's lookups still walk the tree themselves, and fold in
   later.

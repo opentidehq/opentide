@@ -151,7 +151,7 @@ fn global(kind: K) -> Option<&'static str> {
 /// The capture of `token` under `parent`, or none.
 ///
 /// A column pattern (`User*`) is several tokens here and one in the old
-/// grammar; [`highlight_spans`] colours it as one span and never asks.
+/// grammar; [`highlight_span`] colours it as one span and never asks.
 pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
     let kind = token.kind();
     if let Some((_, _, capture)) = PARENT_RULES
@@ -208,7 +208,7 @@ pub(crate) fn highlight_spans(root: &crate::syntax::SyntaxNode) -> Vec<(ByteSpan
     out
 }
 
-/// [`highlight_spans`] one element at a time, in preorder, as
+/// `highlight_spans` one element at a time, in preorder, as
 /// `opentide_parse::walk_once` gives them (ADR 0014 §5a: the analysis walks
 /// its tree once, and the highlight reads that walk as it goes).
 pub(crate) fn highlight_span(element: &SyntaxElement, out: &mut Vec<(ByteSpan, &'static str)>) {
