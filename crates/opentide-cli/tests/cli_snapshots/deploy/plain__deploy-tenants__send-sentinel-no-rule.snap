@@ -6,7 +6,7 @@ args: opentide deploy --platform sentinel --strategy PREVIEW --uuid 00000000-000
 exit: 0
 
 ━━━ stdout
-Skipped: No rule has a status this run deploys · 1 rule in REMOVED
-  help: no configured status deploys with this run
+Skipped: No rule has a status PREVIEW deploys · 1 rule in REMOVED
+  help: set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it
 
 ━━━ stderr · empty
