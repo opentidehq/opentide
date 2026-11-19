@@ -82,3 +82,104 @@ fn a_misspelled_provider_suggests_the_closest() {
     );
     assert!(!ws.join(".gitlab-ci.yml").exists());
 }
+
+/// `--python-version` is written into the pipeline as it is (#1656): a value
+/// no provider reads as a supported Python exits 2 and writes nothing, from
+/// `setup ci` and from `setup --ci`.
+#[test]
+fn a_python_version_the_pipeline_cannot_hold_is_refused() {
+    let (_scratch, ws) = tide_corpus();
+    let before = replay::files(&ws);
+    for version in ["2.7", "abc\"; x", "3.12\nevil: true"] {
+        let (code, stdout, stderr) = opentide(
+            &ws,
+            &[
+                "setup",
+                "ci",
+                "gitlab",
+                "--python-version",
+                version,
+                "--yes",
+            ],
+        );
+        assert_eq!(code, 2, "{version:?}: {stdout}{stderr}");
+        assert!(stderr.contains("--python-version"), "{stderr}");
+        assert!(stderr.contains("use 3.10 or later"), "{stderr}");
+    }
+    let (code, stdout, stderr) = opentide(
+        &ws,
+        &[
+            "setup",
+            "--ci",
+            "github",
+            "--python-version",
+            "3.9",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}{stderr}");
+    assert_eq!(replay::files(&ws), before, "a refused run wrote a file");
+    let (code, stdout, stderr) = opentide(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "gitlab",
+            "--python-version",
+            "3.13.1",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let pipeline = std::fs::read_to_string(ws.join(".gitlab-ci.yml")).unwrap();
+    assert!(
+        pipeline.contains("image: python:3.13.1-slim\n"),
+        "{pipeline}"
+    );
+}
+
+/// `setup ci` never writes over a pipeline it did not write, and says so
+/// when it replaces one that was edited (#1656).
+#[test]
+fn a_pipeline_the_user_wrote_is_kept_and_an_edited_one_is_replaced_with_a_warning() {
+    let (_scratch, ws) = tide_corpus();
+    let own = "stages: [test]\ntest:\n  script: [make test]\n";
+    std::fs::write(ws.join(".gitlab-ci.yml"), own).unwrap();
+
+    let (code, stdout, stderr) = opentide(&ws, &["--json", "setup", "ci", "gitlab", "--plan"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let plan: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(plan["steps"][0]["files"][0]["action"], "skip", "{stdout}");
+    assert!(stdout.contains("was not written by opentide"), "{stdout}");
+
+    let (code, stdout, stderr) = opentide(&ws, &["setup", "ci", "gitlab", "--yes"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stderr.contains(".gitlab-ci.yml was not written by opentide"),
+        "{stderr}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(ws.join(".gitlab-ci.yml")).unwrap(),
+        own
+    );
+
+    let (code, stdout, stderr) = opentide(
+        &ws,
+        &["setup", "ci", "github", "--default-branch", "main", "--yes"],
+    );
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(!stderr.contains("is replaced"), "{stderr}");
+    let path = ws.join(".github/workflows/opentide.yml");
+    let generated = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, format!("{generated}# my custom edit\n")).unwrap();
+    let (code, stdout, stderr) = opentide(
+        &ws,
+        &["setup", "ci", "github", "--default-branch", "main", "--yes"],
+    );
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stderr.contains(".github/workflows/opentide.yml is replaced by the pipeline this opentide writes; lines changed in it by hand are not kept"),
+        "{stderr}"
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), generated);
+}

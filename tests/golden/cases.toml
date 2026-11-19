@@ -2247,6 +2247,14 @@ variant = "promotion-target"
 args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
 fixtures = ["vscode-docs-folder"]
 
+# --python-version is written into the pipeline as it is: a version opentide
+# does not install on exits 2 and writes nothing (#1656).
+[[case]]
+command = "setup ci"
+variant = "python-version-refused"
+args = ["setup", "ci", "github", "--python-version", "2.7", "--yes"]
+fixtures = ["tide-corpus"]
+
 [[case]]
 command = "setup env"
 variant = "example"

@@ -1520,18 +1520,7 @@ fn ci_step(
     root: &Path,
     cx: &Context<'_>,
 ) -> Result<StepResult, Box<Report>> {
-    if let Some(branch) = &args.default_branch
-        && !super::is_valid_branch_name(branch)
-    {
-        return Err(bad_parameter(
-            &format!(
-                "{} cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'",
-                super::repr(branch)
-            ),
-            &["--default-branch"],
-            Some("--default-branch"),
-        ));
-    }
+    super::check_pipeline_values(args)?;
     let run = super::prepare(stage, args, root, cx)?;
     let mut written = Vec::new();
     for (relative, bytes, _) in &run.files {
