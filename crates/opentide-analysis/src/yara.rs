@@ -176,26 +176,31 @@ mod tests {
         assert!(rename(LanguageId::TideYaml, text, at, "shell").is_err());
     }
 
-    /// Completion at the end of a decomposed `condition`, as in a `.yar`
-    /// file (#1685): the strings the rule defines, and the operators.
+    /// Completion in a decomposed `condition` while it is typed, as in the
+    /// same rule in a `.yar` file (#1685): at the end of a line, after a
+    /// blank the block drops (`$cmd ` lists operators, not `$cmd` again), and
+    /// on a new line of the block.
     #[test]
-    fn completion_at_the_end_of_a_decomposed_condition() {
+    fn completion_in_a_decomposed_condition_matches_a_yar_file() {
         let host = crate::MemoryWorkspace::default();
-        let typed = RULE.replace("#cmd > 1\n", "#cmd > 1 and \n");
-        let end = typed.find("> 1 and ").unwrap() + "> 1 and ".len();
-        let items = crate::completions(&host, LanguageId::TideYaml, &typed, end);
-        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        let raw = "rule a {\n  strings:\n    $cmd = \"cmd.exe\" ascii\n  condition:\n    $cmd and #cmd > 1 and \n}\n";
-        let raw_end = raw.find("> 1 and ").unwrap() + "> 1 and ".len();
-        let expected = crate::completions(&host, LanguageId::Yara, raw, raw_end);
-        assert!(!expected.is_empty());
-        assert_eq!(
-            labels,
-            expected
-                .iter()
-                .map(|item| item.label.as_str())
-                .collect::<Vec<_>>()
-        );
+        let labels = |items: Vec<crate::CompletionItem>| -> Vec<String> {
+            items.into_iter().map(|item| item.label).collect()
+        };
+        let head = RULE.replace("        $cmd and #cmd > 1\n", "");
+        let raw_head = "rule a {\n  strings:\n    $cmd = \"cmd.exe\" ascii\n  condition:\n";
+        for typed in ["$cmd and #cmd > 1 and ", "$cmd ", "$cmd", "$cmd and\n"] {
+            let tide = format!("{head}        {}", typed.replace('\n', "\n        "));
+            let raw = format!("{raw_head}    {}", typed.replace('\n', "\n    "));
+            let got = labels(crate::completions(
+                &host,
+                LanguageId::TideYaml,
+                &tide,
+                tide.len(),
+            ));
+            let want = labels(crate::completions(&host, LanguageId::Yara, &raw, raw.len()));
+            assert!(!want.is_empty(), "{typed:?}");
+            assert_eq!(got, want, "{typed:?}");
+        }
     }
 
     #[test]

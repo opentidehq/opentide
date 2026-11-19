@@ -118,9 +118,11 @@ fn unclosed_typed_literals_are_linear() {
         "{small} bytes read for {n} literals, {large} for {}: not linear",
         4 * n
     );
-    // Lines are scanned on their own: one per line, each to its end.
+    // Each line is scanned once, from its first `datetime(` to its end: 14
+    // bytes a line (`(a datetime(b` and the newline). Scanning again at the
+    // second `datetime(` reads 17.
     let lines = "datetime(a datetime(b\n".repeat(n);
-    assert!(typed_literal_scan(lines.clone()) <= lines.len());
+    assert_eq!(typed_literal_scan(lines), 14 * n);
     // A closed one on a later line is still a literal.
     let spans = lex_on_small_stack(format!("{source}\ndatetime(2024-01-01)"));
     assert_eq!(
