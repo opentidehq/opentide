@@ -37,12 +37,23 @@ error: missing command: choose from start
 
 This is not captured by the docs harness, which does not run `mcp`; `opentide mcp --help` prints the help and exits `0`.
 
+## Protocol errors
+
+The server reads one JSON-RPC message a line. What it answers to a message it cannot serve:
+
+| Message | Answer |
+|---------|--------|
+| A line that is not JSON | Nothing: the line is skipped, as the official MCP SDKs skip one, since a parse error has no `id` to answer and answering garbage can start an error loop |
+| JSON that is not a JSON-RPC message | `-32600` Invalid request, with no `id` |
+| `tools/call` or `resources/read` without `params`, or with params that do not read | `-32602` Invalid params, with the method as `data` |
+| A method the server does not have | `-32601` Method not found, with the method as `data` |
+| A request before `initialize` | `-32602`, naming the `_meta` keys it lacks: the 2026-07-28 revision of MCP lets a request skip `initialize` when it carries its protocol version in `_meta`. Send `initialize` first |
+
 ## Exit codes
 
 | Code | When |
 |------|------|
 | `0` | The host closed stdin |
-| `1` | The `mcp` package does not import |
 | `2` | `opentide mcp` without `start`, or an unknown subcommand or option |
 
 ## Source

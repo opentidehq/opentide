@@ -132,7 +132,7 @@ rust_jobs() {
     node scripts/engine/check-npm-packs.mjs
     echo "==> wasi-host (opentide/fetch against opentide serve)"
     cargo build --locked -p opentide-cli
-    OPENTIDE_BIN=target/debug/opentide-cli node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
+    OPENTIDE_BIN="${CARGO_TARGET_DIR:-target}/debug/opentide-cli" node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
   fi
 
   local seconds="${FUZZ_SMOKE_SECONDS:-60}"
