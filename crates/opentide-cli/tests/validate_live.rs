@@ -108,6 +108,7 @@ fn live(
             interrupted: &never,
             now: now(),
             registry,
+            debug: false,
         },
     );
     (result, proxy.verify())
@@ -376,6 +377,7 @@ fn scripted(ws: &Path, outcomes: Vec<Result<LiveCheck, ConnectorError>>) -> Live
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     )
 }
@@ -451,6 +453,11 @@ fn each_outcome_of_a_check_is_the_oracles() {
     );
     // A refusal fails the run too, so the timeouts are not its only failures.
     assert!(!live.result.iter().any(|(key, _)| key == "_failure_code"));
+    // A run that rejected a query has no tick (#1658, E8).
+    assert_eq!(
+        live.step.as_ref().unwrap().status,
+        opentide_cli::render::progress::StepStatus::Failed
+    );
     let report = live.report(&Env::from_pairs([("OPENTIDE_PROGRESS", "json")]));
     assert_eq!(
         report.stderr_first,
@@ -531,14 +538,38 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
             "Cannot authenticate with the tenant configuration",
         ))],
     );
+    // The tenant refused the credential: a tenant's failure, with its host
+    // and what to check, and no query counted as checked (#1658, E8).
     assert_eq!(
         value(&live, "message"),
         &Json::str(
-            "Query validation for splunk failed: splunk tenant 'lab': Cannot authenticate \
-             with the tenant configuration"
+            "splunk tenant 'lab' refused the check: Cannot authenticate with the tenant \
+             configuration"
         )
     );
-    assert_eq!(value(&live, "queries_validated"), &Json::Int(2));
+    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(value(&live, "host"), &Json::str("splunk.invalid:8089"));
+    let Json::Str(advice) = value(&live, "advice") else {
+        panic!("advice")
+    };
+    assert!(
+        advice.starts_with(
+            "check the credentials of the 'lab' tenant in \
+             .opentide/configurations/platforms/splunk.toml"
+        ),
+        "{advice}"
+    );
+    assert!(
+        !live
+            .result
+            .iter()
+            .any(|(key, _)| key == "queries_validated")
+    );
+    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+    assert_eq!(
+        live.step.as_ref().unwrap().status,
+        opentide_cli::render::progress::StepStatus::Failed
+    );
     let live = scripted(
         ws.path(),
         vec![Err(ConnectorError::Unreachable {
@@ -575,6 +606,7 @@ fn usage_errors_and_skips_answer_before_any_check() {
         interrupted: &never,
         now: now(),
         registry: &registry,
+        debug: false,
     };
     let env: &'static Env = Box::leak(Box::new(env));
     let plain: &'static Env = Box::leak(Box::new(Env::from_pairs::<&str, &str>([])));
@@ -644,6 +676,136 @@ fn usage_errors_and_skips_answer_before_any_check() {
             .any(|(key, _)| key == "_exit_code" || key == "_failure_code"),
         "{:?}",
         elsewhere.result
+    );
+}
+
+/// A tenant that refuses the credential stops only its own rules: the next
+/// tenant is checked, its results kept and counted (#1658, E8).
+#[test]
+fn a_refused_tenant_does_not_drop_the_next_tenants_checks() {
+    let ws = splunk_rules(2);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        format!(
+            "{text}\n[[tenants]]\nname = \"lab2\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nurl = \
+             \"splunk2.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n"
+        ),
+    )
+    .unwrap();
+    let rejection = LiveCheck {
+        errors: vec!["Unknown search command 'stat'".into()],
+        ..LiveCheck::default()
+    };
+    let live = scripted(
+        ws.path(),
+        vec![
+            Err(ConnectorError::authentication(
+                "splunk",
+                "lab",
+                "Splunk refused the credential (HTTP 401)",
+            )),
+            Ok(rejection),
+            Ok(LiveCheck::default()),
+        ],
+    );
+    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(
+        value(&live, "message"),
+        &Json::str(
+            "splunk tenant 'lab' refused the check: Splunk refused the credential (HTTP 401)"
+        )
+    );
+    // lab2's two queries were checked, one rejected.
+    assert_eq!(value(&live, "queries_validated"), &Json::Int(2));
+    assert_eq!(value(&live, "queries_rejected"), &Json::Int(1));
+    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+}
+
+/// An Elastic tenant that refuses the API key fails the tenant: no query
+/// counts as rejected, and the result names the tenant, its host and what to
+/// check (#1658, E8).
+#[test]
+fn an_elastic_tenant_that_refuses_the_key_fails_the_tenant() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let server = runtime.block_on(wiremock::MockServer::start());
+    runtime.block_on(
+        wiremock::Mock::given(wiremock::matchers::any())
+            .respond_with(wiremock::ResponseTemplate::new(401).set_body_string(
+                r#"{"error":{"type":"security_exception","reason":"unable to authenticate"}}"#,
+            ))
+            .mount(&server),
+    );
+    let uri = server.uri();
+    let rules: Vec<(&str, String)> = (1..=2)
+        .map(|n| {
+            (
+                if n == 1 { "rule-1.yaml" } else { "rule-2.yaml" },
+                rule(
+                    &format!("Elastic rule {n}"),
+                    &format!("00000000-0000-4000-8046-0000000003{n:02}"),
+                    "  elastic:\n    status: STAGING\n    type: query\n    language: kuery\n    \
+                     query: 'process.name: cmd.exe'\n    index: [logs-*]\n",
+                ),
+            )
+        })
+        .collect();
+    let ws = workspace(
+        "elastic",
+        &format!(
+            "url = \"{uri}\"\nelasticsearch_url = \"{uri}\"\napi_key = \"$ELASTIC_API_KEY\"\n\
+             ssl = false\n"
+        ),
+        &rules,
+    );
+    let env = Env::from_pairs([("ELASTIC_API_KEY", SECRET), ("NO_PROXY", "*")]);
+    let args = Args {
+        platform: Some("elastic".to_owned()),
+        live: true,
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &opentide_connectors::builtin(),
+            debug: false,
+        },
+    );
+    assert_eq!(
+        value(&live, "status"),
+        &Json::str("failed"),
+        "{:?}",
+        live.result
+    );
+    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(value(&live, "host"), &Json::str(uri.as_str()));
+    let Json::Str(message) = value(&live, "message") else {
+        panic!("a message")
+    };
+    assert!(
+        message.starts_with("elastic tenant 'lab' refused the check: "),
+        "{message}"
+    );
+    assert!(!message.contains("Queries rejected"), "{message}");
+    assert!(
+        !live
+            .result
+            .iter()
+            .any(|(key, _)| key == "queries_validated")
+    );
+    assert_eq!(
+        live.step.as_ref().unwrap().status,
+        opentide_cli::render::progress::StepStatus::Failed
     );
 }
 
@@ -719,6 +881,7 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     );
     assert_eq!(
@@ -741,5 +904,329 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
             serde_json::json!(["65f0c0ffee0123456789abcd"]),
             serde_json::json!(["65f0c0ffee0123456789abce"]),
         ]
+    );
+}
+
+/// A tenant refused before another one stops the check is never hidden by
+/// that later failure: the result names it beside the unreachable tenant
+/// (#1658, E8).
+#[test]
+fn a_refused_tenant_is_named_when_the_next_one_is_unreachable() {
+    let ws = splunk_rules(1);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        format!(
+            "{text}\n[[tenants]]\nname = \"lab2\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nurl = \
+             \"splunk2.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n"
+        ),
+    )
+    .unwrap();
+    let live = scripted(
+        ws.path(),
+        vec![
+            Err(ConnectorError::authentication(
+                "splunk",
+                "lab",
+                "Splunk refused the credential (HTTP 401)",
+            )),
+            Err(ConnectorError::Unreachable {
+                platform: "splunk".into(),
+                tenant: "lab2".into(),
+                address: "https://splunk2.invalid:8089".into(),
+                reason: "connection refused".into(),
+            }),
+        ],
+    );
+    assert_eq!(value(&live, "tenant"), &Json::str("lab2"));
+    assert_eq!(
+        value(&live, "refused_tenants"),
+        &Json::Array(vec![Json::str("lab")])
+    );
+    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+}
+
+/// An Elastic tenant whose first rule timed out and whose second the key
+/// is refused on: an answer came, so the tenant refused the check; it is
+/// not reported unreachable (#1658, E8).
+#[test]
+fn an_elastic_refusal_after_a_timeout_is_a_refusal() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let server = runtime.block_on(wiremock::MockServer::start());
+    runtime.block_on(async {
+        wiremock::Mock::given(wiremock::matchers::any())
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(4)),
+            )
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(wiremock::matchers::any())
+            .respond_with(wiremock::ResponseTemplate::new(401).set_body_string(
+                r#"{"error":{"type":"security_exception","reason":"unable to authenticate"}}"#,
+            ))
+            .with_priority(2)
+            .mount(&server)
+            .await;
+    });
+    let uri = server.uri();
+    let rules: Vec<(&str, String)> = (1..=2)
+        .map(|n| {
+            (
+                if n == 1 { "rule-1.yaml" } else { "rule-2.yaml" },
+                rule(
+                    &format!("Elastic rule {n}"),
+                    &format!("00000000-0000-4000-8046-0000000005{n:02}"),
+                    "  elastic:\n    status: STAGING\n    type: query\n    language: kuery\n    \
+                     query: 'process.name: cmd.exe'\n    index: [logs-*]\n",
+                ),
+            )
+        })
+        .collect();
+    let ws = workspace(
+        "elastic",
+        &format!(
+            "url = \"{uri}\"\nelasticsearch_url = \"{uri}\"\napi_key = \"$ELASTIC_API_KEY\"\n\
+             ssl = false\n"
+        ),
+        &rules,
+    );
+    let env = Env::from_pairs([("ELASTIC_API_KEY", SECRET), ("NO_PROXY", "*")]);
+    let args = Args {
+        platform: Some("elastic".to_owned()),
+        live: true,
+        check_timeout: Some("1".to_owned()),
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &opentide_connectors::builtin(),
+            debug: false,
+        },
+    );
+    let Json::Str(message) = value(&live, "message") else {
+        panic!("a message: {:?}", live.result)
+    };
+    assert!(
+        message.starts_with("elastic tenant 'lab' refused the check: "),
+        "{message}"
+    );
+    // The timed-out check is kept beside the refusal.
+    let Json::Array(timed_out) = value(&live, "timed_out") else {
+        panic!("timed_out")
+    };
+    assert_eq!(timed_out.len(), 1);
+}
+
+/// `validate query --live --platform splunk --json` on the golden
+/// `live-tenants` workspace, the recorded Splunk tenant answering its first
+/// parser check 401: the tenant's failure, end to end through the recorded
+/// requests (#1658, E8).
+#[test]
+fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
+    use opentide_cassette::cassette::Body;
+    let text =
+        std::fs::read_to_string(repo().join("tests/cassettes/golden/validate-live-splunk.json"))
+            .unwrap();
+    let recorded = Cassette::parse(&text).unwrap();
+    let mut interactions = recorded.interactions[..=2].to_vec();
+    let answer = &mut interactions[2].response;
+    answer.status = 401;
+    answer.headers = vec![("content-type".into(), "application/json".into())];
+    answer.body = Body::Text(
+        r#"{"messages":[{"type":"WARN","text":"call not properly authenticated"}]}"#.into(),
+    );
+    let cassette = Cassette::new(
+        &recorded.scenario,
+        recorded.recorded_from.clone(),
+        interactions,
+    );
+    let proxy = Proxy::start(
+        Mode::Replay { cassette },
+        Redaction::new([SECRET.to_owned()]),
+    )
+    .unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = scratch.path().join("ws");
+    copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), &ws);
+    let mut ca = tempfile::NamedTempFile::new().unwrap();
+    ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
+    let env = Env::from_pairs(
+        proxy
+            .client_env(ca.path().to_str().unwrap())
+            .into_iter()
+            .chain([("SPLUNK_TOKEN".to_owned(), SECRET.to_owned())]),
+    );
+    let args = Args {
+        platform: Some("splunk".to_owned()),
+        live: true,
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.to_str().unwrap()),
+            env: &env,
+            cwd: &ws,
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &opentide_connectors::builtin(),
+            debug: false,
+        },
+    );
+    assert_eq!(proxy.verify(), Vec::new());
+    let report = opentide_cli::commands::validate_live::report_of("validate query", &live.result);
+    let failure = report.outcome.failure.as_ref().unwrap();
+    assert_eq!(failure.code, "command_failed");
+    let keys: Vec<&str> = live.result.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(
+        keys,
+        [
+            "platform",
+            "mode",
+            "status",
+            "supported",
+            "tenant",
+            "host",
+            "message",
+            "advice",
+            "_exit_code"
+        ]
+    );
+    assert_eq!(
+        value(&live, "message"),
+        &Json::str(
+            "splunk tenant 'lab' refused the check: Splunk refused the credential (HTTP \
+             401): call not properly authenticated"
+        )
+    );
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// `git` in `dir`, with a fixed identity and no system or user config.
+fn git(dir: &Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .args([
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .envs([
+            ("GIT_AUTHOR_NAME", "t"),
+            ("GIT_AUTHOR_EMAIL", "t@opentide.invalid"),
+            ("GIT_COMMITTER_NAME", "t"),
+            ("GIT_COMMITTER_EMAIL", "t@opentide.invalid"),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
+/// On a push the production deploy will promote, `--changed` checks the
+/// changed STAGING rule as the deploy sends it: promoted, on the tenant that
+/// takes RELEASE (#1653, smoke E15). It used to check it on PREVIEW tenants
+/// only, and with only a RELEASE tenant it reached none (exit 2).
+#[test]
+fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
+    let ws = splunk_rules(1);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace("strategies = [\"PREVIEW\"]", "strategies = [\"RELEASE\"]"),
+    )
+    .unwrap();
+    git(ws.path(), &["init", "-q"]);
+    git(ws.path(), &["add", "-A"]);
+    git(ws.path(), &["commit", "-q", "-m", "base"]);
+    let path = ws.path().join("objects/rules/rule-1.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace("n=1", "n=2")).unwrap();
+    git(ws.path(), &["commit", "-q", "-a", "-m", "push"]);
+    let before = std::fs::read(&path).unwrap();
+    let registry = Scripted::registry(
+        "splunk",
+        vec![Ok(LiveCheck {
+            result: None,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        })],
+    );
+    let workspace = ws.path().display().to_string();
+    let env = Env::from_pairs([
+        ("SPLUNK_TOKEN", SECRET),
+        ("GITHUB_ACTIONS", "true"),
+        ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_SHA", "HEAD"),
+        ("GITHUB_WORKSPACE", workspace.as_str()),
+    ]);
+    let args = Args {
+        platform: Some("splunk".to_owned()),
+        live: true,
+        changed: true,
+        check_timeout: Some("5".to_owned()),
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &registry,
+            debug: false,
+        },
+    );
+    assert_eq!(
+        value(&live, "status"),
+        &Json::str("passed"),
+        "{:?}",
+        live.result
+    );
+    assert_eq!(
+        value(&live, "queries_per_tenant"),
+        &Json::object([("lab", Json::Int(1))])
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "a check writes nothing"
     );
 }

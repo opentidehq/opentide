@@ -17,23 +17,3 @@ Deploying to splunk / lab · 1 rule
 error: Tenant deployment failed · platform: splunk · tenant: *** · error: Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 ✗ splunk · 0 deployed, 1 failed, 0 not attempted · <SECONDS>
 ✗ Deployment failed · 1 failed, 0 not attempted · <SECONDS>
-
-━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644
-name: Splunk create rule
-metadata:
-  uuid: 00000000-0000-4000-8047-000000000041
-  schema: rule::1.0
-  version: 1
-  created: 2026-01-01
-  modified: 2026-01-02
-  tlp: clear
-description: A changed rule the splunk stand-in tenant receives in a deploy that sends.
-response:
-  alert_severity: High
-configurations:
-  splunk:
-    status: PRODUCTION
-    query: index=main EventCode=4688
-    scheduling:
-      schedule:
-        cron: "0 * * * *"

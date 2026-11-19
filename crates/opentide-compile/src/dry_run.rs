@@ -529,6 +529,9 @@ pub fn run(
         .join("; ");
     // Tenants each rule reaches, per platform with tenants.
     let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
+    // The rules no tenant of a platform takes, as the deploy skips them:
+    // (platform, uuid, reason).
+    let mut unrouted: Vec<(String, String, String)> = Vec::new();
     for (platform, uuids) in &deployment {
         if tenantless.contains(&platform) {
             continue;
@@ -554,7 +557,23 @@ pub fn run(
             let Ok(strategy) = owned.statuses.strategy(status) else {
                 continue;
             };
-            for tenant in plan::rule_tenants(&tenants, &block, strategy, &runs, request.wide) {
+            let routed = plan::rule_tenants(&tenants, &block, strategy, &runs, request.wide);
+            if routed.is_empty() {
+                unrouted.push((
+                    platform.clone(),
+                    crate::rule::canonical_uuid(uuid),
+                    plan::unrouted_reason(
+                        platform,
+                        &tenants,
+                        &block,
+                        status,
+                        strategy,
+                        &runs,
+                        request.wide,
+                    ),
+                ));
+            }
+            for tenant in routed {
                 per_tenant
                     .entry(tenant.name.clone())
                     .or_default()
@@ -566,8 +585,9 @@ pub fn run(
     let workspace_root = workspace.root().to_path_buf();
     let mut planned: Vec<Change> = Vec::new();
     for (platform, uuids) in &deployment {
-        let tenants = targets.get(platform).filter(|tenants| !tenants.is_empty());
-        let pairs: Vec<(Option<String>, String)> = match tenants {
+        // A platform whose tenants were resolved plans what they take; a
+        // rule none takes is reported as the deploy skips it (#1653).
+        let pairs: Vec<(Option<String>, String)> = match targets.get(platform) {
             Some(tenants) => tenants
                 .iter()
                 .flat_map(|(tenant, ids)| ids.iter().map(|id| (Some(tenant.clone()), id.clone())))
@@ -690,6 +710,34 @@ pub fn run(
             )
         })
         .collect();
+    for (platform, uuid, reason) in &unrouted {
+        let name = index
+            .get("rule", uuid)
+            .and_then(|object| object.root())
+            .map(Json::from_node)
+            .and_then(|data| data.get("name").and_then(Json::as_str).map(str::to_owned))
+            .unwrap_or_else(|| uuid.clone());
+        own_warnings.push(format!(
+            "{name} ({uuid}) is skipped on {platform}: {reason}"
+        ));
+    }
+    if !unrouted.is_empty() {
+        payload.insert(
+            "unrouted".into(),
+            Json::Array(
+                unrouted
+                    .iter()
+                    .map(|(platform, uuid, reason)| {
+                        let mut entry = Object::new();
+                        entry.insert("platform".into(), platform.clone().into());
+                        entry.insert("uuid".into(), uuid.clone().into());
+                        entry.insert("reason".into(), reason.clone().into());
+                        Json::Object(entry)
+                    })
+                    .collect(),
+            ),
+        );
+    }
     if !own_warnings.is_empty() {
         payload.insert("warnings".into(), own_warnings.clone().into());
     }

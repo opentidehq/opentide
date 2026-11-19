@@ -513,7 +513,7 @@ pub fn defender(cx: &Context<'_>) -> Report {
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     let (tenants, root) = configured(cx, DEFENDER)?;
-    super::query::log_unset(&tenants, cx.env);
+    super::query::log_unset(&tenants, cx.env, "an extract");
     if tenants.is_empty() {
         tracing::error!(
             detail = "You must first have Defender for Endpoint tenants configured to initiate the import",
@@ -2016,7 +2016,7 @@ fn elastic_run(
     written_count: &mut usize,
 ) -> Outcome {
     let (tenants, root) = configured(cx, ELASTIC)?;
-    super::query::log_unset(&tenants, cx.env);
+    super::query::log_unset(&tenants, cx.env, "an extract");
     if tenants.is_empty() {
         return Err(
             "No tenants configured for Elastic in .opentide/configurations/platforms/elastic.toml"

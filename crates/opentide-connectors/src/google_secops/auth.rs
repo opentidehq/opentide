@@ -20,8 +20,11 @@
 //! `x-goog-user-project`, as google-auth's `apply` sends it.
 //!
 //! A token that cannot be obtained stops the tenant: the credentials are
-//! missing or unreadable (`google_secops_credentials_missing`), or Google
-//! refused them or did not answer (`google_secops_tenant_unauthorized`).
+//! missing or unreadable (`google_secops_credentials_missing`), Google
+//! refused them or answered with no token (`google_secops_tenant_unauthorized`),
+//! or its token endpoint could not be reached or sent no answer in time (the
+//! connector's own [`ConnectorError::Unreachable`] or
+//! [`ConnectorError::Timeout`]).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -57,8 +60,8 @@ pub const ASSERTION_LIFETIME: i64 = 3600;
 /// The code of credentials that are missing or cannot be read.
 pub const CREDENTIALS_MISSING: &str = "google_secops_credentials_missing";
 
-/// The code of credentials Google refused, or a token endpoint that did not
-/// answer.
+/// The code of credentials Google refused, or a token endpoint whose answer
+/// is no token.
 pub const TENANT_UNAUTHORIZED: &str = "google_secops_tenant_unauthorized";
 
 /// What time it is, for a token's expiry and an assertion's `iat`: the
@@ -513,6 +516,11 @@ impl Authorizer {
                          Credentials are not set up (the metadata server did not answer: {error})"
                     )),
                 ));
+            }
+            // The token endpoint could not be reached, or sent no answer in
+            // time: the network's failure, not the credentials' (#1658, D5).
+            Err(error @ (ConnectorError::Unreachable { .. } | ConnectorError::Timeout { .. })) => {
+                return Err(error);
             }
             Err(error) => {
                 return Err(unauthorized(

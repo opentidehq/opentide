@@ -505,12 +505,14 @@ fn readme(target: &Path, options: &RepoOptions) -> String {
         metadata.push_str(&format!("\n**Organisation:** {org}\n"));
     }
     let deploy = if options.platforms.is_empty() {
-        "opentide deploy --dry-run".to_owned()
+        "opentide deploy --dry-run --strategy PREVIEW --all".to_owned()
     } else {
         options
             .platforms
             .iter()
-            .map(|platform| format!("opentide deploy --platform {platform} --dry-run"))
+            .map(|platform| {
+                format!("opentide deploy --platform {platform} --dry-run --strategy PREVIEW --all")
+            })
             .collect::<Vec<_>>()
             .join("\n")
     };
@@ -989,7 +991,12 @@ mod tests {
         assert!(
             text.starts_with("# Detections\n\nOurs\n\n**Organisation:** Blue\n\n## Quick start")
         );
-        assert!(text.contains("opentide deploy --platform splunk --dry-run\n```"));
+        // A command that runs as written (#1656): `deploy` needs `--strategy`.
+        assert!(
+            text.contains(
+                "opentide deploy --platform splunk --dry-run --strategy PREVIEW --all\n```"
+            )
+        );
         assert!(text.ends_with("- sentinel\n- splunk\n"));
     }
 
