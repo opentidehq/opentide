@@ -333,6 +333,25 @@ fn obfuscated_strings_and_hex_integers_are_literals() {
     }
     // The prefix must touch the quote: `h "x"` is a name, then a string.
     assert_parse_error("print h \"x\"");
+    // A hexadecimal integer is a long, even with an `e` among its digits.
+    let types = |source: &str| -> Vec<String> {
+        let analysis = columns(source, Profile::Sentinel);
+        let pipeline = analysis.pipelines.last().expect("a pipeline");
+        let schema = pipeline
+            .stages
+            .last()
+            .map_or(&pipeline.source, |s| &s.output);
+        schema
+            .columns
+            .iter()
+            .map(|c| format!("{}:{}", c.name, c.type_name.as_deref().unwrap_or("?")))
+            .collect()
+    };
+    assert_eq!(
+        types("print x = 0x1E, y = 0xBEEF, z = 0x10, w = 1e3"),
+        ["x:long", "y:long", "z:long", "w:real"]
+    );
+    assert_clean("union (print A = 0x1E), (print A = 1) | project A");
     // A table named by an obfuscated string is that table: its columns.
     let columns = |source: &str| -> Vec<String> {
         let analysis = columns(source, Profile::Sentinel);

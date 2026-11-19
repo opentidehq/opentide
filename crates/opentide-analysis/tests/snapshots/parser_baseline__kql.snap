@@ -13021,6 +13021,15 @@ kql_parse_error error 0:8-0:11 KQL syntax error: unexpected input after the quer
 186..191 variable
 192..193 operator
 194..202 string
+202..203 punctuation.delimiter
+204..210 variable
+211..212 operator
+213..221 string
+222..223 operator.pipe
+224..230 keyword
+231..236 variable
+237..238 operator
+239..256 string
 == oracles/kql/parenthesized_tabular_let.kql
 0..3 keyword
 4..11 variable
