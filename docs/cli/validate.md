@@ -511,6 +511,10 @@ configured tenant:
 }
 ```
 
+A tenant that refuses the check itself fails the same way, as the tenant's failure, not as rejected queries: a credential it refuses (Splunk's `401`, Elastic's `401` or `403`, or a missing preview privilege, a Google SecOps instance that refuses or cannot load the credentials, an authentication failure on any other platform). `--json` names the `tenant` and the `host`; `message` says `<platform> tenant '<name>' refused the check: <reason>`, and `advice` names the tenant's credentials in its configuration file. No `queries_validated` is reported, since no query was checked, and the platform's remaining tenants are not checked. Through 0.28.1 such a refusal was reported as `Queries rejected` with every query counted as checked.
+
+A run whose tenants rejected a query, or that stopped on a tenant, ends its step without a tick: the checklist row is `✗`, never `✓`, above the `error:` line.
+
 ### Slow queries and timeouts
 
 Each query may take `--check-timeout` seconds on a tenant (default: `OPENTIDE_QUERY_CHECK_TIMEOUT`, else `120`). The value is a positive number of seconds; anything else (`0`, `-5`, `abc`, `inf`) exits `2` with `failure.code` `usage_invalid_value`, naming `--check-timeout` or the variable as `failure.argument`, before any query is sent. On Splunk, Carbon Black Cloud, Defender and Elastic it bounds each request to the tenant; on SentinelOne the PowerQuery, polled until then; on Sentinel the search, which Log Analytics runs for at most 600 seconds.

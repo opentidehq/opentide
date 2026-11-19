@@ -481,7 +481,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
     if tables.is_empty() {
         return Live::of(no_tenants(platform));
     }
-    log_unset(&configured_tenants(&tables), cx.env);
+    log_unset(&configured_tenants(&tables), cx.env, "a live check");
     let compile_cx = owned.context(workspace.index());
     let batches = match batches(
         platform,
@@ -523,7 +523,12 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
             stopped_early(platform, early, &reach)
         }
         Ok(report) => {
-            step.status = StepStatus::Ok;
+            // A run that rejected a query is no tick (#1658, E8).
+            step.status = if report.checks.iter().any(|check| !check.errors.is_empty()) {
+                StepStatus::Failed
+            } else {
+                StepStatus::Ok
+            };
             checked_result(platform, &report, &reach, timeout)
         }
     };
@@ -780,6 +785,7 @@ fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
     match early {
         Early::Failed(message) => failed(Some(platform), &message, 1),
         Early::Unreachable(unreachable) => unreachable.result(platform),
+        Early::Refused(refused) => refused.result(platform),
         Early::Crashed(error) => {
             tracing::error!(
                 system = platform,
@@ -1077,6 +1083,52 @@ impl Unreachable {
     }
 }
 
+/// A tenant that refused the check itself, not a query: the credential or
+/// the account's rights (#1658, E8).
+#[derive(Debug)]
+struct Refused {
+    tenant: String,
+    host: String,
+    message: String,
+}
+
+impl Refused {
+    fn new(platform: &str, tenant: &str, host: &str, reason: &str) -> Self {
+        Self::with_message(
+            tenant,
+            host,
+            format!("{platform} tenant '{tenant}' refused the check: {reason}"),
+        )
+    }
+
+    fn with_message(tenant: &str, host: &str, message: String) -> Self {
+        Self {
+            tenant: tenant.to_owned(),
+            host: host.to_owned(),
+            message,
+        }
+    }
+
+    /// The failed result: the tenant, its host, why, and what to check.
+    fn result(&self, platform: &str) -> Fields {
+        let mut result = head(Some(platform), "failed");
+        result.push(("tenant".into(), Json::str(&self.tenant)));
+        result.push(("host".into(), Json::str(&self.host)));
+        result.push(("message".into(), Json::str(&self.message)));
+        result.push((
+            "advice".into(),
+            Json::str(format!(
+                "check the credentials of the '{}' tenant in {} (the environment variables its \
+                 setup names) and the account's rights on the tenant",
+                self.tenant,
+                config_path(platform)
+            )),
+        ));
+        result.push(("_exit_code".into(), Json::Int(1)));
+        result
+    }
+}
+
 /// Why the check stopped before it finished.
 #[derive(Debug)]
 enum Early {
@@ -1084,6 +1136,9 @@ enum Early {
     Failed(String),
     /// A tenant that cannot be reached.
     Unreachable(Unreachable),
+    /// A tenant that refused the credential (or the account's rights): no
+    /// query was checked there.
+    Refused(Refused),
     /// Anything else, as `Type: detail`.
     Crashed(String),
 }
@@ -1584,7 +1639,7 @@ impl Asked<'_> {
                 streak.timed_out(&error, true).map_err(Early::Unreachable)?;
                 Ok(timed_out(&error))
             }
-            Err(error) => Err(early(platform, tenant, error)),
+            Err(error) => Err(early(platform, tenant, &streak.host, error)),
         }
     }
 }
@@ -1647,9 +1702,8 @@ fn answered(
 /// Google's `ERROR` diagnostics fail the rule (`google_secops_compile_error`)
 /// and its `WARNING` ones are warnings, each placed on the section key and
 /// line it falls in; a `run_frequency` Google does not allow fails it too.
-/// Credentials that cannot be loaded fail every rule on the instance;
-/// refused ones fail the rule they were refused on, and the rest are not
-/// sent.
+/// Credentials that cannot be loaded, or that the instance refuses, fail
+/// the tenant: the check stops there, and no query counts as rejected.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 async fn google_secops(
     batches: &[Batch],
@@ -1684,14 +1738,14 @@ async fn google_secops(
         });
         let (instance, authorizer) = match ready {
             Ok(ready) => ready,
+            // Credentials that cannot be loaded: no rule can be checked on
+            // the instance, so the tenant fails, not each query (#1658, D4).
             Err(error) => {
-                let text = error.text();
-                for rule in rules {
-                    report
-                        .checks
-                        .push(rejected(platform, rule, &tenant.name, None, &text));
-                }
-                continue;
+                return Err(Early::Refused(Refused::with_message(
+                    &tenant.name,
+                    &host,
+                    format!("{platform} tenant '{}': {}", tenant.name, error.text()),
+                )));
             }
         };
         let context = TenantContext {
@@ -1759,8 +1813,8 @@ async fn google_secops(
                     });
                 }
                 Err(refused @ ConnectorError::Authentication { .. }) => {
-                    streak.answered();
-                    // The instance refuses every rule alike: the rest are not sent.
+                    // The instance refuses every rule alike: the tenant fails,
+                    // and no query of it counts as rejected (#1658, D4).
                     let text = refused.text();
                     tracing::error!(
                         tenant = tenant.name.as_str(),
@@ -1768,10 +1822,11 @@ async fn google_secops(
                         critical = true,
                         "google_secops_tenant_validation_failed"
                     );
-                    report
-                        .checks
-                        .push(rejected(platform, rule, &tenant.name, None, &text));
-                    break;
+                    return Err(Early::Refused(Refused::with_message(
+                        &tenant.name,
+                        &host,
+                        format!("{platform} tenant '{}': {text}", tenant.name),
+                    )));
                 }
                 Err(ConnectorError::Timeout {
                     address, seconds, ..
@@ -1788,7 +1843,7 @@ async fn google_secops(
                         Vec::new(),
                     ));
                 }
-                Err(error) => return Err(early(platform, &tenant.name, error)),
+                Err(error) => return Err(early(platform, &tenant.name, &host, error)),
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
@@ -1798,7 +1853,7 @@ async fn google_secops(
 
 /// A failure that stops the check (`reaching_tenant`, then the service's
 /// handlers).
-fn early(platform: &str, tenant: &str, error: ConnectorError) -> Early {
+fn early(platform: &str, tenant: &str, host: &str, error: ConnectorError) -> Early {
     match error {
         ConnectorError::Unreachable {
             address, reason, ..
@@ -1811,7 +1866,7 @@ fn early(platform: &str, tenant: &str, error: ConnectorError) -> Early {
         ConnectorError::Setup { message, .. } => Early::Failed(message),
         ConnectorError::Cancelled => Early::Failed("interrupted".to_owned()),
         ConnectorError::Authentication { message, .. } => {
-            Early::Crashed(format!("{platform} tenant '{tenant}': {message}"))
+            Early::Refused(Refused::new(platform, tenant, host, &message))
         }
         other => Early::Crashed(other.to_string()),
     }
@@ -2214,8 +2269,6 @@ async fn elastic(
                     }
                 }
                 Err(RuleFailure::Tenant(error)) => {
-                    streak.answered();
-                    report.checks.push(failed_check(&error, warnings));
                     tracing::error!(
                         rule = rule.name.as_str(),
                         uuid = rule.uuid.as_str(),
@@ -2223,7 +2276,14 @@ async fn elastic(
                         critical = true,
                         "elastic_tenant_validation_failed"
                     );
-                    break;
+                    // The tenant refused the check itself (a key, a
+                    // privilege): no query was checked (#1658, E8).
+                    return Err(Early::Refused(Refused::new(
+                        "elastic",
+                        &tenant.name,
+                        &host,
+                        &error,
+                    )));
                 }
                 Err(RuleFailure::Rule(error)) => {
                     streak.answered();
@@ -2266,7 +2326,7 @@ async fn elastic(
                     ));
                 }
                 Err(RuleFailure::Connector(error)) => {
-                    return Err(early("elastic", &tenant.name, error));
+                    return Err(early("elastic", &tenant.name, &host, error));
                 }
                 Err(RuleFailure::Other(early)) => return Err(early),
             }

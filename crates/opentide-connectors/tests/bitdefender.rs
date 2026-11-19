@@ -721,6 +721,48 @@ fn an_unreachable_tenant_stops() {
     );
 }
 
+/// A create whose connection is refused was never sent, so nothing can have
+/// been created: the tenant is unreachable, not the create unconfirmed, and
+/// it is not sent again (#1658, D6).
+#[test]
+fn a_create_refused_a_connection_is_an_unreachable_tenant_not_unconfirmed() {
+    let run = Run::new();
+    // Port 1 on the loopback: nothing listens there.
+    let setup: toml::Table = toml::from_str(
+        "ssl = false\nurl = \"http://127.0.0.1:1/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
+    )
+    .unwrap();
+    let env = Environment::from_pairs([("NO_PROXY", "*"), ("GRAVITYZONE_API_KEY", "key")]);
+    let tenant = Tenant::from_setup(
+        "bitdefender",
+        "gravityzone-eu",
+        &setup,
+        &env,
+        Mode::Required,
+        &bitdefender::http_defaults(),
+    )
+    .unwrap();
+    let http = HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let error = block_on(deploy_rule_with(cx, &create(), &run.pacer))
+        .unwrap()
+        .unwrap_err();
+    let text = error.to_string();
+    assert!(
+        text.starts_with(
+            "bitdefender_tenant_unreachable: Cannot reach bitdefender tenant 'gravityzone-eu' at \
+             http://127.0.0.1:1"
+        ),
+        "{text}"
+    );
+    assert!(!text.contains("GravityZone console"), "{text}");
+}
+
 #[test]
 fn a_rate_limit_waits_and_resends_the_same_request() {
     let limited: Vec<Scripted> = vec![

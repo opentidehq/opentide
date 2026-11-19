@@ -355,9 +355,22 @@ impl<'a> Client<'a> {
         let response = self
             .cx
             .http
-            .send(request, self.cx.cancel)
+            .send_or_unsent(request, self.cx.cancel)
             .await
-            .map_err(classify)?;
+            .map_err(|failed| {
+                if failed.unsent {
+                    // Never sent, so nothing happened: the tenant cannot be
+                    // reached, and no create can be unconfirmed.
+                    CallError::Tenant(ConnectorError::refused(
+                        PLATFORM,
+                        self.tenant(),
+                        format!("{TENANT_UNREACHABLE}: {}", failed.error.text()),
+                        None,
+                    ))
+                } else {
+                    classify(failed.error)
+                }
+            })?;
         let status = response.status().as_u16();
         let retry_after = response
             .headers()

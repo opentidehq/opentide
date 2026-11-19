@@ -2,7 +2,7 @@
 
 A Google SecOps instance did not answer, so no rule was deployed to it.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint, or to Google's token endpoint, failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
 
 ## Example
 

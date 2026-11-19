@@ -28,7 +28,7 @@ exit: 1
 
 ━━━ stderr · json, 1 lines
 {
-  "advice": "Set those environment variables before a live check.",
+  "advice": "Set those environment variables before an extract.",
   "detail": "Unset configuration variables: $ELASTIC_API_KEY",
   "event": "environment_variable_missing",
   "level": "critical",

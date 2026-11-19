@@ -902,3 +902,53 @@ fn an_instance_without_an_endpoint_is_reached_at_its_locations_default() {
         assert_eq!(instance.scope(&tenant), None);
     }
 }
+
+/// A token endpoint that refuses the connection is the network's failure,
+/// not the credentials': the tenant is unreachable, never
+/// `google_secops_tenant_unauthorized` (#1658, D5).
+#[test]
+fn a_token_endpoint_that_cannot_be_reached_is_unreachable_not_unauthorized() {
+    runtime().block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let adc = directory.path().join("adc.json");
+        // Port 1 on the loopback: nothing listens there.
+        let document = json!({"type": "authorized_user", "client_id": "c",
+            "client_secret": CLIENT_SECRET, "refresh_token": REFRESH_TOKEN,
+            "token_uri": "http://127.0.0.1:1/token"});
+        std::fs::write(&adc, document.to_string()).unwrap();
+        let setup: toml::Table = toml::from_str(
+            "project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\nendpoint = \"http://127.0.0.1:1\"\n",
+        )
+        .unwrap();
+        let env =
+            Environment::from_pairs([("GOOGLE_APPLICATION_CREDENTIALS", adc.to_str().unwrap())]);
+        let settings = HttpSettings::default();
+        let tenant = Tenant::from_setup(
+            "google_secops",
+            "secops-eu",
+            &setup,
+            &env,
+            Mode::Required,
+            &settings,
+        )
+        .unwrap();
+        let http = HttpClient::new(&tenant.label, &settings, &env, None).unwrap();
+        let cancel = CancellationToken::new();
+        let cx = TenantContext {
+            tenant: &tenant,
+            http: &http,
+            cancel: &cancel,
+        };
+        let authorizer = GoogleSecops::new(env).authorizer(&tenant).unwrap();
+        let error = authorizer.token(cx).await.unwrap_err();
+        assert!(
+            matches!(error, ConnectorError::Unreachable { .. }),
+            "{error:?}"
+        );
+        let shown = format!("{error} {error:?}");
+        assert!(!shown.contains("unauthorized"), "{shown}");
+        for secret in [CLIENT_SECRET, REFRESH_TOKEN] {
+            assert!(!shown.contains(secret), "{secret} leaked: {shown}");
+        }
+    });
+}
