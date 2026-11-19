@@ -3105,6 +3105,7 @@ dependencies = [
 name = "opentide-yara"
 version = "0.12.0"
 dependencies = [
+ "foldhash",
  "opentide-core",
  "opentide-highlight",
  "serde",
