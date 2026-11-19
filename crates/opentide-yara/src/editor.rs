@@ -204,8 +204,16 @@ pub fn symbols(source: &str) -> Vec<Symbol> {
 
 /// [`symbols`] on `source`'s AST.
 pub(crate) fn symbols_of(source: &str, ast: &AST<'_>) -> Vec<Symbol> {
+    let rules = rules_of(ast);
+    let definitions = || {
+        rules
+            .iter()
+            .flat_map(|r| r.strings.iter().filter(|s| s.definition))
+            .map(|s| s.span.0)
+    };
+    let mut details = StringDetails::new(source, definitions().count(), definitions());
     let mut out = Vec::new();
-    for rule in rules_of(ast) {
+    for rule in &rules {
         out.push(Symbol {
             name: rule.name.clone(),
             kind: SymbolKind::Rule,
@@ -220,7 +228,7 @@ pub(crate) fn symbols_of(source: &str, ast: &AST<'_>) -> Vec<Symbol> {
                 kind: SymbolKind::String,
                 span: s.span,
                 selection: s.span,
-                detail: line_at(source, s.span.0).map(|l| l.trim().to_string()),
+                detail: details.next().flatten(),
                 parent: Some(rule.name.clone()),
             });
         }
@@ -234,6 +242,86 @@ fn line_at(source: &str, offset: usize) -> Option<&str> {
         .find('\n')
         .map_or(source.len(), |i| offset + i);
     source.get(start..end)
+}
+
+/// The outline's detail of each string definition, in order: its line,
+/// trimmed, or where the line defines several strings, its part of the line,
+/// from its identifier to the next one's. A search back and forth from each
+/// string, and a copy of its whole line, made n strings on one line O(n²) in
+/// time and memory (16,000 took 7 GB): past a few strings, the lines' ends
+/// come from one table of line starts.
+struct StringDetails<'a, I: Iterator<Item = usize>> {
+    source: &'a str,
+    starts: std::iter::Peekable<I>,
+    /// Line starts, for a document of many definitions; empty for a few.
+    table: Vec<usize>,
+    /// The line of the previous definition, `(start, end)`.
+    previous: Option<(usize, usize)>,
+}
+
+impl<'a, I: Iterator<Item = usize>> StringDetails<'a, I> {
+    /// A document of at most this many definitions searches each line's
+    /// ends, as a table costs more.
+    const SEARCHED: usize = 8;
+
+    fn new(source: &'a str, count: usize, starts: I) -> Self {
+        let table = if count > Self::SEARCHED {
+            std::iter::once(0)
+                .chain(source.match_indices('\n').map(|(i, _)| i + 1))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Self {
+            source,
+            starts: starts.peekable(),
+            table,
+            previous: None,
+        }
+    }
+
+    /// The line around `offset`, without its `\n`.
+    fn line(&self, offset: usize) -> (usize, usize) {
+        if self.table.is_empty() {
+            let start = self.source[..offset].rfind('\n').map_or(0, |i| i + 1);
+            let end = self.source[offset..]
+                .find('\n')
+                .map_or(self.source.len(), |i| offset + i);
+            return (start, end);
+        }
+        let line = self.table.partition_point(|&s| s <= offset) - 1;
+        let end = self
+            .table
+            .get(line + 1)
+            .map_or(self.source.len(), |&next| next - 1);
+        (self.table[line], end)
+    }
+}
+
+impl<I: Iterator<Item = usize>> Iterator for StringDetails<'_, I> {
+    type Item = Option<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let at = self.starts.next()?;
+        let line = self.line(at);
+        let shared_before = self.previous == Some(line);
+        let next_here = self
+            .starts
+            .peek()
+            .copied()
+            .filter(|&next| next < line.1 && next >= line.0);
+        self.previous = Some(line);
+        let (from, to) = if shared_before || next_here.is_some() {
+            (at, next_here.unwrap_or(line.1))
+        } else {
+            line
+        };
+        Some(
+            self.source
+                .get(from..to)
+                .map(|text| text.trim().to_string()),
+        )
+    }
 }
 
 /// What sits at `offset`: a string of a rule, or a rule.
@@ -984,6 +1072,42 @@ mod tests {
     fn symbols_list_rules_and_strings() {
         let names: Vec<String> = symbols(SIG).into_iter().map(|s| s.name).collect();
         assert_eq!(names, ["mz", "loader", "$cfg", "$cfg2"]);
+    }
+
+    /// A string's detail is its line, or its part of a line that defines
+    /// several; the details of n strings on one line hold the text's bytes
+    /// once, not n times: a copy of the whole line for each made 16,000
+    /// strings take 7 GB.
+    #[test]
+    fn string_details_are_their_line_or_their_part_of_it() {
+        let src = "rule r {\n  strings:\n    $a = \"x\" ascii // first\n    $b = { 4D 5A } $c = /re/\n  condition:\n    any of them\n}\n";
+        let details: Vec<Option<String>> =
+            symbols(src).into_iter().skip(1).map(|s| s.detail).collect();
+        assert_eq!(
+            details,
+            [
+                Some("$a = \"x\" ascii // first".to_string()),
+                Some("$b = { 4D 5A }".to_string()),
+                Some("$c = /re/".to_string()),
+            ]
+        );
+        for n in [1_000, 2_000] {
+            let strings: Vec<String> = (0..n).map(|i| format!("$s{i} = \"x{i}\"")).collect();
+            let src = format!(
+                "rule r {{ strings: {} condition: any of them }}",
+                strings.join(" ")
+            );
+            let bytes: usize = symbols(&src)
+                .iter()
+                .filter_map(|s| s.detail.as_ref())
+                .map(String::len)
+                .sum();
+            assert!(
+                bytes <= src.len(),
+                "{n} strings: {bytes} bytes of details for {}",
+                src.len()
+            );
+        }
     }
 
     #[test]

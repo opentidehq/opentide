@@ -100,13 +100,13 @@ parse_external = 2823605
 parse_external_allocations = 2157
 
 [yara]
-analyze_corpus = 16402692
+analyze_corpus = 16418157
 analyze_corpus_allocations = 22057
-analyze_external = 354118330
-analyze_external_allocations = 314061
-parse_corpus = 5588116
+analyze_external = 354325515
+analyze_external_allocations = 314370
+parse_corpus = 5588332
 parse_corpus_allocations = 3163
-parse_external = 123043184
+parse_external = 123043714
 parse_external_allocations = 77153
 
 [yaral]

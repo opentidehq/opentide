@@ -137,7 +137,44 @@ struct PatternInfo {
 
 struct RuleState {
     patterns: Vec<PatternInfo>,
+    /// Where each named string is in `patterns`, once the rule has more
+    /// than a few: a scan of the strings per definition and per use made a
+    /// rule of n strings O(n²) (16,000 took seconds). Anonymous `$` strings
+    /// are not in it.
+    named: foldhash::HashMap<String, usize>,
     uses_them: bool,
+}
+
+impl RuleState {
+    /// Rules of at most this many strings scan them, as hashing costs more.
+    const SCANNED: usize = 8;
+
+    /// The named string `name` (sigil included).
+    fn position(&self, name: &str) -> Option<usize> {
+        if self.named.is_empty() {
+            return self.patterns.iter().position(|p| {
+                visited();
+                p.name == name
+            });
+        }
+        visited();
+        self.named.get(name).copied()
+    }
+
+    /// Index the string just pushed, building the index once the rule has
+    /// more than [`Self::SCANNED`] strings.
+    fn index_last(&mut self) {
+        let len = self.patterns.len();
+        if len <= Self::SCANNED {
+            return;
+        }
+        let from = if self.named.is_empty() { 0 } else { len - 1 };
+        for (i, p) in self.patterns.iter().enumerate().skip(from) {
+            if p.name != "$" {
+                self.named.entry(p.name.clone()).or_insert(i);
+            }
+        }
+    }
 }
 
 pub struct Checker<'a> {
@@ -193,6 +230,7 @@ impl<'a> Checker<'a> {
             in_for_of: 0,
             rule: RuleState {
                 patterns: Vec::new(),
+                named: foldhash::HashMap::default(),
                 uses_them: false,
             },
             findings: Vec::new(),
@@ -404,6 +442,7 @@ impl<'a> Checker<'a> {
         let findings_before = self.findings.len();
         self.rule = RuleState {
             patterns: Vec::new(),
+            named: foldhash::HashMap::default(),
             uses_them: false,
         };
         if let Some(patterns) = &rule.patterns {
@@ -536,7 +575,7 @@ impl<'a> Checker<'a> {
         let ident = pattern.identifier();
         let at = span(&ident.span());
         let name = ident.name;
-        if name != "$" && self.rule.patterns.iter().any(|p| p.name == name) {
+        if name != "$" && self.rule.position(name).is_some() {
             self.error(
                 codes::YARA_DUPLICATE_STRING,
                 format!("the string `{name}` is already defined in this rule"),
@@ -548,6 +587,7 @@ impl<'a> Checker<'a> {
                 span: at,
                 referenced: false,
             });
+            self.rule.index_last();
         }
         self.modifiers(pattern, at);
         match pattern {
@@ -813,8 +853,8 @@ impl<'a> Checker<'a> {
             }
             return;
         }
-        match self.rule.patterns.iter_mut().find(|p| p.name == name) {
-            Some(p) => p.referenced = true,
+        match self.rule.position(&name) {
+            Some(i) => self.rule.patterns[i].referenced = true,
             None => self.error(
                 codes::YARA_UNDEFINED_STRING,
                 format!("the rule defines no string `{name}`"),
@@ -842,12 +882,25 @@ impl<'a> Checker<'a> {
                     let at = span(&item.span());
                     let id = item.identifier.trim_start_matches('$');
                     let mut matched = 0;
-                    for p in &mut self.rule.patterns {
-                        let pid = p.name.trim_start_matches('$');
-                        if (item.wildcard && pid.starts_with(id)) || (!item.wildcard && pid == id) {
-                            p.referenced = true;
-                            matched += 1;
+                    if item.wildcard || id.is_empty() || self.rule.named.is_empty() {
+                        for p in &mut self.rule.patterns {
+                            visited();
+                            let pid = p.name.trim_start_matches('$');
+                            if (item.wildcard && pid.starts_with(id))
+                                || (!item.wildcard && pid == id)
+                            {
+                                p.referenced = true;
+                                matched += 1;
+                            }
                         }
+                    } else if let Some(&i) = {
+                        visited();
+                        self.rule.named.get(&format!("${id}"))
+                    } {
+                        // A named string is defined once (a second is an error
+                        // and not kept), so the name matches one at most.
+                        self.rule.patterns[i].referenced = true;
+                        matched = 1;
                     }
                     if matched == 0 {
                         let shown = format!("${id}{}", if item.wildcard { "*" } else { "" });
@@ -2171,6 +2224,14 @@ struct Folds(RefCell<HashMap<usize, Folded>>);
 #[cfg(test)]
 thread_local! {
     static COMPUTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The strings of a rule the checker looked at, by scan or by name.
+    static STRINGS_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// One more string of the rule looked at (a work count for the tests).
+fn visited() {
+    #[cfg(test)]
+    STRINGS_VISITED.set(STRINGS_VISITED.get() + 1);
 }
 
 impl Folds {
@@ -2342,6 +2403,44 @@ fn hex_fragments(sub: &HexSubPattern) -> Vec<Vec<Vec<MaskedByte>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A rule of n strings, used by name, by a set of names and by `them`,
+    /// looks at a number of strings that grows with n: a scan of the rule's
+    /// strings per definition and per use made 16,000 strings take seconds.
+    /// A work count, not a clock (the rule of #1459).
+    #[test]
+    fn a_rule_of_many_strings_looks_at_each_about_once() {
+        let rule = |n: usize, condition: &dyn Fn(&[String]) -> String| {
+            let names: Vec<String> = (0..n).map(|i| format!("$s{i}")).collect();
+            let strings: Vec<String> = names.iter().map(|s| format!("{s} = \"x{s}\"")).collect();
+            format!(
+                "rule r {{ strings: {} condition: {} }}",
+                strings.join(" "),
+                condition(&names)
+            )
+        };
+        type Condition<'a> = &'a dyn Fn(&[String]) -> String;
+        let conditions: [(&str, Condition); 3] = [
+            ("`any of them`", &|_| "any of them".to_string()),
+            ("each by name", &|names| names.join(" and ")),
+            ("a set of names", &|names| {
+                format!("all of ({})", names.join(", "))
+            }),
+        ];
+        for (name, condition) in conditions {
+            let visited = |n: usize| {
+                let source = rule(n, condition);
+                let before = STRINGS_VISITED.get();
+                let _ = crate::diagnostics(&source, &crate::Context::default());
+                STRINGS_VISITED.get() - before
+            };
+            let (small, large) = (visited(1_000), visited(2_000));
+            assert!(
+                large * 10 <= small * 21,
+                "{name}: {small} strings looked at for 1,000, {large} for 2,000"
+            );
+        }
+    }
 
     /// Each arithmetic node is folded once, however deep it nests: the
     /// checker folds at every level, and folding read the whole subtree
