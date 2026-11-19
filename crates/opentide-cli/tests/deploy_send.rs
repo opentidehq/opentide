@@ -1911,10 +1911,72 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
 
     std::fs::remove_file(&config).unwrap();
     let (code, out, err) = cli(ws.path(), &argv, &push());
-    assert_eq!(code, 0, "{out}{err}");
-    assert!(out.contains("\"status\":\"completed\""), "{out}");
     let text = std::fs::read_to_string(&rule).unwrap();
     assert!(text.contains("    status: PRODUCTION\n"), "{text}");
+    // The promoted rule goes to the tenant, which does not resolve here:
+    // the failure is that tenant's own.
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("\"tenant\":\"lab\""), "{out}");
+    assert!(out.contains("\"failures\":[{"), "{out}");
+}
+
+/// The rule a RELEASE push promotes is deployed to the tenants that take
+/// RELEASE, with its new status: the run reads the workspace again after the
+/// promotion rewrote the file. It used to plan the rule from the status it
+/// had before, route it to no tenant, send nothing and report it deployed.
+#[test]
+fn a_push_deploys_the_rule_it_promotes_to_its_release_tenants() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, "7.1.0");
+    let setup = format!("url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\n", server.uri());
+    let uuid = "00000000-0000-4000-8047-000000000904";
+    let ws = workspace(
+        "graylog",
+        "lab",
+        &setup,
+        &[(
+            "r.yaml",
+            rule(
+                "Promoted",
+                uuid,
+                "A rule.",
+                &graylog_block("STAGING", "EventID:1"),
+            ),
+        )],
+    );
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let env = vec![
+        ("GITHUB_ACTIONS", "true".to_owned()),
+        ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_SHA", "HEAD".to_owned()),
+        ("GITHUB_WORKSPACE", ws.path().display().to_string()),
+        ("GRAYLOG_TOKEN", "token".to_owned()),
+    ];
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "graylog",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &env);
+    // The tenant's version was read: the run reached the tenant.
+    rt.block_on(server.verify());
+    assert_eq!(code, 0, "{out}{err}");
+    let text = std::fs::read_to_string(ws.path().join("objects/rules/r.yaml")).unwrap();
+    assert!(text.contains("    status: PRODUCTION\n"), "{text}");
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let created = received
+        .iter()
+        .filter(|request| {
+            request.method == wiremock::http::Method::POST
+                && request.url.path() == "/api/events/definitions"
+        })
+        .count();
+    assert_eq!(created, 1, "{out}{err}");
+    assert!(out.contains("\"tenant\":\"lab\""), "{out}");
+    assert!(shard_of(ws.path(), uuid).contains(GRAYLOG_CREATED), "{err}");
 }
 
 /// A `RELEASE` push of `r.yaml` with *extra* in the environment: the changed
@@ -1969,7 +2031,19 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
         "RELEASE",
     ];
     let (code, out, err) = cli(ws.path(), &argv, &env);
-    assert_eq!(code, 0, "{out}{err}");
+    // The promoted rule is routed to the tenant, which has no token here:
+    // the tenant's own refusal fails the run.
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(
+        out.contains("\"tenant\":\"lab\"") && out.contains("SPLUNK_TOKEN"),
+        "{out}{err}"
+    );
+    // Whole-folder promotion rewrites s.yaml too, but only the files the
+    // push changed are deployed (#1653 tracks that gap).
+    assert!(
+        !out.contains("00000000-0000-4000-8047-000000000903"),
+        "{out}"
+    );
     let read = |name: &str| std::fs::read_to_string(ws.path().join("objects/rules").join(name));
     let changed = read("r.yaml").unwrap();
     assert!(changed.contains("    status: PRODUCTION\n"), "{changed}");
@@ -2329,6 +2403,93 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
     assert!(shard_of(ws.path(), lost).is_empty());
     assert!(shard_of(ws.path(), refused).contains(GRAYLOG_KEPT));
     assert!(shard_of(ws.path(), removed).is_empty());
+}
+
+/// A deploy resolves the tenant's stream and notification aliases through
+/// its `stream_ids` and `notification_ids`, as the dry run does, in every
+/// request it builds from the rule: the query check, a create and an update
+/// name the ids, never an empty list (which Graylog reads as every stream and
+/// no notification). An alias the tenant does not define fails its rule
+/// alone, before any request for it.
+#[test]
+fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
+    const STREAM: &str = "65f1c0de2a3b4c5d6e7f2222";
+    const NOTIFICATION: &str = "65f1c0de2a3b4c5d6e7f3333";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, "7.1.0");
+    let setup = format!(
+        "url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\nstreams = [\"endpoint\"]\n\
+         [tenants.setup.stream_ids]\nendpoint = \"{STREAM}\"\n\
+         [tenants.setup.notification_ids]\npager = \"{NOTIFICATION}\"\n",
+        server.uri()
+    );
+    let (created, recorded, unknown) = (
+        "00000000-0000-4000-8099-000000000127",
+        "00000000-0000-4000-8099-000000000128",
+        "00000000-0000-4000-8099-000000000129",
+    );
+    let notify = |alias: &str| {
+        format!(
+            "{}    notifications:\n      - {alias}\n",
+            graylog_block("STAGING", "EventID:1")
+        )
+    };
+    let ws = stated(
+        "graylog",
+        &setup,
+        &[("b.yaml", recorded, notify("pager"), GRAYLOG_KEPT)],
+    );
+    let rules = ws.path().join("objects/rules");
+    std::fs::write(
+        rules.join("a.yaml"),
+        rule("Aliased rule", created, "Aliased.", &notify("pager")),
+    )
+    .unwrap();
+    std::fs::write(
+        rules.join("c.yaml"),
+        rule("Unknown alias rule", unknown, "Unknown.", &notify("nobody")),
+    )
+    .unwrap();
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    // The unknown alias fails its rule, and the run; the others deploy.
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("graylog_alias_unknown"), "{err}");
+    assert!(err.contains("nobody"), "{err}");
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let bodies = |verb: wiremock::http::Method, prefix: &str| -> Vec<serde_json::Value> {
+        received
+            .iter()
+            .filter(|request| request.method == verb && request.url.path().starts_with(prefix))
+            .map(|request| serde_json::from_slice(&request.body).unwrap())
+            .collect()
+    };
+    // Graylog 7 takes a created definition under `entity`; an update is bare.
+    let created_bodies = bodies(wiremock::http::Method::POST, "/api/events/definitions");
+    let updated = bodies(
+        wiremock::http::Method::PUT,
+        &format!("/api/events/definitions/{GRAYLOG_KEPT}"),
+    );
+    let checked = bodies(wiremock::http::Method::POST, "/api/search/validate");
+    assert_eq!((created_bodies.len(), updated.len()), (1, 1), "{err}");
+    // The query is checked for the two rules that resolve, never the third.
+    assert_eq!(checked.len(), 2, "{err}");
+    for definition in [&created_bodies[0]["entity"], &updated[0]] {
+        assert_eq!(
+            definition["config"]["streams"],
+            serde_json::json!([STREAM]),
+            "{definition}"
+        );
+        assert_eq!(
+            definition["notifications"],
+            serde_json::json!([{"notification_id": NOTIFICATION}]),
+            "{definition}"
+        );
+    }
+    for body in &checked {
+        assert_eq!(body["streams"], serde_json::json!([STREAM]), "{body}");
+    }
+    assert!(shard_of(ws.path(), unknown).is_empty(), "{err}");
 }
 
 /// A definition the tenant lost while git ignores deployment state is not
