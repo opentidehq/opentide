@@ -948,7 +948,7 @@ fn a_token_endpoint_that_cannot_be_reached_is_unreachable_not_unauthorized() {
         let shown = format!("{error} {error:?}");
         assert!(!shown.contains("unauthorized"), "{shown}");
         for secret in [CLIENT_SECRET, REFRESH_TOKEN] {
-            assert!(!shown.contains(secret), "{secret} leaked: {shown}");
+            assert!(!shown.contains(secret), "a secret leaked: {shown}");
         }
     });
 }

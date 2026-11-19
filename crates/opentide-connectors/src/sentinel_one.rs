@@ -571,6 +571,16 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
             .map(json_text)
             .filter(|text| !text.is_empty());
         let text: String = answer.text().chars().take(500).collect();
+        let detail = detail.or((!text.is_empty()).then_some(text));
+        if answer.status == 401 {
+            // The API token, not the query: the tenant's failure (#1658, E8).
+            let reason = detail.map(|detail| format!(": {detail}")).unwrap_or_default();
+            return Err(ConnectorError::authentication(
+                PLATFORM,
+                tenant,
+                format!("SentinelOne refused the API token on {tenant} (HTTP 401){reason}"),
+            ));
+        }
         return Err(ConnectorError::refused(
             PLATFORM,
             tenant,
@@ -578,7 +588,7 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
                 "SentinelOne refused the PowerQuery on {tenant} (HTTP {})",
                 answer.status
             ),
-            detail.or((!text.is_empty()).then_some(text)),
+            detail,
         ));
     }
     Ok(match body.get("data") {

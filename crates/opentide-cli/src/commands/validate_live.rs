@@ -515,14 +515,22 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
     step.unit = "rule".into();
     step.count = Some(uuids.len());
     let started = Instant::now();
-    let checked = check_batches(platform, &batches, timeout, cx, &compile_cx);
+    let (checked, refused) = check_batches(platform, &batches, timeout, cx, &compile_cx);
     step.seconds = started.elapsed().as_secs_f64();
     let result = match checked {
         Err(early) => {
             step.status = StepStatus::Failed;
-            stopped_early(platform, early, &reach)
+            let mut result = stopped_early(platform, early, &reach);
+            if !refused.is_empty() {
+                // A tenant refused before this one stopped the check: named
+                // too, never hidden by the later failure (#1658, E8).
+                let at = result.len() - 1;
+                result.insert(at, ("refused_tenants".into(), refused_names(&refused)));
+            }
+            result
         }
-        Ok(report) => {
+        Ok(mut report) => {
+            report.refused = refused;
             // A run that rejected a query, or that a tenant refused, is no
             // tick (#1658, E8).
             step.status = if !report.refused.is_empty()
@@ -533,7 +541,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
                 StepStatus::Ok
             };
             match report.refused.first() {
-                Some(refused) => refused_result(platform, refused, &report),
+                Some(refused) => refused_result(platform, refused, &report, timeout),
                 None => checked_result(platform, &report, &reach, timeout),
             }
         }
@@ -810,25 +818,28 @@ fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
     }
 }
 
+/// The tenants' names, as a JSON list.
+fn refused_names(refused: &[Refused]) -> Json {
+    Json::Array(refused.iter().map(|refused| Json::str(&refused.tenant)).collect())
+}
+
 /// The result of a check a tenant refused: the first refusal's tenant, host,
-/// message and advice; the other tenants refused named, and the queries the
-/// other tenants checked counted (their rejections were logged as they
-/// came).
-fn refused_result(platform: &str, refused: &Refused, report: &CheckReport) -> Fields {
+/// message and advice; every tenant refused named when there are several;
+/// the queries checked (on every tenant, the refused ones' before their
+/// refusal) counted, their rejections having been logged as they came; and
+/// the checks that timed out and the warnings, as a check every tenant
+/// answered reports them.
+fn refused_result(
+    platform: &str,
+    refused: &Refused,
+    report: &CheckReport,
+    timeout: f64,
+) -> Fields {
     let mut result = refused.result(platform);
     let at = result.len() - 1;
     let mut extra: Fields = Vec::new();
     if report.refused.len() > 1 {
-        extra.push((
-            "refused_tenants".into(),
-            Json::Array(
-                report
-                    .refused
-                    .iter()
-                    .map(|refused| Json::str(&refused.tenant))
-                    .collect(),
-            ),
-        ));
+        extra.push(("refused_tenants".into(), refused_names(&report.refused)));
     }
     if !report.checks.is_empty() {
         extra.push(("queries_validated".into(), Json::from(report.checks.len())));
@@ -839,8 +850,28 @@ fn refused_result(platform: &str, refused: &Refused, report: &CheckReport) -> Fi
             .count();
         extra.push(("queries_rejected".into(), Json::from(rejected)));
     }
+    let timed_out: Vec<&RuleCheck> = report
+        .checks
+        .iter()
+        .filter(|check| check.code.is_some())
+        .collect();
+    if !timed_out.is_empty() {
+        extra.push(("check_timeout".into(), Json::Float(timeout)));
+        extra.push((
+            "timed_out".into(),
+            Json::Array(timed_out.iter().map(|check| check.to_json()).collect()),
+        ));
+    }
     for (offset, field) in extra.into_iter().enumerate() {
         result.insert(at + offset, field);
+    }
+    if report.checks.iter().any(|check| !check.warnings.is_empty()) {
+        result.push((
+            "warnings".into(),
+            Json::Array(vec![Json::str(format!(
+                "Query validation reported warnings for {platform}"
+            ))]),
+        ));
     }
     result
 }
@@ -1493,26 +1524,54 @@ fn check_batches(
     timeout: f64,
     cx: &Context<'_>,
     compile: &opentide_compile::Context<'_>,
-) -> Result<CheckReport, Early> {
+) -> (Result<CheckReport, Early>, Vec<Refused>) {
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    // The tenants that refused the check, kept outside the report so that a
+    // later tenant's failure never hides them (#1658, E8).
+    let refusals: Refusals = std::sync::Mutex::new(Vec::new());
     let ran = opentide_connectors::runtime::sync_call(|| {
         tracing::dispatcher::with_default(&dispatch, || {
             opentide_connectors::runtime::block_on(async {
                 if platform == "elastic" {
-                    elastic(batches, timeout, cx, compile).await
+                    elastic(batches, timeout, cx, compile, &refusals).await
                 } else if platform == "google_secops" {
-                    google_secops(batches, timeout, cx, compile).await
+                    google_secops(batches, timeout, cx, compile, &refusals).await
                 } else {
-                    generic(platform, batches, timeout, cx).await
+                    generic(platform, batches, timeout, cx, &refusals).await
                 }
             })
         })
     });
-    match ran {
+    let refused = refusals
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let checked = match ran {
         Ok(Ok(result)) => result,
         Ok(Err(message)) => Err(Early::Crashed(message)),
         Err(_) => Err(Early::Crashed("the check stopped unexpectedly".to_owned())),
+    };
+    (checked, refused)
+}
+
+/// The tenants that refused the check, in order.
+type Refusals = std::sync::Mutex<Vec<Refused>>;
+
+/// Keeps *refused*, logged as `tenant_check_refused` unless the platform
+/// logged it in its own words (`logged`).
+fn refuse(refusals: &Refusals, platform: &str, refused: Refused, logged: bool) {
+    if !logged {
+        tracing::error!(
+            platform,
+            tenant = refused.tenant.as_str(),
+            error = refused.message.as_str(),
+            critical = true,
+            "tenant_check_refused"
+        );
     }
+    refusals
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push(refused);
 }
 
 /// `LiveQueryValidator.validate`: each rule's queries on each tenant.
@@ -1521,6 +1580,7 @@ async fn generic(
     batches: &[Batch],
     timeout: f64,
     cx: &Context<'_>,
+    refusals: &Refusals,
 ) -> Result<CheckReport, Early> {
     let environment = Environment::from_pairs(cx.env.iter());
     let validator = cx
@@ -1591,7 +1651,7 @@ async fn generic(
                     // The tenant refused the check itself: its other rules
                     // are not sent, the next tenant is checked (#1658, E8).
                     Err(Early::Refused(refused)) => {
-                        report.refused.push(refused);
+                        refuse(refusals, platform, refused, false);
                         continue 'tenants;
                     }
                     Err(early) => return Err(early),
@@ -1755,6 +1815,7 @@ async fn google_secops(
     timeout: f64,
     cx: &Context<'_>,
     compile: &opentide_compile::Context<'_>,
+    refusals: &Refusals,
 ) -> Result<CheckReport, Early> {
     use opentide_connectors::google_secops::client::Client;
     use opentide_connectors::google_secops::{GoogleSecops, Instance, check_rule};
@@ -1786,11 +1847,16 @@ async fn google_secops(
             // Credentials that cannot be loaded: no rule can be checked on
             // the instance, so the tenant fails, not each query (#1658, D4).
             Err(error) => {
-                report.refused.push(Refused::with_message(
-                    &tenant.name,
-                    &host,
-                    format!("{platform} tenant '{}': {}", tenant.name, error.text()),
-                ));
+                refuse(
+                    refusals,
+                    platform,
+                    Refused::with_message(
+                        &tenant.name,
+                        &host,
+                        format!("{platform} tenant '{}': {}", tenant.name, error.text()),
+                    ),
+                    false,
+                );
                 continue;
             }
         };
@@ -1868,11 +1934,19 @@ async fn google_secops(
                         critical = true,
                         "google_secops_tenant_validation_failed"
                     );
-                    report.refused.push(Refused::with_message(
-                        &tenant.name,
-                        &host,
-                        format!("{platform} tenant '{}': {text}", tenant.name),
-                    ));
+                    // An answer: a refusal after timeouts is not an
+                    // unreachable tenant.
+                    streak.answered();
+                    refuse(
+                        refusals,
+                        platform,
+                        Refused::with_message(
+                            &tenant.name,
+                            &host,
+                            format!("{platform} tenant '{}': {text}", tenant.name),
+                        ),
+                        true,
+                    );
                     break;
                 }
                 Err(ConnectorError::Timeout {
@@ -2252,6 +2326,7 @@ async fn elastic(
     timeout: f64,
     cx: &Context<'_>,
     compile: &opentide_compile::Context<'_>,
+    refusals: &Refusals,
 ) -> Result<CheckReport, Early> {
     let environment = Environment::from_pairs(cx.env.iter());
     let connector = Elastic;
@@ -2326,9 +2401,15 @@ async fn elastic(
                     // The tenant refused the check itself (a key, a
                     // privilege): its other rules are not sent, the next
                     // tenant is checked (#1658, E8).
-                    report
-                        .refused
-                        .push(Refused::new("elastic", &tenant.name, &host, &error));
+                    // An answer: a refusal after timeouts is not an
+                    // unreachable tenant.
+                    streak.answered();
+                    refuse(
+                        refusals,
+                        "elastic",
+                        Refused::new("elastic", &tenant.name, &host, &error),
+                        true,
+                    );
                     break;
                 }
                 Err(RuleFailure::Rule(error)) => {
