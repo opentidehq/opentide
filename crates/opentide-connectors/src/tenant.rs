@@ -264,7 +264,7 @@ fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, Strin
                     // A run that sends nothing keeps verifying.
                     None if mode == Mode::Counting => Ok(true),
                     None => Err(format!(
-                        "ssl is unset ({text}). Set that environment variable to true or false before a live check."
+                        "ssl is unset ({text}). Set that environment variable to true or false."
                     )),
                 };
             }

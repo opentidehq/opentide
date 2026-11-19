@@ -413,6 +413,15 @@ impl Defender {
             let detail = answer
                 .not_json_detail()
                 .unwrap_or_else(|| error_message(&answer));
+            if answer.status == 403 {
+                // The app registration's permission, not the query: the
+                // tenant's failure (#1658, E8).
+                return Err(ConnectorError::authentication(
+                    PLATFORM,
+                    tenant,
+                    format!("{message}: {detail}"),
+                ));
+            }
             return Err(ConnectorError::refused(
                 PLATFORM,
                 tenant,

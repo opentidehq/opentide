@@ -465,10 +465,12 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         .token(cx)
         .await
         .unwrap_err();
+    // A token endpoint that cannot be reached is the network's failure, not
+    // the credentials' (#1658, D5).
     assert!(
         error
             .to_string()
-            .starts_with("google_secops_tenant_unauthorized: tenant secops-eu: Google's token endpoint did not answer"),
+            .starts_with("Cannot reach google_secops tenant 'secops-eu' at http://127.0.0.1:9"),
         "{error}"
     );
     // The metadata server.
