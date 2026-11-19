@@ -73,7 +73,7 @@ for OPENTIDE_HOOK_WORKSPACE in .; do
     mkdir -p "$OPENTIDE_HOOK_COPY/.opentide"
     # From inside the copy, paths print as they are in the workspace.
     if ! (cd "$OPENTIDE_HOOK_COPY" && opentide --repo . validate --strict --allow-empty); then
-      echo "The staged files of $OPENTIDE_HOOK_REPO do not validate; the files on disk can differ. To check what is staged: git stash push --keep-index --include-untracked && opentide --repo \"$OPENTIDE_HOOK_REPO\" validate --strict; git stash pop" >&2
+      echo "The staged files of $OPENTIDE_HOOK_REPO do not validate; the files on disk can differ from them. See how with: git diff -- \"$OPENTIDE_HOOK_REPO\"; then fix the files and git add them." >&2
       OPENTIDE_HOOK_STATUS=1
     fi
   fi

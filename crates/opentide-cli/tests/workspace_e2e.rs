@@ -930,14 +930,14 @@ fn the_commit_hook_validates_a_root_and_a_nested_workspace() {
     );
 
     // A broken rule staged in the nested workspace alone is refused, and the
-    // hook says how to check what is staged.
+    // hook says how to see where the staged files differ, without changing them.
     tutorial::break_tlp(&repo.join("kept"));
     git(&repo, &["add", "-A"]);
     let broken = hooked_commit(&root, &repo, "broken");
     assert!(!broken.status.success(), "{broken:?}");
     let stderr = String::from_utf8_lossy(&broken.stderr);
     assert!(
-        stderr.contains("git stash push --keep-index --include-untracked"),
+        stderr.contains("See how with: git diff -- ") && !stderr.contains("git stash"),
         "{stderr}"
     );
     assert!(!stderr.contains("opentide-hook."), "{stderr}");
