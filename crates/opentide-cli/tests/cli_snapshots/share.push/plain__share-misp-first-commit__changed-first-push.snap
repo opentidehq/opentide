@@ -6,23 +6,23 @@ args: opentide share push --changed --dry-run
 exit: 3
 
 ━━━ stdout
-misp-prod
-  ○ skipped    Rule still in staging  …000000000014  status not shared
-  ○ skipped    Rule marked red        …000000000015  TLP above max_tlp
-  + created    Shared Actor           …000000000001
-  + created    Shared Objective       …000000000002
-  + created    Shared rule to create  …000000000011
-  ~ updated    Shared rule to update  …000000000012
+misp-prod · dry run, nothing is sent
+  ○ skip       Rule still in staging  …000000000014  status not shared
+  ○ skip       Rule marked red        …000000000015  TLP above max_tlp
+  + create     Shared Actor           …000000000001
+  + create     Shared Objective       …000000000002
+  + create     Shared rule to create  …000000000011
+  ~ update     Shared rule to update  …000000000012
   ○ unchanged  Shared rule unchanged  …000000000013
 
-misp-locked
-  ○ skipped  Shared Actor           …000000000001  type not shared
-  ○ skipped  Shared Objective       …000000000002  type not shared
-  ○ skipped  Rule still in staging  …000000000014  status not shared
-  ○ skipped  Rule marked red        …000000000015  TLP above max_tlp
-  ✗ failed   Shared rule to create  …000000000011  organisation uuid missing
-  ✗ failed   Shared rule to update  …000000000012  organisation uuid missing
-  ✗ failed   Shared rule unchanged  …000000000013  organisation uuid missing
+misp-locked · dry run, nothing is sent
+  ○ skip  Shared Actor           …000000000001  type not shared
+  ○ skip  Shared Objective       …000000000002  type not shared
+  ○ skip  Rule still in staging  …000000000014  status not shared
+  ○ skip  Rule marked red        …000000000015  TLP above max_tlp
+  ✗ fail  Shared rule to create  …000000000011  organisation uuid missing
+  ✗ fail  Shared rule to update  …000000000012  organisation uuid missing
+  ✗ fail  Shared rule unchanged  …000000000013  organisation uuid missing
 
 
 ━━━ stderr
