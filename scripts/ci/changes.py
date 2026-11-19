@@ -198,6 +198,8 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     *((f"crates/{crate}/*", ("wasm",)) for crate in PARSER_CRATES),
     ("crates/opentide-cli/src/render/ci.rs", ("gitlab",)),
     ("crates/opentide-cli/src/commands/setup/*", ("gitlab",)),
+    # The pipelines' templates, which `setup ci gitlab` renders.
+    ("crates/opentide-compile/src/ci/*", ("gitlab",)),
     ("crates/*/Cargo.toml", ("deny",)),
     ("bindings/*/Cargo.toml", ("deny",)),
     ("xtask/Cargo.toml", ("deny",)),
