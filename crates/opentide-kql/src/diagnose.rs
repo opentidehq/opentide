@@ -978,10 +978,11 @@ mod tests {
     }
 
     /// The scope checks read tokens, not the tree: they stay on broken input,
-    /// as on the old engine (`union *` is the shape they exist for).
+    /// as on the old engine (`union *` is the shape they exist for; it parses,
+    /// and the trailing pipe breaks the query).
     #[test]
     fn the_scope_checks_run_on_broken_input() {
-        let source = "search \"a\" | union *";
+        let source = "search \"a\" | union * |";
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
         let codes: Vec<String> = analyze(source, &catalog)
             .diagnostics
@@ -995,6 +996,41 @@ mod tests {
                 codes::KQL_UNSCOPED_SEARCH,
                 codes::KQL_UNSCOPED_UNION
             ]
+        );
+    }
+
+    /// A wildcard table (`Sign*`, `*Logs`, `*`) in a union or a search's `in`
+    /// list is a pattern, as Kusto takes it: no syntax error, no table named
+    /// by its first word (`'Sign' is not a table`), and only a bare `*` reads
+    /// every table.
+    #[test]
+    fn wildcard_tables_are_patterns() {
+        let cases: [(&str, &[&str]); 9] = [
+            (
+                "union isfuzzy=false Nope1, Sign*",
+                &[codes::KQL_UNKNOWN_TABLE],
+            ),
+            ("union Sign*", &[]),
+            ("union Signin*Logs, *Events", &[]),
+            (
+                "union withsource=T Sign*, Nope1",
+                &[codes::KQL_UNKNOWN_TABLE],
+            ),
+            ("SigninLogs | union kind=outer Sec*", &[]),
+            ("union *", &[codes::KQL_UNSCOPED_UNION]),
+            ("union withsource=T *", &[codes::KQL_UNSCOPED_UNION]),
+            ("search in (Sec*, SigninLogs) \"x\"", &[]),
+            (
+                "search in (SecurityEvent, *) \"x\"",
+                &[codes::KQL_WILDCARD_TABLE],
+            ),
+        ];
+        for (source, expected) in cases {
+            assert_eq!(codes_of(source), expected, "{source}");
+        }
+        assert_eq!(
+            unknown_tables("union isfuzzy=false Nope1, Sign*"),
+            ["Nope1"]
         );
     }
 

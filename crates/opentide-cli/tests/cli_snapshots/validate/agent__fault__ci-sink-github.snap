@@ -58,15 +58,6 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/covert-exfiltration-rule-0157.yaml:45:33
-   │
-44 │     query: |
-45 │       search in (SecurityEvent, *) "error"
-   │                                 ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
 error[falco_output_syntax]: invalid formatting syntax: formatting cannot end with a % (libsinsp)
    ╭─▶ objects/rules/covert-implant-rule-0165.yaml:43:30
    │
@@ -101,15 +92,6 @@ error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects th
    │                   ━━━
    │
    ╰─ help: try: "cannot run"
-
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/covert-tunnel-rule-0170.yaml:49:13
-   │
-48 │     query: |
-49 │       union * | take 1
-   │             ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
 error[spl_search_operator]: '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
    ╭─▶ objects/rules/elevated-dropper-rule-0068.yaml:59:22
@@ -503,15 +485,6 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/remote-dropper-rule-0140.yaml:75:13
-   │
-74 │     query: |
-75 │       union * | take 1
-   │             ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
 error[eql_not_boolean]: integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
    ╭─▶ objects/rules/remote-dropper-rule-0197.yaml:59:21
    │
@@ -850,10 +823,10 @@ warning[asset_unknown]: visibility.toml.logsources.11.assets.0: logsource "Ghost
 ::warning title=asset_unknown::visibility.toml.logsources.9.assets.0: logsource "Ghost3" names asset "ghost-3", which [[assets]] does not declare.
 ::warning title=asset_unknown::visibility.toml.logsources.10.assets.0: logsource "Ghost4" names asset "ghost-4", which [[assets]] does not declare.
 ::warning title=asset_unknown::visibility.toml.logsources.11.assets.0: logsource "Ghost5" names asset "ghost-5", which [[assets]] does not declare.
-::notice title=opentide::92 more findings: see the job summary or code scanning
+::notice title=opentide::89 more findings: see the job summary or code scanning
 
 ━━━ stderr
-✗ 102 errors in 90 files · 872 objects checked · 2025 queries · <SECONDS>
+✗ 99 errors in 87 files · 872 objects checked · 2025 queries · <SECONDS>
 → opentide explain unknown_key · how to fix it
 → opentide validate · check again
 tip: add --json for machine-readable output
@@ -861,7 +834,7 @@ tip: add --json for machine-readable output
 ━━━ tmp/github-step-summary.md · created 0644
 ### ✗ opentide validate
 
-102 errors in 90 files · 872 objects checked · 2025 queries · <SECONDS>
+99 errors in 87 files · 872 objects checked · 2025 queries · <SECONDS>
 
 | Severity | Code | Location | Message |
 |---|---|---|---|
@@ -873,12 +846,10 @@ tip: add --json for machine-readable output
 | error | [`invalid_ref`](https://opentide.org/docs/cli/diagnostics#invalid_ref) | `objects/objectives/rapid-tunnel-objective-0003.yaml:77:7` | Unknown threat reference "00000000-0000-4000-8000-00000000beef" — help: opentide info threats lists the ones that exist |
 | error | [`invalid_ref`](https://opentide.org/docs/cli/diagnostics#invalid_ref) | `objects/rules/covert-beacon-rule-0015.yaml:29:18` | Unknown objective or signal reference "00000000-0000-4000-8000-0000deadbeef" — help: opentide info objectives lists the ones that exist |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/covert-dropper-rule-0064.yaml:41:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_definition\_order — help: the template in .opentide/templates/ shows the field and its values |
-| error | [`kql_parse_error`](https://opentide.org/docs/cli/diagnostics#kql_parse_error) | `objects/rules/covert-exfiltration-rule-0157.yaml:45:33` | KQL syntax error: expected a name — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
 | error | [`falco_output_syntax`](https://opentide.org/docs/cli/diagnostics#falco_output_syntax) | `objects/rules/covert-implant-rule-0165.yaml:43:30` | invalid formatting syntax: formatting cannot end with a % \(libsinsp\) — help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/ |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/covert-injection-rule-0032.yaml:1:1` | missing required field "name" — help: the template in .opentide/templates/ shows the field and its values |
 | error | [`eql_unknown_function`](https://opentide.org/docs/cli/diagnostics#eql_unknown_function) | `objects/rules/covert-injection-rule-0262.yaml:81:21` | unknown EQL function \`startsWth\` — help: did you mean "startsWith"? |
 | error | [`kuery_parse_error`](https://opentide.org/docs/cli/diagnostics#kuery_parse_error) | `objects/rules/covert-pivot-rule-0073.yaml:48:19` | Kibana ends an unquoted value at \`not \` and rejects the query; quote the value — help: try: "cannot run" |
-| error | [`kql_parse_error`](https://opentide.org/docs/cli/diagnostics#kql_parse_error) | `objects/rules/covert-tunnel-rule-0170.yaml:49:13` | KQL syntax error: expected a name — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
 | error | [`spl_search_operator`](https://opentide.org/docs/cli/diagnostics#spl_search_operator) | `objects/rules/elevated-dropper-rule-0068.yaml:59:22` | '==' is not a search operator: Splunk accepts it but the comparison never matches; use '=' — help: try: = |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/elevated-exfiltration-rule-0014.yaml:9:13` | metadata.reviewed: metadata.reviewed is not a valid date or time: parameter 'day' for \`2026-02\` is invalid, must be in range \`1..=28\` — help: the template in .opentide/templates/ shows the field and its values |
 | error | [`spl_command_without_pipe`](https://opentide.org/docs/cli/diagnostics#spl_command_without_pipe) | `objects/rules/elevated-exfiltration-rule-0043.yaml:65:7` | the search starts with the command name \`stats\` but no \`\|\`; Splunk searches for the word \`stats\` instead of running the command — help: try: \| stats |
@@ -925,7 +896,6 @@ tip: add --json for machine-readable output
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/remote-beacon-rule-0061.yaml:46:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_definition\_duplicate — help: the template in .opentide/templates/ shows the field and its values |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/remote-dropper-rule-0048.yaml:36:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_definition\_name — help: the template in .opentide/templates/ shows the field and its values |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/remote-dropper-rule-0074.yaml:48:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_list\_in\_value — help: the template in .opentide/templates/ shows the field and its values |
-| error | [`kql_parse_error`](https://opentide.org/docs/cli/diagnostics#kql_parse_error) | `objects/rules/remote-dropper-rule-0140.yaml:75:13` | KQL syntax error: expected a name — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
 | error | [`eql_not_boolean`](https://opentide.org/docs/cli/diagnostics#eql_not_boolean) | `objects/rules/remote-dropper-rule-0197.yaml:59:21` | integer \`1\` is not a condition: EQL needs a boolean here \(a comparison, a predicate, \`true\` or \`false\`\) — help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql |
 | error | [`ecs_type_mismatch`](https://opentide.org/docs/cli/diagnostics#ecs_type_mismatch) | `objects/rules/remote-spray-rule-0119.yaml:69:20` | \`process.pid\` is a \`long\` field in ECS v9.5.0: Elasticsearch rejects the value \`abc\`, which is not a number, on it — help: the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference |
 | error | [`kql_unknown_operator`](https://opentide.org/docs/cli/diagnostics#kql_unknown_operator) | `objects/rules/rogue-exfiltration-rule-0092.yaml:65:9` | unknown tabular operator 'frobnicate' — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
@@ -965,5 +935,8 @@ tip: add --json for machine-readable output
 | error | [`unknown_key`](https://opentide.org/docs/cli/diagnostics#unknown_key) |   | deployment.toml.colour3: unknown key |
 | error | [`unknown_key`](https://opentide.org/docs/cli/diagnostics#unknown_key) |   | deployment.toml.colour4: unknown key |
 | error | [`unknown_key`](https://opentide.org/docs/cli/diagnostics#unknown_key) |   | deployment.toml.colour5: unknown key |
+| error | [`unknown_key`](https://opentide.org/docs/cli/diagnostics#unknown_key) |   | platforms/sentinel.toml.platform.colour: unknown key |
+| error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) |   | platform.name: platforms/splunk.toml.platform.name: Input should be a valid string — help: the template in .opentide/templates/ shows the field and its values |
+| error | [`missing_field`](https://opentide.org/docs/cli/diagnostics#missing_field) |   | platforms/defender\_for\_endpoint.toml.tenants.0.name: required key is missing |
 
-… and 8 more in the job log.
+… and 5 more in the job log.

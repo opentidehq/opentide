@@ -528,6 +528,9 @@ impl<'a> Pass<'a> {
                     }
                 }
                 K::FUNCTION_CALL => legs.push(self.call_source(&child, scope)),
+                // The tables a pattern matches are the workspace's: their
+                // columns are not known here.
+                K::TABLE_PATTERN => legs.push(Schema::open()),
                 _ => {}
             }
         }
