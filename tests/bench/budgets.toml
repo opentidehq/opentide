@@ -86,11 +86,14 @@ seed = 20261107
 runs = 5
 warmup = 1
 # The heavy workspace's digest (cargo xtask corpus generate --seed 20261107 --digest): a
-# report of another generator output is not held to these numbers. Since #1700 the
-# generator writes CrowdStrike's `trigger: verbose` where it wrote `event` (which deploy
-# refuses), and the heavy workspace is aa03d09a58068a06: the medians below were measured on
-# this digest, so it stays until they are re-recorded from a CI run, in a change of its own.
-digest = "5978a2ab7c093587"
+# report of another generator output is not held to these numbers, so it follows the
+# generator (xtask's the_budgets_baseline_matches_what_a_default_run_reports): a digest left
+# behind would turn the baseline check off. #1700 moved it from 5978a2ab7c093587: the
+# generator writes CrowdStrike's `trigger: verbose` where it wrote `event`, which deploy
+# refuses, one word in each of its CrowdStrike rules. The medians below were measured on
+# 5978a2ab7c093587 and stand: the oracle's model reads `trigger` as any string (0.23.0's
+# CrowdstrikeDetails.trigger: str). Re-record them only from a CI run, in a change of its own.
+digest = "aa03d09a58068a06"
 # The platforms the heavy workspace holds: the ones opentide 0.23.0 knows, in the connector
 # order (xtask's bench::oracle::ORACLE_PLATFORMS). Bitdefender, Graylog, Exabeam and Google
 # SecOps join when the oracle pin moves past 0.28.

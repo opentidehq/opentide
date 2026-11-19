@@ -35,11 +35,8 @@ fn recorded_digests() {
             },
             "626f15aed7c6fc65",
         ),
-        // The benchmarks' workspace: the platforms their 0.23.0 oracle knows.
-        // Its oracle baselines (tests/bench/budgets.toml) were measured on
-        // 5978a2ab7c093587, before CrowdStrike's `trigger` became `verbose`
-        // (#1700): a report on this output is not held to them until they are
-        // re-recorded from a CI run.
+        // The benchmarks' workspace: the platforms their 0.23.0 oracle knows,
+        // the corpus their baselines were measured on (tests/bench/budgets.toml).
         (
             Options {
                 platforms: xtask::bench::oracle::ORACLE_PLATFORMS,
