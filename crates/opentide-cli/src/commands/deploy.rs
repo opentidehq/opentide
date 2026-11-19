@@ -62,6 +62,9 @@ pub struct Args {
     pub wide: bool,
     /// `--keep-deprecated` / `--drop-deprecated`.
     pub keep_deprecated: Option<bool>,
+    /// `--skip-promotion`: the push's deploy does not promote, so the dry
+    /// run previews no promotion either.
+    pub skip_promotion: bool,
 }
 
 impl From<&crate::tree::DeployArgs> for Args {
@@ -73,6 +76,7 @@ impl From<&crate::tree::DeployArgs> for Args {
             files: args.files.clone(),
             platform: args.platform.as_ref().map(|platform| platform.0.clone()),
             plan: args.plan.clone(),
+            skip_promotion: args.skip_promotion,
             wide: args.wide,
             keep_deprecated: if args.keep_deprecated {
                 Some(true)
@@ -93,6 +97,9 @@ pub struct Context<'a> {
     pub env: &'a Env,
     /// The working directory.
     pub cwd: &'a Path,
+    /// `--debug` or `OPENTIDE_DEBUG`: the push's deploy promotes every rule
+    /// file, and so does the preview.
+    pub debug: bool,
 }
 
 /// A dry run's result, as every mode prints it.
@@ -209,7 +216,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         return refused;
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match open(options) {
+    let workspace = match open(options.clone()) {
         Ok(workspace) => workspace,
         Err(message) => return failed(message),
     };
@@ -217,6 +224,16 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
+    // A RELEASE push promotes before it deploys: plan the promoted rules,
+    // as the push's deploy will (#1653, smoke E13).
+    let (workspace, promoted) = match preview(args, cx, &workspace, &owned, options) {
+        Ok(Some((promoted, count, target))) => {
+            crate::app::release(workspace);
+            (promoted, Some((count, target)))
+        }
+        Ok(None) => (workspace, None),
+        Err(message) => return failed(message),
+    };
     let request = Request {
         strategies: args.strategies.clone(),
         all: args.all,
@@ -240,10 +257,59 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
     let is_set = |name: &str| cx.env.get(name).is_some();
     let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
     let at_root = root::is_workspace_root(&OsFs, workspace.root());
-    let result = from_outcome(outcome, at_root);
+    let mut result = from_outcome(outcome, at_root);
+    if let Some((count, target)) = promoted {
+        result.warnings.insert(
+            0,
+            format!(
+                "the push's deploy promotes {} to {target} first (status promotion): the plan \
+                 shows {} promoted, and nothing is written",
+                plural(count, "rule file", None),
+                if count == 1 { "it" } else { "them" }
+            ),
+        );
+    }
     // The index is large on a heavy workspace (see `app::release`).
     crate::app::release(workspace);
     result
+}
+
+/// The workspace as the push's deploy reads it after its status promotion,
+/// when the run is one that promotes and the promotion rewrites a file.
+fn preview(
+    args: &Args,
+    cx: &Context<'_>,
+    workspace: &opentide_workspace::Workspace,
+    owned: &Owned,
+    options: opentide_workspace::RootOptions,
+) -> Result<Option<(opentide_workspace::Workspace, usize, String)>, String> {
+    let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
+    if args.skip_promotion || !reads_changes {
+        return Ok(None);
+    }
+    let Ok(runs) = opentide_compile::strategy::parse_strategies(
+        &args.strategies,
+        &owned.statuses,
+        "--strategy",
+    ) else {
+        return Ok(None);
+    };
+    if !super::promotion_preview::applies(&runs, reads_changes, cx.env) {
+        return Ok(None);
+    }
+    let (rules_dir, folder) = dry_run::rules_folder(workspace);
+    let env = |name: &str| cx.env.get(name).map(str::to_owned);
+    // The dry run reports a diff it cannot read itself.
+    let Ok((scope, _)) = dry_run::git_scope(workspace.root(), cx.cwd, &env, &rules_dir, &folder)
+    else {
+        return Ok(None);
+    };
+    let local = if cx.debug {
+        opentide_compile::plan::local_scope(workspace.fs().as_ref(), &rules_dir, &folder).files
+    } else {
+        Vec::new()
+    };
+    super::promotion_preview::promoted_workspace(owned, options, &scope.files, &local, cx.debug)
 }
 
 /// A run refused before it started: a usage error, exit 2.

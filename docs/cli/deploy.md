@@ -49,7 +49,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--file` | Read this rule file instead of the changed rules (repeatable), matched as [`validate --file`](./validate.md) matches: a file name, or a path relative to the current directory or the workspace |
 | `--platform` | Target platform (see [platforms](../usage/concepts/platforms.md)) |
 | `--wide` | Deploy the rule files read whatever their status strategy, `INERT` included, to the tenants accepting the run's strategies. `DISABLEMENT` and `DELETION` still follow `--keep-deprecated` |
-| `--dry-run` | Simulate deployment without writes. `--json` lists the tenants each rule would reach |
+| `--dry-run` | Simulate deployment without writes. `--json` lists the tenants each rule would reach. On a push a `RELEASE` deploy promotes, the plan shows the changed rules promoted, as the deploy will send them, with a warning saying so; nothing is written |
 | `--keep-deprecated` / `--drop-deprecated` | Include rules whose status maps to `DISABLEMENT` or `DELETION`, so a `RELEASE` run disables or deletes them. Default: on, off with `--all` |
 | `--skip-promotion` | Skip the promotion step of a `RELEASE` run on a push |
 | `--skip-unconfigured` | Exit 0 when every platform with rules to deploy has no `[[tenants]]` block |

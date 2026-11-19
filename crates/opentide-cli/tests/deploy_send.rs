@@ -3196,3 +3196,74 @@ fn a_skipped_push_keeps_the_status_it_would_have_promoted() {
         "{err}"
     );
 }
+
+/// The dry run of a RELEASE push previews the status promotion the push's
+/// deploy makes first (#1653, smoke E13): the changed STAGING rule is
+/// planned as promoted, for the tenant that takes RELEASE, with a warning
+/// saying so, and nothing is written. It used to say no rule would deploy.
+#[test]
+fn a_release_pushs_dry_run_plans_the_rules_it_will_promote() {
+    let uuid = "00000000-0000-4000-8047-000000000913";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Previewed", uuid, "A rule.", block))],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace(
+            "strategies = [\"PREVIEW\", \"RELEASE\"]",
+            "strategies = [\"RELEASE\"]",
+        ),
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}{err}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(
+        document["plan"],
+        serde_json::json!({"splunk": [uuid]}),
+        "{out}"
+    );
+    assert!(
+        document["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning
+                .as_str()
+                .unwrap()
+                .contains("promotes 1 rule file to PRODUCTION first")),
+        "{out}"
+    );
+    assert!(out.contains("PRODUCTION"), "{out}");
+    assert_eq!(
+        std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+        before,
+        "a dry run writes nothing"
+    );
+    // --skip-promotion previews none: nothing in STAGING goes to RELEASE.
+    let mut skipped = argv.to_vec();
+    skipped.push("--skip-promotion");
+    let (code, out, _) = cli(ws.path(), &skipped, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(document["plan"].get("splunk").is_none(), "{out}");
+}

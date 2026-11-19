@@ -441,13 +441,73 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
         return Live::of(result);
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    let workspace = match super::open(options.clone()) {
         Ok(workspace) => workspace,
+        Err(message) => return Live::of(failed(Some(platform), &message, 1)),
+    };
+    // A push that the deploy will promote is checked as the deploy sends
+    // it: the promoted status, on the tenants that take it (#1653, smoke
+    // E15).
+    let workspace = match promoted(args, platform, &workspace, cx, options) {
+        Ok(Some(promoted)) => {
+            crate::app::release(workspace);
+            promoted
+        }
+        Ok(None) => workspace,
         Err(message) => return Live::of(failed(Some(platform), &message, 1)),
     };
     let live = with_workspace(args, platform, &workspace, cx);
     crate::app::release(workspace);
     live
+}
+
+/// The workspace as the push's deploy reads it after its status promotion,
+/// for a `--changed` run on a push that the deploy will promote and whose
+/// promotion rewrites a changed rule file; the check then sees the promoted
+/// status and the tenants it routes the rule to.
+fn promoted(
+    args: &Args,
+    platform: &str,
+    workspace: &Workspace,
+    cx: &Context<'_>,
+    options: opentide_workspace::RootOptions,
+) -> Result<Option<Workspace>, String> {
+    if !args.changed {
+        return Ok(None);
+    }
+    let owned = opentide_compile::Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let Ok(runs) = run_strategies(args, platform, &owned) else {
+        return Ok(None);
+    };
+    if !super::promotion_preview::applies(&runs, true, cx.env) {
+        return Ok(None);
+    }
+    let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
+    let root = OsFs.resolve(workspace.root());
+    let source = opentide_compile::git::diff_source(&lookup);
+    // The scope's own read reports a diff it cannot compute.
+    let Ok(changed) = opentide_compile::git::changed_paths(&root, cx.cwd, &lookup, source) else {
+        return Ok(None);
+    };
+    let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
+    let (top, _) = opentide_compile::git::split_rule_paths(&changed, &folder);
+    let files: Vec<std::path::PathBuf> = top
+        .iter()
+        .filter_map(|path| Path::new(path).file_name().map(|name| rules_dir.join(name)))
+        .collect();
+    let preview =
+        super::promotion_preview::promoted_workspace(&owned, options, &files, &[], false)?;
+    Ok(preview.map(|(promoted, count, target)| {
+        tracing::info!(
+            rules = count,
+            target = target.as_str(),
+            "promotion_previewed"
+        );
+        promoted
+    }))
 }
 
 /// A run's result as a list of fields (the oracle's result dict).

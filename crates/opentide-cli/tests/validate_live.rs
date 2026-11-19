@@ -646,3 +646,104 @@ fn usage_errors_and_skips_answer_before_any_check() {
         elsewhere.result
     );
 }
+
+/// `git` in `dir`, with a fixed identity and no system or user config.
+fn git(dir: &Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .args([
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .envs([
+            ("GIT_AUTHOR_NAME", "t"),
+            ("GIT_AUTHOR_EMAIL", "t@opentide.invalid"),
+            ("GIT_COMMITTER_NAME", "t"),
+            ("GIT_COMMITTER_EMAIL", "t@opentide.invalid"),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
+/// On a push the production deploy will promote, `--changed` checks the
+/// changed STAGING rule as the deploy sends it: promoted, on the tenant that
+/// takes RELEASE (#1653, smoke E15). It used to check it on PREVIEW tenants
+/// only, and with only a RELEASE tenant it reached none (exit 2).
+#[test]
+fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
+    let ws = splunk_rules(1);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace("strategies = [\"PREVIEW\"]", "strategies = [\"RELEASE\"]"),
+    )
+    .unwrap();
+    git(ws.path(), &["init", "-q"]);
+    git(ws.path(), &["add", "-A"]);
+    git(ws.path(), &["commit", "-q", "-m", "base"]);
+    let path = ws.path().join("objects/rules/rule-1.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace("n=1", "n=2")).unwrap();
+    git(ws.path(), &["commit", "-q", "-a", "-m", "push"]);
+    let before = std::fs::read(&path).unwrap();
+    let registry = Scripted::registry(
+        "splunk",
+        vec![Ok(LiveCheck {
+            result: None,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        })],
+    );
+    let workspace = ws.path().display().to_string();
+    let env = Env::from_pairs([
+        ("SPLUNK_TOKEN", SECRET),
+        ("GITHUB_ACTIONS", "true"),
+        ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_SHA", "HEAD"),
+        ("GITHUB_WORKSPACE", workspace.as_str()),
+    ]);
+    let args = Args {
+        platform: Some("splunk".to_owned()),
+        live: true,
+        changed: true,
+        check_timeout: Some("5".to_owned()),
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &registry,
+        },
+    );
+    assert_eq!(
+        value(&live, "status"),
+        &Json::str("passed"),
+        "{:?}",
+        live.result
+    );
+    assert_eq!(
+        value(&live, "queries_per_tenant"),
+        &Json::object([("lab", Json::Int(1))])
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "a check writes nothing"
+    );
+}

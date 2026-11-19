@@ -1331,6 +1331,7 @@ impl Run<'_> {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
                 cwd: &cwd,
+                debug: self.globals.debug || self.env.opentide_debug(),
             },
         )
     }

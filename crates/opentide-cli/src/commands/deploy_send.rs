@@ -523,15 +523,8 @@ fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Js
 /// Whether the run would promote statuses (`StatusStrategy.RELEASE in run`
 /// on a push in CI, reading the changed files, without `--skip-promotion`).
 fn promotes(args: &Args, runs: &[StatusStrategy], env: &Env) -> bool {
-    let lookup = |name: &str| env.get(name).map(str::to_owned);
-    let ci = opentide_compile::git::ci(&lookup);
-    runs.contains(&StatusStrategy::Release)
-        && !args.all
-        && args.uuids.is_empty()
-        && args.files.is_empty()
-        && !args.skip_promotion
-        && ci != opentide_compile::git::Ci::Local
-        && !opentide_compile::git::is_change_request(ci, &lookup)
+    let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
+    !args.skip_promotion && super::promotion_preview::applies(runs, reads_changes, env)
 }
 
 /// `_deploy` for a run that sends.
