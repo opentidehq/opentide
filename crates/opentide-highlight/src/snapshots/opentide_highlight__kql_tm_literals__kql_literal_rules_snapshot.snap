@@ -4,25 +4,25 @@ expression: "serde_json::to_string_pretty(&literals).expect(\"json\")"
 ---
 [
   {
-    "begin": "(?:\\b[hH])?```",
+    "begin": "(?:(?<![A-Za-z0-9_$])[hH])?```",
     "comment": "capture:string",
     "end": "```",
     "name": "string.quoted.opentide"
   },
   {
-    "begin": "(?:\\b[hH])?~~~",
+    "begin": "(?:(?<![A-Za-z0-9_$])[hH])?~~~",
     "comment": "capture:string",
     "end": "~~~",
     "name": "string.quoted.opentide"
   },
   {
     "comment": "capture:string",
-    "match": "(?:\\b[hH])?(?:@\"(?:[^\"]|\"\")*\"|@'(?:[^']|'')*'|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')",
+    "match": "(?:(?<![A-Za-z0-9_$])[hH])?(?:@\"(?:[^\"]|\"\")*\"|@'(?:[^']|'')*'|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')",
     "name": "string.quoted.opentide"
   },
   {
     "comment": "capture:number",
-    "match": "\\b(?:0[xX][0-9A-Fa-f]*|[0-9]+(?:\\.[0-9]+)?)\\b",
+    "match": "\\b(?:0[xX][0-9A-Fa-f]*|[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\\b",
     "name": "constant.numeric.opentide"
   }
 ]
