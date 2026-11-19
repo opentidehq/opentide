@@ -423,6 +423,10 @@ impl ValidateOptions {
 /// built-in platform, or (with the `plugins` feature) one a loaded platform
 /// plugin adds. A plan or a tenant lookup for any other name would find
 /// nothing and say so only by being empty.
+#[cfg_attr(
+    all(not(feature = "compile"), not(test)),
+    expect(dead_code, reason = "deploy_plan's and tenants'")
+)]
 pub(crate) fn known_platform(platform: &str) -> Result<(), Error> {
     if opentide_schema::platforms::get(platform).is_some() {
         return Ok(());

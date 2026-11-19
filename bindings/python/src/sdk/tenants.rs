@@ -382,8 +382,10 @@ fn instant(name: &str, text: &str) -> PyResult<Timestamp> {
     })
 }
 
-/// The facade's request; a missing *end* is now, a missing *start* the
-/// minute before *end* ([`TimeWindow::check`]).
+/// The facade's request; a missing *end* is now, a missing *start*
+/// `window.since` before *end* (a day for a query, a minute for a live
+/// check); a negative *limit* is refused here, one above
+/// [`connectors::MAX_QUERY_LIMIT`] by the facade.
 fn request(
     text: String,
     language: String,

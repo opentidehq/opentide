@@ -208,10 +208,11 @@ def test_a_window_that_does_not_read_is_refused(
 @pytest.mark.parametrize("limit", [0, -1, 5001])
 def test_a_limit_the_command_line_refuses_is_refused(connection: Connection, limit: int) -> None:
     # opentide query --limit takes 1 to 5000 (smoke D13); nothing is sent.
-    with pytest.raises(OpentideError) as raised:
-        run(connection.query("x", limit=limit))
-    assert raised.value.code == "usage_invalid_value"
-    assert "between 1 and 5000" in raised.value.message
+    for operation in (connection.query, connection.validate_query):
+        with pytest.raises(OpentideError) as raised:
+            run(operation("x", limit=limit))
+        assert raised.value.code == "usage_invalid_value"
+        assert "between 1 and 5000" in raised.value.message
 
 
 def test_tenants_of_a_platform_that_is_none_is_refused() -> None:

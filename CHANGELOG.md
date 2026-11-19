@@ -118,6 +118,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **MCP `validation_report` refuses an `object_type` that is no object family** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). `object_type: "bogus"` answered a report that matched nothing; it is now refused (`isError`, `usage_invalid_choice: Unknown object type(s): bogus. Choose rule, threat, or objective.`), as `opentide validate --type bogus` is.
 - **`opentide --version` checks nothing** ([#1072](https://github.com/opentidehq/opentide/issues/1072)). With no other argument it prints the version before anything else: it no longer looks for the workspace or reads its configuration. When the analysis engine does not load, it prints the version from the package's metadata and exits 0, where it failed; the first command reports the engine, and `opentide doctor` checks the install.
 - **Every query language is checked faster, with the same results** ([#1571](https://github.com/opentidehq/opentide/issues/1571)). Most of a short query's check was setup repeated on every call, and each language walked its tree several times. What `validate`, the editor and the MCP server report is unchanged.
   - KQL: a one-line query in 9 µs, not 292; the analysis corpus in 42 µs a query, not 339; real rules with a quarter fewer instructions

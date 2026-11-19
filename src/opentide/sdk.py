@@ -23,7 +23,7 @@ import json
 import os
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -64,9 +64,6 @@ OperationName = Literal["create", "update", "disable", "delete"]
 DEFAULT_LIMIT = 100
 #: Seconds an asynchronous search may run when the caller names no timeout.
 DEFAULT_TIMEOUT = 120.0
-#: The window :meth:`Connection.query` searches when given no *start*:
-#: ``opentide query``'s ``--since 24h``.
-DEFAULT_SINCE = timedelta(hours=24)
 
 _T = TypeVar("_T")
 

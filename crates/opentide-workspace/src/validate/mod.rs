@@ -481,8 +481,10 @@ pub fn unknown_types(types: &[String]) -> Option<Refusal> {
     })
 }
 
-/// A `validate` run's result.
+/// A `validate` run's result. Read its fields; it gains fields in minor
+/// releases (`refused`), so code outside this crate does not build one.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Validation {
     /// Each check run, with `passed` or `failed`, in the order `checks`
     /// lists them.
