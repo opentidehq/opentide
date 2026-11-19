@@ -1,0 +1,3 @@
+// prod:qualified_table valid
+union cluster("help").database("Samples").StormEvents, database("Security").['Sign-in Logs'], workspace("w").Sec*
+| take 10
