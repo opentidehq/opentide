@@ -1185,8 +1185,6 @@ fn deploy(
     result
 }
 
-/// Every rule on every tenant the targets resolved; rules on tenantless
-/// platforms once (`plan_changes`).
 /// Writes back the files of `promoted` that `put_back` names, as they were
 /// before the promotion, and logs each (`rule_promotion_undone`).
 ///
@@ -1208,6 +1206,8 @@ fn unpromote(
     Ok(())
 }
 
+/// Every rule on every tenant the targets resolved; rules on tenantless
+/// platforms once (`plan_changes`).
 fn plan_changes(
     workspace: &Workspace,
     owned: &opentide_compile::Owned,
