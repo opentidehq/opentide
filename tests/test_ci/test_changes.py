@@ -197,6 +197,14 @@ def test_the_gitlab_lint_runs_when_the_pipeline_can_change(path: str, gitlab: bo
     assert plan(path)["gitlab"] == str(gitlab).lower()
 
 
+def test_build_wasm_runs_its_own_tests_in_the_python_job() -> None:
+    # tests/test_scripts/test_build_wasm.py holds the script's artifact paths;
+    # a change to the script alone must run it, not only the `wasm` job.
+    outputs = plan("scripts/engine/build-wasm.sh")
+    assert outputs["wasm"] == "true"
+    assert outputs["python"] == "true"
+
+
 def test_the_python_job_runs_on_the_python_surface_alone() -> None:
     for path in (
         "src/opentide/sdk.py",

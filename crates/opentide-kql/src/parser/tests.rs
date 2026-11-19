@@ -599,3 +599,46 @@ fn search_and_find_forms_parse_and_their_broken_twins_do_not() {
         assert!(!errors(source).is_empty(), "{source} parses");
     }
 }
+
+#[test]
+fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
+    // B21 (smoke test): the outer pipeline's next `|` sat inside the open
+    // group, so the list read as a sub-query and `4688` as its table
+    // ("expected a name"). The `)` is missing right after the list.
+    for (source, after) in [
+        (
+            "SecurityEvent\n| where EventID in (4688, 4689\n| project Account",
+            "4689",
+        ),
+        ("SecurityEvent\n| where EventID in (4688, 4689", "4689"),
+        ("T | where a in (\"x\", \"y\" | take 1", "\"y\""),
+        ("T | where x has_any (\"x\", \"y\"\n| take 1", "\"y\""),
+        ("T | where x in (a, b\n| take 1", "b"),
+    ] {
+        let parsed = parse(source);
+        let first = parsed.errors.first().expect("an error");
+        assert_eq!(first.message, "expected `)`", "{source}");
+        let at = source.find(after).expect("in the source") + after.len();
+        assert_eq!(usize::from(first.gap.start()), at, "{source}");
+    }
+    // A sub-query that never closes is still read as one, whatever names
+    // its source: only the `)` is missing.
+    // The `)` is missing at the end of the input; read as a list instead,
+    // the error would stand inside it (round 1 of the review).
+    for source in [
+        "T | where a in (S | project a",
+        "T | where a in (database(\"d\").S | project a",
+        "T | where a in (['My Table'] | project a",
+        "T | where a in ((S | project a)\n| project b",
+        "T | where a in (union A, B | project a",
+    ] {
+        let parsed = parse(source);
+        let found: Vec<&str> = parsed.errors.iter().map(|e| e.message.as_str()).collect();
+        assert_eq!(found, ["expected `)`"], "{source}: {found:?}");
+        assert_eq!(
+            usize::from(parsed.errors[0].gap.start()),
+            source.len(),
+            "{source}"
+        );
+    }
+}

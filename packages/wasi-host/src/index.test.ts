@@ -515,7 +515,10 @@ interface Server {
 // when it exists. The WASI build (`scripts/engine/build-wasm.sh cli`) runs
 // the same cases under Node's own WASI when OPENTIDE_WASI_CLI names it: the
 // module has no network, so every tenant request goes through the host.
-const debugBinary = join(root, "target/debug/opentide-cli");
+// The debug build is in the target pool CARGO_TARGET_DIR names (AGENTS.md),
+// else in the checkout's target/.
+const targetDir = process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : join(root, "target");
+const debugBinary = join(targetDir, "debug/opentide-cli");
 // Both are resolved here: the server is spawned in a scratch workspace, where
 // a relative path would name nothing.
 const nativeBinary =
