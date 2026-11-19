@@ -65,7 +65,7 @@ uv pip install 'opentide==0.28.1'    # pin the current release
 
 </Tabs>
 
-That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms. `pip install opentide` is the only install: the package has no Python dependencies, and its one extra, `plugins` (pydantic), is for writing a [platform plugin](../sdk/platforms.md). You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
@@ -74,7 +74,7 @@ For agent/MCP hosts, remember the path to this environment's `opentide` binary �
 The base install above already ships the MCP server. There is no extra step:
 
 ```bash
-opentide mcp start        # mcp (>=2.3,<3) is a base dependency since 0.14.0
+opentide mcp start        # the server is compiled into opentide
 ```
 
 An older command such as `pip install 'opentide[mcp]'` still installs opentide: pip and uv warn that the extra does not exist and install the package anyway. Drop the brackets when you next touch it. See [MCP installation](../mcp/installation.md).
@@ -98,14 +98,14 @@ The build takes several minutes. `opentide doctor` reports it (`analysis_engine`
 
 `pip` and `uv` create the `opentide` console launcher in the active environment's `Scripts` directory. Ensure that directory is on `PATH`, then run the package directly:
 
+On Windows on Arm, `pip install opentide` installs opentide's own Arm wheel and nothing else: the package has no Python dependencies. Only the `plugins` extra adds one, pydantic, whose pydantic-core publishes Windows on Arm wheels from CPython 3.11, so on CPython 3.10 pip compiles it, which needs a Rust toolchain and the MSVC build tools.
+
 1. Find the path of opentide binaries:
 
 ```powershell
 Get-Command opentide -All
 where.exe opentide
 ```
-
-On Windows on Arm, use CPython 3.11 or later and install with `pip install --only-binary cryptography opentide`. The newest cryptography releases publish no Windows on Arm wheel, so without the flag pip compiles cryptography, which needs OpenSSL and a Rust toolchain; with it, pip takes the newest cryptography that has one: 46.0.3, whose `cp38-abi3` and `cp311-abi3` Windows on Arm wheels install on CPython 3.10 and later. On CPython 3.10, pydantic-core (the `plugins` extra's), orjson, rpds-py and cffi publish no Windows on Arm wheel (theirs start at 3.11), so pip compiles them, which needs a Rust toolchain and the MSVC build tools.
 
 opentide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
 

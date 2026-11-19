@@ -19,7 +19,7 @@ opentide setup --plan --platform sentinel --ci github --mcp vscode --hooks --env
 
 The interactive wizard opens with the opentide logo and the tagline (the one-line pill in a terminal narrower than 82 columns, and no mark with `--no-color` or `NO_COLOR`), then uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. An empty repository name is refused on screen. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
 
-Every `setup` command, scripted or interactive, ends the same way: the files it wrote, its warnings (each once), one outcome line, and numbered next steps when it created a repository:
+Every `setup` command, scripted or interactive, ends the same way: the files it wrote, one outcome line, numbered next steps when it created a repository, and its warnings (each once, on stderr):
 
 ```text illustrative
   objects/{threats,objectives,rules}/                your detection catalogue
@@ -28,13 +28,13 @@ Every `setup` command, scripted or interactive, ends the same way: the files it 
   .opentide/configurations/platforms/sentinel.toml   platform configuration
   .github/workflows/opentide.yml                     GitHub Actions pipeline
 
-warning: This folder is not a git repository yet, so the pipeline targets 'main'; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.
 ✓ Created Tutorial Detections in ./tutorial-detections
 
 Next steps
   1  cd tutorial-detections
   2  opentide generate · schemas, templates and editor snippets
   3  opentide validate · check every object before you commit
+warning: This folder is not a git repository yet, so the pipeline targets "main"; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.
 ```
 
 This is `opentide setup --yes --name "Tutorial Detections" --platform sentinel --ci github --path tutorial-detections` outside a git repository; it is not captured by the docs harness, which runs no `setup`. `--json` returns the same facts: the outcome under `message`, each step's `files`, and the next steps under `next_actions`.
@@ -313,7 +313,7 @@ opentide setup skills --yes --all --cursor
 opentide setup skills --yes --generic --path /path/to/repo
 ```
 
-Use `--path` / `-C` for the repository root on install, `discover`, and `show`. Do not pass a positional path to `opentide setup skills` itself — Click would treat `discover` / `show` as that path and skip the subcommands.
+Use `--path` / `-C` for the repository root on install, `discover`, and `show`. `opentide setup skills` takes no positional path: a word after it is read as a subcommand (`discover`, `show`).
 
 Installing `--github-copilot` without `--generic` also applies the generic layout; JSON output includes `"also_applied": ["generic"]`.
 

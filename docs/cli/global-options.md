@@ -108,16 +108,16 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
 | `OPENTIDE_QUERY_CHECK_TIMEOUT` | Seconds each `validate query --live` check may wait for a tenant's answer, like `--check-timeout` (default 120); see [Slow queries](./validate.md#slow-queries-and-timeouts) |
 | `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar). `json` writes progress events on stderr instead, in every mode; see [Progress events](./json-output.md#progress-events) |
-| `OPENTIDE_CACHE_DIR` | Where opentide caches what it generates for the language server (`lsp-catalogs/`); default: the user cache directory |
+| `OPENTIDE_CACHE_DIR` | Not read: the language server generates its catalog in memory each time it starts and caches nothing on disk. `opentide commands` still lists it |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
 ## Environment propagation
 
-The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
+The root options apply to the whole run. `opentide mcp start` hands them to the commands its tools run as the matching variables: `--repo` as `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE`, `--data` as `OPENTIDE_DATA_ROOT`, `--proxy` as `HTTPS_PROXY` and `HTTP_PROXY`, and `--debug` as `OPENTIDE_DEBUG`.
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
+Interactive terminals receive colour. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
