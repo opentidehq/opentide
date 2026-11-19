@@ -542,7 +542,7 @@ hunting, and threat response."""
 opentide setup
 opentide validate
 opentide generate
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 ## Platforms

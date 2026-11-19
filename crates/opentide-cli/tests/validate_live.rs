@@ -108,6 +108,7 @@ fn live(
             interrupted: &never,
             now: now(),
             registry,
+            debug: false,
         },
     );
     (result, proxy.verify())
@@ -376,6 +377,7 @@ fn scripted(ws: &Path, outcomes: Vec<Result<LiveCheck, ConnectorError>>) -> Live
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     )
 }
@@ -604,6 +606,7 @@ fn usage_errors_and_skips_answer_before_any_check() {
         interrupted: &never,
         now: now(),
         registry: &registry,
+        debug: false,
     };
     let env: &'static Env = Box::leak(Box::new(env));
     let plain: &'static Env = Box::leak(Box::new(Env::from_pairs::<&str, &str>([])));
@@ -775,6 +778,7 @@ fn an_elastic_tenant_that_refuses_the_key_fails_the_tenant() {
             interrupted: &never,
             now: now(),
             registry: &opentide_connectors::builtin(),
+            debug: false,
         },
     );
     assert_eq!(
@@ -877,6 +881,7 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     );
     assert_eq!(
@@ -1008,6 +1013,7 @@ fn an_elastic_refusal_after_a_timeout_is_a_refusal() {
             interrupted: &never,
             now: now(),
             registry: &opentide_connectors::builtin(),
+            debug: false,
         },
     );
     let Json::Str(message) = value(&live, "message") else {
@@ -1079,6 +1085,7 @@ fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
             interrupted: &never,
             now: now(),
             registry: &opentide_connectors::builtin(),
+            debug: false,
         },
     );
     assert_eq!(proxy.verify(), Vec::new());
@@ -1120,6 +1127,108 @@ fn copy_tree(from: &Path, to: &Path) {
             std::fs::copy(entry.path(), target).unwrap();
         }
     }
+}
+
+/// `git` in `dir`, with a fixed identity and no system or user config.
+fn git(dir: &Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .args([
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .envs([
+            ("GIT_AUTHOR_NAME", "t"),
+            ("GIT_AUTHOR_EMAIL", "t@opentide.invalid"),
+            ("GIT_COMMITTER_NAME", "t"),
+            ("GIT_COMMITTER_EMAIL", "t@opentide.invalid"),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
+/// On a push the production deploy will promote, `--changed` checks the
+/// changed STAGING rule as the deploy sends it: promoted, on the tenant that
+/// takes RELEASE (#1653, smoke E15). It used to check it on PREVIEW tenants
+/// only, and with only a RELEASE tenant it reached none (exit 2).
+#[test]
+fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
+    let ws = splunk_rules(1);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace("strategies = [\"PREVIEW\"]", "strategies = [\"RELEASE\"]"),
+    )
+    .unwrap();
+    git(ws.path(), &["init", "-q"]);
+    git(ws.path(), &["add", "-A"]);
+    git(ws.path(), &["commit", "-q", "-m", "base"]);
+    let path = ws.path().join("objects/rules/rule-1.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace("n=1", "n=2")).unwrap();
+    git(ws.path(), &["commit", "-q", "-a", "-m", "push"]);
+    let before = std::fs::read(&path).unwrap();
+    let registry = Scripted::registry(
+        "splunk",
+        vec![Ok(LiveCheck {
+            result: None,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        })],
+    );
+    let workspace = ws.path().display().to_string();
+    let env = Env::from_pairs([
+        ("SPLUNK_TOKEN", SECRET),
+        ("GITHUB_ACTIONS", "true"),
+        ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_SHA", "HEAD"),
+        ("GITHUB_WORKSPACE", workspace.as_str()),
+    ]);
+    let args = Args {
+        platform: Some("splunk".to_owned()),
+        live: true,
+        changed: true,
+        check_timeout: Some("5".to_owned()),
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &registry,
+            debug: false,
+        },
+    );
+    assert_eq!(
+        value(&live, "status"),
+        &Json::str("passed"),
+        "{:?}",
+        live.result
+    );
+    assert_eq!(
+        value(&live, "queries_per_tenant"),
+        &Json::object([("lab", Json::Int(1))])
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "a check writes nothing"
+    );
 }
 
 /// A Splunk live validator that keeps the search of each check it gets.
@@ -1184,6 +1293,7 @@ fn a_splunk_check_sends_the_query_as_written() {
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     );
     assert_eq!(value(&live, "status"), &Json::str("passed"));

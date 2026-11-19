@@ -11,7 +11,7 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "5 objects on misp-locked · 3 new, 2 skipped",
+  "message": "Status of 5 objects for misp-locked · 3 to create, 2 skipped",
   "next_actions": [],
   "ok": true,
   "records": [

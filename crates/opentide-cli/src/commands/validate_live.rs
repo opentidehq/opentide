@@ -79,6 +79,9 @@ pub struct Context<'a> {
     pub now: jiff::Timestamp,
     /// The platforms' connectors.
     pub registry: &'a Registry,
+    /// `--debug` or `OPENTIDE_DEBUG`: a push's deploy promotes every rule
+    /// file of the rules folder, and the gate previews that promotion.
+    pub debug: bool,
 }
 
 impl std::fmt::Debug for Context<'_> {
@@ -441,13 +444,91 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
         return Live::of(result);
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    let workspace = match super::open(options.clone()) {
         Ok(workspace) => workspace,
+        Err(message) => return Live::of(failed(Some(platform), &message, 1)),
+    };
+    // A push that the deploy will promote is checked as the deploy sends
+    // it: the promoted status, on the tenants that take it (#1653, smoke
+    // E15).
+    let workspace = match promoted(args, platform, &workspace, cx, options) {
+        Ok(Some(promoted)) => {
+            crate::app::release(workspace);
+            promoted
+        }
+        Ok(None) => workspace,
         Err(message) => return Live::of(failed(Some(platform), &message, 1)),
     };
     let live = with_workspace(args, platform, &workspace, cx);
     crate::app::release(workspace);
     live
+}
+
+/// The workspace as the push's deploy reads it after its status promotion,
+/// for a `--changed` run on a push that the deploy will promote and whose
+/// promotion rewrites a changed rule file; the check then sees the promoted
+/// status and the tenants it routes the rule to.
+fn promoted(
+    args: &Args,
+    platform: &str,
+    workspace: &Workspace,
+    cx: &Context<'_>,
+    options: opentide_workspace::RootOptions,
+) -> Result<Option<Workspace>, String> {
+    if !args.changed {
+        return Ok(None);
+    }
+    let owned = opentide_compile::Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let Ok(runs) = run_strategies(args, platform, &owned) else {
+        return Ok(None);
+    };
+    if !super::promotion_preview::applies(&runs, true, cx.env) {
+        return Ok(None);
+    }
+    let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
+    let root = OsFs.resolve(workspace.root());
+    let source = opentide_compile::git::diff_source(&lookup);
+    // The scope's own read reports a diff it cannot compute.
+    let Ok(changed) = opentide_compile::git::changed_paths(&root, cx.cwd, &lookup, source) else {
+        return Ok(None);
+    };
+    let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
+    let (top, _) = opentide_compile::git::split_rule_paths(&changed, &folder);
+    let files: Vec<std::path::PathBuf> = top
+        .iter()
+        .filter_map(|path| Path::new(path).file_name().map(|name| rules_dir.join(name)))
+        .collect();
+    // `--debug` or `OPENTIDE_DEBUG`: the push's deploy promotes every rule
+    // file; the gate checks the changed ones, as promoted.
+    let debug = cx.debug || cx.env.opentide_debug();
+    let local = if debug {
+        opentide_compile::plan::local_scope(workspace.fs().as_ref(), &rules_dir, &folder).files
+    } else {
+        Vec::new()
+    };
+    match super::promotion_preview::promoted_workspace(&owned, options, &files, &local, debug)? {
+        super::promotion_preview::Preview::Promoted {
+            workspace,
+            files,
+            target,
+            ..
+        } => {
+            tracing::info!(
+                rules = files.len(),
+                target = target.as_str(),
+                "promotion_previewed"
+            );
+            Ok(Some(*workspace))
+        }
+        super::promotion_preview::Preview::Stops(message) => {
+            tracing::warn!(detail = message.as_str(), "promotion_would_stop");
+            Ok(None)
+        }
+        super::promotion_preview::Preview::Nothing => Ok(None),
+    }
 }
 
 /// A run's result as a list of fields (the oracle's result dict).

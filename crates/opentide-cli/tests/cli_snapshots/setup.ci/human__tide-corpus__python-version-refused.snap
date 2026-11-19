@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.ci/human/tide-corpus/python-version-refused
+---
+args: opentide setup ci github --python-version 2.7 --yes
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1m␛[31merror:␛[0m --python-version: "2.7" is not a Python version opentide installs on; use 3.10 or later, as
+       3.12, 3.12.4 or 3.x
