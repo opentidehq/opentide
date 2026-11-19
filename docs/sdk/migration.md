@@ -29,7 +29,7 @@ description: The entry points removed with the Python implementation — Opentid
 
 What does not change: the [models](./models.md) (`from opentide.models import DetectionRule`, the Rust classes), the [platform plugins](./platforms.md#platform-plugins) (`opentide.plugins`), and the command line.
 
-Every other module of the package was internal, undocumented, and is removed too: `opentide.cli`, `opentide.core`, `opentide.platforms`, `opentide.deployment`, `opentide.validation`, `opentide.loading`, `opentide.registry`, `opentide.generation`, `opentide.documentation`, `opentide.export`, `opentide.ci`, `opentide.sharing`, `opentide.query`, `opentide.mcp_server`, `opentide.vocabulary`, `opentide.schemas`. A plugin that uses only `opentide.plugins` keeps working.
+Every other module of the package was internal and is removed too: `opentide.cli`, `opentide.core`, `opentide.platforms`, `opentide.deployment`, `opentide.validation`, `opentide.loading`, `opentide.registry`, `opentide.generation`, `opentide.documentation`, `opentide.export`, `opentide.ci`, `opentide.sharing`, `opentide.query`, `opentide.mcp_server`, `opentide.vocabulary`, `opentide.schemas`. A plugin that uses only `opentide.plugins` keeps working. One of them ran in pipelines: a GitLab pipeline that `opentide setup ci gitlab` wrote through 0.28.1 calls `python -m opentide.ci.codequality`; regenerate it with `opentide setup ci gitlab --yes`.
 
 ## Validate
 

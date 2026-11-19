@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.mcp/agent/tide-corpus/not-on-path
+---
+args: opentide setup mcp --vscode --yes
+exit: 0
+
+━━━ stdout
+  .vscode/mcp.json   MCP server for VS Code
+
+✓ Wrote .vscode/mcp.json
+
+━━━ stderr
+warning: These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command.
+
+━━━ ws/.vscode/ · created 0755
+
+━━━ ws/.vscode/mcp.json · created 0644
+{
+  "servers": {
+    "opentide": {
+      "command": "opentide",
+      "args": [
+        "mcp",
+        "start"
+      ],
+      "env": {
+        "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}

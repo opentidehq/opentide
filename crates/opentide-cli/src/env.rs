@@ -36,6 +36,26 @@ impl Env {
         self.vars.get(name).map(String::as_str)
     }
 
+    /// The program search path, `PATH`. Windows names variables in any
+    /// case and keeps the one it was given (`Path`), so there the name is
+    /// matched whatever its case.
+    pub fn search_path(&self) -> Option<&str> {
+        self.named(cfg!(windows), "PATH")
+    }
+
+    /// The value of `name`, its case ignored when `any_case`.
+    fn named(&self, any_case: bool, name: &str) -> Option<&str> {
+        if !any_case {
+            return self.get(name);
+        }
+        self.get(name).or_else(|| {
+            self.vars
+                .iter()
+                .find(|(key, _)| key.eq_ignore_ascii_case(name))
+                .map(|(_, value)| value.as_str())
+        })
+    }
+
     /// Every variable, by name.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
         self.vars.iter().map(|(k, v)| (k.as_str(), v.as_str()))
@@ -97,6 +117,23 @@ impl Env {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Windows keeps the search path as `Path` (#1670 review): matched
+    /// whatever its case there, and only as `PATH` elsewhere, where a
+    /// `Path` variable is not the search path.
+    #[test]
+    fn the_search_path_is_found_in_any_case_on_windows() {
+        let windows = Env::from_pairs([("Path", "C:\\bin")]);
+        assert_eq!(windows.named(true, "PATH"), Some("C:\\bin"));
+        assert_eq!(windows.named(false, "PATH"), None);
+        assert_eq!(
+            windows.search_path(),
+            if cfg!(windows) { Some("C:\\bin") } else { None }
+        );
+        let both = Env::from_pairs([("PATH", "/usr/bin"), ("Path", "/elsewhere")]);
+        assert_eq!(both.named(true, "PATH"), Some("/usr/bin"));
+        assert_eq!(both.search_path(), Some("/usr/bin"));
+    }
 
     #[test]
     fn framework_colour_choice_follows_no_color_then_force_color_then_clicolor_force() {

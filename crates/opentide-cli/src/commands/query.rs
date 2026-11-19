@@ -49,8 +49,10 @@ pub fn query_platforms() -> Vec<&'static str> {
 
 /// Rows per tenant when `--limit` names none (`DEFAULT_LIMIT`).
 pub const DEFAULT_LIMIT: i64 = 100;
-/// The most rows one query may return per tenant (`MAX_LIMIT`).
-pub const MAX_LIMIT: i64 = 5_000;
+/// The most rows one query may return per tenant
+/// ([`opentide_connectors::connector::MAX_QUERY_LIMIT`]).
+#[expect(clippy::cast_possible_wrap, reason = "5000 fits an i64")]
+pub const MAX_LIMIT: i64 = opentide_connectors::connector::MAX_QUERY_LIMIT as i64;
 /// The window `--since` takes when no window is given (`DEFAULT_SINCE`).
 pub const DEFAULT_SINCE: &str = "24h";
 /// Columns the table shows when `--columns` names none (`TABLE_COLUMNS`).

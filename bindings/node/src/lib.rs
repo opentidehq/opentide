@@ -358,26 +358,39 @@ impl Workspace {
     /// The tenants the workspace configures for `platform` (the
     /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
     /// in file order; empty when it configures none. Open one with
-    /// `Connection.open`.
+    /// `Connection.open`. Throws `usage_invalid_choice` for a `platform`
+    /// that is neither built in nor a loaded plugin's.
     #[napi(catch_unwind)]
-    pub fn tenants(&self, platform: String) -> Vec<TenantConfig> {
-        self.inner
-            .tenants(&platform)
-            .into_iter()
-            .map(TenantConfig::from)
-            .collect()
+    pub fn tenants(&self, env: &Env, platform: String) -> napi::Result<Vec<TenantConfig>> {
+        self.tenant_configs(&platform).map_err(|e| throw(*env, e))
     }
 }
 
 /// What each `#[napi]` method computes, before its result becomes a
 /// JavaScript value: plain Rust, so the crate's own tests run it.
 impl Workspace {
+    /// The tenants of `platform`, once the facade knows the platform.
+    fn tenant_configs(&self, platform: &str) -> Result<Vec<TenantConfig>, Failure> {
+        Ok(self
+            .inner
+            .tenants(platform)?
+            .into_iter()
+            .map(TenantConfig::from)
+            .collect())
+    }
+
     fn validation(
         &self,
         options: Option<ValidateOptions>,
     ) -> Result<opentide::Validation, Failure> {
         let options = validate_options(options.unwrap_or_default())?;
-        Ok(self.inner.validate(&options))
+        let validation = self.inner.validate(&options);
+        // An option the command line refuses (an unknown `types` entry):
+        // thrown with its usage code, as the other refused options are.
+        if let Some(refusal) = &validation.refused {
+            return Err(Failure::new(refusal.code, refusal.message.clone()));
+        }
+        Ok(validation)
     }
 
     fn lint_report(&self, options: Option<LintOptions>) -> Result<LintReport, Failure> {

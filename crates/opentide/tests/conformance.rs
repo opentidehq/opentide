@@ -241,6 +241,7 @@ fn call(ws: &Workspace, operation: &Value) -> Result<Json, opentide::Error> {
         "coverage" => tree(&ws.coverage(operation["technique"].as_str().unwrap())),
         "tenants" => Json::Array(
             ws.tenants(operation["platform"].as_str().unwrap())
+                .unwrap()
                 .iter()
                 .map(|tenant| {
                     object(vec![

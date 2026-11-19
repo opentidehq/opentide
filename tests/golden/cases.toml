@@ -110,6 +110,12 @@ source = "tests/golden/fixtures/vscode-workspace"
 about = "vscode with signal entities written without their stage or in the wrong case, which `migrate vocab-scope --apply` rewrites in place"
 edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - hostname  # no stage\n        - 'host::command line'\n    - name: Dump\n      entities: [Process, Host::Hostname]\n" }]
 
+[fixtures.vscode-long-query]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with `long.lucene`, a 807-character Lucene query on one line whose `(` never closes: the frame shows the line in part (B22)"
+edits = [{ path = "long.lucene", find = "", replace = "(process.name:proc00.exe OR process.name:proc01.exe OR process.name:proc02.exe OR process.name:proc03.exe OR process.name:proc04.exe OR process.name:proc05.exe OR process.name:proc06.exe OR process.name:proc07.exe OR process.name:proc08.exe OR process.name:proc09.exe OR process.name:proc10.exe OR process.name:proc11.exe OR process.name:proc12.exe OR process.name:proc13.exe OR process.name:proc14.exe OR process.name:proc15.exe OR process.name:proc16.exe OR process.name:proc17.exe OR process.name:proc18.exe OR process.name:proc19.exe OR process.name:proc20.exe OR process.name:proc21.exe OR process.name:proc22.exe OR process.name:proc23.exe OR process.name:proc24.exe OR process.name:proc25.exe OR process.name:proc26.exe OR process.name:proc27.exe OR process.name:proc28.exe OR process.name:proc29.exe\n" }]
+
 [fixtures.vscode-ambiguous]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -2218,6 +2224,7 @@ command = "setup"
 variant = "plan"
 args = ["setup", "--plan", "--platform", "sentinel", "--ci", "github", "--mcp", "vscode", "--hooks", "--env"]
 fixtures = ["none", "empty"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
 
 [[case]]
 command = "setup"
@@ -2287,6 +2294,21 @@ variant = "promotion-target"
 args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
 fixtures = ["vscode-docs-folder"]
 
+# GitLab merges its Code Quality reports on the job's Python, with no module
+# the release does not ship (#1656).
+[[case]]
+command = "setup ci"
+variant = "gitlab"
+args = ["setup", "ci", "gitlab", "--yes"]
+fixtures = ["tide-corpus"]
+
+# The explorer job installs the pinned release, as every job does (#1656).
+[[case]]
+command = "setup ci"
+variant = "explorer-pages"
+args = ["setup", "ci", "github", "--default-branch", "main", "--explorer-pages", "--yes"]
+fixtures = ["tide-corpus"]
+
 # The tenants name their own variables ($ELASTIC_API_KEY, $S1_API_TOKEN,
 # $DEFENDER_CLIENT_SECRET, ...): the jobs that reach a tenant map each one,
 # from GitHub's secrets and in each Azure step's env (#1655).
@@ -2333,12 +2355,23 @@ command = "setup mcp"
 variant = "example"
 args = ["setup", "mcp", "--vscode", "--yes"]
 fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+
+# `opentide` not on PATH: every configuration runs it, so setup warns and
+# reports mcp_available: false (#1670, smoke C6). `<TMP>/empty` holds nothing.
+[[case]]
+command = "setup mcp"
+variant = "not-on-path"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/empty" }
 
 [[case]]
 command = "setup mcp"
 variant = "cursor-vscode"
 args = ["setup", "mcp", "--cursor", "--vscode", "--yes"]
 fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
 
 # An existing configuration with a byte-order mark and comments, merged into (#743).
 [[case]]
@@ -2346,6 +2379,7 @@ command = "setup mcp"
 variant = "merge"
 args = ["setup", "mcp", "--vscode", "--yes"]
 fixtures = ["setup-merge"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
 
 # An existing platform file, enabled in place.
 [[case]]
@@ -3269,3 +3303,10 @@ args = ["share", "push", "--changed", "--uuid", "00000000-0000-4000-8048-0000000
 fixtures = ["share-misp-push"]
 modes = ["plain", "json"]
 env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY = "<WS>" }
+
+# B22: a finding on a line longer than a frame shows.
+[[case]]
+command = "validate query"
+variant = "long-line"
+args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
+fixtures = ["vscode-long-query"]

@@ -255,7 +255,7 @@ fn a_missing_name_is_asked_for_at_a_terminal() {
         vec![Reply::Text(Some("  Served Threat  "))],
         true,
     );
-    assert_eq!(asked, ["text Threat name [] None"]);
+    assert_eq!(asked, ["text Threat name [] Some(\"a name\")"]);
     assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
     assert!(written(&report, dir.path()).contains("name: Served Threat"));
 }
@@ -272,7 +272,7 @@ fn a_rule_asks_for_its_platform_blocks() {
         vec![Reply::Text(Some("Watch")), Reply::Checkbox(Some(vec![1]))],
         true,
     );
-    assert_eq!(asked[0], "text Rule name [] None");
+    assert_eq!(asked[0], "text Rule name [] Some(\"a name\")");
     assert_eq!(
         asked[1],
         "checkbox Platform blocks [\"Microsoft Sentinel\", \"Splunk Enterprise Security\"] [] required=false"
@@ -289,11 +289,12 @@ fn a_rule_asks_for_its_platform_blocks() {
         vec![Reply::Text(Some("Other"))],
         true,
     );
-    assert_eq!(asked, ["text Rule name [] None"]);
+    assert_eq!(asked, ["text Rule name [] Some(\"a name\")"]);
 }
 
-/// An empty answer needs input; Ctrl-C stops the run; and nobody is asked
-/// anything away from a terminal.
+/// The name question refuses an empty answer (`required`); one that gets
+/// through anyway is an invalid name, not a missing one (#1670); Ctrl-C
+/// stops the run; and nobody is asked anything away from a terminal.
 #[test]
 fn an_unanswered_question_stops_the_run() {
     let dir = prompted_workspace();
@@ -305,7 +306,8 @@ fn an_unanswered_question_stops_the_run() {
         true,
     );
     let failure = report.outcome.failure.unwrap();
-    assert_eq!(failure.code, USAGE_NEEDS_INPUT);
+    assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+    assert_eq!(failure.message, "The name cannot be empty");
     assert_eq!(failure.argument.as_deref(), Some("--name"));
     let (report, _) = prompted(dir.path(), "threat", &[], vec![Reply::CtrlC], true);
     assert_eq!(report.outcome.exit_code, 130);

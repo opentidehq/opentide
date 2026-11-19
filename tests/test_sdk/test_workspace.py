@@ -30,6 +30,33 @@ def test_the_names_are_the_packages() -> None:
     assert {"Workspace", "run_json", "OpentideError"} <= set(dir(opentide))
 
 
+def test_dir_lists_the_package_names_only() -> None:
+    names = dir(opentide)
+    assert "Workspace" in names
+    assert "TYPE_CHECKING" not in names
+    assert "annotations" not in names
+
+
+def test_a_path_that_is_no_folder_is_refused(tmp_path: Path) -> None:
+    # As `--repo` refuses it (smoke D13): not an empty workspace.
+    for path in (tmp_path / "nowhere", tmp_path / "file.txt"):
+        if path.name == "file.txt":
+            path.write_text("x", encoding="utf-8")
+        with pytest.raises(OpentideError) as raised:
+            Workspace.open(path)
+        assert raised.value.code == "usage_invalid_value"
+
+
+def test_options_the_command_line_refuses_are_refused(ws: Workspace) -> None:
+    with pytest.raises(OpentideError) as raised:
+        ws.validate(types=["bogus"])
+    assert raised.value.code == "usage_invalid_choice"
+    assert "Unknown object type(s): bogus" in raised.value.message
+    with pytest.raises(OpentideError) as raised:
+        ws.deploy_plan(platform="bogus")
+    assert raised.value.code == "usage_invalid_choice"
+
+
 def test_a_workspace_opens_on_disk(ws: Workspace, tide_corpus_repo: Path) -> None:
     assert ws.root.resolve() == tide_corpus_repo.resolve()
     assert repr(ws) == f"Workspace({str(ws.root)!r})"
