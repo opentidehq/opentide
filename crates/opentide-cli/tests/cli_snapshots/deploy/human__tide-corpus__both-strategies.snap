@@ -39,6 +39,9 @@ exit: 0
     ␛[1m␛[32m+ create␛[0m  ␛[1mSysdig Falco Rule␛[0m  ␛[2m…0000005d1a90␛[0m  ␛[2mstatus STAGING␛[0m
 
 ␛[1mPlan:␛[0m 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete
+  ␛[1m␛[34mnote:␛[0m splunk: once a rule's saved search is written, any other saved search in the tenant's app
+        whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier
+        name of the rule left) is deleted
   ␛[1m␛[36mhelp:␛[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml;
         add (or uncomment) a [[tenants]] entry in
         .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a
