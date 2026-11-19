@@ -1,0 +1,41 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | search kind=case_sensitive in (U, V*) * has \\\"x\\\"\")"
+---
+SOURCE_FILE@0..51
+  QUERY@0..51
+    TABULAR_EXPRESSION@0..51
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      SEARCH_OPERATOR@4..51
+        SEARCH_KW@4..10 "search"
+        WHITESPACE@10..11 " "
+        OPERATOR_OPTION@11..30
+          IDENT@11..15 "kind"
+          EQ@15..16 "="
+          OPTION_VALUE@16..30
+            IDENT@16..30 "case_sensitive"
+        WHITESPACE@30..31 " "
+        IN_KW@31..33 "in"
+        WHITESPACE@33..34 " "
+        L_PAREN@34..35 "("
+        IDENT@35..36 "U"
+        COMMA@36..37 ","
+        WHITESPACE@37..38 " "
+        TABLE_PATTERN@38..40
+          IDENT@38..39 "V"
+          STAR@39..40 "*"
+        R_PAREN@40..41 ")"
+        WHITESPACE@41..42 " "
+        COMPARISON_EXPR@42..51
+          STAR_EXPR@42..43
+            STAR@42..43 "*"
+          WHITESPACE@43..44 " "
+          CMP_OP@44..47 "has"
+          WHITESPACE@47..48 " "
+          LITERAL@48..51
+            STRING@48..51 "\"x\""

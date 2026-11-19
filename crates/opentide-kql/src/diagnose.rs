@@ -1119,6 +1119,8 @@ mod tests {
             "SecurityEvent | where * =~ \"x\"",
             "SecurityEvent | where * matches regex \"x\"",
             "SecurityEvent | where * == \"x\"",
+            "SecurityEvent | where * : \"x\"",
+            "search in (SecurityEvent) * : \"x\"",
             "SecurityEvent | where * startswith \"x\" and EventID == 1",
             "SecurityEvent | extend y = 2 * 3",
             "SecurityEvent | summarize count(*)",

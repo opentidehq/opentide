@@ -78,7 +78,7 @@ snapshots! {
     op_print_and_datatable: "let d = datatable (a: string, b: int) [\"x\", 1, ];\nprint a = 1, 2 | union d";
     op_externaldata: "externaldata (c: string, d: dynamic,) [@\"https://e/x.csv\", \"b\"] with (format = \"csv\") | take 1";
     op_search_source: "search kind = case_sensitive \"x\" | search \"y\" | take 1";
-    op_search_in: "search in (A, B) where c == 1";
+    op_search_in: "search in (A, B) c == 1";
     op_find_in: "find in (T) where a == 1 | take 1";
     op_top_nested_sample: "T | top-nested 3 of x with others = \"o\" by count() desc, top-nested of y by sum(z) asc nulls last | sample-distinct 10 of a";
     op_fork_facet_partition: "T | fork a = (where x > 1 | take 5) (count) | facet by a, b with (where x > 1 | take 5) | facet by c with take 5 | partition hint.strategy = native by k (top 1 by t) | partition by k in dynamic([1]) { U | take 1 }";
@@ -532,6 +532,69 @@ fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
         "T | render timechart title=-1",
         "T | render timechart title=a==b",
         "T | render timechart title=a has \"b\"",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}
+
+// The search and find forms Kusto.Language 12.4.1 accepts that were errors.
+snapshots! {
+    search_star_colon: "search * : \"error\" and Column : \"x\"";
+    search_operator_kind_in: "T | search kind=case_sensitive in (U, V*) * has \"x\"";
+    find_project_columns: "find in (T1) where x == 1 project Column1, ['a b']:long";
+    find_project_smart: "find in (T1) where x == 1 project-smart | take 1";
+}
+
+#[test]
+fn search_and_find_forms_parse_and_their_broken_twins_do_not() {
+    for source in [
+        "search Column : \"error\"",
+        "T | search * has \"x\"",
+        "T | search Col : \"a\" and * : \"b\"",
+        "search a : \"x\" == true",
+        "search a == \"x\" : true",
+        "T | where a : \"x\"",
+        "find \"x\" project Col1",
+        "find in (T1) where x == 1 project Col1:dynamic",
+        "T | search in (T2) \"x\"",
+        "T | where a : \"x\" != \"y\"",
+        "T | where a <= \"y\" : \"x\"",
+        "T | where * == \"x\" : true",
+        "T | where a : \"x\" !in (\"y\")",
+        "T | where a : \"x\" has_all (\"y\")",
+        "T | where a : \"x\" !between (1 .. 2)",
+        "T | search withsource=src with_source=s bagexpansion=bag isfuzzy=true \"x\"",
+        "T | search kind=default \"x\"",
+        "find in (T) where a == 1",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "search a : b : c",
+        "search a :",
+        "search : \"x\"",
+        "search * :",
+        "search * != \"x\"",
+        "find in (T1) where x == 1 project",
+        "find in (T1) where x == 1 project Col1,",
+        "find in (T1) where x == 1 project pack_all()",
+        "find in (T1) where x == 1 project-away Col1",
+        "find in (T1) where x == 1 project - smart",
+        "find in (T1) where x == 1 project-smart, Col1",
+        "find in (T1) where x == 1 project Col1:(a:int)",
+        "search \"x\" project Col1",
+        "T | search foo=1 \"x\"",
+        "T | search kind=case_sensitive",
+        "T | where a : \"x\" has \"y\"",
+        "T | where a has \"y\" : \"x\"",
+        "T | where a : \"x\" =~ \"y\"",
+        "T | where a : \"x\" matches regex \"y\"",
+        "T | where * has \"x\" : true",
+        "T | where a in (\"y\") : \"x\"",
+        "T | search kind=simple \"x\"",
+        "T | search hint.x=1 \"x\"",
+        "T | search where a == 1",
+        "search in (T) where a == 1",
     ] {
         assert!(!errors(source).is_empty(), "{source} parses");
     }

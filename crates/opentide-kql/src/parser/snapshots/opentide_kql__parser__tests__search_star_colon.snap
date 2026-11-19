@@ -1,0 +1,31 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"search * : \\\"error\\\" and Column : \\\"x\\\"\")"
+---
+SOURCE_FILE@0..35
+  QUERY@0..35
+    TABULAR_EXPRESSION@0..35
+      TABULAR_SOURCE@0..35
+        SEARCH_SOURCE@0..35
+          SEARCH_KW@0..6 "search"
+          WHITESPACE@6..7 " "
+          AND_EXPR@7..35
+            COMPARISON_EXPR@7..18
+              STAR_EXPR@7..8
+                STAR@7..8 "*"
+              WHITESPACE@8..9 " "
+              COLON@9..10 ":"
+              WHITESPACE@10..11 " "
+              LITERAL@11..18
+                STRING@11..18 "\"error\""
+            WHITESPACE@18..19 " "
+            AND_KW@19..22 "and"
+            WHITESPACE@22..23 " "
+            COMPARISON_EXPR@23..35
+              NAME_REF@23..29
+                IDENT@23..29 "Column"
+              WHITESPACE@29..30 " "
+              COLON@30..31 ":"
+              WHITESPACE@31..32 " "
+              LITERAL@32..35
+                STRING@32..35 "\"x\""
