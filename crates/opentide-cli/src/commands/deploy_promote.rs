@@ -78,7 +78,8 @@ pub enum Restored {
 impl Promoted {
     /// Writes the file's bytes from before the promotion back, as the
     /// promotion wrote it (through a temporary file, its mode kept), when
-    /// the file still holds exactly what the promotion wrote.
+    /// the file still holds exactly what the promotion wrote. A file that
+    /// holds its bytes from before the promotion is left as it is (`Done`).
     ///
     /// # Errors
     ///
@@ -91,6 +92,9 @@ impl Promoted {
             }
             Err(error) => return Err(format!("{}: {error}", self.path.display())),
         };
+        if now == self.original {
+            return Ok(Restored::Done);
+        }
         if now != self.promoted {
             return Ok(Restored::Edited);
         }
@@ -102,18 +106,17 @@ impl Promoted {
 
 /// The promoted files a run has not settled yet: put back before the
 /// process ends at once (a second Ctrl-C, a run still stopping after the
-/// grace period, a termination signal), where no destructor runs.
+/// grace period, SIGTERM), where no destructor runs. Every change to a
+/// file it holds, the promotion's write and each restore, happens under
+/// its lock, so a signal waits for a write or a restore in progress and
+/// then finds the file settled or still pending, never half done.
 static PENDING: std::sync::Mutex<Vec<Promoted>> = std::sync::Mutex::new(Vec::new());
 
-fn pending() -> std::sync::MutexGuard<'static, Vec<Promoted>> {
+/// The pending files, locked.
+pub fn pending() -> std::sync::MutexGuard<'static, Vec<Promoted>> {
     PENDING
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-/// Holds *files* as pending until [`settle`] takes them.
-pub fn hold(files: &[Promoted]) {
-    pending().extend(files.iter().cloned());
 }
 
 /// Takes *files* off the pending list: the run settled them.
@@ -121,14 +124,127 @@ pub fn settle(files: &[Promoted]) {
     pending().retain(|held| !files.iter().any(|file| file.path == held.path));
 }
 
-/// Puts back every pending file, before the process ends at once. Called
-/// from the interrupt handler; logs what it could not put back.
+/// A tenant received the rule *uuid* (canonical): its file stays
+/// promoted, and a forced exit no longer puts it back.
+pub fn received(uuid: &str) {
+    pending().retain(|held| held.uuid.as_deref() != Some(uuid));
+}
+
+/// Puts back every pending file before the process ends at once, holding
+/// the lock while it does. Called from a signal's thread, where nothing
+/// logs: what it did is written on stderr.
 pub fn restore_pending() {
-    let files = std::mem::take(&mut *pending());
-    for file in files {
-        if let Err(error) = file.restore() {
-            tracing::error!(detail = error.as_str(), "rule_promotion_undo_failed");
+    use std::io::Write as _;
+    let mut held = pending();
+    let mut err = std::io::stderr().lock();
+    for file in held.drain(..) {
+        let path = file.path.display();
+        let _ignored = match file.restore() {
+            Ok(Restored::Done) => writeln!(
+                err,
+                "warning: {path}: status promotion undone, as no tenant received the rule"
+            ),
+            Ok(Restored::Missing) => writeln!(
+                err,
+                "warning: {path} was deleted during the deploy, so its status promotion was not \
+                 undone"
+            ),
+            Ok(Restored::Edited) => writeln!(
+                err,
+                "error: {path} changed during the deploy, so its status promotion was not \
+                 undone: no tenant received the rule; set its status back before committing"
+            ),
+            Err(error) => writeln!(
+                err,
+                "error: could not undo the status promotion of {path}, which no tenant \
+                 received: {error}"
+            ),
+        };
+    }
+}
+
+/// While a promotion is pending, SIGTERM (and SIGHUP) put the pending
+/// files back ([`restore_pending`]), then end the process as their default
+/// does. A signal is taken only while it still has its default action when
+/// the first promotion starts: one that is ignored (`nohup`) or already
+/// handled (`opentide serve`, a host program's own handler) is left alone.
+/// On Linux `/proc/self/status` says which; elsewhere only SIGTERM is taken,
+/// and only where opentide is the whole process ([`crate::app::exit`]) and
+/// no `serve` handles it. The handler stays installed once taken, since
+/// signal-hook never gives a signal back to its default (an unregistered
+/// SIGTERM would be ignored): with nothing pending it ends the process at
+/// once, as the default does.
+pub fn guard_termination() {
+    #[cfg(unix)]
+    {
+        static INSTALLED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+        INSTALLED.get_or_init(|| {
+            use signal_hook::consts::{SIGHUP, SIGTERM};
+            let taken: Vec<i32> = [SIGTERM, SIGHUP]
+                .into_iter()
+                .filter(|&signal| match default_action(signal) {
+                    Some(default) => default,
+                    None => {
+                        signal == SIGTERM
+                            && crate::app::process_ends()
+                            && !crate::serve::handles_termination()
+                    }
+                })
+                .collect();
+            if taken.is_empty() {
+                return;
+            }
+            if let Err(error) = install_termination(&taken) {
+                tracing::warn!(detail = %error, "promotion_signal_not_handled");
+            }
+        });
+    }
+}
+
+/// Whether *signal* has its default action (neither ignored nor caught),
+/// read from `/proc/self/status`; `None` where that cannot be read.
+#[cfg(unix)]
+fn default_action(signal: i32) -> Option<bool> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let mask = |name: &str| -> Option<u64> {
+        let line = status.lines().find(|line| line.starts_with(name))?;
+        u64::from_str_radix(line[name.len()..].trim(), 16).ok()
+    };
+    let bit = 1_u64 << (signal - 1);
+    Some(mask("SigIgn:")? & bit == 0 && mask("SigCgt:")? & bit == 0)
+}
+
+#[cfg(unix)]
+fn install_termination(signals: &[i32]) -> std::io::Result<()> {
+    let mut signals = signal_hook::iterator::Signals::new(signals)?;
+    std::thread::Builder::new()
+        .name("opentide-promotion-stop".into())
+        .spawn(move || {
+            if let Some(signal) = signals.forever().next() {
+                restore_pending();
+                let _ignored = signal_hook::low_level::emulate_default_handler(signal);
+            }
+        })?;
+    Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod signal_tests {
+    /// SIGTERM has its default action in a test process; SIGPIPE, which
+    /// Rust's runtime ignores, does not.
+    #[test]
+    fn the_status_file_says_which_signals_keep_their_default() {
+        if !std::path::Path::new("/proc/self/status").exists() {
+            return;
         }
+        assert_eq!(
+            super::default_action(signal_hook::consts::SIGPIPE),
+            Some(false)
+        );
+        assert_eq!(
+            super::default_action(signal_hook::consts::SIGUSR2),
+            Some(true)
+        );
     }
 }
 
@@ -210,7 +326,7 @@ fn setting_text(value: &Setting) -> String {
 }
 
 /// Runs the promotion: plans every file, then logs, writes and draws the
-/// step: the files it rewrote, held pending ([`hold`]), and `Ok` when the
+/// step: the files it rewrote, held pending ([`pending`]), and `Ok` when the
 /// run goes on to plan. A write that fails stops the run, and the files
 /// written before it are among those returned, to put back.
 pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> (Vec<Promoted>, Result<(), Stop>) {
@@ -223,12 +339,24 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> (Vec<Promoted>, Result<(
     if ended.is_none() {
         for (path, bytes, before) in planned {
             let (path, bytes) = (&path, &bytes);
+            let written = Promoted {
+                path: path.clone(),
+                original: before.0,
+                promoted: bytes.clone(),
+                uuid: before.1,
+            };
+            // Pending before it is written, under the lock: a signal waits
+            // for the write, then puts the file back.
+            let mut held = pending();
+            held.push(written.clone());
             // `_write_atomically`: through a temporary file beside it, the
             // rule's permission bits kept (#987).
             if let Err(error) = opentide_workspace::fs::write_atomically(path, bytes) {
+                held.pop();
                 ended = Some(Stop::Failed(format!("{}: {error}", path.display())));
                 break;
             }
+            drop(held);
             emit(&Event::Info(
                 "rule_promoted",
                 vec![
@@ -239,13 +367,6 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> (Vec<Promoted>, Result<(
                     ),
                 ],
             ));
-            let written = Promoted {
-                path: path.clone(),
-                original: before.0,
-                promoted: bytes.clone(),
-                uuid: before.1,
-            };
-            hold(std::slice::from_ref(&written));
             promoted.push(written);
         }
     }
@@ -776,6 +897,8 @@ mod tests {
         };
         assert_eq!(file.restore(), Ok(Restored::Done));
         assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        // Put back already (a signal's restore, then the run's).
+        assert_eq!(file.restore(), Ok(Restored::Done));
         std::fs::write(&path, "edited").unwrap();
         assert_eq!(file.restore(), Ok(Restored::Edited));
         assert_eq!(std::fs::read(&path).unwrap(), b"edited");

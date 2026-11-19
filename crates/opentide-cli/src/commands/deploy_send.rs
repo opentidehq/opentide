@@ -469,7 +469,13 @@ fn report_skipped(
         Some((_, Json::Object(members))) => members.clone(),
         _ => Object::new(),
     };
-    summary.insert("skipped".into(), Json::from(rules));
+    // The rules a status left out, besides the rows the run skipped (a
+    // rule no tenant takes, an `INERT` block).
+    let rows = match summary.get("skipped") {
+        Some(Json::Int(rows)) => usize::try_from(*rows).unwrap_or(0),
+        _ => 0,
+    };
+    summary.insert("skipped".into(), Json::from(rules + rows));
     set(result, "_summary", Json::Object(summary));
     let deployable = if runs.is_empty() {
         Vec::new()
@@ -659,6 +665,7 @@ fn deploy(
             local: &local,
             debug,
         };
+        super::deploy_promote::guard_termination();
         // The files it rewrote, even when a write failed part-way: put
         // back unless a tenant receives their rule (#1653).
         let (rewritten, outcome) = super::deploy_promote::run(&promotion, &cx.lines);
@@ -1231,7 +1238,7 @@ impl Unpromote {
         self.sent.extend(
             results
                 .iter()
-                .filter(|result| result.status == "deployed" && result.tenant.is_some())
+                .filter(|result| reached(result))
                 .map(|result| opentide_compile::rule::canonical_uuid(&result.id)),
         );
         let kept: Vec<_> = self
@@ -1249,11 +1256,13 @@ impl Unpromote {
             .is_some_and(|uuid| self.sent.contains(uuid))
     }
 
-    /// Puts back every file no tenant received the rule of, once.
+    /// Puts back every file no tenant received the rule of, once, holding
+    /// the pending files' lock: a signal meanwhile waits for it, then finds
+    /// nothing left to put back.
     fn finish(&mut self) -> Settled {
         use super::deploy_promote::Restored;
         let files = std::mem::take(&mut self.files);
-        super::deploy_promote::settle(&files);
+        let mut held = super::deploy_promote::pending();
         let mut settled = Settled::default();
         for file in files.iter().filter(|file| !self.keeps(file)) {
             let path = file.path.display().to_string();
@@ -1266,9 +1275,13 @@ impl Unpromote {
                 Ok(Restored::Missing) => settled.warnings.push(format!(
                     "{path} was deleted during the deploy, so its status promotion was not undone"
                 )),
-                Ok(Restored::Edited) => settled.warnings.push(format!(
-                    "{path} changed during the deploy, so its status promotion was not undone: \
-                     no tenant received the rule; check its status before committing"
+                // The write-back would commit the edit, and with it a
+                // status no tenant received.
+                Ok(Restored::Edited) => settled.failures.push((
+                    path,
+                    "the file changed during the deploy, so it was left as it is; set its \
+                     status back before committing"
+                        .to_owned(),
                 )),
                 Err(error) => {
                     tracing::error!(
@@ -1281,8 +1294,15 @@ impl Unpromote {
                 }
             }
         }
+        held.retain(|pending| !files.iter().any(|file| file.path == pending.path));
+        drop(held);
         settled
     }
+}
+
+/// A result a tenant received: `deployed`, on a tenant.
+fn reached(result: &RuleResult) -> bool {
+    result.status == "deployed" && result.tenant.is_some()
 }
 
 impl Settled {
@@ -1328,6 +1348,14 @@ impl Drop for Unpromote {
         let settled = self.finish();
         for warning in settled.warnings {
             tracing::warn!(detail = warning.as_str(), "rule_promotion_not_undone");
+        }
+        for (path, error) in settled.failures {
+            tracing::error!(
+                path = path.as_str(),
+                detail = error.as_str(),
+                critical = true,
+                "rule_promotion_undo_failed"
+            );
         }
     }
 }
@@ -1633,6 +1661,10 @@ impl<'l> DeployLog<'l> {
                     break;
                 }
             }
+        }
+        if reached(&result) {
+            // Kept promoted from now on, whatever ends the run (#1653).
+            super::deploy_promote::received(&opentide_compile::rule::canonical_uuid(&result.id));
         }
         self.print(&result);
         self.results.push(result);

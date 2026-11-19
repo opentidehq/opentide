@@ -3607,15 +3607,13 @@ fn a_promotion_the_run_cannot_undo_fails_the_run() {
     }
 }
 
-/// A promoted file edited or deleted while the run sends is left as it is,
-/// with a warning: the run never overwrites an edit, nor makes a deleted
-/// file again (#1653).
+/// A promoted file edited or deleted while the run sends is left as it is:
+/// the run never overwrites an edit, nor makes a deleted file again
+/// (#1653). An edited file fails the run (exit 1), since the write-back
+/// would commit a status no tenant received; a deleted one is a warning.
 #[test]
 fn a_promoted_file_changed_during_the_run_is_left_as_it_is() {
-    for (deleted, said) in [
-        (false, "changed during the deploy"),
-        (true, "was deleted during the deploy"),
-    ] {
+    for deleted in [false, true] {
         let ws = sent_and_unsent();
         let unsent = ws.path().join("objects/rules/b.yaml");
         let touched = unsent.clone();
@@ -3634,20 +3632,26 @@ fn a_promoted_file_changed_during_the_run_is_left_as_it_is() {
             }),
             Vec::new(),
         );
-        assert_eq!(value(&sent, "_exit_code"), &Json::Int(0), "{text}");
-        let Json::Array(warnings) = value(&sent, "warnings") else {
-            panic!("{:?}", sent.result)
-        };
-        assert!(
-            warnings
-                .iter()
-                .any(|warning| text_of(warning).contains(said)
-                    && text_of(warning).contains("b.yaml")),
-            "{warnings:?}"
-        );
         if deleted {
+            assert_eq!(value(&sent, "_exit_code"), &Json::Int(0), "{text}");
+            let Json::Array(warnings) = value(&sent, "warnings") else {
+                panic!("{:?}", sent.result)
+            };
+            assert!(
+                warnings.iter().any(|warning| {
+                    let warning = text_of(warning);
+                    warning.contains("was deleted during the deploy") && warning.contains("b.yaml")
+                }),
+                "{warnings:?}"
+            );
             assert!(!unsent.exists(), "the deleted file was made again");
         } else {
+            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+            let message = text_of(value(&sent, "message"));
+            assert!(
+                message.contains("b.yaml") && message.contains("changed during the deploy"),
+                "{message}"
+            );
             let now = std::fs::read_to_string(&unsent).unwrap();
             assert!(now.ends_with("# edited\n"), "{now}");
         }

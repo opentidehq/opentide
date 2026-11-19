@@ -174,7 +174,7 @@ terminal = ["dep:ratatui", "dep:ratatui-core", "dep:ansi-to-tui", "dep:inquire"]
 
 [target.'cfg(not(target_os = "wasi"))'.dependencies]
 # Ctrl-C (`app::install_interrupt_handler`). WASI delivers no signals.
-ctrlc = { version = "3.4", features = ["termination"] }
+ctrlc = "3.4"
 # `mcp start`'s transport on stdin and a duplicate of stdout. WASI has
 # neither tokio's `fs` nor its `io-std` (tokio refuses them on wasm32); the
 # WASI build reads and writes the standard streams through blocking adapters.

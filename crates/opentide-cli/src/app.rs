@@ -2399,11 +2399,11 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
     let _ = interrupt;
 }
 
-/// Ctrl-C, or a termination signal (SIGTERM, SIGHUP): `interrupt` is set,
-/// and the run stops ([`Interrupt`]). The process ends with
-/// `error: interrupted` and 130 on a second signal, or when the run has not
-/// stopped after [`INTERRUPT_GRACE`]; a deploy's promoted rule files no
-/// tenant received are put back first, since no destructor runs then.
+/// Ctrl-C: `interrupt` is set, and the run stops ([`Interrupt`]). The
+/// process ends with `error: interrupted` and 130 on a second Ctrl-C, or
+/// when the run has not stopped after [`INTERRUPT_GRACE`]; a deploy's
+/// promoted rule files no tenant received are put back first, since no
+/// destructor runs then.
 #[cfg(not(target_os = "wasi"))]
 pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
@@ -2435,6 +2435,11 @@ pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
 
 /// Set by [`exit`]: the process ends when the run returns.
 static PROCESS_ENDS: AtomicBool = AtomicBool::new(false);
+
+/// Whether opentide is the whole process ([`exit`]), not a host's call.
+pub(crate) fn process_ends() -> bool {
+    PROCESS_ENDS.load(Ordering::Relaxed)
+}
 
 /// `opentide` as the whole process: [`main`], then exit with its status.
 /// The `opentide` binary calls it; a host that runs commands in its own

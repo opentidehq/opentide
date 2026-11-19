@@ -231,11 +231,15 @@ fn pushed_workspace(ws: &std::path::Path, port: u16) {
 }
 
 /// A RELEASE push's deploy that gets `signals` while its tenant holds the
-/// request: the run ends with 130, and the rule it promoted, which no
-/// tenant received, keeps the status it had (#1653). A termination signal
-/// is an interrupt (ctrlc's `termination`), and a second one, which ends the
-/// process at once, puts the promoted files back first.
-fn signalled_deploy_puts_the_promotion_back(signals: &[rustix::process::Signal]) {
+/// request: the rule it promoted, which no tenant received, keeps the
+/// status it had (#1653). SIGTERM puts the pending files back, then ends
+/// the process as its default does; a second Ctrl-C ends it at once, after
+/// putting them back. The status the process ended with, and its stderr.
+fn signalled_deploy_puts_the_promotion_back(
+    launcher: &[&str],
+    signals: &[rustix::process::Signal],
+    pause: Duration,
+) -> (std::process::ExitStatus, String) {
     let (accepted, connections) = mpsc::channel();
     let port = silent_tenant(accepted);
     let scratch = tempfile::tempdir().unwrap();
@@ -246,7 +250,13 @@ fn signalled_deploy_puts_the_promotion_back(signals: &[rustix::process::Signal])
     pushed_workspace(&ws, port);
     let rule = ws.join("objects/rules/r.yaml");
     let before = std::fs::read_to_string(&rule).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
+    let binary = env!("CARGO_BIN_EXE_opentide-cli");
+    let (program, words) = match launcher {
+        [] => (binary, Vec::new()),
+        [first, rest @ ..] => (*first, rest.iter().copied().chain([binary]).collect()),
+    };
+    let mut child = Command::new(program)
+        .args(words)
         .args([
             "--json",
             "deploy",
@@ -285,6 +295,7 @@ fn signalled_deploy_puts_the_promotion_back(signals: &[rustix::process::Signal])
     let pid = rustix::process::Pid::from_raw(i32::try_from(child.id()).unwrap()).unwrap();
     for signal in signals {
         rustix::process::kill_process(pid, *signal).unwrap();
+        std::thread::sleep(pause);
     }
     let deadline = Instant::now() + PATIENCE;
     let status = loop {
@@ -304,23 +315,68 @@ fn signalled_deploy_puts_the_promotion_back(signals: &[rustix::process::Signal])
         .unwrap()
         .read_to_string(&mut stderr)
         .unwrap();
-    assert_eq!(status.code(), Some(130), "{signals:?}: {stderr}");
     assert_eq!(
         std::fs::read_to_string(&rule).unwrap(),
         before,
         "{signals:?}: the promotion was put back; stderr: {stderr}"
     );
+    (status, stderr)
 }
 
 #[test]
 fn sigterm_during_a_deploy_puts_its_promotion_back() {
-    signalled_deploy_puts_the_promotion_back(&[rustix::process::Signal::TERM]);
+    use std::os::unix::process::ExitStatusExt as _;
+    let (status, stderr) = signalled_deploy_puts_the_promotion_back(
+        &[],
+        &[rustix::process::Signal::TERM],
+        Duration::ZERO,
+    );
+    assert_eq!(
+        status.signal(),
+        Some(15),
+        "ended by SIGTERM: {status:?}; {stderr}"
+    );
+    assert!(
+        stderr.contains("r.yaml: status promotion undone, as no tenant received the rule"),
+        "{stderr}"
+    );
+}
+
+/// SIGHUP puts the promotion back where it has its default action; under
+/// `nohup`, which ignores it, it is left ignored and the deploy runs on
+/// until SIGTERM. Linux reads which from `/proc/self/status`.
+#[cfg(target_os = "linux")]
+#[test]
+fn sighup_puts_the_promotion_back_unless_nohup_ignores_it() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let (status, stderr) = signalled_deploy_puts_the_promotion_back(
+        &[],
+        &[rustix::process::Signal::HUP],
+        Duration::ZERO,
+    );
+    assert_eq!(
+        status.signal(),
+        Some(1),
+        "ended by SIGHUP: {status:?}; {stderr}"
+    );
+    let (status, stderr) = signalled_deploy_puts_the_promotion_back(
+        &["nohup"],
+        &[rustix::process::Signal::HUP, rustix::process::Signal::TERM],
+        Duration::from_millis(500),
+    );
+    assert_eq!(
+        status.signal(),
+        Some(15),
+        "SIGHUP was ignored, SIGTERM ended it: {status:?}; {stderr}"
+    );
 }
 
 #[test]
-fn a_second_signal_during_a_deploy_puts_its_promotion_back() {
-    signalled_deploy_puts_the_promotion_back(&[
-        rustix::process::Signal::INT,
-        rustix::process::Signal::TERM,
-    ]);
+fn a_second_ctrl_c_during_a_deploy_puts_its_promotion_back() {
+    let (status, stderr) = signalled_deploy_puts_the_promotion_back(
+        &[],
+        &[rustix::process::Signal::INT, rustix::process::Signal::INT],
+        Duration::ZERO,
+    );
+    assert_eq!(status.code(), Some(130), "{stderr}");
 }
