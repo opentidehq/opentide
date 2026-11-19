@@ -248,6 +248,9 @@ pub enum CallError {
     /// The call got no answer (a timeout, a reset, a truncated body): it may
     /// or may not have happened.
     NoAnswer(ConnectorError),
+    /// The call was never sent: its connection could not be made, or the
+    /// tenant's certificate was refused. Nothing happened.
+    Unsent(ConnectorError),
     /// The tenant refused the key, has no Incidents API, or the run was
     /// cancelled: no rule on it can deploy.
     Tenant(ConnectorError),
@@ -355,9 +358,16 @@ impl<'a> Client<'a> {
         let response = self
             .cx
             .http
-            .send(request, self.cx.cancel)
+            .send_or_unsent(request, self.cx.cancel)
             .await
-            .map_err(classify)?;
+            .map_err(|failed| {
+                if failed.unsent {
+                    // Never sent, so nothing happened.
+                    CallError::Unsent(failed.error)
+                } else {
+                    classify(failed.error)
+                }
+            })?;
         let status = response.status().as_u16();
         let retry_after = response
             .headers()
@@ -595,11 +605,11 @@ impl RuleOutcome {
 }
 
 /// A tenant error from a call: `bitdefender_tenant_unreachable` for a call
-/// that got no answer, else the error itself.
+/// that got no answer or was never sent, else the error itself.
 fn tenant_error(error: CallError, tenant: &str) -> ConnectorError {
     match error {
         CallError::Tenant(error) => error,
-        CallError::NoAnswer(error) => ConnectorError::refused(
+        CallError::NoAnswer(error) | CallError::Unsent(error) => ConnectorError::refused(
             PLATFORM,
             tenant,
             format!("{TENANT_UNREACHABLE}: {}", error.text()),
@@ -727,6 +737,17 @@ async fn create(
                     outcome.fail(
                         CREATE_UNCONFIRMED,
                         format!("{unconfirmed}; the retry got no answer either"),
+                        Some(second.text()),
+                    );
+                    return Ok(());
+                }
+                // The retry never left (its connection refused), but the
+                // first create may still have landed: unconfirmed all the
+                // same, and the tenant goes on (#1658, D6).
+                Err(CallError::Unsent(second)) => {
+                    outcome.fail(
+                        CREATE_UNCONFIRMED,
+                        format!("{unconfirmed}; the retry could not be sent"),
                         Some(second.text()),
                     );
                     return Ok(());

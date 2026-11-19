@@ -674,7 +674,7 @@ pub fn sentinel_with(cx: &Context<'_>, connector: &Sentinel) -> super::Report {
 
 fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Outcome {
     let (tenants, root) = configured(cx, SENTINEL)?;
-    super::super::query::log_unset(&tenants, cx.env);
+    super::super::query::log_unset(&tenants, cx.env, "an extract");
     if tenants.is_empty() {
         tracing::error!(
             detail = "You must first have Sentinel tenants configured to initiate the import",
