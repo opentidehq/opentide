@@ -3202,7 +3202,7 @@ env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY 
 [[case]]
 command = "validate"
 variant = "folded-comment"
-args = ["validate"]
+args = ["validate", "--check", "queries", "--file", "detections/rules/custom-folder-rule.yaml"]
 fixtures = ["vscode-folded-comment"]
 
 [[case]]

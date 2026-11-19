@@ -10,6 +10,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Upgrade
 
+- Run `opentide validate --check queries`. Rewrite each query it flags with `query_folded_comment` as a literal block (`|-`), or drop its `//` line; until then, `--queries warn` reports it as a warning.
 - If a script reads an Elastic rule's `api_request` from `opentide deploy --dry-run --json` or `deploy_plan`, read `api_request.payload`: `api_request` is now `{payload, block}`. The Kibana rule is now the one the first tenant gets: that tenant's modifiers, `tags` and `index` are in it, and a tenant with `suppression = false` has no `alert_suppression`.
 - If your Python code catches `opentide._native.sdk.SdkError` itself (not `OpentideError`), read eight items from its `args`: `code`, `message`, `detail`, `scope`, `status`, `fields`, `partial` (a deploy document as JSON text, or `None`) and `more` (the further failures, each `(code, message, status, fields)`).
 - If a pipeline relies on `opentide deploy` stopping at the first refused rule, read the run's `failures` instead: the run now goes on, deploys what it can, and still exits 1 when anything failed.

@@ -13,7 +13,7 @@ exit: 0
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/validate.sarif · created 0644
-(995726 bytes; long strings and the largest parts elided)
+(995890 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -27,7 +27,7 @@ exit: 0
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 277926 bytes, sha256 9d5285be8427746da49f30f796639a3d257098b6137bd86b48f3051e94054cf6>",
+          "rules": "<elided 277926 bytes, sha256 339725c4bf415e67120720803557edf0d918e4ed913397f8d57baa6cad004223>",
           "version": "0.28.1"
         }
       }

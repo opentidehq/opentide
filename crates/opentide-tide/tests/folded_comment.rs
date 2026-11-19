@@ -83,6 +83,24 @@ fn a_comment_folding_carries_over_is_an_error_in_every_language() {
             "configurations.google_secops.events",
             10,
         ),
+        (
+            "yara signature (harfanglab)",
+            "  harfanglab:\n    yara:\n      signature: >-\n        rule a {\n        // note\n        condition: true }\n",
+            "configurations.harfanglab.yara.signature",
+            9,
+        ),
+        (
+            "yara signature (bitdefender)",
+            "  bitdefender:\n    yara:\n      signature: >-\n        rule a {\n        // note\n        condition: true }\n",
+            "configurations.bitdefender.yara.signature",
+            9,
+        ),
+        (
+            "yara assembled from the harfanglab fields",
+            "  harfanglab:\n    enabled: true\n    schema: platform::harfanglab::1.0\n    status: STAGING\n    yara:\n      meta:\n        context:\n          - file\n        os: Windows\n      strings: |\n        $a = \"x\"\n      condition: >-\n        $a\n        // note\n        and true\n",
+            "configurations.harfanglab.yara",
+            18,
+        ),
     ];
     for (case, block, path, line) in cases {
         let found = folded(&rule(block));
