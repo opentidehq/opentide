@@ -10,7 +10,7 @@ build-backend = "maturin"
 [project]
 name = "opentide"
 dynamic = ["version"]
-description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across nine security platforms."
+description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across thirteen security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
 # NOTICE covers the third-party data the engine compiles in; the licence and notice

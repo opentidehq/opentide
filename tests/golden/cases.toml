@@ -236,6 +236,18 @@ source = "tests/golden/fixtures/share-misp"
 about = "`share-misp` as a git checkout whose last commit, a push, changed sharing.toml and no object: nothing for `share push --changed` to share (UC-4.4e)"
 pushed = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"clear\"", replace = "max_tlp = \"green\"" }]
 
+[fixtures.deploy-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout of one commit, a new repository's first push: every rule file is new, so a deploy without --all reads them all (#1662)"
+pushed = []
+
+[fixtures.share-misp-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout of one commit, a new repository's first push: every object is new to `share push --changed` (#1662)"
+pushed = []
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -2058,9 +2070,10 @@ modes = ["plain", "json"]
 # UC-4.6c (#979): a RELEASE deploy on a push in CI promotes the rules the push
 # changed (`status promotion`) before it plans: the rule file rewritten in
 # place, `--skip-promotion` leaving it, a push with nothing to promote, and a
-# status written as an anchor, left with a warning. The oracle's plan reads
-# the promoted rule's tenants from before the promotion, so none is reached
-# and nothing is sent.
+# status written as an anchor, left with a warning. The plan reads the
+# promoted files again, so a promoted rule goes to the tenant that takes
+# RELEASE (#1653): here `lab`, which does not resolve, so its deploy fails.
+# The oracle planned from the status before the promotion and reached none.
 
 [[case]]
 command = "deploy"
@@ -2100,6 +2113,34 @@ command = "deploy"
 variant = "dry-run-push"
 args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
 fixtures = ["deploy-push"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# #1662: a repository's first commit has no parent, so every rule file it
+# holds is new: outside CI (the last commit) and on a GitHub push (an
+# all-zero `before`, HEAD's first parent missing), the dry run plans them all.
+[[case]]
+command = "deploy"
+variant = "dry-run-first-commit"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "deploy"
+variant = "dry-run-first-push"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push whose commits changed no rule file reads none, and says so rather
+# than blame a status (#1662).
+[[case]]
+command = "deploy"
+variant = "dry-run-no-rule-changed"
+args = ["deploy", "--dry-run", "--strategy", "PREVIEW"]
+fixtures = ["share-misp-push-config"]
 modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
@@ -2245,6 +2286,35 @@ command = "setup ci"
 variant = "promotion-target"
 args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
 fixtures = ["vscode-docs-folder"]
+
+# The tenants name their own variables ($ELASTIC_API_KEY, $S1_API_TOKEN,
+# $DEFENDER_CLIENT_SECRET, ...): the jobs that reach a tenant map each one,
+# from GitHub's secrets and in each Azure step's env (#1655).
+[[case]]
+command = "setup ci"
+variant = "tenant-variables-github"
+args = ["setup", "ci", "github", "--default-branch", "main", "--yes"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "setup ci"
+variant = "tenant-variables-azure"
+args = ["setup", "ci", "azure", "--default-branch", "main", "--yes"]
+fixtures = ["tenants"]
+
+# sharing.toml's destinations read ${MISP_API_KEY}: the share job maps it
+# (#1655).
+[[case]]
+command = "setup ci"
+variant = "sharing-variables-github"
+args = ["setup", "ci", "github", "--default-branch", "main", "--sharing", "--yes"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "setup ci"
+variant = "sharing-variables-azure"
+args = ["setup", "ci", "azure", "--default-branch", "main", "--sharing", "--yes"]
+fixtures = ["share-misp"]
 
 [[case]]
 command = "setup env"
@@ -3103,6 +3173,15 @@ fixtures = ["share-misp-push"]
 modes = ["plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 cassette = "golden/share-push-changed"
+
+# #1662: the first push of a new repository shares every object it holds.
+[[case]]
+command = "share push"
+variant = "changed-first-push"
+args = ["share", "push", "--changed", "--dry-run"]
+fixtures = ["share-misp-first-commit"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
 command = "share push"

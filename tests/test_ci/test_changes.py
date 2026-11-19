@@ -176,6 +176,14 @@ def test_the_webassembly_and_typescript_jobs_run_on_their_inputs(
         assert outputs["node"] == "false"  # the parser layer runs no other specialised job
 
 
+def test_build_wasm_runs_its_own_tests_in_the_python_job() -> None:
+    # tests/test_scripts/test_build_wasm.py holds the script's artifact paths;
+    # a change to the script alone must run it, not only the `wasm` job.
+    outputs = plan("scripts/engine/build-wasm.sh")
+    assert outputs["wasm"] == "true"
+    assert outputs["python"] == "true"
+
+
 def test_the_python_job_runs_on_the_python_surface_alone() -> None:
     for path in (
         "src/opentide/sdk.py",

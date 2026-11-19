@@ -54,11 +54,12 @@ The server sends `instructions` to MCP hosts with its `initialize` response. The
 Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` and `run_query` with `live: true` contact the tenant, so the agent asks first, and how to read [`next_actions`](./tools.md#next-actions). The text is the server manifest's `instructions` (`crates/opentide-cli/data/mcp/manifest.json`).
 
 <Callout type="warn">
-`validate_query` refuses unless you pass `live: true`. That call checks the
-catalogue rules for the platform against the tenant. It does not scan the
-`query` argument. A missing SDK or a missing plan is a failed live check.
-`run_query` refuses the same way until `live: true`, then runs a read-only
-query on the named tenants and returns their rows. Everything else (search, `validate_rule` / `validation_report`,
+`validate_query` checks the `query` argument offline, with the engine
+compiled into opentide, on every platform but SentinelOne. With `live: true` it
+checks the catalogue rules for the platform against the tenant instead, and
+does not scan the `query` argument. A missing plan or an unreachable tenant is
+a failed live check. `run_query` refuses until `live: true`, then runs a
+read-only query on the named tenants and returns their rows. Everything else (search, `validate_rule` / `validation_report`,
 chaining, coverage, dry-run deploy) is fully functional.
 </Callout>
 

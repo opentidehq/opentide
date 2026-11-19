@@ -1,0 +1,162 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-first-commit/dry-run-first-commit
+---
+args: opentide --json deploy --dry-run --platform splunk --strategy PREVIEW
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000041"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "splunk"
+  ],
+  "detail": "not in the plan: 11 rules left out: 7 in REMOVED, 2 in PRODUCTION, 2 in DISABLED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it",
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
+  "next_actions": [],
+  "ok": true,
+  "payloads": {
+    "splunk": [
+      {
+        "api_request": {
+          "enabled": false,
+          "name": "",
+          "query": "index=main EventCode=4688",
+          "scheduling": {
+            "schedule": {
+              "cron": "0 * * * *"
+            }
+          },
+          "status": "STAGING"
+        },
+        "name": "Splunk create rule",
+        "uuid": "00000000-0000-4000-8047-000000000041"
+      }
+    ]
+  },
+  "plan": {
+    "splunk": [
+      "00000000-0000-4000-8047-000000000041"
+    ]
+  },
+  "schema_version": 1,
+  "skipped": [
+    {
+      "platform": "carbon_black_cloud",
+      "rule": "Carbon Black retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000061"
+    },
+    {
+      "platform": "crowdstrike",
+      "rule": "CrowdStrike update rule",
+      "status": "PRODUCTION",
+      "strategy": "RELEASE",
+      "uuid": "00000000-0000-4000-8047-000000000022"
+    },
+    {
+      "platform": "crowdstrike",
+      "rule": "CrowdStrike retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000023"
+    },
+    {
+      "platform": "defender_for_endpoint",
+      "rule": "Defender retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000003"
+    },
+    {
+      "platform": "elastic",
+      "rule": "Elastic update rule",
+      "status": "PRODUCTION",
+      "strategy": "RELEASE",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002"
+    },
+    {
+      "platform": "elastic",
+      "rule": "Elastic retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005"
+    },
+    {
+      "platform": "sentinel",
+      "rule": "Sentinel retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000072"
+    },
+    {
+      "platform": "sentinel_one",
+      "rule": "SentinelOne retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000012"
+    },
+    {
+      "platform": "sentinel_one",
+      "rule": "SentinelOne disable rule never deployed",
+      "status": "DISABLED",
+      "strategy": "DISABLEMENT",
+      "uuid": "00000000-0000-4000-8047-000000000013"
+    },
+    {
+      "platform": "splunk",
+      "rule": "Splunk retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000042"
+    },
+    {
+      "platform": "sysdig",
+      "rule": "Sysdig rule to disable the tenant lost",
+      "status": "DISABLED",
+      "strategy": "DISABLEMENT",
+      "uuid": "00000000-0000-4000-8047-000000000033"
+    }
+  ],
+  "status": "completed",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "platforms": 1,
+    "skipped": 11,
+    "tenants": 1,
+    "update": 0,
+    "upsert": 1
+  },
+  "tenants": {
+    "splunk": {
+      "lab": [
+        "00000000-0000-4000-8047-000000000041"
+      ]
+    }
+  },
+  "warnings": [
+    "a real deploy would need $SPLUNK_TOKEN, which is unset"
+  ]
+}
+
+━━━ stderr · empty

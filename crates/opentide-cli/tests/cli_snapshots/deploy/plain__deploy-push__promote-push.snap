@@ -3,16 +3,20 @@ source: crates/opentide-cli/tests/common/snapshot.rs
 description: deploy/plain/deploy-push/promote-push
 ---
 args: opentide deploy --platform splunk --strategy RELEASE
-exit: 0
+exit: 1
 
-━━━ stdout
-✓ Deployed 1 rule to 0 tenants · 1 created or updated · 0 failed, 0 not attempted · <SECONDS>
+━━━ stdout · empty
 
 ━━━ stderr
 ✓ status promotion · 1 rule · <SECONDS>
-Deploy plan · strategy RELEASE · 1 platform, 0 tenants
+Deploy plan · strategy RELEASE · 1 platform, 1 tenant
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
-✓ splunk · 1 deployed, 0 failed, 0 not attempted · <SECONDS>
+
+Deploying to splunk / lab · 1 rule
+  [1/1] ✗ failed    Splunk create rule  Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+error: Tenant deployment failed · platform: splunk · tenant: *** · error: Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+✗ splunk · 0 deployed, 1 failed, 0 not attempted · <SECONDS>
+✗ Deployment failed · 1 failed, 0 not attempted · <SECONDS>
 
 ━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644
 name: Splunk create rule

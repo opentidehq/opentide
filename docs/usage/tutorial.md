@@ -30,21 +30,25 @@ You now have `objects/{threats,objectives,rules}/`, a `.opentide/` config direct
 
 ## 2. Generate the framework artifacts
 
-Before validation can work, the schemas and templates must exist:
+Generate the editor's schemas and templates, the docs and the exports. Validation does not need them (`opentide validate` checks objects against the models compiled into opentide); the editor reads the schemas and snippets, and `opentide new` would generate what it needs on first use:
 
 ```bash
 opentide generate
 ```
 
-```text output-of="opentide generate"
-✓ docs · 7 files · 1.2s · docs/
+On the new, empty repository:
+
+```text illustrative
+✓ docs · 4 files · 0.1s · docs/
 ✓ exports · 3 files · 0.0s · .opentide/exports/
 ✓ vocabularies · 0 files · 0.0s
-✓ templates · 5 files · 1.9s · .opentide/templates/
-✓ schemas · 8 files · 2.6s · .opentide/
+✓ templates · 5 files · 0.0s · .opentide/templates/
+✓ schemas · 8 files · 0.5s · .opentide/
 ✓ snippets · 1 file · 0.0s · .vscode/
-✓ Generated 24 files in 5.8s · 6 phases
+✓ Generated 21 files in 0.6s · 6 phases
 ```
+
+Once the threat, objective and rule of the next steps exist, `docs` writes a page for each of them too (7 files, 24 in all).
 
 This is the output with `--no-color`, in a pipe or in CI: one line per finished phase, with the files it wrote, how long it took and where they went, then the outcome line. At a terminal the phases draw as a live checklist with a spinner on the running one. Phase lines go to stderr and the outcome line to stdout, so `opentide generate > log.txt` keeps the phases on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
@@ -197,7 +201,8 @@ opentide --json validate
     "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
     "uuid-format": { "check": "uuid-format", "status": "passed" },
     "schema": { "check": "schema", "status": "passed" },
-    "configuration": { "check": "configuration", "status": "passed" }
+    "configuration": { "check": "configuration", "status": "passed" },
+    "queries": { "check": "queries", "status": "passed" }
   },
   "report": {
     "ok": true,
@@ -228,7 +233,7 @@ Re-run:
 opentide validate
 ```
 
-Each finding prints as a code frame: its code, the file, line and column, the line itself with the value underlined, and what to do. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check). The process exits `1`, and the last line counts the errors (`✗ 1 error in 1 file · 3 objects checked · 0.9s`):
+Each finding prints as a code frame: its code, the file, line and column, the line itself with the value underlined, and what to do. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check). The process exits `1`, and the last line counts the errors (`✗ 1 error in 1 file · 3 objects checked · 1 query · 0.9s`):
 
 ```text output-of="opentide validate" exit=1 state=dangling-reference
 error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"

@@ -558,22 +558,10 @@ fn select<'t>(
         .collect())
 }
 
-/// A setup value as `toml` holds it, for [`Tenant::from_setup`].
-pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
-    use opentide_compile::Json as J;
-    Some(match value {
-        J::Str(text) => toml::Value::String(text.clone()),
-        J::Int(number) => toml::Value::Integer(*number),
-        // TOML integers are signed 64-bit: a larger one is the nearest float,
-        // as it was read before `Json` kept it exact.
-        #[expect(clippy::cast_precision_loss, reason = "the nearest float, as before")]
-        J::UInt(number) => toml::Value::Float(*number as f64),
-        J::Float(number) => toml::Value::Float(*number),
-        J::Bool(flag) => toml::Value::Boolean(*flag),
-        J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
-        J::Null | J::Object(_) => return None,
-    })
-}
+/// A setup value as `toml` holds it, for [`Tenant::from_setup`]: the
+/// connectors' own, so every command builds a tenant alike (a table such as
+/// Graylog's `stream_ids` kept).
+pub(crate) use opentide_connectors::tenant::toml_value;
 
 /// The `$NAME` (or `${NAME}`) a setup value names, when it is one.
 fn reference(value: &opentide_compile::Json) -> Option<&str> {
@@ -2169,9 +2157,18 @@ mod tests {
             ]))
         );
         assert_eq!(toml_value(&J::Null), None);
+        // A table is kept (Graylog's `stream_ids`), its nulls left out.
+        let mut ids = opentide_compile::json::Object::new();
+        ids.insert("endpoint".into(), J::Str("65f0c0ffee0123456789abcd".into()));
+        ids.insert("gone".into(), J::Null);
+        let mut expected = toml::Table::new();
+        expected.insert(
+            "endpoint".into(),
+            toml::Value::String("65f0c0ffee0123456789abcd".into()),
+        );
         assert_eq!(
-            toml_value(&J::Object(opentide_compile::json::Object::new())),
-            None
+            toml_value(&J::Object(ids)),
+            Some(toml::Value::Table(expected))
         );
         assert_eq!(reference(&J::Str("$TOKEN".into())), Some("TOKEN"));
         assert_eq!(reference(&J::Str("${TOKEN}".into())), Some("TOKEN"));

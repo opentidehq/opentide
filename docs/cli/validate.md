@@ -277,7 +277,7 @@ An object file that is not valid YAML is reported as a `yaml_parse` issue agains
 
 ### Schema identifier
 
-The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that is not registered, or that names another object type (a rule declaring `threat::1.0`), fails with `schema_validation` at that field. Neither case is checked against the newest revision instead. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
+The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that names another object type (a rule declaring `threat::1.0`) fails with `schema_validation` at that field. So does an identifier that is not registered (`rule::9.9`, `RULE::1.1`), and the object is then also checked against the newest revision of its type, without the unknown-key check, so its other findings still show: `metadata.schema: unknown schema identifier: "rule::9.9"; checked against rule::1.1, the newest rule revision, without the unknown-key check`. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
 
 ### Vendor rule ids
 
@@ -288,15 +288,16 @@ The `schema` check validates each object against the revision its `metadata.sche
 A rule may carry a block for a platform this workspace has not enabled, for example a rule imported from a repository that deploys to Splunk. The block is still validated against that platform's model: an empty `query`, an unknown key, or a missing required field fails, and so does a key that is not a platform (`configurations.splnk`). A well-formed block passes with one `platform_not_enabled` warning per disabled platform, at `configurations.<platform>`:
 
 ```text illustrative
-warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace
    ╭─▶ objects/rules/imported.yaml:24:3
    │
 23 │ configurations:
 24 │   splunk:
    │   ━━━━━━
    │
+   ╰─ help: enable splunk with 'opentide setup platforms --splunk'
 
-✓ 3 objects valid · 1 warning · 0.9s
+✓ 3 objects valid · 1 query · 1 warning · 0.9s
 ```
 
 In `--json` mode a line naming it is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
@@ -352,7 +353,7 @@ It reports the engine's errors: a query the platform would reject (`kql_parse_er
 
 `warn` is for a catalogue that has to keep validating while its queries are fixed; `off` validates everything but the queries. `--queries` with `--check` other than `queries` exits `2`, as does `--check queries --queries off`: the run would ignore the one or contradict the other. A failed run's `validate · check again` step keeps the mode.
 
-A query `opentide new` wrote as a placeholder (`...`, marked `# opentide:placeholder`) is an error too, since no platform accepts it; its frame says so and its help asks for the rule's query.
+A query `opentide new` wrote as a placeholder (`...`, marked `# opentide:placeholder`) is not sent to the engine, so the file validates as [`opentide new`](./new.md) promises; [`opentide lint`](./lint.md#placeholders) reports each placeholder, and `lint --strict` in CI fails until it is replaced.
 
 When the engine does not load, the check reports one `engine_unavailable` error and the run fails, whatever `--queries` says but `off`: the check never skips. The engine ships with `pip install opentide`; there is no extra to install.
 
@@ -552,7 +553,7 @@ A live check sends each rule's query to the tenants a deploy would send the rule
 
 Three flags narrow the rule files and leave the rest alone:
 
-- `--changed` reads the rule files a deploy of the same run reads. On a pull or merge request: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run: the pushed commit's diff. Outside CI: the last commit. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is checked on the pull request, on the tenants that accept `RELEASE`, before it merges. When no changed rule has a block for the platform, the result is `skipped` with exit `0`. Outside CI, a repository with no commit yet has no last commit, so no rule changed: the result is `skipped` too, with a warning saying so.
+- `--changed` reads the rule files a deploy of the same run reads. On a pull or merge request: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run: the pushed commit's diff. Outside CI: the last commit. A repository's first commit has no parent, so every file it holds counts as added. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is checked on the pull request, on the tenants that accept `RELEASE`, before it merges. When no changed rule has a block for the platform, the result is `skipped` with exit `0`. Outside CI, a repository with no commit yet has no last commit, so no rule changed: the result is `skipped` too, with a warning saying so.
 - `--file` and `--uuid` select rules by file or UUID. Each target must select a rule file directly in the rules folder. A target that selects none fails the run with exit `1` before any query is sent, and `--json` lists it under `unmatched`. `--changed` cannot be combined with either (exit `2`).
 
 `--json` names the narrowing in `scope`: `changed` or `selected`.
