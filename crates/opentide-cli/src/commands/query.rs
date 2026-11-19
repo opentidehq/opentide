@@ -556,31 +556,10 @@ fn select<'t>(
         .collect())
 }
 
-/// A setup value as `toml` holds it, for [`Tenant::from_setup`].
-pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
-    use opentide_compile::Json as J;
-    Some(match value {
-        J::Str(text) => toml::Value::String(text.clone()),
-        J::Int(number) => toml::Value::Integer(*number),
-        // TOML integers are signed 64-bit: a larger one is the nearest float,
-        // as it was read before `Json` kept it exact.
-        #[expect(clippy::cast_precision_loss, reason = "the nearest float, as before")]
-        J::UInt(number) => toml::Value::Float(*number as f64),
-        J::Float(number) => toml::Value::Float(*number),
-        J::Bool(flag) => toml::Value::Boolean(*flag),
-        J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
-        // A table (Graylog's `stream_ids` and `notification_ids`) is kept,
-        // as the connectors' `tenant::configured` keeps it: `Tenant` reads
-        // it with `table`.
-        J::Object(entries) => toml::Value::Table(
-            entries
-                .iter()
-                .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-                .collect(),
-        ),
-        J::Null => return None,
-    })
-}
+/// A setup value as `toml` holds it, for [`Tenant::from_setup`]: the
+/// connectors' own, so every command builds a tenant alike (a table such as
+/// Graylog's `stream_ids` kept).
+pub(crate) use opentide_connectors::tenant::toml_value;
 
 /// The `$NAME` (or `${NAME}`) a setup value names, when it is one.
 fn reference(value: &opentide_compile::Json) -> Option<&str> {
