@@ -141,7 +141,9 @@ exit: 0
         }
       ],
       "step": "mcp",
-      "warnings": []
+      "warnings": [
+        "These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command."
+      ]
     }
   ],
   "summary": {
@@ -153,7 +155,8 @@ exit: 0
   },
   "warnings": [
     "This folder is not a git repository yet, so the pipeline targets \"main\"; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.",
-    "Not a Git repository; wrote hook files without installing .git/hooks."
+    "Not a Git repository; wrote hook files without installing .git/hooks.",
+    "These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command."
   ]
 }
 

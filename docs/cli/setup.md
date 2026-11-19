@@ -46,7 +46,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
-| `--name`, `--org`, `--description` | README metadata |
+| `--name`, `--org`, `--description` | README metadata. `opentide new` does not read them: it copies `metadata.organisation` from the objects already in the catalogue, so fill it in the first object by hand ([new](./new.md#what-the-new-file-holds)) |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |
@@ -141,7 +141,7 @@ opentide setup repo --yes --name SOC --platform sentinel
 
 ### setup platforms
 
-Create and enable platform configuration templates under `.opentide/configurations/platforms/`.
+Create and enable platform configuration templates under `.opentide/configurations/platforms/`. When `README.md` ends with the `## Platforms` list `setup repo` wrote (only `- <platform>` lines), the platforms it enables are added to that list, and `README.md` is listed under `updated`; a section you have edited is left alone.
 
 ```bash
 opentide setup platforms --sentinel --defender-for-endpoint --yes
@@ -235,7 +235,7 @@ opentide setup hooks --yes
 opentide setup hooks --path ./detection-repo --yes --no-install
 ```
 
-The hook runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict --allow-empty`, so it always validates the worktree being committed. `--allow-empty` lets a workspace with no detection object yet commit (the first commit after `opentide setup`), which `--strict` alone fails; the CI pipelines setup writes keep `--strict` alone, so an empty workspace fails there. Re-run `opentide setup hooks` to refresh a hook written by an earlier release. Everyone whose commits run the hook needs a release with `--allow-empty` first: an older `opentide` refuses the option (exit `2`) and so every commit, so upgrade before committing the refreshed `.pre-commit-config.yaml` and `.opentide/hooks/pre-commit`. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
+The hook validates what the commit holds: it copies the workspace's staged files out of Git's index (`git checkout-index`) into a temporary folder, removed when the hook ends, and runs `opentide --repo <that copy> validate --strict --allow-empty` there. A broken file that is staged is refused even when the copy on disk has been fixed since, and a change on disk that is not staged does not block the commit. The pre-commit entry runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict --allow-empty`; pre-commit stashes unstaged changes before it runs, so it too sees the staged content of tracked files, but an untracked file in the workspace is still validated. `--allow-empty` lets a workspace with no detection object yet commit (the first commit after `opentide setup`), which `--strict` alone fails; the CI pipelines setup writes keep `--strict` alone, so an empty workspace fails there. Re-run `opentide setup hooks` to refresh a hook written by an earlier release. Everyone whose commits run the hook needs a release with `--allow-empty` first: an older `opentide` refuses the option (exit `2`) and so every commit, so upgrade before committing the refreshed `.pre-commit-config.yaml` and `.opentide/hooks/pre-commit`. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
 
 Both the hook and the pre-commit entry first check that the pinned workspace still has its `.opentide/`: `validate --strict --allow-empty` fails a folder that is not a workspace, but this names the cause. After a workspace is moved or renamed they fail and ask you to re-run `opentide setup hooks` (or bypass with `OPENTIDE_SKIP_HOOKS=1`, or `SKIP=opentide-validate` under pre-commit) instead of passing every commit.
 
@@ -267,6 +267,8 @@ opentide setup mcp --cursor --vscode --yes
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
+
+Every file runs a bare `opentide`, which the editor looks up on its `PATH`. When `opentide` is not on the `PATH` setup runs with (an install in a virtual environment that is not activated, for instance), the files are still written, and setup warns that the editor cannot start the server: JSON output has `"mcp_available": false` and the warning in `warnings`. Put `opentide` on `PATH`, or set its full path as the server `command`. [`opentide doctor`](./doctor.md) checks the same for the configurations already written.
 
 The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code itself. When `.vscode/extensions.json` recommends it, `setup mcp --vscode` still writes `.vscode/mcp.json`, for teammates without the extension, and says so: JSON output has `"extension_mcp": true` and a `detail` sentence, printed as a note.
 

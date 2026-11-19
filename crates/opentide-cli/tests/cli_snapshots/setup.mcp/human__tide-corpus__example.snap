@@ -10,7 +10,10 @@ exit: 0
 
 ␛[1m␛[32m✓␛[0m Wrote .vscode/mcp.json
 
-━━━ stderr · empty
+━━━ stderr
+␛[1m␛[33mwarning:␛[0m These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot
+         start the server. Put opentide on PATH (pipx install opentide, or activate its virtual
+         environment before starting the editor), or set the full path as the server command.
 
 ━━━ ws/.vscode/ · created 0755
 

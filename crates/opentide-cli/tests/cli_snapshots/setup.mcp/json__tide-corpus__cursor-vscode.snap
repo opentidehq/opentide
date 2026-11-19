@@ -15,14 +15,17 @@ exit: 0
     ".vscode/mcp.json",
     ".cursor/mcp.json"
   ],
-  "mcp_available": true,
+  "mcp_available": false,
   "message": "Wrote 2 files",
   "next_actions": [],
   "ok": true,
   "path": "<WS>",
   "schema_version": 1,
   "status": "completed",
-  "summary": {}
+  "summary": {},
+  "warnings": [
+    "These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command."
+  ]
 }
 
 ━━━ stderr · empty

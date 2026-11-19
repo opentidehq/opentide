@@ -795,3 +795,103 @@ fn the_first_commit_of_a_fresh_setup_passes_its_hook() {
     let allowed = opentide(&repo, &["validate", "--strict", "--allow-empty"], &[]);
     assert_eq!(allowed.code, Some(0), "{allowed:?}");
 }
+
+/// `git commit` in `repo` with `opentide` on `PATH` (this build, linked
+/// from `root/bin`), as a person's shell runs it.
+#[cfg(unix)]
+fn hooked_commit(root: &Path, repo: &Path, message: &str) -> std::process::Output {
+    let bin = root.join("bin");
+    if !bin.join("opentide").exists() {
+        std::fs::create_dir_all(&bin).unwrap();
+        std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_opentide-cli"), bin.join("opentide"))
+            .unwrap();
+    }
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // The hook's copy of the index goes here, where the test can see it.
+    let tmp = root.join("tmp");
+    std::fs::create_dir_all(&tmp).unwrap();
+    let mut commit = Command::new("git");
+    commit
+        .args(["-c", "user.email=e2e@opentide.test", "-c", "user.name=e2e"])
+        .args(["-c", "commit.gpgsign=false", "commit", "-q", "-m", message])
+        .current_dir(repo)
+        .env("PATH", &path)
+        .env("TMPDIR", &tmp);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("OPENTIDE_") {
+            commit.env_remove(name);
+        }
+    }
+    for name in LEAKED {
+        commit.env_remove(name);
+    }
+    isolate_git(&mut commit);
+    commit.output().unwrap()
+}
+
+/// The commit hook validates what the commit holds, the staged files, not
+/// the work tree (#1670, smoke A8): a broken rule staged, then fixed on disk
+/// but not staged, is refused; a good rule staged, then broken on disk, is
+/// committed.
+#[cfg(unix)]
+#[test]
+fn the_commit_hook_validates_the_staged_files() {
+    let (_dir, root) = scratch();
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    opentide(
+        &repo,
+        &[
+            "setup",
+            "--hooks",
+            "--yes",
+            "--name",
+            "Hooked",
+            "--platform",
+            "sentinel",
+        ],
+        &[],
+    )
+    .ok();
+    tutorial::write_objects(&repo);
+    git(&repo, &["add", "-A"]);
+    let first = hooked_commit(&root, &repo, "objects");
+    assert!(
+        first.status.success(),
+        "the hook refused good objects: {first:?}"
+    );
+
+    // Broken in the index, good on disk: refused.
+    tutorial::break_tlp(&repo);
+    git(&repo, &["add", "-A"]);
+    tutorial::write_objects(&repo);
+    let broken = hooked_commit(&root, &repo, "broken");
+    assert!(
+        !broken.status.success(),
+        "the hook let a broken staged rule through: {broken:?}"
+    );
+    let stderr = String::from_utf8_lossy(&broken.stderr);
+    let stdout = String::from_utf8_lossy(&broken.stdout);
+    assert!(
+        format!("{stdout}{stderr}").contains("clearr"),
+        "{stdout}{stderr}"
+    );
+
+    // Good in the index, broken on disk: committed, and the hook's copy of
+    // the index is gone.
+    std::fs::write(repo.join("notes.txt"), "a change to commit\n").unwrap();
+    git(&repo, &["add", "-A"]);
+    tutorial::break_tlp(&repo);
+    let good = hooked_commit(&root, &repo, "good");
+    assert!(
+        good.status.success(),
+        "the hook validated the work tree, not the staged rule: {good:?}"
+    );
+    let left: Vec<_> = std::fs::read_dir(root.join("tmp")).unwrap().collect();
+    assert!(left.is_empty(), "{left:?}");
+}

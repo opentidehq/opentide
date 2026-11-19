@@ -224,6 +224,84 @@ fn new_finds_a_reference_whatever_the_case_of_its_uuid() {
     assert_eq!(document["failure"]["code"], "reference_not_found");
 }
 
+/// A name that is empty or only spaces is an invalid `--name`, not a
+/// missing one (#1670, smoke B8): `new` did say it "prompts only at an
+/// interactive terminal", whatever the terminal.
+#[test]
+fn new_refuses_an_empty_name_as_an_invalid_value() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    replay::fixture("tide-corpus", &ws);
+    for name in ["", "   "] {
+        let (code, stdout) = run_at(&ws, &["--json", "new", "threat", "--name", name]);
+        assert_eq!(code, 2, "{stdout}");
+        let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(
+            document["failure"]["code"], "usage_invalid_value",
+            "{stdout}"
+        );
+        assert_eq!(document["failure"]["argument"], "--name", "{stdout}");
+        assert_eq!(
+            document["failure"]["message"], "--name cannot be empty",
+            "{stdout}"
+        );
+    }
+    // No --name at all, and no terminal to ask at: still a missing input.
+    let (code, stdout) = run_at(&ws, &["--json", "new", "threat"]);
+    assert_eq!(code, 2, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(document["failure"]["code"], "usage_needs_input", "{stdout}");
+}
+
+/// `new --path` into a folder below the family's, or outside the
+/// workspace, writes a file opentide does not read (#1670, smoke B7): it
+/// says so, and does not point at a `validate --file` that refuses it.
+#[test]
+fn new_warns_when_the_path_is_outside_the_family_folder() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    replay::fixture("empty", &ws);
+    let elsewhere = root.join("elsewhere.yaml");
+    for (name, path) in [
+        ("Sub Dir", "objects/threats/team-a/".to_owned()),
+        ("Elsewhere", elsewhere.display().to_string()),
+    ] {
+        let (code, stdout) = run_at(
+            &ws,
+            &["--json", "new", "threat", "--name", name, "--path", &path],
+        );
+        assert_eq!(code, 0, "{stdout}");
+        let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        let warnings = document["warnings"].as_array().unwrap();
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.as_str().unwrap().contains(
+                    "is not directly in objects/threats/, so opentide will not index, validate"
+                )),
+            "{stdout}"
+        );
+        assert!(!stdout.contains("validate --file"), "{stdout}");
+    }
+    // The family's folder itself, named by --path: no such warning.
+    let (code, stdout) = run_at(
+        &ws,
+        &[
+            "--json",
+            "new",
+            "threat",
+            "--name",
+            "In Place",
+            "--path",
+            "objects/threats/",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    assert!(!stdout.contains("is not directly in"), "{stdout}");
+    assert!(stdout.contains("validate --file"), "{stdout}");
+}
+
 /// `new` warns when the file it wrote does not match the `lint.toml`
 /// `[filenames]` pattern (the kind's own table first), naming the key, and
 /// not when it does.
