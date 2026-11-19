@@ -96,9 +96,9 @@ The build takes several minutes. `opentide doctor` reports it (`analysis_engine`
 
 ### Windows and PowerShell
 
-`pip` and `uv` create the `opentide` console launcher in the active environment's `Scripts` directory. Ensure that directory is on `PATH`, then run the package directly:
-
 On Windows on Arm, `pip install opentide` installs opentide's own Arm wheel and nothing else: the package has no Python dependencies. Only the `plugins` extra adds one, pydantic, whose pydantic-core publishes Windows on Arm wheels from CPython 3.11, so on CPython 3.10 pip compiles it, which needs a Rust toolchain and the MSVC build tools.
+
+`pip` and `uv` create the `opentide` console launcher in the active environment's `Scripts` directory. Ensure that directory is on `PATH`, then run the package directly:
 
 1. Find the path of opentide binaries:
 

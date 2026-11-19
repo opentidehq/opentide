@@ -355,7 +355,7 @@ In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB
 
 On GitHub, which shows 10 annotations of each level per step, opentide writes the errors first, then the warnings, then the notices, 10 of each, and one notice counting the rest; the job summary and code scanning have them all.
 
-The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, and the rules per platform and tenant, by UUID; a failed rule's name is in the failures table. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
+The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, and the rules per platform and tenant. A dry run (the pull-request job's) lists each rule as `Name (uuid)`; a real deploy lists the UUIDs alone, and a failed rule's name is in the failures table. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
 
 `validate` and `lint` also write their findings as a report file for the provider's code-quality view:
 

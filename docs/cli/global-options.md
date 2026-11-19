@@ -113,7 +113,10 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 
 ## Environment propagation
 
-The root options apply to the whole run. `opentide mcp start` hands them to the commands its tools run as the matching variables: `--repo` as `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE`, `--data` as `OPENTIDE_DATA_ROOT`, `--proxy` as `HTTPS_PROXY` and `HTTP_PROXY`, and `--debug` as `OPENTIDE_DEBUG`.
+The root options apply to the whole run, and reach the runs a long-lived command starts:
+
+- `opentide mcp start` hands them to the commands its tools run as variables: `--repo` as `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE`, `--data` as `OPENTIDE_DATA_ROOT`, `--proxy` as `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings (as [Proxy](#proxy) sets them for any run), and `--debug` as `OPENTIDE_DEBUG`.
+- `opentide serve` hands each run the same `--repo`, `--data` and `--debug` variables, and `--proxy` as `OPENTIDE_PROXY`, which that run reads as its own `--proxy`.
 
 ## Terminal output
 

@@ -324,7 +324,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository path (install, discover, show) |
-| `--cursor` | Copy the skills to `.cursor/skills/`, keeping files you added there |
+| `--cursor` | Copy the skills to `.cursor/skills/`, keeping files you added there; they are also installed under `.agents/skills/` |
 | `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/`, keeping files you added there |
 | `--generic` | Write `AGENTS.md` for any agent that reads `.agents/skills/` |
 | `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |

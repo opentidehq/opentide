@@ -114,7 +114,7 @@ opentide setup skills --yes --generic --name SOC --org "Example Corp"
 
 | Skills target | Output |
 |---------------|--------|
-| `--cursor` | `.cursor/skills/<slug>/` (and `.agents/skills/detection-engineering/`) |
+| `--cursor` | `.cursor/skills/<slug>/`, and `.agents/skills/<slug>/` |
 | `--claude-code` | `CLAUDE.md`, `.claude/skills/` |
 | `--generic` | `AGENTS.md`, `.agents/skills/` |
 | `--github-copilot` | `.github/copilot-instructions.md`, and `AGENTS.md` and `.agents/skills/` as `--generic` |

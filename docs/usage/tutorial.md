@@ -30,7 +30,7 @@ You now have `objects/{threats,objectives,rules}/`, a `.opentide/` config direct
 
 ## 2. Generate the framework artifacts
 
-Generate the editor's schemas and templates, the docs and the exports. Validation does not need them (`opentide validate` checks objects against the models compiled into opentide), but the editor and `opentide new` do:
+Generate the editor's schemas and templates, the docs and the exports. Validation does not need them (`opentide validate` checks objects against the models compiled into opentide); the editor reads the schemas and snippets, and `opentide new` would generate what it needs on first use:
 
 ```bash
 opentide generate

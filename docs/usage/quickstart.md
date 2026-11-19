@@ -46,7 +46,7 @@ This runs the full pipeline: docs → exports → vocabs → templates → schem
 
 Each finished phase prints one line on stderr (files written, time, destination); the outcome line is the only line on stdout. This is the output with `--no-color`, in a pipe or in CI; at a terminal the phases draw as a live checklist.
 
-Validation does not need these files: `opentide validate` checks objects against the models compiled into opentide. The editor's checks and completion, `opentide new` and the docs site do.
+Validation does not need these files: `opentide validate` checks objects against the models compiled into opentide. The editor reads them for its schemas and snippets, and the docs are built from them; `opentide new` generates what it needs on first use.
 
 </Step>
 
