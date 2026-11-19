@@ -148,6 +148,10 @@ impl<'i> P<'i> {
         self.0.current_range()
     }
 
+    pub(crate) fn nth_range(&self, n: usize) -> Option<rowan::TextRange> {
+        self.0.nth_range(n)
+    }
+
     /// Notes a quoted name right after an expression: the old grammar read
     /// it as an index ([`parse`]).
     pub(crate) fn quoted_name_after_value(&mut self) {

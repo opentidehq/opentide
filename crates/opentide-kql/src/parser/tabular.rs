@@ -522,10 +522,49 @@ fn union_leg(p: &mut P<'_>) {
         p.done(m, K::PAREN_TABULAR);
     } else if p.name_at(0) && p.nth(1) == K::L_PAREN {
         expr::function_call(p);
-    } else {
+    } else if !table_pattern(p) {
         let m = p.start();
         p.expect_name();
         p.done(m, K::TABLE_REF);
+    }
+}
+
+/// A table pattern (`Sec*`, `*Events`, `Sec*Events`, `*`): a run of touching
+/// words, numbers and stars that starts with a word or a star and holds a
+/// star, as Kusto takes in a union and a search's `in` list. Returns false,
+/// consuming nothing, at anything else: a name stays a name.
+fn table_pattern(p: &mut P<'_>) -> bool {
+    let touching = |p: &P<'_>, n: usize| {
+        let (Some(a), Some(b)) = (p.nth_range(n), p.nth_range(n + 1)) else {
+            return false;
+        };
+        a.end() == b.start() && (matches!(p.nth(n + 1), K::STAR | K::NUMBER) || p.name_at(n + 1))
+    };
+    if !(p.at(K::STAR) || p.name_at(0)) {
+        return false;
+    }
+    let mut last = 0;
+    while touching(p, last) {
+        last += 1;
+    }
+    if !(0..=last).any(|n| p.nth(n) == K::STAR) {
+        return false;
+    }
+    let m = p.start();
+    for _ in 0..=last {
+        match p.current() {
+            K::STAR | K::NUMBER => p.bump(),
+            _ => p.bump_as(K::IDENT),
+        }
+    }
+    p.done(m, K::TABLE_PATTERN);
+    true
+}
+
+/// One table of a search's `in` list: a name, or a pattern.
+fn search_table(p: &mut P<'_>) {
+    if !table_pattern(p) {
+        p.expect_name();
     }
 }
 
@@ -875,7 +914,7 @@ fn search_source(p: &mut P<'_>) {
     if p.at(K::IN_KW) {
         p.bump();
         if p.expect(K::L_PAREN) {
-            list(p, ident);
+            list(p, search_table);
             p.expect(K::R_PAREN);
         }
     }

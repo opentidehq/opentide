@@ -64,12 +64,14 @@ TabularPrimary =
 | SearchSource
 
 TableRef = table:'ident'
+// A union leg's or a search's tables by pattern: `Sec*`, `*Events`, `*`.
+TablePattern = pieces:('ident' | 'number' | '*')*
 ParenTabular = '(' TabularExpression ')'
 
 // `search "x"`, `search in (A, B) Account == "a"`, `find in (T) where x`.
 SearchSource =
   name:('search' | 'find') OperatorOption*
-  ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr
+  ('in' '(' (table:'ident' | TablePattern) (',' (table:'ident' | TablePattern))* ')')? 'where'? predicate:Expr
 
 MaterializeExpression = 'materialize' '(' body:TabularExpression ')'
 
@@ -171,7 +173,7 @@ LookupOperator =
 
 // `union T1, (T2 | where x), f("a")`.
 UnionOperator = 'union' OperatorOption* UnionLeg (',' UnionLeg)*
-UnionLeg = TableRef | FunctionCall | ParenTabular
+UnionLeg = TableRef | TablePattern | FunctionCall | ParenTabular
 
 // `parse col with "a" x:long * "b"`.
 ParseOperator =
