@@ -89,6 +89,43 @@ test('a KQL block under configurations.sentinel.query is embedded KQL', () => {
   assert.ok(where.some((s) => s.startsWith('keyword.')), where.join(' '));
 });
 
+test('KQL literals: obfuscated strings, hex numbers and multi-line fences', () => {
+  const rule = `name: Rule
+metadata:
+  schema: rule::1.0
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | where CommandLine has h"x // y" and Mask == 0x1F and $h"b" != "c"
+      | extend Note = H\`\`\`first
+      second // not a comment\`\`\`
+      | where EventID == 4688
+description: where
+`;
+  const all = tokens(rule);
+  const kql = (scopes) => scopes.includes('meta.embedded.block.kql');
+  const string = (scopes) => scopes.some((s) => s.startsWith('string.'));
+  const number = (scopes) => scopes.some((s) => s.startsWith('constant.numeric'));
+  // `h"x // y"` is one string: its `//` is not a comment.
+  const obfuscated = scopesOf(all, 'h"x // y"');
+  assert.equal(obfuscated.length, 1, JSON.stringify(all));
+  assert.ok(kql(obfuscated[0]) && string(obfuscated[0]), obfuscated[0].join(' '));
+  const hex = scopesOf(all, '0x1F');
+  assert.equal(hex.length, 1, JSON.stringify(all));
+  assert.ok(number(hex[0]), hex[0].join(' '));
+  // After `$`, the `h` belongs to the name: only `"b"` is a string.
+  assert.equal(scopesOf(all, '$h"b"').length, 0, JSON.stringify(all));
+  assert.ok(string(scopesOf(all, '"b"')[0] ?? []), JSON.stringify(all));
+  // The fence spans its two lines, `//` included; the query goes on after it.
+  for (const piece of ['H\`\`\`', 'first', 'second // not a comment', '\`\`\`']) {
+    const [scopes] = scopesOf(all, piece);
+    assert.ok(scopes && string(scopes), `${piece}: ${JSON.stringify(all)}`);
+  }
+  const after = scopesOf(all, 'where').slice(-2, -1)[0];
+  assert.ok(after && kql(after) && after.some((s) => s.startsWith('keyword.')), JSON.stringify(all));
+});
+
 test('a plain SPL scalar and a Carbon Black query are embedded too', () => {
   const all = tokens(RULE);
   const stats = scopesOf(all, 'stats')[0];
