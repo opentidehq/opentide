@@ -457,6 +457,17 @@ fn enabled_platforms(stage: &stage::Stage, root: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Where `share` reads its destinations, from the repository.
+const SHARING_FILE: &str = ".opentide/configurations/sharing.toml";
+
+/// A file names `$name`, which the CI runner sets itself: the pipeline does
+/// not map it.
+fn runner_owned_warning(file: &str, name: &str) -> String {
+    format!(
+        "{file} reads ${name}, a variable the CI runner sets itself: the pipeline does not map it from the CI secret store. Rename the variable."
+    )
+}
+
 const NO_PLATFORMS_WARNING: &str = "No enabled platforms found under .opentide/configurations/platforms/. Run `opentide setup platforms` (e.g. `--sentinel`) before `setup ci` so validate query jobs are included in the generated pipeline.";
 const GITLAB_DEFAULT_BRANCH: &str = "$CI_DEFAULT_BRANCH";
 const FALLBACK_DEFAULT_BRANCH: &str = "main";
@@ -610,6 +621,54 @@ fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
         .collect()
 }
 
+/// The variables the pipeline's jobs map: each enabled platform's tenants'
+/// (`credentials`), and with `sharing`, `sharing.toml`'s destinations'.
+/// A name the CI runner sets itself is warned about in `warnings`.
+fn pipeline_variables(
+    stage: &stage::Stage,
+    root: &Path,
+    platforms: &[String],
+    sharing: bool,
+    warnings: &mut Vec<String>,
+) -> (IndexMap<String, Vec<String>>, Vec<String>) {
+    // Every enabled platform's tenants: the jobs that reach a tenant map
+    // these from the CI secret store, whatever names they chose.
+    let mut credentials = IndexMap::new();
+    for platform in platforms {
+        let file = root
+            .join(".opentide/configurations/platforms")
+            .join(format!("{platform}.toml"));
+        let names = files::read_text(stage, &file)
+            .ok()
+            .flatten()
+            .map(|text| ci::tenant_variables(&text))
+            .unwrap_or_default();
+        for name in names.iter().filter(|name| ci::runner_owned(name)) {
+            warnings.push(runner_owned_warning(
+                &format!(".opentide/configurations/platforms/{platform}.toml"),
+                name,
+            ));
+        }
+        credentials.insert(platform.clone(), names);
+    }
+    // The destinations `share push` reaches: the share job maps their
+    // variables.
+    let sharing_credentials = if sharing {
+        let names = files::read_text(stage, &root.join(SHARING_FILE))
+            .ok()
+            .flatten()
+            .map(|text| ci::env_references(&text))
+            .unwrap_or_default();
+        for name in names.iter().filter(|name| ci::runner_owned(name)) {
+            warnings.push(runner_owned_warning(SHARING_FILE, name));
+        }
+        names
+    } else {
+        Vec::new()
+    };
+    (credentials, sharing_credentials)
+}
+
 /// What a run did, or would do.
 pub(crate) struct Run {
     /// The files written, relative to the repository, in order.
@@ -659,20 +718,8 @@ pub(crate) fn prepare(
             branch
         }
     };
-    // Every enabled platform's tenants: the jobs that reach a tenant map
-    // these from the CI secret store, whatever names they chose.
-    let mut credentials = IndexMap::new();
-    for platform in &platforms {
-        let file = root
-            .join(".opentide/configurations/platforms")
-            .join(format!("{platform}.toml"));
-        let names = files::read_text(stage, &file)
-            .ok()
-            .flatten()
-            .map(|text| ci::tenant_variables(&text))
-            .unwrap_or_default();
-        credentials.insert(platform.clone(), names);
-    }
+    let (credentials, sharing_credentials) =
+        pipeline_variables(stage, root, &platforms, args.sharing, &mut warnings);
     let options = ci::Options {
         provider: args.provider,
         platforms: platforms.clone(),
@@ -687,6 +734,7 @@ pub(crate) fn prepare(
         docs_output: "docs".to_owned(),
         rules_folder: rules_folder(root, cx),
         credentials,
+        sharing_credentials,
     };
     let text = ci::render(&options)
         .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;

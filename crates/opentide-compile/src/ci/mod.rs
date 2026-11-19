@@ -130,6 +130,9 @@ pub struct Options {
     /// ([`secret_names`]), and a query-checked platform's live check is
     /// skipped when one is unset.
     pub credentials: IndexMap<String, Vec<String>>,
+    /// The variables `sharing.toml`'s destinations name ([`env_references`]):
+    /// the share job maps them.
+    pub sharing_credentials: Vec<String>,
 }
 
 /// Why a pipeline could not be rendered: a template that does not render,
@@ -274,17 +277,6 @@ const GITHUB_NOT_SKIPPED: &str = "!contains(github.event.head_commit.message, '[
 /// (`azure_skip_guard`).
 const AZURE_SKIP_GUARD: &str = "commit=\"${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}\"; if [ -n \"$commit\" ] && git log -1 --format=%B \"$commit\" 2>/dev/null | grep -qF '[skip deploy]'; then echo \"[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline.\"; exit 0; fi";
 
-/// On Azure, unsets each of `names` whose value is its own macro, `$(NAME)`:
-/// a step's `env:` maps `NAME: $(NAME)`, and Azure leaves the macro as
-/// written when the pipeline defines no such variable, so a credential the
-/// project never set would reach opentide as that text rather than unset.
-fn azure_unset_literals(names: &[String]) -> String {
-    format!(
-        "for name in {}; do if [ \"$(printenv \"$name\")\" = \"\\$($name)\" ]; then unset \"$name\"; fi; done",
-        names.join(" ")
-    )
-}
-
 /// Replace the workspace's configuration with the default branch's, before
 /// anything sends a credential (`trusted_platform_config_commands`).
 fn trusted_config(branch: &str) -> Vec<String> {
@@ -371,12 +363,102 @@ pub fn bundled_variables() -> Vec<String> {
 /// reference ([`bundled_variables`]) and every variable the repository's
 /// tenants name ([`Options::credentials`]), so a tenant that names its own
 /// `$NAME` gets its credential in CI as it does locally.
+/// A name the CI runner sets itself ([`runner_owned`]) is left out: mapping
+/// it from the secret store would replace the runner's own value.
 pub fn secret_names(options: &Options) -> Vec<String> {
     let mut names = bundled_variables();
     names.extend(options.credentials.values().flatten().cloned());
+    mappable(names)
+}
+
+/// The variables the share job maps: `sharing.toml`'s, as [`secret_names`].
+pub fn sharing_names(options: &Options) -> Vec<String> {
+    mappable(options.sharing_credentials.clone())
+}
+
+fn mappable(mut names: Vec<String>) -> Vec<String> {
+    names.retain(|name| !runner_owned(name));
     names.sort();
     names.dedup();
     names
+}
+
+/// Whether the CI runner or the job itself sets `name` (`PATH`, `HOME`,
+/// `CI`, `GITHUB_*`, `RUNNER_*`, Azure's `BUILD_*` and `SYSTEM_*`, GitLab's
+/// `CI_*`, the pipeline's own `OPENTIDE_*`, ...), in any case: a pipeline
+/// never maps it from the secret store, and `setup ci` warns a tenant that
+/// names one.
+pub fn runner_owned(name: &str) -> bool {
+    const NAMES: [&str; 22] = [
+        "PATH",
+        "HOME",
+        "SHELL",
+        "USER",
+        "LOGNAME",
+        "PWD",
+        "OLDPWD",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "LANG",
+        "HOSTNAME",
+        "TERM",
+        "IFS",
+        "CI",
+        "TF_BUILD",
+        "AZURE_HTTP_USER_AGENT",
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "GIT_DIR",
+        "SSL_CERT_FILE",
+    ];
+    const PREFIXES: [&str; 14] = [
+        "GITHUB_",
+        "RUNNER_",
+        "ACTIONS_",
+        "CI_",
+        "GITLAB_",
+        "FF_",
+        "AGENT_",
+        "BUILD_",
+        "SYSTEM_",
+        "PIPELINE_",
+        "RELEASE_",
+        "OPENTIDE_",
+        "LD_",
+        "PIP_",
+    ];
+    let upper = name.to_ascii_uppercase();
+    NAMES.contains(&upper.as_str()) || PREFIXES.iter().any(|prefix| upper.starts_with(prefix))
+}
+
+/// The variables a configuration file's string values name as a whole
+/// (`$NAME` or `${NAME}`), anywhere in it, sorted: what `sharing.toml`'s
+/// destinations read from the environment. A file that is not TOML names
+/// none.
+pub fn env_references(text: &str) -> Vec<String> {
+    fn walk(value: &toml::Value, found: &mut Vec<String>) {
+        match value {
+            toml::Value::String(text) => {
+                if let Some(name) = crate::plan::env_reference(text) {
+                    found.push(name.to_owned());
+                }
+            }
+            toml::Value::Array(items) => items.iter().for_each(|item| walk(item, found)),
+            toml::Value::Table(table) => table.values().for_each(|item| walk(item, found)),
+            _ => {}
+        }
+    }
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let Ok(document) = text.parse::<toml::Table>() else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    document.values().for_each(|value| walk(value, &mut found));
+    found.sort();
+    found.dedup();
+    found
 }
 
 /// `$NAME` references in `text`, an upper-case letter then upper-case
@@ -437,19 +519,28 @@ pub fn enables(text: &str) -> bool {
     section && enabled
 }
 
-/// The template's values.
-fn values(options: &Options) -> Value {
-    let branch = options.default_branch.as_str();
-    let quoted_branch = shell_word(branch).into_owned();
-    let header_names = secret_names(options);
+/// The file's first lines: how to regenerate it, and every variable the jobs
+/// map from the CI secret store (`names`, then the share job's).
+fn header(options: &Options, names: &[String]) -> String {
+    let mut listed = names.to_vec();
+    listed.extend(sharing_names(options));
     let mut header = format!(
         "# Generated by opentide — regenerate with `opentide setup ci {}`\n\
          # Platform credentials are read from the environment. Set these in the CI secret store:\n",
         options.provider.name()
     );
-    for name in &header_names {
+    for name in mappable(listed) {
         header.push_str(&format!("#   {name}\n"));
     }
+    header
+}
+
+/// The template's values.
+fn values(options: &Options) -> Value {
+    let branch = options.default_branch.as_str();
+    let quoted_branch = shell_word(branch).into_owned();
+    let header_names = secret_names(options);
+    let header = header(options, &header_names);
     let restore = match options.provider {
         Provider::GitLab => trusted_config("\"$CI_DEFAULT_BRANCH\""),
         _ => trusted_config(&quoted_branch),
@@ -487,8 +578,8 @@ fn values(options: &Options) -> Value {
     };
     context! {
         header => header,
-        unset_literals => azure_unset_literals(&header_names),
         credentials => header_names,
+        sharing_credentials => sharing_names(options),
         branch => branch,
         quoted_branch => quoted_branch,
         python => options.python_version,
@@ -602,6 +693,7 @@ mod tests {
                 "sentinel".to_owned(),
                 vec!["AZURE_CLIENT_ID".to_owned()],
             )]),
+            sharing_credentials: Vec::new(),
         }
     }
 
@@ -635,13 +727,67 @@ mod tests {
             4
         );
         // A variable the pipeline does not define is left unset, not `$(NAME)`.
-        let unset =
-            "do if [ \"$(printenv \"$name\")\" = \"\\$($name)\" ]; then unset \"$name\"; fi; done";
+        let unset = "for name; do if [ \"$(printenv \"$name\")\" = \"\\$($name)\" ]; then unset \"$name\"; fi; done";
         assert_eq!(written.matches(unset).count(), 4, "{written}");
-        assert!(
-            written.contains("for name in AZURE_CLIENT_ID "),
-            "{written}"
+        assert!(written.contains("set -- AZURE_CLIENT_ID "), "{written}");
+    }
+
+    /// The share job maps the variables `sharing.toml` names; a name the
+    /// runner sets itself is never mapped; a name YAML would read as another
+    /// value is quoted as a key.
+    #[test]
+    fn sharing_runner_and_yaml_names() {
+        assert_eq!(
+            env_references(
+                "[[misp]]\napi_key = \"${MISP_API_KEY}\"\nurl = \"$MISP_URL\"\n[[misp]]\napi_key = \"literal\"\nnested = { key = \"$OTHER\" }\n"
+            ),
+            ["MISP_API_KEY", "MISP_URL", "OTHER"]
         );
+        assert!(env_references("not toml [").is_empty());
+        for owned in [
+            "PATH",
+            "home",
+            "CI",
+            "GITHUB_TOKEN",
+            "RUNNER_TEMP",
+            "AZURE_HTTP_USER_AGENT",
+            "BUILD_SOURCEVERSION",
+            "CI_JOB_TOKEN",
+            "OPENTIDE_VERSION",
+        ] {
+            assert!(runner_owned(owned), "{owned}");
+        }
+        for free in [
+            "AZURE_CLIENT_SECRET",
+            "ELASTIC_API_KEY",
+            "MISP_API_KEY",
+            "CIRCL_KEY",
+            "PATHFINDER",
+        ] {
+            assert!(!runner_owned(free), "{free}");
+        }
+
+        for provider in [Provider::GitHub, Provider::Azure] {
+            let mut options = options(provider);
+            options.credentials.insert(
+                "elastic".to_owned(),
+                vec!["PATH".to_owned(), "NULL".to_owned()],
+            );
+            options.sharing_credentials = vec!["MISP_API_KEY".to_owned(), "HOME".to_owned()];
+            let written = render(&options).unwrap();
+            assert!(!written.contains(" PATH:"), "{written}");
+            assert!(!written.contains(" HOME:"), "{written}");
+            assert!(!written.contains("#   PATH\n"), "{written}");
+            assert!(written.contains("#   MISP_API_KEY\n"), "{written}");
+            assert!(written.contains("\"NULL\": $"), "{written}");
+            let (job, mapped) = match provider {
+                Provider::GitHub => ("\n  share:\n", "MISP_API_KEY: ${{ secrets.MISP_API_KEY }}"),
+                _ => ("- job: share\n", "MISP_API_KEY: $(MISP_API_KEY)"),
+            };
+            let share = &written[written.find(job).unwrap()..];
+            assert_eq!(written.matches(mapped).count(), 1, "{written}");
+            assert!(share.contains(mapped), "{share}");
+        }
     }
 
     #[test]

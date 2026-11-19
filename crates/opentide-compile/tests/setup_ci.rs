@@ -62,6 +62,7 @@ fn options(inputs: &toml::Table) -> Options {
         docs_output: "docs".into(),
         rules_folder: text("rules_folder"),
         credentials,
+        sharing_credentials: Vec::new(),
     }
 }
 

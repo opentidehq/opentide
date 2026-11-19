@@ -2261,6 +2261,20 @@ variant = "tenant-variables-azure"
 args = ["setup", "ci", "azure", "--default-branch", "main", "--yes"]
 fixtures = ["tenants"]
 
+# sharing.toml's destinations read ${MISP_API_KEY}: the share job maps it
+# (#1655).
+[[case]]
+command = "setup ci"
+variant = "sharing-variables-github"
+args = ["setup", "ci", "github", "--default-branch", "main", "--sharing", "--yes"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "setup ci"
+variant = "sharing-variables-azure"
+args = ["setup", "ci", "azure", "--default-branch", "main", "--sharing", "--yes"]
+fixtures = ["share-misp"]
+
 [[case]]
 command = "setup env"
 variant = "example"
