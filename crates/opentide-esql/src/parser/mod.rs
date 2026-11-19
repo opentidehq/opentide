@@ -193,6 +193,7 @@ mod tests {
             "FROM a | HIGHLIGHT WITH 1",
             // `AS` takes a qualifier (#1641).
             "FROM a | LOOKUP JOIN t AS ON x",
+            "FROM a | LOOKUP JOIN t AS AS ON x",
             // `not` is a keyword only where a boolean expression starts.
             "FROM a | WHERE b == not 2",
             "FROM a | WHERE x > not NOW()",
