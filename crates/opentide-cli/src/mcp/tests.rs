@@ -429,6 +429,26 @@ fn a_dry_run_of_a_status_that_is_not_defined_is_refused() {
     assert!(text.contains("NOWHERE"), "{text}");
 }
 
+/// `validation_report` with an `object_type` that is no family is refused,
+/// as `validate --type` refuses it, not answered with an empty report.
+#[test]
+fn a_validation_report_of_an_unknown_object_type_is_refused() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let Answer::Result(result) = server(&ws).call(
+        "validation_report",
+        &arguments(json!({"object_type": "bogus"})),
+    ) else {
+        panic!("not a result");
+    };
+    assert_eq!(result["isError"], true, "{result}");
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("usage_invalid_choice: Unknown object type(s): bogus."),
+        "{text}"
+    );
+}
+
 /// A client that sends its next message only once the answer it waits for
 /// has been written: reading on before that is the hang an interactive
 /// client sees under WASI, where a read blocks the one thread.

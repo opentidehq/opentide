@@ -26,7 +26,10 @@ print(__version__, len(ws.rules()), "rules,", validation.summary["objects"], "ob
 | `opentide.TenantConfig` | A tenant: what `Workspace.tenants` returns, or one configured in code |
 | `opentide.OpentideError` | What a call that cannot run raises, with a stable `code` |
 | `opentide.Validation`, `opentide.LintReport`, `opentide.DeployPlan` | What `validate`, `lint` and `deploy_plan` return |
-| `opentide.QueryResult`, `opentide.LiveCheck`, `opentide.DeployOutcome`, `opentide.DeployWarning` | What `query`, `validate_query` and `deploy` return |
+| `opentide.QueryResult`, `opentide.LiveCheck`, `opentide.DeployOutcome`, `opentide.DeployWarning`, `opentide.DeployEvent` | What `query`, `validate_query` and `deploy` return |
+| `opentide.Canceller` | What `Connection.canceller()` returns: stops the connection's operations from elsewhere |
+| `opentide.Capabilities` | What a platform's connector can do (`deploy`, `live_validation`, `query`): `Connection.capabilities()`, `opentide.sdk.capabilities(platform)` |
+| `opentide.sdk.platforms()` | The platforms with a connector, in the order opentide lists them |
 | `opentide.models` | The Tide models: `DetectionRule`, `ThreatVector`, `DetectionObjective`, the platform blocks |
 | `opentide.plugins` | The plugin API: `PlatformPlugin`, which adds a detection platform |
 | `opentide.analysis` | `check_query`: one query checked offline |
@@ -38,7 +41,7 @@ print(__version__, len(ws.rules()), "rules,", validation.summary["objects"], "ob
 
 | Page | Topic |
 |------|-------|
-| [Installation](./installation.md) | Install, vendor SDKs and typing support |
+| [Installation](./installation.md) | Install and typing support |
 | [Workspace](./workspace.md) | Open, validate, lint, the catalogue, coverage, the deploy plan, `run_json`, the async tenant operations, errors |
 | [Migration](./migration.md) | From the removed `Opentide.initialise()`, `run_validation` and documentation writers to `Workspace` |
 | [Query checks](./validation.md) | One query, offline (`opentide.analysis.check_query`) or on a tenant |

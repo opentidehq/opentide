@@ -42,7 +42,9 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   a refused connection's errno (`<ECONNREFUSED>`, 111 on Linux, 61 on macOS), and `validate`'s worker counts in JSON
   (`<CORES>`). The host reports a fixed version (`0.28.1`, `tests/common/snapshot.rs`
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
-  standard input, and the fixtures get fixed modes.
+  standard input, and the fixtures get fixed modes. A case's `PATH` is `/usr/local/bin:/usr/bin:/bin`
+  unless its `env` names one: `<TMP>/bin` holds a stand-in `opentide` and `<TMP>/empty` nothing, so a
+  case that looks for `opentide` (`setup mcp`) names the one it means rather than reading the host's.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
 - **Left out**: `serve`'s session, which feeds standard input: `tests/serve.rs` holds it in its own
   snapshots (#1285), while `cli_snapshots` still lists `serve` among its skipped commands.

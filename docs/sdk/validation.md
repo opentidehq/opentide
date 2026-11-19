@@ -9,7 +9,7 @@ A workspace's checks, its queries' included, are [`Workspace.validate`](./worksp
 
 ## Offline, with the analysis engine
 
-`opentide.analysis.check_query` checks a query in-process, with the engine `pip install opentide` installs (no tenant, no vendor SDK). It covers Sentinel and Defender KQL, Splunk SPL, Elastic (ES|QL, EQL, Kibana KQL, Lucene), Carbon Black Lucene, CrowdStrike CQL and Sysdig's Falco conditions:
+`opentide.analysis.check_query` checks a query in-process, with the engine `pip install opentide` installs (no tenant, no vendor SDK). It covers Sentinel and Defender KQL, Splunk SPL, Elastic (ES|QL, EQL, Kibana KQL, Lucene), Carbon Black and Graylog Lucene, CrowdStrike CQL, Sysdig's Falco conditions, HarfangLab's and Bitdefender's YARA (`yara`), the Exabeam Query Language (`exabeam`) and Google SecOps' YARA-L 2.0 (`yaral`):
 
 ```python
 from opentide.analysis import check_query

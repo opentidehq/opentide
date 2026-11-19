@@ -198,6 +198,9 @@ pub fn validate_json(request: &ValidateRequest, env: &Env, cwd: &Path) -> String
         platform_configurations: crate::plugins::configurations(),
         compile_check: Some(&opentide_compile::validate::Compilers),
     });
+    if let Some(refusal) = &validation.refused {
+        return error(refusal.code, refusal.message.clone());
+    }
     // Each part serialised on its own: a struct keeps its fields' order (the
     // contract's), where a `serde_json::Value` map would sort them.
     let part = |value: Result<String, serde_json::Error>| value.unwrap_or_else(|_| "null".into());
