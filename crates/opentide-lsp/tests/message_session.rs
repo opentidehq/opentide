@@ -149,6 +149,134 @@ fn a_query_is_checked_hovered_and_completed() {
     );
 }
 
+/// The number of items a completion answered, `None` for `null`.
+fn completed(
+    session: &mut MessageSession,
+    id: u64,
+    uri: &str,
+    line: u32,
+    character: u32,
+) -> Option<usize> {
+    let items = request(
+        session,
+        id,
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": character },
+                "context": { "triggerKind": 2, "triggerCharacter": " " } }),
+    );
+    match items {
+        Value::Null => None,
+        Value::Array(items) => Some(items.len()),
+        other => Some(other["items"].as_array().map_or(0, Vec::len)),
+    }
+}
+
+/// A space typed after `| ` in a rule's query lists the operators, as in a
+/// `.kql` file; a space typed in the YAML around it still opens nothing
+/// (smoke C5).
+#[test]
+fn a_typed_space_completes_inside_a_rule_query_only() {
+    let mut session = start(Value::Null);
+    let uri = "objects/rules/typed.yaml";
+    let text = RULE.replace("      | where EventID == 4688\n", "      | \n");
+    open(&mut session, uri, "opentide-yaml", &text);
+    let line = u32::try_from(text.lines().position(|l| l == "      | ").unwrap()).unwrap();
+    let in_query = completed(&mut session, 2, uri, line, 8).expect("a list");
+    assert!(in_query > 10, "{in_query} items after `| `");
+    open(&mut session, "untitled:q.kql", "kql", "SecurityEvent\n| ");
+    assert_eq!(
+        completed(&mut session, 3, "untitled:q.kql", 1, 2),
+        Some(in_query)
+    );
+    // `description: ` is prose: a space there opens no list.
+    let prose = u32::try_from(
+        text.lines()
+            .position(|l| l.starts_with("description:"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(completed(&mut session, 4, uri, prose, 13), None);
+}
+
+/// A `language` the server does not know is `InvalidParams`, never "no
+/// findings" (smoke C10).
+#[test]
+fn an_unknown_language_is_invalid_params() {
+    let mut session = start(Value::Null);
+    for (id, method, language) in [
+        (2, "opentide/analyze", "sql"),
+        (3, "opentide/analyze", "kqll"),
+        (4, "opentide/highlight", "nonsense"),
+    ] {
+        let replies = send(
+            &mut session,
+            json!({ "id": id, "method": method, "params": { "text": "x", "language": language } }),
+        );
+        let reply = replies.iter().find(|m| m["id"] == id).expect("an answer");
+        assert_eq!(reply["error"]["code"], -32602, "{reply}");
+        let message = reply["error"]["message"].as_str().unwrap();
+        assert!(
+            message.contains(&format!("unknown language \"{language}\"")),
+            "{message}"
+        );
+        assert!(message.contains("kql"), "{message}");
+    }
+    // An alias is a language, and no `language` is the method's default.
+    let found = request(
+        &mut session,
+        5,
+        "opentide/analyze",
+        json!({ "text": "SecurityEvent | wher x", "language": "kusto" }),
+    );
+    assert!(
+        !found["diagnostics"].as_array().unwrap().is_empty(),
+        "{found}"
+    );
+    request(
+        &mut session,
+        6,
+        "opentide/highlight",
+        json!({ "text": "T | take 1" }),
+    );
+}
+
+/// `opentide/fs/read` reads a path relative to a workspace folder as the
+/// file in it, as an absolute one (smoke C10).
+#[test]
+fn fs_read_takes_a_path_relative_to_a_workspace_folder() {
+    let mut session = MessageSession::new();
+    send(
+        &mut session,
+        json!({ "id": 1, "method": "initialize", "params": {
+            "processId": null, "capabilities": {},
+            "workspaceFolders": [{ "uri": "file:///ws", "name": "ws" }],
+            "initializationOptions": { "workspace": { "documents": [
+                { "uri": "file:///ws/objects/rules/r.yaml", "text": RULE },
+            ] } },
+        } }),
+    );
+    send(
+        &mut session,
+        json!({ "method": "initialized", "params": {} }),
+    );
+    for (id, path) in [(2, "/ws/objects/rules/r.yaml"), (3, "objects/rules/r.yaml")] {
+        let read = request(
+            &mut session,
+            id,
+            "opentide/fs/read",
+            json!({ "path": path }),
+        );
+        assert_eq!(read["text"], RULE, "{path}");
+    }
+    let missing = request(
+        &mut session,
+        4,
+        "opentide/fs/read",
+        json!({ "path": "objects/none.yaml" }),
+    );
+    assert_eq!(missing["text"], "");
+}
+
 #[test]
 fn references_resolve_against_the_workspace_the_host_supplies() {
     let uri = "objects/rules/process-creation.yaml";
