@@ -146,6 +146,9 @@ fn failed(message: impl Into<String>) -> GitError {
 struct Repo {
     refs: gix_ref::file::Store,
     odb: gix_odb::Handle,
+    /// Whether the clone is shallow (git's `shallow` file): it then names
+    /// parents it does not hold.
+    shallow: bool,
 }
 
 /// Opens the checkout at or above `start`.
@@ -176,7 +179,8 @@ fn open(start: &Path) -> Result<Repo, GitError> {
             top.display()
         ))
     })?;
-    Ok(Repo { refs, odb })
+    let shallow = common.join("shallow").is_file();
+    Ok(Repo { refs, odb, shallow })
 }
 
 /// A commit's tree and parents.
@@ -387,9 +391,23 @@ fn production_base(repo: &Repo, head: ObjectId) -> Result<Option<ObjectId>, GitE
         return Ok(None);
     };
     if repo.commit(parent).is_none() {
-        return Err(failed(format!("Could not find git commit {parent}")));
+        return Err(missing_parent(repo, parent));
     }
     Ok(Some(parent))
+}
+
+/// The failure of a parent the checkout names but does not hold: in a
+/// shallow clone, what to fetch.
+fn missing_parent(repo: &Repo, parent: ObjectId) -> GitError {
+    if repo.shallow {
+        failed(format!(
+            "Could not find git commit {parent}: the checkout is shallow, so it does not hold \
+             the commits the diff needs. Check out the full history (`fetch-depth: 0` in GitHub \
+             Actions, `GIT_DEPTH: \"0\"` on GitLab, `fetchDepth: 0` on Azure Pipelines)"
+        ))
+    } else {
+        failed(format!("Could not find git commit {parent}"))
+    }
 }
 
 /// The first parent of the merge commit a request run builds, when `merge`
@@ -455,8 +473,9 @@ fn github_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
 /// The branch tip before a GitLab push: `CI_COMMIT_BEFORE_SHA`. GitLab
 /// sets it to all zeros on a branch's first push, and also on a pipeline no
 /// push started (`CI_PIPELINE_SOURCE` `web`, `schedule`, `api`, ...), which
-/// is not a new branch.
-fn gitlab_push_before(env: Env<'_>) -> PushBefore {
+/// is not a new branch. A commit the checkout does not hold (a force push
+/// replaced it) is no base either.
+fn gitlab_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
     match set(env, "CI_COMMIT_BEFORE_SHA") {
         Some(before) if all_zeros(&before) => match set(env, "CI_PIPELINE_SOURCE") {
             None => PushBefore::Created,
@@ -465,7 +484,10 @@ fn gitlab_push_before(env: Env<'_>) -> PushBefore {
                 "a `{source}` pipeline names no commit before it (CI_COMMIT_BEFORE_SHA is all zeros)"
             )),
         },
-        Some(before) => PushBefore::Commit(before),
+        Some(before) if commit_id(repo, &before).is_some() => PushBefore::Commit(before),
+        Some(before) => PushBefore::Unknown(format!(
+            "CI_COMMIT_BEFORE_SHA {before} is not in this checkout"
+        )),
         None => PushBefore::Unknown("CI_COMMIT_BEFORE_SHA is not set".into()),
     }
 }
@@ -694,7 +716,7 @@ pub fn changed_paths_noted(
                 Some(base.to_string())
             }
         }
-        (Ci::GitLab, DiffSource::Push) => match gitlab_push_before(env) {
+        (Ci::GitLab, DiffSource::Push) => match gitlab_push_before(&repo, env) {
             PushBefore::Commit(before) => Some(before),
             PushBefore::Created => {
                 return Ok((whole_tree(&repo, latest.as_deref(), tip_name)?, None));

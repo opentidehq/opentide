@@ -340,10 +340,34 @@ fn a_shallow_clone_names_the_parent_it_does_not_hold() {
             &shallow.to_string_lossy(),
         ],
     );
-    // HEAD is the merge; its first parent, b, is not in the clone.
+    // HEAD is the merge; its first parent, b, is not in the clone, and the
+    // error says why and what to fetch.
+    let hint = "the checkout is shallow, so it does not hold the commits the diff needs. \
+                Check out the full history (`fetch-depth: 0` in GitHub Actions, \
+                `GIT_DEPTH: \"0\"` on GitLab, `fetchDepth: 0` on Azure Pipelines)";
     assert_eq!(
         changed(&shallow, &[]).unwrap_err(),
-        GitError::Failed(format!("Could not find git commit {}", h.b))
+        GitError::Failed(format!("Could not find git commit {}: {hint}", h.b))
+    );
+    // So does a CI push read from a depth-1 checkout: its event names a
+    // `before` the clone does not hold (a push of several commits), and the
+    // fallback to the pushed commit's parent finds none either.
+    let events = tempfile::tempdir().unwrap();
+    let event = events.path().join("event.json");
+    std::fs::write(&event, format!("{{\"before\": \"{}\"}}", h.a)).unwrap();
+    let event = event.to_string_lossy().into_owned();
+    let pushed = changed(
+        &shallow,
+        &[
+            ("GITHUB_ACTIONS", "true"),
+            ("GITHUB_SHA", &h.m),
+            ("GITHUB_EVENT_PATH", &event),
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(
+        pushed,
+        GitError::Failed(format!("Could not find git commit {}: {hint}", h.b))
     );
 }
 
@@ -459,7 +483,9 @@ fn revisions_are_read_as_git_rev_parse_reads_them() {
         ],
     );
     assert_eq!(got.unwrap(), ["objects/rules/r2.yaml"]);
-    // A reflog entry names no commit a run diffs.
+    // A reflog entry names no commit a run diffs: as a before the checkout
+    // does not hold (#1683), the run reads the last commit, from HEAD's
+    // first parent (b), and the dry run warns.
     let got = changed(
         &h.root,
         &[
@@ -468,7 +494,7 @@ fn revisions_are_read_as_git_rev_parse_reads_them() {
             ("CI_COMMIT_SHA", &h.m),
         ],
     );
-    assert_eq!(got, Err(GitError::Failed("No Source Commit Found".into())));
+    assert_eq!(got.unwrap(), ["objects/rules/r2.yaml"]);
     // An unknown tip is named.
     let got = changed(
         &h.root,
@@ -1292,12 +1318,19 @@ fn a_push_of_several_commits_reads_from_before_the_push() {
         "{warning}"
     );
     // So does a GitHub run with no push event, and one whose before is not
-    // in the checkout (a force push), and GitLab without its variable.
+    // in the checkout (a force push), and GitLab without its variable or
+    // with a before the checkout does not hold.
     let gone = event(&"1".repeat(40));
+    let missing = "1".repeat(40);
     for pairs in [
         vec![("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", c.as_str())],
         github(&c, &gone),
         vec![("CI", "true"), ("CI_COMMIT_SHA", c.as_str())],
+        vec![
+            ("CI", "true"),
+            ("CI_COMMIT_SHA", c.as_str()),
+            ("CI_COMMIT_BEFORE_SHA", missing.as_str()),
+        ],
         scheduled.clone(),
     ] {
         let (read, warning) = scope(&pairs);
