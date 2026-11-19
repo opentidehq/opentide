@@ -83,8 +83,16 @@ fn not_expr(p: &mut P<'_>) -> Option<CompletedMarker> {
 /// `a == b`, `a matches regex b`, `a in (..)`, `a between (x .. y)`: one
 /// operator, not a chain.
 fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
-    let lhs = colon(p)?;
-    let (kind, shape) = match p.current() {
+    let mut lhs = additive(p)?;
+    let mut next = p.current();
+    // `a : "x" == true`: the search term binds first. Read from the token the
+    // operator match reads anyway: a level of its own cost every operand a
+    // call (parse +1.0% on the external corpus).
+    if next == K::COLON {
+        lhs = colon_rest(p, lhs);
+        next = p.current();
+    }
+    let (kind, shape) = match next {
         K::CMP_OP => (K::COMPARISON_EXPR, Shape::Operand),
         K::MATCHES_KW => (K::COMPARISON_EXPR, Shape::Matches),
         K::IN_KW if p.nth(1) == K::L_PAREN => (K::IN_EXPR, Shape::List),
@@ -95,7 +103,7 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     let m = p.precede(lhs);
     p.bump();
     match shape {
-        Shape::Operand => operand_or_error(p, colon),
+        Shape::Operand => operand_or_error(p, colon_operand),
         Shape::Matches => {
             p.expect(K::REGEX_KW);
             operand_or_error(p, additive);
@@ -106,18 +114,25 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     Some(p.done(m, kind))
 }
 
-/// `Column : "value"`, a search term: Kusto.Language reads `:` anywhere an
-/// expression goes, binding tighter than `==` (`a : "x" == true`) and once
-/// (`a : b : c` is an error).
-fn colon(p: &mut P<'_>) -> Option<CompletedMarker> {
-    let lhs = additive(p)?;
-    if !p.at(K::COLON) {
-        return Some(lhs);
-    }
+/// `Column : "value"`, a search term, from its `:`: Kusto.Language reads `:`
+/// anywhere an expression goes, binding tighter than `==` (`a : "x" == true`,
+/// `a == "x" : true`) and once (`a : b : c` is an error). The callers test the
+/// token with `current`, not `at`: a missing operator's message names no `:`.
+fn colon_rest(p: &mut P<'_>, lhs: CompletedMarker) -> CompletedMarker {
     let m = p.precede(lhs);
     p.bump();
     operand_or_error(p, additive);
-    Some(p.done(m, K::COMPARISON_EXPR))
+    p.done(m, K::COMPARISON_EXPR)
+}
+
+/// The right operand of a comparison, a search term included.
+fn colon_operand(p: &mut P<'_>) -> Option<CompletedMarker> {
+    let rhs = additive(p)?;
+    Some(if p.current() == K::COLON {
+        colon_rest(p, rhs)
+    } else {
+        rhs
+    })
 }
 
 enum Shape {
@@ -192,10 +207,10 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
         K::QUOTED_IDENT => name_ref(p),
         // `* has "x"`: every column, as Kusto's term search takes it, on the
         // left of a string operator (`has`, `contains`, `startswith`, `=~`,
-        // `matches regex`, ...) or `==`, and of nothing else: not `!=`, `<`
-        // or `>=`, not `in` or `has_any`.
+        // `matches regex`, ...), `==` or the search term's `:`, and of nothing
+        // else: not `!=`, `<` or `>=`, not `in` or `has_any`.
         K::STAR
-            if p.nth(1) == K::MATCHES_KW
+            if matches!(p.nth(1), K::MATCHES_KW | K::COLON)
                 || (p.nth(1) == K::CMP_OP
                     && !matches!(p.0.nth_text(1), "!=" | "<>" | "<" | "<=" | ">" | ">=")) =>
         {

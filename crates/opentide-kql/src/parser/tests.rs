@@ -536,3 +536,47 @@ fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
         assert!(!errors(source).is_empty(), "{source} parses");
     }
 }
+
+// The search and find forms Kusto.Language 12.4.1 accepts that were errors.
+snapshots! {
+    search_star_colon: "search * : \"error\" and Column : \"x\"";
+    search_operator_kind_in: "T | search kind=case_sensitive in (U, V*) * has \"x\"";
+    find_project_columns: "find in (T1) where x == 1 project Column1, ['a b']:long";
+    find_project_smart: "find in (T1) where x == 1 project-smart | take 1";
+}
+
+#[test]
+fn search_and_find_forms_parse_and_their_broken_twins_do_not() {
+    for source in [
+        "search Column : \"error\"",
+        "T | search * has \"x\"",
+        "T | search Col : \"a\" and * : \"b\"",
+        "search a : \"x\" == true",
+        "search a == \"x\" : true",
+        "T | where a : \"x\"",
+        "find \"x\" project Col1",
+        "find in (T1) where x == 1 project Col1:dynamic",
+        "T | search in (T2) \"x\"",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "search a : b : c",
+        "search a :",
+        "search : \"x\"",
+        "search * :",
+        "search * != \"x\"",
+        "find in (T1) where x == 1 project",
+        "find in (T1) where x == 1 project Col1,",
+        "find in (T1) where x == 1 project pack_all()",
+        "find in (T1) where x == 1 project-away Col1",
+        "find in (T1) where x == 1 project - smart",
+        "find in (T1) where x == 1 project-smart, Col1",
+        "find in (T1) where x == 1 project Col1:(a:int)",
+        "search \"x\" project Col1",
+        "T | search foo=1 \"x\"",
+        "T | search kind=case_sensitive",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}

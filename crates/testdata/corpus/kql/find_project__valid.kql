@@ -1,0 +1,2 @@
+// prod:find_project prod:find_column valid
+find in (SecurityEvent, Syslog) where TimeGenerated > ago(1h) project TimeGenerated, Computer:string

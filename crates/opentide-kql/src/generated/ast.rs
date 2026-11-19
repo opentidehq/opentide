@@ -8046,6 +8046,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
