@@ -230,6 +230,9 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **"Apply suggestion" keeps a pipe stage's arguments** ([opentide#887](https://github.com/opentidehq/opentide/issues/887)). `kql_unknown_operator` and `spl_unknown_command` cover the whole pipe stage, and the quick fix (and `source.fixAll.opentide`) replaced it all with the suggestion: `index=main | stast count by host` became `index=main | stats`. The edit now replaces only the word the stage starts with (`index=main | stats count by host`); the diagnostics' ranges do not change.
 
 - **`sysdig_list_in_value` sees a value through the block's lists** ([#810](https://github.com/opentidehq/opentide/issues/810)). An exception value that names a block list is that list's items, and a list naming an earlier list is that list's items too, as Falco's loader expands them; an item holding another block list's name inside it (`items: ['x l0']`) is now reported, as `opentide validate` reports it, where the editor said nothing.
+- **A typed space completes inside a rule's query** ([#1668](https://github.com/opentidehq/opentide/issues/1668)). Typing `| ` in a rule's `query: |` block sent `triggerCharacter: " "`, which the server answered with nothing anywhere in Tide YAML; inside an embedded query it now lists the operators, as in a `.kql` file. A space in the YAML around it still opens no list.
+- **`opentide/analyze` and `opentide/highlight` refuse a `language` they do not know** ([#1668](https://github.com/opentidehq/opentide/issues/1668)). `language: "sql"` (or a typo) was read as the default and answered no diagnostics, as if the query were clean; it is now `InvalidParams` (`-32602`), naming the languages.
+- **`opentide/fs/read` reads a path relative to a workspace folder** ([#1668](https://github.com/opentidehq/opentide/issues/1668)). `{ path: "objects/rules/a.yaml" }` answered `""`; each workspace folder is now tried in order, as for an absolute path.
 
 ### Security
 

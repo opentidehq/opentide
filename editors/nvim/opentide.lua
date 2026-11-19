@@ -6,9 +6,26 @@
 -- Configuration checks need `opentide lsp start`: `opentide-lsp` on its own
 -- reports nothing there. Cassandra's CQL uses *.cql too: drop
 -- "cql" from the loop below where a workspace holds Cassandra scripts.
+-- Runs on Neovim 0.9 and later.
+
+-- The workspace folder of the current buffer: the closest folder above it
+-- that holds one of `markers` (vim.fs.root, from Neovim 0.10; vim.fs.find
+-- before it), else the working directory.
+local function root_dir(markers)
+  if vim.fs.root then
+    return vim.fs.root(0, markers)
+  end
+  local found = vim.fs.find(markers, {
+    path = vim.fs.dirname(vim.api.nvim_buf_get_name(0)),
+    upward = true,
+  })[1]
+  return found and vim.fs.dirname(found) or vim.fn.getcwd()
+end
 
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-  pattern = { "objects/**/*.yaml", "objects/**/*.yml" },
+  -- A path with a slash matches the whole file name: `*/objects/...` an
+  -- absolute one, `objects/...` one typed from the workspace folder.
+  pattern = { "*/objects/**/*.yaml", "*/objects/**/*.yml", "objects/**/*.yaml", "objects/**/*.yml" },
   callback = function()
     vim.bo.filetype = "opentide-yaml"
   end,
@@ -69,7 +86,7 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.lsp.start({
       name = "opentide",
       cmd = { "opentide", "lsp", "start" },
-      root_dir = vim.fs.root(0, { ".opentide", ".git" }),
+      root_dir = root_dir({ ".opentide", ".git" }),
     })
   end,
 })
@@ -80,7 +97,7 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.lsp.start({
       name = "opentide-lsp",
       cmd = { "opentide-lsp", "--stdio" },
-      root_dir = vim.fs.root(0, { ".opentide", "objects", ".git" }),
+      root_dir = root_dir({ ".opentide", "objects", ".git" }),
     })
   end,
 })

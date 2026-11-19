@@ -115,7 +115,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     # The scripts a gate job runs: the docs job's.
     ("scripts/validate-docs.sh", ("docs",), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
-    ("scripts/engine/build-wasm.sh", ("wasm",), ()),
+    # Its own tests (tests/test_scripts/test_build_wasm.py) run in `python`.
+    ("scripts/engine/build-wasm.sh", ("wasm", "python"), ()),
     # What the `wasm` job runs besides the build: its smoke tests and packs.
     ("scripts/engine/wasm-smoke.mjs", ("wasm",), ()),
     ("scripts/engine/wasi-run.mjs", ("wasm",), ()),

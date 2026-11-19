@@ -3,7 +3,7 @@ source: crates/opentide-cli/tests/common/snapshot.rs
 description: deploy/json/deploy-push/promote-push
 ---
 args: opentide --json deploy --platform splunk --strategy RELEASE
-exit: 0
+exit: 1
 
 ━━━ stdout · json, 1 lines
 {
@@ -12,22 +12,36 @@ exit: 0
       "action": "upsert",
       "name": "Splunk create rule",
       "platform": "splunk",
-      "status": "STAGING",
-      "tenant": null,
+      "status": "PRODUCTION",
+      "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000041"
     }
   ],
   "command": "deploy",
-  "deployed": [
-    "splunk"
-  ],
+  "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
-  "exit_code": 0,
-  "failure": null,
-  "message": "Deployed 1 rule to 0 tenants · 1 created or updated · 0 failed, 0 not attempted · <SECONDS>",
+  "error": "Deployment to splunk failed on Splunk create rule: Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Deployment to splunk failed on Splunk create rule: Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "id": "00000000-0000-4000-8047-000000000041",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment failed · 1 failed, 0 not attempted · <SECONDS>",
   "next_actions": [],
-  "ok": true,
+  "ok": false,
   "plan": {
     "splunk": [
       "00000000-0000-4000-8047-000000000041"
@@ -36,18 +50,18 @@ exit: 0
   "results": [
     {
       "action": "upsert",
-      "error": null,
+      "error": "Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
       "id": "00000000-0000-4000-8047-000000000041",
       "name": "Splunk create rule",
       "platform": "splunk",
       "reason": null,
-      "seconds": null,
-      "status": "deployed",
-      "tenant": null
+      "seconds": 0.0,
+      "status": "failed",
+      "tenant": "lab"
     }
   ],
   "schema_version": 1,
-  "status": "completed",
+  "status": "failed",
   "strategies": [
     "RELEASE"
   ],
@@ -55,18 +69,26 @@ exit: 0
     "create": 0,
     "delete": 0,
     "disable": 0,
-    "failed": 0,
+    "failed": 1,
     "not_attempted": 0,
     "platforms": 1,
     "seconds": 0.0,
     "skipped": 0,
-    "tenants": 0,
+    "tenants": 1,
     "update": 0,
-    "upsert": 1
+    "upsert": 0
   }
 }
 
-━━━ stderr · empty
+━━━ stderr · json, 1 lines
+{
+  "error": "Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "event": "tenant_deployment_failed",
+  "level": "critical",
+  "platform": "splunk",
+  "tenant": "***",
+  "timestamp": "0000-00-00 00:00:00"
+}
 
 ━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644
 name: Splunk create rule

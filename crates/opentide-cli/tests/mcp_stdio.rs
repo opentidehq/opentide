@@ -467,6 +467,32 @@ fn content_length_headers_are_skipped_and_the_body_is_answered() {
     drop(ws);
 }
 
+/// `tools/call` and `resources/read` without their params are methods the
+/// server has: the answer is `Invalid params`, not `Method not found`.
+#[test]
+fn a_known_method_without_its_params_is_invalid_params() {
+    let (_dir, ws, mut client) = on_the_corpus();
+    client.handshake();
+    for (id, method) in [(41, "tools/call"), (42, "resources/read")] {
+        client.send(&json!({"jsonrpc": "2.0", "id": id, "method": method}));
+        let answer = loop {
+            let line = client
+                .lines
+                .recv_timeout(PATIENCE)
+                .unwrap()
+                .expect("an answer");
+            let answer = frame(&client.text(line));
+            if answer["id"] == id {
+                break answer;
+            }
+        };
+        assert_eq!(answer["error"]["code"], -32602, "{answer}");
+        assert_eq!(answer["error"]["data"], method, "{answer}");
+    }
+    client.close();
+    drop(ws);
+}
+
 /// `opentide --repo <ws> mcp start` from another folder serves `<ws>`.
 #[test]
 fn repo_names_the_workspace_from_outside_it() {
