@@ -2038,17 +2038,19 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
         out.contains("\"tenant\":\"lab\"") && out.contains("SPLUNK_TOKEN"),
         "{out}{err}"
     );
-    // Whole-folder promotion rewrites s.yaml too, but only the files the
-    // push changed are deployed (#1653 tracks that gap).
-    assert!(
-        !out.contains("00000000-0000-4000-8047-000000000903"),
-        "{out}"
-    );
     let read = |name: &str| std::fs::read_to_string(ws.path().join("objects/rules").join(name));
     let changed = read("r.yaml").unwrap();
     assert!(changed.contains("    status: PRODUCTION\n"), "{changed}");
     let other = read("s.yaml").unwrap();
-    other.contains("    status: PRODUCTION\n")
+    let promoted = other.contains("    status: PRODUCTION\n");
+    // Whole-folder promotion deploys what it promoted, s.yaml too (#1653):
+    // the other rule is in the run exactly when it was promoted.
+    assert_eq!(
+        out.contains("00000000-0000-4000-8047-000000000903"),
+        promoted,
+        "{out}"
+    );
+    promoted
 }
 
 /// VS Code's integrated terminal (`TERM_PROGRAM=vscode`) does not turn on
@@ -3010,4 +3012,187 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     rt.block_on(server.verify());
     assert_eq!(rows(&sent)[0].0, "failed", "{:?}", rows(&sent));
     assert_tenant_stopped(&sent, "lab");
+}
+
+/// A push's environment in GitHub Actions for `ws`.
+fn github_push(ws: &Path) -> Vec<(&'static str, String)> {
+    vec![
+        ("GITHUB_ACTIONS", "true".to_owned()),
+        ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_SHA", "HEAD".to_owned()),
+        ("GITHUB_WORKSPACE", ws.display().to_string()),
+    ]
+}
+
+/// A Splunk stand-in that records the body of each saved search it is sent.
+struct SplunkBodies(Mutex<Vec<serde_json::Value>>);
+
+impl Deployer for SplunkBodies {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(serde_json::from_slice(&request.body).unwrap());
+        deploying(async move { Ok(DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// Registers [`SplunkBodies`] as `splunk`.
+struct SplunkRecorder(&'static SplunkBodies);
+
+impl Platform for SplunkRecorder {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A Splunk saved search a RELEASE push promotes is compiled from the
+/// promoted file: its search names the rule with the promoted status
+/// (`MDR_status="PRODUCTION"`), not the one it had (#1653).
+#[test]
+fn a_promoted_splunk_search_carries_the_promoted_status() {
+    let uuid = "00000000-0000-4000-8047-000000000910";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Promoted", uuid, "A rule.", block))],
+    );
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let bodies: &'static SplunkBodies = Box::leak(Box::new(SplunkBodies(Mutex::new(Vec::new()))));
+    let mut registry = Registry::new();
+    registry.register(Box::new(SplunkRecorder(bodies))).unwrap();
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let env = Env::from_pairs(
+        github_push(ws.path())
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value)),
+    );
+    let (sent, text) = deploy_with(ws.path(), &args, &env, &registry, 0);
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)], "{text}");
+    let bodies = bodies.0.lock().unwrap();
+    let [body] = &bodies[..] else {
+        panic!("one saved search: {bodies:?}");
+    };
+    let search = body["search"].as_str().unwrap();
+    assert!(
+        search.contains(&format!("MDR_UUID=\"{uuid}\", MDR_status=\"PRODUCTION\"")),
+        "{search}"
+    );
+}
+
+/// A rule a RELEASE push promotes but no tenant takes (the tenant accepts
+/// PREVIEW only) is not sent: it is reported skipped, with why, never
+/// `deployed`, and its file keeps the status it had, so the write-back
+/// commits no status that was never deployed (#1653).
+#[test]
+fn a_promoted_rule_no_tenant_takes_is_skipped_and_keeps_its_status() {
+    let uuid = "00000000-0000-4000-8047-000000000911";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Unrouted", uuid, "A rule.", block))],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace(
+            "strategies = [\"PREVIEW\", \"RELEASE\"]",
+            "strategies = [\"PREVIEW\"]",
+        ),
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}{err}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let results = document["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1, "{out}");
+    assert_eq!(results[0]["status"], "skipped", "{out}");
+    assert_eq!(results[0]["tenant"], serde_json::Value::Null, "{out}");
+    assert!(
+        results[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("no splunk tenant takes its status PRODUCTION"),
+        "{out}"
+    );
+    assert_eq!(
+        std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+        before,
+        "the promotion was put back"
+    );
+}
+
+/// A RELEASE push skipped for want of tenants (`--skip-unconfigured`) sends
+/// nothing, so the rules it promoted keep the status they had: the
+/// write-back commits no PRODUCTION status for a rule never deployed
+/// (#1653, smoke A4).
+#[test]
+fn a_skipped_push_keeps_the_status_it_would_have_promoted() {
+    let ws = tempfile::tempdir().unwrap();
+    let platforms = ws.path().join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("splunk.toml"),
+        "[platform]\nenabled = true\nname = \"Stand-in\"\n",
+    )
+    .unwrap();
+    let rules = ws.path().join("objects/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    std::fs::write(
+        rules.join("r.yaml"),
+        rule(
+            "Unconfigured",
+            "00000000-0000-4000-8047-000000000912",
+            "A rule.",
+            block,
+        ),
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(rules.join("r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--strategy",
+        "RELEASE",
+        "--skip-unconfigured",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("\"status\":\"skipped\""), "{out}");
+    assert_eq!(
+        std::fs::read(rules.join("r.yaml")).unwrap(),
+        before,
+        "{err}"
+    );
 }

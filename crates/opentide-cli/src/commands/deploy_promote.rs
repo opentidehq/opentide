@@ -49,6 +49,31 @@ pub struct Promotion<'a> {
     pub debug: bool,
 }
 
+/// A rule file the promotion rewrote: what it held before, so a deploy that
+/// sends the rule nowhere can put it back (#1653).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Promoted {
+    /// The file.
+    pub path: PathBuf,
+    /// Its bytes before the promotion.
+    pub original: Vec<u8>,
+    /// The rule's `metadata.uuid`, canonical, when it has one.
+    pub uuid: Option<String>,
+}
+
+impl Promoted {
+    /// Writes the file's bytes from before the promotion back, as the
+    /// promotion wrote it (through a temporary file, its mode kept).
+    ///
+    /// # Errors
+    ///
+    /// The file cannot be written: the message names it.
+    pub fn restore(&self) -> Result<(), String> {
+        opentide_workspace::fs::write_atomically(&self.path, &self.original)
+            .map_err(|error| format!("{}: {error}", self.path.display()))
+    }
+}
+
 /// How a promotion ended, when the run does not go on to plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stop {
@@ -127,19 +152,21 @@ fn setting_text(value: &Setting) -> String {
 }
 
 /// Runs the promotion: plans every file, then logs, writes and draws the
-/// step. `Ok` when the run goes on to plan.
+/// step. `Ok` when the run goes on to plan, with the files it rewrote.
 ///
 /// # Errors
 ///
 /// [`Stop`]: how the run ends instead.
-pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
+pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<Vec<Promoted>, Stop> {
     let started = Instant::now();
     let (events, planned, mut ended) = plan(promotion);
     for event in &events {
         emit(event);
     }
+    let mut promoted = Vec::new();
     if ended.is_none() {
-        for (path, bytes) in &planned {
+        for (path, bytes, before) in planned {
+            let (path, bytes) = (&path, &bytes);
             // `_write_atomically`: through a temporary file beside it, the
             // rule's permission bits kept (#987).
             if let Err(error) = opentide_workspace::fs::write_atomically(path, bytes) {
@@ -156,6 +183,11 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
                     ),
                 ],
             ));
+            promoted.push(Promoted {
+                path: path.clone(),
+                original: before.0,
+                uuid: before.1,
+            });
         }
     }
     let mut step = Step::new(STEP);
@@ -169,10 +201,13 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
     step.seconds = started.elapsed().as_secs_f64();
     lines.step(&step, 1, 1);
     lines.checklist(std::slice::from_ref(&step));
-    ended.map_or(Ok(()), Err)
+    ended.map_or(Ok(promoted), Err)
 }
 
-type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>)>, Option<Stop>);
+/// A file's original bytes and its rule's UUID.
+type Before = (Vec<u8>, Option<String>);
+
+type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>, Before)>, Option<Stop>);
 
 /// Every file read and planned (`PromoteMDR.promote` up to its writes): the
 /// events to log, the bytes to write, and how the run stops, if it does.
@@ -278,7 +313,16 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
                     out.extend_from_slice("\u{feff}".as_bytes());
                 }
                 out.extend_from_slice(text.as_bytes());
-                planned.push((path.clone(), out));
+                let uuid = root
+                    .and_then(|root| root.get("metadata"))
+                    .and_then(|metadata| metadata.get("uuid"))
+                    .and_then(|uuid| match &uuid.value {
+                        node::Value::Str(text) => {
+                            Some(opentide_compile::rule::canonical_uuid(&text.to_string()))
+                        }
+                        _ => None,
+                    });
+                planned.push((path.clone(), out, (bytes.clone(), uuid)));
             }
             Err(Error::Refused(detail)) => events.push(Event::NotPromoted {
                 path: path.display().to_string(),
@@ -403,7 +447,7 @@ mod tests {
             false,
             true,
         );
-        assert_eq!(outcome, Ok(()));
+        assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(after[0], bom.replace("STAGING", "PRODUCTION").into_bytes());
         assert_eq!(after[1], done.as_bytes());
         assert!(drawn.contains("\"step\":\"status promotion\""), "{drawn}");
@@ -437,11 +481,11 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(outcome, Ok(()));
+        assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(after[0], RULE.as_bytes());
         assert!(drawn.contains("✓ status promotion · 1 rule"), "{drawn}");
         let (outcome, drawn, _) = promote(&settings(true, "PRODUCTION"), &[], false, false);
-        assert_eq!(outcome, Ok(()));
+        assert!(outcome.is_ok(), "{outcome:?}");
         assert!(drawn.contains("status promotion · 0 rules"), "{drawn}");
     }
 
@@ -453,7 +497,7 @@ mod tests {
             true,
             false,
         );
-        assert_eq!(outcome, Ok(()));
+        assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(after[0], RULE.replace("STAGING", "PRODUCTION").into_bytes());
         // The step counts the changed files, none here.
         assert!(drawn.contains("status promotion · 0 rules"), "{drawn}");
@@ -623,7 +667,7 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(outcome, Ok(()));
+        assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(after[0], anchored.as_bytes());
     }
 }

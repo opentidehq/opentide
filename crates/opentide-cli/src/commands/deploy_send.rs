@@ -597,7 +597,7 @@ fn deploy(
         cwd: cx.cwd.to_path_buf(),
         plugins: crate::plugins::plugin_ids(),
     };
-    let scope: Scope = if selecting {
+    let mut scope: Scope = if selecting {
         let (scope, unmatched) =
             opentide_compile::dry_run::selected_scope(fs, workspace, &local, &request, cx.cwd);
         if !unmatched.is_empty() {
@@ -635,6 +635,9 @@ fn deploy(
     // read before it still holds the old status, which routes those rules
     // to no RELEASE tenant and compiles them with the old status.
     let reopened;
+    // The files the promotion rewrote, to put back when the deploy sends
+    // their rule nowhere (#1653).
+    let mut promoted: Vec<super::deploy_promote::Promoted> = Vec::new();
     let workspace = if promotes(args, &runs, cx.env) {
         let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
         let debug = cx.debug || cx.env.opentide_debug();
@@ -649,8 +652,14 @@ fn deploy(
             local: &local,
             debug,
         };
-        if let Err(stop) = super::deploy_promote::run(&promotion, &cx.lines) {
-            return super::deploy_promote::stopped(&stop);
+        match super::deploy_promote::run(&promotion, &cx.lines) {
+            Ok(rewritten) => promoted = rewritten,
+            Err(stop) => return super::deploy_promote::stopped(&stop),
+        }
+        if debug {
+            // Whole-folder promotion: deploy what it promoted, not only the
+            // files the push changed (#1653).
+            scope.files.clone_from(&local);
         }
         // Read the files the promotion may have rewritten again (a clone
         // shares every other parse), so the plan and the payloads see the
@@ -770,6 +779,11 @@ fn deploy(
                 .collect(),
         );
         let detail = detail.join("; ");
+        // Nothing is sent: a promoted rule keeps the status it had, so the
+        // write-back commits no status that was never deployed (#1653).
+        if let Err(message) = unpromote(&promoted, |_| true) {
+            return failed(&message);
+        }
         let skip = args.skip_unconfigured && tenantless.len() == deployment.len() && !refused;
         let mut result = vec![
             (
@@ -799,6 +813,8 @@ fn deploy(
     }
     // Each platform's tenants, resolved before anything is sent.
     let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
+    // The rules no tenant of a platform takes: (platform, uuid, reason).
+    let mut unrouted: Vec<(String, String, String)> = Vec::new();
     let index = workspace.index();
     for (platform, uuids) in &deployment {
         let tables = plan::tenants(config, platform);
@@ -835,7 +851,19 @@ fn deploy(
             let Ok(rule_strategy) = owned.statuses.strategy(status) else {
                 continue;
             };
-            for tenant in plan::rule_tenants(&tenants, &block, rule_strategy, &runs, args.wide) {
+            let routed = plan::rule_tenants(&tenants, &block, rule_strategy, &runs, args.wide);
+            if routed.is_empty() {
+                unrouted.push((
+                    platform.clone(),
+                    opentide_compile::rule::canonical_uuid(uuid),
+                    format!(
+                        "not sent: no {platform} tenant takes its status {status} ({} \
+                         strategy)",
+                        rule_strategy.name()
+                    ),
+                ));
+            }
+            for tenant in routed {
                 per_tenant
                     .entry(tenant.name.clone())
                     .or_default()
@@ -843,6 +871,22 @@ fn deploy(
             }
         }
         targets.insert(platform.clone(), per_tenant);
+    }
+    // A promoted rule no tenant takes on any platform keeps the status it
+    // had: the write-back commits no status that was never deployed.
+    let sent_anywhere = |uuid: &str| {
+        targets.values().any(|tenants| {
+            tenants
+                .values()
+                .any(|uuids| uuids.iter().any(|id| id == uuid))
+        })
+    };
+    if let Err(message) = unpromote(&promoted, |file| {
+        file.uuid
+            .as_deref()
+            .is_some_and(|uuid| !sent_anywhere(uuid))
+    }) {
+        return failed(&message);
     }
     let changes = plan_changes(workspace, &owned, &deployment, &targets);
     let tenant_count: usize = targets.values().map(IndexMap::len).sum();
@@ -868,6 +912,17 @@ fn deploy(
     );
     let compile_cx = owned.context(index);
     let mut log = DeployLog::new(&cx.lines, &changes);
+    // A rule no tenant takes was never sent: skipped, with why, never
+    // `deployed` (#1653).
+    for (platform, uuid, reason) in &unrouted {
+        let name = index
+            .get("rule", uuid)
+            .and_then(|object| object.root())
+            .map(CJson::from_node)
+            .and_then(|data| data.get("name").and_then(CJson::as_str).map(str::to_owned))
+            .unwrap_or_else(|| uuid.clone());
+        log.unrouted(platform, uuid, &name, reason);
+    }
     let mut sender = Sender {
         cx,
         workspace,
@@ -968,7 +1023,7 @@ fn deploy(
                     platform == system && Some(stopped.as_str()) == *tenant
                 })
             });
-        if sent && !unusable {
+        if sent && !unusable && !planned_on.is_empty() {
             deployed.push(system.clone());
         }
     }
@@ -1132,6 +1187,27 @@ fn deploy(
 
 /// Every rule on every tenant the targets resolved; rules on tenantless
 /// platforms once (`plan_changes`).
+/// Writes back the files of `promoted` that `put_back` names, as they were
+/// before the promotion, and logs each (`rule_promotion_undone`).
+///
+/// # Errors
+///
+/// A file that cannot be written: the message names it.
+fn unpromote(
+    promoted: &[super::deploy_promote::Promoted],
+    put_back: impl Fn(&super::deploy_promote::Promoted) -> bool,
+) -> Result<(), String> {
+    for file in promoted.iter().filter(|file| put_back(file)) {
+        file.restore()?;
+        tracing::info!(
+            path = file.path.display().to_string().as_str(),
+            detail = "no tenant received the rule, so its status stays as it was",
+            "rule_promotion_undone"
+        );
+    }
+    Ok(())
+}
+
 fn plan_changes(
     workspace: &Workspace,
     owned: &opentide_compile::Owned,
@@ -1143,8 +1219,9 @@ fn plan_changes(
     let root = workspace.root().to_path_buf();
     let mut changes = Vec::new();
     for (platform, uuids) in deployment {
-        let tenants = targets.get(platform).filter(|tenants| !tenants.is_empty());
-        let pairs: Vec<(Option<String>, String)> = match tenants {
+        // A platform whose tenants were resolved plans what they take: a
+        // rule none takes is reported skipped, never sent (#1653).
+        let pairs: Vec<(Option<String>, String)> = match targets.get(platform) {
             Some(tenants) => tenants
                 .iter()
                 .flat_map(|(tenant, ids)| ids.iter().map(|id| (Some(tenant.clone()), id.clone())))
@@ -1447,6 +1524,16 @@ impl<'l> DeployLog<'l> {
     /// A rule the engine decided not to send (`skipped`).
     fn skipped(&mut self, platform: &str, tenant: &str, id: &str, name: &str, reason: &str) {
         let mut result = RuleResult::new(platform, Some(tenant), id, name);
+        result.status = "skipped";
+        result.reason = Some(reason.to_owned());
+        result.seconds = Some(0.0);
+        self.finished(result);
+    }
+
+    /// A rule no tenant of `platform` takes: skipped before anything is
+    /// sent, with no tenant.
+    fn unrouted(&mut self, platform: &str, id: &str, name: &str, reason: &str) {
+        let mut result = RuleResult::new(platform, None, id, name);
         result.status = "skipped";
         result.reason = Some(reason.to_owned());
         result.seconds = Some(0.0);
