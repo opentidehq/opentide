@@ -1291,10 +1291,7 @@ impl Settled {
             })
             .collect();
         let entries = self.failures.iter().zip(&lines).map(|((path, _), line)| {
-            Json::object([
-                ("path", Json::str(path)),
-                ("error", Json::str(line)),
-            ])
+            Json::object([("path", Json::str(path)), ("error", Json::str(line))])
         });
         let mut all = match result.iter().find(|(key, _)| key == "failures") {
             Some((_, Json::Array(own))) => own.clone(),

@@ -203,7 +203,12 @@ fn pushed_workspace(ws: &std::path::Path, port: u16) {
     std::fs::write(&rule, PROMOTED_RULE).unwrap();
     let git = |args: &[&str]| {
         let output = Command::new("git")
-            .args(["-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false"])
+            .args([
+                "-c",
+                "init.defaultBranch=main",
+                "-c",
+                "commit.gpgsign=false",
+            ])
             .args(args)
             .current_dir(ws)
             .env("GIT_CONFIG_NOSYSTEM", "1")

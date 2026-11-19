@@ -3528,7 +3528,12 @@ fn sent_and_unsent() -> tempfile::TempDir {
         &[
             (
                 "a.yaml",
-                rule("Sent", "00000000-0000-4000-8047-000000000920", "A rule.", block),
+                rule(
+                    "Sent",
+                    "00000000-0000-4000-8047-000000000920",
+                    "A rule.",
+                    block,
+                ),
             ),
             (
                 "b.yaml",
@@ -3582,8 +3587,7 @@ fn a_promotion_the_run_cannot_undo_fails_the_run() {
     assert_eq!(value(&sent, "status"), &Json::str("failed"), "{text}");
     let message = text_of(value(&sent, "message"));
     assert!(
-        message.contains("Could not undo the status promotion of")
-            && message.contains("b.yaml"),
+        message.contains("Could not undo the status promotion of") && message.contains("b.yaml"),
         "{message}"
     );
     let Json::Array(failures) = value(&sent, "failures") else {
