@@ -1,0 +1,22 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/human/vscode-long-query/long-line
+---
+args: opentide validate query --file long.lucene --platform elastic
+exit: 1
+
+━━━ stdout
+␛[1m␛[31merror[lucene_parse_error]␛[0m␛[1m: Lucene syntax error: missing `)`␛[0m
+  ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/long.lucene␛\long.lucene:1:808␛]8;;␛\
+␛[34m  │␛[0m
+␛[34m1 │␛[0m …rocess.name:proc15.exe OR process.name:proc16.exe OR process.name:proc17.exe OR process.name:proc18.exe OR process.name:proc19.exe OR process.name:proc20.exe OR process.name:proc21.exe OR process.name:proc22.exe OR process.name:proc23.exe OR process.name:proc24.exe OR process.name:proc25.exe OR process.name:proc26.exe OR process.name:proc27.exe OR process.name:proc28.exe OR process.name:proc29.exe
+␛[34m  │␛[0m                                                                                                                                                                                                                                                                                                                                                                                                                  ␛[1m␛[31m━␛[0m
+␛[34m  │␛[0m
+  ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/
+  ␛[34m ␛[0m        query-dsl/query-dsl-query-string-query
+
+
+━━━ stderr
+␛[1m␛[31m✗␛[0m 1 error in 1 file · 1 query checked
+␛[1m␛[36m→␛[0m ␛[1mopentide explain lucene_parse_error␛[0m␛[2m · how to fix it␛[0m
+␛[1m␛[36m→␛[0m ␛[1mopentide validate query --platform elastic --file long.lucene␛[0m␛[2m · check again␛[0m

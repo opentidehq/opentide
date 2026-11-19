@@ -1054,7 +1054,11 @@ mod tests {
         assert!(source.ends_with("(END)"), "{source}");
         assert_eq!(underlined(&out), ")", "{out}");
         // At the end of the input: one cell past the last character.
-        let out = framed(&mut at(1, length + 1, length + 2), &format!("{line}\n"), None);
+        let out = framed(
+            &mut at(1, length + 1, length + 2),
+            &format!("{line}\n"),
+            None,
+        );
         let source = out.lines().find(|row| row.starts_with("1 │")).unwrap();
         assert!(source.ends_with("(END)"), "{source}");
         assert_eq!(underlined(&out), " ", "{out}");
