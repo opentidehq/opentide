@@ -3,7 +3,7 @@
 //! operators with their own syntax (opentidehq/language-server#125).
 
 use opentide_core::{Diagnostic, Severity, codes};
-use opentide_kql::{Hir, Profile, analyze, lower};
+use opentide_kql::{Hir, Profile, analyze, columns, lower};
 
 fn diagnostics(source: &str) -> Vec<Diagnostic> {
     analyze(source, Profile::Sentinel).diagnostics
@@ -312,4 +312,58 @@ fn malformed_operators_still_fail() {
     ] {
         assert_parse_error(source);
     }
+}
+
+#[test]
+fn obfuscated_strings_and_hex_integers_are_literals() {
+    // Kusto reads `h` or `H` right before any string as an obfuscated string,
+    // and `0x` digits as an int or a long: both are one literal.
+    for source in [
+        "SecurityEvent | where CommandLine has h\"secret\"",
+        "SecurityEvent | where CommandLine has H'secret'",
+        "SecurityEvent | where Account == h@\"CONTOSO\\svc\"",
+        "SecurityEvent | where Account == H@'CONTOSO\\svc'",
+        "print x = h```multi\nline```",
+        "print x = H~~~multi\nline~~~",
+        "SecurityEvent | where EventID == 0x1210",
+        "print mask = 0xFFFFFFFF, low = 0X0f",
+        "print a = -0x1F, b = long(0x1F), c = 0xFFFFFFFFFFFFFFFF, d = 0x",
+    ] {
+        assert_clean(source);
+    }
+    // The prefix must touch the quote: `h "x"` is a name, then a string.
+    assert_parse_error("print h \"x\"");
+    // A hexadecimal integer is a long, even with an `e` among its digits.
+    let types = |source: &str| -> Vec<String> {
+        let analysis = columns(source, Profile::Sentinel);
+        let pipeline = analysis.pipelines.last().expect("a pipeline");
+        let schema = pipeline
+            .stages
+            .last()
+            .map_or(&pipeline.source, |s| &s.output);
+        schema
+            .columns
+            .iter()
+            .map(|c| format!("{}:{}", c.name, c.type_name.as_deref().unwrap_or("?")))
+            .collect()
+    };
+    assert_eq!(
+        types("print x = 0x1E, y = 0xBEEF, z = 0x10, w = 1e3"),
+        ["x:long", "y:long", "z:long", "w:real"]
+    );
+    assert_clean("union (print A = 0x1E), (print A = 1) | project A");
+    // A table named by an obfuscated string is that table: its columns.
+    let columns = |source: &str| -> Vec<String> {
+        let analysis = columns(source, Profile::Sentinel);
+        let pipeline = analysis.pipelines.last().expect("a pipeline");
+        pipeline
+            .source
+            .columns
+            .iter()
+            .map(|c| c.name.clone())
+            .collect()
+    };
+    let plain = columns("table(\"SigninLogs\") | take 1");
+    assert!(plain.iter().any(|c| c == "UserPrincipalName"), "{plain:?}");
+    assert_eq!(columns("table(h\"SigninLogs\") | take 1"), plain);
 }

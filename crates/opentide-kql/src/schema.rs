@@ -1123,11 +1123,15 @@ pub(crate) fn primary_type(primary: &Primary<'_>, input: &Schema) -> Option<Stri
                 other => other.to_string(),
             })
         }
-        Primary::Number(text) => Some(if text.contains(['.', 'e', 'E']) {
-            "real".into()
-        } else {
-            "long".into()
-        }),
+        // A hexadecimal integer (`0x1E`) is a long, whatever digits it has.
+        Primary::Number(text) => Some(
+            if !text.starts_with("0x") && !text.starts_with("0X") && text.contains(['.', 'e', 'E'])
+            {
+                "real".into()
+            } else {
+                "long".into()
+            },
+        ),
         Primary::Call(name) => {
             let name = name.to_ascii_lowercase();
             let t = match name.as_str() {

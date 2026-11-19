@@ -441,6 +441,8 @@ impl<'a> Pass<'a> {
                 && literal_kind(&arg) == Some(K::STRING)
             {
                 let text = self.text(&arg);
+                // An obfuscated name (`table(h"SigninLogs")`) names the table too.
+                let text = text.strip_prefix(['h', 'H']).unwrap_or(text);
                 let table = text.trim_matches(|c| c == '"' || c == '\'' || c == '@');
                 return self.named_source(table, scope).unwrap_or_else(Schema::open);
             }

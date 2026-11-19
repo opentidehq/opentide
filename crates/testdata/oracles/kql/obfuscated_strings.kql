@@ -1,0 +1,8 @@
+SecurityEvent
+| where CommandLine has h"secret-token"
+| where Account != H@'CONTOSO\svc'
+| extend Note = h'hidden', Upper = H"x", Verbatim = h@"C:\x"
+| extend Block = H```multi
+line```, Tilde = h~~~x~~~, Tilde2 = H~~~y~~~
+| extend Lower = h```multi
+line```
