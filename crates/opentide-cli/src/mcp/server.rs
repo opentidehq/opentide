@@ -493,7 +493,10 @@ mod tests {
             let Answer::Result(result) = server.call(tool, &arguments) else {
                 panic!("not a result");
             };
-            let text = result["content"][0]["text"].as_str().unwrap_or("").to_owned();
+            let text = result["content"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned();
             (result, text)
         };
         let in_empty = Server::new(
@@ -533,6 +536,50 @@ mod tests {
             said.contains(&format!(
                 "workspace_not_found: OPENTIDE_REPO_ROOT names {shown}, which is not a folder"
             )),
+            "{said}"
+        );
+
+        // A repository root with no markers and its detections in
+        // OPENTIDE_TIDE_WORKSPACE is a workspace, as the command line
+        // serves it (`commands::unplaced_root`).
+        let mono = scratch.path().join("mono");
+        std::fs::create_dir_all(mono.join("detections/.opentide")).unwrap();
+        let root = mono.to_string_lossy().into_owned();
+        let detections = mono.join("detections").to_string_lossy().into_owned();
+        let split = Server::new(
+            Env::from_pairs([
+                ("OPENTIDE_REPO_ROOT", root.as_str()),
+                ("OPENTIDE_TIDE_WORKSPACE", detections.as_str()),
+            ]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        for (tool, arguments) in [
+            ("validation_report", json!({})),
+            ("search", json!({"query": "x"})),
+        ] {
+            let (result, said) = text(&split, tool, arguments);
+            assert!(!said.contains("workspace_not_found"), "{tool}: {said}");
+            assert_ne!(result["isError"], true, "{tool}: {said}");
+        }
+        // Every variable set must name a folder, the second one too.
+        let gone = mono.join("gone").to_string_lossy().into_owned();
+        let typo = Server::new(
+            Env::from_pairs([
+                ("OPENTIDE_REPO_ROOT", root.as_str()),
+                ("OPENTIDE_TIDE_WORKSPACE", gone.as_str()),
+            ]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        let (result, said) = text(&typo, "search", json!({"query": "x"}));
+        assert_eq!(result["isError"], true, "{said}");
+        assert!(
+            said.contains(&format!("OPENTIDE_TIDE_WORKSPACE names {gone}")),
             "{said}"
         );
     }

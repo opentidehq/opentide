@@ -13,7 +13,7 @@ use opentide_compile::plan::Scope;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{OsFs, root};
 
-use super::{COMMAND_FAILED, open, placement};
+use super::{COMMAND_FAILED, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
 use crate::json::Json;
@@ -209,9 +209,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         return refused;
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match open(options) {
+    let workspace = match super::open_for(COMMAND, options) {
         Ok(workspace) => workspace,
-        Err(message) => return failed(message),
+        Err(refused) => {
+            // A TOML file that does not parse keeps `config_parse`, its place
+            // and its diagnostic.
+            let mut dry = failed(refused.outcome.message.clone());
+            dry.outcome = refused.outcome;
+            return dry;
+        }
     };
     let owned = Owned::new(
         &Vocabularies::bundled(),

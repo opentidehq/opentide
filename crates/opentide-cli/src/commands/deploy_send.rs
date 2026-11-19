@@ -324,9 +324,18 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
 /// a status kept out.
 fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    let workspace = match super::open_for(COMMAND, options) {
         Ok(workspace) => workspace,
-        Err(message) => return failed(&message),
+        Err(refused) => {
+            // A TOML file that does not parse keeps `config_parse`.
+            let (code, message, diagnostics) = super::refusal_parts(&refused);
+            let mut result = failed(&message);
+            result.push(("_failure_code".to_owned(), Json::Str(code)));
+            if let Some(diagnostics) = diagnostics {
+                result.insert(2, ("diagnostics".to_owned(), diagnostics));
+            }
+            return result;
+        }
     };
     let mut warnings: Vec<String> = Vec::new();
     let mut skipped: Vec<plan::Skipped> = Vec::new();

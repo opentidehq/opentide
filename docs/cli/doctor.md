@@ -28,7 +28,7 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `python_version` | The running Python | Older than 3.10 | | |
 | `opentide_version` | The installed opentide version | | | |
 | `opentide_latest` | Whether PyPI has a newer release | | A newer release exists, or PyPI did not answer | `--offline` |
-| `workspace` | Where the workspace is and why: `.opentide/` or `objects/`, found from the current directory or set by `--repo` / `OPENTIDE_REPO_ROOT` | Neither folder is there | `objects/` without `.opentide/` | |
+| `workspace` | Where the workspace is and why: `.opentide/` or `objects/`, found from the current directory or set by `--repo` / `OPENTIDE_REPO_ROOT` | Neither folder is there, or the folder `OPENTIDE_REPO_ROOT` names does not exist (other commands exit `2` on it; a `--repo` naming no folder exits `2` here too) | `objects/` without `.opentide/` | |
 | `git` | git is on `PATH` | | git is missing | |
 | `git_repository` | The workspace is in a repository, and its default branch (`origin/HEAD`) | | Not a repository, or `origin/HEAD` is not set | |
 | `configuration` | The workspace configuration TOMLs (`.opentide/configurations/`, and a parent instance's) load | One does not parse: the message names the file and line | | |

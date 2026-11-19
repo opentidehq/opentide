@@ -426,9 +426,18 @@ fn payload(args: &Args, cx: &Context<'_>) -> Payload {
         );
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    let workspace = match super::open_for("share", options) {
         Ok(workspace) => workspace,
-        Err(message) => return Payload::result(&message, 1, "failed", Vec::new()),
+        Err(refused) => {
+            // A TOML file that does not parse keeps `config_parse`.
+            let (code, message, diagnostics) = super::refusal_parts(&refused);
+            let mut payload = Payload::result(&message, 1, "failed", Vec::new());
+            payload.failure_code = Some(code);
+            if let Some(diagnostics) = diagnostics {
+                payload.put("diagnostics", diagnostics);
+            }
+            return payload;
+        }
     };
     let sharing = config::load(&workspace, cx.env);
     let secrets = sharing.secrets();

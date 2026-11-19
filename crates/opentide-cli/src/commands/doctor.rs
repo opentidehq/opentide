@@ -316,6 +316,19 @@ impl Doctor<'_> {
         } else {
             "found from the current directory"
         };
+        if !self.workspace.is_dir() {
+            let problem = if self.workspace.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Check::new(
+                "workspace",
+                "fail",
+                format!("Workspace {shown} {problem} ({how})"),
+            )
+            .fix("set --repo or OPENTIDE_REPO_ROOT to your detection repository".to_owned());
+        }
         if self.workspace.join(OPENTIDE_DIR).is_dir() {
             return Check::new(
                 "workspace",

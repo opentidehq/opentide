@@ -541,7 +541,9 @@ impl Run<'_> {
         // variable would otherwise read as an empty catalogue that passes.
         // The servers a host starts (`mcp`, `lsp`, `serve`) answer for it
         // per request instead: MCP's catalogue tools refuse with
-        // `workspace_not_found`. An empty value names no folder.
+        // `workspace_not_found`; `doctor` reports it as its failed
+        // `workspace` check, which exists to diagnose it. An empty value
+        // names no folder.
         let first = words.first().map(String::as_str);
         let named = match &self.globals.repo {
             Some(repo) => (first != Some("setup")).then(|| ("--repo", repo.clone())),
@@ -549,7 +551,7 @@ impl Run<'_> {
                 .env
                 .get("OPENTIDE_REPO_ROOT")
                 .filter(|repo| !repo.is_empty())
-                .filter(|_| !matches!(first, Some("setup" | "mcp" | "lsp" | "serve")))
+                .filter(|_| !matches!(first, Some("setup" | "mcp" | "lsp" | "serve" | "doctor")))
                 .map(|repo| ("OPENTIDE_REPO_ROOT", repo.to_owned())),
         };
         if let Some((named, repo)) = named
@@ -4138,15 +4140,17 @@ mod tests {
     fn a_repo_root_variable_naming_no_folder_is_a_usage_error() {
         // A10 (smoke test): `OPENTIDE_REPO_ROOT=/nonexist opentide validate`
         // passed on an empty catalogue, where `--repo /nonexist` exits 2.
-        let missing = std::env::temp_dir().join(format!(
-            "opentide-cli-no-such-root-{}",
-            std::process::id()
-        ));
+        let missing =
+            std::env::temp_dir().join(format!("opentide-cli-no-such-root-{}", std::process::id()));
         let shown = missing.to_string_lossy().into_owned();
         let pairs = [("OPENTIDE_REPO_ROOT", shown.as_str())];
         for line in ["validate", "info", "--json validate"] {
             let ran = dispatched(line, &pairs, false);
-            assert_eq!(ran.code, USAGE_EXIT_CODE, "{line}: {}{}", ran.stdout, ran.stderr);
+            assert_eq!(
+                ran.code, USAGE_EXIT_CODE,
+                "{line}: {}{}",
+                ran.stdout, ran.stderr
+            );
             let said = format!("{}{}", ran.stdout, ran.stderr);
             assert!(
                 said.contains(&format!("OPENTIDE_REPO_ROOT={shown} does not exist")),
@@ -4163,6 +4167,80 @@ mod tests {
         assert_eq!(
             dispatched("--json commands", &[("OPENTIDE_REPO_ROOT", "")], false).code,
             0
+        );
+        // `doctor` reports it as its failed workspace check instead.
+        let doctor = dispatched("--json doctor --offline", &pairs, false);
+        assert_ne!(doctor.code, USAGE_EXIT_CODE, "{}", doctor.stdout);
+        assert!(
+            doctor
+                .stdout
+                .contains(&format!("Workspace {shown} does not exist")),
+            "{}{}",
+            doctor.stdout,
+            doctor.stderr
+        );
+    }
+
+    #[test]
+    fn a_configuration_file_that_does_not_parse_is_config_parse_on_every_command() {
+        // D9, B10 (smoke test): `[platform` in a platform TOML failed each
+        // command with `command_failed`, an absolute path and no position.
+        let dir = tempfile::tempdir().unwrap();
+        let platforms = dir.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::create_dir_all(dir.path().join("objects")).unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
+        let repo = dir.path().display().to_string();
+        for command in [
+            "validate",
+            "lint",
+            "validate query",
+            "validate query --live --platform sentinel",
+            "info",
+            "new rule --name Probe --platform sentinel",
+            "share status",
+            "deploy --dry-run --all",
+            "deploy --all",
+            "generate docs",
+        ] {
+            let line = format!("--repo {repo} --json {command}");
+            let ran = dispatched(&line, &[], false);
+            assert_eq!(ran.code, 1, "{command}: {}{}", ran.stdout, ran.stderr);
+            assert!(
+                ran.stdout.contains("\"code\":\"config_parse\""),
+                "{command}: {}",
+                ran.stdout
+            );
+            assert!(
+                ran.stdout
+                    .contains(".opentide/configurations/platforms/sentinel.toml:2:"),
+                "{command}: {}",
+                ran.stdout
+            );
+        }
+        // A file that cannot be read (here: not UTF-8; permissions take the
+        // same path) has no syntax to fix: its own message and help.
+        std::fs::write(platforms.join("sentinel.toml"), b"enabled = \xff\n").unwrap();
+        let ran = dispatched(&format!("--repo {repo} --json validate"), &[], false);
+        assert_eq!(ran.code, 1, "{}", ran.stdout);
+        assert!(
+            ran.stdout.contains("sentinel.toml: cannot be read: "),
+            "{}",
+            ran.stdout
+        );
+        assert!(
+            ran.stdout.contains("Could not read the configuration file"),
+            "{}",
+            ran.stdout
+        );
+        assert!(
+            !ran.stdout.contains("fix the TOML syntax"),
+            "{}",
+            ran.stdout
         );
     }
 }

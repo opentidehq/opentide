@@ -383,14 +383,14 @@ pub fn placement(repo: Option<&str>, env: &Env, cwd: &Path) -> (String, RootOpti
     (shown, options)
 }
 
-/// The refusal of a command that writes into the workspace when `repo`,
-/// `env` and `cwd` place none: no `.opentide/` or `objects/` at the
-/// repository root (or the `OPENTIDE_TIDE_WORKSPACE` it names), so writing
-/// there would make that folder a workspace every folder below it discovers
-/// (D17, B18: `generate` wrote 20 files into a stray folder and `migrate`
-/// reported 0 files scanned, both exiting 0). `workspace_not_found`, exit 1,
-/// as `opentide new` refuses.
-pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) -> Option<Report> {
+/// The repository root `repo`, `env` and `cwd` place, absolute, when
+/// neither it nor the `OPENTIDE_TIDE_WORKSPACE` it reads is a workspace
+/// root (no `.opentide/` or `objects/`); `None` when one of them is. The one
+/// test the commands that write ([`no_workspace`]) and the MCP server's
+/// catalogue tools (`mcp::plugin::missing_workspace`) apply, so a layout
+/// one serves the other serves too: a repository root with no markers and
+/// its detections in `OPENTIDE_TIDE_WORKSPACE` is a workspace.
+pub fn unplaced_root(repo: Option<&str>, env: &Env, cwd: &Path) -> Option<PathBuf> {
     let (shown, options) = placement(repo, env, cwd);
     let absolute = |path: &Path| {
         if path.is_absolute() {
@@ -403,9 +403,17 @@ pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) ->
     let found = std::iter::once(root.clone())
         .chain(options.tide_workspace_env.as_deref().map(absolute))
         .any(|path| root::is_workspace_root(&OsFs, &path));
-    if found {
-        return None;
-    }
+    (!found).then_some(root)
+}
+
+/// The refusal of a command that writes into the workspace when `repo`,
+/// `env` and `cwd` place none ([`unplaced_root`]): writing there would make
+/// that folder a workspace every folder below it discovers (D17, B18:
+/// `generate` wrote 20 files into a stray folder and `migrate` reported 0
+/// files scanned, both exiting 0). `workspace_not_found`, exit 1, as
+/// `opentide new` refuses.
+pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) -> Option<Report> {
+    let root = unplaced_root(repo, env, cwd)?;
     let mut report = Report::failed(
         command,
         1,
@@ -425,8 +433,11 @@ pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) ->
 /// it does not open. A configuration TOML file that does not parse is
 /// `config_parse` (D9, B10: it was `command_failed` with no position), its
 /// message `path:line:column: problem`, and `diagnostics` holds the file,
-/// line and column, as `docs/cli/json-output.md` documents; any other
-/// problem is `command_failed`, as before.
+/// line and column, as `docs/cli/json-output.md` documents. A file that
+/// cannot be read (permissions, not UTF-8) keeps that code, the only one
+/// for a configuration file that stops the run, with its own message and
+/// help: it has no syntax to fix. Any other problem is `command_failed`, as
+/// before.
 pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Report>> {
     use opentide_schema::configuration::resolve::ResolveError;
     use opentide_workspace::ConfigError;
@@ -435,24 +446,30 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
         .as_deref()
         .map(|repo| options.absolute(repo))
         .unwrap_or_default();
-    let error = match Workspace::open(Arc::new(OsFs), opentide_workspace::Options { roots: options }) {
+    let error = match Workspace::open(
+        Arc::new(OsFs),
+        opentide_workspace::Options { roots: options },
+    ) {
         Ok(workspace) => return Ok(workspace),
         Err(error) => error,
     };
-    let (path, problem, line, column) = match &error {
+    let (path, problem, line, column, unreadable) = match &error {
         ConfigError::Resolve(ResolveError::Parse {
             path,
             message,
             line,
             column,
-        }) => (path.clone(), message.clone(), *line, *column),
-        ConfigError::Unreadable { path, message } => (path.clone(), message.clone(), None, None),
+        }) => (path.clone(), message.clone(), *line, *column, false),
+        ConfigError::Unreadable { path, message } => {
+            (path.clone(), message.clone(), None, None, true)
+        }
         _ => return Err(Box::new(Report::error(command, error.to_string()))),
     };
     // Shown from the workspace root, as 0.28.1 showed it.
-    let shown = Path::new(&path)
-        .strip_prefix(&root)
-        .map_or_else(|_| path.clone(), |relative| relative.to_string_lossy().replace('\\', "/"));
+    let shown = Path::new(&path).strip_prefix(&root).map_or_else(
+        |_| path.clone(),
+        |relative| relative.to_string_lossy().replace('\\', "/"),
+    );
     let place = match (line, column) {
         (Some(line), Some(column)) => format!("{shown}:{line}:{column}"),
         (Some(line), None) => format!("{shown}:{line}"),
@@ -464,7 +481,11 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
         ("severity", Json::str("error")),
         (
             "message",
-            Json::Str(format!("Could not parse configuration TOML: {problem}")),
+            Json::Str(if unreadable {
+                format!("Could not read the configuration file: {problem}")
+            } else {
+                format!("Could not parse configuration TOML: {problem}")
+            }),
         ),
         ("path", Json::str(&shown)),
         ("file_path", Json::str(&path)),
@@ -474,20 +495,42 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
         ("end_column", number(column.map(|column| column + 1))),
         (
             "help",
-            Json::str("fix the TOML syntax at this position, then run the command again"),
+            Json::str(if unreadable {
+                "make the file readable UTF-8 text (its permissions, its encoding), then run \
+                 the command again"
+            } else {
+                "fix the TOML syntax at this position, then run the command again"
+            }),
         ),
         ("explain", Json::str("opentide explain config_parse")),
     ]);
-    let mut report = Report::failed(
-        command,
-        1,
-        Failure::new(CONFIG_PARSE, format!("{place}: {problem}")),
-    );
+    let message = if unreadable {
+        format!("{place}: cannot be read: {problem}")
+    } else {
+        format!("{place}: {problem}")
+    };
+    let mut report = Report::failed(command, 1, Failure::new(CONFIG_PARSE, message));
     report
         .outcome
         .data
         .push(("diagnostics".to_owned(), Json::Array(vec![diagnostic])));
     Err(Box::new(report))
+}
+
+/// An [`open_for`] refusal as the parts a command that builds its own
+/// envelope carries: the failure code, the message and the `diagnostics`.
+pub fn refusal_parts(report: &Report) -> (String, String, Option<Json>) {
+    let (code, message) = report.outcome.failure.as_ref().map_or_else(
+        || (COMMAND_FAILED.to_owned(), report.outcome.message.clone()),
+        |failure| (failure.code.clone(), failure.message.clone()),
+    );
+    let diagnostics = report
+        .outcome
+        .data
+        .iter()
+        .find(|(key, _)| key == "diagnostics")
+        .map(|(_, value)| value.clone());
+    (code, message, diagnostics)
 }
 
 /// `failure.code` of a configuration TOML file that does not parse.
@@ -533,7 +576,11 @@ mod tests {
         let platforms = dir.path().join(".opentide/configurations/platforms");
         std::fs::create_dir_all(&platforms).unwrap();
         std::fs::create_dir_all(dir.path().join("objects")).unwrap();
-        std::fs::write(platforms.join("sentinel.toml"), "enabled = true\n[platform\n").unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
         let (_, options) = placement(None, &Env::default(), dir.path());
         let Err(report) = open_for("validate", options) else {
             panic!("the workspace opened");
@@ -559,7 +606,10 @@ mod tests {
         };
         assert_eq!(first.get("code"), Some(&Json::str("config_parse")));
         assert_eq!(first.get("line"), Some(&Json::from(2usize)));
-        assert!(matches!(first.get("column"), Some(Json::Int(_))), "{first:?}");
+        assert!(
+            matches!(first.get("column"), Some(Json::Int(_))),
+            "{first:?}"
+        );
         // generate keeps the code too, on its failed phase.
         let env = Env::default();
         let cx = generate::Context {

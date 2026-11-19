@@ -271,10 +271,49 @@ fn logged_errors(workspace: &Workspace) -> Result<(), String> {
     })
 }
 
+/// `raised`, a phase's own result, with the errors it logged
+/// ([`logged_errors`]): a phase that logged an error and then raised reports
+/// both, the logged error after a `;` (`generate.md`, "When a phase fails"),
+/// because the skipped object is often what broke the later one (D1: a
+/// malformed objective a rule references failed `docs` on the reference and
+/// never named the file).
+fn with_logged(raised: Result<(), String>, workspace: &Workspace) -> Result<(), String> {
+    match (raised, logged_errors(workspace)) {
+        (Err(raised), Err(logged)) => Err(format!("{raised}; {logged}")),
+        (Err(raised), Ok(())) => Err(raised),
+        (Ok(()), logged) => logged,
+    }
+}
+
+/// Writes the exports of `targets`, one after another: the ones before a
+/// failure are on disk.
+fn exports_phase(
+    changes: &mut Changes,
+    targets: &[Target],
+    workspace: &Workspace,
+    settings: &Settings,
+    vocabularies: &Vocabularies,
+) -> Result<(), String> {
+    let mut outputs = Vec::new();
+    for target in targets {
+        match export(*target, workspace.index(), settings, vocabularies) {
+            Ok(output) => outputs.push(output),
+            Err(PhaseError { detail }) => {
+                write(changes, &outputs)?;
+                return Err(detail);
+            }
+        }
+    }
+    write(changes, &outputs)
+}
+
 /// Whether the phase `name` reads the object registry: a malformed object
 /// file fails it ([`logged_errors`]). `snippets` reads the templates only.
 fn reads_registry(name: &str) -> bool {
-    matches!(name, "docs" | "exports" | "schemas" | "templates" | "vocabs")
+    matches!(
+        name,
+        "docs" | "exports" | "schemas" | "templates" | "vocabs"
+    )
 }
 
 /// Writes `outputs`, as one phase's work.
@@ -311,20 +350,8 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
     let vocabularies = Vocabularies::bundled();
     let targets: Vec<Target> = target.map_or_else(|| Target::ALL.to_vec(), |one| vec![one]);
     let phase = run_phase(&name, cx.cwd, &root, |changes| {
-        let mut outputs = Vec::new();
-        for target in &targets {
-            match export(*target, workspace.index(), &settings, &vocabularies) {
-                Ok(output) => outputs.push(output),
-                Err(PhaseError { detail }) => {
-                    // The exports are written one after another: the
-                    // ones before a failure are on disk.
-                    write(changes, &outputs)?;
-                    return Err(detail);
-                }
-            }
-        }
-        write(changes, &outputs)?;
-        logged_errors(&workspace)
+        let raised = exports_phase(changes, &targets, &workspace, &settings, &vocabularies);
+        with_logged(raised, &workspace)
     });
     match phase.error {
         Some(detail) => phase_failed(
@@ -557,8 +584,8 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
     let root = workspace.root().to_path_buf();
     let mut run = DocsRun::default();
     let phase = run_phase("docs", cx.cwd, &root, |changes| {
-        docs_phase(args, &workspace, cx, &mut run, changes)?;
-        logged_errors(&workspace)
+        let raised = docs_phase(args, &workspace, cx, &mut run, changes);
+        with_logged(raised, &workspace)
     });
     let warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
     if let Some(detail) = phase.error {
@@ -1338,11 +1365,12 @@ pub fn run_phases(
             phase.as_str()
         };
         let ran = run_phase(name, cwd, &root, |changes| {
-            write(changes, &phase_outputs(phase, workspace, &root, version)?)?;
+            let raised = phase_outputs(phase, workspace, &root, version)
+                .and_then(|outputs| write(changes, &outputs));
             if loaded && reads_registry(phase) {
-                logged_errors(workspace)
+                with_logged(raised, workspace)
             } else {
-                Ok(())
+                raised
             }
         });
         steps.push(ran.step);
@@ -1391,8 +1419,8 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let mut steps = Vec::new();
     let mut run = DocsRun::default();
     let docs = run_phase("docs", cx.cwd, &root, |changes| {
-        docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes)?;
-        logged_errors(&workspace)
+        let raised = docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes);
+        with_logged(raised, &workspace)
     });
     steps.push(docs.step);
     if let Some(detail) = docs.error {
@@ -1401,18 +1429,8 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let settings = Settings::new(workspace.configuration(), &root);
     let vocabularies = Vocabularies::bundled();
     let exports = run_phase("exports", cx.cwd, &root, |changes| {
-        let mut outputs = Vec::new();
-        for target in Target::ALL {
-            match export(target, workspace.index(), &settings, &vocabularies) {
-                Ok(output) => outputs.push(output),
-                Err(PhaseError { detail }) => {
-                    write(changes, &outputs)?;
-                    return Err(detail);
-                }
-            }
-        }
-        write(changes, &outputs)?;
-        logged_errors(&workspace)
+        let raised = exports_phase(changes, &Target::ALL, &workspace, &settings, &vocabularies);
+        with_logged(raised, &workspace)
     });
     steps.push(exports.step);
     if let Some(detail) = exports.error {
@@ -1970,10 +1988,60 @@ mod tests {
         std::fs::write(root.join("objects/rules/also.yaml"), "a: b: c\n").unwrap();
         let two = phases(&["schemas".to_owned()], &cx, "0.0.0");
         assert!(
-            two.outcome.message.starts_with("schemas: logged 2 errors, first: "),
+            two.outcome
+                .message
+                .starts_with("schemas: logged 2 errors, first: "),
             "{}",
             two.outcome.message
         );
+    }
+
+    #[test]
+    fn a_phase_that_raises_also_reports_the_error_it_logged() {
+        // D1 (review): a malformed objective that a rule references failed
+        // `docs` on the dangling reference alone, and never named the file
+        // that broke it; `generate.md` promises both, joined with `;`.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::create_dir_all(root.join("objects/objectives")).unwrap();
+        let corpus = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current/Objects");
+        let rule =
+            std::fs::read_to_string(corpus.join("Detection Rules/rule-0001-sentinel-kql.yaml"))
+                .unwrap();
+        std::fs::write(root.join("objects/rules/rule.yaml"), rule).unwrap();
+        // The objective the rule names, cut short so it does not parse.
+        std::fs::write(
+            root.join("objects/objectives/objective.yaml"),
+            "name: Credential access\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  tlp: [\n",
+        )
+        .unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        for report in [docs(&DocsArgs::default(), &cx), phases(&[], &cx, "0.0.0")] {
+            let message = &report.outcome.message;
+            assert_eq!(report.outcome.exit_code, 1, "{message}");
+            let (raised, logged) = message.split_once("; ").unwrap_or_else(|| {
+                panic!("one error where two were due: {message}");
+            });
+            assert!(
+                raised.starts_with("docs: ") && raised.contains("does not exist"),
+                "{message}"
+            );
+            assert!(
+                logged.starts_with(
+                    "logged an error: malformed_object_yaml (path=objects/objectives/objective.yaml, "
+                ),
+                "{message}"
+            );
+        }
     }
 
     #[test]
