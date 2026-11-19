@@ -65,7 +65,7 @@ The share job waits for the deploy but not for its success: a failed deploy stil
 
 On GitLab the file sets `workflow:rules` so that pipelines run for merge requests and for the default branch only. Every job then runs in merge request pipelines, and a push to a branch with an open merge request starts one pipeline, not a branch pipeline beside it. A branch is validated once it has a merge request, as GitHub validates pull requests: a push to a branch with no merge request starts no pipeline, so open a draft merge request to validate work in progress. Through 0.16.1 the file had no `workflow:rules`, and a GitLab job with no `rules` defaults to `except: merge_requests`: the merge request pipeline held only `deploy_staging` and `inflight_shards`, whose `needs: generate` named a job that was not added, so GitLab refused to start it (`'deploy_staging' job needs 'generate' job, but it was not added to the pipeline`) and the staging deploy never ran.
 
-The staging job commits nothing. In CI, a deploy other than `--strategy RELEASE` on a push therefore refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule that has no recorded id (`deployment_state_unpersisted`, before any vendor call), because the id would be lost with the runner and the next run would create the rule again. Updates and deletes of rules that already have an id still run. See [Creates outside the production job](../concepts/deployment-state.md#creates-outside-the-production-job).
+The staging job commits nothing. In CI, a deploy other than `--strategy RELEASE` on a push therefore refuses to create a rule that has no recorded id on a platform that keeps vendor ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps) (`deployment_state_unpersisted`, before any vendor call), because the id would be lost with the runner and the next run would create the rule again. Updates and deletes of rules that already have an id still run. See [Creates outside the production job](../concepts/deployment-state.md#creates-outside-the-production-job).
 
 ### Tenant configuration on pull requests
 
@@ -84,7 +84,7 @@ The step restores only the repository root's `.opentide/configurations`. Configu
 
 The generated production job runs `opentide deploy --strategy RELEASE`. A changed rule whose status maps to `DISABLEMENT` (default `DISABLED`) or `DELETION` (default `REMOVED`) is therefore disabled or deleted on the tenants accepting `RELEASE`, as the [deployment spec](/docs/specifications/specs/deployment/) defines; `--drop-deprecated` turns that off.
 
-A production deploy changes the checkout: promotion rewrites the `status` of the rules it deploys, and Defender, SentinelOne and CrowdStrike record the vendor id each create returns, in `.opentide/states/deployment/`. The job reads the newest deployment state before it deploys and commits those changes to the default branch afterwards.
+A production deploy changes the checkout: promotion rewrites the `status` of the rules it deploys, and the platforms that keep vendor ids record the id each create returns, in `.opentide/states/deployment/`. The job reads the newest deployment state before it deploys and commits those changes to the default branch afterwards.
 
 Before the dry-run, the job fetches the default branch and replaces `.opentide/states/deployment/` in the checkout with the tip's copy (removing the folder first, so a shard the tip deleted stays deleted, and removing it entirely when the tip has none). The job checks out the commit that triggered it, and a write-back from an earlier run may have landed since: without this, a merge made before that write-back would not see the ids it recorded, and would create those rules a second time. The tip descends from the triggering commit, so it already holds that commit's state. The overlay is also recorded as a local commit (never pushed), so the write-back commit holds only this run's changes.
 
@@ -265,7 +265,7 @@ jobs:
       - run: opentide deploy --strategy RELEASE
 ```
 
-Promotion rewrites rule files, and Defender for Endpoint, SentinelOne and CrowdStrike record each new rule's id under `.opentide/states/deployment/`. This sketch leaves both on the runner; the generated production job commits them back to the default branch ([production write-back](#production-write-back)).
+Promotion rewrites rule files, and the platforms that keep vendor ids record each new rule's id under `.opentide/states/deployment/`. This sketch leaves both on the runner; the generated production job commits them back to the default branch ([production write-back](#production-write-back)).
 
 ## Secrets
 
@@ -355,7 +355,7 @@ In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB
 
 On GitHub, which shows 10 annotations of each level per step, opentide writes the errors first, then the warnings, then the notices, 10 of each, and one notice counting the rest; the job summary and code scanning have them all.
 
-The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, the rules per platform and tenant, and the rule names. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
+The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, and the rules per platform and tenant. A dry run (the pull-request job's) lists each rule as `Name (uuid)`; a real deploy lists the UUIDs alone, and a failed rule's name is in the failures table. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
 
 `validate` and `lint` also write their findings as a report file for the provider's code-quality view:
 

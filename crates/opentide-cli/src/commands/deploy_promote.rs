@@ -336,7 +336,7 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
                     .and_then(|metadata| metadata.get("uuid"))
                     .and_then(|uuid| match &uuid.value {
                         node::Value::Str(text) => {
-                            Some(opentide_compile::rule::canonical_uuid(&text.to_string()))
+                            Some(opentide_compile::rule::canonical_uuid(text.as_ref()))
                         }
                         _ => None,
                     });
@@ -452,7 +452,7 @@ mod tests {
             .iter()
             .map(|path| std::fs::read(path).unwrap())
             .collect();
-        (outcome, drawn, after)
+        (outcome.map(|_| ()), drawn, after)
     }
 
     #[test]
