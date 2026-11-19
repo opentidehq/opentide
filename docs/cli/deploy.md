@@ -233,7 +233,7 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 }
 ```
 
-`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`). `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
+`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`), except that an `upsert` the platform reports as a create or an update once sent reads `create` or `update` (Elastic), and counts as one in the tally. `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
 
 ### Connectors and status promotion
 

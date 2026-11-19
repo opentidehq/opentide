@@ -177,6 +177,53 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
     );
 }
 
+/// Under `--platform`, the blocks a status kept out are that platform's
+/// only: another platform's PRODUCTION block is not "not in the plan" of a
+/// PREVIEW run of this one (#1662, D11).
+#[test]
+fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
+    let ws = workspace(&[
+        (
+            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            DEFENDER,
+        ),
+        (
+            "objects/rules/a.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000a",
+                "defender_for_endpoint",
+                "STAGING",
+                "",
+            ),
+        ),
+        (
+            "objects/rules/b.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000b",
+                "sentinel",
+                "PRODUCTION",
+                "",
+            ),
+        ),
+    ]);
+    let all_platforms = run(&ws, all(&["PREVIEW"]), &[]);
+    assert!(
+        text(&all_platforms, "detail").contains("not in the plan: 1 rule in PRODUCTION"),
+        "{}",
+        text(&all_platforms, "detail")
+    );
+    let defender = run(
+        &ws,
+        Request {
+            platform: Some("defender_for_endpoint".to_owned()),
+            ..all(&["PREVIEW"])
+        },
+        &[],
+    );
+    assert_eq!(text(&defender, "detail"), "");
+    assert_eq!(text(&defender, "skipped"), "");
+}
+
 #[test]
 fn a_rule_with_a_vendor_id_is_refused_and_fails_the_run() {
     let ws = workspace(&[

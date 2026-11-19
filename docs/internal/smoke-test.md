@@ -145,7 +145,7 @@ opentide --json deploy --dry-run --all --strategy PREVIEW --strategy RELEASE --p
 ```
 
 The deploy is expected to exit 0 with `"dry_run": true`; `payloads` is keyed by platform, and each
-rule's entry under it has an `api_request`. Read one payload per platform: it is the request a live deploy would send.
+rule's entry under it has an `api_request`. Read one payload per platform: it is the request body a live deploy would send where opentide compiles one (Sentinel, Elastic, Sysdig, Bitdefender, Exabeam, Google SecOps, Graylog), and the rule's platform block, with only the fields it sets, for the other platforms ([`deploy`](../cli/deploy.md)).
 
 | Platform | Offline engine (`validate query`) | Dry-run deploy (`summary`) | `--live` (optional, needs a tenant) |
 |---|---|---|---|

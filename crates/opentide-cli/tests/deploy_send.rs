@@ -2937,3 +2937,49 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     assert_eq!(rows(&sent)[0].0, "failed", "{:?}", rows(&sent));
     assert_tenant_stopped(&sent, "lab");
 }
+
+/// A `--platform` run with no rule of its strategies names those strategies
+/// in its advice, never "this run" (#1662, D11): the result names the
+/// platform, not the strategies.
+#[test]
+fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &[(
+            "production.yaml",
+            rule(
+                "Production rule",
+                "00000000-0000-4000-8046-000000000401",
+                "A rule in production.",
+                "  splunk:\n    status: PRODUCTION\n    query: index=main\n",
+            ),
+        )],
+    );
+    let args = Args {
+        strategies: vec!["PREVIEW".into()],
+        all: true,
+        platform: Some("splunk".to_owned()),
+        ..Args::default()
+    };
+    let (sent, _) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs::<&str, &str>([]),
+        &Registry::new(),
+        0,
+    );
+    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    let Json::Str(advice) = value(&sent, "advice") else {
+        panic!("advice")
+    };
+    assert!(
+        advice.starts_with("set a platform block's status to ") && advice.ends_with(" for PREVIEW to deploy it"),
+        "{advice}"
+    );
+    assert_eq!(
+        value(&sent, "_outcome"),
+        &Json::str("No rule has a status PREVIEW deploys · 1 rule in PRODUCTION")
+    );
+}

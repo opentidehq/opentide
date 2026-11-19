@@ -433,6 +433,11 @@ pub fn run(
     if let Some(warning) = no_commits {
         selection.warnings.insert(0, warning);
     }
+    if let Some(platform) = &request.platform {
+        // `--platform`: another platform's blocks are not this run's to
+        // count as left out (#1662, D11).
+        selection.skipped.retain(|entry| &entry.platform == platform);
+    }
     let config = Json::from_node(&workspace.configuration().resolved.tree);
     let index = workspace.index();
     let cx: Context<'_> = owned.context(index);

@@ -165,13 +165,50 @@ fn model_dump<T: DeserializeOwned + Serialize>(block: &Json) -> Option<Json> {
     Json::from_serialize(&model).ok()
 }
 
-/// The block of `platform` as the dry run shows it when it builds no body
-/// (`_config_preview`, Pydantic's `model_dump`): opentide-schema's model,
-/// serialised by serde. An unset optional field is left out where the
-/// oracle writes it `null`, and a mapping keeps its model's order
-/// (`tests/golden/payloads/APPROVED.toml`). A block the model refuses is
-/// shown as written.
+/// The block of `platform` read by its model (`_config_preview`, Pydantic's
+/// `model_dump`): opentide-schema's model, serialised by serde. An unset
+/// optional field is left out where the oracle writes it `null`, and a
+/// mapping keeps its model's order (`tests/golden/payloads/APPROVED.toml`).
+/// A block the model refuses is as written. Elastic's checks read it whole.
 pub fn config_dump(platform: &str, block: &Json) -> Json {
+    model_config_dump(platform, block).unwrap_or_else(|| block.clone())
+}
+
+/// The block of `platform` as the dry run shows it when it builds no body:
+/// [`config_dump`] without the fields the block does not set. A model's
+/// default (`enabled: false`, `name: ""`) is neither what the block says nor
+/// what a deploy sends (#1662, D12).
+pub fn block_preview(platform: &str, block: &Json) -> Json {
+    match model_config_dump(platform, block) {
+        Some(dumped) => only_set(dumped, block, true),
+        None => block.clone(),
+    }
+}
+
+/// `dumped` keeping only what `written` sets: at each level, a key of a
+/// mapping the written mapping has (at the top, `schema` for a block that
+/// writes it `platform_schema`, the model's alias).
+fn only_set(dumped: Json, written: &Json, top: bool) -> Json {
+    let (Json::Object(dumped), Some(written)) = (&dumped, written.as_object()) else {
+        return dumped;
+    };
+    let kept: Object = dumped
+        .iter()
+        .filter_map(|(key, value)| {
+            let source = written.get(key).or_else(|| {
+                (top && key == "schema")
+                    .then(|| written.get("platform_schema"))
+                    .flatten()
+            })?;
+            Some((key.clone(), only_set(value.clone(), source, false)))
+        })
+        .collect();
+    Json::Object(kept)
+}
+
+/// The block read by `platform`'s model, or `None` when the model refuses
+/// it or there is none.
+fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
     let dumped = match platform {
         "sentinel" => model_dump::<SentinelConfig>(block),
         "defender_for_endpoint" => model_dump::<DefenderConfig>(block),
@@ -188,7 +225,7 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
         "graylog" => model_dump::<GraylogConfig>(block),
         _ => None,
     };
-    dumped.unwrap_or_else(|| block.clone())
+    dumped
 }
 
 /// The entry of a rule shown as its block's dump (`_config_preview`).
@@ -200,7 +237,7 @@ fn dump_entry(platform: &str, rule: &Rule) -> Json {
         "api_request".into(),
         rule.block(platform).map_or_else(
             || Json::Object(Object::new()),
-            |block| config_dump(platform, block),
+            |block| block_preview(platform, block),
         ),
     );
     Json::Object(entry)
@@ -516,5 +553,31 @@ mod tests {
             config_dump("splunk", &block).to_compact(),
             r#"{"enabled":false,"name":"","status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null,"action.x.param.title":"t"}}"#
         );
+    }
+
+    /// The dry run's preview of a block is its dump without the model's
+    /// defaults the block does not set (#1662, D12): no `enabled: false`,
+    /// no `name: ""`; what the block writes stays, in the model's order,
+    /// and `platform_schema` reads as the model's `schema`.
+    #[test]
+    fn a_block_preview_leaves_out_what_the_block_does_not_set() {
+        let block: Json = serde_json::from_str(
+            r#"{"status":"STAGING","platform_schema":"platform::splunk::1.0","query":"index=main","advanced":{"action.x.param.tags":null}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            block_preview("splunk", &block).to_compact(),
+            r#"{"schema":"platform::splunk::1.0","status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null}}"#
+        );
+        let named: Json =
+            serde_json::from_str(r#"{"enabled":true,"name":"N","status":"STAGING","query":"q"}"#)
+                .unwrap();
+        assert_eq!(
+            block_preview("splunk", &named).to_compact(),
+            r#"{"enabled":true,"name":"N","status":"STAGING","query":"q"}"#
+        );
+        // A block the model refuses is shown as written.
+        let refused: Json = serde_json::from_str(r#"{"query":"q","status":"S"}"#).unwrap();
+        assert_eq!(block_preview("sentinel_one", &refused), refused);
     }
 }
