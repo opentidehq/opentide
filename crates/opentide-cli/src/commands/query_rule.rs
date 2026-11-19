@@ -25,7 +25,7 @@ pub struct RuleQuery {
     pub text: String,
     /// Its language, when the rule says (Elastic).
     pub language: Option<String>,
-    /// Elastic's indices.
+    /// Elastic's indices, or Graylog's stream aliases.
     pub index: Vec<String>,
     /// Elastic's data view.
     pub data_view: Option<String>,
@@ -228,6 +228,21 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
         "sentinel_one" => sentinel_one(block, rule),
         "elastic" => elastic(block, rule).map(|query| vec![query]),
         "exabeam" => exabeam(block, rule),
+        // The event definition's search: its Lucene query on the block's
+        // `streams` (aliases resolved per tenant, as deploy resolves them),
+        // else the tenant's own.
+        "graylog" => Ok(vec![RuleQuery {
+            language: Some("lucene".to_owned()),
+            index: match field(block, "streams") {
+                Some(CJson::Str(one)) => vec![one.clone()],
+                Some(CJson::Array(items)) => items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_owned))
+                    .collect(),
+                _ => Vec::new(),
+            },
+            ..plain(required(block.get("query"), rule, platform)?)
+        }]),
         "harfanglab" => Err(format!(
             "rule {name} is a HarfangLab Sigma or YARA rule, which the agents evaluate: it holds \
              no query to search telemetry with. Pass a telemetry query instead, such as \
@@ -397,6 +412,40 @@ mod tests {
     }
 
     const HEAD: &str = "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000AA\n";
+
+    #[test]
+    fn a_graylog_rule_runs_its_query_on_its_streams() {
+        // Smoke E11 (#1654): Graylog's `--rule` runs the definition's query
+        // in Lucene, on the block's stream aliases, else the tenant's.
+        let listed = rule(&format!(
+            "{HEAD}configurations:\n  graylog:\n    query: 'EventID:1'\n    streams: [sysmon, \
+             endpoint]\n"
+        ));
+        assert_eq!(
+            rule_queries(&listed, "graylog").unwrap(),
+            vec![RuleQuery {
+                text: "EventID:1".into(),
+                language: Some("lucene".into()),
+                index: vec!["sysmon".into(), "endpoint".into()],
+                ..RuleQuery::default()
+            }]
+        );
+        let one = rule(&format!(
+            "{HEAD}configurations:\n  graylog:\n    query: 'EventID:1'\n    streams: sysmon\n"
+        ));
+        assert_eq!(rule_queries(&one, "graylog").unwrap()[0].index, ["sysmon"]);
+        let none = rule(&format!(
+            "{HEAD}configurations:\n  graylog:\n    query: 'EventID:1'\n"
+        ));
+        assert!(rule_queries(&none, "graylog").unwrap()[0].index.is_empty());
+        let empty = rule(&format!(
+            "{HEAD}configurations:\n  graylog:\n    query: ' '\n"
+        ));
+        assert_eq!(
+            rule_queries(&empty, "graylog").unwrap_err(),
+            "rule \"R\" has an empty graylog query"
+        );
+    }
 
     #[test]
     fn a_rule_without_the_platform_or_with_an_empty_query_is_refused() {

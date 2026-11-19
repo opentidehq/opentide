@@ -865,3 +865,104 @@ fn a_carbon_black_tenant_that_refuses_the_token_fails_authentication() {
     );
     assert_eq!(detail, None);
 }
+
+/// A Graylog rule whose block searches the `sysmon` stream alias.
+const GRAYLOG_RULE: &str = "name: Logons\nmetadata:\n  uuid: \
+     00000000-0000-4000-8000-0000000000ab\n  schema: rule::1.0\n  version: 1\n  created: \
+     2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  \
+     graylog:\n    schema: platform::graylog::1.0\n    status: STAGING\n    query: \
+     'EventID:4624'\n    streams: sysmon\n";
+
+/// Graylog through `opentide query` (smoke E3/D3 and E11, #1654): the
+/// tenant's `streams`, `--index` and a rule's own `streams` are aliases the
+/// tenant's `[tenants.setup.stream_ids]` table resolves, as deploy resolves
+/// them; `--rule` runs the event definition's query.
+#[test]
+fn graylog_queries_resolve_stream_aliases_and_run_a_rules_query() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/system"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"version": "6.3.0"})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/search/messages"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "schema": [{"field": "source", "type": "string"}],
+                    "datarows": [["pc-1"]],
+                })),
+            )
+            .mount(&server)
+            .await;
+    });
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("graylog.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Graylog\"\n\n[[tenants]]\nname = \"soc\"\n\
+             strategies = [\"PREVIEW\"]\n[tenants.setup]\nurl = \"{}\"\ntoken = \"token\"\n\
+             streams = [\"endpoint\"]\n[tenants.setup.stream_ids]\nendpoint = \
+             \"65f0c0ffee0123456789abcd\"\nsysmon = \"65f0c0ffee0123456789abce\"\n",
+            server.uri()
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(ws.join("objects/rules")).unwrap();
+    std::fs::write(ws.join("objects/rules/logons.yaml"), GRAYLOG_RULE).unwrap();
+    let graylog = |words: &[&str]| {
+        let mut argv = vec!["--json", "query", "--platform", "graylog"];
+        argv.extend(WINDOW);
+        argv.extend(words);
+        run_at(&ws, &argv, &[])
+    };
+    let typed = graylog(&["EventID:1"]);
+    assert_eq!(typed.code, 0, "{}\n{}", typed.stdout, typed.stderr);
+    assert_eq!(typed.document()["row_count"], 1);
+    let aliased = graylog(&["--index", "sysmon", "EventID:1"]);
+    assert_eq!(aliased.code, 0, "{}\n{}", aliased.stdout, aliased.stderr);
+    let by_rule = graylog(&["--rule", "00000000-0000-4000-8000-0000000000ab"]);
+    assert_eq!(by_rule.code, 0, "{}\n{}", by_rule.stdout, by_rule.stderr);
+    let document = by_rule.document();
+    assert_eq!(
+        document["rule"]["queries"],
+        serde_json::json!(["EventID:4624"])
+    );
+    assert_eq!(document["results"][0]["language"], "lucene");
+    let sent: Vec<(serde_json::Value, serde_json::Value)> = rt
+        .block_on(server.received_requests())
+        .unwrap()
+        .iter()
+        .filter(|request| request.url.path() == "/api/search/messages")
+        .map(|request| {
+            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            (body["query"].clone(), body["streams"].clone())
+        })
+        .collect();
+    assert_eq!(
+        sent,
+        [
+            (
+                serde_json::json!("EventID:1"),
+                serde_json::json!(["65f0c0ffee0123456789abcd"])
+            ),
+            (
+                serde_json::json!("EventID:1"),
+                serde_json::json!(["65f0c0ffee0123456789abce"])
+            ),
+            (
+                serde_json::json!("EventID:4624"),
+                serde_json::json!(["65f0c0ffee0123456789abce"])
+            ),
+        ]
+    );
+}
