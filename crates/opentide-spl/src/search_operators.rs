@@ -407,8 +407,15 @@ fn is_field(source: &str, at: usize, end: usize) -> bool {
     i < end && is_op_byte(source.as_bytes()[i])
 }
 
-/// The end of a comment, quoted string or macro starting at `i`.
-pub(crate) fn skip_hidden(source: &str, i: usize, end: usize) -> Option<usize> {
+/// The end of a comment, quoted string or macro starting at `i`: the scan's
+/// own rule, so the analysis's one plan of the pipelines serves this walk too
+/// (ADR 0014 §5). The two were copies of one rule.
+pub(crate) use super::scan::skip_hidden;
+
+/// This module's own copy of [`skip_hidden`], as it was: what the tests hold
+/// the shared rule to.
+#[cfg(test)]
+pub(crate) fn skip_hidden_own(source: &str, i: usize, end: usize) -> Option<usize> {
     let bytes = source.as_bytes();
     if i >= end {
         return None;

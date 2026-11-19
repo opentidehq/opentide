@@ -35,7 +35,7 @@ pub use cst::{debug_parse, highlight_captures, tree_has_error};
 
 pub(crate) use opentide_core::codes;
 use opentide_core::{ByteSpan, Diagnostic, LineIndex};
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans, tokens_in};
 
 /// Where the query runs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -109,7 +109,7 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
         .collect();
     AnalyzeResult {
         diagnostics,
-        tokens: highlight(spec, source),
+        tokens: tokens_in(spec, &lines, &highlight_captures(source)).unwrap_or_default(),
     }
 }
 

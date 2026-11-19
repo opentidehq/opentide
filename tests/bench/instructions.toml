@@ -90,10 +90,10 @@ parse_external = 3529976
 parse_external_allocations = 9580
 
 [spl]
-analyze_corpus = 9828531
-analyze_corpus_allocations = 16960
-analyze_external = 13742323
-analyze_external_allocations = 11613
+analyze_corpus = 7081393
+analyze_corpus_allocations = 16140
+analyze_external = 7262241
+analyze_external_allocations = 11452
 parse_corpus = 3257020
 parse_corpus_allocations = 5313
 parse_external = 2823605

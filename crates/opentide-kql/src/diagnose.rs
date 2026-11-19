@@ -13,7 +13,7 @@ use crate::{
     overlay_catalog_captures, perf, schema,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes, suggest};
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_in};
 use opentide_parse::SyntaxError;
 use rowan::NodeOrToken;
 use std::collections::BTreeSet;
@@ -96,7 +96,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     perf::check_scope(source, &lines, &mut diagnostics);
     let spec = HighlightSpec::shared().expect("highlight spec");
     overlay_catalog_captures(source, &mut spans, catalog);
-    let tokens = tokens_from_spans(spec, source, &spans).unwrap_or_default();
+    let tokens = tokens_in(spec, &lines, &spans).unwrap_or_default();
     Analysis {
         diagnostics,
         hir,
