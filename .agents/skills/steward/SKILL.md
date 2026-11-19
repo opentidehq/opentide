@@ -73,3 +73,7 @@ before building anything for it, and say why when you decline.
 A conflict with `development`: merge `origin/development` into the branch, regenerate
 `uv.lock` with `uv lock` if it conflicts, re-run `scripts/ci-local.sh`, push. Stacked PRs
 (base is another branch) merge in the order the stack comment shows.
+
+When several sessions feed one base, the steward's loop (update one PR at a time, merge,
+message every owner the merge unblocks, close the fixed issue) is in
+[`orchestration`](../orchestration/SKILL.md).
