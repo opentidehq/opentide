@@ -416,7 +416,15 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
             // generated from (elastic/elasticsearch@2c85bbdf) parses it, but
             // 9.5.6, the newest release, rejects it ("no viable alternative
             // at input"): 9.6 at the earliest, as DEDUP and HIGHLIGHT.
-            if let Some(qualifier) = nodes.iter().find(|n| n.kind() == K::JOIN_QUALIFIER) {
+            // Only a qualifier `ON` follows: in `LOOKUP JOIN ON source.ip`
+            // recovery reads `ON` as the index and `source.ip` as a qualifier,
+            // and the parse error says all there is to say.
+            let on = first_token(&parts, &[K::ON_KW]);
+            let qualifier = parts.iter().enumerate().find_map(|(i, p)| {
+                p.as_node()
+                    .filter(|n| n.kind() == K::JOIN_QUALIFIER && on.is_some_and(|on| on > i))
+            });
+            if let Some(qualifier) = qualifier {
                 out.push(Gate::new(
                     "a `LOOKUP JOIN … AS` qualifier",
                     Availability::since_9(6),
@@ -490,8 +498,13 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
                 // 8.19 to 9.4 take only `inference_id` and `task_settings`:
                 // "Invalid option [timeout] in COMPLETION, expected one of
                 // [[inference_id, task_settings]]" (9.4.9).
-                let timeout = node
-                    .children()
+                // A text check first: walking the map's entries allocates a
+                // handle per node, on every COMPLETION with options.
+                let mentions = text_of(node, source).contains("timeout");
+                let timeout = mentions
+                    .then(|| node.children())
+                    .into_iter()
+                    .flatten()
                     .filter(|c| c.kind() == K::NAMED_PARAMETERS)
                     .flat_map(|n| n.children())
                     .filter(|m| m.kind() == K::MAP_EXPRESSION)
@@ -736,6 +749,12 @@ mod tests {
                 .any(|g| g.0 == "the `COMPLETION` option `timeout`")
         );
         assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
+        assert!(
+            !gates("FROM a | LOOKUP JOIN ON source.ip")
+                .iter()
+                .any(|g| g.0 == "a `LOOKUP JOIN … AS` qualifier"),
+            "a broken join gets its parse error only"
+        );
         // Rejected by 9.5.6 ("no viable alternative at input"), as the
         // Elastic parser reported for the syntax-gap hunt.
         assert_eq!(
