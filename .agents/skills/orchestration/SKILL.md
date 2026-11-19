@@ -27,8 +27,8 @@ One session merges; owners never wait on it silently.
 1. Take PRs in priority order: blockers of other PRs first, then the oldest green and reviewed PR.
 2. When a green, reviewed PR's only gap is newer base commits with no conflict, update it with
    GitHub's "Update branch" **merge** option (never "Update with rebase", which force-pushes),
-   and only when the owner has no push in flight (no commit in the last ten minutes). Tell the
-   owner to `git pull` before their next push. Update one PR at a time; updating every PR after
+   and only when the owner's session is idle or has said it is not pushing. Tell the owner to
+   `git pull` before their next push. Update one PR at a time; updating every PR after
    each merge only wastes gate runs.
 3. Merge with the base's method: merge commits on `integration/*`
    ([`unified-core.md`](../../../docs/internal/unified-core.md)), the repository's setting on
@@ -49,19 +49,19 @@ series of user-visible performance PRs that would each add an entry at the same 
 to one consolidated entry, when:
 
 - a tracking issue lists the series, and each PR body says "changelog: deferred to #<issue>";
-- the consolidated PR, written to `release-notes`, lands before the next release candidate, and
-  the release checklist blocks on it.
+- that issue is a sub-issue of the release's tracking issue, so the release cannot close with the
+  consolidated PR, written to `release-notes`, still open.
 
 Fixes and features that change user-visible behaviour keep their own entry in their own PR.
 
 ## 4. Review chosen by what a change touches
 
-Pick the row by the **paths and kind** of the change first; size only matters within row 1.
+Self-review is the exception, for prose only; when in doubt, take the independent review.
 
 | Change | Review |
 |---|---|
-| Only `docs/`, skills, comments, or a fix under about 50 lines **outside** the paths of row 2, with its regression test | The author's own adversarial pass against [`review-checklist`](../review-checklist/SKILL.md), noted in the PR body |
-| Anything under `crates/`, `bindings/`, `src/opentide/`, `xtask/`, `.github/`, `tests/bench/`, `tests/golden/` or `crates/testdata/`; the CLI, MCP or SDK surface; accepted snapshots, raised budgets, oracle exceptions, removed assertions or grown ledgers; a change to this skill, the steward skill or `review-checklist` | An independent adversarial review, posted on the PR, before merge |
+| Only prose: `docs/` pages, skills other than this one, the steward skill and `review-checklist`, and code comments | The author's own adversarial pass against [`review-checklist`](../review-checklist/SKILL.md), noted in the PR body |
+| Everything else, whatever its size: any code, test, fixture, snapshot, corpus, catalog, budget, ledger or oracle exception; the workspace and tool configuration (`Cargo.toml`, `Cargo.lock`, `clippy.toml`, `rustfmt.toml`, `pyproject.toml`, `.config/`); `.github/` and `scripts/`; the CLI, MCP or SDK surface; a change to this skill, the steward skill or `review-checklist` | An independent adversarial review, posted on the PR, before merge |
 | Performance work | Row 2 plus the numbers: instructions and allocations from `cargo xtask throughput`, wall time at one thread and at the default thread count, a work-count test that fails on the old path, and a byte-identical differential against the base commit |
 
 Run the review while CI runs, not after it.
