@@ -2408,6 +2408,8 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
 pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
     let _ignored = ctrlc::set_handler(move || {
+        // Everything goes through `on_ctrl_c`: its tests cover the second
+        // Ctrl-C's restore and the lock order this closure must keep.
         if let Some(code) = on_ctrl_c(&interrupt) {
             std::process::exit(code);
         }

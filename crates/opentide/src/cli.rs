@@ -27,13 +27,17 @@ pub const VERSION: &str = match option_env!("OPENTIDE_VERSION") {
 /// hook and a Ctrl-C handler. Returns the exit code; the caller exits with
 /// it.
 ///
-/// A deploy that promotes rule statuses (a `RELEASE` run on a CI push)
-/// takes SIGTERM, and SIGHUP on Linux, when they still have their default
-/// action, to put the promoted files back before the process ends. It keeps
-/// that handler for the rest of the process's life: with nothing pending,
-/// the signal ends the process as its default does. A host that handles
-/// either signal itself, or ignores it, keeps it; on Linux opentide reads
-/// which from `/proc/self/status`.
+/// On Linux, a deploy that promotes rule statuses (a `RELEASE` run on a CI
+/// push) takes SIGTERM and SIGHUP when, at the promotion, they still have
+/// their default action (read from `/proc/self/status`), to put the
+/// promoted files back before the process ends. Elsewhere `main` takes
+/// neither; only the `opentide` binary itself takes SIGTERM. Once taken, the
+/// handler stays for the life of the process: with nothing pending, the
+/// signal ends the process as its default does, and a handler the host
+/// installs later through signal-hook (`tokio::signal`, for example) still
+/// runs, but the process then ends as the signal's default does. A handler
+/// the host installed before the promotion, or an ignored signal, is left
+/// alone.
 ///
 /// ```no_run
 /// let argv: Vec<String> = std::env::args().skip(1).collect();
