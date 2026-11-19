@@ -4272,7 +4272,9 @@ impl Sender<'_, '_> {
             return Ok(DeployRequest::delete(id.clone()));
         }
         let tenant = batch.tenant.name.as_str();
-        let setup = opentide_compile::deploy::setup(&batch.table, "setup");
+        // The tenant's whole `setup` table: its `stream_ids` and
+        // `notification_ids` resolve the block's aliases, as in a dry run.
+        let setup = opentide_compile::graylog::tenant_setup(&batch.table);
         let compiled = opentide_compile::graylog::compile_definition(
             self.compile,
             rule,
