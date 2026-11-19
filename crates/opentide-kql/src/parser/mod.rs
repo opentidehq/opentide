@@ -317,6 +317,12 @@ impl<'i> P<'i> {
     /// by level, from one scan of the outer group: a deep nest of `(` costs
     /// one pass and no recursion (one pass per level burnt the parser's fuel
     /// on 3,000 levels, and recursed once per level).
+    ///
+    /// A group that never closes reaches the end of the input, so the pipes
+    /// of the pipeline around it fall inside it: `in (4688, 4689` then
+    /// `| project Account` on the next line. Its pipe makes it tabular only
+    /// when what comes before that pipe is one tabular source, as in
+    /// `(T | where`; otherwise the group is a list that misses its `)`.
     pub(crate) fn paren_is_tabular(&self, n: usize) -> bool {
         if self.nth(n) != K::L_PAREN {
             return false;
@@ -328,7 +334,8 @@ impl<'i> P<'i> {
         // For the `(` at `n + k` (k < run): the index after its group, and
         // whether a `|` stands at its top level.
         let mut ends: Vec<Option<usize>> = vec![None; run];
-        let mut pipes = vec![false; run];
+        // The first `|` at each group's top level.
+        let mut pipes: Vec<Option<usize>> = vec![None; run];
         let mut open: Vec<usize> = Vec::new();
         let mut at = n;
         let end = loop {
@@ -347,7 +354,7 @@ impl<'i> P<'i> {
                 }
                 K::PIPE => {
                     if let Some(slot) = open.last().and_then(|&o| pipes.get_mut(o - n)) {
-                        *slot = true;
+                        slot.get_or_insert(at);
                     }
                 }
                 _ => {}
@@ -358,8 +365,8 @@ impl<'i> P<'i> {
         let end_of = |k: usize| ends[k].unwrap_or(end);
         let mut k = 0;
         loop {
-            if pipes[k] {
-                return true;
+            if let Some(pipe) = pipes[k] {
+                return ends[k].is_some() || self.tabular_item(n + k + 1, pipe);
             }
             let close = end_of(k).saturating_sub(1);
             if k + 1 < run {

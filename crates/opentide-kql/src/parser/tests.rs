@@ -599,3 +599,28 @@ fn search_and_find_forms_parse_and_their_broken_twins_do_not() {
         assert!(!errors(source).is_empty(), "{source} parses");
     }
 }
+
+#[test]
+fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
+    // B21 (smoke test): the outer pipeline's next `|` sat inside the open
+    // group, so the list read as a sub-query and `4688` as its table
+    // ("expected a name"). The `)` is missing right after the list.
+    for (source, after) in [
+        (
+            "SecurityEvent\n| where EventID in (4688, 4689\n| project Account",
+            "4689",
+        ),
+        ("SecurityEvent\n| where EventID in (4688, 4689", "4689"),
+        ("T | where a in (\"x\", \"y\" | take 1", "\"y\""),
+        ("T | where (a == 1\n| take 1", "1"),
+    ] {
+        let parsed = parse(source);
+        let first = parsed.errors.first().expect("an error");
+        assert_eq!(first.message, "expected `)`", "{source}");
+        let at = source.find(after).expect("in the source") + after.len();
+        assert_eq!(usize::from(first.gap.start()), at, "{source}");
+    }
+    // A sub-query that never closes is still read as one.
+    let found = errors("T | where a in (S | project a");
+    assert_eq!(found, ["expected `)`"], "{found:?}");
+}
