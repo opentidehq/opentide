@@ -2331,6 +2331,60 @@ fn graylog_logs_records_and_forgets_as_it_deploys() {
     assert!(shard_of(ws.path(), removed).is_empty());
 }
 
+/// A deploy resolves the tenant's stream and notification aliases through
+/// its `stream_ids` and `notification_ids`, as the dry run does: the
+/// definition Graylog receives names the ids, never an empty list (which
+/// Graylog reads as every stream and no notification).
+#[test]
+fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
+    const STREAM: &str = "65f1c0de2a3b4c5d6e7f2222";
+    const NOTIFICATION: &str = "65f1c0de2a3b4c5d6e7f3333";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, "7.1.0");
+    let setup = format!(
+        "url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\nstreams = [\"endpoint\"]\n\
+         [tenants.setup.stream_ids]\nendpoint = \"{STREAM}\"\n\
+         [tenants.setup.notification_ids]\npager = \"{NOTIFICATION}\"\n",
+        server.uri()
+    );
+    let uuid = "00000000-0000-4000-8099-000000000127";
+    let block = format!(
+        "{}    notifications:\n      - pager\n",
+        graylog_block("STAGING", "EventID:1")
+    );
+    let ws = workspace(
+        "graylog",
+        "lab",
+        &setup,
+        &[("a.yaml", rule("Aliased rule", uuid, "Aliased.", &block))],
+    );
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 0, "{err}");
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let created: Vec<serde_json::Value> = received
+        .iter()
+        .filter(|request| {
+            request.method == wiremock::http::Method::POST
+                && request.url.path() == "/api/events/definitions"
+        })
+        .map(|request| serde_json::from_slice(&request.body).unwrap())
+        .collect();
+    assert_eq!(created.len(), 1, "{err}");
+    // Graylog 7 takes the definition under `entity`.
+    let definition = &created[0]["entity"];
+    assert_eq!(
+        definition["config"]["streams"],
+        serde_json::json!([STREAM]),
+        "{definition}"
+    );
+    assert_eq!(
+        definition["notifications"],
+        serde_json::json!([{"notification_id": NOTIFICATION}]),
+        "{definition}"
+    );
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.
