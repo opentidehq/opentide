@@ -1911,13 +1911,14 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
 
     std::fs::remove_file(&config).unwrap();
     let (code, out, err) = cli(ws.path(), &argv, &push());
-    let text = std::fs::read_to_string(&rule).unwrap();
-    assert!(text.contains("    status: PRODUCTION\n"), "{text}");
     // The promoted rule goes to the tenant, which does not resolve here:
-    // the failure is that tenant's own.
+    // the failure is that tenant's own, and since no tenant received the
+    // rule its promotion is put back (#1653).
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("\"tenant\":\"lab\""), "{out}");
     assert!(out.contains("\"failures\":[{"), "{out}");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    assert!(text.contains("    status: STAGING\n"), "{text}");
 }
 
 /// The rule a RELEASE push promotes is deployed to the tenants that take
@@ -1984,10 +1985,11 @@ fn a_push_deploys_the_rule_it_promotes_to_its_release_tenants() {
 /// (`s.yaml`) was promoted too (whole-folder promotion).
 fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
     let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let disabled = "  splunk:\n    status: DISABLED\n    query: index=main\n";
     let ws = workspace(
         "splunk",
         "lab",
-        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
         &[
             (
                 "r.yaml",
@@ -2007,49 +2009,56 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
                     block,
                 ),
             ),
+            (
+                "t.yaml",
+                rule(
+                    "Disabled",
+                    "00000000-0000-4000-8047-000000000905",
+                    "A disabled rule.",
+                    disabled,
+                ),
+            ),
         ],
     );
     pushed(ws.path(), "objects/rules/r.yaml");
-    let env = vec![
-        ("GITHUB_ACTIONS", "true".to_owned()),
-        ("GITHUB_EVENT_NAME", "push".to_owned()),
-        ("GITHUB_SHA", "HEAD".to_owned()),
-        ("GITHUB_WORKSPACE", ws.path().display().to_string()),
-    ];
-    let mut env = env;
-    env.extend(
+    let mut pairs: Vec<(String, String)> = github_push(ws.path())
+        .into_iter()
+        .map(|(name, value)| (name.to_owned(), value))
+        .collect();
+    pairs.extend(
         extra
             .iter()
-            .map(|(name, value)| (*name, (*value).to_owned())),
+            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned())),
     );
-    let argv = [
-        "--json",
-        "deploy",
-        "--platform",
-        "splunk",
-        "--strategy",
-        "RELEASE",
-    ];
-    let (code, out, err) = cli(ws.path(), &argv, &env);
-    // The promoted rule is routed to the tenant, which has no token here:
-    // the tenant's own refusal fails the run.
-    assert_eq!(code, 1, "{out}{err}");
+    let env = Env::from_pairs(pairs);
+    let (registry, deployer) = scripted("splunk", Vec::new());
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(ws.path(), &args, &env, &registry, 0);
     assert!(
-        out.contains("\"tenant\":\"lab\"") && out.contains("SPLUNK_TOKEN"),
-        "{out}{err}"
+        rows(&sent).iter().all(|(status, _)| status == "deployed"),
+        "{text}"
     );
     let read = |name: &str| std::fs::read_to_string(ws.path().join("objects/rules").join(name));
     let changed = read("r.yaml").unwrap();
     assert!(changed.contains("    status: PRODUCTION\n"), "{changed}");
     let other = read("s.yaml").unwrap();
     let promoted = other.contains("    status: PRODUCTION\n");
-    // Whole-folder promotion deploys what it promoted, s.yaml too (#1653):
-    // the other rule is in the run exactly when it was promoted.
-    assert_eq!(
-        out.contains("00000000-0000-4000-8047-000000000903"),
-        promoted,
-        "{out}"
-    );
+    // Whole-folder promotion deploys what it promoted, s.yaml too, and
+    // nothing else of the folder: never the disabled rule (#1653).
+    let seen: Vec<String> = deployer
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    assert_eq!(seen.contains(&"Untouched".to_owned()), promoted, "{seen:?}");
+    assert!(!seen.contains(&"Disabled".to_owned()), "{seen:?}");
+    assert!(seen.contains(&"Promoted".to_owned()), "{seen:?}");
     promoted
 }
 
@@ -3255,10 +3264,12 @@ fn a_release_pushs_dry_run_plans_the_rules_it_will_promote() {
             .any(|warning| warning
                 .as_str()
                 .unwrap()
-                .contains("promotes 1 rule file to PRODUCTION first")),
+                .contains("promotes 1 rule to PRODUCTION first")),
         "{out}"
     );
-    assert!(out.contains("PRODUCTION"), "{out}");
+    // The plan reads the promoted file: its change carries the new status.
+    assert_eq!(document["changes"][0]["status"], "PRODUCTION", "{out}");
+    assert_eq!(document["changes"][0]["tenant"], "lab", "{out}");
     assert_eq!(
         std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
         before,
@@ -3271,4 +3282,169 @@ fn a_release_pushs_dry_run_plans_the_rules_it_will_promote() {
     assert_eq!(code, 0, "{out}");
     let document: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(document["plan"].get("splunk").is_none(), "{out}");
+}
+
+/// A promoted rule whose tenant the run cannot use (its credential is
+/// unset) was sent nowhere: its file is put back, so the write-back commits
+/// no status that was never deployed (#1653).
+#[test]
+fn a_promoted_rule_whose_tenant_fails_keeps_its_status() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Unsent",
+                "00000000-0000-4000-8047-000000000914",
+                "A rule.",
+                block,
+            ),
+        )],
+    );
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("SPLUNK_TOKEN"), "{out}");
+    assert_eq!(
+        std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+        before,
+        "the promotion was put back"
+    );
+}
+
+/// A run that ends before it plans anything puts back what it promoted:
+/// `--platform` naming a platform the promoted rule has no block for, and
+/// a promoted rule whose only platform is not enabled (#1653).
+#[test]
+fn a_push_that_plans_nothing_keeps_the_status_it_promoted() {
+    for (argv, rule_block) in [
+        (
+            vec![
+                "--json",
+                "deploy",
+                "--platform",
+                "sentinel",
+                "--strategy",
+                "RELEASE",
+            ],
+            "  splunk:\n    status: STAGING\n    query: index=main\n",
+        ),
+        (
+            vec!["--json", "deploy", "--strategy", "RELEASE"],
+            "  graylog:\n    status: STAGING\n    query: 'EventID:1'\n",
+        ),
+    ] {
+        let ws = workspace(
+            "splunk",
+            "lab",
+            "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+            &[(
+                "r.yaml",
+                rule(
+                    "Unplanned",
+                    "00000000-0000-4000-8047-000000000915",
+                    "A rule.",
+                    rule_block,
+                ),
+            )],
+        );
+        pushed(ws.path(), "objects/rules/r.yaml");
+        let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+        let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+        assert_eq!(code, 0, "{argv:?}: {out}{err}");
+        assert_eq!(
+            std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+            before,
+            "{argv:?}: the promotion was put back"
+        );
+    }
+}
+
+/// A dry run whose push's promotion would stop the run (a promotion target
+/// that names no status) says so, rather than preview nothing (#1653).
+#[test]
+fn a_release_pushs_dry_run_warns_of_a_promotion_that_would_stop() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Stopping",
+                "00000000-0000-4000-8047-000000000916",
+                "A rule.",
+                block,
+            ),
+        )],
+    );
+    std::fs::write(
+        ws.path().join(".opentide/configurations/deployment.toml"),
+        "[promotion]\nenabled = true\npromotion_target = \"NOWHERE\"\n",
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let argv = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (_, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert!(
+        out.contains("would stop at its status promotion: Invalid promotion target"),
+        "{out}{err}"
+    );
+}
+
+/// The dry run reports a rule no tenant takes as the deploy skips it, with
+/// the reason, and previews no promotion for it (#1653).
+#[test]
+fn a_dry_run_reports_a_rule_no_tenant_takes() {
+    let uuid = "00000000-0000-4000-8047-000000000917";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n    tenants: [other]\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Listed elsewhere", uuid, "A rule.", block))],
+    );
+    let argv = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--all",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "PREVIEW",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(document["changes"], serde_json::json!([]), "{out}");
+    assert_eq!(document["unrouted"][0]["uuid"], uuid, "{out}");
+    assert!(
+        document["unrouted"][0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("its tenants list names no splunk tenant"),
+        "{out}"
+    );
 }

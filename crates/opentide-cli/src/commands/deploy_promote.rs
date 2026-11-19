@@ -204,6 +204,10 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<Vec<Promoted>, St
     ended.map_or(Ok(promoted), Err)
 }
 
+/// A file the promotion would rewrite: its path, its promoted bytes, and
+/// its rule's canonical UUID.
+pub type Previewed = (PathBuf, Vec<u8>, Option<String>);
+
 /// What the promotion would write, without writing it or drawing its step
 /// (the dry run's and the live gate's preview, #1653): each file's promoted
 /// bytes. Its events are not logged: the run that promotes logs them.
@@ -211,14 +215,22 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<Vec<Promoted>, St
 /// # Errors
 ///
 /// [`Stop`]: how a real run would end instead.
-pub fn preview(promotion: &Promotion<'_>) -> Result<Vec<(PathBuf, Vec<u8>)>, Stop> {
+pub fn preview(promotion: &Promotion<'_>) -> Result<Vec<Previewed>, Stop> {
     let (_, planned, ended) = plan(promotion);
     match ended {
         Some(stop) => Err(stop),
         None => Ok(planned
             .into_iter()
-            .map(|(path, bytes, _)| (path, bytes))
+            .map(|(path, bytes, (_, uuid))| (path, bytes, uuid))
             .collect()),
+    }
+}
+
+/// What a [`Stop`] says, as a preview warns of it.
+pub fn stop_text(stop: &Stop) -> String {
+    match stop {
+        Stop::Failed(message) => message.clone(),
+        Stop::Exit => "Invalid promotion target".to_owned(),
     }
 }
 

@@ -226,13 +226,22 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
     );
     // A RELEASE push promotes before it deploys: plan the promoted rules,
     // as the push's deploy will (#1653, smoke E13).
-    let (workspace, promoted) = match preview(args, cx, &workspace, &owned, options) {
-        Ok(Some((promoted, count, target))) => {
-            crate::app::release(workspace);
-            (promoted, Some((count, target)))
-        }
-        Ok(None) => (workspace, None),
+    let preview = match preview(args, cx, &workspace, &owned, options) {
+        Ok(preview) => preview,
         Err(message) => return failed(message),
+    };
+    let (workspace, promoted, stops) = match preview {
+        Some(super::promotion_preview::Preview::Promoted {
+            workspace: promoted,
+            files,
+            uuids,
+            target,
+        }) => {
+            crate::app::release(workspace);
+            (*promoted, Some((files, uuids, target)), None)
+        }
+        Some(super::promotion_preview::Preview::Stops(message)) => (workspace, None, Some(message)),
+        Some(super::promotion_preview::Preview::Nothing) | None => (workspace, None, None),
     };
     let request = Request {
         strategies: args.strategies.clone(),
@@ -251,38 +260,74 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
     };
     let env = |name: &str| cx.env.get(name).map(str::to_owned);
     let root_dir = workspace.root().to_path_buf();
+    // The push's deploy also sends what a whole-folder promotion rewrote.
+    let promoted_files: Vec<std::path::PathBuf> = promoted
+        .as_ref()
+        .map(|(files, _, _)| files.clone())
+        .unwrap_or_default();
     let changed = |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), String> {
-        dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder)
+        let (mut scope, warning) = dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder)?;
+        for file in &promoted_files {
+            if !scope.files.contains(file) {
+                scope.files.push(file.clone());
+            }
+        }
+        Ok((scope, warning))
     };
     let is_set = |name: &str| cx.env.get(name).is_some();
     let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
     let at_root = root::is_workspace_root(&OsFs, workspace.root());
     let mut result = from_outcome(outcome, at_root);
-    if let Some((count, target)) = promoted {
+    if let Some(message) = stops {
         result.warnings.insert(
             0,
-            format!(
-                "the push's deploy promotes {} to {target} first (status promotion): the plan \
-                 shows {} promoted, and nothing is written",
-                plural(count, "rule file", None),
-                if count == 1 { "it" } else { "them" }
-            ),
+            format!("the push's deploy would stop at its status promotion: {message}"),
         );
+    }
+    if let Some((_, uuids, target)) = promoted {
+        // Only the promoted rules a tenant receives keep their promotion:
+        // the deploy puts the others back.
+        let planned = planned_uuids(&result.result);
+        let count = uuids.iter().filter(|uuid| planned.contains(*uuid)).count();
+        if count > 0 {
+            result.warnings.insert(
+                0,
+                format!(
+                    "the push's deploy promotes {} to {target} first (status promotion): the \
+                     plan shows {} promoted, and nothing is written",
+                    plural(count, "rule", None),
+                    if count == 1 { "it" } else { "them" }
+                ),
+            );
+        }
     }
     // The index is large on a heavy workspace (see `app::release`).
     crate::app::release(workspace);
     result
 }
 
-/// The workspace as the push's deploy reads it after its status promotion,
-/// when the run is one that promotes and the promotion rewrites a file.
+/// The canonical UUIDs of the rules a dry run's `changes` send to a tenant.
+fn planned_uuids(result: &Json) -> Vec<String> {
+    match result.get("changes") {
+        Some(Json::Array(changes)) => changes
+            .iter()
+            .filter(|change| change.get("tenant").is_some_and(|tenant| !tenant.is_null()))
+            .filter_map(|change| change.get("uuid").and_then(Json::as_str))
+            .map(opentide_compile::rule::canonical_uuid)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// What the push's deploy does at its status promotion, when the run is one
+/// that promotes.
 fn preview(
     args: &Args,
     cx: &Context<'_>,
     workspace: &opentide_workspace::Workspace,
     owned: &Owned,
     options: opentide_workspace::RootOptions,
-) -> Result<Option<(opentide_workspace::Workspace, usize, String)>, String> {
+) -> Result<Option<super::promotion_preview::Preview>, String> {
     let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
     if args.skip_promotion || !reads_changes {
         return Ok(None);
@@ -310,6 +355,7 @@ fn preview(
         Vec::new()
     };
     super::promotion_preview::promoted_workspace(owned, options, &scope.files, &local, cx.debug)
+        .map(Some)
 }
 
 /// A run refused before it started: a usage error, exit 2.

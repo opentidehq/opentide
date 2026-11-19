@@ -80,10 +80,30 @@ pub fn applies(runs: &[StatusStrategy], reads_changes: bool, env: &Env) -> bool 
         && !opentide_compile::git::is_change_request(ci, &lookup)
 }
 
+/// What the push's deploy will do at its status promotion, as a preview
+/// reads it.
+pub enum Preview {
+    /// The promotion rewrites no file.
+    Nothing,
+    /// The workspace as the deploy will read it after promoting, the files
+    /// it rewrites, the canonical UUIDs of their rules, and the target.
+    Promoted {
+        /// The workspace, the promoted files read from memory.
+        workspace: Box<Workspace>,
+        /// The files the promotion rewrites.
+        files: Vec<PathBuf>,
+        /// Their rules' canonical UUIDs.
+        uuids: Vec<String>,
+        /// The status they are promoted to.
+        target: String,
+    },
+    /// The promotion would stop the run: what it says.
+    Stops(String),
+}
+
 /// The workspace as the push's deploy will read it after promoting
 /// `changed` (every rule file of `local` instead when `debug`), opened with
-/// `options`, and how many files the promotion rewrites; `None` when it
-/// rewrites none or would stop the run (the deploy reports that itself).
+/// `options`.
 ///
 /// # Errors
 ///
@@ -94,7 +114,7 @@ pub fn promoted_workspace(
     changed: &[PathBuf],
     local: &[PathBuf],
     debug: bool,
-) -> Result<Option<(Workspace, usize, String)>, String> {
+) -> Result<Preview, String> {
     let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
     let promotion = Promotion {
         settings: &settings,
@@ -102,20 +122,32 @@ pub fn promoted_workspace(
         local,
         debug,
     };
-    let Ok(files) = deploy_promote::preview(&promotion) else {
-        return Ok(None);
+    let planned = match deploy_promote::preview(&promotion) {
+        Ok(planned) => planned,
+        Err(stop) => return Ok(Preview::Stops(deploy_promote::stop_text(&stop))),
     };
-    if files.is_empty() {
-        return Ok(None);
+    if planned.is_empty() {
+        return Ok(Preview::Nothing);
     }
-    let count = files.len();
+    let files = planned.iter().map(|(path, _, _)| path.clone()).collect();
+    let uuids = planned
+        .iter()
+        .filter_map(|(_, _, uuid)| uuid.clone())
+        .collect();
     let target = settings.target.clone().unwrap_or_default();
     let workspace = Workspace::open(
-        Arc::new(Overlay::new(files)),
+        Arc::new(Overlay::new(
+            planned.into_iter().map(|(path, bytes, _)| (path, bytes)),
+        )),
         opentide_workspace::Options { roots: options },
     )
     .map_err(|error| error.to_string())?;
-    Ok(Some((workspace, count, target)))
+    Ok(Preview::Promoted {
+        workspace: Box::new(workspace),
+        files,
+        uuids,
+        target,
+    })
 }
 
 #[cfg(test)]

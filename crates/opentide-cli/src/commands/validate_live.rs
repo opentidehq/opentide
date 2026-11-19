@@ -498,16 +498,34 @@ fn promoted(
         .iter()
         .filter_map(|path| Path::new(path).file_name().map(|name| rules_dir.join(name)))
         .collect();
-    let preview =
-        super::promotion_preview::promoted_workspace(&owned, options, &files, &[], false)?;
-    Ok(preview.map(|(promoted, count, target)| {
-        tracing::info!(
-            rules = count,
-            target = target.as_str(),
-            "promotion_previewed"
-        );
-        promoted
-    }))
+    // `--debug` or `OPENTIDE_DEBUG`: the push's deploy promotes every rule
+    // file; the gate checks the changed ones, as promoted.
+    let debug = cx.env.opentide_debug();
+    let local = if debug {
+        opentide_compile::plan::local_scope(workspace.fs().as_ref(), &rules_dir, &folder).files
+    } else {
+        Vec::new()
+    };
+    match super::promotion_preview::promoted_workspace(&owned, options, &files, &local, debug)? {
+        super::promotion_preview::Preview::Promoted {
+            workspace,
+            files,
+            target,
+            ..
+        } => {
+            tracing::info!(
+                rules = files.len(),
+                target = target.as_str(),
+                "promotion_previewed"
+            );
+            Ok(Some(*workspace))
+        }
+        super::promotion_preview::Preview::Stops(message) => {
+            tracing::warn!(detail = message.as_str(), "promotion_would_stop");
+            Ok(None)
+        }
+        super::promotion_preview::Preview::Nothing => Ok(None),
+    }
 }
 
 /// A run's result as a list of fields (the oracle's result dict).
