@@ -1,0 +1,30 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | serialize rn = row_number(), x\")"
+---
+SOURCE_FILE@0..34
+  QUERY@0..34
+    TABULAR_EXPRESSION@0..34
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      SERIALIZE_OPERATOR@4..34
+        SERIALIZE_KW@4..13 "serialize"
+        WHITESPACE@13..14 " "
+        ASSIGNMENT@14..31
+          NAME_REF@14..16
+            IDENT@14..16 "rn"
+          WHITESPACE@16..17 " "
+          EQ@17..18 "="
+          WHITESPACE@18..19 " "
+          FUNCTION_CALL@19..31
+            IDENT@19..29 "row_number"
+            L_PAREN@29..30 "("
+            R_PAREN@30..31 ")"
+        COMMA@31..32 ","
+        WHITESPACE@32..33 " "
+        NAME_REF@33..34
+          IDENT@33..34 "x"

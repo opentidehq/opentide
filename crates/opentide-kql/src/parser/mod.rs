@@ -245,6 +245,11 @@ impl<'i> P<'i> {
         done.precede(&mut self.0)
     }
 
+    /// The text of the token `n` ahead.
+    pub(crate) fn nth_text(&self, n: usize) -> &str {
+        self.0.nth_text(n)
+    }
+
     /// Whether the token `n` ahead is a word that can be a name: an
     /// identifier, or a keyword spelled like one (`has` is a column when no
     /// operator can come, `!has` never is).

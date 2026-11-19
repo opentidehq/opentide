@@ -21,9 +21,13 @@
 // - Comments and whitespace are trivia tokens, in no rule.
 // - Broken input is an `Error` node in place, in no rule.
 
-SourceFile = LetStatement* (Query | ControlCommand)?
+SourceFile = (LetStatement | QueryParametersStatement)* (Query | ControlCommand)?
 
 LetStatement = 'let' name:'ident' '=' value:LetValue ';'
+
+// `declare query_parameters(p: string = "x");`
+QueryParametersStatement =
+  'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'
 
 LetValue = Expr | TabularExpression | FunctionDefinition
 
@@ -132,6 +136,10 @@ TabularOperator =
 | FacetOperator
 | PartitionOperator
 | ScanOperator
+| SerializeOperator
+| AsOperator
+| TopHittersOperator
+| ReduceOperator
 | KeywordOperator
 | UnknownOperator
 
@@ -222,7 +230,10 @@ SeriesDefault = 'default' '=' Expr
 
 EvaluateOperator = 'evaluate' HintOption* plugin:FunctionCall
 DistinctOperator = 'distinct' HintOption* (StarArg | ColumnItem (',' ColumnItem)*)?
-RenderOperator = 'render' kind:'ident'
+// `render timechart with (title = "x", ycolumns = a, b)`.
+RenderOperator = 'render' kind:'ident' RenderWith?
+RenderWith = 'with' '(' (RenderProperty (',' RenderProperty)*)? ')'
+RenderProperty = NamedArgument | NameRef
 PrintOperator = 'print' ColumnItem (',' ColumnItem)*
 
 // `range x from 1 to 10 step 1`.
@@ -266,13 +277,23 @@ ScanStep =
   'step' name:'ident' 'optional'? ('output' '=' output:('all' | 'last' | 'none'))?
   ':' predicate:Expr ('=>' Assignment (',' Assignment)*)? ';'
 
-// `invoke`, `serialize`, `as`, `getschema`, `sample`, `consume`, `reduce`,
-// `make-graph`, ...: an operator that takes at most one argument.
+SerializeOperator = 'serialize' (ColumnItem (',' ColumnItem)*)?
+// `as hint.materialized=true T2`.
+AsOperator = 'as' HintOption* name:'ident'
+// `top-hitters 5 of x by y`.
+TopHittersOperator = keyword:'top-hitters' count:Expr 'of' value:Expr TopHittersBy?
+TopHittersBy = 'by' sum:Expr
+// `reduce kind=source by x with threshold=0.1, characters="ab"`.
+ReduceOperator =
+  'reduce' OperatorOption* 'by' value:Expr
+  ('with' (OperatorOption (',' OperatorOption)*)?)?
+
+// `invoke`, `getschema`, `sample`, `consume`, `make-graph`, ...: an operator
+// that takes at most one argument.
 KeywordOperator =
-  name:('search' | 'find' | 'invoke' | 'serialize' | 'as' | 'getschema' | 'sample'
-      | 'externaldata' | 'consume' | 'reduce' | 'make-graph' | 'graph-match'
-      | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components'
-      | 'top-hitters')
+  name:('search' | 'find' | 'invoke' | 'getschema' | 'sample'
+      | 'externaldata' | 'consume' | 'make-graph' | 'graph-match'
+      | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components')
   args:Expr?
 
 // A name the engine does not know as an operator: the catalog decides.

@@ -1,0 +1,3 @@
+// prod:query_parameters_statement valid
+declare query_parameters(account:string = "admin", lookback:timespan = 1d);
+SecurityEvent | where TimeGenerated > ago(lookback) and Account has account
