@@ -168,7 +168,7 @@ for platform in ws.info()["platforms"]:
 
 ## Query validation policy
 
-Only platforms with `can_validate=True` check queries on the tenant. CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check: CLI and MCP return `supported: false` for them with `--live` (`live: true`) — **never fake validation**. CrowdStrike's CQL, Sysdig's Falco conditions and HarfangLab's and Bitdefender's YARA are checked offline only. SentinelOne, Graylog and Exabeam are checked on the tenant only: without `--live`, `validate query` exits `2` and names `--live`.
+Only platforms with `can_validate=True` check queries on the tenant. CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check: CLI and MCP return `supported: false` for them with `--live` (`live: true`) — **never fake validation**. CrowdStrike's CQL, Sysdig's Falco conditions and HarfangLab's and Bitdefender's YARA are checked offline only. SentinelOne is checked on the tenant only: without `--live`, `validate query --platform sentinel_one` exits `2` and names `--live`. Graylog and Exabeam are checked both ways: offline by default, on the tenant with `--live`.
 
 ```bash
 opentide validate query --platform crowdstrike          # the offline CQL check

@@ -1,12 +1,12 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Exabeam and platform plugins assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
 ---
 
 # Deployment state
 
-Microsoft Defender for Endpoint, SentinelOne and CrowdStrike give every rule
-opentide creates an id of their own. The next deploy has to update or delete the
+Microsoft Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
+opentide creates an id of their own, and so do platform plugins. The next deploy has to update or delete the
 remote rule by that id. opentide keeps it in a per-rule JSON file under
 `.opentide/states/`, not in the rule YAML.
 
@@ -29,10 +29,13 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the four platforms (Defender for Endpoint, SentinelOne,
-CrowdStrike, Sysdig, and Exabeam), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
-platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black, and Elastic
-address rules by `metadata.uuid` or by title and never get one.
+deployed to one of the eight platforms that keep ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
+platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black Cloud and
+Elastic address rules by `metadata.uuid` or by title and never get one. Splunk
+names a saved search after the rule's `name`: renaming a deployed rule creates
+a second saved search and leaves the old one enabled and scheduled, and
+retiring the rule deletes only the one with its current name. Delete the old
+search in Splunk when you rename a rule.
 
 Splunk is the one that addresses a rule by title: its saved search is named
 after the rule's `name` (with ` - Rule` for a correlation search). Renaming a
@@ -128,8 +131,8 @@ Only the generated production job commits shards. Any other CI run, such as
 the pull-request staging job (`opentide deploy --strategy PREVIEW`), would
 leave the id of a rule it creates on a runner that is thrown away, and the
 next run would create the rule again. In CI, a run other than
-`--strategy RELEASE` on a push therefore refuses to create a Defender for
-Endpoint, SentinelOne or CrowdStrike rule that has no shard entry, with
+`--strategy RELEASE` on a push therefore refuses to create a rule that has
+no shard entry on any of the eight platforms above, with
 `deployment_state_unpersisted` and before any vendor call. The run exits `1`.
 
 - Updates, disablements and deletions of a rule that already has a shard

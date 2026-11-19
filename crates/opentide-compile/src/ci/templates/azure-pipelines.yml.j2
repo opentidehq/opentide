@@ -1,11 +1,26 @@
 {#- Azure Pipelines: `azure-pipelines.yml` (`ci/azure.py`). -#}
 {% import "scripts.sh.j2" as sh %}
-{% macro script(commands) -%}
+{#- A script that reaches a tenant or a sharing destination maps each
+    variable of `secrets` from the pipeline's variables: Azure gives a script
+    no secret variable it does not map. A variable the pipeline does not
+    define stays `$(NAME)` as written, so the script unsets it first. -#}
+{% macro script(commands, secrets=none) -%}
 - script: |
     set -e
+{% if secrets %}
+    set -- [[ secrets | join(" ") ]]; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+{% endif %}
     [[ commands | join("\n") | indent(4) ]]
+{%- if secrets %}
+
+  env:
+{%- for name in secrets %}
+
+    [[ name | scalar(4) ]]: $([[ name ]])
+{%- endfor %}
+{%- endif %}
 {%- endmacro %}
-{% macro steps(commands, persist=false, full_history=false) -%}
+{% macro steps(commands, persist=false, full_history=false, secrets=none) -%}
 {% if persist or full_history %}
 - checkout: self
 {% if persist %}
@@ -20,7 +35,7 @@
     versionSpec: '[[ python ]]'
 - script: [[ pip ]]
   displayName: Install opentide
-[[ script(commands) ]]
+[[ script(commands, secrets) ]]
 {%- endmacro %}
 {% macro job(id, name, body, condition=none) -%}
 - job: [[ id ]]
@@ -44,7 +59,7 @@
     ArtifactName: CodeAnalysisLogs
 {% endset %}
 {% set production %}
-[[ steps([skip_guard] + identity + [sh.overlay(fetch), dry_run, 'echo "##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true"', deploy], persist=true, full_history=true) ]]
+[[ steps([skip_guard] + identity + [sh.overlay(fetch), dry_run, 'echo "##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true"', deploy], persist=true, full_history=true, secrets=credentials) ]]
 [[ script(identity + [sh.writeback(rules, push, fetch, 'git push origin "$state_commit:refs/opentide/deployment-state/$state_commit"')]) ]]
   displayName: Commit deployment write-backs
   condition: and(always(), eq(variables['OPENTIDE_DEPLOY_STARTED'], 'true'))
@@ -92,7 +107,7 @@ stages:
     jobs:
       [[ job("validate", "Validate objects", validate) | indent(6) ]]
 {% for query in queries %}
-      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true)) | indent(6) ]]
+      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true, secrets=credentials)) | indent(6) ]]
 {% endfor %}
 
   - stage: Generate
@@ -106,7 +121,7 @@ stages:
     dependsOn: Generate
     jobs:
 {% if staging %}
-      [[ job("deploy_staging", "Deploy Staging", steps([skip_guard] + restore + staging_commands, persist=true, full_history=true), premerge) | indent(6) ]]
+      [[ job("deploy_staging", "Deploy Staging", steps([skip_guard] + restore + staging_commands, persist=true, full_history=true, secrets=credentials), premerge) | indent(6) ]]
 {% endif %}
 {% if inflight %}
       [[ job("inflight_shards", "Inflight preview shards", steps([fetch, sh.default_branch_shards("origin/" ~ branch), 'export OPENTIDE_REPO_ROOT="$BUILD_SOURCESDIRECTORY"', "opentide generate inflight"] + identity + [sh.publish_shards(push, fetch)], persist=true, full_history=true), premerge) | indent(6) ]]
@@ -120,7 +135,7 @@ stages:
     dependsOn: [Generate, Deploy]
     condition: and(not(canceled()), eq(dependencies.Generate.result, 'Succeeded'), eq(variables['Build.SourceBranch'], 'refs/heads/[[ branch ]]'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
-      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true)) | indent(6) ]]
+      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true, secrets=sharing_credentials)) | indent(6) ]]
 
 {% endif %}
   - stage: Document

@@ -504,8 +504,17 @@ fn a_bare_payload_skips_the_checks_and_says_so() {
 
 /// A tenant on `server` (Kibana and Elasticsearch both), `index` `logs-*`.
 fn stand_tenant(server: &str) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
+    stand_tenant_at(server, server)
+}
+
+/// A tenant whose Kibana is `kibana` and Elasticsearch `elasticsearch`,
+/// `index` `logs-*`.
+fn stand_tenant_at(
+    kibana: &str,
+    elasticsearch: &str,
+) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
     let setup: toml::Table = toml::from_str(&format!(
-        "url = \"{server}\"\nelasticsearch_url = \"{server}\"\nindex = [\"logs-*\"]\n"
+        "url = \"{kibana}\"\nelasticsearch_url = \"{elasticsearch}\"\nindex = [\"logs-*\"]\n"
     ))
     .unwrap();
     let env = opentide_connectors::Environment::default();
@@ -704,4 +713,166 @@ fn an_interrupted_deploy_fails_the_tenant() {
     let error = outcome.unwrap_err();
     assert_eq!(error.scope, DeployScope::Tenant);
     assert!(error.is_interrupted(), "{error:?}");
+}
+
+/// A Kibana stand-in that answers its first request (the rule lookup) 404,
+/// then refuses every connection: its listener is closed before it answers.
+fn kibana_gone_after_the_lookup() -> String {
+    use std::io::{Read as _, Write as _};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = Vec::new();
+        let mut byte = [0_u8; 1];
+        while !request.ends_with(b"\r\n\r\n") && stream.read(&mut byte).unwrap() == 1 {
+            request.push(byte[0]);
+        }
+        drop(listener);
+        stream
+            .write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\
+                  Content-Length: 2\r\nConnection: close\r\n\r\n{}",
+            )
+            .unwrap();
+    });
+    address
+}
+
+/// Elasticsearch on a stand-in answering the checks' `_field_caps`.
+fn elasticsearch(runtime: &tokio::runtime::Runtime) -> wiremock::MockServer {
+    use wiremock::matchers::{method, path_regex};
+    let server = runtime.block_on(wiremock::MockServer::start());
+    runtime.block_on(
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(&server),
+    );
+    server
+}
+
+/// `operation` deployed to a tenant whose Kibana is `kibana` and whose
+/// Elasticsearch is a stand-in: the outcome, and the paths Elasticsearch
+/// was asked.
+fn deploy_with_kibana_at(
+    runtime: &tokio::runtime::Runtime,
+    kibana: &str,
+    operation: Operation,
+) -> (
+    Result<
+        opentide_connectors::connector::DeployOutcome,
+        opentide_connectors::connector::DeployError,
+    >,
+    Vec<String>,
+) {
+    let es = elasticsearch(runtime);
+    let (tenant, http) = stand_tenant_at(kibana, &es.uri());
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let cx = opentide_connectors::connector::TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let (rule_id, body) = overridden_rule("query");
+    let request = DeployRequest::new(rule_id, operation, body);
+    let outcome = runtime.block_on(Elastic.deploy(cx, &request));
+    let asked = runtime
+        .block_on(es.received_requests())
+        .unwrap()
+        .iter()
+        .map(|r| r.url.path().to_owned())
+        .collect();
+    (outcome, asked)
+}
+
+/// A Kibana whose connection fails fails the tenant, not the rule (#1658,
+/// E7): on the lookup of an update, on the create after a lookup that
+/// answered 404, and on a delete. Its other rules would only wait on the
+/// same retries. The Elasticsearch checks, on a reachable cluster, ran
+/// first (a delete runs none).
+#[test]
+fn an_unreachable_kibana_fails_the_tenant_on_every_operation() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    // Port 1 on the loopback: nothing listens there.
+    let closed = "http://127.0.0.1:1".to_owned();
+    for (operation, kibana, checked) in [
+        (Operation::Update, closed.clone(), true),
+        (Operation::Create, kibana_gone_after_the_lookup(), true),
+        (Operation::Delete, closed.clone(), false),
+    ] {
+        let (outcome, asked) = deploy_with_kibana_at(&runtime, &kibana, operation);
+        let error = outcome.unwrap_err();
+        assert_eq!(error.scope, DeployScope::Tenant, "{operation:?}: {error:?}");
+        assert_eq!(error.failure.code, "tenant_unreachable", "{operation:?}");
+        assert!(
+            error
+                .failure
+                .message
+                .starts_with(&format!("Cannot reach elastic tenant 'lab' at {kibana}")),
+            "{operation:?}: {}",
+            error.failure.message
+        );
+        assert_eq!(
+            asked.iter().any(|path| path.ends_with("/_field_caps")),
+            checked,
+            "{operation:?}: {asked:?}"
+        );
+    }
+}
+
+/// A gateway's 503 in front of Kibana (Kibana down behind a proxy or
+/// Elastic Cloud's front end) on the rule lookup or a delete fails the
+/// tenant, once the client's retries ran out (#1658, E7).
+#[test]
+fn a_gateway_in_front_of_kibana_fails_the_tenant() {
+    use wiremock::matchers::{method, path};
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    for operation in [Operation::Update, Operation::Delete] {
+        let kibana = runtime.block_on(wiremock::MockServer::start());
+        runtime.block_on(
+            wiremock::Mock::given(method(if operation == Operation::Delete {
+                "DELETE"
+            } else {
+                "GET"
+            }))
+            .and(path("/api/detection_engine/rules"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(503)
+                    .set_body_string("<html><title>503 Service Unavailable</title></html>"),
+            )
+            .mount(&kibana),
+        );
+        let (outcome, _) = deploy_with_kibana_at(&runtime, &kibana.uri(), operation);
+        let error = outcome.unwrap_err();
+        assert_eq!(error.scope, DeployScope::Tenant, "{operation:?}: {error:?}");
+        assert_eq!(error.failure.code, "tenant_gateway", "{operation:?}");
+        assert!(
+            error
+                .failure
+                .message
+                .starts_with("Kibana of elastic tenant 'lab' answered "),
+            "{}",
+            error.failure.message
+        );
+        assert!(
+            error.failure.message.contains("HTTP 503"),
+            "{}",
+            error.failure.message
+        );
+        // Nothing was created or written.
+        let methods: Vec<String> = runtime
+            .block_on(kibana.received_requests())
+            .unwrap()
+            .iter()
+            .map(|r| r.method.to_string())
+            .collect();
+        assert!(
+            !methods.iter().any(|m| m == "POST" || m == "PUT"),
+            "{methods:?}"
+        );
+    }
 }

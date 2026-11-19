@@ -2456,6 +2456,11 @@ fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("graylog_alias_unknown"), "{err}");
     assert!(err.contains("nobody"), "{err}");
+    // The failure keeps the compiler's hint, as the dry run shows it.
+    assert!(
+        err.contains("add the alias to the tenant's stream_ids or notification_ids table"),
+        "{err}"
+    );
     let received = rt.block_on(server.received_requests()).unwrap();
     let bodies = |verb: wiremock::http::Method, prefix: &str| -> Vec<serde_json::Value> {
         received
