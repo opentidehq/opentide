@@ -16,9 +16,8 @@
 //!   #977): it does not run on Python, and the platforms are its own
 //!   connectors, which import no Python SDK.
 //! - `analysis_engine` passes: the engine is compiled into this program.
-//! - `lsp_catalog` reports the catalog compiled in (the field catalog is not
-//!   generated from Rust yet, UC-2.6), and still warns about a committed one
-//!   from another opentide.
+//! - `lsp_catalog` warns about a committed catalog from another opentide;
+//!   no program reads it (the language server generates its own, #926).
 
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -735,7 +734,7 @@ impl Doctor<'_> {
                     "warn",
                     format!(
                         "The language-server catalog committed in {shown} is from opentide \
-                         {from}, not {version}: editors that run opentide-lsp on their own use it"
+                         {from}, not {version}"
                     ),
                 )
                 .fix(fix);
