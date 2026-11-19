@@ -895,3 +895,50 @@ fn the_commit_hook_validates_the_staged_files() {
     let left: Vec<_> = std::fs::read_dir(root.join("tmp")).unwrap().collect();
     assert!(left.is_empty(), "{left:?}");
 }
+
+/// One hook for a repository's root workspace and a workspace nested in it
+/// (#1670 review): each is validated from a copy of its own staged files.
+/// One shared copy refused every commit, the nested files being there
+/// already when its turn came.
+#[cfg(unix)]
+#[test]
+fn the_commit_hook_validates_a_root_and_a_nested_workspace() {
+    let (_dir, root) = scratch();
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    let setup = ["setup", "--hooks", "--yes", "--platform", "sentinel"];
+    opentide(&repo, &[&setup[..], &["--name", "Root"]].concat(), &[]).ok();
+    opentide(
+        &repo,
+        &[&setup[..], &["--name", "Kept", "--path", "kept"]].concat(),
+        &[],
+    )
+    .ok();
+    let script = std::fs::read_to_string(repo.join(".git/hooks/pre-commit")).unwrap();
+    assert!(
+        script.contains("for OPENTIDE_HOOK_WORKSPACE in . kept; do"),
+        "{script}"
+    );
+    tutorial::write_objects(&repo);
+    tutorial::write_objects(&repo.join("kept"));
+    git(&repo, &["add", "-A"]);
+    let both = hooked_commit(&root, &repo, "both");
+    assert!(
+        both.status.success(),
+        "the hook refused two good workspaces: {both:?}"
+    );
+
+    // A broken rule staged in the nested workspace alone is refused, and the
+    // hook says how to check what is staged.
+    tutorial::break_tlp(&repo.join("kept"));
+    git(&repo, &["add", "-A"]);
+    let broken = hooked_commit(&root, &repo, "broken");
+    assert!(!broken.status.success(), "{broken:?}");
+    let stderr = String::from_utf8_lossy(&broken.stderr);
+    assert!(
+        stderr.contains("git stash push --keep-index --include-untracked"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("opentide-hook."), "{stderr}");
+}

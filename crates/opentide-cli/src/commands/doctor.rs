@@ -356,7 +356,7 @@ impl Doctor<'_> {
     }
 
     fn git(&self) -> Vec<Check> {
-        let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
+        let path = self.cx.env.search_path().unwrap_or_default().to_owned();
         let Some(git) = on_path("git", &path, &self.cwd) else {
             return vec![
                 Check::new(
@@ -1229,7 +1229,7 @@ impl Doctor<'_> {
                 "; the opentide extension ({EXTENSION_ID}) also provides the server to VS Code"
             ));
         }
-        let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
+        let path = self.cx.env.search_path().unwrap_or_default().to_owned();
         let mut unresolved: Vec<String> = commands
             .into_iter()
             .filter(|command| !command.is_empty() && on_path(command, &path, &self.cwd).is_none())

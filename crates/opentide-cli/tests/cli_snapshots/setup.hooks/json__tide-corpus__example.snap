@@ -48,27 +48,32 @@ if ! command -v opentide >/dev/null 2>&1; then
 fi
 # Validate the worktree being committed, not whatever OPENTIDE_REPO_ROOT names,
 # and what the commit holds: the staged files, copied out of the index, not
-# the files on disk, which can differ from them.
+# the files on disk, which can differ from them. Each workspace gets a copy
+# of its own (a nested one is also in the root's).
 OPENTIDE_HOOK_TOP=$(git rev-parse --show-toplevel)
 OPENTIDE_HOOK_STAGED=$(mktemp -d "${TMPDIR:-/tmp}/opentide-hook.XXXXXX")
 trap 'rm -rf "$OPENTIDE_HOOK_STAGED"' EXIT
 trap 'exit 1' HUP INT TERM
 OPENTIDE_HOOK_STATUS=0
+OPENTIDE_HOOK_COUNT=0
 for OPENTIDE_HOOK_WORKSPACE in .; do
+  OPENTIDE_HOOK_COUNT=$((OPENTIDE_HOOK_COUNT + 1))
   if [ "$OPENTIDE_HOOK_WORKSPACE" = . ]; then
     OPENTIDE_HOOK_REPO=$OPENTIDE_HOOK_TOP
-    OPENTIDE_HOOK_COPY=$OPENTIDE_HOOK_STAGED
+    OPENTIDE_HOOK_COPY=$OPENTIDE_HOOK_STAGED/$OPENTIDE_HOOK_COUNT
   else
     OPENTIDE_HOOK_REPO=$OPENTIDE_HOOK_TOP/$OPENTIDE_HOOK_WORKSPACE
-    OPENTIDE_HOOK_COPY=$OPENTIDE_HOOK_STAGED/$OPENTIDE_HOOK_WORKSPACE
+    OPENTIDE_HOOK_COPY=$OPENTIDE_HOOK_STAGED/$OPENTIDE_HOOK_COUNT/$OPENTIDE_HOOK_WORKSPACE
   fi
   if [ ! -d "$OPENTIDE_HOOK_REPO/.opentide" ]; then
     echo "No opentide workspace at $OPENTIDE_HOOK_REPO (missing .opentide/). Re-run 'opentide setup hooks' or set OPENTIDE_SKIP_HOOKS=1 to bypass." >&2
     OPENTIDE_HOOK_STATUS=1
   else
-    (cd "$OPENTIDE_HOOK_TOP" && git ls-files -z -- ":(literal)$OPENTIDE_HOOK_WORKSPACE" | git checkout-index -z --stdin --prefix="$OPENTIDE_HOOK_STAGED/")
+    (cd "$OPENTIDE_HOOK_TOP" && git ls-files -z -- ":(literal)$OPENTIDE_HOOK_WORKSPACE" | git checkout-index -z --stdin --prefix="$OPENTIDE_HOOK_STAGED/$OPENTIDE_HOOK_COUNT/")
     mkdir -p "$OPENTIDE_HOOK_COPY/.opentide"
-    if ! opentide --repo "$OPENTIDE_HOOK_COPY" validate --strict --allow-empty; then
+    # From inside the copy, paths print as they are in the workspace.
+    if ! (cd "$OPENTIDE_HOOK_COPY" && opentide --repo . validate --strict --allow-empty); then
+      echo "The staged files of $OPENTIDE_HOOK_REPO do not validate; the files on disk can differ. To check what is staged: git stash push --keep-index --include-untracked && opentide --repo \"$OPENTIDE_HOOK_REPO\" validate --strict; git stash pop" >&2
       OPENTIDE_HOOK_STATUS=1
     fi
   fi

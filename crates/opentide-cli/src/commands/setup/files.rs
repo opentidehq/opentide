@@ -777,7 +777,7 @@ impl McpServer {
 /// `opentide` cannot be found on `env`'s `PATH`.
 #[cfg(not(target_os = "wasi"))]
 fn command_not_on_path(env: &Env, cwd: &Path) -> bool {
-    let path = env.get("PATH").unwrap_or_default();
+    let path = env.search_path().unwrap_or_default();
     crate::commands::doctor::on_path("opentide", path, cwd).is_none()
 }
 
