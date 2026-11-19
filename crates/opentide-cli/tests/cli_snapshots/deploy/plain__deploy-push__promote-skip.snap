@@ -9,4 +9,5 @@ exit: 0
 Skipped: No rule has a status this run deploys · 1 rule in STAGING
   help: no configured status deploys with this run
 
-━━━ stderr · empty
+━━━ stderr
+warning: This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file

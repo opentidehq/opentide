@@ -216,7 +216,8 @@ fn gitlab_reads_the_before_sha_and_the_merged_result() {
         ],
     )
     .unwrap();
-    assert_eq!(first, ["objects/rules/r2.yaml"]);
+    // An all-zero before: the push created the branch, so every file is new (#1683).
+    assert_eq!(first, ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]);
     let merged = changed(
         &h.root,
         &[
@@ -1203,6 +1204,107 @@ fn a_ci_push_without_a_commit_says_so() {
                 root.display()
             )),
             "{env:?}"
+        );
+    }
+}
+
+/// #1683: the first push of a new repository often holds several commits.
+/// The diff starts where the branch was before the push (all zeros: every
+/// file), not at the last commit's parent; where the platform names no such
+/// commit, the dry run's scope says that only the last commit was read.
+#[test]
+fn a_push_of_several_commits_reads_from_before_the_push() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "objects/rules/r1.yaml", "a: 1\n");
+    let a = commit(&root, "a");
+    write(&root, "objects/rules/r2.yaml", "b: 1\n");
+    commit(&root, "b");
+    write(&root, "objects/rules/r3.yaml", "c: 1\n");
+    let c = commit(&root, "c");
+    let every = [
+        "objects/rules/r1.yaml",
+        "objects/rules/r2.yaml",
+        "objects/rules/r3.yaml",
+    ];
+    let zeros = "0".repeat(40);
+    let events = tempfile::tempdir().unwrap();
+    let event = |before: &str| {
+        let path = events.path().join(format!("{before}.json"));
+        std::fs::write(&path, format!("{{\"before\": \"{before}\"}}")).unwrap();
+        path.to_string_lossy().into_owned()
+    };
+    // GitHub: the first push (a, b and c at once) names an all-zero before.
+    let created = event(&zeros);
+    fn github<'a>(sha: &'a str, path: &'a str) -> Vec<(&'a str, &'a str)> {
+        vec![
+            ("GITHUB_ACTIONS", "true"),
+            ("GITHUB_SHA", sha),
+            ("GITHUB_EVENT_PATH", path),
+        ]
+    }
+    assert_eq!(changed(&root, &github(&c, &created)).unwrap(), every);
+    // A later push of b and c names a.
+    let later = event(&a);
+    assert_eq!(
+        changed(&root, &github(&c, &later)).unwrap(),
+        ["objects/rules/r2.yaml", "objects/rules/r3.yaml"]
+    );
+    // GitLab: the same first push.
+    let gitlab = [
+        ("CI", "true"),
+        ("CI_COMMIT_SHA", c.as_str()),
+        ("CI_COMMIT_BEFORE_SHA", zeros.as_str()),
+    ];
+    assert_eq!(changed(&root, &gitlab).unwrap(), every);
+    let pushed = [gitlab.as_slice(), &[("CI_PIPELINE_SOURCE", "push")]].concat();
+    assert_eq!(changed(&root, &pushed).unwrap(), every);
+    // A scheduled or manual pipeline sends all zeros too, but created no
+    // branch: it reads the last commit.
+    let scheduled = [gitlab.as_slice(), &[("CI_PIPELINE_SOURCE", "schedule")]].concat();
+    assert_eq!(
+        changed(&root, &scheduled).unwrap(),
+        ["objects/rules/r3.yaml"]
+    );
+
+    let rules = root.join("objects/rules");
+    let scope = |pairs: &[(&str, &str)]| {
+        let map: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        let env = move |name: &str| map.get(name).cloned();
+        opentide_compile::dry_run::git_scope(&root, &root, &env, &rules, "objects/rules").unwrap()
+    };
+    // A push that names where the branch was says nothing more.
+    let (read, warning) = scope(&github(&c, &created));
+    assert_eq!(read.files.len(), 3);
+    assert_eq!(warning, None);
+    // Azure names no such commit: the last commit is read, and the run says so.
+    let (read, warning) = scope(&[("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", c.as_str())]);
+    assert_eq!(read.files, [rules.join("r3.yaml")]);
+    let warning = warning.unwrap();
+    assert!(
+        warning
+            .contains("Azure Pipelines does not name the commit the branch held before the push")
+            && warning.ends_with("pass --all to deploy every rule file"),
+        "{warning}"
+    );
+    // So does a GitHub run with no push event, and one whose before is not
+    // in the checkout (a force push), and GitLab without its variable.
+    let gone = event(&"1".repeat(40));
+    for pairs in [
+        vec![("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", c.as_str())],
+        github(&c, &gone),
+        vec![("CI", "true"), ("CI_COMMIT_SHA", c.as_str())],
+        scheduled.clone(),
+    ] {
+        let (read, warning) = scope(&pairs);
+        assert_eq!(read.files, [rules.join("r3.yaml")], "{pairs:?}");
+        assert!(
+            warning.is_some_and(|warning| warning.contains("pass --all")),
+            "{pairs:?}"
         );
     }
 }

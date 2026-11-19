@@ -62,8 +62,8 @@ pub fn git_scope(
     folder: &str,
 ) -> Result<(Scope, Option<String>), String> {
     let source = crate::git::diff_source(env);
-    let changed =
-        crate::git::changed_paths(workspace, cwd, env, source).map_err(|error| error.message())?;
+    let (changed, note) = crate::git::changed_paths_noted(workspace, cwd, env, source)
+        .map_err(|error| error.message())?;
     let (top, nested) = crate::git::split_rule_paths(&changed, folder);
     let files = top
         .iter()
@@ -79,7 +79,7 @@ pub fn git_scope(
     } else {
         None
     };
-    Ok((scope, warning))
+    Ok((scope, warning.or(note)))
 }
 
 /// A failure the CLI reports with a code and an exit status.
