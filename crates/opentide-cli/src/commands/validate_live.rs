@@ -79,6 +79,9 @@ pub struct Context<'a> {
     pub now: jiff::Timestamp,
     /// The platforms' connectors.
     pub registry: &'a Registry,
+    /// `--debug` or `OPENTIDE_DEBUG`: a push's deploy promotes every rule
+    /// file of the rules folder, and the gate previews that promotion.
+    pub debug: bool,
 }
 
 impl std::fmt::Debug for Context<'_> {
@@ -500,7 +503,7 @@ fn promoted(
         .collect();
     // `--debug` or `OPENTIDE_DEBUG`: the push's deploy promotes every rule
     // file; the gate checks the changed ones, as promoted.
-    let debug = cx.env.opentide_debug();
+    let debug = cx.debug || cx.env.opentide_debug();
     let local = if debug {
         opentide_compile::plan::local_scope(workspace.fs().as_ref(), &rules_dir, &folder).files
     } else {

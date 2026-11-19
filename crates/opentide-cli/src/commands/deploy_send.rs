@@ -330,7 +330,16 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
     };
     let mut warnings: Vec<String> = Vec::new();
     let mut skipped: Vec<plan::Skipped> = Vec::new();
-    let mut result = deploy(args, cx, &workspace, &mut warnings, &mut skipped);
+    let mut promoted = Unpromote::default();
+    let mut result = deploy(
+        args,
+        cx,
+        &workspace,
+        &mut warnings,
+        &mut skipped,
+        &mut promoted,
+    );
+    promoted.finish().apply(&mut result, &mut warnings);
     if (!args.uuids.is_empty() || !args.files.is_empty()) && !has(&result, "scope") {
         result.push(("scope".into(), Json::str("selected")));
     }
@@ -538,6 +547,7 @@ fn deploy(
     workspace: &Workspace,
     plan_warnings: &mut Vec<String>,
     plan_skipped: &mut Vec<plan::Skipped>,
+    promoted: &mut Unpromote,
 ) -> Vec<(String, Json)> {
     if let Some(value) = cx
         .env
@@ -628,9 +638,6 @@ fn deploy(
     // read before it still holds the old status, which routes those rules
     // to no RELEASE tenant and compiles them with the old status.
     let reopened;
-    // The files the promotion rewrote: put back, on every way out of the
-    // run, unless a tenant received their rule (#1653).
-    let mut promoted = Unpromote::default();
     let workspace = if promotes(args, &runs, cx.env) {
         let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
         let debug = cx.debug || cx.env.opentide_debug();
@@ -645,9 +652,12 @@ fn deploy(
             local: &local,
             debug,
         };
-        match super::deploy_promote::run(&promotion, &cx.lines) {
-            Ok(rewritten) => promoted.files = rewritten,
-            Err(stop) => return super::deploy_promote::stopped(&stop),
+        // The files it rewrote, even when a write failed part-way: put
+        // back unless a tenant receives their rule (#1653).
+        let (rewritten, outcome) = super::deploy_promote::run(&promotion, &cx.lines);
+        promoted.files = rewritten;
+        if let Err(stop) = outcome {
+            return super::deploy_promote::stopped(&stop);
         }
         if debug {
             // Whole-folder promotion: deploy what it promoted besides the
@@ -993,6 +1003,8 @@ fn deploy(
                 };
             }
         }
+        // What reached a tenant stays promoted, whatever ends the run next.
+        promoted.received(&log.results);
         step.seconds = step_started.elapsed().as_secs_f64();
         completed += 1;
         cx.lines.step(&step, completed, total);
@@ -1033,7 +1045,6 @@ fn deploy(
         }
     }
     cx.lines.checklist(&steps);
-    promoted.received(&log.results);
     let seconds = started.elapsed().as_secs_f64();
     let results = log.results.clone();
     let platforms = deployment.len();
@@ -1176,10 +1187,13 @@ fn deploy(
     result
 }
 
-/// The files a status promotion rewrote, put back as they were when the
-/// run ends, whichever way it ends, unless a tenant received their rule:
-/// the write-back then commits no status that was never deployed (#1653).
-/// A file is kept promoted when any platform block of its rule was sent.
+/// The files a status promotion rewrote: put back as they were before the
+/// result is built ([`Unpromote::finish`]) unless a tenant received their
+/// rule, so the write-back commits no status that was never deployed
+/// (#1653). A file is kept promoted when any platform block of its rule
+/// reached any tenant. Dropping the guard puts back what `finish` did not
+/// (a panic); a forced exit puts back what is still pending
+/// ([`super::deploy_promote::restore_pending`]).
 #[derive(Default)]
 struct Unpromote {
     files: Vec<super::deploy_promote::Promoted>,
@@ -1187,8 +1201,17 @@ struct Unpromote {
     sent: std::collections::HashSet<String>,
 }
 
+/// What putting the promoted files back did: warnings for the files left
+/// as they were, failures for the files that could not be written.
+#[derive(Debug, Default)]
+struct Settled {
+    warnings: Vec<String>,
+    failures: Vec<(String, String)>,
+}
+
 impl Unpromote {
-    /// The rules of `results` a tenant received (`deployed`).
+    /// The rules of `results` a tenant received (`deployed`): their files
+    /// are kept promoted, and a forced exit no longer puts them back.
     fn received(&mut self, results: &[RuleResult]) {
         self.sent.extend(
             results
@@ -1196,33 +1219,103 @@ impl Unpromote {
                 .filter(|result| result.status == "deployed" && result.tenant.is_some())
                 .map(|result| opentide_compile::rule::canonical_uuid(&result.id)),
         );
+        let kept: Vec<_> = self
+            .files
+            .iter()
+            .filter(|file| self.keeps(file))
+            .cloned()
+            .collect();
+        super::deploy_promote::settle(&kept);
+    }
+
+    fn keeps(&self, file: &super::deploy_promote::Promoted) -> bool {
+        file.uuid
+            .as_ref()
+            .is_some_and(|uuid| self.sent.contains(uuid))
+    }
+
+    /// Puts back every file no tenant received the rule of, once.
+    fn finish(&mut self) -> Settled {
+        use super::deploy_promote::Restored;
+        let files = std::mem::take(&mut self.files);
+        super::deploy_promote::settle(&files);
+        let mut settled = Settled::default();
+        for file in files.iter().filter(|file| !self.keeps(file)) {
+            let path = file.path.display().to_string();
+            match file.restore() {
+                Ok(Restored::Done) => tracing::info!(
+                    path = path.as_str(),
+                    detail = "no tenant received the rule, so its status stays as it was",
+                    "rule_promotion_undone"
+                ),
+                Ok(Restored::Missing) => settled.warnings.push(format!(
+                    "{path} was deleted during the deploy, so its status promotion was not undone"
+                )),
+                Ok(Restored::Edited) => settled.warnings.push(format!(
+                    "{path} changed during the deploy, so its status promotion was not undone: \
+                     no tenant received the rule; check its status before committing"
+                )),
+                Err(error) => {
+                    tracing::error!(
+                        path = path.as_str(),
+                        detail = error.as_str(),
+                        critical = true,
+                        "rule_promotion_undo_failed"
+                    );
+                    settled.failures.push((path, error));
+                }
+            }
+        }
+        settled
+    }
+}
+
+impl Settled {
+    /// The run's result with the files left as they were among its
+    /// warnings, and a file that could not be put back as a failure: the
+    /// run fails (exit 1), since a commit would carry a status no tenant
+    /// received.
+    fn apply(self, result: &mut Vec<(String, Json)>, warnings: &mut Vec<String>) {
+        warnings.extend(self.warnings);
+        if self.failures.is_empty() {
+            return;
+        }
+        let lines: Vec<String> = self
+            .failures
+            .iter()
+            .map(|(path, error)| {
+                format!(
+                    "Could not undo the status promotion of {path}, which no tenant received: \
+                     {error}"
+                )
+            })
+            .collect();
+        let entries = self.failures.iter().zip(&lines).map(|((path, _), line)| {
+            Json::object([
+                ("path", Json::str(path)),
+                ("error", Json::str(line)),
+            ])
+        });
+        let mut all = match result.iter().find(|(key, _)| key == "failures") {
+            Some((_, Json::Array(own))) => own.clone(),
+            _ => Vec::new(),
+        };
+        all.extend(entries);
+        set(result, "failures", Json::Array(all));
+        if text_of(result, "status").as_deref() != Some("failed") {
+            set(result, "status", Json::str("failed"));
+            set(result, "message", Json::str(&lines[0]));
+            set(result, "error", Json::str(&lines[0]));
+        }
+        set(result, "_exit_code", Json::Int(1));
     }
 }
 
 impl Drop for Unpromote {
     fn drop(&mut self) {
-        for file in &self.files {
-            if file
-                .uuid
-                .as_ref()
-                .is_some_and(|uuid| self.sent.contains(uuid))
-            {
-                continue;
-            }
-            let path = file.path.display().to_string();
-            match file.restore() {
-                Ok(()) => tracing::info!(
-                    path = path.as_str(),
-                    detail = "no tenant received the rule, so its status stays as it was",
-                    "rule_promotion_undone"
-                ),
-                Err(error) => tracing::error!(
-                    path = path.as_str(),
-                    detail = error.as_str(),
-                    critical = true,
-                    "rule_promotion_undo_failed"
-                ),
-            }
+        let settled = self.finish();
+        for warning in settled.warnings {
+            tracing::warn!(detail = warning.as_str(), "rule_promotion_not_undone");
         }
     }
 }

@@ -1254,6 +1254,7 @@ impl Run<'_> {
                 interrupted: &interrupted,
                 now: jiff::Timestamp::now(),
                 registry: &registry,
+                debug: self.globals.debug,
             },
         );
         let mut report = live.report(self.env);
@@ -2386,19 +2387,23 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
     let _ = interrupt;
 }
 
-/// Ctrl-C: `interrupt` is set, and the run stops ([`Interrupt`]). The
-/// process ends with `error: interrupted` and 130 on a second Ctrl-C, or when
-/// the run has not stopped after [`INTERRUPT_GRACE`].
+/// Ctrl-C, or a termination signal (SIGTERM, SIGHUP): `interrupt` is set,
+/// and the run stops ([`Interrupt`]). The process ends with
+/// `error: interrupted` and 130 on a second signal, or when the run has not
+/// stopped after [`INTERRUPT_GRACE`]; a deploy's promoted rule files no
+/// tenant received are put back first, since no destructor runs then.
 #[cfg(not(target_os = "wasi"))]
 pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
     let _ignored = ctrlc::set_handler(move || {
         if let Some(code) = on_interrupt(&interrupt, &mut std::io::stderr().lock()) {
+            crate::commands::deploy_promote::restore_pending();
             std::process::exit(code);
         }
         let interrupt = interrupt.clone();
         std::thread::spawn(move || {
             std::thread::sleep(INTERRUPT_GRACE);
+            crate::commands::deploy_promote::restore_pending();
             std::process::exit(interrupt.report(&mut std::io::stderr().lock()));
         });
     });

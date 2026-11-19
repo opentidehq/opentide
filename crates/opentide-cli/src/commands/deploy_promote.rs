@@ -49,28 +49,86 @@ pub struct Promotion<'a> {
     pub debug: bool,
 }
 
-/// A rule file the promotion rewrote: what it held before, so a deploy that
-/// sends the rule nowhere can put it back (#1653).
+/// A rule file the promotion rewrote: what it held before and after, so a
+/// deploy that sends the rule nowhere can put it back (#1653).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Promoted {
     /// The file.
     pub path: PathBuf,
     /// Its bytes before the promotion.
     pub original: Vec<u8>,
+    /// The bytes the promotion wrote.
+    pub promoted: Vec<u8>,
     /// The rule's `metadata.uuid`, canonical, when it has one.
     pub uuid: Option<String>,
 }
 
+/// What putting a promoted file back did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Restored {
+    /// The file holds its bytes from before the promotion again.
+    Done,
+    /// The file is gone: it is not made again.
+    Missing,
+    /// The file no longer holds what the promotion wrote (someone edited
+    /// it): it is left as it is.
+    Edited,
+}
+
 impl Promoted {
     /// Writes the file's bytes from before the promotion back, as the
-    /// promotion wrote it (through a temporary file, its mode kept).
+    /// promotion wrote it (through a temporary file, its mode kept), when
+    /// the file still holds exactly what the promotion wrote.
     ///
     /// # Errors
     ///
-    /// The file cannot be written: the message names it.
-    pub fn restore(&self) -> Result<(), String> {
+    /// The file cannot be read or written: the message names it.
+    pub fn restore(&self) -> Result<Restored, String> {
+        let now = match std::fs::read(&self.path) {
+            Ok(now) => now,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Restored::Missing);
+            }
+            Err(error) => return Err(format!("{}: {error}", self.path.display())),
+        };
+        if now != self.promoted {
+            return Ok(Restored::Edited);
+        }
         opentide_workspace::fs::write_atomically(&self.path, &self.original)
+            .map(|()| Restored::Done)
             .map_err(|error| format!("{}: {error}", self.path.display()))
+    }
+}
+
+/// The promoted files a run has not settled yet: put back before the
+/// process ends at once (a second Ctrl-C, a run still stopping after the
+/// grace period, a termination signal), where no destructor runs.
+static PENDING: std::sync::Mutex<Vec<Promoted>> = std::sync::Mutex::new(Vec::new());
+
+fn pending() -> std::sync::MutexGuard<'static, Vec<Promoted>> {
+    PENDING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Holds *files* as pending until [`settle`] takes them.
+pub fn hold(files: &[Promoted]) {
+    pending().extend(files.iter().cloned());
+}
+
+/// Takes *files* off the pending list: the run settled them.
+pub fn settle(files: &[Promoted]) {
+    pending().retain(|held| !files.iter().any(|file| file.path == held.path));
+}
+
+/// Puts back every pending file, before the process ends at once. Called
+/// from the interrupt handler; logs what it could not put back.
+pub fn restore_pending() {
+    let files = std::mem::take(&mut *pending());
+    for file in files {
+        if let Err(error) = file.restore() {
+            tracing::error!(detail = error.as_str(), "rule_promotion_undo_failed");
+        }
     }
 }
 
@@ -152,12 +210,10 @@ fn setting_text(value: &Setting) -> String {
 }
 
 /// Runs the promotion: plans every file, then logs, writes and draws the
-/// step. `Ok` when the run goes on to plan, with the files it rewrote.
-///
-/// # Errors
-///
-/// [`Stop`]: how the run ends instead.
-pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<Vec<Promoted>, Stop> {
+/// step: the files it rewrote, held pending ([`hold`]), and `Ok` when the
+/// run goes on to plan. A write that fails stops the run, and the files
+/// written before it are among those returned, to put back.
+pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> (Vec<Promoted>, Result<(), Stop>) {
     let started = Instant::now();
     let (events, planned, mut ended) = plan(promotion);
     for event in &events {
@@ -183,11 +239,14 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<Vec<Promoted>, St
                     ),
                 ],
             ));
-            promoted.push(Promoted {
+            let written = Promoted {
                 path: path.clone(),
                 original: before.0,
+                promoted: bytes.clone(),
                 uuid: before.1,
-            });
+            };
+            hold(std::slice::from_ref(&written));
+            promoted.push(written);
         }
     }
     let mut step = Step::new(STEP);
@@ -201,7 +260,7 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<Vec<Promoted>, St
     step.seconds = started.elapsed().as_secs_f64();
     lines.step(&step, 1, 1);
     lines.checklist(std::slice::from_ref(&step));
-    ended.map_or(Ok(promoted), Err)
+    (promoted, ended.map_or(Ok(()), Err))
 }
 
 /// A file the promotion would rewrite: its path, its promoted bytes, and
@@ -464,7 +523,7 @@ mod tests {
             .iter()
             .map(|path| std::fs::read(path).unwrap())
             .collect();
-        (outcome.map(|_| ()), drawn, after)
+        (outcome.1, drawn, after)
     }
 
     #[test]
@@ -699,5 +758,75 @@ mod tests {
         );
         assert!(outcome.is_ok(), "{outcome:?}");
         assert_eq!(after[0], anchored.as_bytes());
+    }
+
+    /// A promoted file is put back only while it holds what the promotion
+    /// wrote: a file edited since is left as it is, and a deleted one is not
+    /// made again (#1653).
+    #[test]
+    fn a_restore_puts_back_only_what_the_promotion_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.yaml");
+        std::fs::write(&path, "promoted").unwrap();
+        let file = Promoted {
+            path: path.clone(),
+            original: b"original".to_vec(),
+            promoted: b"promoted".to_vec(),
+            uuid: None,
+        };
+        assert_eq!(file.restore(), Ok(Restored::Done));
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        std::fs::write(&path, "edited").unwrap();
+        assert_eq!(file.restore(), Ok(Restored::Edited));
+        assert_eq!(std::fs::read(&path).unwrap(), b"edited");
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(file.restore(), Ok(Restored::Missing));
+        assert!(!path.exists());
+    }
+
+    /// A write that fails part-way stops the run and returns the files
+    /// written before it, so the deploy puts them back (#1653). A folder the
+    /// user cannot write refuses the temporary file; a privileged user
+    /// writes there all the same, and the test then has nothing to show.
+    #[cfg(unix)]
+    #[test]
+    fn a_write_that_fails_part_way_returns_the_files_written_before_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let (open, shut) = (dir.path().join("1"), dir.path().join("2"));
+        let paths = vec![open.join("a.yaml"), shut.join("b.yaml")];
+        for path in &paths {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, RULE).unwrap();
+        }
+        let mode = |bits| std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(bits));
+        mode(0o555).unwrap();
+        if std::fs::write(shut.join("probe"), "").is_ok() {
+            mode(0o755).unwrap();
+            eprintln!("skipped: this user writes a read-only folder");
+            return;
+        }
+        let (written, outcome) = run(
+            &Promotion {
+                settings: &settings(true, "PRODUCTION"),
+                changed: &paths,
+                local: &paths,
+                debug: false,
+            },
+            &lines(&Buffer::default(), false),
+        );
+        mode(0o755).unwrap();
+        settle(&written);
+        let Err(Stop::Failed(message)) = outcome else {
+            panic!("{outcome:?}");
+        };
+        assert!(message.contains("b.yaml"), "{message}");
+        assert_eq!(written.len(), 1, "{written:?}");
+        assert_eq!(written[0].path, paths[0]);
+        assert_eq!(written[0].original, RULE.as_bytes());
+        assert_eq!(
+            std::fs::read(&paths[0]).unwrap(),
+            RULE.replace("STAGING", "PRODUCTION").into_bytes()
+        );
     }
 }

@@ -1822,6 +1822,11 @@ fn a_failed_deploy_lists_its_failures_in_the_job_summary() {
 
 /// `ws` as a git checkout of two commits, the second changing `file`.
 fn pushed(ws: &Path, file: &str) {
+    pushed_files(ws, &[file]);
+}
+
+/// `ws` as a repository whose last commit changed each of `files`.
+fn pushed_files(ws: &Path, files: &[&str]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .args([
@@ -1847,13 +1852,15 @@ fn pushed(ws: &Path, file: &str) {
     git(&["init", "-q"]);
     git(&["add", "-A"]);
     git(&["commit", "-q", "-m", "base"]);
-    let path = ws.join(file);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(
-        &path,
-        text.replace("description: ", "description: Changed. "),
-    )
-    .unwrap();
+    for file in files {
+        let path = ws.join(file);
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            text.replace("description: ", "description: Changed. "),
+        )
+        .unwrap();
+    }
     git(&["commit", "-q", "-a", "-m", "push"]);
 }
 
@@ -3447,4 +3454,247 @@ fn a_dry_run_reports_a_rule_no_tenant_takes() {
             .contains("its tenants list names no splunk tenant"),
         "{out}"
     );
+}
+
+/// A Splunk stand-in that runs `during` on its first request, then answers
+/// each request in turn with `answers`, then `Ok`.
+struct HookedSplunk {
+    during: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    answers: Mutex<std::collections::VecDeque<Result<(), ConnectorError>>>,
+}
+
+impl Deployer for HookedSplunk {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let during = self.during.lock().unwrap().take();
+        if let Some(during) = during {
+            during();
+        }
+        let next = self.answers.lock().unwrap().pop_front().unwrap_or(Ok(()));
+        deploying(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// Registers a [`HookedSplunk`] as `splunk`.
+struct Hooked(&'static HookedSplunk);
+
+impl Platform for Hooked {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A RELEASE push in `ws` deployed to Splunk by a [`HookedSplunk`].
+fn hooked_push(
+    ws: &Path,
+    during: Box<dyn FnOnce() + Send>,
+    answers: Vec<Result<(), ConnectorError>>,
+) -> (Sent, String) {
+    let splunk: &'static HookedSplunk = Box::leak(Box::new(HookedSplunk {
+        during: Mutex::new(Some(during)),
+        answers: Mutex::new(answers.into()),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Hooked(splunk))).unwrap();
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let env = Env::from_pairs(
+        github_push(ws)
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value)),
+    );
+    deploy_with(ws, &args, &env, &registry, 0)
+}
+
+/// Two promoted rules: `a.yaml`, which the tenant receives, and `b.yaml`,
+/// which no tenant takes (it lists another tenant), so its file is put back.
+fn sent_and_unsent() -> tempfile::TempDir {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let elsewhere = format!("{block}    tenants: [other]\n");
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[
+            (
+                "a.yaml",
+                rule("Sent", "00000000-0000-4000-8047-000000000920", "A rule.", block),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Unsent",
+                    "00000000-0000-4000-8047-000000000921",
+                    "A rule.",
+                    &elsewhere,
+                ),
+            ),
+        ],
+    );
+    pushed_files(ws.path(), &["objects/rules/a.yaml", "objects/rules/b.yaml"]);
+    ws
+}
+
+fn text_of(json: &Json) -> String {
+    match json {
+        Json::Str(text) => text.clone(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// A promoted file the run cannot put back fails the run (exit 1), naming
+/// the file: its commit would carry a status no tenant received (#1653).
+/// The rules folder is made read-only while the rule is sent; a privileged
+/// user writes there all the same, and the test then has nothing to show.
+#[test]
+fn a_promotion_the_run_cannot_undo_fails_the_run() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let ws = sent_and_unsent();
+    let rules = ws.path().join("objects/rules");
+    let mode = |bits| std::fs::set_permissions(&rules, std::fs::Permissions::from_mode(bits));
+    mode(0o555).unwrap();
+    let privileged = std::fs::write(rules.join("probe"), "").is_ok();
+    mode(0o755).unwrap();
+    if privileged {
+        eprintln!("skipped: this user writes a read-only folder");
+        return;
+    }
+    let shut = rules.clone();
+    let (sent, text) = hooked_push(
+        ws.path(),
+        Box::new(move || {
+            std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
+        }),
+        Vec::new(),
+    );
+    mode(0o755).unwrap();
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+    assert_eq!(value(&sent, "status"), &Json::str("failed"), "{text}");
+    let message = text_of(value(&sent, "message"));
+    assert!(
+        message.contains("Could not undo the status promotion of")
+            && message.contains("b.yaml"),
+        "{message}"
+    );
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("{:?}", sent.result)
+    };
+    assert!(
+        failures.iter().any(|failure| failure
+            .get("path")
+            .and_then(Json::as_str)
+            .is_some_and(|path| path.ends_with("b.yaml"))),
+        "{failures:?}"
+    );
+    for file in ["a.yaml", "b.yaml"] {
+        let now = std::fs::read_to_string(rules.join(file)).unwrap();
+        assert!(now.contains("status: PRODUCTION"), "{file}: {now}");
+    }
+}
+
+/// A promoted file edited or deleted while the run sends is left as it is,
+/// with a warning: the run never overwrites an edit, nor makes a deleted
+/// file again (#1653).
+#[test]
+fn a_promoted_file_changed_during_the_run_is_left_as_it_is() {
+    for (deleted, said) in [
+        (false, "changed during the deploy"),
+        (true, "was deleted during the deploy"),
+    ] {
+        let ws = sent_and_unsent();
+        let unsent = ws.path().join("objects/rules/b.yaml");
+        let touched = unsent.clone();
+        let (sent, text) = hooked_push(
+            ws.path(),
+            Box::new(move || {
+                if deleted {
+                    std::fs::remove_file(&touched).unwrap();
+                } else {
+                    let mut file = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&touched)
+                        .unwrap();
+                    file.write_all(b"# edited\n").unwrap();
+                }
+            }),
+            Vec::new(),
+        );
+        assert_eq!(value(&sent, "_exit_code"), &Json::Int(0), "{text}");
+        let Json::Array(warnings) = value(&sent, "warnings") else {
+            panic!("{:?}", sent.result)
+        };
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| text_of(warning).contains(said)
+                    && text_of(warning).contains("b.yaml")),
+            "{warnings:?}"
+        );
+        if deleted {
+            assert!(!unsent.exists(), "the deleted file was made again");
+        } else {
+            let now = std::fs::read_to_string(&unsent).unwrap();
+            assert!(now.ends_with("# edited\n"), "{now}");
+        }
+    }
+}
+
+/// A rule that reached one tenant and failed on another was deployed: its
+/// file stays promoted, and `deploy --uuid` sends it again (#1653).
+#[test]
+fn a_promoted_rule_that_reached_one_tenant_of_two_stays_promoted() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Partial",
+                "00000000-0000-4000-8047-000000000922",
+                "A rule.",
+                block,
+            ),
+        )],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[[tenants]]\nname = \"backup\"\nstrategies = [\"PREVIEW\", \"RELEASE\"]\n\
+         [tenants.setup]\nurl = \"backup.invalid\"\ntoken = \"token\"\n",
+    );
+    std::fs::write(&config, text).unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let (sent, text) = hooked_push(
+        ws.path(),
+        Box::new(|| {}),
+        vec![
+            Ok(()),
+            Err(ConnectorError::refused(
+                "splunk",
+                "backup",
+                "POST https://x failed with HTTP 400 Bad Request: no",
+                None,
+            )),
+        ],
+    );
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+    let mut statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    statuses.sort();
+    assert_eq!(statuses, ["deployed", "failed"], "{text}");
+    let now = std::fs::read_to_string(ws.path().join("objects/rules/r.yaml")).unwrap();
+    assert!(now.contains("status: PRODUCTION"), "{now}");
 }

@@ -108,6 +108,7 @@ fn live(
             interrupted: &never,
             now: now(),
             registry,
+            debug: false,
         },
     );
     (result, proxy.verify())
@@ -376,6 +377,7 @@ fn scripted(ws: &Path, outcomes: Vec<Result<LiveCheck, ConnectorError>>) -> Live
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     )
 }
@@ -575,6 +577,7 @@ fn usage_errors_and_skips_answer_before_any_check() {
         interrupted: &never,
         now: now(),
         registry: &registry,
+        debug: false,
     };
     let env: &'static Env = Box::leak(Box::new(env));
     let plain: &'static Env = Box::leak(Box::new(Env::from_pairs::<&str, &str>([])));
@@ -719,6 +722,7 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     );
     assert_eq!(
@@ -826,6 +830,7 @@ fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
             interrupted: &never,
             now: now(),
             registry: &registry,
+            debug: false,
         },
     );
     assert_eq!(
