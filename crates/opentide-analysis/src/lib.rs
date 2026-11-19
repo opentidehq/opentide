@@ -806,7 +806,7 @@ pub fn completions(
     match language {
         LanguageId::TideYaml => {
             let (text, offset) = opentide_core::strip_bom_at(text, offset);
-            if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
+            if let Some((inj, inner, typed)) = opentide_tide::injection_typed_at(text, offset) {
                 if inj.language == LanguageId::Falco {
                     let ctx = opentide_tide::falco_context(text, &inj.field_path);
                     // Blanks typed after the scalar's end, which YAML drops:
@@ -828,7 +828,13 @@ pub fn completions(
                     }
                     return opentide_falco::completions(&query, at, &ctx);
                 }
-                return query_completions(inj.language, &inj.inner, inner, &inj.platform);
+                // What is typed after a decomposed line and not in the
+                // assembled text: blanks start a new word, a new line a new
+                // expression (#1685).
+                let mut query = inj.inner.clone();
+                query.insert_str(inner, &typed);
+                let at = inner + typed.len();
+                return query_completions(inj.language, &query, at, &inj.platform);
             }
             let workspace = workspace_index(host);
             opentide_tide::completions_tide(text, offset, &workspace)
