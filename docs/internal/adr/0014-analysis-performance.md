@@ -150,6 +150,15 @@ Lucene's short queries that, and the per-node vectors around it, was most of the
   reads either's text.
 - **Held by element visits.** A test counts the elements the walks visit in one analysis and
   holds it to the tree's element count: the two-walk path visits more.
+- **Keep the nodes, not the tokens.** A language whose checks read the nodes after the walk keeps
+  those, and reads each token as the walk meets it: kept, the tokens' cursors (most of the
+  elements) stay alive together, and malloc's slow path takes over (`_int_malloc` nearly doubled):
+  #1626, which kept them, cost 12% more peak memory and 18% more time on a 1.8 MB KQL query for
+  fewer instructions.
+- **KQL.** KQL's HIR, node checks, tables' scopes (rebuilt from the walk's depths), syntax error
+  and highlight read one walk. The column pass is not a walk: it follows each pipeline's operators
+  in order, carrying the schema and the `let` scope, and steps to the children it evaluates; the
+  error path's lookups find one token each.
 
 ### 5b. A fast hasher for maps keyed by user input (addendum, KQL)
 
@@ -169,8 +178,10 @@ keyword table and the catalog's name lookups each hash a name per use.
   reused (FxHash, foldhash's `FixedState`) lets a crafted rule make the analysis quadratic.
 - **Known exceptions.** rowan's token cache (`NodeCache`, which every parser's
   `GreenNodeBuilder` uses through opentide-parse) hashes token text with Fx; it is rowan's, not
-  ours, and is a follow-up. KQL's catalog name lookups (`lib.rs`) still use SipHash until #1609
-  lands; their keys are catalog names, not the query's.
+  ours. Measured (#1616): 70,000 names crafted to share their low 17 hash bits, in a 980 KB
+  query, parse in 2.05 s against 0.093 s for ordinary names (about 22×); a seeded `NodeCache`
+  brings it to 1.02×. #1616 tracks the fix. KQL's catalog name lookups (`lib.rs`) still use
+  SipHash until #1609 lands; their keys are catalog names, not the query's.
 
 ### 6. How to measure
 

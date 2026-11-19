@@ -78,7 +78,7 @@ snapshots! {
     op_print_and_datatable: "let d = datatable (a: string, b: int) [\"x\", 1, ];\nprint a = 1, 2 | union d";
     op_externaldata: "externaldata (c: string, d: dynamic,) [@\"https://e/x.csv\", \"b\"] with (format = \"csv\") | take 1";
     op_search_source: "search kind = case_sensitive \"x\" | search \"y\" | take 1";
-    op_search_in: "search in (A, B) where c == 1";
+    op_search_in: "search in (A, B) c == 1";
     op_find_in: "find in (T) where a == 1 | take 1";
     op_top_nested_sample: "T | top-nested 3 of x with others = \"o\" by count() desc, top-nested of y by sum(z) asc nulls last | sample-distinct 10 of a";
     op_fork_facet_partition: "T | fork a = (where x > 1 | take 5) (count) | facet by a, b with (where x > 1 | take 5) | facet by c with take 5 | partition hint.strategy = native by k (top 1 by t) | partition by k in dynamic([1]) { U | take 1 }";
@@ -441,4 +441,161 @@ fn parse_kv_takes_its_keys_and_options() {
     }
     assert!(!errors("T | parse-kv Text as (a long)").is_empty());
     assert!(!errors("T | parse-kv Text with (pair_delimiter)").is_empty());
+}
+
+// The operator forms Kusto.Language 12.4.1 accepts that were syntax errors.
+snapshots! {
+    serialize_assignment: "T | serialize rn = row_number(), x";
+    render_with_properties: "T | render timechart with (title=\"x\", ycolumns=a, b, ymin=-1)";
+    as_hint_materialized: "T | as hint.materialized=true T2 | take 1";
+    top_hitters_of_by: "T | top-hitters 5 of x by y";
+    reduce_kind_by_with: "T | reduce kind=source by x with threshold=0.1, characters=\"ab\"";
+    declare_query_parameters: "declare query_parameters(p:string = \"x\", n:int);\nlet y = 1;\nT | where c == p";
+}
+
+#[test]
+fn operator_forms_parse_and_their_broken_twins_do_not() {
+    for source in [
+        "T | serialize",
+        "T | as T2",
+        "T | render barchart",
+        "T | render barchart with ()",
+        "T | reduce by x",
+        "T | top-hitters 5 of x",
+        "T | reduce by x with",
+        "T | reduce by x with kind=source, characters=\"a\", threshold=0.2",
+        "T | render barchart with (ycolumns=a, b, title=\"x\", series=c, d)",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "T | top-hitters 5",
+        "T | top-hitters 5 of x by",
+        "T | reduce x",
+        "T | reduce by x with threshold=0.1,",
+        "T | render barchart with (title=\"x\",)",
+        "T | render barchart with title=\"x\"",
+        "T | as hint.materialized=true",
+        "declare query_parameters(p:string)\nT",
+        "declare query_parameters(p);\nT",
+        "declare query_parameters();\nT",
+        "T | reduce foo=1 by x",
+        "T | reduce Kind=source by x",
+        "T | reduce by x with foo=1",
+        "T | reduce by x with Threshold=0.1",
+        "T | render barchart with (a)",
+        "T | render barchart with (title=\"x\", a)",
+        "T | as hint.progressive_fetch=true T2",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}
+
+// Forms Kusto.Language 12.4.1 accepts that were syntax errors after #1646.
+snapshots! {
+    render_legacy_properties: "T | render barchart kind=stacked title=\"x\" accumulate=true with (ymin=0)";
+    option_signed_number: "T | reduce by x with threshold=-0.1, characters=\"a\"";
+    statement_without_semicolon: "declare query_parameters(p:string = \"x\");\nlet y = 1";
+}
+
+#[test]
+fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
+    for source in [
+        "T | render timechart kind=stacked",
+        "T | render barchart title=strcat(\"a\") | take 1",
+        "T | reduce by x with threshold=+0.1",
+        "T | join kind=-1 (U) on x",
+        "declare query_parameters(p:string = \"x\")",
+        "let x = 1",
+        "let x = 1;\nlet y = 2",
+        "T | render timechart kind=-1 accumulate=true title=a.b[0]",
+        "T | render timechart title=strcat(\"a\", \"b\") kind=1h",
+        "T | reduce by x with threshold=-1h",
+        "T | join kind=1h (U) on x",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "T | render barchart ytitle=\"y\"",
+        "T | render barchart Kind=stacked",
+        "T | render barchart kind=stacked, title=\"x\"",
+        "T | render barchart with (title=\"x\") kind=stacked",
+        "T | reduce by x with threshold=- 0.1",
+        "T | reduce by x with threshold=-x",
+        "declare query_parameters(p:string = \"x\")\nT",
+        "let x = 1\nT",
+        "let f = () { let y = 1 y };\nT",
+        "T | render timechart title=\"a\" + \"b\"",
+        "T | render timechart kind=1+2",
+        "T | render timechart kind=strcat(\"a\")",
+        "T | render timechart accumulate=f(1)",
+        "T | render timechart title=-1",
+        "T | render timechart title=a==b",
+        "T | render timechart title=a has \"b\"",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}
+
+// The search and find forms Kusto.Language 12.4.1 accepts that were errors.
+snapshots! {
+    search_star_colon: "search * : \"error\" and Column : \"x\"";
+    search_operator_kind_in: "T | search kind=case_sensitive in (U, V*) * has \"x\"";
+    find_project_columns: "find in (T1) where x == 1 project Column1, ['a b']:long";
+    find_project_smart: "find in (T1) where x == 1 project-smart | take 1";
+}
+
+#[test]
+fn search_and_find_forms_parse_and_their_broken_twins_do_not() {
+    for source in [
+        "search Column : \"error\"",
+        "T | search * has \"x\"",
+        "T | search Col : \"a\" and * : \"b\"",
+        "search a : \"x\" == true",
+        "search a == \"x\" : true",
+        "T | where a : \"x\"",
+        "find \"x\" project Col1",
+        "find in (T1) where x == 1 project Col1:dynamic",
+        "T | search in (T2) \"x\"",
+        "T | where a : \"x\" != \"y\"",
+        "T | where a <= \"y\" : \"x\"",
+        "T | where * == \"x\" : true",
+        "T | where a : \"x\" !in (\"y\")",
+        "T | where a : \"x\" has_all (\"y\")",
+        "T | where a : \"x\" !between (1 .. 2)",
+        "T | search withsource=src with_source=s bagexpansion=bag isfuzzy=true \"x\"",
+        "T | search kind=default \"x\"",
+        "find in (T) where a == 1",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "search a : b : c",
+        "search a :",
+        "search : \"x\"",
+        "search * :",
+        "search * != \"x\"",
+        "find in (T1) where x == 1 project",
+        "find in (T1) where x == 1 project Col1,",
+        "find in (T1) where x == 1 project pack_all()",
+        "find in (T1) where x == 1 project-away Col1",
+        "find in (T1) where x == 1 project - smart",
+        "find in (T1) where x == 1 project-smart, Col1",
+        "find in (T1) where x == 1 project Col1:(a:int)",
+        "search \"x\" project Col1",
+        "T | search foo=1 \"x\"",
+        "T | search kind=case_sensitive",
+        "T | where a : \"x\" has \"y\"",
+        "T | where a has \"y\" : \"x\"",
+        "T | where a : \"x\" =~ \"y\"",
+        "T | where a : \"x\" matches regex \"y\"",
+        "T | where * has \"x\" : true",
+        "T | where a in (\"y\") : \"x\"",
+        "T | search kind=simple \"x\"",
+        "T | search hint.x=1 \"x\"",
+        "T | search where a == 1",
+        "search in (T) where a == 1",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
 }

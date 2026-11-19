@@ -1,0 +1,21 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/034_row_my_field_1.esql
+---
+SOURCE_FILE@0..19
+  QUERY@0..18
+    ROW_COMMAND@0..18
+      ROW_KW@0..3 "ROW"
+      WHITESPACE@3..4 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@4..18
+        QUALIFIED_NAME@4..14
+          QUOTED_IDENTIFIER@4..14
+            QUOTED_IDENT@4..14 "`my field`"
+        WHITESPACE@14..15 " "
+        EQ@15..16 "="
+        WHITESPACE@16..17 " "
+        NUMBER@17..18
+          NUMBER_LIT@17..18 "1"
+  WHITESPACE@18..19 "\n"
+--- errors

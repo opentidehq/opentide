@@ -1,0 +1,1 @@
+FROM logs | ENRICH policy ON a WITH b

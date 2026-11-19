@@ -1,0 +1,1 @@
+FROM logs | USER_AGENT ua = agent

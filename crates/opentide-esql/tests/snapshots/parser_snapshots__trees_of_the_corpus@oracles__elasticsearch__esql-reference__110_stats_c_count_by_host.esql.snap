@@ -1,0 +1,42 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/110_stats_c_count_by_host.esql
+---
+SOURCE_FILE@0..39
+  QUERY@0..38
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    STATS_COMMAND@12..38
+      STATS_KW@12..17 "STATS"
+      WHITESPACE@17..18 " "
+      AGGREGATE_FIELD@18..30
+        QUALIFIED_NAME@18..19
+          IDENTIFIER@18..19
+            IDENT@18..19 "c"
+        WHITESPACE@19..20 " "
+        EQ@20..21 "="
+        WHITESPACE@21..22 " "
+        FUNCTION_CALL@22..30
+          IDENTIFIER@22..27
+            IDENT@22..27 "COUNT"
+          L_PAREN@27..28 "("
+          STAR@28..29
+            STAR_TOKEN@28..29 "*"
+          R_PAREN@29..30 ")"
+      WHITESPACE@30..31 " "
+      BY_KW@31..33 "BY"
+      WHITESPACE@33..34 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@34..38
+        QUALIFIED_NAME@34..38
+          IDENTIFIER@34..38
+            IDENT@34..38 "host"
+  WHITESPACE@38..39 "\n"
+--- errors

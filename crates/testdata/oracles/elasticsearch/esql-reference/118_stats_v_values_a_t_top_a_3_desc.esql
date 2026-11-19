@@ -1,0 +1,1 @@
+FROM logs | STATS v = VALUES(a), t = TOP(a, 3, "desc")

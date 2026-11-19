@@ -1,0 +1,43 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/099_eval_b_a_in_x_y.esql
+---
+SOURCE_FILE@0..37
+  QUERY@0..36
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..36
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..36
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        IN_EXPRESSION@21..36
+          QUALIFIED_NAME@21..22
+            IDENTIFIER@21..22
+              IDENT@21..22 "a"
+          WHITESPACE@22..23 " "
+          IN_KW@23..25 "IN"
+          WHITESPACE@25..26 " "
+          L_PAREN@26..27 "("
+          STRING@27..30
+            STRING_LIT@27..30 "\"x\""
+          COMMA@30..31 ","
+          WHITESPACE@31..32 " "
+          STRING@32..35
+            STRING_LIT@32..35 "\"y\""
+          R_PAREN@35..36 ")"
+  WHITESPACE@36..37 "\n"
+--- errors

@@ -1,0 +1,2 @@
+// prod:search_operator valid
+SecurityEvent | search kind=case_sensitive in (SecurityEvent) Account : "admin" and * has "4625"

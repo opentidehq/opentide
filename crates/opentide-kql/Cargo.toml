@@ -17,6 +17,8 @@ workspace = true
 opentide-core.workspace = true
 strsim.workspace = true
 foldhash.workspace = true
+# Already in the graph (indexmap): a schema's name index holds positions, not names (#1628).
+hashbrown = { version = "0.17", default-features = false }
 opentide-highlight.workspace = true
 opentide-parse.workspace = true
 logos.workspace = true

@@ -7,7 +7,7 @@ use super::{
     AggArg, Analysis, Column, Ctx, Definition, Item, Known, LITERAL_FUNCTIONS, MadeBy, Pipeline,
     Primary, Reference, Schema, Source, Stage, aggregate_columns_for, asim_schema, glob_matches,
     merge_union, mismatch_message, primary_type, reshaped, resolve_column, source_schema,
-    type_mismatch, unknown_column,
+    type_mismatch, unknown_column, unquote_name,
 };
 use crate::Catalog;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
@@ -15,7 +15,7 @@ use crate::syntax_util::{
     child as child_of, ident, legacy_kind, literal_kind, name, simple_call, simple_ident,
     simple_primary, span, text, token_span, tokens,
 };
-use foldhash::{HashMap, HashMapExt};
+use foldhash::{HashMap, HashMapExt, HashSet};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 use rowan::TextRange;
 use std::collections::BTreeSet;
@@ -55,6 +55,7 @@ fn run<'a>(
     for child in root.children() {
         match child.kind() {
             K::LET_STATEMENT => pass.let_statement(&child, &mut scope),
+            K::QUERY_PARAMETERS_STATEMENT => pass.query_parameters(&child, &mut scope),
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
                     pass.tabular(&body, &scope);
@@ -143,6 +144,44 @@ const BUDGET: u32 = 480;
 /// than the 35 levels the tree-sitter engine took.
 const PIPELINE: u32 = 12;
 
+/// The names an operator's earlier items defined, which its later items may
+/// read (`extend a = 1, b = a * 2`). One per operator: a slice copied for each
+/// item and scanned for each reference made an operator of n items O(n²)
+/// (#1628). A few names are scanned, as hashing costs more; past
+/// [`Defined::SCAN_ONLY`] they are also kept in a set.
+#[derive(Default)]
+struct Defined {
+    names: Vec<String>,
+    set: HashSet<String>,
+}
+
+impl Defined {
+    const SCAN_ONLY: usize = 8;
+
+    fn insert(&mut self, name: String) {
+        if self.names.len() == Self::SCAN_ONLY {
+            self.set.extend(self.names.iter().cloned());
+        }
+        if self.names.len() >= Self::SCAN_ONLY {
+            self.set.insert(name.clone());
+        }
+        self.names.push(name);
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        if self.names.len() > Self::SCAN_ONLY {
+            #[cfg(test)]
+            crate::schema::tests::count_name_compared();
+            return self.set.contains(name);
+        }
+        self.names.iter().any(|n| {
+            #[cfg(test)]
+            crate::schema::tests::count_name_compared();
+            n == name
+        })
+    }
+}
+
 /// Matches a quirk of the tree-sitter pass: it read the items of `project`,
 /// `extend` and either list of `summarize` by a field that also holds the
 /// commas between them, and took each comma for an item it cannot name, so
@@ -207,6 +246,25 @@ impl<'a> Pass<'a> {
 
     // --- bindings ---------------------------------------------------------
 
+    /// `declare query_parameters(p: string, t: (a: int))`: a scalar is a value
+    /// and a tabular parameter a table of unknown columns, as in a function.
+    fn query_parameters(&self, node: &SyntaxNode, scope: &mut Scope) {
+        for parameter in node.children().filter(|c| c.kind() == K::PARAMETER) {
+            let Some(name) = ident(&parameter).map(|t| Self::token_text(&t)) else {
+                continue;
+            };
+            let tabular = child_of(&parameter, K::TYPE)
+                .is_some_and(|t| self.text(&t).trim_start().starts_with('('));
+            if tabular {
+                let mut schema = Schema::open();
+                schema.source = Source::Let(name.clone());
+                scope.tabular.insert(name, schema);
+            } else {
+                scope.scalars.insert(name);
+            }
+        }
+    }
+
     fn let_statement(&mut self, node: &SyntaxNode, scope: &mut Scope) {
         let Some(name) = ident(node).map(|t| Self::token_text(&t)) else {
             return;
@@ -234,7 +292,7 @@ impl<'a> Pass<'a> {
                         return;
                     }
                 }
-                self.expression(&value, Ctx::One(&Schema::open()), scope, span(node), &[]);
+                self.expression(&value, Ctx::One(&Schema::open()), scope, span(node), None);
                 scope.scalars.insert(name);
             }
         }
@@ -290,7 +348,7 @@ impl<'a> Pass<'a> {
         {
             return Some(schema);
         }
-        self.expression(&body, Ctx::One(&Schema::open()), &scope, span(&body), &[]);
+        self.expression(&body, Ctx::One(&Schema::open()), &scope, span(&body), None);
         None
     }
 
@@ -353,8 +411,8 @@ impl<'a> Pass<'a> {
         };
         match inner.kind() {
             K::TABLE_REF => {
-                let word = ident(&inner)
-                    .map(|t| Self::token_text(&t))
+                let word = crate::syntax_util::table_token(&inner)
+                    .map(|t| unquote_name(t.text()).to_owned())
                     .unwrap_or_default();
                 self.named_source(&word, scope).unwrap_or_else(|| {
                     let mut schema = Schema::open();
@@ -394,7 +452,7 @@ impl<'a> Pass<'a> {
                 Some(arg.clone())
             };
             if let Some(value) = value {
-                self.expression(&value, Ctx::One(&Schema::open()), scope, call_span, &[]);
+                self.expression(&value, Ctx::One(&Schema::open()), scope, call_span, None);
             }
         }
         if name == "table" {
@@ -403,6 +461,8 @@ impl<'a> Pass<'a> {
                 && literal_kind(&arg) == Some(K::STRING)
             {
                 let text = self.text(&arg);
+                // An obfuscated name (`table(h"SigninLogs")`) names the table too.
+                let text = text.strip_prefix(['h', 'H']).unwrap_or(text);
                 let table = text.trim_matches(|c| c == '"' || c == '\'' || c == '@');
                 return self.named_source(table, scope).unwrap_or_else(Schema::open);
             }
@@ -450,7 +510,7 @@ impl<'a> Pass<'a> {
         let mut schema = Schema::closed(Vec::new(), Source::Print);
         let node_span = span(node);
         for (index, item) in node.children().enumerate() {
-            match self.column_item(&item, &Schema::open(), scope, node_span, &[]) {
+            match self.column_item(&item, &Schema::open(), scope, node_span, None) {
                 Item::Named(names, type_name) => {
                     for name in names {
                         schema.set(Column::new(name, type_name.clone()));
@@ -477,8 +537,8 @@ impl<'a> Pass<'a> {
                     }
                 }
                 K::TABLE_REF => {
-                    let word = ident(&child)
-                        .map(|t| Self::token_text(&t))
+                    let word = crate::syntax_util::table_token(&child)
+                        .map(|t| unquote_name(t.text()).to_owned())
                         .unwrap_or_default();
                     legs.push(self.named_source(&word, scope).unwrap_or_else(Schema::open));
                 }
@@ -488,6 +548,11 @@ impl<'a> Pass<'a> {
                     }
                 }
                 K::FUNCTION_CALL => legs.push(self.call_source(&child, scope)),
+                // The tables a pattern matches are the workspace's: their
+                // columns are not known here.
+                K::TABLE_PATTERN => legs.push(Schema::open()),
+                // Another database's table: its columns are not known here.
+                K::QUALIFIED_TABLE => legs.push(Schema::open()),
                 _ => {}
             }
         }
@@ -512,11 +577,11 @@ impl<'a> Pass<'a> {
         match op.kind() {
             K::WHERE_OPERATOR | K::FILTER_OPERATOR => {
                 if let Some(p) = op.first_child() {
-                    self.expression(&p, ctx, scope, op_span, &[]);
+                    self.expression(&p, ctx, scope, op_span, None);
                 }
                 input
             }
-            K::TAKE_OPERATOR | K::LIMIT_OPERATOR | K::RENDER_OPERATOR => input,
+            K::TAKE_OPERATOR | K::LIMIT_OPERATOR | K::RENDER_OPERATOR | K::AS_OPERATOR => input,
             K::COUNT_OPERATOR => {
                 let mut out = Schema::closed(
                     vec![Column {
@@ -532,7 +597,7 @@ impl<'a> Pass<'a> {
             }
             K::SORT_OPERATOR | K::TOP_OPERATOR => {
                 for key in op.children() {
-                    self.expression(&key, ctx, scope, op_span, &[]);
+                    self.expression(&key, ctx, scope, op_span, None);
                 }
                 input
             }
@@ -541,44 +606,54 @@ impl<'a> Pass<'a> {
                 let mut out = input.clone();
                 out.reshaped_by = Some(kind);
                 let (names, patterns) = self.column_refs(op);
+                let mut away = Vec::with_capacity(names.len());
                 for ident in names {
-                    let name = self.text(&ident).to_string();
+                    away.push(self.text(&ident).to_string());
                     self.reference(&ident, ctx, scope, op_span);
-                    out.remove(&name, kind);
                 }
+                out.remove_all(away, kind);
                 let dropped: Vec<String> = out
                     .columns
                     .iter()
                     .filter(|c| patterns.iter().any(|p| glob_matches(p, &c.name)))
                     .map(|c| c.name.clone())
                     .collect();
-                for name in dropped {
-                    out.remove(&name, kind);
-                }
+                out.remove_all(dropped, kind);
                 out
             }
             K::PROJECT_KEEP_OPERATOR | K::PROJECT_REORDER_OPERATOR => {
                 let keep = op.kind() == K::PROJECT_KEEP_OPERATOR;
                 let (names, patterns) = self.column_refs(op);
-                let mut kept = Vec::new();
+                let mut kept: Vec<&str> = Vec::with_capacity(names.len());
                 for ident in names {
                     self.reference(&ident, ctx, scope, op_span);
-                    kept.push(self.text(&ident).to_string());
+                    kept.push(self.text(&ident));
                 }
+                // Past a few names, a set: the list scanned per column made
+                // `project-keep` of k names over n columns O(k·n).
+                let kept_set: HashSet<&str> = if kept.len() > Defined::SCAN_ONLY {
+                    kept.iter().copied().collect()
+                } else {
+                    HashSet::default()
+                };
+                let is_kept = |name: &str| {
+                    if kept.len() > Defined::SCAN_ONLY {
+                        kept_set.contains(name)
+                    } else {
+                        kept.contains(&name)
+                    }
+                };
                 let mut out = input.clone();
                 if keep {
                     let dropped: Vec<String> = out
                         .columns
                         .iter()
                         .filter(|c| {
-                            !kept.contains(&c.name)
-                                && !patterns.iter().any(|p| glob_matches(p, &c.name))
+                            !is_kept(&c.name) && !patterns.iter().any(|p| glob_matches(p, &c.name))
                         })
                         .map(|c| c.name.clone())
                         .collect();
-                    for name in dropped {
-                        out.remove(&name, kind);
-                    }
+                    out.remove_all(dropped, kind);
                     out.narrowed = true;
                     out.reshaped_by = Some(kind);
                     if patterns.is_empty() {
@@ -591,6 +666,7 @@ impl<'a> Pass<'a> {
             K::PROJECT_RENAME_OPERATOR => {
                 let mut out = input.clone();
                 out.reshaped_by = Some(kind);
+                let mut renames = Vec::new();
                 for item in op.children().filter(|c| c.kind() == K::RENAME_ITEM) {
                     let names: Vec<SyntaxNode> = item
                         .children()
@@ -603,24 +679,24 @@ impl<'a> Pass<'a> {
                     let new_name = self.text(new).to_string();
                     self.reference(old, ctx, scope, op_span);
                     let type_name = input.column(&old_name).and_then(|c| c.type_name.clone());
-                    out.remove(&old_name, kind);
                     let column = Column {
                         made_by: Some(made_by),
                         renamed_from: Some(old_name),
                         ..Column::new(new_name, type_name)
                     };
                     self.define(span(new), &column);
-                    out.set(column);
+                    renames.push(column);
                 }
+                out.rename_all(renames, kind);
                 out
             }
-            K::EXTEND_OPERATOR => {
+            // `serialize rn = row_number()` adds columns as `extend` does.
+            K::EXTEND_OPERATOR | K::SERIALIZE_OPERATOR => {
                 let mut out = input.clone();
-                let mut defined: Vec<String> = Vec::new();
+                let mut defined = Defined::default();
                 comma_quirk(&mut out, op.children().count());
                 for item in op.children() {
-                    let extra: Vec<&str> = defined.iter().map(String::as_str).collect();
-                    match self.column_item(&item, &input, scope, op_span, &extra) {
+                    match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                         Item::Named(names, type_name) => {
                             for (name, node) in names.into_iter().zip(assigned_names(&item)) {
                                 let column = Column {
@@ -628,7 +704,7 @@ impl<'a> Pass<'a> {
                                     ..Column::new(name.clone(), type_name.clone())
                                 };
                                 self.define(span(&node), &column);
-                                defined.push(name);
+                                defined.insert(name);
                                 out.set(column);
                             }
                         }
@@ -672,7 +748,7 @@ impl<'a> Pass<'a> {
                 )
                 .first()
                 {
-                    self.expression(column, ctx, scope, op_span, &[]);
+                    self.expression(column, ctx, scope, op_span, None);
                 }
                 for part in op.children().filter(|c| c.kind() == K::PARSE_COLUMN) {
                     let Some(name) = ident(&part) else {
@@ -694,7 +770,7 @@ impl<'a> Pass<'a> {
                 let range = node_after(op, K::IN_KW);
                 for child in nodes_but(op, &[K::MV_OPTION]) {
                     if Some(&child) != range.as_ref() {
-                        self.expression(&child, ctx, scope, op_span, &[]);
+                        self.expression(&child, ctx, scope, op_span, None);
                     }
                 }
                 let mut out = input;
@@ -724,15 +800,12 @@ impl<'a> Pass<'a> {
                     .next()
                     .map(|k| k.text().to_ascii_lowercase())
                     .unwrap_or_default();
-                let bare = op.first_child().is_none();
-                match keyword.as_str() {
-                    "as" | "sample" => input,
-                    "serialize" if bare => input,
-                    _ => {
-                        let mut out = input;
-                        out.make_open();
-                        out
-                    }
+                if keyword == "sample" {
+                    input
+                } else {
+                    let mut out = input;
+                    out.make_open();
+                    out
                 }
             }
             _ => {
@@ -788,7 +861,7 @@ impl<'a> Pass<'a> {
             ..input.clone()
         };
         for item in items {
-            match self.column_item(&item, &input, scope, op_span, &[]) {
+            match self.column_item(&item, &input, scope, op_span, None) {
                 Item::Named(names, type_name) => {
                     for (name, node) in names.into_iter().zip(assigned_names(&item)) {
                         let column = Column {
@@ -823,11 +896,10 @@ impl<'a> Pass<'a> {
             removed: HashMap::new(),
             ..input.clone()
         };
-        let mut defined: Vec<String> = Vec::new();
+        let mut defined = Defined::default();
         comma_quirk(&mut out, op.children().count());
         for item in op.children() {
-            let extra: Vec<&str> = defined.iter().map(String::as_str).collect();
-            match self.column_item(&item, &input, scope, op_span, &extra) {
+            match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                 Item::Named(names, type_name) => {
                     let from = value_of(&item)
                         .filter(|_| is_assignment(&item))
@@ -841,7 +913,7 @@ impl<'a> Pass<'a> {
                             ..Column::new(name.clone(), type_name.clone())
                         };
                         self.define(span(&node), &column);
-                        defined.push(name);
+                        defined.insert(name);
                         out.set(column);
                     }
                 }
@@ -885,7 +957,7 @@ impl<'a> Pass<'a> {
         comma_quirk(&mut out, aggregates.len());
         let mut by_columns = Vec::new();
         for item in &by_items {
-            match self.column_item(item, &ctx_input, scope, op_span, &[]) {
+            match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, type_name) => {
                     for name in names {
                         by_columns.push(Column {
@@ -926,7 +998,7 @@ impl<'a> Pass<'a> {
         // quadratic in the items (#1424). The items read the input, not `out`.
         let mut made = by_columns;
         for item in &aggregates {
-            match self.column_item(item, &ctx_input, scope, op_span, &[]) {
+            match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
                     let Some(mut columns) = self.aggregate_columns(item, &ctx_input) else {
                         out.make_open();
@@ -1016,7 +1088,7 @@ impl<'a> Pass<'a> {
                 Ctx::Join(&left, &right),
                 scope,
                 made_by.span,
-                &[],
+                None,
             );
         }
         let mut out = match kind.as_str() {
@@ -1047,7 +1119,7 @@ impl<'a> Pass<'a> {
                 Ctx::Join(&left, &right),
                 scope,
                 made_by.span,
-                &[],
+                None,
             );
             if let Some(ident) = simple_ident(&condition) {
                 keys.insert(self.text(&ident).to_string());
@@ -1113,7 +1185,7 @@ impl<'a> Pass<'a> {
                     };
                     if is_assignment(&first) {
                         if let Some(value) = value_of(&first) {
-                            self.expression(&value, Ctx::One(&input), scope, op_span, &[]);
+                            self.expression(&value, Ctx::One(&input), scope, op_span, None);
                         }
                         for name in assigned_names(&first) {
                             let column = Column {
@@ -1124,15 +1196,12 @@ impl<'a> Pass<'a> {
                             out.set(column);
                         }
                     } else {
-                        self.expression(&first, Ctx::One(&input), scope, op_span, &[]);
+                        self.expression(&first, Ctx::One(&input), scope, op_span, None);
                         match simple_ident(&first) {
                             Some(ident) => {
                                 let name = self.text(&ident);
-                                if let Some(column) = Arc::make_mut(&mut out.columns)
-                                    .iter_mut()
-                                    .find(|c| c.name == name)
+                                if let Some(column) = Arc::make_mut(&mut out.columns).get_mut(name)
                                 {
-                                    let column = Arc::make_mut(column);
                                     column.type_name = Some(to_type.clone());
                                     column.made_by = Some(made_by);
                                 }
@@ -1145,7 +1214,7 @@ impl<'a> Pass<'a> {
             }
         }
         if let Some(limit) = node_after(op, K::LIMIT_KW) {
-            self.expression(&limit, Ctx::One(&input), scope, op_span, &[]);
+            self.expression(&limit, Ctx::One(&input), scope, op_span, None);
         }
         out
     }
@@ -1172,7 +1241,7 @@ impl<'a> Pass<'a> {
         input: &Schema,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) -> Item {
         if is_assignment(item) {
             let value = value_of(item);
@@ -1228,7 +1297,7 @@ impl<'a> Pass<'a> {
         ctx: Ctx,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) {
         self.deeper(1, |pass| pass.expression_at(node, ctx, scope, op, extra));
     }
@@ -1239,7 +1308,7 @@ impl<'a> Pass<'a> {
         ctx: Ctx,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) {
         match node.kind() {
             K::NAME_REF => {
@@ -1319,7 +1388,7 @@ impl<'a> Pass<'a> {
 
     fn reference(&mut self, ident: &SyntaxNode, ctx: Ctx, scope: &Scope, op: ByteSpan) {
         let name = self.text(ident).to_string();
-        self.reference_in(&name, span(ident), ctx, scope, op, &[]);
+        self.reference_in(&name, span(ident), ctx, scope, op, None);
     }
 
     /// A name read where a column is expected.
@@ -1330,9 +1399,9 @@ impl<'a> Pass<'a> {
         ctx: Ctx,
         scope: &Scope,
         op: ByteSpan,
-        extra: &[&str],
+        extra: Option<&Defined>,
     ) {
-        if name.starts_with('$') || scope.binds(name) || extra.contains(&name) {
+        if name.starts_with('$') || scope.binds(name) || extra.is_some_and(|e| e.contains(name)) {
             return;
         }
         if self.catalog.table(name).is_some() || self.catalog.asim_parser(name).is_some() {

@@ -1,0 +1,2 @@
+union workspace("w").SecurityEvent, database("db").SigninLogs
+| take 10

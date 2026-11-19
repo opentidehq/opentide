@@ -7,7 +7,7 @@
 //! words anywhere ([`global`]), and a name by where it stands: a call, a
 //! type, a member, a table, a variable.
 
-use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
+use crate::syntax::{SyntaxElement, SyntaxKind as K, SyntaxToken};
 use opentide_core::ByteSpan;
 use rowan::NodeOrToken;
 
@@ -41,13 +41,14 @@ const PARENT_RULES: &[(K, K, &str)] = &[
     (K::TOP_OPERATOR, K::TOP_KW, "keyword"),
     (K::MV_EXPAND_OPERATOR, K::MV_EXPAND_KW, "keyword"),
     (K::MV_EXPAND_OPERATOR, K::MVEXPAND_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::SEARCH_KW, "keyword"),
+    (K::SEARCH_OPERATOR, K::SEARCH_KW, "keyword"),
+    (K::FIND_PROJECT, K::PROJECT_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::FIND_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::INVOKE_KW, "keyword"),
     (K::EVALUATE_OPERATOR, K::EVALUATE_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::SERIALIZE_KW, "keyword"),
+    (K::SERIALIZE_OPERATOR, K::SERIALIZE_KW, "keyword"),
     (K::SCAN_OPERATOR, K::SCAN_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::AS_KW, "keyword"),
+    (K::AS_OPERATOR, K::AS_KW, "keyword"),
     (K::PARSE_KV_OPERATOR, K::AS_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::GETSCHEMA_KW, "keyword"),
     (K::MAKE_SERIES_OPERATOR, K::MAKE_SERIES_KW, "keyword"),
@@ -88,13 +89,14 @@ const PARENT_RULES: &[(K, K, &str)] = &[
     (K::FORK_OPERATOR, K::FORK_KW, "keyword"),
     (K::FACET_OPERATOR, K::FACET_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::CONSUME_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::REDUCE_KW, "keyword"),
+    (K::REDUCE_OPERATOR, K::REDUCE_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::MAKE_GRAPH_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::GRAPH_MATCH_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::GRAPH_SHORTEST_PATHS_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::GRAPH_TO_TABLE_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::GRAPH_MARK_COMPONENTS_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::TOP_HITTERS_KW, "keyword"),
+    (K::TOP_HITTERS_OPERATOR, K::TOP_HITTERS_KW, "keyword"),
+    (K::TOP_HITTERS_OPERATOR, K::OF_KW, "keyword"),
     (K::TOP_NESTED_CLAUSE, K::TOP_NESTED_KW, "keyword"),
     (K::MV_EXPAND_OPERATOR, K::LIMIT_KW, "keyword"),
     (K::MV_EXPAND_ITEM, K::TO_KW, "keyword"),
@@ -114,7 +116,21 @@ const PARENT_RULES: &[(K, K, &str)] = &[
     (K::DYNAMIC_LITERAL, K::DYNAMIC_KW, "type"),
     (K::TYPE, K::DYNAMIC_KW, "type"),
     (K::CONTROL_COMMAND, K::DOT, "error"),
+    (K::QUERY_PARAMETERS_STATEMENT, K::DECLARE_KW, "keyword"),
 ];
+
+/// Whether some rule of [`PARENT_RULES`] names a token kind: the many tokens
+/// no rule names (names, blanks, brackets) skip the scan of the table, which
+/// otherwise cost every token an entry's compare per rule (#1646).
+const HAS_PARENT_RULE: [bool; K::ERROR as usize] = {
+    let mut table = [false; K::ERROR as usize];
+    let mut i = 0;
+    while i < PARENT_RULES.len() {
+        table[PARENT_RULES[i].1 as usize] = true;
+        i += 1;
+    }
+    table
+};
 
 /// The capture of a token wherever it stands: operators, brackets, a few
 /// keywords.
@@ -151,12 +167,13 @@ fn global(kind: K) -> Option<&'static str> {
 /// The capture of `token` under `parent`, or none.
 ///
 /// A column pattern (`User*`) is several tokens here and one in the old
-/// grammar; [`highlight_spans`] colours it as one span and never asks.
+/// grammar; [`highlight_span`] colours it as one span and never asks.
 pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
     let kind = token.kind();
-    if let Some((_, _, capture)) = PARENT_RULES
-        .iter()
-        .find(|(p, k, _)| *p == parent && *k == kind)
+    if HAS_PARENT_RULE.get(kind as usize).copied().unwrap_or(false)
+        && let Some((_, _, capture)) = PARENT_RULES
+            .iter()
+            .find(|(p, k, _)| *p == parent && *k == kind)
     {
         return Some(capture);
     }
@@ -199,44 +216,53 @@ pub(crate) fn capture(token: &SyntaxToken, parent: K) -> Option<&'static str> {
 /// The `(span, capture)` of every coloured token of the tree, in order. The
 /// captures are the spec's names, borrowed: a copy per token was a few
 /// percent of a query's analysis.
-pub(crate) fn highlight_spans(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
+#[cfg(test)]
+pub(crate) fn highlight_spans(root: &crate::syntax::SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
     let mut out = Vec::new();
     for element in root.descendants_with_tokens() {
-        match element {
-            NodeOrToken::Node(node) if node.kind() == K::COLUMN_PATTERN => {
-                let range = node.text_range();
-                out.push((
-                    ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                    "variable",
-                ));
-            }
-            NodeOrToken::Token(token) => {
-                let Some(parent) = token.parent() else {
-                    continue;
-                };
-                if parent.kind() == K::COLUMN_PATTERN {
-                    continue;
-                }
-                if let Some(capture) = capture(&token, parent.kind()) {
-                    let range = token.text_range();
-                    if !range.is_empty() {
-                        out.push((
-                            ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
-                            capture,
-                        ));
-                    }
-                }
-            }
-            NodeOrToken::Node(_) => {}
-        }
+        highlight_span(&element, &mut out);
     }
     out
+}
+
+/// `highlight_spans` one element at a time, in preorder, as
+/// `opentide_parse::walk_once` gives them (ADR 0014 §5a: the analysis walks
+/// its tree once, and the highlight reads that walk as it goes).
+pub(crate) fn highlight_span(element: &SyntaxElement, out: &mut Vec<(ByteSpan, &'static str)>) {
+    match element {
+        NodeOrToken::Node(node) if matches!(node.kind(), K::COLUMN_PATTERN | K::TABLE_PATTERN) => {
+            let range = node.text_range();
+            out.push((
+                ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
+                "variable",
+            ));
+        }
+        NodeOrToken::Token(token) => {
+            let Some(parent) = token.parent() else {
+                return;
+            };
+            if matches!(parent.kind(), K::COLUMN_PATTERN | K::TABLE_PATTERN) {
+                return;
+            }
+            if let Some(capture) = capture(token, parent.kind()) {
+                let range = token.text_range();
+                if !range.is_empty() {
+                    out.push((
+                        ByteSpan::new(usize::from(range.start()), usize::from(range.end())),
+                        capture,
+                    ));
+                }
+            }
+        }
+        NodeOrToken::Node(_) => {}
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::parse;
+    use crate::syntax::SyntaxNode;
 
     fn captures(source: &str) -> Vec<(&str, &'static str)> {
         let root = SyntaxNode::new_root(parse(source).green);

@@ -21,9 +21,13 @@
 // - Comments and whitespace are trivia tokens, in no rule.
 // - Broken input is an `Error` node in place, in no rule.
 
-SourceFile = LetStatement* (Query | ControlCommand)?
+SourceFile = (LetStatement | QueryParametersStatement)* (Query | ControlCommand)?
 
-LetStatement = 'let' name:'ident' '=' value:LetValue ';'
+LetStatement = 'let' name:'ident' '=' value:LetValue ';'?
+
+// `declare query_parameters(p: string = "x");`
+QueryParametersStatement =
+  'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?
 
 LetValue = Expr | TabularExpression | FunctionDefinition
 
@@ -53,6 +57,7 @@ TabularSource = TabularPrimary
 
 TabularPrimary =
   TableRef
+| QualifiedTable
 | ParenTabular
 | PrintOperator
 | UnionOperator
@@ -63,13 +68,21 @@ TabularPrimary =
 | MaterializeExpression
 | SearchSource
 
-TableRef = table:'ident'
+TableRef = '['? table:('ident' | 'quoted_ident' | 'string') ']'?
+// A table in another scope: `cluster("c").database("d").T`, `workspace("w").['T']`.
+QualifiedTable = FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)
+// A union leg's or a search's tables by pattern: `Sec*`, `*Events`, `*`.
+TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*
 ParenTabular = '(' TabularExpression ')'
 
 // `search "x"`, `search in (A, B) Account == "a"`, `find in (T) where x`.
 SearchSource =
   name:('search' | 'find') OperatorOption*
-  ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr
+  FindProject?
+// `find … project a, b:long` or `find … project-smart`.
+FindProject = 'project' (FindColumn (',' FindColumn)* | '-' smart:'ident')
+FindColumn = name:('ident' | 'quoted_ident') (':' Type)?
 
 MaterializeExpression = 'materialize' '(' body:TabularExpression ')'
 
@@ -87,7 +100,7 @@ ExternaldataExpression =
 
 // `kind=inner`, `isfuzzy=true`, `hint.strategy=shuffle`.
 OperatorOption = name:('ident' | 'hint_name') '=' value:OptionValue
-OptionValue = value:('ident' | 'boolean' | 'number' | 'string')
+OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')
 // mv-expand and mv-apply options are a fixed set of names.
 MvOption = name:('kind' | 'bagexpansion' | 'with_itemindex' | 'hint_name') '=' value:OptionValue
 // summarize, make-series and evaluate take `hint.*` options only.
@@ -127,6 +140,11 @@ TabularOperator =
 | FacetOperator
 | PartitionOperator
 | ScanOperator
+| SerializeOperator
+| AsOperator
+| TopHittersOperator
+| ReduceOperator
+| SearchOperator
 | KeywordOperator
 | UnknownOperator
 
@@ -171,7 +189,7 @@ LookupOperator =
 
 // `union T1, (T2 | where x), f("a")`.
 UnionOperator = 'union' OperatorOption* UnionLeg (',' UnionLeg)*
-UnionLeg = TableRef | FunctionCall | ParenTabular
+UnionLeg = TableRef | TablePattern | QualifiedTable | FunctionCall | ParenTabular
 
 // `parse col with "a" x:long * "b"`.
 ParseOperator =
@@ -217,7 +235,10 @@ SeriesDefault = 'default' '=' Expr
 
 EvaluateOperator = 'evaluate' HintOption* plugin:FunctionCall
 DistinctOperator = 'distinct' HintOption* (StarArg | ColumnItem (',' ColumnItem)*)?
-RenderOperator = 'render' kind:'ident'
+// `render timechart with (title = "x", ycolumns = a, b)`.
+RenderOperator = 'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?
+RenderWith = 'with' '(' (RenderProperty (',' RenderProperty)*)? ')'
+RenderProperty = NamedArgument | NameRef
 PrintOperator = 'print' ColumnItem (',' ColumnItem)*
 
 // `range x from 1 to 10 step 1`.
@@ -261,13 +282,28 @@ ScanStep =
   'step' name:'ident' 'optional'? ('output' '=' output:('all' | 'last' | 'none'))?
   ':' predicate:Expr ('=>' Assignment (',' Assignment)*)? ';'
 
-// `invoke`, `serialize`, `as`, `getschema`, `sample`, `consume`, `reduce`,
-// `make-graph`, ...: an operator that takes at most one argument.
+SerializeOperator = 'serialize' (ColumnItem (',' ColumnItem)*)?
+// `as hint.materialized=true T2`.
+AsOperator = 'as' HintOption* name:'ident'
+// `top-hitters 5 of x by y`.
+TopHittersOperator = keyword:'top-hitters' count:Expr 'of' value:Expr TopHittersBy?
+TopHittersBy = 'by' sum:Expr
+// `reduce kind=source by x with threshold=0.1, characters="ab"`.
+ReduceOperator =
+  'reduce' OperatorOption* 'by' value:Expr
+  ('with' (OperatorOption (',' OperatorOption)*)?)?
+
+// `T | search kind=case_sensitive in (U) "x"`.
+SearchOperator =
+  'search' OperatorOption*
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr
+
+// `invoke`, `getschema`, `sample`, `consume`, `make-graph`, ...: an operator
+// that takes at most one argument.
 KeywordOperator =
-  name:('search' | 'find' | 'invoke' | 'serialize' | 'as' | 'getschema' | 'sample'
-      | 'externaldata' | 'consume' | 'reduce' | 'make-graph' | 'graph-match'
-      | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components'
-      | 'top-hitters')
+  name:('find' | 'invoke' | 'getschema' | 'sample'
+      | 'externaldata' | 'consume' | 'make-graph' | 'graph-match'
+      | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components')
   args:Expr?
 
 // A name the engine does not know as an operator: the catalog decides.
@@ -293,12 +329,14 @@ Expr =
 | NameRef
 | Literal
 | DynamicLiteral
+// `* has "x"`: every column, on the left of a comparison or a set test.
+| StarExpr
 
 OrExpr = Expr ('or' Expr)*
 AndExpr = Expr ('and' Expr)*
 NotExpr = 'not' operand:Expr
 // `a == b`, `a has "x"`, `a matches regex "x"`, `a !~ b`.
-ComparisonExpr = lhs:Expr (op:'cmp_op' | 'matches' 'regex') rhs:Expr
+ComparisonExpr = lhs:Expr (op:('cmp_op' | ':') | 'matches' 'regex') rhs:Expr
 // `a in (1, 2)`, `a !in~ (T | project x)`, `a has_any (...)`.
 InExpr = lhs:Expr op:('in' | 'set_op') set:ExpressionList
 BetweenExpr = lhs:Expr op:'between_op' range:Range
@@ -319,6 +357,7 @@ Argument = NamedArgument | StarArg | Expr
 // `_Im_NetworkSession(starttime = ago(1d))`.
 NamedArgument = name:'ident' '=' value:Expr
 StarArg = '*'
+StarExpr = '*'
 
 ToscalarExpr = 'toscalar' '(' body:TabularExpression ')'
 ParenExpr = '(' Expr ')'

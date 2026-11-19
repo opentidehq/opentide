@@ -96,6 +96,14 @@ pub(crate) fn ident(node: &SyntaxNode) -> Option<SyntaxToken> {
     tokens(node).find(|t| t.kind() == K::IDENT)
 }
 
+/// The token that names a `TABLE_REF`: its identifier, or its quoted name
+/// (`['My Table']`, as one token or, after a scope's dot, the string between
+/// `[` and `]`). Its name is [`crate::schema::unquote_name`] of its text,
+/// which leaves an identifier as it is.
+pub(crate) fn table_token(table_ref: &SyntaxNode) -> Option<SyntaxToken> {
+    tokens(table_ref).find(|t| matches!(t.kind(), K::IDENT | K::QUOTED_IDENT | K::STRING))
+}
+
 /// The first child node of `kind`.
 pub(crate) fn child(node: &SyntaxNode, kind: K) -> Option<SyntaxNode> {
     node.children().find(|c| c.kind() == kind)
@@ -190,6 +198,11 @@ pub(crate) fn legacy_kind(kind: K) -> &'static str {
         K::FACET_OPERATOR => "facet_operator",
         K::PARTITION_OPERATOR => "partition_operator",
         K::SCAN_OPERATOR => "scan_operator",
+        K::SERIALIZE_OPERATOR => "serialize_operator",
+        K::AS_OPERATOR => "as_operator",
+        K::TOP_HITTERS_OPERATOR => "top_hitters_operator",
+        K::REDUCE_OPERATOR => "reduce_operator",
+        K::SEARCH_OPERATOR => "search_operator",
         K::KEYWORD_OPERATOR => "keyword_operator",
         K::PRINT_OPERATOR => "print_operator",
         K::UNKNOWN_OPERATOR => "unknown_operator",

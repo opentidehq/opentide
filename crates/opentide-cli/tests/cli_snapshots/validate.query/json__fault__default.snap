@@ -10,25 +10,6 @@ exit: 1
   "command": "validate query",
   "diagnostics": [
     {
-      "code": "kql_parse_error",
-      "column": 33,
-      "end_column": 34,
-      "end_line": 45,
-      "explain": "opentide explain kql_parse_error",
-      "field_path": [
-        "configurations",
-        "sentinel",
-        "query"
-      ],
-      "fix": null,
-      "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
-      "line": 45,
-      "message": "KQL syntax error: expected a name",
-      "object_uuid": null,
-      "path": "objects/rules/covert-exfiltration-rule-0157.yaml",
-      "severity": "error"
-    },
-    {
       "code": "falco_output_syntax",
       "column": 30,
       "end_column": 31,
@@ -83,25 +64,6 @@ exit: 1
       "message": "Kibana ends an unquoted value at `not ` and rejects the query; quote the value",
       "object_uuid": null,
       "path": "objects/rules/covert-pivot-rule-0073.yaml",
-      "severity": "error"
-    },
-    {
-      "code": "kql_parse_error",
-      "column": 13,
-      "end_column": 14,
-      "end_line": 49,
-      "explain": "opentide explain kql_parse_error",
-      "field_path": [
-        "configurations",
-        "sentinel",
-        "query"
-      ],
-      "fix": null,
-      "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
-      "line": 49,
-      "message": "KQL syntax error: expected a name",
-      "object_uuid": null,
-      "path": "objects/rules/covert-tunnel-rule-0170.yaml",
       "severity": "error"
     },
     {
@@ -523,25 +485,6 @@ exit: 1
       "severity": "error"
     },
     {
-      "code": "kql_parse_error",
-      "column": 13,
-      "end_column": 14,
-      "end_line": 75,
-      "explain": "opentide explain kql_parse_error",
-      "field_path": [
-        "configurations",
-        "sentinel",
-        "query"
-      ],
-      "fix": null,
-      "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
-      "line": 75,
-      "message": "KQL syntax error: expected a name",
-      "object_uuid": null,
-      "path": "objects/rules/remote-dropper-rule-0140.yaml",
-      "severity": "error"
-    },
-    {
       "code": "eql_not_boolean",
       "column": 21,
       "end_column": 22,
@@ -920,7 +863,7 @@ exit: 1
   "mode": "offline",
   "next_actions": [
     {
-      "command": "opentide --json explain kql_parse_error",
+      "command": "opentide --json explain falco_output_syntax",
       "reason": "how to fix it"
     },
     {
@@ -1364,7 +1307,7 @@ exit: 1
     },
     {
       "column": 7,
-      "errors": 1,
+      "errors": 0,
       "field_path": [
         "configurations",
         "sentinel",
@@ -2295,7 +2238,7 @@ exit: 1
     },
     {
       "column": 7,
-      "errors": 1,
+      "errors": 0,
       "field_path": [
         "configurations",
         "sentinel",
@@ -10397,7 +10340,7 @@ exit: 1
     },
     {
       "column": 7,
-      "errors": 1,
+      "errors": 0,
       "field_path": [
         "configurations",
         "sentinel",
@@ -16383,8 +16326,8 @@ exit: 1
   "schema_version": 1,
   "status": "failed",
   "summary": {
-    "error_files": 47,
-    "errors": 47,
+    "error_files": 44,
+    "errors": 44,
     "files": 659,
     "notes": 0,
     "queries": 1162,

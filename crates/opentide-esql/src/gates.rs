@@ -267,8 +267,31 @@ pub(crate) const GATED: &[K] = &[
     K::JOIN_COMMAND,
     K::MAP_EXPRESSION,
     K::COMPLETION_COMMAND,
+    K::RERANK_COMMAND,
     K::METADATA,
 ];
+
+/// The `"timeout"` entry of a command's `WITH {…}` options, which
+/// COMPLETION and RERANK take from 9.5: 9.4 refuses it ("Invalid option
+/// [timeout] in COMPLETION, expected one of [[inference_id,
+/// task_settings]]", and in RERANK "[[inference_id]]"). A key of a nested
+/// map is not an option. A text check first: walking the map's entries
+/// allocates a handle per node, on every command with options.
+fn timeout_option(node: &SyntaxNode, source: &str) -> Option<SyntaxNode> {
+    if !text_of(node, source).contains("timeout") {
+        return None;
+    }
+    node.children()
+        .filter(|c| c.kind() == K::NAMED_PARAMETERS)
+        .flat_map(|n| n.children())
+        .filter(|m| m.kind() == K::MAP_EXPRESSION)
+        .flat_map(|m| m.children())
+        .filter(|e| e.kind() == K::MAP_ENTRY)
+        .find(|e| {
+            e.first_child()
+                .is_some_and(|k| text_of(&k, source).trim_matches('"') == "timeout")
+        })
+}
 
 /// Version gates for one node (not names: those come from the catalog).
 pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
@@ -281,6 +304,21 @@ pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
 
 /// The gates of one node, of any kind.
 fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
+    // RERANK has only its option gate: answered before the parts below are
+    // collected, which allocates on every gated node. 9.2 to 9.4: "Invalid
+    // option [timeout] in RERANK, expected one of [[inference_id]]".
+    if node.kind() == K::RERANK_COMMAND {
+        return timeout_option(node, source)
+            .map(|entry| {
+                Gate::new(
+                    "the `RERANK` option `timeout`",
+                    Availability::since_9(5),
+                    span_of(&entry),
+                )
+            })
+            .into_iter()
+            .collect();
+    }
     let mut out = Vec::new();
     let span = span_of(node);
     let parts = parts(node);
@@ -412,6 +450,25 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
             ));
         }
         K::JOIN_COMMAND => {
+            // `LOOKUP JOIN index AS qualifier`: the grammar the catalog is
+            // generated from (elastic/elasticsearch@2c85bbdf) parses it, but
+            // 9.5.6, the newest release, rejects it ("no viable alternative
+            // at input"): 9.6 at the earliest, as DEDUP and HIGHLIGHT.
+            // Only a qualifier `ON` follows: in `LOOKUP JOIN ON source.ip`
+            // recovery reads `ON` as the index and `source.ip` as a qualifier,
+            // and the parse error says all there is to say.
+            let on = first_token(&parts, &[K::ON_KW]);
+            let qualifier = parts.iter().enumerate().find_map(|(i, p)| {
+                p.as_node()
+                    .filter(|n| n.kind() == K::JOIN_QUALIFIER && on.is_some_and(|on| on > i))
+            });
+            if let Some(qualifier) = qualifier {
+                out.push(Gate::new(
+                    "a `LOOKUP JOIN … AS` qualifier",
+                    Availability::since_9(6),
+                    span_of(qualifier),
+                ));
+            }
             // The conditions follow `ON`; the parser reads the index before it
             // (`processing.rs`, `join`).
             let conditions: Vec<&SyntaxNode> = first_token(&parts, &[K::ON_KW])
@@ -476,6 +533,13 @@ fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
                     Availability::since_9(2),
                     span,
                 ));
+                if let Some(entry) = timeout_option(node, source) {
+                    out.push(Gate::new(
+                        "the `COMPLETION` option `timeout`",
+                        Availability::since_9(5),
+                        span_of(&entry),
+                    ));
+                }
             }
         }
         K::METADATA if first_token(&parts, &[K::L_BRACK]).is_some() => {
@@ -687,7 +751,71 @@ mod tests {
             gates("ROW a = \"x\" | WHERE a LIKE b"),
             one("a LIKE pattern that is not a string literal", "b", None)
         );
+        // 9.4.9: "Invalid option [timeout] in COMPLETION, expected one of
+        // [[inference_id, task_settings]]"; 9.5 takes it.
+        let completion =
+            "FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\", \"timeout\": \"10s\"}";
+        assert!(
+            gates(completion).iter().any(
+                |g| g.0 == "the `COMPLETION` option `timeout`" && g.1 == "\"timeout\": \"10s\""
+            ),
+            "{:?}",
+            gates(completion)
+        );
+        let rerank =
+            "FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\", \"timeout\": \"10s\"}";
+        assert_eq!(
+            gates(rerank),
+            one(
+                "the `RERANK` option `timeout`",
+                "\"timeout\": \"10s\"",
+                None
+            )
+        );
+        assert_eq!(
+            gates("FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\"}"),
+            []
+        );
+        // `timeout` in the prompt, or in a nested map, is not the option.
+        for q in [
+            "FROM a | COMPLETION c = \"timeout\" WITH {\"inference_id\": \"e\"}",
+            "FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\", \"task_settings\": {\"timeout\": 1}}",
+        ] {
+            assert!(
+                !gates(q)
+                    .iter()
+                    .any(|g| g.0 == "the `COMPLETION` option `timeout`"),
+                "{q}"
+            );
+        }
+        assert!(
+            !gates("FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\"}")
+                .iter()
+                .any(|g| g.0 == "the `COMPLETION` option `timeout`")
+        );
         assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
+        // `AS` is optional before the qualifier, and a join inside FORK is
+        // its own command.
+        assert_eq!(
+            gates("FROM a | LOOKUP JOIN t q ON x"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
+        assert_eq!(
+            gates("FROM a | FORK (LOOKUP JOIN t AS q ON x) (WHERE y)"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
+        assert!(
+            !gates("FROM a | LOOKUP JOIN ON source.ip")
+                .iter()
+                .any(|g| g.0 == "a `LOOKUP JOIN … AS` qualifier"),
+            "a broken join gets its parse error only"
+        );
+        // Rejected by 9.5.6 ("no viable alternative at input"), as the
+        // Elastic parser reported for the syntax-gap hunt.
+        assert_eq!(
+            gates("FROM a | LOOKUP JOIN t AS q ON x"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
         let join = "a `LOOKUP JOIN` condition with several fields or an expression";
         let q = "FROM a | LOOKUP JOIN t ON x, y";
         assert_eq!(gates(q), one(join, &q[9..], None));
@@ -720,6 +848,7 @@ mod tests {
             "ROW a = 1 | LIMIT 1 BY a | CHANGE_POINT a BY b",
             "ROW a = \"x\" | GROK a \"%{WORD:b}\", \"%{WORD:c}\"",
             "FROM a | LOOKUP JOIN t ON x, y | COMPLETION p WITH ep | FUSE linear WITH {}",
+            "FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\", \"timeout\": \"1s\"}",
         ] {
             for node in crate::syntax_tree(query).descendants() {
                 if !gates_of(&node, query).is_empty() {

@@ -22,7 +22,7 @@ SOURCE_FILE@0..54
       WHITESPACE@32..33 " "
       PIPE@33..34 "|"
       WHITESPACE@34..35 " "
-      KEYWORD_OPERATOR@35..45
+      SEARCH_OPERATOR@35..45
         SEARCH_KW@35..41 "search"
         WHITESPACE@41..42 " "
         LITERAL@42..45

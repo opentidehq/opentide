@@ -1,0 +1,31 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/082_eval_new_col_a.esql
+---
+SOURCE_FILE@0..31
+  QUERY@0..30
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..30
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..30
+        QUALIFIED_NAME@17..26
+          QUOTED_IDENTIFIER@17..26
+            QUOTED_IDENT@17..26 "`new col`"
+        WHITESPACE@26..27 " "
+        EQ@27..28 "="
+        WHITESPACE@28..29 " "
+        QUALIFIED_NAME@29..30
+          IDENTIFIER@29..30
+            IDENT@29..30 "a"
+  WHITESPACE@30..31 "\n"
+--- errors

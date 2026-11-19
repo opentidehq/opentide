@@ -4,7 +4,7 @@
 //! tables, the column pass, the performance checks), the HIR and the
 //! highlight tokens, from one parse and one line index.
 
-use crate::highlight::highlight_spans;
+use crate::highlight::highlight_span;
 use crate::parser::parse_once;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use crate::syntax_util::{is_operator, legacy_kind, span, text, token_at};
@@ -13,7 +13,7 @@ use crate::{
     overlay_catalog_captures, perf, schema,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes, suggest};
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_in};
 use opentide_parse::SyntaxError;
 use rowan::NodeOrToken;
 use std::collections::BTreeSet;
@@ -36,30 +36,65 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let parsed = parse_once(source);
     let root = SyntaxNode::new_root(parsed.green);
     let lines = LineIndex::new(source);
+    // One walk of the tree (ADR 0014 §5a): the HIR, the node checks below,
+    // the syntax error's position and the highlight read it, in preorder,
+    // where each walked the tree again and rowan allocated a cursor for every
+    // node of every walk. The tokens, most of the elements, are read as the
+    // walk meets them and not kept, so their cursors are freed as they were;
+    // only the nodes are kept, until the passes that read them are done. The
+    // column pass (which follows each pipeline's structure with its scope,
+    // not the tree's order) and the error path's lookups still step through
+    // the tree themselves.
+    let mut nodes: Vec<SyntaxNode> = Vec::new();
+    let mut spans = Vec::new();
+    let at = parsed.errors.first().map(|error| error.gap.end());
+    let mut error_tokens = ErrorTokens::default();
+    // Each node's depth, beside it: the tables' scopes are rebuilt from it.
+    let mut depths: Vec<usize> = Vec::new();
+    opentide_parse::walk_once(&root, |element, depth| {
+        #[cfg(test)]
+        tests::VISITS.set(tests::VISITS.get() + 1);
+        highlight_span(&element, &mut spans);
+        match element {
+            NodeOrToken::Node(node) => {
+                nodes.push(node);
+                depths.push(depth);
+            }
+            NodeOrToken::Token(token) => {
+                if let Some(at) = at {
+                    error_tokens.see(&token, at);
+                }
+            }
+        }
+    });
     let mut diagnostics = Vec::new();
     if let Some(error) = parsed.errors.first() {
-        diagnostics.push(syntax_error(&lines, &root, error));
+        diagnostics.push(syntax_error(&lines, &error_tokens, error));
     }
-    let hir = lower(&root, source);
-    control_commands(&root, &lines, &mut diagnostics);
-    operators(&root, &lines, catalog, &mut diagnostics);
-    let lets = let_names(&root);
-    functions(&root, &lines, catalog, &lets, &mut diagnostics);
-    scalar_operators(&root, &lines, catalog, &mut diagnostics);
-    let _ = tables(&root, &lines, catalog, &lets, &mut diagnostics);
+    let hir = lower_nodes(&nodes, source);
+    control_commands(&nodes, &lines, &mut diagnostics);
+    operators(&nodes, &lines, catalog, &mut diagnostics);
+    let lets = let_names(&nodes);
+    functions(&nodes, &lines, catalog, &lets, &mut diagnostics);
+    scalar_operators(&nodes, &lines, catalog, &mut diagnostics);
+    let _ = tables(&nodes, &depths, &lines, catalog, &lets, &mut diagnostics);
+    // What the later passes need of the nodes, taken now, so that the nodes
+    // are freed before the column pass.
+    let pipes = pipelines(&nodes, parsed.errors.is_empty());
+    let whole = if parsed.errors.is_empty() {
+        Vec::new()
+    } else {
+        whole_unknown_operators(&nodes, &lines)
+    };
+    drop(nodes);
+    drop(depths);
     let columns =
         schema::new_tree::analyze(&root, source, &lines, catalog, parsed.errors.is_empty());
     diagnostics.extend(columns.diagnostics.iter().cloned());
-    perf::check(
-        &pipelines(&root, parsed.errors.is_empty()),
-        &lines,
-        &columns,
-        &mut diagnostics,
-    );
+    perf::check(&pipes, &lines, &columns, &mut diagnostics);
     if let Some(error) = parsed.errors.first() {
         with_typed_literal_hint(&mut diagnostics);
         let boundary = lines.position(usize::from(quiet_from(&root, error)));
-        let whole = whole_unknown_operators(&root, &lines);
         quiet_after_the_error(&mut diagnostics, boundary, &whole);
     }
     // The scope checks scan tokens, not the tree: the old engine gave them on
@@ -67,9 +102,8 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     // reject, are the shapes they exist for.
     perf::check_scope(source, &lines, &mut diagnostics);
     let spec = HighlightSpec::shared().expect("highlight spec");
-    let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
-    let tokens = tokens_from_spans(spec, source, &spans).unwrap_or_default();
+    let tokens = tokens_in(spec, &lines, &spans).unwrap_or_default();
     Analysis {
         diagnostics,
         hir,
@@ -105,8 +139,9 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
 /// them and every bracket closed (`summarzie count()`, not `summarzie
 /// count(`). The syntax error that follows one is what its mistyped name
 /// caused, so its "did you mean" stays ([`quiet_after_the_error`]).
-fn whole_unknown_operators(root: &SyntaxNode, lines: &LineIndex) -> Vec<Range> {
-    root.descendants()
+fn whole_unknown_operators(nodes: &[SyntaxNode], lines: &LineIndex) -> Vec<Range> {
+    nodes
+        .iter()
         .filter(|n| n.kind() == K::UNKNOWN_OPERATOR)
         .filter(|n| {
             let mut depth = 0_i64;
@@ -247,11 +282,12 @@ fn same_catalog(a: &CatalogRef, b: &CatalogRef) -> bool {
 /// performance checks read them; none in a query that does not parse
 /// (`clean`), whose operators recovery may have made of fragments: broken
 /// input gets no performance hint (the text-based scope checks still run).
-fn pipelines(root: &SyntaxNode, clean: bool) -> Vec<perf::Pipeline> {
-    root.descendants()
+fn pipelines(nodes: &[SyntaxNode], clean: bool) -> Vec<perf::Pipeline> {
+    nodes
+        .iter()
         .filter(|n| clean && n.kind() == K::TABULAR_EXPRESSION)
         .map(|expr| perf::Pipeline {
-            span: span(&expr),
+            span: span(expr),
             ops: expr
                 .children()
                 .filter(|op| is_operator(op.kind()))
@@ -267,13 +303,23 @@ fn pipelines(root: &SyntaxNode, clean: bool) -> Vec<perf::Pipeline> {
 /// The HIR (`opentide_kql::lower`): the `let`s, the first source, and every
 /// operator with its text, in source order; a control command alone.
 pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
+    // Walked lazily: a control command ends the walk at its node.
+    lower_nodes(root.descendants(), source)
+}
+
+/// [`lower`] of a tree's nodes in preorder.
+fn lower_nodes<N: std::borrow::Borrow<SyntaxNode>>(
+    nodes: impl IntoIterator<Item = N>,
+    source: &str,
+) -> Hir {
     let mut lets = Vec::new();
     let mut source_name = String::new();
     let mut operators = Vec::new();
-    for node in root.descendants() {
+    for node in nodes {
+        let node = node.borrow();
         match node.kind() {
             K::LET_STATEMENT => {
-                let name = name_of(&node)
+                let name = name_of(node)
                     .map(|t| t.text().to_owned())
                     .unwrap_or_default();
                 let value = node
@@ -283,17 +329,17 @@ pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
                 lets.push((name, value));
             }
             K::CONTROL_COMMAND => {
-                let name = name_of(&node)
+                let name = name_of(node)
                     .map(|t| t.text().to_owned())
                     .unwrap_or_default();
                 return Hir::ControlCommand { name };
             }
             K::TABULAR_SOURCE if source_name.is_empty() => {
-                text(source, &node).trim().clone_into(&mut source_name);
+                text(source, node).trim().clone_into(&mut source_name);
             }
             kind if is_operator(kind) => {
                 let name = if kind == K::KEYWORD_OPERATOR {
-                    crate::syntax_util::tokens(&node)
+                    crate::syntax_util::tokens(node)
                         .next()
                         .map_or_else(|| "unknown".to_owned(), |t| t.text().to_owned())
                 } else {
@@ -303,7 +349,7 @@ pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
                 };
                 operators.push(HirOp {
                     name,
-                    args: text(source, &node).to_owned(),
+                    args: text(source, node).to_owned(),
                 });
             }
             _ => {}
@@ -354,9 +400,30 @@ fn expected_phrase(error: &SyntaxError) -> Option<String> {
     })
 }
 
+/// The tokens a syntax error is placed on, met in document order: the first
+/// significant one from the error's end on, and the last significant one.
+#[derive(Default)]
+struct ErrorTokens {
+    next: Option<rowan::TextRange>,
+    last: Option<rowan::TextRange>,
+}
+
+impl ErrorTokens {
+    fn see(&mut self, token: &SyntaxToken, at: rowan::TextSize) {
+        if matches!(token.kind(), K::WHITESPACE | K::COMMENT) {
+            return;
+        }
+        let range = token.text_range();
+        if self.next.is_none() && range.start() >= at {
+            self.next = Some(range);
+        }
+        self.last = Some(range);
+    }
+}
+
 /// The one syntax error the old engine reported, with what the parser
 /// expected: at the token the error stands before.
-fn syntax_error(lines: &LineIndex, root: &SyntaxNode, error: &SyntaxError) -> Diagnostic {
+fn syntax_error(lines: &LineIndex, tokens: &ErrorTokens, error: &SyntaxError) -> Diagnostic {
     let mut message = format!("KQL syntax error: {}", error.message);
     if !error.message.starts_with("expected")
         && let Some(expected) = expected_phrase(error)
@@ -364,30 +431,22 @@ fn syntax_error(lines: &LineIndex, root: &SyntaxNode, error: &SyntaxError) -> Di
         message.push_str(&format!("; expected {expected}"));
     }
     let at = error.gap.end();
-    // The first significant token from `at` on, by an iterative scan: rowan's
-    // `token_at_offset` and `next_token` recurse once per tree level.
-    let next = root
-        .descendants_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-        .find(|t| !matches!(t.kind(), K::WHITESPACE | K::COMMENT) && t.text_range().start() >= at);
-    // Past the last token, the error is on that token: an empty range at the end
-    // of the text, often a blank line, is not visible in an editor.
-    let range = next
-        .or_else(|| {
-            // Not `last_token`: it stops at an empty last node.
-            root.descendants_with_tokens()
-                .filter_map(NodeOrToken::into_token)
-                .filter(|t| !matches!(t.kind(), K::WHITESPACE | K::COMMENT))
-                .last()
-        })
-        .map_or_else(|| rowan::TextRange::empty(at), |t| t.text_range());
+    // The first significant token from `at` on, from the walk: rowan's
+    // `token_at_offset` and `next_token` recurse once per tree level. Past the
+    // last token, the error is on that token (not `last_token`, which stops
+    // at an empty last node): an empty range at the end of the text, often a
+    // blank line, is not visible in an editor.
+    let range = tokens
+        .next
+        .or(tokens.last)
+        .unwrap_or_else(|| rowan::TextRange::empty(at));
     Diagnostic::error(codes::KQL_PARSE_ERROR, message, range_of(lines, range))
 }
 
 /// `.show tables`: reported once.
-fn control_commands(root: &SyntaxNode, lines: &LineIndex, out: &mut Vec<Diagnostic>) {
-    if let Some(node) = root.descendants().find(|n| n.kind() == K::CONTROL_COMMAND) {
-        let name = name_of(&node).map_or_else(|| ".".into(), |t| t.text().to_owned());
+fn control_commands(nodes: &[SyntaxNode], lines: &LineIndex, out: &mut Vec<Diagnostic>) {
+    if let Some(node) = nodes.iter().find(|n| n.kind() == K::CONTROL_COMMAND) {
+        let name = name_of(node).map_or_else(|| ".".into(), |t| t.text().to_owned());
         out.push(Diagnostic::error(
             codes::KQL_CONTROL_COMMAND_UNSUPPORTED,
             format!("KQL control command '.{name}' is not valid in detections"),
@@ -397,11 +456,16 @@ fn control_commands(root: &SyntaxNode, lines: &LineIndex, out: &mut Vec<Diagnost
 }
 
 /// Unknown operators, and `render`.
-fn operators(root: &SyntaxNode, lines: &LineIndex, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    for node in root.descendants() {
+fn operators(
+    nodes: &[SyntaxNode],
+    lines: &LineIndex,
+    catalog: &Catalog,
+    out: &mut Vec<Diagnostic>,
+) {
+    for node in nodes {
         match node.kind() {
             K::UNKNOWN_OPERATOR => {
-                let name = name_of(&node)
+                let name = name_of(node)
                     .map(|t| t.text().to_owned())
                     .unwrap_or_default();
                 if catalog.operator(&name).is_none() {
@@ -428,34 +492,51 @@ fn operators(root: &SyntaxNode, lines: &LineIndex, catalog: &Catalog, out: &mut 
     }
 }
 
-/// Names bound by `let` anywhere in the query.
-fn let_names(root: &SyntaxNode) -> BTreeSet<String> {
-    root.descendants()
-        .filter(|n| n.kind() == K::LET_STATEMENT)
-        .filter_map(|n| name_of(&n).map(|t| t.text().to_owned()))
-        .collect()
+/// Names bound by `let` or `declare query_parameters` anywhere in the query.
+fn let_names(nodes: &[SyntaxNode]) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    let mut add = |node: &SyntaxNode| {
+        if let Some(name) = name_of(node) {
+            names.insert(name.text().to_owned());
+        }
+    };
+    // One walk over the nodes: a second one, for the parameters alone, cost
+    // every query (#1646).
+    for node in nodes {
+        match node.kind() {
+            K::LET_STATEMENT => add(node),
+            K::QUERY_PARAMETERS_STATEMENT => node
+                .children()
+                .filter(|c| c.kind() == K::PARAMETER)
+                .for_each(|c| add(&c)),
+            _ => {}
+        }
+    }
+    names
 }
 
 /// Calls: typed literals written as calls, plugins, deprecated and
 /// misspelled functions.
 fn functions(
-    root: &SyntaxNode,
+    nodes: &[SyntaxNode],
     lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
-    for node in root.descendants().filter(|n| n.kind() == K::FUNCTION_CALL) {
-        let Some(name_token) = name_of(&node) else {
+    for node in nodes.iter().filter(|n| n.kind() == K::FUNCTION_CALL) {
+        let Some(name_token) = name_of(node) else {
             continue;
         };
         let name = name_token.text().to_owned();
         let name_range = range_of(lines, name_token.text_range());
-        let is_plugin = node
-            .parent()
-            .is_some_and(|p| p.kind() == K::EVALUATE_OPERATOR);
+        let parent = node.parent().map(|p| p.kind());
+        let is_plugin = parent == Some(K::EVALUATE_OPERATOR);
         let function = catalog.function(&name);
-        if lets.contains(&name) {
+        if parent == Some(K::QUALIFIED_TABLE) {
+            // A scope of a table in another database (`cluster("c")`,
+            // `database("d")`, `workspace("w")`, `app("a")`), not a function.
+        } else if lets.contains(&name) {
             // A function the query declares with `let`.
         } else if !is_plugin && TYPED_LITERAL_TYPES.contains(&name.as_str()) {
             out.push(Diagnostic::error(
@@ -520,13 +601,13 @@ fn functions(
 
 /// The legacy spellings of scalar operators (`containscs`, `notcontains`).
 fn scalar_operators(
-    root: &SyntaxNode,
+    nodes: &[SyntaxNode],
     lines: &LineIndex,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    for node in root
-        .descendants()
+    for node in nodes
+        .iter()
         .filter(|n| matches!(n.kind(), K::COMPARISON_EXPR | K::IN_EXPR | K::BETWEEN_EXPR))
     {
         for token in node
@@ -589,14 +670,16 @@ fn is_fuzzy_union(node: &SyntaxNode) -> bool {
 }
 
 /// The tables a query reads: a source, a join or lookup side, a union leg.
-/// Walks the tree with a stack of scopes: a function definition with tabular
-/// parameters adds their names to its body's `let` names, as a layer over
-/// the scope it is in. Each layer holds its own parameters only: copying the
-/// scope's names for each function made `n` functions with tabular
-/// parameters quadratic (#1424). Returns how many names the layers hold, the
-/// work count a test bounds.
+/// Reads the walk's nodes, in preorder with their depths, with a stack of
+/// scopes: a function definition with tabular parameters adds their names to
+/// its body's `let` names, as a layer over the scope it is in, for the nodes
+/// below it (deeper, until the depth comes back to its own). Each layer holds
+/// its own parameters only: copying the scope's names for each function made
+/// `n` functions with tabular parameters quadratic (#1424). Returns how many
+/// names the layers hold, the work count a test bounds.
 fn tables(
-    root: &SyntaxNode,
+    nodes: &[SyntaxNode],
+    depths: &[usize],
     lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
@@ -617,24 +700,43 @@ fn tables(
         }
         at = scopes[at].0;
     };
-    // Children go on the stack reversed, so they come off in document order.
-    let mut stack: Vec<(SyntaxNode, usize)> = vec![(root.clone(), 0)];
-    while let Some((node, scope)) = stack.pop() {
-        let mut scope = scope;
+    // The open function scopes, (the depth of their definition, the layer),
+    // and the node at each depth of the path to the current one.
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    let mut path: Vec<usize> = Vec::new();
+    for (index, (node, &depth)) in nodes.iter().zip(depths).enumerate() {
+        while open.last().is_some_and(|&(at, _)| at >= depth) {
+            open.pop();
+        }
+        // Preorder: a node is at most one level below the one before it.
+        debug_assert!(depth <= path.len(), "a node deeper than its parent");
+        path.truncate(depth);
+        path.push(index);
+        let scope = open.last().map_or(0, |&(_, layer)| layer);
         match node.kind() {
             K::FUNCTION_DEFINITION => {
-                let params = tabular_parameters(&node);
+                let params = tabular_parameters(node);
                 if !params.is_empty() {
                     scopes.push((scope, params.into_iter().collect()));
-                    scope = scopes.len() - 1;
+                    open.push((depth, scopes.len() - 1));
                 }
             }
             K::TABLE_REF => {
-                let in_union = node.parent().is_some_and(|p| p.kind() == K::UNION_OPERATOR);
-                let fuzzy = in_union && node.parent().is_some_and(|p| is_fuzzy_union(&p));
-                if !fuzzy && let Some(name) = name_of(&node) {
+                let parent = depth
+                    .checked_sub(1)
+                    .and_then(|d| path.get(d))
+                    .map(|&i| &nodes[i]);
+                let fuzzy =
+                    parent.is_some_and(|p| p.kind() == K::UNION_OPERATOR && is_fuzzy_union(p));
+                // Another database's table (`database("d").T`) is not this
+                // workspace's to check.
+                let elsewhere = parent.is_some_and(|p| p.kind() == K::QUALIFIED_TABLE);
+                if !fuzzy
+                    && !elsewhere
+                    && let Some(name) = crate::syntax_util::table_token(node)
+                {
                     check_table_named(
-                        name.text(),
+                        crate::schema::unquote_name(name.text()),
                         range_of(lines, node.text_range()),
                         catalog,
                         |name| binds(&scopes, scope, name),
@@ -644,8 +746,6 @@ fn tables(
             }
             _ => {}
         }
-        let children: Vec<SyntaxNode> = node.children().collect();
-        stack.extend(children.into_iter().rev().map(|c| (c, scope)));
     }
     scopes.iter().map(|(_, names)| names.len()).sum()
 }
@@ -654,6 +754,63 @@ fn tables(
 mod tests {
     use super::*;
     use crate::Profile;
+
+    /// A tree's nodes in preorder and their depths, as `analyze`'s walk
+    /// gives them.
+    fn nodes_and_depths(root: &SyntaxNode) -> (Vec<SyntaxNode>, Vec<usize>) {
+        let (mut nodes, mut depths) = (Vec::new(), Vec::new());
+        opentide_parse::walk_once(root, |element, depth| {
+            if let NodeOrToken::Node(node) = element {
+                nodes.push(node);
+                depths.push(depth);
+            }
+        });
+        (nodes, depths)
+    }
+
+    thread_local! {
+        /// The elements `analyze`'s walk visited on this thread.
+        pub(super) static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// One walk serves the HIR, the node checks, the syntax error and the
+    /// highlight (ADR 0014 §5a): `analyze`'s walk visits each element of the
+    /// tree once, on broken input too. What it holds is that one walk, not
+    /// the others: the column pass and the error path's lookups still step
+    /// through the tree themselves and are not counted here; the node checks
+    /// and the tables' scopes are held to the one walk by taking its nodes as
+    /// a slice.
+    #[test]
+    fn an_analysis_visits_each_element_once() {
+        for source in [
+            "let n = 5;\nSecurityEvent\n| where EventID == 4624 and Account !has \"svc\"\n\
+             | summarize count() by Account, bin(TimeGenerated, 1h)\n| top n by count_",
+            "SigninLogs | where UserPrincipalName =~ \"a\" | summ",
+            ".show tables",
+        ] {
+            let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+            let elements = SyntaxNode::new_root(parse_once(source).green)
+                .descendants_with_tokens()
+                .count();
+            let before = VISITS.get();
+            let _ = analyze(source, &catalog);
+            assert_eq!(VISITS.get() - before, elements, "{source:?}");
+        }
+    }
+
+    /// `lower` stops at a control command, as it did before the walk merge:
+    /// its lazy walk yields the nodes up to the command's, not the tree's.
+    #[test]
+    fn lower_stops_at_a_control_command() {
+        let source = ".show tables | where x == 1 and y == 2 | project a, b, c";
+        let root = SyntaxNode::new_root(parse_once(source).green);
+        let all = root.descendants().count();
+        let mut yielded = 0;
+        let hir = lower_nodes(root.descendants().inspect(|_| yielded += 1), source);
+        assert!(matches!(hir, Hir::ControlCommand { .. }), "{hir:?}");
+        assert!(yielded < all, "{yielded} of {all} nodes");
+        assert_eq!(format!("{:?}", lower(&root, source)), format!("{hir:?}"));
+    }
 
     /// The scopes of `tables` hold each tabular parameter once, however many
     /// `let` names are in scope (#1424): copying them per function was
@@ -671,9 +828,17 @@ mod tests {
         let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
         let parsed = parse_once(&source);
         let root = SyntaxNode::new_root(parsed.green.clone());
-        let lets = let_names(&root);
+        let (nodes, depths) = nodes_and_depths(&root);
+        let lets = let_names(&nodes);
         let mut out = Vec::new();
-        let held = tables(&root, &LineIndex::new(&source), &catalog, &lets, &mut out);
+        let held = tables(
+            &nodes,
+            &depths,
+            &LineIndex::new(&source),
+            &catalog,
+            &lets,
+            &mut out,
+        );
         assert_eq!(held, n + 2);
         // A parameter is not a table; an unknown name still is reported.
         assert!(out.iter().all(|d| !d.message.contains("'T'")), "{out:?}");
@@ -684,6 +849,23 @@ mod tests {
     }
 
     /// The tables `analyze` reports unknown in `source` (Sentinel).
+    /// A tabular parameter names a table inside its function only: the
+    /// scope a definition opens ends with its body, for its siblings and for
+    /// what follows, and a nested definition's scope is over its parent's.
+    #[test]
+    fn a_parameter_scope_ends_with_its_function() {
+        assert_eq!(
+            unknown_tables("let f = (T:(*)) { T };\nlet g = (U:(*)) { T | union U };\nT | union U"),
+            ["T", "T", "U"]
+        );
+        assert_eq!(
+            unknown_tables(
+                "let f = (T:(*)) { let g = (U:(*)) { T | union U }; g(T) | union U };\nT"
+            ),
+            ["U", "T"]
+        );
+    }
+
     fn unknown_tables(source: &str) -> Vec<String> {
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
         analyze(source, &catalog)
@@ -818,10 +1000,11 @@ mod tests {
     }
 
     /// The scope checks read tokens, not the tree: they stay on broken input,
-    /// as on the old engine (`union *` is the shape they exist for).
+    /// as on the old engine (`union *` is the shape they exist for; it parses,
+    /// and the trailing pipe breaks the query).
     #[test]
     fn the_scope_checks_run_on_broken_input() {
-        let source = "search \"a\" | union *";
+        let source = "search \"a\" | union * |";
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
         let codes: Vec<String> = analyze(source, &catalog)
             .diagnostics
@@ -836,6 +1019,127 @@ mod tests {
                 codes::KQL_UNSCOPED_UNION
             ]
         );
+    }
+
+    /// A wildcard table (`Sign*`, `*Logs`, `*`) in a union or a search's `in`
+    /// list is a pattern, as Kusto takes it: no syntax error, no table named
+    /// by its first word (`'Sign' is not a table`), and only a bare `*` reads
+    /// every table.
+    #[test]
+    fn wildcard_tables_are_patterns() {
+        let cases: [(&str, &[&str]); 9] = [
+            (
+                "union isfuzzy=false Nope1, Sign*",
+                &[codes::KQL_UNKNOWN_TABLE],
+            ),
+            ("union Sign*", &[]),
+            ("union Signin*Logs, *Events", &[]),
+            (
+                "union withsource=T Sign*, Nope1",
+                &[codes::KQL_UNKNOWN_TABLE],
+            ),
+            ("SigninLogs | union kind=outer Sec*", &[]),
+            ("union *", &[codes::KQL_UNSCOPED_UNION]),
+            ("union withsource=T *", &[codes::KQL_UNSCOPED_UNION]),
+            ("search in (Sec*, SigninLogs) \"x\"", &[]),
+            (
+                "search in (SecurityEvent, *) \"x\"",
+                &[codes::KQL_WILDCARD_TABLE],
+            ),
+        ];
+        for (source, expected) in cases {
+            assert_eq!(codes_of(source), expected, "{source}");
+        }
+        assert_eq!(
+            unknown_tables("union isfuzzy=false Nope1, Sign*"),
+            ["Nope1"]
+        );
+    }
+
+    /// A table in another scope (`database("d").T`, `cluster("c").database("d").T`,
+    /// `workspace("w").T`, `app("a").T`) or by quoted name (`['T']`) parses, in
+    /// a query's source, a union leg and a join's side, as Kusto takes it.
+    /// Another database's table is not this workspace's to check; a quoted
+    /// name is checked as its name.
+    #[test]
+    fn qualified_and_quoted_tables_parse() {
+        for source in [
+            "database(\"d\").T | take 1",
+            "cluster(\"c\").database(\"d\").T | take 1",
+            "workspace(\"w\").SecurityEvent | take 1",
+            "app(\"a\").requests | take 1",
+            "union database(\"db\").T1, cluster(\"c\").database(\"db\").T2",
+            "union workspace(\"w\").Sec*, SigninLogs",
+            "cluster(\"c\").database(\"d\").['My Table'] | take 1",
+            "SecurityEvent | join (database(\"d\").T) on Key",
+            "['SecurityEvent'] | take 1",
+            "search in (['SecurityEvent'], Sec*) \"x\"",
+        ] {
+            assert!(
+                codes_of(source).is_empty(),
+                "{source}: {:?}",
+                codes_of(source)
+            );
+        }
+        assert_eq!(unknown_tables("['NopeTable'] | take 1"), ["NopeTable"]);
+        assert_eq!(
+            unknown_tables("union ['SecurityEvent'], ['Nope2']"),
+            ["Nope2"]
+        );
+        // Not tables Kusto takes: a scope with no table, scopes out of order
+        // or in another case, a pattern outside a union, a quoted name that
+        // is not a plain string in touching brackets.
+        for broken in [
+            "cluster(\"c\").database(\"d\")",
+            "cluster(\"c\").database(\"d\") | take 1",
+            "cluster(\"c\").T",
+            "cluster(\"c\").cluster(\"d\").T",
+            "workspace(\"w\").database(\"d\").T",
+            "DATABASE(\"d\").T",
+            "database(\"d\").Sec* | take 1",
+            "database(\"d\").[ 'T' ]",
+            "database(\"d\").[@'T']",
+        ] {
+            assert_eq!(codes_of(broken), [codes::KQL_PARSE_ERROR], "{broken}");
+        }
+        // A scope call with no dot after it is still a call.
+        assert!(codes_of("print database(\"d\")").is_empty());
+    }
+
+    /// `where * has "x"`: a star on the left of a string operator or `==`
+    /// searches every column, as Kusto takes it; on the left of anything else
+    /// (`!=`, `<`, `in`, `has_any`) it is still an error, as in Kusto.
+    /// `2 * 3`, `count(*)` and a bare `where *` are as before.
+    #[test]
+    fn a_star_searches_every_column() {
+        for source in [
+            "SecurityEvent | where * has \"x\"",
+            "SecurityEvent | where * contains \"x\"",
+            "SecurityEvent | where * !has \"x\"",
+            "SecurityEvent | where * =~ \"x\"",
+            "SecurityEvent | where * matches regex \"x\"",
+            "SecurityEvent | where * == \"x\"",
+            "SecurityEvent | where * : \"x\"",
+            "search in (SecurityEvent) * : \"x\"",
+            "SecurityEvent | where * startswith \"x\" and EventID == 1",
+            "SecurityEvent | extend y = 2 * 3",
+            "SecurityEvent | summarize count(*)",
+        ] {
+            assert!(
+                codes_of(source).is_empty(),
+                "{source}: {:?}",
+                codes_of(source)
+            );
+        }
+        for not_kusto in [
+            "SecurityEvent | where *",
+            "SecurityEvent | where * != \"x\"",
+            "SecurityEvent | where * < 5",
+            "SecurityEvent | where * in (\"a\")",
+            "SecurityEvent | where * has_any (\"a\", \"b\")",
+        ] {
+            assert_eq!(codes_of(not_kusto), [codes::KQL_PARSE_ERROR], "{not_kusto}");
+        }
     }
 
     fn codes_of(source: &str) -> Vec<String> {

@@ -1,0 +1,55 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/112_stats_count_by_b_bucket_timestamp_1_hour.esql
+---
+SOURCE_FILE@0..61
+  QUERY@0..60
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    STATS_COMMAND@12..60
+      STATS_KW@12..17 "STATS"
+      WHITESPACE@17..18 " "
+      AGGREGATE_FIELD@18..26
+        FUNCTION_CALL@18..26
+          IDENTIFIER@18..23
+            IDENT@18..23 "COUNT"
+          L_PAREN@23..24 "("
+          STAR@24..25
+            STAR_TOKEN@24..25 "*"
+          R_PAREN@25..26 ")"
+      WHITESPACE@26..27 " "
+      BY_KW@27..29 "BY"
+      WHITESPACE@29..30 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@30..60
+        QUALIFIED_NAME@30..31
+          IDENTIFIER@30..31
+            IDENT@30..31 "b"
+        WHITESPACE@31..32 " "
+        EQ@32..33 "="
+        WHITESPACE@33..34 " "
+        FUNCTION_CALL@34..60
+          IDENTIFIER@34..40
+            IDENT@34..40 "BUCKET"
+          L_PAREN@40..41 "("
+          QUALIFIED_NAME@41..51
+            IDENTIFIER@41..51
+              IDENT@41..51 "@timestamp"
+          COMMA@51..52 ","
+          WHITESPACE@52..53 " "
+          QUALIFIED_INTERVAL@53..59
+            NUMBER@53..54
+              NUMBER_LIT@53..54 "1"
+            WHITESPACE@54..55 " "
+            TIME_UNIT@55..59
+              IDENT@55..59 "hour"
+          R_PAREN@59..60 ")"
+  WHITESPACE@60..61 "\n"
+--- errors

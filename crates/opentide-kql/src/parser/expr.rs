@@ -83,18 +83,37 @@ fn not_expr(p: &mut P<'_>) -> Option<CompletedMarker> {
 /// `a == b`, `a matches regex b`, `a in (..)`, `a between (x .. y)`: one
 /// operator, not a chain.
 fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
-    let lhs = additive(p)?;
-    let (kind, shape) = match p.current() {
-        K::CMP_OP => (K::COMPARISON_EXPR, Shape::Operand),
-        K::MATCHES_KW => (K::COMPARISON_EXPR, Shape::Matches),
+    let mut lhs = additive(p)?;
+    let mut next = p.current();
+    // `a : "x" == true`: the search term binds first. Read from the token the
+    // operator match reads anyway: a level of its own cost every operand a
+    // call (parse +1.0% on the external corpus).
+    let mut term = false;
+    if next == K::COLON {
+        lhs = colon_rest(p, lhs);
+        next = p.current();
+        term = true;
+    }
+    // A search term stands where a string operator does: after one, only an
+    // equality or ordering, a set or a range test (`a : "x" == true`, `a :
+    // "x" in (…)`); `a : "x" has "y"` is an error, as in Kusto.Language.
+    let (kind, shape) = match next {
+        K::CMP_OP if !term || equality_or_ordering(p.nth_text(0)) => {
+            (K::COMPARISON_EXPR, Shape::Operand)
+        }
+        K::MATCHES_KW if !term => (K::COMPARISON_EXPR, Shape::Matches),
         K::IN_KW if p.nth(1) == K::L_PAREN => (K::IN_EXPR, Shape::List),
         K::SET_OP => (K::IN_EXPR, Shape::List),
         K::BETWEEN_OP => (K::BETWEEN_EXPR, Shape::Range),
         _ => return Some(lhs),
     };
+    let equality = shape == Shape::Operand && equality_or_ordering(p.nth_text(0));
     let m = p.precede(lhs);
     p.bump();
     match shape {
+        // `a == "x" : true`; after a string operator the right side is no
+        // search term (`a has "y" : "x"` is an error).
+        Shape::Operand if equality => operand_or_error(p, colon_operand),
         Shape::Operand => operand_or_error(p, additive),
         Shape::Matches => {
             p.expect(K::REGEX_KW);
@@ -106,6 +125,33 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     Some(p.done(m, kind))
 }
 
+/// `Column : "value"`, a search term, from its `:`: Kusto.Language reads `:`
+/// anywhere an expression goes, binding tighter than `==` (`a : "x" == true`,
+/// `a == "x" : true`) and once (`a : b : c` is an error). The callers test the
+/// token with `current`, not `at`: a missing operator's message names no `:`.
+fn colon_rest(p: &mut P<'_>, lhs: CompletedMarker) -> CompletedMarker {
+    let m = p.precede(lhs);
+    p.bump();
+    operand_or_error(p, additive);
+    p.done(m, K::COMPARISON_EXPR)
+}
+
+/// The right operand of a comparison, a search term included.
+fn colon_operand(p: &mut P<'_>) -> Option<CompletedMarker> {
+    let rhs = additive(p)?;
+    Some(if p.current() == K::COLON {
+        colon_rest(p, rhs)
+    } else {
+        rhs
+    })
+}
+
+/// `==`, `!=`, `<>` and the orderings: the comparisons a search term goes with.
+fn equality_or_ordering(op: &str) -> bool {
+    matches!(op, "==" | "!=" | "<>" | "<" | "<=" | ">" | ">=")
+}
+
+#[derive(PartialEq, Eq)]
 enum Shape {
     Operand,
     Matches,
@@ -150,6 +196,14 @@ fn unary(p: &mut P<'_>) -> Option<CompletedMarker> {
     Some(p.done(m, K::UNARY_EXPR))
 }
 
+/// A primary expression and its `.member`, `[index]`: no sign and no binary
+/// operator (a legacy `render … title=` value), or an error.
+pub(super) fn postfix(p: &mut P<'_>) {
+    if primary(p).is_none() {
+        p.error(NOT_AN_EXPRESSION);
+    }
+}
+
 /// A primary expression and the `.member` and `[index]` that follow it.
 fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
     let mut lhs = match p.current() {
@@ -168,6 +222,19 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
             p.done(m, K::PAREN_EXPR)
         }
         K::QUOTED_IDENT => name_ref(p),
+        // `* has "x"`: every column, as Kusto's term search takes it, on the
+        // left of a string operator (`has`, `contains`, `startswith`, `=~`,
+        // `matches regex`, ...), `==` or the search term's `:`, and of nothing
+        // else: not `!=`, `<` or `>=`, not `in` or `has_any`.
+        K::STAR
+            if matches!(p.nth(1), K::MATCHES_KW | K::COLON)
+                || (p.nth(1) == K::CMP_OP
+                    && !matches!(p.0.nth_text(1), "!=" | "<>" | "<" | "<=" | ">" | ">=")) =>
+        {
+            let m = p.start();
+            p.bump();
+            p.done(m, K::STAR_EXPR)
+        }
         // In an expression, `dynamic` and `toscalar` only open
         // `dynamic(...)` and `toscalar(...)`: never a column, as in the old
         // grammar (found by the switch's full differential, seed 3).

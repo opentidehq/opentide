@@ -88,15 +88,80 @@ fn source(p: &mut P<'_>) {
             p.done(m, K::MATERIALIZE_EXPRESSION);
         }
         K::SEARCH_KW | K::FIND_KW => search_source(p),
-        _ if p.name_at(0) && next == K::L_PAREN => {
-            expr::function_call(p);
+        _ if p.name_at(0) && next == K::L_PAREN => call_or_qualified_table(p, false),
+        _ => table_name(p),
+    }
+}
+
+/// A table by name, quoted (`['My Table']`) or not, or "expected a name".
+fn table_name(p: &mut P<'_>) {
+    let m = p.start();
+    let touching = |p: &P<'_>, n: usize| {
+        p.0.nth_range(n)
+            .zip(p.0.nth_range(n + 1))
+            .is_some_and(|(a, b)| a.end() == b.start())
+    };
+    if p.at(K::L_BRACKET)
+        && p.nth(1) == K::STRING
+        && p.nth(2) == K::R_BRACKET
+        && touching(p, 0)
+        && touching(p, 1)
+        && p.0.nth_text(1).starts_with(['\'', '"'])
+    {
+        // `.['My Table']` after a scope: the lexer reads a `[` after a dot
+        // as an index, so the quoted name comes as its three tokens.
+        p.bump();
+        p.bump();
+        p.bump();
+    } else if !p.eat(K::QUOTED_IDENT) {
+        p.expect_name();
+    }
+    p.done(m, K::TABLE_REF);
+}
+
+/// A call (`f(x)`), or a table in another scope: a scope call, then a
+/// dot and the table's name (`database("d").SecurityEvent`,
+/// `workspace("w").['T']`, `app("a").requests`), with `cluster("c")`
+/// before a `database(...)` (`cluster("c").database("d").T`). A pattern
+/// (`database("d").Sec*`) only where a union takes one (`patterns`). Kusto's
+/// scope functions are spelled in lower case; a scope call with no dot after
+/// it stays a call, and one with a dot but no table after it is an error.
+fn call_or_qualified_table(p: &mut P<'_>, patterns: bool) {
+    let scope = |p: &P<'_>| {
+        if !(p.name_at(0) && p.nth(1) == K::L_PAREN) {
+            return None;
         }
-        _ => {
-            let m = p.start();
-            p.expect_name();
-            p.done(m, K::TABLE_REF);
+        ["cluster", "database", "workspace", "app"]
+            .into_iter()
+            .find(|scope| p.0.nth_text(0) == *scope)
+    };
+    let Some(first) = scope(p) else {
+        expr::function_call(p);
+        return;
+    };
+    let call = expr::function_call(p);
+    if !p.at(K::DOT) {
+        return;
+    }
+    let m = p.precede(call);
+    p.bump();
+    // `cluster(...)` names the cluster a `database(...)` is in.
+    if first == "cluster" {
+        if scope(p) == Some("database") {
+            expr::function_call(p);
+        } else {
+            p.error("expected `database(...)` after `cluster(...)`");
+        }
+        if !p.eat(K::DOT) {
+            p.error("expected `.` and a table name");
+            p.done(m, K::QUALIFIED_TABLE);
+            return;
         }
     }
+    if !(patterns && table_run(p, Some(K::TABLE_REF))) {
+        table_name(p);
+    }
+    p.done(m, K::QUALIFIED_TABLE);
 }
 
 /// One operator after a pipe.
@@ -215,8 +280,57 @@ fn operator(p: &mut P<'_>) {
         K::RENDER_KW => {
             p.bump();
             p.expect_name();
+            // The legacy properties before `with`: `render barchart kind=stacked`.
+            // Kusto.Language reads `kind` and `accumulate` as an option value,
+            // `title` as a primary expression with no operator after it.
+            loop {
+                if at_named_option(p, &["kind", "accumulate"]) {
+                    option_after_name(p, K::OPERATOR_OPTION);
+                } else if at_named_option(p, &["title"]) {
+                    let property = p.start();
+                    p.bump_as(K::IDENT);
+                    p.bump();
+                    expr::postfix(p);
+                    p.done(property, K::NAMED_ARGUMENT);
+                } else {
+                    break;
+                }
+            }
+            if p.at(K::WITH_KW) {
+                render_with(p);
+            }
             K::RENDER_OPERATOR
         }
+        K::SERIALIZE_KW => {
+            p.bump();
+            if expr::at_expr_start(p) {
+                list(p, assignment_or_expr);
+            }
+            K::SERIALIZE_OPERATOR
+        }
+        K::AS_KW => {
+            p.bump();
+            // `hint.materialized` is the one hint `as` takes.
+            while p.at(K::HINT_NAME) && p.nth_text(0) == "hint.materialized" && p.nth(1) == K::EQ {
+                option_after_name(p, K::HINT_OPTION);
+            }
+            p.expect_name();
+            K::AS_OPERATOR
+        }
+        K::TOP_HITTERS_KW => {
+            p.bump();
+            expr::expr(p);
+            p.expect(K::OF_KW);
+            expr::expr(p);
+            if p.at(K::BY_KW) {
+                let by = p.start();
+                p.bump();
+                expr::expr(p);
+                p.done(by, K::TOP_HITTERS_BY);
+            }
+            K::TOP_HITTERS_OPERATOR
+        }
+        K::REDUCE_KW => reduce(p),
         K::TOP_NESTED_KW => {
             list(p, top_nested_clause);
             K::TOP_NESTED_OPERATOR
@@ -240,22 +354,24 @@ fn operator(p: &mut P<'_>) {
         K::FACET_KW => facet(p),
         K::PARTITION_KW => partition(p),
         K::SCAN_KW => scan(p),
-        K::SEARCH_KW
-        | K::FIND_KW
+        K::SEARCH_KW => {
+            // `T | search kind=case_sensitive in (U) "x"`: a source's grammar.
+            p.bump();
+            search_options(p);
+            search_body(p, false);
+            K::SEARCH_OPERATOR
+        }
+        K::FIND_KW
         | K::INVOKE_KW
-        | K::SERIALIZE_KW
-        | K::AS_KW
         | K::GETSCHEMA_KW
         | K::SAMPLE_KW
         | K::EXTERNALDATA_KW
         | K::CONSUME_KW
-        | K::REDUCE_KW
         | K::MAKE_GRAPH_KW
         | K::GRAPH_MATCH_KW
         | K::GRAPH_SHORTEST_PATHS_KW
         | K::GRAPH_TO_TABLE_KW
-        | K::GRAPH_MARK_COMPONENTS_KW
-        | K::TOP_HITTERS_KW => {
+        | K::GRAPH_MARK_COMPONENTS_KW => {
             p.bump();
             if expr::at_expr_start(p) {
                 expr::expr(p);
@@ -421,7 +537,14 @@ fn at_option(p: &P<'_>) -> bool {
 fn option_value(p: &mut P<'_>) {
     let v = p.start();
     match p.current() {
-        K::BOOLEAN | K::NUMBER | K::STRING => p.bump(),
+        // `threshold=-0.1`: Kusto.Language takes a sign that touches its number.
+        K::MINUS | K::PLUS
+            if matches!(p.nth(1), K::NUMBER | K::TIMESPAN) && p.tokens_touch(0, 1) =>
+        {
+            p.bump();
+            p.bump();
+        }
+        K::BOOLEAN | K::NUMBER | K::TIMESPAN | K::STRING => p.bump(),
         _ if p.name_at(0) => p.bump_as(K::IDENT),
         _ => p.error("expected an option value"),
     }
@@ -521,11 +644,60 @@ fn union_leg(p: &mut P<'_>) {
         p.expect(K::R_PAREN);
         p.done(m, K::PAREN_TABULAR);
     } else if p.name_at(0) && p.nth(1) == K::L_PAREN {
-        expr::function_call(p);
-    } else {
-        let m = p.start();
+        call_or_qualified_table(p, true);
+    } else if !table_run(p, Some(K::TABLE_REF)) {
+        table_name(p);
+    }
+}
+
+/// A table or a table pattern (`Sec*`, `*Events`, `Sec*Events`, `*`): a run
+/// of touching words, numbers, timespans and stars that starts with a word or
+/// a star, consumed as it is read, as [`column_ref`] reads a column pattern.
+/// With a star it is a pattern, as Kusto takes in a union and a search's `in`
+/// list; without one it is a single name, closed as `plain`, or left a bare
+/// token when `plain` is `None`. Returns false, consuming nothing, at
+/// anything else.
+fn table_run(p: &mut P<'_>, plain: Option<K>) -> bool {
+    if !(p.at(K::STAR) || p.name_at(0)) {
+        return false;
+    }
+    let m = p.start();
+    let mut star = false;
+    let mut end = None;
+    loop {
+        let range = p.current_range();
+        if end.is_some()
+            && (range.map(|r| r.start()) != end
+                || !(matches!(p.current(), K::STAR | K::NUMBER | K::TIMESPAN) || p.name_at(0)))
+        {
+            break;
+        }
+        end = range.map(|r| r.end());
+        match p.current() {
+            K::STAR => {
+                star = true;
+                p.bump();
+            }
+            K::NUMBER | K::TIMESPAN => p.bump(),
+            _ => p.bump_as(K::IDENT),
+        }
+    }
+    match (star, plain) {
+        (true, _) => {
+            p.done(m, K::TABLE_PATTERN);
+        }
+        (false, Some(kind)) => {
+            p.done(m, kind);
+        }
+        (false, None) => p.abandon(m),
+    }
+    true
+}
+
+/// One table of a search's `in` list: a name, or a pattern.
+fn search_table(p: &mut P<'_>) {
+    if !table_run(p, None) && !p.eat(K::QUOTED_IDENT) {
         p.expect_name();
-        p.done(m, K::TABLE_REF);
     }
 }
 
@@ -866,20 +1038,161 @@ fn with_options(p: &mut P<'_>) {
     }
 }
 
-/// `search "x"`, `search in (A, B) where x`, `find in (T) where x`.
+/// `search "x"`, `search in (A, B) x`, `find in (T) where x`.
 fn search_source(p: &mut P<'_>) {
     let m = p.start();
+    let find = p.at(K::FIND_KW);
     p.bump();
-    options(p);
+    if find {
+        options(p);
+    } else {
+        search_options(p);
+    }
+    search_body(p, find);
+    if find && p.at(K::PROJECT_KW) {
+        find_project(p);
+    }
+    p.done(m, K::SEARCH_SOURCE);
+}
+
+/// The options `search` takes, as Kusto.Language reads them: `kind` with one
+/// of its three values, `withsource` (or `with_source`), `bagexpansion` and
+/// `isfuzzy`. Any other name is not an option (`search foo=1 "x"`).
+fn search_options(p: &mut P<'_>) {
+    const NAMES: &[&str] = &[
+        "kind",
+        "withsource",
+        "with_source",
+        "bagexpansion",
+        "isfuzzy",
+    ];
+    while at_named_option(p, NAMES) {
+        let kind = p.nth_text(0) == "kind";
+        let value_ok = matches!(
+            p.nth_text(2),
+            "default" | "case_insensitive" | "case_sensitive"
+        ) && p.name_at(2);
+        option_after_name(p, K::OPERATOR_OPTION);
+        if kind && !value_ok {
+            p.error("expected `default`, `case_insensitive` or `case_sensitive`");
+        }
+    }
+}
+
+/// What follows a search's options: its tables, then its predicate, after a
+/// `where` only in a `find`.
+fn search_body(p: &mut P<'_>, find: bool) {
     // `in` after `search` starts the table list, as in the old grammar.
     if p.at(K::IN_KW) {
         p.bump();
         if p.expect(K::L_PAREN) {
-            list(p, ident);
+            list(p, search_table);
             p.expect(K::R_PAREN);
         }
     }
-    p.eat(K::WHERE_KW);
+    if find {
+        p.eat(K::WHERE_KW);
+    }
     expr::expr(p);
-    p.done(m, K::SEARCH_SOURCE);
+}
+
+/// `project a, ['b c']:long` or `project-smart` after a `find`: the columns
+/// are names with an optional scalar type, no expressions. `project-smart`
+/// is three tokens here, which must touch, as Kusto.Language reads them.
+fn find_project(p: &mut P<'_>) {
+    let m = p.start();
+    let smart = p.nth(1) == K::MINUS
+        && p.nth(2) == K::IDENT
+        && p.nth_text(2) == "smart"
+        && p.tokens_touch(0, 1)
+        && p.tokens_touch(1, 2);
+    p.bump();
+    if smart {
+        p.bump();
+        p.bump();
+    } else {
+        list(p, find_column);
+    }
+    p.done(m, K::FIND_PROJECT);
+}
+
+/// `name` or `name: type`, the type a scalar one.
+fn find_column(p: &mut P<'_>) {
+    let m = p.start();
+    if !p.eat(K::QUOTED_IDENT) {
+        p.expect_name();
+    }
+    if p.eat(K::COLON) {
+        let t = p.start();
+        if !p.eat(K::DYNAMIC_KW) {
+            p.expect_name();
+        }
+        p.done(t, K::TYPE);
+    }
+    p.done(m, K::FIND_COLUMN);
+}
+
+// ------------------------------------------------- render, reduce
+
+/// `with (title = "x", ycolumns = a, b)`: a property's value is an expression,
+/// and a bare name after it continues its column list.
+fn render_with(p: &mut P<'_>) {
+    let m = p.start();
+    p.bump();
+    p.expect(K::L_PAREN);
+    if !p.at(K::R_PAREN) {
+        // Whether a bare name may come: only after a property whose value is
+        // a list of columns, as Kusto.Language reads them.
+        let mut in_list = false;
+        loop {
+            if p.name_at(0) && p.nth(1) == K::EQ {
+                in_list = matches!(p.nth_text(0), "ycolumns" | "series" | "anomalycolumns");
+                let property = p.start();
+                p.bump_as(K::IDENT);
+                p.bump();
+                expr::expr(p);
+                p.done(property, K::NAMED_ARGUMENT);
+            } else if in_list && p.name_at(0) {
+                name_ref(p);
+            } else {
+                p.error("expected `name = value`");
+                break;
+            }
+            if !p.eat(K::COMMA) {
+                break;
+            }
+        }
+    }
+    p.expect(K::R_PAREN);
+    p.done(m, K::RENDER_WITH);
+}
+
+/// Whether `name = value` starts here with one of `names`, spelt exactly.
+fn at_named_option(p: &P<'_>, names: &[&str]) -> bool {
+    p.name_at(0) && p.nth(1) == K::EQ && names.contains(&p.nth_text(0))
+}
+
+/// `reduce kind=source by x with threshold=0.1, characters="ab"`
+fn reduce(p: &mut P<'_>) -> K {
+    const WITH: &[&str] = &["kind", "threshold", "characters"];
+    p.bump();
+    while at_named_option(p, &["kind"]) {
+        option_after_name(p, K::OPERATOR_OPTION);
+    }
+    p.expect(K::BY_KW);
+    expr::expr(p);
+    // Kusto.Language accepts a `with` that no option follows.
+    if p.eat(K::WITH_KW) && p.name_at(0) && p.nth(1) == K::EQ {
+        loop {
+            if !at_named_option(p, WITH) {
+                p.error("expected `threshold`, `characters` or `kind`");
+                break;
+            }
+            option_after_name(p, K::OPERATOR_OPTION);
+            if !p.eat(K::COMMA) {
+                break;
+            }
+        }
+    }
+    K::REDUCE_OPERATOR
 }

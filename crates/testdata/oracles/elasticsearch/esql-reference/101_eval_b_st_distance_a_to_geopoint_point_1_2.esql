@@ -1,0 +1,1 @@
+FROM logs | EVAL b = ST_DISTANCE(a, TO_GEOPOINT("POINT(1 2)"))

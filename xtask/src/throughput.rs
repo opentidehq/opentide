@@ -20,15 +20,17 @@
 //! check elsewhere warns.
 //!
 //! Leaving glibc out leaves out what malloc and free do, so each pass has a
-//! second budget, `<pass>_allocations`: the calls the bench's own code makes
-//! into the allocator ([`ALLOCATORS`]). Callgrind's `calls=` counts span the
-//! whole run, not only `--toggle-collect` (nor would `--zero-before` reset
-//! them), but a call arc is in the profile only if the counted pass takes it
-//! too. So the count is the two warm-up passes and the counted one, three
-//! passes over each text, plus only the part of the first pass's one-time
-//! work that goes through call sites the counted pass also uses: the input
-//! loading and most catalog building are not in it. It does not vary from
-//! run to run, so it is held within [`ALLOCATION_SLACK`] calls, with no
+//! second budget, `<pass>_allocations`: how many times the counted pass
+//! enters the allocator ([`ALLOCATORS`]), read as the executions of each
+//! allocator's first instruction (`--dump-instr=yes`), whoever called it.
+//! Callgrind's call arcs (`calls=`) are not used: whether it records
+//! `__rust_alloc`'s tail jump into `malloc` as a call of its own depends on
+//! the code's layout: on #1624 the arcs over the warm-up and counted passes
+//! of CQL's and Falco's corpus analyses rose by 7,312 and 10,049 while their
+//! allocations fell. An instruction's execution count is the same however it
+//! was reached, and it counts only the counted pass, as the instructions do.
+//! It does not vary from run to run (ten runs of Exabeam's corpus analysis
+//! gave one count), so it is held within [`ALLOCATION_SLACK`] calls, with no
 //! percentage.
 
 use anyhow::{Context, Result, bail};
@@ -42,8 +44,9 @@ use std::process::{Command, ExitCode};
 pub const TOLERANCE: f64 = 0.03;
 
 /// How many allocator calls a count may differ from its budget by. The count
-/// does not vary from run to run, but it can by one from machine to machine:
-/// on CI's runner Exabeam's corpus analysis made one call more than here,
+/// does not vary from run to run, but the earlier count of call arcs did by
+/// one from machine to machine: on CI's runner Exabeam's corpus analysis made
+/// one call more than here,
 /// on the same build inputs, valgrind and glibc (a CPU-dependent choice in a
 /// dependency; #1581). Below the smallest input set's number of analyses, so
 /// one allocation more a call still fails.
@@ -420,6 +423,9 @@ fn count(
         Command::new("valgrind")
             .arg("--tool=callgrind")
             .arg("--toggle-collect=throughput::counted")
+            // Each instruction's own cost line, at its absolute address: the
+            // allocations are the runs of each allocator's first instruction.
+            .args(["--dump-instr=yes", "--dump-line=no", "--compress-pos=no"])
             .arg(format!("--callgrind-out-file={}", out.display()))
             .arg(binary)
             .args(["--count", language, mode, set]),
@@ -442,8 +448,8 @@ fn count(
         // Every pass allocates: none counted means the allocator's symbols no
         // longer match ALLOCATORS (another global allocator, another libc).
         bail!(
-            "{language} {mode} {set}: callgrind counted no call into {ALLOCATORS:?} \
-             from the bench binary"
+            "{language} {mode} {set}: callgrind counted no entry into {ALLOCATORS:?} \
+             in `throughput::counted`"
         );
     }
     if instructions == 0 {
@@ -473,10 +479,10 @@ fn count(
 struct Own {
     /// Its instructions.
     instructions: u64,
-    /// Its calls into the allocator (`malloc`, `calloc`, `realloc` and the
-    /// aligned ones), whose own instructions are left out with glibc's: the
-    /// number of calls is exact, so an allocation more a token still shows.
-    /// Over the three passes, as callgrind counts calls (the module doc).
+    /// The counted pass's entries into the allocator (`malloc`, `calloc`,
+    /// `realloc` and the aligned ones), from any caller, whose own
+    /// instructions are left out with glibc's: the number is exact, so an
+    /// allocation more a token still shows (the module doc).
     allocations: u64,
 }
 
@@ -489,23 +495,37 @@ pub const ALLOCATORS: [&str; 5] = [
     "aligned_alloc",
 ];
 
-/// What a callgrind profile counts in `binary`'s own code. Its instructions:
-/// every cost line under an `ob=` (the object a function is in) that names
-/// it, but a call's inclusive cost (the line after `calls=`), which is the
-/// callee's. Its allocations: the calls (`calls=N`) it makes to an
-/// [`ALLOCATORS`] function, over the three passes (the module doc). Shared
-/// libraries (glibc's malloc and string routines, the loader) are left out
-/// of the instructions: their counts move
-/// with the glibc version, the CPU it picks a routine for, and the allocation
-/// order, where the bench's own code counts the same on any x86-64 Linux.
+/// What a callgrind profile, written with `--dump-instr=yes --dump-line=no
+/// --compress-pos=no`, counts of the bench. Its instructions: every cost line
+/// under an `ob=` (the object a function is in) that names `binary`, but a
+/// call's inclusive cost (the line after `calls=`), which is the callee's.
+/// Shared libraries (glibc's malloc and string routines, the loader) are left
+/// out of the instructions: their counts move with the glibc version, the CPU
+/// it picks a routine for, and the allocation order, where the bench's own
+/// code counts the same on any x86-64 Linux. Its allocations: for each
+/// [`ALLOCATORS`] function, the cost of its lowest address, the function's
+/// first instruction, which runs once each time the function is entered,
+/// whether callgrind recorded the way in as a call or as a jump (the module
+/// doc). Every line at that address counts (callgrind may write a block in
+/// several contexts), and a function is told apart by its object too.
+///
+/// glibc's own calls between its allocators count as entries too:
+/// `posix_memalign` with an alignment of 16 or less, and `realloc` of a null
+/// pointer, go through `malloc`. Rust's system allocator calls neither (it
+/// calls `posix_memalign` only when an alignment exceeds the size, and never
+/// reallocates null), so each Rust allocation is one entry.
 fn own_cost(profile: &str, binary: &Path) -> Own {
     let wanted = binary.file_name();
     // Compressed names: objects and functions each have their own ids.
     let mut objects: BTreeMap<&str, &str> = BTreeMap::new();
     let mut functions: BTreeMap<&str, &str> = BTreeMap::new();
     let mut own = false;
-    let mut callee = "";
+    let mut object = "";
+    let mut function = "";
     let mut after_call = false;
+    // Each allocator's (object, name) lowest address with a cost, and the
+    // cost of every line at that address.
+    let mut entries: BTreeMap<(&str, &str), (u64, u64)> = BTreeMap::new();
     let mut cost = Own {
         instructions: 0,
         allocations: 0,
@@ -517,24 +537,34 @@ fn own_cost(profile: &str, binary: &Path) -> Own {
                 "ob" | "cob" | "fn" | "cfn" | "fl" | "fi" | "fe" | "cfi" | "cfl"
             )
         }) else {
-            if let Some(calls) = line.strip_prefix("calls=") {
+            if line.starts_with("calls=") {
                 after_call = true;
-                if own && ALLOCATORS.contains(&callee) {
-                    cost.allocations += calls
-                        .split_whitespace()
-                        .next()
-                        .and_then(|n| n.parse::<u64>().ok())
-                        .unwrap_or(0);
-                }
             } else if line.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '*'))
                 && !std::mem::take(&mut after_call)
-                && own
             {
-                cost.instructions += line
-                    .split_whitespace()
-                    .last()
+                let mut fields = line.split_whitespace();
+                let address = fields
+                    .next()
+                    .and_then(|a| a.strip_prefix("0x"))
+                    .and_then(|a| u64::from_str_radix(a, 16).ok());
+                let n = fields
+                    .next_back()
                     .and_then(|n| n.parse::<u64>().ok())
                     .unwrap_or(0);
+                if own {
+                    cost.instructions += n;
+                }
+                if let Some(address) = address
+                    && ALLOCATORS.contains(&function)
+                {
+                    let entry = entries.entry((object, function)).or_insert((address, 0));
+                    if address < entry.0 {
+                        *entry = (address, 0);
+                    }
+                    if address == entry.0 {
+                        entry.1 += n;
+                    }
+                }
             }
             continue;
         };
@@ -553,11 +583,15 @@ fn own_cost(profile: &str, binary: &Path) -> Own {
             None => rest.trim(),
         };
         match key {
-            "ob" => own = Path::new(name).file_name() == wanted,
-            "cfn" => callee = name,
+            "ob" => {
+                object = name;
+                own = Path::new(name).file_name() == wanted;
+            }
+            "fn" => function = name,
             _ => {}
         }
     }
+    cost.allocations = entries.values().map(|&(_, n)| n).sum();
     cost
 }
 
@@ -592,8 +626,8 @@ fn budgets_toml(budgets: &Budgets, environment: &str) -> String {
          # parse alone and full analysis, over the short corpus and the external\n\
          # public rules. `<pass>` is the bench binary's own instructions in the\n\
          # counted pass (glibc and the loader left out), held within 3%;\n\
-         # `<pass>_allocations` its calls into the allocator over the warm-up and\n\
-         # counted passes, held within a few calls. Written by\n\
+         # `<pass>_allocations` its entries into the allocator in the counted\n\
+         # pass, held within a few calls. Written by\n\
          # `cargo xtask throughput --record`, the highest of several runs. Record\n\
          # again when a change lowers counts on purpose, or raises them on purpose\n\
          # with the reason in its PR.\n",
@@ -620,47 +654,103 @@ mod tests {
 events: Ir
 ob=(1) /usr/lib/x86_64-linux-gnu/libc.so.6
 fn=(1) malloc
-0 500
+0xad750 500
 ob=(2) /work/target/release/deps/throughput-abc
 fn=(2) throughput::counted
-0 7
-+1 3
+0x1000 7
+0x1004 3
 cob=(1)
 cfn=(1)
-calls=2 0
-+1 500
+calls=2 0xad750
+0x1008 500
 ob=(1)
 fn=(1)
--1 200
+0xad760 200
 ob=(2)
 fn=(3) opentide_kql::analyze
-* 11
+0x2000 11
 cob=(1)
 cfn=(4) realloc
-calls=5 0
-* 40
-cob=(1)
-cfn=(1)
-calls=1 0
-* 9
-ob=(1)
-fn=(1)
-cob=(1)
-cfn=(1)
-calls=3 0
-* 30
-totals: 1300
+calls=5 0xae1a0
+0x2004 40
+totals: 761
 ";
         let binary = Path::new("/elsewhere/throughput-abc");
-        // The bench's own code calls malloc 2 + 1 times and realloc 5 times;
-        // glibc's own call to malloc is not the bench's.
-        assert_eq!(
-            own_cost(profile, binary),
-            Own {
-                instructions: 7 + 3 + 11,
-                allocations: 2 + 5 + 1
-            }
-        );
+        let own = own_cost(profile, binary);
+        assert_eq!(own.instructions, 7 + 3 + 11);
+        // No cost line of realloc's own: it ran in no counted pass.
+        assert_eq!(own.allocations, 500);
+    }
+
+    #[test]
+    fn an_allocation_is_an_entry_however_callgrind_recorded_the_way_in() {
+        // The same pass, twice: malloc entered 6 times, its first instruction
+        // (the lowest address, 0xad750) run 6 times, its loop 9. In the
+        // second, callgrind recorded two of the entries, which came through
+        // `__rust_alloc`'s tail jump, as calls of their own (#1624): the arcs
+        // add up to 8, the entries stay 6.
+        let entries = "\
+ob=(1) /usr/lib/x86_64-linux-gnu/libc.so.6
+fn=(1) malloc
+0xad760 9
+0xad750 6
+fn=(2) realloc
+0xae1a0 4
+0xae1b0 4
+ob=(2) /work/throughput-abc
+fn=(3) throughput::counted
+0x1000 7
+cob=(1)
+cfn=(1)
+calls=6 0xad750
+0x1004 30
+";
+        let jumps = "\
+ob=(1) /usr/lib/x86_64-linux-gnu/libc.so.6
+fn=(1) malloc
+0xad760 9
+0xad750 6
+fn=(2) realloc
+0xae1a0 4
+0xae1b0 4
+ob=(2) /work/throughput-abc
+fn=(3) throughput::counted
+0x1000 7
+cob=(1)
+cfn=(1)
+calls=6 0xad750
+0x1004 30
+fn=(4) __rust_alloc
+cob=(1)
+cfn=(1)
+calls=2 0xad750
+0x3000 10
+";
+        let binary = Path::new("/elsewhere/throughput-abc");
+        assert_eq!(own_cost(entries, binary).allocations, 6 + 4);
+        assert_eq!(own_cost(jumps, binary).allocations, 6 + 4);
+    }
+
+    #[test]
+    fn an_entry_is_summed_over_its_blocks_and_kept_to_its_object() {
+        // malloc's first instruction written in two blocks (3 + 2 entries),
+        // and another object's `malloc` at a lower address, which is not
+        // libc's entry and does not replace it.
+        let profile = "\
+ob=(1) /usr/lib/x86_64-linux-gnu/libc.so.6
+fn=(1) malloc
+0xad750 3
+0xad760 8
+ob=(2) /usr/lib/libother.so
+fn=(1)
+0x100 7
+0x104 7
+ob=(1)
+fn=(1)
+0xad750 2
+";
+        let binary = Path::new("/elsewhere/throughput-abc");
+        assert_eq!(own_cost(profile, binary).allocations, 3 + 2 + 7);
     }
 
     #[test]

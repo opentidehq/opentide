@@ -1,0 +1,2 @@
+declare query_parameters(user:string = "alice@contoso.com")
+SigninLogs | where UserPrincipalName == user

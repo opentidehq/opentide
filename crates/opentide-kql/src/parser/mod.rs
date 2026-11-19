@@ -148,6 +148,15 @@ impl<'i> P<'i> {
         self.0.current_range()
     }
 
+    /// Whether the significant tokens `a` and `b` ahead touch: no blank or
+    /// comment between them.
+    pub(crate) fn tokens_touch(&self, a: usize, b: usize) -> bool {
+        matches!(
+            (self.0.nth_range(a), self.0.nth_range(b)),
+            (Some(a), Some(b)) if a.end() == b.start()
+        )
+    }
+
     /// Notes a quoted name right after an expression: the old grammar read
     /// it as an index ([`parse`]).
     pub(crate) fn quoted_name_after_value(&mut self) {
@@ -223,6 +232,12 @@ impl<'i> P<'i> {
         self.0.start()
     }
 
+    /// Lets go of a node `start` opened: what it took stays in the node
+    /// around it.
+    pub(crate) fn abandon(&mut self, marker: Marker) {
+        marker.abandon(&mut self.0);
+    }
+
     pub(crate) fn enter(&mut self) -> bool {
         self.0.enter()
     }
@@ -237,6 +252,11 @@ impl<'i> P<'i> {
 
     pub(crate) fn precede(&mut self, done: CompletedMarker) -> Marker {
         done.precede(&mut self.0)
+    }
+
+    /// The text of the token `n` ahead.
+    pub(crate) fn nth_text(&self, n: usize) -> &str {
+        self.0.nth_text(n)
     }
 
     /// Whether the token `n` ahead is a word that can be a name: an

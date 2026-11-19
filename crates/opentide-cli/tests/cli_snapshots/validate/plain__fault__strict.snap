@@ -58,15 +58,6 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/covert-exfiltration-rule-0157.yaml:45:33
-   │
-44 │     query: |
-45 │       search in (SecurityEvent, *) "error"
-   │                                 ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
 error[falco_output_syntax]: invalid formatting syntax: formatting cannot end with a % (libsinsp)
    ╭─▶ objects/rules/covert-implant-rule-0165.yaml:43:30
    │
@@ -101,15 +92,6 @@ error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects th
    │                   ━━━
    │
    ╰─ help: try: "cannot run"
-
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/covert-tunnel-rule-0170.yaml:49:13
-   │
-48 │     query: |
-49 │       union * | take 1
-   │             ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
 error[spl_search_operator]: '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
    ╭─▶ objects/rules/elevated-dropper-rule-0068.yaml:59:22
@@ -503,15 +485,6 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[kql_parse_error]: KQL syntax error: expected a name
-   ╭─▶ objects/rules/remote-dropper-rule-0140.yaml:75:13
-   │
-74 │     query: |
-75 │       union * | take 1
-   │             ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
 error[eql_not_boolean]: integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
    ╭─▶ objects/rules/remote-dropper-rule-0197.yaml:59:21
    │
@@ -836,6 +809,6 @@ warning[asset_unknown]: visibility.toml.logsources.11.assets.0: logsource "Ghost
 
 
 ━━━ stderr
-✗ 102 errors in 90 files · 872 objects checked · 2025 queries · <SECONDS>
+✗ 99 errors in 87 files · 872 objects checked · 2025 queries · <SECONDS>
 → opentide explain unknown_key · how to fix it
 → opentide validate · check again

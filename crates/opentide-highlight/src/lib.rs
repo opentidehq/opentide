@@ -773,18 +773,46 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// The highlight tokens of `spans` in `source`, sorted. Their ranges come
+/// from the line table [`opentide_core::with_line_index`] installed for
+/// `source`, when one is; otherwise from a [`LineIndex`] built here. An
+/// engine that holds a [`LineIndex`] of `source` passes it to
+/// [`tokens_in`] instead (ADR 0014 §1: one table per analysis).
 pub fn tokens_from_spans(
     spec: &HighlightSpec,
     source: &str,
     spans: &[(ByteSpan, &str)],
 ) -> Result<Vec<HighlightToken>, HighlightError> {
-    let lines = LineIndex::new(source);
+    if opentide_core::line_index_installed(source) {
+        tokens_with(spec, spans, |span| {
+            opentide_core::span_to_range(source, span)
+        })
+    } else {
+        tokens_in(spec, &LineIndex::new(source), spans)
+    }
+}
+
+/// [`tokens_from_spans`], with the ranges from `lines`, the caller's line
+/// table of the text.
+pub fn tokens_in(
+    spec: &HighlightSpec,
+    lines: &LineIndex<'_>,
+    spans: &[(ByteSpan, &str)],
+) -> Result<Vec<HighlightToken>, HighlightError> {
+    tokens_with(spec, spans, |span| lines.range(span))
+}
+
+fn tokens_with(
+    spec: &HighlightSpec,
+    spans: &[(ByteSpan, &str)],
+    range: impl Fn(ByteSpan) -> opentide_core::Range,
+) -> Result<Vec<HighlightToken>, HighlightError> {
     let mut out = Vec::with_capacity(spans.len());
     for (span, capture) in spans {
         let token_type = spec.token_index(capture)?;
         out.push(HighlightToken {
             span: *span,
-            range: lines.range(*span),
+            range: range(*span),
             capture: (*capture).to_string(),
             token_type,
         });
@@ -814,6 +842,16 @@ pub fn tm_scope_name(language: LanguageId) -> String {
         other => format!("source.{}", other.as_str()),
     }
 }
+
+/// A KQL string on one line in the TextMate grammar: `"..."`, `'...'`,
+/// `@"..."` and `@'...'`, each with an optional obfuscating `h` or `H` that
+/// starts a name, as the lexer reads it (`ah"b"` and `$h"b"` are a name
+/// and a string).
+const KQL_STRING_MATCH: &str = r#"(?:(?<![A-Za-z0-9_$])[hH])?(?:@"(?:[^"]|"")*"|@'(?:[^']|'')*'|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')"#;
+
+/// A KQL number in the TextMate grammar: hexadecimal (`0x1F`, `0X1f`, `0x`)
+/// or decimal, with an exponent (`1.5e3`). Timespans (`5m`) stay plain.
+const KQL_NUMBER_MATCH: &str = r"\b(?:0[xX][0-9A-Fa-f]*|[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\b";
 
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
 ///
@@ -877,16 +915,41 @@ fn generate_tm_language_from(
             "comment": "capture:macro",
         }));
     }
-    patterns.push(serde_json::json!({
-        "name": string_tm,
-        "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
-        "comment": "capture:string",
-    }));
-    patterns.push(serde_json::json!({
-        "name": number_tm,
-        "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
-        "comment": "capture:number",
-    }));
+    if language == LanguageId::Kql {
+        // KQL's literals as its lexer reads them: any string may be
+        // obfuscated (`h` or `H` right before it), the multi-line ```` ``` ````
+        // and `~~~` strings span lines, `@"..."` doubles its quote, and an
+        // integer may be hexadecimal (`0x1F`, a bare `0x`).
+        for fence in ["```", "~~~"] {
+            patterns.push(serde_json::json!({
+                "name": string_tm,
+                "begin": format!("(?:(?<![A-Za-z0-9_$])[hH])?{fence}"),
+                "end": fence,
+                "comment": "capture:string",
+            }));
+        }
+        patterns.push(serde_json::json!({
+            "name": string_tm,
+            "match": KQL_STRING_MATCH,
+            "comment": "capture:string",
+        }));
+        patterns.push(serde_json::json!({
+            "name": number_tm,
+            "match": KQL_NUMBER_MATCH,
+            "comment": "capture:number",
+        }));
+    } else {
+        patterns.push(serde_json::json!({
+            "name": string_tm,
+            "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+            "comment": "capture:string",
+        }));
+        patterns.push(serde_json::json!({
+            "name": number_tm,
+            "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+            "comment": "capture:number",
+        }));
+    }
     if language == LanguageId::TideYaml {
         for capture in ["tide.property", "tide.keyword"] {
             let keys = tide_keys_for_capture(capture);
@@ -1203,6 +1266,33 @@ mod tests {
         assert!(impact.enum_values.len() > 1);
     }
 
+    /// The tokens read the caller's line table, or the one
+    /// `with_line_index` installed, and build none of their own when they can
+    /// (ADR 0014 §1), with the same ranges either way.
+    #[test]
+    fn the_tokens_build_a_line_table_only_when_none_is_given() {
+        let spec = HighlightSpec::load().unwrap();
+        let source = "a | b\n\"é\u{1F600}\" | c";
+        let spans = [
+            (ByteSpan::new(0, 1), "keyword"),
+            (ByteSpan::new(6, 14), "string"),
+            (ByteSpan::new(17, 18), "keyword"),
+        ];
+        let built = || opentide_core::line_tables_built();
+        let before = built();
+        let own = tokens_from_spans(&spec, source, &spans).unwrap();
+        assert_eq!(built() - before, 1);
+        let lines = LineIndex::new(source);
+        let before = built();
+        assert_eq!(tokens_in(&spec, &lines, &spans).unwrap(), own);
+        assert_eq!(built() - before, 0);
+        opentide_core::with_line_index(source, || {
+            let before = built();
+            assert_eq!(tokens_from_spans(&spec, source, &spans).unwrap(), own);
+            assert_eq!(built() - before, 0);
+        });
+    }
+
     #[test]
     fn an_unknown_capture_fails() {
         let spec = HighlightSpec::load().unwrap();
@@ -1325,6 +1415,60 @@ mod tests {
                 .iter()
                 .any(|field| field.path == "description" && field.required)
         );
+    }
+}
+
+#[cfg(test)]
+mod kql_tm_literals {
+    use opentide_core::LanguageId;
+
+    /// The KQL grammar's one-line rules of `capture`, compiled.
+    fn rules(capture: &str) -> Vec<regex::Regex> {
+        let spec = crate::HighlightSpec::load().expect("spec");
+        let tm = crate::generate_tm_language(LanguageId::Kql, &spec);
+        tm["patterns"]
+            .as_array()
+            .expect("patterns")
+            .iter()
+            .filter(|p| p["comment"] == format!("capture:{capture}"))
+            .filter_map(|p| p["match"].as_str())
+            .map(|m| regex::Regex::new(m).expect("a regex"))
+            .collect()
+    }
+
+    fn found<'t>(capture: &str, text: &'t str) -> Vec<&'t str> {
+        rules(capture)
+            .iter()
+            .flat_map(|rule| rule.find_iter(text).map(|m| m.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn hexadecimal_integers_are_numbers() {
+        assert_eq!(
+            found(
+                "number",
+                "x == 0x1F or y == 0X1f or z == 0x or w == 12.5 or v == 0xFFFFFFFFFFFFFFFF or u == 1.5e3"
+            ),
+            ["0x1F", "0X1f", "0x", "12.5", "0xFFFFFFFFFFFFFFFF", "1.5e3"]
+        );
+    }
+
+    // The string and fence rules use a lookbehind, which the `regex` crate
+    // lacks: `highlights/test/embedded.test.mjs` runs them in vscode-textmate,
+    // as an editor does.
+
+    #[test]
+    fn kql_literal_rules_snapshot() {
+        let spec = crate::HighlightSpec::load().expect("spec");
+        let tm = crate::generate_tm_language(LanguageId::Kql, &spec);
+        let literals: Vec<&serde_json::Value> = tm["patterns"]
+            .as_array()
+            .expect("patterns")
+            .iter()
+            .filter(|p| p["comment"] == "capture:string" || p["comment"] == "capture:number")
+            .collect();
+        insta::assert_snapshot!(serde_json::to_string_pretty(&literals).expect("json"));
     }
 }
 

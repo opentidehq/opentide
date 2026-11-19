@@ -1,0 +1,32 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/144_sort_length_a_desc.esql
+---
+SOURCE_FILE@0..32
+  QUERY@0..31
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    SORT_COMMAND@12..31
+      SORT_KW@12..16 "SORT"
+      WHITESPACE@16..17 " "
+      ORDER_EXPRESSION@17..31
+        FUNCTION_CALL@17..26
+          IDENTIFIER@17..23
+            IDENT@17..23 "LENGTH"
+          L_PAREN@23..24 "("
+          QUALIFIED_NAME@24..25
+            IDENTIFIER@24..25
+              IDENT@24..25 "a"
+          R_PAREN@25..26 ")"
+        WHITESPACE@26..27 " "
+        DESC_KW@27..31 "DESC"
+  WHITESPACE@31..32 "\n"
+--- errors

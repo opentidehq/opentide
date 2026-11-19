@@ -6,7 +6,7 @@ use crate::{Lang, SyntaxKind, SyntaxNode, SyntaxToken, T};
 use opentide_parse::ast::{AstChildren, AstNode, support};
 use opentide_parse::conformance::{NodeRule, Rule};
 
-/// `SourceFile = LetStatement* (Query | ControlCommand)?`
+/// `SourceFile = (LetStatement | QueryParametersStatement)* (Query | ControlCommand)?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SourceFile {
     syntax: SyntaxNode,
@@ -30,6 +30,10 @@ impl SourceFile {
     pub fn let_statements(&self) -> AstChildren<LetStatement> {
         support::children(&self.syntax)
     }
+    /// The `QueryParametersStatement` children.
+    pub fn query_parameters_statements(&self) -> AstChildren<QueryParametersStatement> {
+        support::children(&self.syntax)
+    }
     /// The `Query` child.
     pub fn query(&self) -> Option<Query> {
         support::child(&self.syntax)
@@ -40,7 +44,7 @@ impl SourceFile {
     }
 }
 
-/// `LetStatement = 'let' name:'ident' '=' value:LetValue ';'`
+/// `LetStatement = 'let' name:'ident' '=' value:LetValue ';'?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LetStatement {
     syntax: SyntaxNode,
@@ -75,6 +79,56 @@ impl LetStatement {
     /// The `LetValue` child.
     pub fn value(&self) -> Option<LetValue> {
         support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![;])
+    }
+}
+
+/// `QueryParametersStatement = 'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct QueryParametersStatement {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for QueryParametersStatement {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::QUERY_PARAMETERS_STATEMENT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl QueryParametersStatement {
+    /// The token child.
+    pub fn declare_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![declare])
+    }
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The `Parameter` children.
+    pub fn parameters(&self) -> AstChildren<Parameter> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
     }
     /// The token child.
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
@@ -197,7 +251,49 @@ impl From<FunctionDefinition> for LetValue {
     }
 }
 
-/// `Expr = OrExpr | AndExpr | NotExpr | ComparisonExpr | InExpr | BetweenExpr | AdditiveExpr | MultiplicativeExpr | UnaryExpr | MemberExpr | IndexExpr | FunctionCall | ToscalarExpr | ParenExpr | NameRef | Literal | DynamicLiteral`
+/// `Parameter = name:'ident' ':' Type ('=' default:Expr)?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Parameter {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for Parameter {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::PARAMETER
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl Parameter {
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![:])
+    }
+    /// The `Type` child.
+    pub fn r#type(&self) -> Option<Type> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![=])
+    }
+    /// The `Expr` child.
+    pub fn default(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `Expr = OrExpr | AndExpr | NotExpr | ComparisonExpr | InExpr | BetweenExpr | AdditiveExpr | MultiplicativeExpr | UnaryExpr | MemberExpr | IndexExpr | FunctionCall | ToscalarExpr | ParenExpr | NameRef | Literal | DynamicLiteral | StarExpr`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expr {
     /// A `OrExpr`.
@@ -234,6 +330,8 @@ pub enum Expr {
     Literal(Literal),
     /// A `DynamicLiteral`.
     DynamicLiteral(DynamicLiteral),
+    /// A `StarExpr`.
+    StarExpr(StarExpr),
 }
 
 impl AstNode for Expr {
@@ -256,6 +354,7 @@ impl AstNode for Expr {
             || NameRef::can_cast(kind)
             || Literal::can_cast(kind)
             || DynamicLiteral::can_cast(kind)
+            || StarExpr::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let node = match syntax.kind() {
@@ -278,6 +377,7 @@ impl AstNode for Expr {
             SyntaxKind::NAME_REF => Self::NameRef(NameRef { syntax }),
             SyntaxKind::LITERAL => Self::Literal(Literal { syntax }),
             SyntaxKind::DYNAMIC_LITERAL => Self::DynamicLiteral(DynamicLiteral { syntax }),
+            SyntaxKind::STAR_EXPR => Self::StarExpr(StarExpr { syntax }),
             _ => return None,
         };
         Some(node)
@@ -301,6 +401,7 @@ impl AstNode for Expr {
             Self::NameRef(it) => it.syntax(),
             Self::Literal(it) => it.syntax(),
             Self::DynamicLiteral(it) => it.syntax(),
+            Self::StarExpr(it) => it.syntax(),
         }
     }
 }
@@ -407,6 +508,12 @@ impl From<DynamicLiteral> for Expr {
     }
 }
 
+impl From<StarExpr> for Expr {
+    fn from(node: StarExpr) -> Self {
+        Self::StarExpr(node)
+    }
+}
+
 /// `TabularExpression = TabularSource ('|' TabularOperator)*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TabularExpression {
@@ -496,48 +603,6 @@ impl FunctionDefinition {
     /// The token child.
     pub fn r_curly_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T!['}'])
-    }
-}
-
-/// `Parameter = name:'ident' ':' Type ('=' default:Expr)?`
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Parameter {
-    syntax: SyntaxNode,
-}
-
-impl AstNode for Parameter {
-    type Language = Lang;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::PARAMETER
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl Parameter {
-    /// The token child.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
-    }
-    /// The token child.
-    pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![:])
-    }
-    /// The `Type` child.
-    pub fn r#type(&self) -> Option<Type> {
-        support::child(&self.syntax)
-    }
-    /// The token child.
-    pub fn eq_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![=])
-    }
-    /// The `Expr` child.
-    pub fn default(&self) -> Option<Expr> {
-        support::child(&self.syntax)
     }
 }
 
@@ -673,7 +738,7 @@ impl TabularSource {
     }
 }
 
-/// `TabularOperator = WhereOperator | FilterOperator | ProjectOperator | ProjectAwayOperator | ProjectRenameOperator | ProjectKeepOperator | ProjectReorderOperator | ExtendOperator | SummarizeOperator | JoinOperator | UnionOperator | ParseOperator | ParseWhereOperator | ParseKvOperator | LookupOperator | TakeOperator | LimitOperator | TopOperator | CountOperator | MvExpandOperator | MvApplyOperator | MakeSeriesOperator | EvaluateOperator | SortOperator | DistinctOperator | RenderOperator | RangeOperator | TopNestedOperator | SampleDistinctOperator | ForkOperator | FacetOperator | PartitionOperator | ScanOperator | KeywordOperator | UnknownOperator`
+/// `TabularOperator = WhereOperator | FilterOperator | ProjectOperator | ProjectAwayOperator | ProjectRenameOperator | ProjectKeepOperator | ProjectReorderOperator | ExtendOperator | SummarizeOperator | JoinOperator | UnionOperator | ParseOperator | ParseWhereOperator | ParseKvOperator | LookupOperator | TakeOperator | LimitOperator | TopOperator | CountOperator | MvExpandOperator | MvApplyOperator | MakeSeriesOperator | EvaluateOperator | SortOperator | DistinctOperator | RenderOperator | RangeOperator | TopNestedOperator | SampleDistinctOperator | ForkOperator | FacetOperator | PartitionOperator | ScanOperator | SerializeOperator | AsOperator | TopHittersOperator | ReduceOperator | SearchOperator | KeywordOperator | UnknownOperator`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TabularOperator {
     /// A `WhereOperator`.
@@ -742,6 +807,16 @@ pub enum TabularOperator {
     PartitionOperator(PartitionOperator),
     /// A `ScanOperator`.
     ScanOperator(ScanOperator),
+    /// A `SerializeOperator`.
+    SerializeOperator(SerializeOperator),
+    /// A `AsOperator`.
+    AsOperator(AsOperator),
+    /// A `TopHittersOperator`.
+    TopHittersOperator(TopHittersOperator),
+    /// A `ReduceOperator`.
+    ReduceOperator(ReduceOperator),
+    /// A `SearchOperator`.
+    SearchOperator(SearchOperator),
     /// A `KeywordOperator`.
     KeywordOperator(KeywordOperator),
     /// A `UnknownOperator`.
@@ -784,6 +859,11 @@ impl AstNode for TabularOperator {
             || FacetOperator::can_cast(kind)
             || PartitionOperator::can_cast(kind)
             || ScanOperator::can_cast(kind)
+            || SerializeOperator::can_cast(kind)
+            || AsOperator::can_cast(kind)
+            || TopHittersOperator::can_cast(kind)
+            || ReduceOperator::can_cast(kind)
+            || SearchOperator::can_cast(kind)
             || KeywordOperator::can_cast(kind)
             || UnknownOperator::can_cast(kind)
     }
@@ -838,6 +918,13 @@ impl AstNode for TabularOperator {
             SyntaxKind::FACET_OPERATOR => Self::FacetOperator(FacetOperator { syntax }),
             SyntaxKind::PARTITION_OPERATOR => Self::PartitionOperator(PartitionOperator { syntax }),
             SyntaxKind::SCAN_OPERATOR => Self::ScanOperator(ScanOperator { syntax }),
+            SyntaxKind::SERIALIZE_OPERATOR => Self::SerializeOperator(SerializeOperator { syntax }),
+            SyntaxKind::AS_OPERATOR => Self::AsOperator(AsOperator { syntax }),
+            SyntaxKind::TOP_HITTERS_OPERATOR => {
+                Self::TopHittersOperator(TopHittersOperator { syntax })
+            }
+            SyntaxKind::REDUCE_OPERATOR => Self::ReduceOperator(ReduceOperator { syntax }),
+            SyntaxKind::SEARCH_OPERATOR => Self::SearchOperator(SearchOperator { syntax }),
             SyntaxKind::KEYWORD_OPERATOR => Self::KeywordOperator(KeywordOperator { syntax }),
             SyntaxKind::UNKNOWN_OPERATOR => Self::UnknownOperator(UnknownOperator { syntax }),
             _ => return None,
@@ -879,6 +966,11 @@ impl AstNode for TabularOperator {
             Self::FacetOperator(it) => it.syntax(),
             Self::PartitionOperator(it) => it.syntax(),
             Self::ScanOperator(it) => it.syntax(),
+            Self::SerializeOperator(it) => it.syntax(),
+            Self::AsOperator(it) => it.syntax(),
+            Self::TopHittersOperator(it) => it.syntax(),
+            Self::ReduceOperator(it) => it.syntax(),
+            Self::SearchOperator(it) => it.syntax(),
             Self::KeywordOperator(it) => it.syntax(),
             Self::UnknownOperator(it) => it.syntax(),
         }
@@ -1083,6 +1175,36 @@ impl From<ScanOperator> for TabularOperator {
     }
 }
 
+impl From<SerializeOperator> for TabularOperator {
+    fn from(node: SerializeOperator) -> Self {
+        Self::SerializeOperator(node)
+    }
+}
+
+impl From<AsOperator> for TabularOperator {
+    fn from(node: AsOperator) -> Self {
+        Self::AsOperator(node)
+    }
+}
+
+impl From<TopHittersOperator> for TabularOperator {
+    fn from(node: TopHittersOperator) -> Self {
+        Self::TopHittersOperator(node)
+    }
+}
+
+impl From<ReduceOperator> for TabularOperator {
+    fn from(node: ReduceOperator) -> Self {
+        Self::ReduceOperator(node)
+    }
+}
+
+impl From<SearchOperator> for TabularOperator {
+    fn from(node: SearchOperator) -> Self {
+        Self::SearchOperator(node)
+    }
+}
+
 impl From<KeywordOperator> for TabularOperator {
     fn from(node: KeywordOperator) -> Self {
         Self::KeywordOperator(node)
@@ -1095,11 +1217,13 @@ impl From<UnknownOperator> for TabularOperator {
     }
 }
 
-/// `TabularPrimary = TableRef | ParenTabular | PrintOperator | UnionOperator | DatatableExpression | ExternaldataExpression | RangeOperator | FunctionCall | MaterializeExpression | SearchSource`
+/// `TabularPrimary = TableRef | QualifiedTable | ParenTabular | PrintOperator | UnionOperator | DatatableExpression | ExternaldataExpression | RangeOperator | FunctionCall | MaterializeExpression | SearchSource`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TabularPrimary {
     /// A `TableRef`.
     TableRef(TableRef),
+    /// A `QualifiedTable`.
+    QualifiedTable(QualifiedTable),
     /// A `ParenTabular`.
     ParenTabular(ParenTabular),
     /// A `PrintOperator`.
@@ -1124,6 +1248,7 @@ impl AstNode for TabularPrimary {
     type Language = Lang;
     fn can_cast(kind: SyntaxKind) -> bool {
         TableRef::can_cast(kind)
+            || QualifiedTable::can_cast(kind)
             || ParenTabular::can_cast(kind)
             || PrintOperator::can_cast(kind)
             || UnionOperator::can_cast(kind)
@@ -1137,6 +1262,7 @@ impl AstNode for TabularPrimary {
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let node = match syntax.kind() {
             SyntaxKind::TABLE_REF => Self::TableRef(TableRef { syntax }),
+            SyntaxKind::QUALIFIED_TABLE => Self::QualifiedTable(QualifiedTable { syntax }),
             SyntaxKind::PAREN_TABULAR => Self::ParenTabular(ParenTabular { syntax }),
             SyntaxKind::PRINT_OPERATOR => Self::PrintOperator(PrintOperator { syntax }),
             SyntaxKind::UNION_OPERATOR => Self::UnionOperator(UnionOperator { syntax }),
@@ -1159,6 +1285,7 @@ impl AstNode for TabularPrimary {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             Self::TableRef(it) => it.syntax(),
+            Self::QualifiedTable(it) => it.syntax(),
             Self::ParenTabular(it) => it.syntax(),
             Self::PrintOperator(it) => it.syntax(),
             Self::UnionOperator(it) => it.syntax(),
@@ -1175,6 +1302,12 @@ impl AstNode for TabularPrimary {
 impl From<TableRef> for TabularPrimary {
     fn from(node: TableRef) -> Self {
         Self::TableRef(node)
+    }
+}
+
+impl From<QualifiedTable> for TabularPrimary {
+    fn from(node: QualifiedTable) -> Self {
+        Self::QualifiedTable(node)
     }
 }
 
@@ -1232,7 +1365,7 @@ impl From<SearchSource> for TabularPrimary {
     }
 }
 
-/// `TableRef = table:'ident'`
+/// `TableRef = '['? table:('ident' | 'quoted_ident' | 'string') ']'?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TableRef {
     syntax: SyntaxNode,
@@ -1253,8 +1386,54 @@ impl AstNode for TableRef {
 
 impl TableRef {
     /// The token child.
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['['])
+    }
+    /// The token child.
     pub fn table(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident], T![string]])
+    }
+    /// The token child.
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![']'])
+    }
+}
+
+/// `QualifiedTable = FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct QualifiedTable {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for QualifiedTable {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::QUALIFIED_TABLE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl QualifiedTable {
+    /// The `FunctionCall` children.
+    pub fn function_calls(&self) -> AstChildren<FunctionCall> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn dot_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![.])
+    }
+    /// The `TableRef` child.
+    pub fn table_ref(&self) -> Option<TableRef> {
+        support::child(&self.syntax)
+    }
+    /// The `TablePattern` child.
+    pub fn table_pattern(&self) -> Option<TablePattern> {
+        support::child(&self.syntax)
     }
 }
 
@@ -1614,7 +1793,7 @@ impl MaterializeExpression {
     }
 }
 
-/// `SearchSource = name:('search' | 'find') OperatorOption* ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr`
+/// `SearchSource = name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr FindProject?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SearchSource {
     syntax: SyntaxNode,
@@ -1650,9 +1829,13 @@ impl SearchSource {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T!['('])
     }
-    /// The token child.
-    pub fn table(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
+    /// The token children, in order.
+    pub fn table(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The `TablePattern` children.
+    pub fn table_patterns(&self) -> AstChildren<TablePattern> {
+        support::children(&self.syntax)
     }
     /// The token child.
     pub fn comma_token(&self) -> Option<SyntaxToken> {
@@ -1669,6 +1852,36 @@ impl SearchSource {
     /// The `Expr` child.
     pub fn predicate(&self) -> Option<Expr> {
         support::child(&self.syntax)
+    }
+    /// The `FindProject` child.
+    pub fn find_project(&self) -> Option<FindProject> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TablePattern {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for TablePattern {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TABLE_PATTERN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TablePattern {
+    /// The token children, in order.
+    pub fn pieces(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![number], T![timespan], T![*]])
     }
 }
 
@@ -1702,6 +1915,82 @@ impl OperatorOption {
     }
     /// The `OptionValue` child.
     pub fn value(&self) -> Option<OptionValue> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `FindProject = 'project' ((FindColumn (',' FindColumn)*) | ('-' smart:'ident'))`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FindProject {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for FindProject {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::FIND_PROJECT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl FindProject {
+    /// The token child.
+    pub fn project_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![project])
+    }
+    /// The `FindColumn` children.
+    pub fn find_columns(&self) -> AstChildren<FindColumn> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn minus_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn smart(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+}
+
+/// `FindColumn = name:('ident' | 'quoted_ident') (':' Type)?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FindColumn {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for FindColumn {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::FIND_COLUMN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl FindColumn {
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The token child.
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![:])
+    }
+    /// The `Type` child.
+    pub fn r#type(&self) -> Option<Type> {
         support::child(&self.syntax)
     }
 }
@@ -1740,7 +2029,7 @@ impl DatatableColumn {
     }
 }
 
-/// `OptionValue = value:('ident' | 'boolean' | 'number' | 'string')`
+/// `OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OptionValue {
     syntax: SyntaxNode,
@@ -1761,10 +2050,14 @@ impl AstNode for OptionValue {
 
 impl OptionValue {
     /// The token child.
+    pub fn sign(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![-], T![+]])
+    }
+    /// The token child.
     pub fn value(&self) -> Option<SyntaxToken> {
         support::token_in(
             &self.syntax,
-            &[T![ident], T![boolean], T![number], T![string]],
+            &[T![ident], T![boolean], T![number], T![timespan], T![string]],
         )
     }
 }
@@ -2801,7 +3094,7 @@ impl DistinctOperator {
     }
 }
 
-/// `RenderOperator = 'render' kind:'ident'`
+/// `RenderOperator = 'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderOperator {
     syntax: SyntaxNode,
@@ -2828,6 +3121,18 @@ impl RenderOperator {
     /// The token child.
     pub fn kind(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![ident])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+    /// The `NamedArgument` children.
+    pub fn named_arguments(&self) -> AstChildren<NamedArgument> {
+        support::children(&self.syntax)
+    }
+    /// The `RenderWith` child.
+    pub fn render_with(&self) -> Option<RenderWith> {
+        support::child(&self.syntax)
     }
 }
 
@@ -3139,7 +3444,221 @@ impl ScanOperator {
     }
 }
 
-/// `KeywordOperator = name:('search' | 'find' | 'invoke' | 'serialize' | 'as' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'reduce' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components' | 'top-hitters') args:Expr?`
+/// `SerializeOperator = 'serialize' (ColumnItem (',' ColumnItem)*)?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SerializeOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for SerializeOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::SERIALIZE_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl SerializeOperator {
+    /// The token child.
+    pub fn serialize_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![serialize])
+    }
+    /// The `ColumnItem` children.
+    pub fn column_items(&self) -> AstChildren<ColumnItem> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+}
+
+/// `AsOperator = 'as' HintOption* name:'ident'`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AsOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for AsOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::AS_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl AsOperator {
+    /// The token child.
+    pub fn as_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![as])
+    }
+    /// The `HintOption` children.
+    pub fn hint_options(&self) -> AstChildren<HintOption> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+}
+
+/// `TopHittersOperator = keyword:'top-hitters' count:Expr 'of' value:Expr TopHittersBy?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TopHittersOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for TopHittersOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TOP_HITTERS_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TopHittersOperator {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![top - hitters])
+    }
+    /// The `Expr` child.
+    pub fn count(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn of_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![of])
+    }
+    /// The `Expr` child, number 1 from 0 among the `Expr` children.
+    pub fn value(&self) -> Option<Expr> {
+        support::nth_child(&self.syntax, 1)
+    }
+    /// The `TopHittersBy` child.
+    pub fn top_hitters_by(&self) -> Option<TopHittersBy> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `ReduceOperator = 'reduce' OperatorOption* 'by' value:Expr ('with' (OperatorOption (',' OperatorOption)*)?)?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ReduceOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for ReduceOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::REDUCE_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ReduceOperator {
+    /// The token child.
+    pub fn reduce_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![reduce])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn by_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![by])
+    }
+    /// The `Expr` child.
+    pub fn value(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![with])
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+}
+
+/// `SearchOperator = 'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SearchOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for SearchOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::SEARCH_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl SearchOperator {
+    /// The token child.
+    pub fn search_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![search])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn in_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![in])
+    }
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The token children, in order.
+    pub fn table(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The `TablePattern` children.
+    pub fn table_patterns(&self) -> AstChildren<TablePattern> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
+    }
+    /// The `Expr` child.
+    pub fn predicate(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `KeywordOperator = name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct KeywordOperator {
     syntax: SyntaxNode,
@@ -3164,22 +3683,17 @@ impl KeywordOperator {
         support::token_in(
             &self.syntax,
             &[
-                T![search],
                 T![find],
                 T![invoke],
-                T![serialize],
-                T![as],
                 T![getschema],
                 T![sample],
                 T![externaldata],
                 T![consume],
-                T![reduce],
                 T![make - graph],
                 T![graph-match],
                 T![graph - shortest - paths],
                 T![graph - to - table],
                 T![graph - mark - components],
-                T![top - hitters],
             ],
         )
     }
@@ -3567,11 +4081,15 @@ impl NameTuple {
     }
 }
 
-/// `UnionLeg = TableRef | FunctionCall | ParenTabular`
+/// `UnionLeg = TableRef | TablePattern | QualifiedTable | FunctionCall | ParenTabular`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnionLeg {
     /// A `TableRef`.
     TableRef(TableRef),
+    /// A `TablePattern`.
+    TablePattern(TablePattern),
+    /// A `QualifiedTable`.
+    QualifiedTable(QualifiedTable),
     /// A `FunctionCall`.
     FunctionCall(FunctionCall),
     /// A `ParenTabular`.
@@ -3581,11 +4099,17 @@ pub enum UnionLeg {
 impl AstNode for UnionLeg {
     type Language = Lang;
     fn can_cast(kind: SyntaxKind) -> bool {
-        TableRef::can_cast(kind) || FunctionCall::can_cast(kind) || ParenTabular::can_cast(kind)
+        TableRef::can_cast(kind)
+            || TablePattern::can_cast(kind)
+            || QualifiedTable::can_cast(kind)
+            || FunctionCall::can_cast(kind)
+            || ParenTabular::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let node = match syntax.kind() {
             SyntaxKind::TABLE_REF => Self::TableRef(TableRef { syntax }),
+            SyntaxKind::TABLE_PATTERN => Self::TablePattern(TablePattern { syntax }),
+            SyntaxKind::QUALIFIED_TABLE => Self::QualifiedTable(QualifiedTable { syntax }),
             SyntaxKind::FUNCTION_CALL => Self::FunctionCall(FunctionCall { syntax }),
             SyntaxKind::PAREN_TABULAR => Self::ParenTabular(ParenTabular { syntax }),
             _ => return None,
@@ -3595,6 +4119,8 @@ impl AstNode for UnionLeg {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             Self::TableRef(it) => it.syntax(),
+            Self::TablePattern(it) => it.syntax(),
+            Self::QualifiedTable(it) => it.syntax(),
             Self::FunctionCall(it) => it.syntax(),
             Self::ParenTabular(it) => it.syntax(),
         }
@@ -3604,6 +4130,18 @@ impl AstNode for UnionLeg {
 impl From<TableRef> for UnionLeg {
     fn from(node: TableRef) -> Self {
         Self::TableRef(node)
+    }
+}
+
+impl From<TablePattern> for UnionLeg {
+    fn from(node: TablePattern) -> Self {
+        Self::TablePattern(node)
+    }
+}
+
+impl From<QualifiedTable> for UnionLeg {
+    fn from(node: QualifiedTable) -> Self {
+        Self::QualifiedTable(node)
     }
 }
 
@@ -3895,6 +4433,124 @@ impl StarArg {
     }
 }
 
+/// `NamedArgument = name:'ident' '=' value:Expr`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NamedArgument {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for NamedArgument {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::NAMED_ARGUMENT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl NamedArgument {
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![=])
+    }
+    /// The `Expr` child.
+    pub fn value(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `RenderWith = 'with' '(' (RenderProperty (',' RenderProperty)*)? ')'`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RenderWith {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for RenderWith {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::RENDER_WITH
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl RenderWith {
+    /// The token child.
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![with])
+    }
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The `RenderProperty` children.
+    pub fn render_properties(&self) -> AstChildren<RenderProperty> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
+    }
+}
+
+/// `RenderProperty = NamedArgument | NameRef`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RenderProperty {
+    /// A `NamedArgument`.
+    NamedArgument(NamedArgument),
+    /// A `NameRef`.
+    NameRef(NameRef),
+}
+
+impl AstNode for RenderProperty {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        NamedArgument::can_cast(kind) || NameRef::can_cast(kind)
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        let node = match syntax.kind() {
+            SyntaxKind::NAMED_ARGUMENT => Self::NamedArgument(NamedArgument { syntax }),
+            SyntaxKind::NAME_REF => Self::NameRef(NameRef { syntax }),
+            _ => return None,
+        };
+        Some(node)
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::NamedArgument(it) => it.syntax(),
+            Self::NameRef(it) => it.syntax(),
+        }
+    }
+}
+
+impl From<NamedArgument> for RenderProperty {
+    fn from(node: NamedArgument) -> Self {
+        Self::NamedArgument(node)
+    }
+}
+
+impl From<NameRef> for RenderProperty {
+    fn from(node: NameRef) -> Self {
+        Self::NameRef(node)
+    }
+}
+
 /// `TopNestedClause = keyword:'top-nested' count:Expr? TopNestedOf TopNestedOthers? TopNestedBy`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TopNestedClause {
@@ -4159,6 +4815,36 @@ impl ScanStep {
     }
 }
 
+/// `TopHittersBy = 'by' sum:Expr`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TopHittersBy {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for TopHittersBy {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TOP_HITTERS_BY
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TopHittersBy {
+    /// The token child.
+    pub fn by_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![by])
+    }
+    /// The `Expr` child.
+    pub fn sum(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
+
 /// `OrExpr = Expr ('or' Expr)*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OrExpr {
@@ -4249,7 +4935,7 @@ impl NotExpr {
     }
 }
 
-/// `ComparisonExpr = lhs:Expr (op:'cmp_op' | ('matches' 'regex')) rhs:Expr`
+/// `ComparisonExpr = lhs:Expr (op:('cmp_op' | ':') | ('matches' 'regex')) rhs:Expr`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ComparisonExpr {
     syntax: SyntaxNode,
@@ -4275,7 +4961,7 @@ impl ComparisonExpr {
     }
     /// The token child.
     pub fn op(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![cmp_op])
+        support::token_in(&self.syntax, &[T![cmp_op], T![:]])
     }
     /// The token child.
     pub fn matches_token(&self) -> Option<SyntaxToken> {
@@ -4671,6 +5357,32 @@ impl DynamicLiteral {
     }
 }
 
+/// `StarExpr = '*'`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct StarExpr {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for StarExpr {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::STAR_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl StarExpr {
+    /// The token child.
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![*])
+    }
+}
+
 /// `ExpressionList = '(' ((Expr (',' Expr)*) | TabularExpression)? ')'`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ExpressionList {
@@ -4803,40 +5515,6 @@ impl From<StarArg> for Argument {
 impl From<Expr> for Argument {
     fn from(node: Expr) -> Self {
         Self::Expr(node)
-    }
-}
-
-/// `NamedArgument = name:'ident' '=' value:Expr`
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct NamedArgument {
-    syntax: SyntaxNode,
-}
-
-impl AstNode for NamedArgument {
-    type Language = Lang;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::NAMED_ARGUMENT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl NamedArgument {
-    /// The token child.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
-    }
-    /// The token child.
-    pub fn eq_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![=])
-    }
-    /// The `Expr` child.
-    pub fn value(&self) -> Option<Expr> {
-        support::child(&self.syntax)
     }
 }
 
@@ -5040,9 +5718,12 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::SOURCE_FILE as u16,
         name: "SourceFile",
-        text: "LetStatement* (Query | ControlCommand)?",
+        text: "(LetStatement | QueryParametersStatement)* (Query | ControlCommand)?",
         rule: Rule::Seq(&[
-            Rule::Rep(&Rule::Kind(SyntaxKind::LET_STATEMENT as u16)),
+            Rule::Rep(&Rule::Alt(&[
+                Rule::Kind(SyntaxKind::LET_STATEMENT as u16),
+                Rule::Kind(SyntaxKind::QUERY_PARAMETERS_STATEMENT as u16),
+            ])),
             Rule::Opt(&Rule::Alt(&[
                 Rule::Kind(SyntaxKind::QUERY as u16),
                 Rule::Kind(SyntaxKind::CONTROL_COMMAND as u16),
@@ -5052,7 +5733,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::LET_STATEMENT as u16,
         name: "LetStatement",
-        text: "'let' name:'ident' '=' value:LetValue ';'",
+        text: "'let' name:'ident' '=' value:LetValue ';'?",
         rule: Rule::Seq(&[
             Rule::Kind(T![let] as u16),
             Rule::Kind(T![ident] as u16),
@@ -5076,11 +5757,29 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Kind(SyntaxKind::TABULAR_EXPRESSION as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_DEFINITION as u16),
             ]),
-            Rule::Kind(T![;] as u16),
+            Rule::Opt(&Rule::Kind(T![;] as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::QUERY_PARAMETERS_STATEMENT as u16,
+        name: "QueryParametersStatement",
+        text: "'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![declare] as u16),
+            Rule::Kind(T![ident] as u16),
+            Rule::Kind(T!['('] as u16),
+            Rule::Kind(SyntaxKind::PARAMETER as u16),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![,] as u16),
+                Rule::Kind(SyntaxKind::PARAMETER as u16),
+            ])),
+            Rule::Kind(T![')'] as u16),
+            Rule::Opt(&Rule::Kind(T![;] as u16)),
         ]),
     },
     NodeRule {
@@ -5097,6 +5796,39 @@ pub static RULES: &[NodeRule] = &[
             Rule::Kind(T![.] as u16),
             Rule::Kind(T![ident] as u16),
             Rule::Rep(&Rule::Kind(T![ident] as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::PARAMETER as u16,
+        name: "Parameter",
+        text: "name:'ident' ':' Type ('=' default:Expr)?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![ident] as u16),
+            Rule::Kind(T![:] as u16),
+            Rule::Kind(SyntaxKind::TYPE as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![=] as u16),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                    Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                    Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                    Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                    Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                    Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NAME_REF as u16),
+                    Rule::Kind(SyntaxKind::LITERAL as u16),
+                    Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                ]),
+            ])),
         ]),
     },
     NodeRule {
@@ -5141,6 +5873,11 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::FACET_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::PARTITION_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::SCAN_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::SERIALIZE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                 ]),
@@ -5182,44 +5919,13 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Kind(SyntaxKind::TABULAR_EXPRESSION as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_DEFINITION as u16),
             ]),
             Rule::Opt(&Rule::Kind(T![;] as u16)),
             Rule::Kind(T!['}'] as u16),
-        ]),
-    },
-    NodeRule {
-        kind: SyntaxKind::PARAMETER as u16,
-        name: "Parameter",
-        text: "name:'ident' ':' Type ('=' default:Expr)?",
-        rule: Rule::Seq(&[
-            Rule::Kind(T![ident] as u16),
-            Rule::Kind(T![:] as u16),
-            Rule::Kind(SyntaxKind::TYPE as u16),
-            Rule::Opt(&Rule::Seq(&[
-                Rule::Kind(T![=] as u16),
-                Rule::Alt(&[
-                    Rule::Kind(SyntaxKind::OR_EXPR as u16),
-                    Rule::Kind(SyntaxKind::AND_EXPR as u16),
-                    Rule::Kind(SyntaxKind::NOT_EXPR as u16),
-                    Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
-                    Rule::Kind(SyntaxKind::IN_EXPR as u16),
-                    Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
-                    Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
-                    Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
-                    Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
-                    Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
-                    Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
-                    Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
-                    Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
-                    Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
-                    Rule::Kind(SyntaxKind::NAME_REF as u16),
-                    Rule::Kind(SyntaxKind::LITERAL as u16),
-                    Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
-                ]),
-            ])),
         ]),
     },
     NodeRule {
@@ -5266,6 +5972,7 @@ pub static RULES: &[NodeRule] = &[
         text: "TabularPrimary",
         rule: Rule::Alt(&[
             Rule::Kind(SyntaxKind::TABLE_REF as u16),
+            Rule::Kind(SyntaxKind::QUALIFIED_TABLE as u16),
             Rule::Kind(SyntaxKind::PAREN_TABULAR as u16),
             Rule::Kind(SyntaxKind::PRINT_OPERATOR as u16),
             Rule::Kind(SyntaxKind::UNION_OPERATOR as u16),
@@ -5280,8 +5987,33 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::TABLE_REF as u16,
         name: "TableRef",
-        text: "table:'ident'",
-        rule: Rule::Kind(T![ident] as u16),
+        text: "'['? table:('ident' | 'quoted_ident' | 'string') ']'?",
+        rule: Rule::Seq(&[
+            Rule::Opt(&Rule::Kind(T!['['] as u16)),
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![quoted_ident] as u16),
+                Rule::Kind(T![string] as u16),
+            ]),
+            Rule::Opt(&Rule::Kind(T![']'] as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::QUALIFIED_TABLE as u16,
+        name: "QualifiedTable",
+        text: "FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)",
+        rule: Rule::Seq(&[
+            Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![.] as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+            ])),
+            Rule::Kind(T![.] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::TABLE_REF as u16),
+                Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+            ]),
+        ]),
     },
     NodeRule {
         kind: SyntaxKind::PAREN_TABULAR as u16,
@@ -5320,6 +6052,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Rep(&Rule::Seq(&[
@@ -5345,6 +6078,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
             ])),
@@ -5359,6 +6093,8 @@ pub static RULES: &[NodeRule] = &[
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
             Rule::Alt(&[
                 Rule::Kind(SyntaxKind::TABLE_REF as u16),
+                Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                Rule::Kind(SyntaxKind::QUALIFIED_TABLE as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
                 Rule::Kind(SyntaxKind::PAREN_TABULAR as u16),
             ]),
@@ -5366,6 +6102,8 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(T![,] as u16),
                 Rule::Alt(&[
                     Rule::Kind(SyntaxKind::TABLE_REF as u16),
+                    Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                    Rule::Kind(SyntaxKind::QUALIFIED_TABLE as u16),
                     Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
                     Rule::Kind(SyntaxKind::PAREN_TABULAR as u16),
                 ]),
@@ -5405,6 +6143,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
                     Rule::Kind(T![,] as u16),
@@ -5426,6 +6165,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ])),
                 Rule::Opt(&Rule::Kind(T![,] as u16)),
@@ -5470,6 +6210,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![,] as u16),
@@ -5491,6 +6232,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
             Rule::Opt(&Rule::Kind(T![,] as u16)),
@@ -5533,6 +6275,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![to] as u16),
             Rule::Alt(&[
@@ -5553,6 +6296,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![step] as u16),
             Rule::Alt(&[
@@ -5573,6 +6317,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5605,6 +6350,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -5630,6 +6376,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -5651,17 +6398,29 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::SEARCH_SOURCE as u16,
         name: "SearchSource",
-        text: "name:('search' | 'find') OperatorOption* ('in' '(' table:'ident' (',' table:'ident')* ')')? 'where'? predicate:Expr",
+        text: "name:('search' | 'find') OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr FindProject?",
         rule: Rule::Seq(&[
             Rule::Alt(&[Rule::Kind(T![search] as u16), Rule::Kind(T![find] as u16)]),
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
             Rule::Opt(&Rule::Seq(&[
                 Rule::Kind(T![in] as u16),
                 Rule::Kind(T!['('] as u16),
-                Rule::Kind(T![ident] as u16),
+                Rule::Alt(&[
+                    Rule::Alt(&[
+                        Rule::Kind(T![ident] as u16),
+                        Rule::Kind(T![quoted_ident] as u16),
+                    ]),
+                    Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                ]),
                 Rule::Rep(&Rule::Seq(&[
                     Rule::Kind(T![,] as u16),
-                    Rule::Kind(T![ident] as u16),
+                    Rule::Alt(&[
+                        Rule::Alt(&[
+                            Rule::Kind(T![ident] as u16),
+                            Rule::Kind(T![quoted_ident] as u16),
+                        ]),
+                        Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                    ]),
                 ])),
                 Rule::Kind(T![')'] as u16),
             ])),
@@ -5684,8 +6443,21 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
+            Rule::Opt(&Rule::Kind(SyntaxKind::FIND_PROJECT as u16)),
         ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::TABLE_PATTERN as u16,
+        name: "TablePattern",
+        text: "pieces:('ident' | 'number' | 'timespan' | '*')*",
+        rule: Rule::Rep(&Rule::Alt(&[
+            Rule::Kind(T![ident] as u16),
+            Rule::Kind(T![number] as u16),
+            Rule::Kind(T![timespan] as u16),
+            Rule::Kind(T![*] as u16),
+        ])),
     },
     NodeRule {
         kind: SyntaxKind::OPERATOR_OPTION as u16,
@@ -5701,6 +6473,39 @@ pub static RULES: &[NodeRule] = &[
         ]),
     },
     NodeRule {
+        kind: SyntaxKind::FIND_PROJECT as u16,
+        name: "FindProject",
+        text: "'project' ((FindColumn (',' FindColumn)*) | ('-' smart:'ident'))",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![project] as u16),
+            Rule::Alt(&[
+                Rule::Seq(&[
+                    Rule::Kind(SyntaxKind::FIND_COLUMN as u16),
+                    Rule::Rep(&Rule::Seq(&[
+                        Rule::Kind(T![,] as u16),
+                        Rule::Kind(SyntaxKind::FIND_COLUMN as u16),
+                    ])),
+                ]),
+                Rule::Seq(&[Rule::Kind(T![-] as u16), Rule::Kind(T![ident] as u16)]),
+            ]),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::FIND_COLUMN as u16,
+        name: "FindColumn",
+        text: "name:('ident' | 'quoted_ident') (':' Type)?",
+        rule: Rule::Seq(&[
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![quoted_ident] as u16),
+            ]),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![:] as u16),
+                Rule::Kind(SyntaxKind::TYPE as u16),
+            ])),
+        ]),
+    },
+    NodeRule {
         kind: SyntaxKind::DATATABLE_COLUMN as u16,
         name: "DatatableColumn",
         text: "name:'ident' ':' Type",
@@ -5713,12 +6518,19 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::OPTION_VALUE as u16,
         name: "OptionValue",
-        text: "value:('ident' | 'boolean' | 'number' | 'string')",
-        rule: Rule::Alt(&[
-            Rule::Kind(T![ident] as u16),
-            Rule::Kind(T![boolean] as u16),
-            Rule::Kind(T![number] as u16),
-            Rule::Kind(T![string] as u16),
+        text: "sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')",
+        rule: Rule::Seq(&[
+            Rule::Opt(&Rule::Alt(&[
+                Rule::Kind(T![-] as u16),
+                Rule::Kind(T![+] as u16),
+            ])),
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![boolean] as u16),
+                Rule::Kind(T![number] as u16),
+                Rule::Kind(T![timespan] as u16),
+                Rule::Kind(T![string] as u16),
+            ]),
         ]),
     },
     NodeRule {
@@ -5770,6 +6582,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5797,6 +6610,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5827,6 +6641,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Rep(&Rule::Seq(&[
@@ -5852,6 +6667,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
             ])),
@@ -5948,6 +6764,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Rep(&Rule::Seq(&[
@@ -5973,6 +6790,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
             ])),
@@ -6007,6 +6825,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -6032,6 +6851,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -6059,6 +6879,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -6084,6 +6905,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -6117,6 +6939,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![,] as u16),
@@ -6138,6 +6961,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -6167,6 +6991,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![with] as u16),
             Rule::Alt(&[
@@ -6204,6 +7029,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![with] as u16),
             Rule::Alt(&[
@@ -6240,6 +7066,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
             Rule::Opt(&Rule::Seq(&[
                 Rule::Kind(T![as] as u16),
@@ -6291,6 +7118,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![,] as u16),
@@ -6312,6 +7140,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -6386,6 +7215,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -6422,6 +7252,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
             Rule::Kind(T![on] as u16),
@@ -6464,6 +7295,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Alt(&[
@@ -6491,6 +7323,7 @@ pub static RULES: &[NodeRule] = &[
                                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                                 Rule::Kind(SyntaxKind::LITERAL as u16),
                                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                             ]),
                         ]),
                     ])),
@@ -6517,6 +7350,7 @@ pub static RULES: &[NodeRule] = &[
                                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                                 Rule::Kind(SyntaxKind::LITERAL as u16),
                                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                             ]),
                         ]),
                     ])),
@@ -6542,6 +7376,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ]),
@@ -6568,6 +7403,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ]),
@@ -6595,6 +7431,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -6620,6 +7457,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -6681,6 +7519,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                     Rule::Rep(&Rule::Seq(&[
@@ -6706,6 +7545,7 @@ pub static RULES: &[NodeRule] = &[
                                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                                 Rule::Kind(SyntaxKind::LITERAL as u16),
                                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                             ]),
                         ]),
                     ])),
@@ -6716,8 +7556,16 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::RENDER_OPERATOR as u16,
         name: "RenderOperator",
-        text: "'render' kind:'ident'",
-        rule: Rule::Seq(&[Rule::Kind(T![render] as u16), Rule::Kind(T![ident] as u16)]),
+        text: "'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![render] as u16),
+            Rule::Kind(T![ident] as u16),
+            Rule::Rep(&Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+                Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
+            ])),
+            Rule::Opt(&Rule::Kind(SyntaxKind::RENDER_WITH as u16)),
+        ]),
     },
     NodeRule {
         kind: SyntaxKind::TOP_NESTED_OPERATOR as u16,
@@ -6756,6 +7604,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![of] as u16),
             Rule::Alt(&[
@@ -6776,6 +7625,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -6843,6 +7693,11 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::FACET_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::PARTITION_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::SCAN_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::SERIALIZE_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                     ]),
@@ -6879,6 +7734,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
             Rule::Alt(&[
@@ -6932,6 +7788,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
                     Rule::Kind(T![,] as u16),
@@ -6953,6 +7810,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ])),
             ])),
@@ -6976,27 +7834,234 @@ pub static RULES: &[NodeRule] = &[
         ]),
     },
     NodeRule {
+        kind: SyntaxKind::SERIALIZE_OPERATOR as u16,
+        name: "SerializeOperator",
+        text: "'serialize' (ColumnItem (',' ColumnItem)*)?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![serialize] as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::ASSIGNMENT as u16),
+                    Rule::Kind(SyntaxKind::TUPLE_ASSIGNMENT as u16),
+                    Rule::Alt(&[
+                        Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                        Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                        Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                        Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                        Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                        Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                        Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                        Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                        Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                        Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                        Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                        Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                        Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                        Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                        Rule::Kind(SyntaxKind::NAME_REF as u16),
+                        Rule::Kind(SyntaxKind::LITERAL as u16),
+                        Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                    ]),
+                ]),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Alt(&[
+                        Rule::Kind(SyntaxKind::ASSIGNMENT as u16),
+                        Rule::Kind(SyntaxKind::TUPLE_ASSIGNMENT as u16),
+                        Rule::Alt(&[
+                            Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                            Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                            Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                            Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                            Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                            Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                            Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                            Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                            Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                            Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                            Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                            Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                            Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                            Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                            Rule::Kind(SyntaxKind::NAME_REF as u16),
+                            Rule::Kind(SyntaxKind::LITERAL as u16),
+                            Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                        ]),
+                    ]),
+                ])),
+            ])),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::AS_OPERATOR as u16,
+        name: "AsOperator",
+        text: "'as' HintOption* name:'ident'",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![as] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::HINT_OPTION as u16)),
+            Rule::Kind(T![ident] as u16),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::TOP_HITTERS_OPERATOR as u16,
+        name: "TopHittersOperator",
+        text: "keyword:'top-hitters' count:Expr 'of' value:Expr TopHittersBy?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![top - hitters] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+            Rule::Kind(T![of] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+            Rule::Opt(&Rule::Kind(SyntaxKind::TOP_HITTERS_BY as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::REDUCE_OPERATOR as u16,
+        name: "ReduceOperator",
+        text: "'reduce' OperatorOption* 'by' value:Expr ('with' (OperatorOption (',' OperatorOption)*)?)?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![reduce] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
+            Rule::Kind(T![by] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![with] as u16),
+                Rule::Opt(&Rule::Seq(&[
+                    Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+                    Rule::Rep(&Rule::Seq(&[
+                        Rule::Kind(T![,] as u16),
+                        Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+                    ])),
+                ])),
+            ])),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::SEARCH_OPERATOR as u16,
+        name: "SearchOperator",
+        text: "'search' OperatorOption* ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![search] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![in] as u16),
+                Rule::Kind(T!['('] as u16),
+                Rule::Alt(&[
+                    Rule::Alt(&[
+                        Rule::Kind(T![ident] as u16),
+                        Rule::Kind(T![quoted_ident] as u16),
+                    ]),
+                    Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                ]),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Alt(&[
+                        Rule::Alt(&[
+                            Rule::Kind(T![ident] as u16),
+                            Rule::Kind(T![quoted_ident] as u16),
+                        ]),
+                        Rule::Kind(SyntaxKind::TABLE_PATTERN as u16),
+                    ]),
+                ])),
+                Rule::Kind(T![')'] as u16),
+            ])),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+        ]),
+    },
+    NodeRule {
         kind: SyntaxKind::KEYWORD_OPERATOR as u16,
         name: "KeywordOperator",
-        text: "name:('search' | 'find' | 'invoke' | 'serialize' | 'as' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'reduce' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components' | 'top-hitters') args:Expr?",
+        text: "name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?",
         rule: Rule::Seq(&[
             Rule::Alt(&[
-                Rule::Kind(T![search] as u16),
                 Rule::Kind(T![find] as u16),
                 Rule::Kind(T![invoke] as u16),
-                Rule::Kind(T![serialize] as u16),
-                Rule::Kind(T![as] as u16),
                 Rule::Kind(T![getschema] as u16),
                 Rule::Kind(T![sample] as u16),
                 Rule::Kind(T![externaldata] as u16),
                 Rule::Kind(T![consume] as u16),
-                Rule::Kind(T![reduce] as u16),
                 Rule::Kind(T![make - graph] as u16),
                 Rule::Kind(T![graph-match] as u16),
                 Rule::Kind(T![graph - shortest - paths] as u16),
                 Rule::Kind(T![graph - to - table] as u16),
                 Rule::Kind(T![graph - mark - components] as u16),
-                Rule::Kind(T![top - hitters] as u16),
             ]),
             Rule::Opt(&Rule::Alt(&[
                 Rule::Kind(SyntaxKind::OR_EXPR as u16),
@@ -7016,6 +8081,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
         ]),
     },
@@ -7043,6 +8109,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
         ]),
     },
@@ -7085,6 +8152,11 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::FACET_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::PARTITION_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::SCAN_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::SERIALIZE_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
             ]),
@@ -7124,6 +8196,11 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::FACET_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::PARTITION_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::SCAN_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::SERIALIZE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::AS_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                 ]),
@@ -7208,6 +8285,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7236,6 +8314,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7294,6 +8373,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Opt(&Rule::Alt(&[
                 Rule::Kind(T![asc] as u16),
@@ -7331,6 +8411,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Opt(&Rule::Seq(&[
@@ -7368,6 +8449,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Opt(&Rule::Kind(SyntaxKind::SERIES_DEFAULT as u16)),
@@ -7398,6 +8480,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7406,6 +8489,58 @@ pub static RULES: &[NodeRule] = &[
         name: "StarArg",
         text: "'*'",
         rule: Rule::Kind(T![*] as u16),
+    },
+    NodeRule {
+        kind: SyntaxKind::NAMED_ARGUMENT as u16,
+        name: "NamedArgument",
+        text: "name:'ident' '=' value:Expr",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![ident] as u16),
+            Rule::Kind(T![=] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::RENDER_WITH as u16,
+        name: "RenderWith",
+        text: "'with' '(' (RenderProperty (',' RenderProperty)*)? ')'",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![with] as u16),
+            Rule::Kind(T!['('] as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
+                    Rule::Kind(SyntaxKind::NAME_REF as u16),
+                ]),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Alt(&[
+                        Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
+                        Rule::Kind(SyntaxKind::NAME_REF as u16),
+                    ]),
+                ])),
+            ])),
+            Rule::Kind(T![')'] as u16),
+        ]),
     },
     NodeRule {
         kind: SyntaxKind::TOP_NESTED_CLAUSE as u16,
@@ -7431,6 +8566,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
             Rule::Kind(SyntaxKind::TOP_NESTED_OF as u16),
             Rule::Opt(&Rule::Kind(SyntaxKind::TOP_NESTED_OTHERS as u16)),
@@ -7464,6 +8600,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
         ]),
@@ -7494,6 +8631,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7524,6 +8662,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Opt(&Rule::Alt(&[
@@ -7586,6 +8725,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Opt(&Rule::Seq(&[
                 Rule::Kind(T![=>] as u16),
@@ -7596,6 +8736,34 @@ pub static RULES: &[NodeRule] = &[
                 ])),
             ])),
             Rule::Kind(T![;] as u16),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::TOP_HITTERS_BY as u16,
+        name: "TopHittersBy",
+        text: "'by' sum:Expr",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![by] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
         ]),
     },
     NodeRule {
@@ -7621,6 +8789,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![or] as u16),
@@ -7642,6 +8811,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -7669,6 +8839,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![and] as u16),
@@ -7690,6 +8861,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -7718,13 +8890,14 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
     NodeRule {
         kind: SyntaxKind::COMPARISON_EXPR as u16,
         name: "ComparisonExpr",
-        text: "lhs:Expr (op:'cmp_op' | ('matches' 'regex')) rhs:Expr",
+        text: "lhs:Expr (op:('cmp_op' | ':') | ('matches' 'regex')) rhs:Expr",
         rule: Rule::Seq(&[
             Rule::Alt(&[
                 Rule::Kind(SyntaxKind::OR_EXPR as u16),
@@ -7744,9 +8917,10 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Alt(&[
-                Rule::Kind(T![cmp_op] as u16),
+                Rule::Alt(&[Rule::Kind(T![cmp_op] as u16), Rule::Kind(T![:] as u16)]),
                 Rule::Seq(&[Rule::Kind(T![matches] as u16), Rule::Kind(T![regex] as u16)]),
             ]),
             Rule::Alt(&[
@@ -7767,6 +8941,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7793,6 +8968,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Alt(&[Rule::Kind(T![in] as u16), Rule::Kind(T![set_op] as u16)]),
             Rule::Kind(SyntaxKind::EXPRESSION_LIST as u16),
@@ -7821,6 +8997,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![between_op] as u16),
             Rule::Kind(SyntaxKind::RANGE as u16),
@@ -7849,6 +9026,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Alt(&[Rule::Kind(T![+] as u16), Rule::Kind(T![-] as u16)]),
@@ -7870,6 +9048,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -7897,6 +9076,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Alt(&[
@@ -7922,6 +9102,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -7950,6 +9131,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7976,6 +9158,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![.] as u16),
             Rule::Kind(T![ident] as u16),
@@ -8004,6 +9187,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Opt(&Rule::Kind(T![.] as u16)),
             Rule::Kind(T!['['] as u16),
@@ -8025,6 +9209,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![']'] as u16),
         ]),
@@ -8064,6 +9249,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![')'] as u16),
         ]),
@@ -8097,6 +9283,12 @@ pub static RULES: &[NodeRule] = &[
         ]),
     },
     NodeRule {
+        kind: SyntaxKind::STAR_EXPR as u16,
+        name: "StarExpr",
+        text: "'*'",
+        rule: Rule::Kind(T![*] as u16),
+    },
+    NodeRule {
         kind: SyntaxKind::EXPRESSION_LIST as u16,
         name: "ExpressionList",
         text: "'(' ((Expr (',' Expr)*) | TabularExpression)? ')'",
@@ -8122,6 +9314,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                     Rule::Rep(&Rule::Seq(&[
                         Rule::Kind(T![,] as u16),
@@ -8143,6 +9336,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ])),
                 ]),
@@ -8175,6 +9369,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![..] as u16),
             Rule::Alt(&[
@@ -8195,36 +9390,9 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![')'] as u16),
-        ]),
-    },
-    NodeRule {
-        kind: SyntaxKind::NAMED_ARGUMENT as u16,
-        name: "NamedArgument",
-        text: "name:'ident' '=' value:Expr",
-        rule: Rule::Seq(&[
-            Rule::Kind(T![ident] as u16),
-            Rule::Kind(T![=] as u16),
-            Rule::Alt(&[
-                Rule::Kind(SyntaxKind::OR_EXPR as u16),
-                Rule::Kind(SyntaxKind::AND_EXPR as u16),
-                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
-                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
-                Rule::Kind(SyntaxKind::IN_EXPR as u16),
-                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
-                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
-                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
-                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
-                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
-                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
-                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
-                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
-                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
-                Rule::Kind(SyntaxKind::NAME_REF as u16),
-                Rule::Kind(SyntaxKind::LITERAL as u16),
-                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
-            ]),
         ]),
     },
     NodeRule {

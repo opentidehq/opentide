@@ -1,14 +1,21 @@
-//! The statements: `let`, a function definition, a type, a control command.
+//! The statements: `let`, `declare query_parameters`, a function definition, a
+//! type, a control command.
 
 use super::{P, expr, tabular};
 use crate::syntax::SyntaxKind as K;
 use opentide_parse::TokenSet;
 
-/// `SourceFile = LetStatement* (Query | ControlCommand)?`
+/// `SourceFile = (LetStatement | QueryParametersStatement)* (Query | ControlCommand)?`
 pub(super) fn source_file(p: &mut P<'_>) {
     let m = p.start();
-    while p.current() == K::LET_KW {
-        let_statement(p);
+    loop {
+        if p.current() == K::LET_KW {
+            let_statement(p);
+        } else if at_query_parameters(p) {
+            query_parameters(p);
+        } else {
+            break;
+        }
     }
     if p.current() == K::DOT {
         control_command(p);
@@ -23,6 +30,32 @@ pub(super) fn source_file(p: &mut P<'_>) {
     p.done(m, K::SOURCE_FILE);
 }
 
+/// Whether `declare query_parameters(` starts here.
+fn at_query_parameters(p: &P<'_>) -> bool {
+    p.current() == K::DECLARE_KW
+        && p.nth(1) == K::IDENT
+        && p.nth_text(1) == "query_parameters"
+        && p.nth(2) == K::L_PAREN
+}
+
+/// `declare query_parameters(name: type = default, ...);`
+fn query_parameters(p: &mut P<'_>) {
+    let m = p.start();
+    p.bump();
+    p.bump();
+    p.bump();
+    // One parameter at least: Kusto.Language rejects `query_parameters()`.
+    loop {
+        parameter(p);
+        if !p.eat(K::COMMA) {
+            break;
+        }
+    }
+    p.expect(K::R_PAREN);
+    statement_end(p);
+    p.done(m, K::QUERY_PARAMETERS_STATEMENT);
+}
+
 /// `let name = value;`
 fn let_statement(p: &mut P<'_>) {
     let m = p.start();
@@ -30,8 +63,16 @@ fn let_statement(p: &mut P<'_>) {
     p.expect_name();
     p.expect(K::EQ);
     let_value(p);
-    p.expect(K::SEMICOLON);
+    statement_end(p);
     p.done(m, K::LET_STATEMENT);
+}
+
+/// The `;` after a statement, which the last one of the text may leave out:
+/// `let x = 1` alone is a query to Kusto.Language.
+fn statement_end(p: &mut P<'_>) {
+    if !p.at_eof() {
+        p.expect(K::SEMICOLON);
+    }
 }
 
 /// What a `let` binds: a function, a tabular expression or a scalar. A lone

@@ -1,0 +1,1 @@
+FROM logs | EVAL b = TO_STRING(a)
