@@ -628,18 +628,29 @@ mod tests {
             let links = tempfile::tempdir().unwrap();
             let link = links.path().join("linked");
             std::os::unix::fs::symlink(dir.path(), &link).unwrap();
-            let (_, options) = placement(None, &Env::default(), &link);
-            let Err(report) = open_for("validate", options) else {
-                panic!("the workspace opened");
-            };
-            assert!(
-                report
-                    .outcome
-                    .message
-                    .starts_with(".opentide/configurations/platforms/sentinel.toml:2:"),
-                "{}",
-                report.outcome.message
-            );
+            let linked = link.to_string_lossy().into_owned();
+            let real = dir.path().to_string_lossy().into_owned();
+            let env = Env::default();
+            for (repo, cwd) in [
+                (None, link.as_path()),
+                (Some(linked.as_str()), dir.path()),
+                (Some(real.as_str()), link.as_path()),
+                (Some(linked.as_str()), links.path()),
+            ] {
+                let (_, options) = placement(repo, &env, cwd);
+                let Err(report) = open_for("validate", options) else {
+                    panic!("the workspace opened");
+                };
+                assert!(
+                    report
+                        .outcome
+                        .message
+                        .starts_with(".opentide/configurations/platforms/sentinel.toml:2:"),
+                    "{repo:?} from {}: {}",
+                    cwd.display(),
+                    report.outcome.message
+                );
+            }
         }
         // generate keeps the code too, on its failed phase.
         let env = Env::default();
