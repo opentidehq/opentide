@@ -26,8 +26,10 @@ const root = fileURLToPath(new URL("../../../", import.meta.url));
 const generatedLegend: string[] = JSON.parse(readFileSync(join(root, "highlights/generated/legend.json"), "utf8"));
 
 // Host tests run against built artifacts. CI sets the variable for each one it
-// builds; locally, the debug server is used when it exists.
-const debugServer = join(root, "target/debug/opentide-lsp");
+// builds; locally, the debug server is used when it exists, in the target
+// pool CARGO_TARGET_DIR names (AGENTS.md) or else the checkout's target/.
+const targetDir = process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : join(root, "target");
+const debugServer = join(targetDir, "debug/opentide-lsp");
 const server = process.env.OPENTIDE_LSP_BIN ?? (existsSync(debugServer) ? debugServer : undefined);
 const wasiBinary = process.env.OPENTIDE_WASI_BIN;
 const wasmGlue = process.env.OPENTIDE_WASM_GLUE;

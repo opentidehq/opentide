@@ -1320,22 +1320,16 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
             }
             Err(format!("rule {name:?} has no SentinelOne query"))
         }
-        "graylog" => {
-            let text = required(block, "query", name, platform)?;
-            let streams = match block.get("streams") {
-                Some(CJson::Str(one)) => vec![one.clone()],
-                Some(CJson::Array(items)) => items
-                    .iter()
-                    .filter_map(|item| item.as_str().map(str::to_owned))
-                    .collect(),
-                _ => Vec::new(),
-            };
-            Ok(vec![RuleQuery {
-                language: "lucene".to_owned(),
-                index: streams,
-                ..RuleQuery::plain(text)
-            }])
-        }
+        // The event definition's query on its streams, as `query --rule`
+        // runs it (`query/rules.py`'s `graylog`).
+        "graylog" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
+            .into_iter()
+            .map(|query| RuleQuery {
+                language: query.language.unwrap_or_default(),
+                index: query.index,
+                ..RuleQuery::plain(query.text)
+            })
+            .collect()),
         // Each sequence's filter (`_exabeam_queries`), as `query --rule` runs it.
         "exabeam" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
             .into_iter()
