@@ -121,6 +121,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **MCP `validation_report` refuses an `object_type` that is no object family** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). `object_type: "bogus"` answered a report that matched nothing; it is now refused (`isError`, `usage_invalid_choice: Unknown object type(s): bogus. Choose rule, threat, or objective.`), as `opentide validate --type bogus` is.
 - **`opentide --version` checks nothing** ([#1072](https://github.com/opentidehq/opentide/issues/1072)). With no other argument it prints the version before anything else: it no longer looks for the workspace or reads its configuration. When the analysis engine does not load, it prints the version from the package's metadata and exits 0, where it failed; the first command reports the engine, and `opentide doctor` checks the install.
 - **Every query language is checked faster, with the same results** ([#1571](https://github.com/opentidehq/opentide/issues/1571)). Most of a short query's check was setup repeated on every call, and each language walked its tree several times. What `validate`, the editor and the MCP server report is unchanged.
   - KQL: a one-line query in 9 µs, not 292; the analysis corpus in 42 µs a query, not 339; real rules with a quarter fewer instructions
@@ -474,6 +475,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **`opentide://templates/rule` serves the template `opentide new rule` starts from** ([#1667](https://github.com/opentidehq/opentide/issues/1667)). It served the `rule::1.0` template for `rule` and `rule::1.1`, and refused `rule::1.0`. A family is now its newest revision's template, and each revision `opentide generate` wrote is served by its id.
 - **MCP refuses an unknown `stack` in `validate_query` and an unknown `type` in `search`** ([#1667](https://github.com/opentidehq/opentide/issues/1667)). `stack: "bogus"` was checked as no stack and passed; it now fails with `valid: null`, naming `MAJOR.MINOR` and `serverless`. `type: "bogus"` returned no match; it is now refused, naming `rule`, `threat` and `objective`.
 - **MCP live `validate_query` answers the documented fields only** ([#1667](https://github.com/opentidehq/opentide/issues/1667)). A failed live check added `_exit_code: 1`; `status: "failed"` says it.
+- **`dir(opentide)` lists only the package's names** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). It listed `TYPE_CHECKING` and `annotations`, which are not opentide's.
 
 ### Security
 

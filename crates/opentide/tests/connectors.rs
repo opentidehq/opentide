@@ -65,7 +65,7 @@ fn a_workspace_lists_its_tenants_in_file_order() {
         )],
     )
     .unwrap();
-    let tenants = ws.tenants("splunk");
+    let tenants = ws.tenants("splunk").unwrap();
     let names: Vec<&str> = tenants.iter().map(TenantConfig::name).collect();
     assert_eq!(names, ["prod", "lab"]);
     assert_eq!(tenants[0].platform(), "splunk");
@@ -73,7 +73,12 @@ fn a_workspace_lists_its_tenants_in_file_order() {
         tenants[0].setup_keys().collect::<Vec<_>>(),
         ["port", "token", "url"]
     );
-    assert!(ws.tenants("elastic").is_empty());
+    assert!(ws.tenants("elastic").unwrap().is_empty());
+    // A name `--platform` refuses is refused, not an empty list (smoke D13).
+    assert_eq!(
+        code(&ws.tenants("splunck").unwrap_err()),
+        "usage_invalid_choice"
+    );
 }
 
 #[test]
@@ -341,6 +346,20 @@ async fn a_cancelled_operation_stops() {
         .unwrap_err();
     assert_eq!(code(&error), "interrupted");
     assert!(canceller.is_cancelled());
+}
+
+/// A limit `opentide query --limit` refuses is refused before anything is
+/// sent (smoke D13): the tenant here would not answer.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_limit_outside_one_to_five_thousand_is_refused() {
+    let connection = Connection::open(&harfanglab("http://127.0.0.1:1"), &options()).unwrap();
+    for limit in [0, connectors::MAX_QUERY_LIMIT + 1] {
+        let mut request = QueryRequest::new("processes", "telemetry", window());
+        request.limit = limit;
+        let error = connection.query(&request).await.unwrap_err();
+        assert_eq!(error.code(), "usage_invalid_value", "{error}");
+        assert!(error.to_string().contains("between 1 and 5000"), "{error}");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
