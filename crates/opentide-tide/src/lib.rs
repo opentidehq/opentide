@@ -226,8 +226,24 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
             let inner = inj.inner.floor_char_boundary(inner);
             return Some((inj, inner));
         }
-        // An assembled injection covers only its parts' text.
+        // An assembled injection covers only its parts' text, and the end
+        // of each line a field contributes: right after its last character
+        // (blanks typed after it count too), where the cursor is while the
+        // line is typed. The newline there is text deploy writes.
         if !inj.parts.is_empty() {
+            let end = inj.parts.iter().rev().find(|p| {
+                !p.synthetic
+                    && p.end > p.start
+                    && inj.host_map.get(p.end - 1).is_some_and(|&h| {
+                        h < offset
+                            && source
+                                .get(h + 1..offset)
+                                .is_some_and(|gap| gap.chars().all(|c| c == ' ' || c == '\t'))
+                    })
+            });
+            if let Some(end) = end.map(|p| p.end) {
+                return Some((inj, end));
+            }
             continue;
         }
         // Right after the query's last character: where the cursor is while
@@ -2405,6 +2421,23 @@ configurations:
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
             assert_eq!(&inj.inner[inner..], "\u{e9}", "{offset}");
         }
+    }
+
+    /// The end of a HarfangLab `yara.condition` line, where the cursor is
+    /// while it is typed, is in the assembled rule (#1685): no injection
+    /// covered it, so completion there offered nothing.
+    #[test]
+    fn a_cursor_at_the_end_of_a_decomposed_yara_line_is_in_the_rule() {
+        let source = "name: R\nconfigurations:\n  harfanglab:\n    yara:\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
+        let end = source.find("> 1").unwrap() + "> 1".len();
+        let (inj, inner) = injection_at_offset(source, end).unwrap();
+        assert!(inj.inner[..inner].ends_with("$cmd and #cmd > 1"), "{inner}");
+        assert!(!inj.is_synthetic(inner.saturating_sub(1)));
+        // The end of the strings line, too; not a byte past the newline.
+        let strings_end = source.find("ascii").unwrap() + "ascii".len();
+        let (inj, inner) = injection_at_offset(source, strings_end).unwrap();
+        assert!(inj.inner[..inner].ends_with("\"cmd.exe\" ascii"), "{inner}");
+        assert!(injection_at_offset(source, end + 1).is_none());
     }
 
     #[test]

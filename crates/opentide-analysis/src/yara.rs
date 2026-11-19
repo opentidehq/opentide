@@ -176,6 +176,28 @@ mod tests {
         assert!(rename(LanguageId::TideYaml, text, at, "shell").is_err());
     }
 
+    /// Completion at the end of a decomposed `condition`, as in a `.yar`
+    /// file (#1685): the strings the rule defines, and the operators.
+    #[test]
+    fn completion_at_the_end_of_a_decomposed_condition() {
+        let host = crate::MemoryWorkspace::default();
+        let typed = RULE.replace("#cmd > 1\n", "#cmd > 1 and \n");
+        let end = typed.find("> 1 and ").unwrap() + "> 1 and ".len();
+        let items = crate::completions(&host, LanguageId::TideYaml, &typed, end);
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        let raw = "rule a {\n  strings:\n    $cmd = \"cmd.exe\" ascii\n  condition:\n    $cmd and #cmd > 1 and \n}\n";
+        let raw_end = raw.find("> 1 and ").unwrap() + "> 1 and ".len();
+        let expected = crate::completions(&host, LanguageId::Yara, raw, raw_end);
+        assert!(!expected.is_empty());
+        assert_eq!(
+            labels,
+            expected
+                .iter()
+                .map(|item| item.label.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn raw_files_format_and_fold() {
         assert_eq!(
