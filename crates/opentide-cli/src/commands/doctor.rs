@@ -355,7 +355,7 @@ impl Doctor<'_> {
     }
 
     fn git(&self) -> Vec<Check> {
-        let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
+        let path = self.cx.env.search_path().unwrap_or_default().to_owned();
         let Some(git) = on_path("git", &path, &self.cwd) else {
             return vec![
                 Check::new(
@@ -1228,7 +1228,7 @@ impl Doctor<'_> {
                 "; the opentide extension ({EXTENSION_ID}) also provides the server to VS Code"
             ));
         }
-        let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
+        let path = self.cx.env.search_path().unwrap_or_default().to_owned();
         let mut unresolved: Vec<String> = commands
             .into_iter()
             .filter(|command| !command.is_empty() && on_path(command, &path, &self.cwd).is_none())
@@ -1467,7 +1467,7 @@ pub const GIT_VERSION_NOT_CHECKED: &str =
 /// The program `name` resolves to on `path` (a `PATH` value), relative to
 /// `cwd`, as a shell finds it.
 #[cfg(not(target_os = "wasi"))]
-fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     which::which_in(name, Some(path), cwd).ok()
 }
 
@@ -1476,7 +1476,7 @@ fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::P
 /// folders, the first that holds a file of that name (WASI has no execute
 /// bit to check).
 #[cfg(target_os = "wasi")]
-fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     let candidate = std::path::Path::new(name);
     if candidate.components().count() > 1 {
         let found = cwd.join(candidate);

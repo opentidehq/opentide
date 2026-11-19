@@ -950,7 +950,7 @@ fn a_platform_with_no_rule_to_deploy_is_skipped_and_counts_the_blocks_left_out()
     assert_eq!(report.outcome.exit_code, 0);
     assert_eq!(
         report.outcome_line.as_deref(),
-        Some("No rule has a status this run deploys · 1 rule in DESIGN")
+        Some("No rule has a status PREVIEW or RELEASE deploys · 1 rule in DESIGN")
     );
 }
 
@@ -2787,8 +2787,9 @@ fn elastic_creates_updates_refuses_and_deletes_as_it_deploys() {
     assert_eq!(code, 1, "{err}");
     let ordered = [
         "Timestamp field 'event.ingested' not found in mappings yet",
-        "✓ deployed  Fresh rule",
-        "✓ deployed  Present rule",
+        // Kibana said which: a create, an update (#1662, E10).
+        "✓ created   Fresh rule",
+        "✓ updated   Present rule",
         "refusing to modify prebuilt rule",
         "✓ deleted   Removed rule",
         // The checks' warning, then Kibana's refusal.
@@ -3701,4 +3702,75 @@ fn a_promoted_rule_that_reached_one_tenant_of_two_stays_promoted() {
     assert_eq!(statuses, ["deployed", "failed"], "{text}");
     let now = std::fs::read_to_string(ws.path().join("objects/rules/r.yaml")).unwrap();
     assert!(now.contains("status: PRODUCTION"), "{now}");
+}
+
+/// A `--platform` run (not a dry run) with no rule of its strategies counts
+/// only its own platform's left-out rules, and names its strategies in its
+/// advice, never "this run" (#1662, D11): the result names the platform,
+/// not the strategies.
+#[test]
+fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &[(
+            "production.yaml",
+            rule(
+                "Production rule",
+                "00000000-0000-4000-8046-000000000401",
+                "A rule in production.",
+                "  splunk:\n    status: PRODUCTION\n    query: index=main\n",
+            ),
+        )],
+    );
+    // Another platform's left-out rule, which a `--platform splunk` run does
+    // not count (#1662, D11).
+    std::fs::write(
+        ws.path()
+            .join(".opentide/configurations/platforms/sentinel.toml"),
+        "[platform]\nenabled = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        ws.path().join("objects/rules/sentinel.yaml"),
+        rule(
+            "Sentinel production rule",
+            "00000000-0000-4000-8046-000000000402",
+            "Another platform's rule.",
+            "  sentinel:\n    status: PRODUCTION\n    query: SecurityEvent\n",
+        ),
+    )
+    .unwrap();
+    let args = Args {
+        strategies: vec!["PREVIEW".into()],
+        all: true,
+        platform: Some("splunk".to_owned()),
+        ..Args::default()
+    };
+    let (sent, _) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs::<&str, &str>([]),
+        &Registry::new(),
+        0,
+    );
+    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    let Json::Str(advice) = value(&sent, "advice") else {
+        panic!("advice")
+    };
+    assert!(
+        advice.starts_with("set a platform block's status to ")
+            && advice.ends_with(" for PREVIEW to deploy it"),
+        "{advice}"
+    );
+    assert_eq!(
+        value(&sent, "_outcome"),
+        &Json::str("No rule has a status PREVIEW deploys · 1 rule in PRODUCTION")
+    );
+    let Json::Array(skipped) = value(&sent, "skipped") else {
+        panic!("skipped")
+    };
+    assert_eq!(skipped.len(), 1, "{skipped:?}");
+    assert_eq!(skipped[0].get("platform"), Some(&Json::str("splunk")));
 }

@@ -583,6 +583,9 @@ fn located(error: &ConnectorError) -> Vec<(String, String)> {
 
 /// Rows returned when the caller names no limit (`query.models.DEFAULT_LIMIT`).
 pub const DEFAULT_LIMIT: usize = 100;
+/// The most rows one query returns per tenant: `opentide query --limit` and
+/// the SDKs take 1 to this.
+pub const MAX_QUERY_LIMIT: usize = 5_000;
 /// How long an asynchronous search may run when the caller names no timeout
 /// (`query.models.DEFAULT_TIMEOUT`).
 pub const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(120);

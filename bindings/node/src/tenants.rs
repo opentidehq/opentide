@@ -153,9 +153,9 @@ pub struct QueryOptions<'a> {
     /// Where the search ends: a `Date` or an RFC 3339 instant. Default: now.
     #[napi(ts_type = "Date | string")]
     pub end: Option<Either<JsDate<'a>, String>>,
-    /// The most rows to return (default 100); `truncated` says there were
-    /// more.
-    pub limit: Option<u32>,
+    /// The most rows to return, 1 to 5000 (default 100); `truncated` says
+    /// there were more. Anything else rejects with `usage_invalid_value`.
+    pub limit: Option<f64>,
     /// The Elastic indices, the HarfangLab telemetry source or the
     /// CrowdStrike repository.
     pub index: Option<Vec<String>>,
@@ -191,7 +191,7 @@ struct Settings {
     language: Option<String>,
     start: Option<Timestamp>,
     end: Option<Timestamp>,
-    limit: Option<u32>,
+    limit: Option<usize>,
     index: Option<Vec<String>>,
     data_view: Option<String>,
     timeout: Option<f64>,
@@ -830,7 +830,7 @@ struct Given {
     language: Option<String>,
     start: Option<When>,
     end: Option<When>,
-    limit: Option<u32>,
+    limit: Option<f64>,
     index: Option<Vec<String>>,
     data_view: Option<String>,
     timeout: Option<f64>,
@@ -849,7 +849,7 @@ impl Given {
             language: self.language,
             start: at("start", self.start)?,
             end: at("end", self.end)?,
-            limit: self.limit,
+            limit: self.limit.map(rows).transpose()?,
             index: self.index,
             data_view: self.data_view,
             timeout: self.timeout,
@@ -873,9 +873,7 @@ fn request(text: String, options: Settings, since: Since) -> Result<QueryRequest
         ));
     }
     let mut request = QueryRequest::new(text, options.language.unwrap_or_default(), window);
-    request.limit = options.limit.map_or(DEFAULT_LIMIT, |limit| {
-        usize::try_from(limit).unwrap_or(usize::MAX)
-    });
+    request.limit = options.limit.unwrap_or(DEFAULT_LIMIT);
     request.index = options.index.unwrap_or_default();
     request.data_view = options.data_view;
     request.timeout = match options.timeout {
@@ -920,6 +918,29 @@ fn operation_name(operation: Operation) -> &'static str {
         Operation::Disable => "disable",
         Operation::Delete => "delete",
     }
+}
+
+/// A `limit` as a row count: a whole number from 1 to `MAX_QUERY_LIMIT`, as
+/// `opentide query --limit` takes it; anything else (`0`, `-1`, `1.5`,
+/// `NaN`) is a usage error, not truncated or wrapped.
+fn rows(limit: f64) -> Result<usize, Failure> {
+    let max = connectors::MAX_QUERY_LIMIT;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "MAX_QUERY_LIMIT (5000) is exact in an f64"
+    )]
+    let in_range = limit.fract() == 0.0 && (1.0..=max as f64).contains(&limit);
+    if !in_range {
+        return Err(Failure::invalid(format!(
+            "limit must be between 1 and {max}, not {limit}"
+        )));
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a whole number from 1 to 5000, checked above"
+    )]
+    Ok(limit as usize)
 }
 
 fn duration(name: &str, seconds: f64) -> Result<Duration, Failure> {
@@ -1041,12 +1062,31 @@ mod tests {
     }
 
     #[test]
+    fn a_limit_is_a_whole_number_from_one_to_five_thousand() {
+        // As `opentide query --limit` takes it: no wrap, no truncation.
+        for limit in [0.0, -1.0, 1.5, 5001.0, f64::NAN, f64::INFINITY] {
+            let given = Given {
+                limit: Some(limit),
+                ..Given::default()
+            };
+            let failure = given.settings().unwrap_err();
+            assert_eq!(failure.code, "usage_invalid_value", "{limit}");
+            assert!(failure.message.contains("between 1 and 5000"), "{limit}");
+        }
+        let given = Given {
+            limit: Some(5000.0),
+            ..Given::default()
+        };
+        assert_eq!(given.settings().unwrap().limit, Some(5000));
+    }
+
+    #[test]
     fn given_options_read_their_instants_as_dates_or_strings() {
         let given = Given {
             language: Some("s1ql".into()),
             start: Some(When::Date(Some(1_794_474_000_000.0))),
             end: Some(When::Text(AT.into())),
-            limit: Some(3),
+            limit: Some(3.0),
             index: Some(vec!["logs".into()]),
             data_view: Some("view".into()),
             timeout: Some(2.0),
@@ -1348,12 +1388,17 @@ mod tests {
         )]);
         let ws = crate::workspace_from_files("/ws".into(), files).unwrap();
         let names: Vec<String> = ws
-            .tenants("splunk".into())
+            .tenant_configs("splunk")
+            .unwrap()
             .iter()
             .map(TenantConfig::name)
             .collect();
         assert_eq!(names, ["prod", "lab"]);
-        assert!(ws.tenants("elastic".into()).is_empty());
+        assert!(ws.tenant_configs("elastic").unwrap().is_empty());
+        let Err(failure) = ws.tenant_configs("splunck") else {
+            panic!("a platform that is none is refused");
+        };
+        assert_eq!(failure.code, "usage_invalid_choice");
     }
 
     #[test]

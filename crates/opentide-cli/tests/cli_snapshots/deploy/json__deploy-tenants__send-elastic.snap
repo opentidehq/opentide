@@ -65,7 +65,7 @@ exit: 1
       "tenant": "soc"
     }
   ],
-  "message": "Deployment failed · 2 created or updated, 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
+  "message": "Deployment failed · 1 created, 1 updated, 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
   "next_actions": [],
   "ok": false,
   "plan": {
@@ -78,7 +78,7 @@ exit: 1
   },
   "results": [
     {
-      "action": "upsert",
+      "action": "create",
       "error": null,
       "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
       "name": "Elastic create rule",
@@ -89,7 +89,7 @@ exit: 1
       "tenant": "soc"
     },
     {
-      "action": "upsert",
+      "action": "update",
       "error": null,
       "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
       "name": "Elastic update rule",
@@ -129,7 +129,7 @@ exit: 1
     "RELEASE"
   ],
   "summary": {
-    "create": 0,
+    "create": 1,
     "delete": 1,
     "disable": 0,
     "failed": 1,
@@ -138,8 +138,8 @@ exit: 1
     "seconds": 0.0,
     "skipped": 0,
     "tenants": 1,
-    "update": 0,
-    "upsert": 2
+    "update": 1,
+    "upsert": 0
   }
 }
 
