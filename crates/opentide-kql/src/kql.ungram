@@ -298,6 +298,8 @@ Expr =
 | NameRef
 | Literal
 | DynamicLiteral
+// `* has "x"`: every column, on the left of a comparison or a set test.
+| StarExpr
 
 OrExpr = Expr ('or' Expr)*
 AndExpr = Expr ('and' Expr)*
@@ -324,6 +326,7 @@ Argument = NamedArgument | StarArg | Expr
 // `_Im_NetworkSession(starttime = ago(1d))`.
 NamedArgument = name:'ident' '=' value:Expr
 StarArg = '*'
+StarExpr = '*'
 
 ToscalarExpr = 'toscalar' '(' body:TabularExpression ')'
 ParenExpr = '(' Expr ')'

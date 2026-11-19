@@ -12303,6 +12303,21 @@ kql_parse_error error 0:16-0:20 KQL syntax error: expected an expression
 21..23 keyword
 24..37 property
 38..42 keyword
+== corpus/kql/star_expr__valid.kql
+0..13 type
+14..15 operator.pipe
+16..21 keyword
+22..23 operator
+24..27 operator
+28..38 string
+39..41 operator
+42..43 operator
+44..51 operator
+52..53 punctuation.bracket
+53..56 string
+56..57 punctuation.delimiter
+58..61 string
+61..62 punctuation.bracket
 == corpus/kql/string__invalid.kql
 kql_parse_error error 0:6-0:19 KQL syntax error: expected an expression
 0..5 keyword
@@ -13653,3 +13668,13 @@ kql_parse_error error 0:69-1:0 KQL syntax error: expected an expression
 83..84 punctuation.bracket
 85..88 operator
 89..96 variable
+== oracles/kql/where_star_has.kql
+0..13 type
+14..15 operator.pipe
+16..21 keyword
+22..23 operator
+24..27 operator
+28..38 string
+39..40 operator.pipe
+41..45 keyword
+46..48 number

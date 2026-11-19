@@ -1092,6 +1092,33 @@ mod tests {
         assert!(codes_of("print database(\"d\")").is_empty());
     }
 
+    /// `where * has "x"`: a star on the left of a comparison or a set test
+    /// searches every column, as Kusto takes it. `2 * 3`, `count(*)` and a
+    /// bare `where *` are as before.
+    #[test]
+    fn a_star_searches_every_column() {
+        for source in [
+            "SecurityEvent | where * has \"x\"",
+            "SecurityEvent | where * contains \"x\"",
+            "SecurityEvent | where * has_any (\"a\", \"b\")",
+            "SecurityEvent | where * == \"x\"",
+            "SecurityEvent | where * in (\"a\")",
+            "SecurityEvent | where * startswith \"x\" and EventID == 1",
+            "SecurityEvent | extend y = 2 * 3",
+            "SecurityEvent | summarize count(*)",
+        ] {
+            assert!(
+                codes_of(source).is_empty(),
+                "{source}: {:?}",
+                codes_of(source)
+            );
+        }
+        assert_eq!(
+            codes_of("SecurityEvent | where *"),
+            [codes::KQL_PARSE_ERROR]
+        );
+    }
+
     fn codes_of(source: &str) -> Vec<String> {
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);
         analyze(source, &catalog)

@@ -197,7 +197,7 @@ impl From<FunctionDefinition> for LetValue {
     }
 }
 
-/// `Expr = OrExpr | AndExpr | NotExpr | ComparisonExpr | InExpr | BetweenExpr | AdditiveExpr | MultiplicativeExpr | UnaryExpr | MemberExpr | IndexExpr | FunctionCall | ToscalarExpr | ParenExpr | NameRef | Literal | DynamicLiteral`
+/// `Expr = OrExpr | AndExpr | NotExpr | ComparisonExpr | InExpr | BetweenExpr | AdditiveExpr | MultiplicativeExpr | UnaryExpr | MemberExpr | IndexExpr | FunctionCall | ToscalarExpr | ParenExpr | NameRef | Literal | DynamicLiteral | StarExpr`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expr {
     /// A `OrExpr`.
@@ -234,6 +234,8 @@ pub enum Expr {
     Literal(Literal),
     /// A `DynamicLiteral`.
     DynamicLiteral(DynamicLiteral),
+    /// A `StarExpr`.
+    StarExpr(StarExpr),
 }
 
 impl AstNode for Expr {
@@ -256,6 +258,7 @@ impl AstNode for Expr {
             || NameRef::can_cast(kind)
             || Literal::can_cast(kind)
             || DynamicLiteral::can_cast(kind)
+            || StarExpr::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let node = match syntax.kind() {
@@ -278,6 +281,7 @@ impl AstNode for Expr {
             SyntaxKind::NAME_REF => Self::NameRef(NameRef { syntax }),
             SyntaxKind::LITERAL => Self::Literal(Literal { syntax }),
             SyntaxKind::DYNAMIC_LITERAL => Self::DynamicLiteral(DynamicLiteral { syntax }),
+            SyntaxKind::STAR_EXPR => Self::StarExpr(StarExpr { syntax }),
             _ => return None,
         };
         Some(node)
@@ -301,6 +305,7 @@ impl AstNode for Expr {
             Self::NameRef(it) => it.syntax(),
             Self::Literal(it) => it.syntax(),
             Self::DynamicLiteral(it) => it.syntax(),
+            Self::StarExpr(it) => it.syntax(),
         }
     }
 }
@@ -404,6 +409,12 @@ impl From<Literal> for Expr {
 impl From<DynamicLiteral> for Expr {
     fn from(node: DynamicLiteral) -> Self {
         Self::DynamicLiteral(node)
+    }
+}
+
+impl From<StarExpr> for Expr {
+    fn from(node: StarExpr) -> Self {
+        Self::StarExpr(node)
     }
 }
 
@@ -4782,6 +4793,32 @@ impl DynamicLiteral {
     }
 }
 
+/// `StarExpr = '*'`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct StarExpr {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for StarExpr {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::STAR_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl StarExpr {
+    /// The token child.
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![*])
+    }
+}
+
 /// `ExpressionList = '(' ((Expr (',' Expr)*) | TabularExpression)? ')'`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ExpressionList {
@@ -5187,6 +5224,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Kind(SyntaxKind::TABULAR_EXPRESSION as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_DEFINITION as u16),
@@ -5293,6 +5331,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Kind(SyntaxKind::TABULAR_EXPRESSION as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_DEFINITION as u16),
@@ -5329,6 +5368,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -5457,6 +5497,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Rep(&Rule::Seq(&[
@@ -5482,6 +5523,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
             ])),
@@ -5546,6 +5588,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
                     Rule::Kind(T![,] as u16),
@@ -5567,6 +5610,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ])),
                 Rule::Opt(&Rule::Kind(T![,] as u16)),
@@ -5611,6 +5655,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![,] as u16),
@@ -5632,6 +5677,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
             Rule::Opt(&Rule::Kind(T![,] as u16)),
@@ -5674,6 +5720,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![to] as u16),
             Rule::Alt(&[
@@ -5694,6 +5741,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![step] as u16),
             Rule::Alt(&[
@@ -5714,6 +5762,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5746,6 +5795,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -5771,6 +5821,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -5837,6 +5888,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5934,6 +5986,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5961,6 +6014,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -5991,6 +6045,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Rep(&Rule::Seq(&[
@@ -6016,6 +6071,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
             ])),
@@ -6112,6 +6168,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Rep(&Rule::Seq(&[
@@ -6137,6 +6194,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
             ])),
@@ -6171,6 +6229,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -6196,6 +6255,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -6223,6 +6283,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -6248,6 +6309,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -6281,6 +6343,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![,] as u16),
@@ -6302,6 +6365,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -6331,6 +6395,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![with] as u16),
             Rule::Alt(&[
@@ -6368,6 +6433,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![with] as u16),
             Rule::Alt(&[
@@ -6404,6 +6470,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
             Rule::Opt(&Rule::Seq(&[
                 Rule::Kind(T![as] as u16),
@@ -6455,6 +6522,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![,] as u16),
@@ -6476,6 +6544,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -6550,6 +6619,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -6586,6 +6656,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
             Rule::Kind(T![on] as u16),
@@ -6628,6 +6699,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Alt(&[
@@ -6655,6 +6727,7 @@ pub static RULES: &[NodeRule] = &[
                                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                                 Rule::Kind(SyntaxKind::LITERAL as u16),
                                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                             ]),
                         ]),
                     ])),
@@ -6681,6 +6754,7 @@ pub static RULES: &[NodeRule] = &[
                                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                                 Rule::Kind(SyntaxKind::LITERAL as u16),
                                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                             ]),
                         ]),
                     ])),
@@ -6706,6 +6780,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ]),
@@ -6732,6 +6807,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ]),
@@ -6759,6 +6835,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
@@ -6784,6 +6861,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                 ])),
@@ -6845,6 +6923,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ]),
                     Rule::Rep(&Rule::Seq(&[
@@ -6870,6 +6949,7 @@ pub static RULES: &[NodeRule] = &[
                                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                                 Rule::Kind(SyntaxKind::LITERAL as u16),
                                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                             ]),
                         ]),
                     ])),
@@ -6920,6 +7000,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![of] as u16),
             Rule::Alt(&[
@@ -6940,6 +7021,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7043,6 +7125,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
             Rule::Alt(&[
@@ -7096,6 +7179,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
                 Rule::Rep(&Rule::Seq(&[
                     Rule::Kind(T![,] as u16),
@@ -7117,6 +7201,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                 ])),
             ])),
@@ -7180,6 +7265,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
         ]),
     },
@@ -7207,6 +7293,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
         ]),
     },
@@ -7372,6 +7459,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7400,6 +7488,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7458,6 +7547,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Opt(&Rule::Alt(&[
                 Rule::Kind(T![asc] as u16),
@@ -7495,6 +7585,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Opt(&Rule::Seq(&[
@@ -7532,6 +7623,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Opt(&Rule::Kind(SyntaxKind::SERIES_DEFAULT as u16)),
@@ -7562,6 +7654,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7595,6 +7688,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ])),
             Rule::Kind(SyntaxKind::TOP_NESTED_OF as u16),
             Rule::Opt(&Rule::Kind(SyntaxKind::TOP_NESTED_OTHERS as u16)),
@@ -7628,6 +7722,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
         ]),
@@ -7658,6 +7753,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7688,6 +7784,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ]),
             Rule::Opt(&Rule::Alt(&[
@@ -7750,6 +7847,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Opt(&Rule::Seq(&[
                 Rule::Kind(T![=>] as u16),
@@ -7785,6 +7883,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![or] as u16),
@@ -7806,6 +7905,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -7833,6 +7933,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Kind(T![and] as u16),
@@ -7854,6 +7955,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -7882,6 +7984,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7908,6 +8011,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Alt(&[
                 Rule::Kind(T![cmp_op] as u16),
@@ -7931,6 +8035,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -7957,6 +8062,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Alt(&[Rule::Kind(T![in] as u16), Rule::Kind(T![set_op] as u16)]),
             Rule::Kind(SyntaxKind::EXPRESSION_LIST as u16),
@@ -7985,6 +8091,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![between_op] as u16),
             Rule::Kind(SyntaxKind::RANGE as u16),
@@ -8013,6 +8120,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Alt(&[Rule::Kind(T![+] as u16), Rule::Kind(T![-] as u16)]),
@@ -8034,6 +8142,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -8061,6 +8170,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Rep(&Rule::Seq(&[
                 Rule::Alt(&[
@@ -8086,6 +8196,7 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::NAME_REF as u16),
                     Rule::Kind(SyntaxKind::LITERAL as u16),
                     Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                 ]),
             ])),
         ]),
@@ -8114,6 +8225,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },
@@ -8140,6 +8252,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![.] as u16),
             Rule::Kind(T![ident] as u16),
@@ -8168,6 +8281,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Opt(&Rule::Kind(T![.] as u16)),
             Rule::Kind(T!['['] as u16),
@@ -8189,6 +8303,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![']'] as u16),
         ]),
@@ -8228,6 +8343,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![')'] as u16),
         ]),
@@ -8261,6 +8377,12 @@ pub static RULES: &[NodeRule] = &[
         ]),
     },
     NodeRule {
+        kind: SyntaxKind::STAR_EXPR as u16,
+        name: "StarExpr",
+        text: "'*'",
+        rule: Rule::Kind(T![*] as u16),
+    },
+    NodeRule {
         kind: SyntaxKind::EXPRESSION_LIST as u16,
         name: "ExpressionList",
         text: "'(' ((Expr (',' Expr)*) | TabularExpression)? ')'",
@@ -8286,6 +8408,7 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::NAME_REF as u16),
                         Rule::Kind(SyntaxKind::LITERAL as u16),
                         Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                     ]),
                     Rule::Rep(&Rule::Seq(&[
                         Rule::Kind(T![,] as u16),
@@ -8307,6 +8430,7 @@ pub static RULES: &[NodeRule] = &[
                             Rule::Kind(SyntaxKind::NAME_REF as u16),
                             Rule::Kind(SyntaxKind::LITERAL as u16),
                             Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                            Rule::Kind(SyntaxKind::STAR_EXPR as u16),
                         ]),
                     ])),
                 ]),
@@ -8339,6 +8463,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![..] as u16),
             Rule::Alt(&[
@@ -8359,6 +8484,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
             Rule::Kind(T![')'] as u16),
         ]),
@@ -8388,6 +8514,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
         ]),
     },

@@ -168,6 +168,13 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
             p.done(m, K::PAREN_EXPR)
         }
         K::QUOTED_IDENT => name_ref(p),
+        // `* has "x"`: every column, the left side of a comparison or a set
+        // test, as Kusto's term search takes it.
+        K::STAR if matches!(p.nth(1), K::CMP_OP | K::SET_OP | K::IN_KW) => {
+            let m = p.start();
+            p.bump();
+            p.done(m, K::STAR_EXPR)
+        }
         // In an expression, `dynamic` and `toscalar` only open
         // `dynamic(...)` and `toscalar(...)`: never a column, as in the old
         // grammar (found by the switch's full differential, seed 3).

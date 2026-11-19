@@ -1,0 +1,2 @@
+// prod:star_expr valid
+SecurityEvent | where * has "mimikatz" or * has_any ("a", "b")
