@@ -1803,7 +1803,7 @@ exit: 0
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/lint.sarif · created 0644
-(1086719 bytes; long strings and the largest parts elided)
+(1090887 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -1812,12 +1812,12 @@ exit: 0
         "id": "opentide/lint/"
       },
       "columnKind": "unicodeCodePoints",
-      "results": "<elided 49931 bytes, sha256 4e1df891b939ddb155ce6ee740273e98074d79085c2df23a3bc29dbd5c02a8c7>",
+      "results": "<elided 49931 bytes, sha256 9ff27e66db09f42ae1e81b273d2e436cef7a8f8d2b550ba6bdeb165fb346fdc5>",
       "tool": {
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 277288 bytes, sha256 0af47f051876833952307776ac02e143d7941e70f736a3002611d6bb4cd21d86>",
+          "rules": "<elided 277926 bytes, sha256 339725c4bf415e67120720803557edf0d918e4ed913397f8d57baa6cad004223>",
           "version": "0.28.1"
         }
       }
