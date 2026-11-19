@@ -1362,7 +1362,7 @@ pub(crate) fn phase_outputs(
 /// Runs `phases` (each `schemas`, `templates`, `vocabs` or `snippets`) on `workspace`
 /// in order, each as a checklist step, until one fails. With `loaded`, a
 /// phase that reads the registry also fails on an object file the index
-/// could not load ([`logged_errors`]): `opentide generate` does, `opentide
+/// could not load (`logged_errors`): `opentide generate` does, `opentide
 /// new` (which only fills in a missing template) does not.
 pub fn run_phases(
     phases: &[String],

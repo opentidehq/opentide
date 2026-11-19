@@ -4215,6 +4215,16 @@ mod tests {
             ran.stdout
                 .contains("\"argument\":\"OPENTIDE_TIDE_WORKSPACE\"")
         );
+        // `doctor` runs anyway and fails its workspace check on it.
+        let doctor = dispatched("--json doctor --offline", &split, false);
+        assert_ne!(doctor.code, USAGE_EXIT_CODE, "{}", doctor.stdout);
+        assert!(
+            doctor.stdout.contains("does not exist")
+                && doctor.stdout.contains("OPENTIDE_TIDE_WORKSPACE="),
+            "{}{}",
+            doctor.stdout,
+            doctor.stderr
+        );
         // A Tide workspace that is a folder passes the test.
         let detections = root.path().join("detections");
         std::fs::create_dir_all(detections.join(".opentide")).unwrap();

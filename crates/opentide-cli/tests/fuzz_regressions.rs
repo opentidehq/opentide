@@ -233,6 +233,8 @@ fn random_command_lines() {
 #[test]
 fn framework_fuzz_lines_write_in_their_temporary_folder() {
     let cwd = scratch();
+    // `generate` refuses a folder that is no workspace (#1659): make it one.
+    std::fs::create_dir_all(cwd.path().join(".opentide")).unwrap();
     let (code, stderr) = replay(b"generate\0docs", cwd.path());
     assert_eq!(code, 0, "{stderr}");
     assert!(cwd.path().join("docs/README.md").is_file(), "{stderr}");
