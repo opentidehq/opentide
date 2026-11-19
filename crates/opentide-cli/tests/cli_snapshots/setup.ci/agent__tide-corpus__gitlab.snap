@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
-assertion_line: 875
 description: setup.ci/agent/tide-corpus/gitlab
 ---
 args: opentide setup ci gitlab --yes
@@ -29,11 +28,6 @@ exit: 0
 #   ELASTIC_API_KEY
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
-#   EXABEAM_CLIENT_ID
-#   EXABEAM_CLIENT_SECRET
-#   GOOGLE_SECOPS_CREDENTIALS
-#   GRAVITYZONE_API_KEY
-#   GRAYLOG_TOKEN
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET

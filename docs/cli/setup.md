@@ -167,7 +167,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 
 Generate CI/CD pipeline files. **CI provider** is the positional argument (`github`, `gitlab`, or `azure`). Detection platforms are **not** passed here — they are discovered from enabled `.opentide/configurations/platforms/*.toml` files written by `setup platforms`.
 
-Run `setup platforms` before `setup ci` so `validate query` jobs are included. If none are enabled, `setup ci` still writes the pipeline and prints a `WARNING` line (a `warnings` entry in JSON mode).
+Run `setup platforms` before `setup ci` so `validate query` jobs are included and its credentials are mapped; after enabling a platform later, run `setup ci` again, or its deploy fails with `credential_unset`. If none are enabled, `setup ci` still writes the pipeline and prints a `WARNING` line (a `warnings` entry in JSON mode).
 
 Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (GitLab), or pipeline (Azure) scope so `opentide` commands resolve the detection repository in CI. Re-run `setup ci` to refresh existing pipeline files.
 
