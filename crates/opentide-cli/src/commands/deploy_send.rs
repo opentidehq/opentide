@@ -723,13 +723,19 @@ fn deploy(
             .filter(|entry| args.platform.as_ref().is_none_or(|p| p == &entry.platform))
             .cloned(),
     );
+    // The commits changed no rule file: say so, rather than blame a status.
+    let unchanged = !selecting && !args.all && scope.files.is_empty() && scope.nested.is_empty();
     let refused = !selection.refused.is_empty();
     let refused_rules = selection.refused.clone();
     let mut deployment = selection.platforms.clone();
     if let Some(platform) = &args.platform {
         let Some(uuids) = deployment.shift_remove(platform) else {
             return nothing(
-                "No rules to deploy for this platform",
+                if unchanged {
+                    opentide_compile::dry_run::NO_RULE_FILE_CHANGED
+                } else {
+                    "No rules to deploy for this platform"
+                },
                 refused,
                 ("platform", Json::str(platform)),
             );
@@ -742,7 +748,11 @@ fn deploy(
         // annotation (`no_rules_warning`); with one, the platform's absence
         // returned above.
         return nothing(
-            opentide_compile::dry_run::NO_RULES_MATCHED,
+            if unchanged {
+                opentide_compile::dry_run::NO_RULE_FILE_CHANGED
+            } else {
+                opentide_compile::dry_run::NO_RULES_MATCHED
+            },
             refused,
             ("strategies", run_names),
         );
