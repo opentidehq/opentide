@@ -143,13 +143,6 @@ const BUDGET: u32 = 480;
 /// than the 35 levels the tree-sitter engine took.
 const PIPELINE: u32 = 12;
 
-/// Matches a quirk of the tree-sitter pass: it read the items of `project`,
-/// `extend` and either list of `summarize` by a field that also holds the
-/// commas between them, and took each comma for an item it cannot name, so
-/// a list of two or more items leaves the schema open (no column
-/// diagnostic after it). Kept for parity with the engine this one replaces
-/// (epic #1219); #1386 removes it after the port, behind a measurement of
-/// every new `kql_unknown_column` over the corpora.
 /// The names an operator's earlier items defined, which its later items may
 /// read (`extend a = 1, b = a * 2`). One per operator: a slice copied for each
 /// item and scanned for each reference made an operator of n items O(n²)
@@ -188,6 +181,13 @@ impl Defined {
     }
 }
 
+/// Matches a quirk of the tree-sitter pass: it read the items of `project`,
+/// `extend` and either list of `summarize` by a field that also holds the
+/// commas between them, and took each comma for an item it cannot name, so
+/// a list of two or more items leaves the schema open (no column
+/// diagnostic after it). Kept for parity with the engine this one replaces
+/// (epic #1219); #1386 removes it after the port, behind a measurement of
+/// every new `kql_unknown_column` over the corpora.
 fn comma_quirk(out: &mut Schema, items: usize) {
     if items >= 2 {
         out.make_open();
