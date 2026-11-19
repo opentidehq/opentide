@@ -146,6 +146,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `vscode` | the VS Code extension's fixture workspace, vendored unchanged in [`fixtures/vscode-workspace/`](fixtures/vscode-workspace/) (source and commit in `vscode-workspace.SOURCE.toml`, MIT licence in `vscode-workspace.LICENSE`) |
 | `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is snapshotted |
 | `vscode-unscoped` | `vscode` with one declared edit: signal entities written without their stage or in the wrong case (`hostname`, `'host::command line'`, `Process`), so the file `migrate vocab-scope --apply` rewrites is snapshotted (`tide-corpus` links its object folders, which the command does not follow) |
+| `vscode-long-query` | `vscode` with one declared edit: `long.lucene`, a Lucene query on one line longer than a frame shows, whose `(` never closes, so the frame shows the line in part |
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are snapshotted as they are, not asserted against the fault manifest |
