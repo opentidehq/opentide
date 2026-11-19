@@ -11,7 +11,7 @@ findings. [`smoke-test.md`](smoke-test.md) is the checklist this run started fro
 
 ## Summary
 - **Verdict: no-go for 1.0.0-rc.1 at `d11702e9c`.** Three blockers, listed in [Go / no-go](#go--no-go), must land first.
-- **81 unique findings** (92 reports, with duplicates across areas merged): **3 blockers, 13 majors, 53 minor, 12 docs**.
+- **87 unique findings** (98 reports, with duplicates across areas merged): **3 blockers, 13 majors, 58 minor, 13 docs**.
   - They are filed as 17 grouped issues, [#1653](https://github.com/opentidehq/opentide/issues/1653) to [#1671](https://github.com/opentidehq/opentide/issues/1671), each with a checklist and reproductions.
   - The version blocker is the existing [#1623](https://github.com/opentidehq/opentide/issues/1623).
 - **Coverage:** 716 cells across five areas.
@@ -101,7 +101,7 @@ Each cell is **pass**, **fail** (with its finding, linked to its issue), **needs
 | C | MCP server, language server, editors, WASM | 172 | 25 | 3 | 4 | 17 |
 | D | Build outputs, dry-run payloads, live paths without a tenant, SDKs | 118 | 32 | 16 | 1 | 17 |
 | E | Phase 2: Elastic 8.19/9.5, Graylog 6.3, Splunk 10.6, Falco | 39 | 10 | 5 | 1 | 21 |
-| | **Total** | **564** | **115** | **26** | **11** | **92** |
+| | **Total** | **564** | **115** | **26** | **11** | **98** |
 
 ### Area A: Install, new repository, CI generation, docs walk-through, contributor loop
 
@@ -822,104 +822,116 @@ Sorted by severity:
 
 A finding that two areas reported points at the one tracked (*same as*). Full reproductions, expected and actual output, and code locations are in each issue.
 
-| ID | Severity | Finding | Issue | Fix PR |
-|---|---|---|---|---|
-| A1 | blocker | Version 0.12.0 is below 0.28.1 and already on PyPI; pipelines pin 0.12.0, which installs the old CLI that crashes | [#1623](https://github.com/opentidehq/opentide/issues/1623) | — |
-| E1 | blocker | Production deploy job promotes rules, deploys them to 0 tenants and reports success | [#1653](https://github.com/opentidehq/opentide/issues/1653) | [#1664](https://github.com/opentidehq/opentide/pull/1664) |
-| E2 | blocker | Graylog deploy sends empty streams and notifications (aliases dropped); dry run resolves them | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1666](https://github.com/opentidehq/opentide/pull/1666) |
-| A2 | major | GitLab validate after_script runs python -m opentide.ci.codequality, which no longer exists | [#1656](https://github.com/opentidehq/opentide/issues/1656) | — |
-| A3 | major | Azure pipeline never maps credentials into steps (no env:) | [#1655](https://github.com/opentidehq/opentide/issues/1655) | — |
-| A4 | major | Production job promotes and commits even when the deploy reached no tenant *(same as E1)* | [#1653](https://github.com/opentidehq/opentide/issues/1653) | [#1664](https://github.com/opentidehq/opentide/pull/1664) |
-| A5 | major | setup ci silently overwrites a user-edited pipeline; --plan calls it a merge | [#1656](https://github.com/opentidehq/opentide/issues/1656) | — |
-| A6 | major | --explorer-pages job builds from opentide@development source and needs undocumented secrets | [#1656](https://github.com/opentidehq/opentide/issues/1656) | — |
-| A7 | major | share status reports never-shared objects as created on the target | [#1661](https://github.com/opentidehq/opentide/issues/1661) | — |
-| B16 | major | A // line in a folded >- KQL query comments out the rest: deployed rule matches every event; validate and lint clean | [#1660](https://github.com/opentidehq/opentide/issues/1660) | — |
-| C1 | major | MCP with no workspace (or missing OPENTIDE_REPO_ROOT) serves an empty catalogue; validation_report ok: true | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| D1 | major | generate silently ignores malformed object files: exit 0, rule missing from outputs | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| D2 | major | Real Graylog deploy sends streams:[] and notifications:[] (setup.setup lookup) *(same as E2)* | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1666](https://github.com/opentidehq/opentide/pull/1666) |
-| D3 | major | Graylog query and --live reject documented stream_ids aliases *(same as E3)* | [#1654](https://github.com/opentidehq/opentide/issues/1654) | — |
-| E3 | major | Graylog query and validate query --live reject stream aliases the tenant defines | [#1654](https://github.com/opentidehq/opentide/issues/1654) | — |
-| E4 | major | Generated GitHub pipeline never passes the tenant's own credential variables | [#1655](https://github.com/opentidehq/opentide/issues/1655) | — |
-| E5 | major | Splunk needs an undocumented soc_macro_auto_mdr_mapping macro; nothing deploys without it | [#1657](https://github.com/opentidehq/opentide/issues/1657) | — |
-| E6 | major | Renaming a Splunk rule leaves the old saved search running (duplicate alerting) | [#1657](https://github.com/opentidehq/opentide/issues/1657) | — |
-| E7 | major | Unreachable Kibana is a per-rule failure: every rule retried, tenant never stopped | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| E14 | major | Build is 0.12.0, an existing older PyPI release *(same as A1)* | [#1623](https://github.com/opentidehq/opentide/issues/1623) | — |
-| A8 | minor | Git hook validates the working copy, not the staged content | [#1670](https://github.com/opentidehq/opentide/issues/1670) | — |
-| A9 | minor | --data / OPENTIDE_DATA_ROOT has no effect; a missing path is accepted | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| A10 | minor | OPENTIDE_REPO_ROOT naming a missing folder makes validate pass (exit 0) | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| A11 | minor | --python-version unchecked: breaks GitHub YAML, injects GitLab keys, accepts 2.7 | [#1656](https://github.com/opentidehq/opentide/issues/1656) | — |
-| A12 | minor | Generated README quick-start command fails (deploy --dry-run without --strategy) | [#1656](https://github.com/opentidehq/opentide/issues/1656) | — |
-| A13 | minor | Redirected human output wraps at 80 columns; docs say never wrapped | [#1665](https://github.com/opentidehq/opentide/issues/1665) | — |
-| A15 | minor | PyPI summary says nine platforms; there are 13 | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| A16 | minor | CrowdStrike template leaves credentials empty instead of $VAR; pipelines pass no secret | [#1655](https://github.com/opentidehq/opentide/issues/1655) | — |
-| B1 | minor | metadata.created/modified accept any string ('yesterday', 2026-02-30) | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B2 | minor | validate passes values the platform rejects (CrowdStrike trigger/outcome, HarfangLab Sigma, Defender category) | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B3 | minor | Opaque 'ElasticConfig validation failed ... duration' for bad new_terms window, not placed at the value | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B4 | minor | validate query --json places a HarfangLab YARA error at the metadata.uuid line | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B5 | minor | bitdefender_criterion_field underline covers one character | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B7 | minor | new --path outside objects/ writes a file opentide never reads, then suggests a failing validate --file | [#1670](https://github.com/opentidehq/opentide/issues/1670) | — |
-| B8 | minor | Empty name at the interactive prompt gets the 'prompts only at a terminal' message | [#1670](https://github.com/opentidehq/opentide/issues/1670) | — |
-| B9 | minor | YAML error frames: tab on previous line, no unclosed-[ note, odd duplicate-key wording | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B10 | minor | Config TOML syntax error is command_failed with no position (config_parse documented) *(same as D9)* | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| B11 | minor | Plain output wraps at 80 columns; docs say never *(same as A13)* | [#1665](https://github.com/opentidehq/opentide/issues/1665) | — |
-| B12 | minor | NO_COLOR / --no-color / FORCE_COLOR=0 at a terminal still emit bold escapes | [#1665](https://github.com/opentidehq/opentide/issues/1665) | — |
-| B15 | minor | Threat chaining accepts any keys and a self-loop | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B17 | minor | setup --org never reaches new; README platform list goes stale after setup platforms | [#1670](https://github.com/opentidehq/opentide/issues/1670) | — |
-| B18 | minor | Old unscoped vocabulary value gets no migrate vocab-scope hint; migrate outside a workspace exits 0 | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| B19 | minor | explain kql_parse suggests yaml_parse | [#1663](https://github.com/opentidehq/opentide/issues/1663) | — |
-| B21 | minor | Unclosed ( in KQL before a pipe reported as 'expected a name' at the wrong token | [#1660](https://github.com/opentidehq/opentide/issues/1660) | — |
-| B22 | minor | Frames and messages not truncated: a 1 MB one-line query prints ~2 MB | [#1665](https://github.com/opentidehq/opentide/issues/1665) | — |
-| C2 | minor | deploy_rule dry_run:false drops the deployer's error for 7 of 9 tenant platforms | [#1667](https://github.com/opentidehq/opentide/issues/1667) | — |
-| C3 | minor | opentide://templates/rule (and rule::1.1) returns the rule::1.0 template; rule::1.0 refused | [#1667](https://github.com/opentidehq/opentide/issues/1667) | — |
-| C4 | minor | editors/nvim/opentide.lua fails on Neovim 0.9.5 and misses rules opened by absolute path | [#1668](https://github.com/opentidehq/opentide/issues/1668) | — |
-| C5 | minor | Completion after '\| ' returns nothing in a query inside a rule (.kql gets 54 items) | [#1668](https://github.com/opentidehq/opentide/issues/1668) | — |
-| C6 | minor | setup mcp never warns when opentide is not on PATH, though docs say it does | [#1670](https://github.com/opentidehq/opentide/issues/1670) | — |
-| C7 | minor | Live validate_query results carry an internal _exit_code key | [#1667](https://github.com/opentidehq/opentide/issues/1667) | — |
-| C8 | minor | MCP: a non-JSON line gets no reply; a call without params answers Method not found | [#1667](https://github.com/opentidehq/opentide/issues/1667) | — |
-| C9 | minor | validate_query accepts any stack; search accepts any type, silently | [#1667](https://github.com/opentidehq/opentide/issues/1667) | — |
-| C10 | minor | opentide/analyze: unknown language = no diagnostics; opentide/fs/read: '' for relative path | [#1668](https://github.com/opentidehq/opentide/issues/1668) | — |
-| C11 | minor | build-wasm.sh builds into $CARGO_TARGET_DIR but reads $root/target | [#1668](https://github.com/opentidehq/opentide/issues/1668) | — |
-| C16 | minor | deploy_rule dry run for a platform with no block answers a successful preview | [#1667](https://github.com/opentidehq/opentide/issues/1667) | — |
-| D4 | minor | --live reports SecOps/Graylog tenant failures as Queries rejected, no reason in JSON | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| D5 | minor | Google SecOps reports a refused connection as tenant_unauthorized | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| D6 | minor | Bitdefender reports refused TCP connect as create_unconfirmed and asks for manual cleanup | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| D7 | minor | Deploy without creds/tenant: result shape differs per platform; Elastic tries every rule | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| D8 | minor | generate docs --flavor bogus exits 1 command_failed, not 2 usage_invalid_choice | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| D9 | minor | TOML/YAML parse errors come back as command_failed with no diagnostics | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| D10 | minor | Deploy without --all reads nothing when HEAD is the root commit *(same as E9)* | [#1662](https://github.com/opentidehq/opentide/issues/1662) | — |
-| D11 | minor | Dry-run 'not in the plan' note counts other platforms' rules under --platform | [#1662](https://github.com/opentidehq/opentide/issues/1662) | — |
-| D12 | minor | Dry-run api_request is the rule block with defaults for 6 platforms; contradicts docs | [#1662](https://github.com/opentidehq/opentide/issues/1662) | — |
-| D13 | minor | Python/Node/Rust SDKs accept inputs the CLI refuses (bogus types, platform, limit=0) | [#1669](https://github.com/opentidehq/opentide/issues/1669) | — |
-| D14 | minor | Python Connection.query/validate_query raise raw AttributeError for string start/end | [#1669](https://github.com/opentidehq/opentide/issues/1669) | — |
-| D17 | minor | generate outside a workspace writes 20 files there and exits 0 | [#1659](https://github.com/opentidehq/opentide/issues/1659) | — |
-| ED6 | minor | No tenant connectivity check anywhere (doctor checks only env vars) | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| E8 | minor | --live credential refusal reported as rejected queries, with a green tick | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| E9 | minor | Deploy on a repo whose only commit is the root commit reads no rule | [#1662](https://github.com/opentidehq/opentide/issues/1662) | — |
-| E10 | minor | No-op redeploy rewrites every rule and reports it as changed | [#1662](https://github.com/opentidehq/opentide/issues/1662) | — |
-| E11 | minor | Graylog opentide query --rule is refused; docs don't say so | [#1654](https://github.com/opentidehq/opentide/issues/1654) | — |
-| E12 | minor | Success info printed as warnings; redactor masks 'HTTP'; wrong advice text | [#1658](https://github.com/opentidehq/opentide/issues/1658) | — |
-| E13 | minor | Production job's dry-run step says nothing will deploy (no promotion simulated) | [#1653](https://github.com/opentidehq/opentide/issues/1653) | — |
-| E15 | minor | On a push to main the live gate checks to-be-promoted rules only against PREVIEW tenants; a RELEASE-only setup exits 2 | [#1653](https://github.com/opentidehq/opentide/issues/1653) | — |
-| A14 | docs | Getting-started pages: 0.28.1 pin, validate query exit 2, layout, skills, Python-era text | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| B6 | docs | Docs contradict on placeholder queries; a YARA-L placeholder counts as 1 query valid | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| B13 | docs | validate.md describes unknown schema identifiers wrongly | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| B14 | docs | Tutorial sample outputs drifted (file counts, missing queries check) | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| C12 | docs | MCP docs say validate_query refuses unless live: true; it checks offline | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| C13 | docs | MCP install pages pin opentide==0.28.1 *(same as A14)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| C14 | docs | Stale MCP docs: exit code row, deploy_rule message, --uuid, engine shape | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| C15 | docs | docs/cli/lsp.md disagrees with the server (configurationSchemas, custom requests, editor setup) | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| C17 | docs | lsp start caches nothing; docs describe a cache under OPENTIDE_CACHE_DIR | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| D15 | docs | Docs list 3-5 platforms keeping vendor ids; 8 write state shards *(same as ED2)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| D16 | docs | SDK docs drift: models.md, 0.28.1 pin, check_query languages, dir(opentide) leaks | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| ED1 | docs | configuration.md: 'info --platform' does not show what a platform expects | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| ED2 | docs | deployment-state.md: wrong platform count, misses Graylog/Bitdefender/SecOps, no Splunk rename caveat | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| ED3 | docs | platforms.md says Graylog validate query exits 2 offline; it runs offline *(same as A14)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| ED4 | docs | ci-cd.md: job summary lists UUIDs, not rule names | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
-| ED5 | docs | quickstart pins opentide==0.28.1 while the build is 0.12.0 *(same as A14)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | — |
+| ID | Severity | Finding | Issue | Fix PR / owner | State |
+|---|---|---|---|---|---|
+| A1 | blocker | Version 0.12.0 is below 0.28.1 and already on PyPI; pipelines pin 0.12.0, which installs the old CLI that crashes | [#1623](https://github.com/opentidehq/opentide/issues/1623) | release step (#[#1623](https://github.com/opentidehq/opentide/pull/1623), your call) | Needs decision |
+| E1 | blocker | Production deploy job promotes rules, deploys them to 0 tenants and reports success | [#1653](https://github.com/opentidehq/opentide/issues/1653) | [#1664](https://github.com/opentidehq/opentide/pull/1664) | Fixed |
+| E2 | blocker | Graylog deploy sends empty streams and notifications (aliases dropped); dry run resolves them | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1666](https://github.com/opentidehq/opentide/pull/1666) | Fixed |
+| A2 | major | GitLab validate after_script runs python -m opentide.ci.codequality, which no longer exists | [#1656](https://github.com/opentidehq/opentide/issues/1656) | [#1681](https://github.com/opentidehq/opentide/pull/1681) | Fix in PR |
+| A3 | major | Azure pipeline never maps credentials into steps (no env:) | [#1655](https://github.com/opentidehq/opentide/issues/1655) | [#1676](https://github.com/opentidehq/opentide/pull/1676) | Fix in PR |
+| A4 | major | Production job promotes and commits even when the deploy reached no tenant *(same as E1)* | [#1653](https://github.com/opentidehq/opentide/issues/1653) | [#1664](https://github.com/opentidehq/opentide/pull/1664) (part); rest: fixer 1 | Fix in PR |
+| A5 | major | setup ci silently overwrites a user-edited pipeline; --plan calls it a merge | [#1656](https://github.com/opentidehq/opentide/issues/1656) | fixer 2 | Queued |
+| A6 | major | --explorer-pages job builds from opentide@development source and needs undocumented secrets | [#1656](https://github.com/opentidehq/opentide/issues/1656) | [#1681](https://github.com/opentidehq/opentide/pull/1681) | Fix in PR |
+| A7 | major | share status reports never-shared objects as created on the target | [#1661](https://github.com/opentidehq/opentide/issues/1661) | fixer 2 | Queued |
+| B16 | major | A // line in a folded >- KQL query comments out the rest: deployed rule matches every event; validate and lint clean | [#1660](https://github.com/opentidehq/opentide/issues/1660) | fixer 3 | Queued |
+| C1 | major | MCP with no workspace (or missing OPENTIDE_REPO_ROOT) serves an empty catalogue; validation_report ok: true | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| D1 | major | generate silently ignores malformed object files: exit 0, rule missing from outputs | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| D2 | major | Real Graylog deploy sends streams:[] and notifications:[] (setup.setup lookup) *(same as E2)* | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1666](https://github.com/opentidehq/opentide/pull/1666) | Fixed |
+| D3 | major | Graylog query and --live reject documented stream_ids aliases *(same as E3)* | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1674](https://github.com/opentidehq/opentide/pull/1674) | Fixed |
+| E3 | major | Graylog query and validate query --live reject stream aliases the tenant defines | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1674](https://github.com/opentidehq/opentide/pull/1674) | Fixed |
+| E4 | major | Generated GitHub pipeline never passes the tenant's own credential variables | [#1655](https://github.com/opentidehq/opentide/issues/1655) | [#1676](https://github.com/opentidehq/opentide/pull/1676) | Fix in PR |
+| E5 | major | Splunk needs an undocumented soc_macro_auto_mdr_mapping macro; nothing deploys without it | [#1657](https://github.com/opentidehq/opentide/issues/1657) | fixer 1 | Queued |
+| E6 | major | Renaming a Splunk rule leaves the old saved search running (duplicate alerting) | [#1657](https://github.com/opentidehq/opentide/issues/1657) | fixer 1 | Queued |
+| E7 | major | Unreachable Kibana is a per-rule failure: every rule retried, tenant never stopped | [#1658](https://github.com/opentidehq/opentide/issues/1658) | [#1690](https://github.com/opentidehq/opentide/pull/1690) | Fixed |
+| E14 | major | Build is 0.12.0, an existing older PyPI release *(same as A1)* | [#1623](https://github.com/opentidehq/opentide/issues/1623) | release step (#[#1623](https://github.com/opentidehq/opentide/pull/1623), your call) | Needs decision |
+| A8 | minor | Git hook validates the working copy, not the staged content | [#1670](https://github.com/opentidehq/opentide/issues/1670) | fixer 5 | Queued |
+| A9 | minor | --data / OPENTIDE_DATA_ROOT has no effect; a missing path is accepted | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| A10 | minor | OPENTIDE_REPO_ROOT naming a missing folder makes validate pass (exit 0) | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| A11 | minor | --python-version unchecked: breaks GitHub YAML, injects GitLab keys, accepts 2.7 | [#1656](https://github.com/opentidehq/opentide/issues/1656) | fixer 2 | Queued |
+| A12 | minor | Generated README quick-start command fails (deploy --dry-run without --strategy) | [#1656](https://github.com/opentidehq/opentide/issues/1656) | fixer 2 | Queued |
+| A13 | minor | Redirected human output wraps at 80 columns; docs say never wrapped | [#1665](https://github.com/opentidehq/opentide/issues/1665) | fixer 3 | Queued |
+| A15 | minor | PyPI summary says nine platforms; there are 13 | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| A16 | minor | CrowdStrike template leaves credentials empty instead of $VAR; pipelines pass no secret | [#1655](https://github.com/opentidehq/opentide/issues/1655) | [#1676](https://github.com/opentidehq/opentide/pull/1676) | Fix in PR |
+| B1 | minor | metadata.created/modified accept any string ('yesterday', 2026-02-30) | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B2 | minor | validate passes values the platform rejects (CrowdStrike trigger/outcome, HarfangLab Sigma, Defender category) | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B3 | minor | Opaque 'ElasticConfig validation failed ... duration' for bad new_terms window, not placed at the value | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B4 | minor | validate query --json places a HarfangLab YARA error at the metadata.uuid line | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B5 | minor | bitdefender_criterion_field underline covers one character | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B7 | minor | new --path outside objects/ writes a file opentide never reads, then suggests a failing validate --file | [#1670](https://github.com/opentidehq/opentide/issues/1670) | fixer 5 | Queued |
+| B8 | minor | Empty name at the interactive prompt gets the 'prompts only at a terminal' message | [#1670](https://github.com/opentidehq/opentide/issues/1670) | fixer 5 | Queued |
+| B9 | minor | YAML error frames: tab on previous line, no unclosed-[ note, odd duplicate-key wording | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B10 | minor | Config TOML syntax error is command_failed with no position (config_parse documented) *(same as D9)* | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| B11 | minor | Plain output wraps at 80 columns; docs say never *(same as A13)* | [#1665](https://github.com/opentidehq/opentide/issues/1665) | fixer 3 | Queued |
+| B12 | minor | NO_COLOR / --no-color / FORCE_COLOR=0 at a terminal still emit bold escapes | [#1665](https://github.com/opentidehq/opentide/issues/1665) | fixer 3 | Queued |
+| B15 | minor | Threat chaining accepts any keys and a self-loop | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B17 | minor | setup --org never reaches new; README platform list goes stale after setup platforms | [#1670](https://github.com/opentidehq/opentide/issues/1670) | fixer 5 | Queued |
+| B18 | minor | Old unscoped vocabulary value gets no migrate vocab-scope hint; migrate outside a workspace exits 0 | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| B19 | minor | explain kql_parse suggests yaml_parse | [#1663](https://github.com/opentidehq/opentide/issues/1663) | fixer 3 | Queued |
+| B21 | minor | Unclosed ( in KQL before a pipe reported as 'expected a name' at the wrong token | [#1660](https://github.com/opentidehq/opentide/issues/1660) | [#1678](https://github.com/opentidehq/opentide/pull/1678) | Fixed |
+| B22 | minor | Frames and messages not truncated: a 1 MB one-line query prints ~2 MB | [#1665](https://github.com/opentidehq/opentide/issues/1665) | fixer 3 | Queued |
+| C2 | minor | deploy_rule dry_run:false drops the deployer's error for 7 of 9 tenant platforms | [#1667](https://github.com/opentidehq/opentide/issues/1667) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C3 | minor | opentide://templates/rule (and rule::1.1) returns the rule::1.0 template; rule::1.0 refused | [#1667](https://github.com/opentidehq/opentide/issues/1667) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C4 | minor | editors/nvim/opentide.lua fails on Neovim 0.9.5 and misses rules opened by absolute path | [#1668](https://github.com/opentidehq/opentide/issues/1668) | [#1682](https://github.com/opentidehq/opentide/pull/1682) | Fix in PR |
+| C5 | minor | Completion after '\| ' returns nothing in a query inside a rule (.kql gets 54 items) | [#1668](https://github.com/opentidehq/opentide/issues/1668) | [#1682](https://github.com/opentidehq/opentide/pull/1682) | Fix in PR |
+| C6 | minor | setup mcp never warns when opentide is not on PATH, though docs say it does | [#1670](https://github.com/opentidehq/opentide/issues/1670) | fixer 5 | Queued |
+| C7 | minor | Live validate_query results carry an internal _exit_code key | [#1667](https://github.com/opentidehq/opentide/issues/1667) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C8 | minor | MCP: a non-JSON line gets no reply; a call without params answers Method not found | [#1667](https://github.com/opentidehq/opentide/issues/1667) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C9 | minor | validate_query accepts any stack; search accepts any type, silently | [#1667](https://github.com/opentidehq/opentide/issues/1667) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C10 | minor | opentide/analyze: unknown language = no diagnostics; opentide/fs/read: '' for relative path | [#1668](https://github.com/opentidehq/opentide/issues/1668) | [#1682](https://github.com/opentidehq/opentide/pull/1682) | Fix in PR |
+| C11 | minor | build-wasm.sh builds into $CARGO_TARGET_DIR but reads $root/target | [#1668](https://github.com/opentidehq/opentide/issues/1668) | [#1673](https://github.com/opentidehq/opentide/pull/1673) | Fixed |
+| C16 | minor | deploy_rule dry run for a platform with no block answers a successful preview | [#1667](https://github.com/opentidehq/opentide/issues/1667) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| D4 | minor | --live reports SecOps/Graylog tenant failures as Queries rejected, no reason in JSON | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| D5 | minor | Google SecOps reports a refused connection as tenant_unauthorized | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| D6 | minor | Bitdefender reports refused TCP connect as create_unconfirmed and asks for manual cleanup | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| D7 | minor | Deploy without creds/tenant: result shape differs per platform; Elastic tries every rule | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| D8 | minor | generate docs --flavor bogus exits 1 command_failed, not 2 usage_invalid_choice | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| D9 | minor | TOML/YAML parse errors come back as command_failed with no diagnostics | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| D10 | minor | Deploy without --all reads nothing when HEAD is the root commit *(same as E9)* | [#1662](https://github.com/opentidehq/opentide/issues/1662) | [#1680](https://github.com/opentidehq/opentide/pull/1680) | Fix in PR |
+| D11 | minor | Dry-run 'not in the plan' note counts other platforms' rules under --platform | [#1662](https://github.com/opentidehq/opentide/issues/1662) | fixer 6 | Queued |
+| D12 | minor | Dry-run api_request is the rule block with defaults for 6 platforms; contradicts docs | [#1662](https://github.com/opentidehq/opentide/issues/1662) | fixer 6 | Queued |
+| D13 | minor | Python/Node/Rust SDKs accept inputs the CLI refuses (bogus types, platform, limit=0) | [#1669](https://github.com/opentidehq/opentide/issues/1669) | [#1686](https://github.com/opentidehq/opentide/pull/1686) | Fix in PR |
+| D14 | minor | Python Connection.query/validate_query raise raw AttributeError for string start/end | [#1669](https://github.com/opentidehq/opentide/issues/1669) | [#1686](https://github.com/opentidehq/opentide/pull/1686) | Fix in PR |
+| D17 | minor | generate outside a workspace writes 20 files there and exits 0 | [#1659](https://github.com/opentidehq/opentide/issues/1659) | fixer 3 | Queued |
+| ED6 | minor | No tenant connectivity check anywhere (doctor checks only env vars) | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| E8 | minor | --live credential refusal reported as rejected queries, with a green tick | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| E9 | minor | Deploy on a repo whose only commit is the root commit reads no rule | [#1662](https://github.com/opentidehq/opentide/issues/1662) | [#1680](https://github.com/opentidehq/opentide/pull/1680) | Fix in PR |
+| E10 | minor | No-op redeploy rewrites every rule and reports it as changed | [#1662](https://github.com/opentidehq/opentide/issues/1662) | fixer 6 | Queued |
+| E11 | minor | Graylog opentide query --rule is refused; docs don't say so | [#1654](https://github.com/opentidehq/opentide/issues/1654) | [#1674](https://github.com/opentidehq/opentide/pull/1674) | Fixed |
+| E12 | minor | Success info printed as warnings; redactor masks 'HTTP'; wrong advice text | [#1658](https://github.com/opentidehq/opentide/issues/1658) | fixer 6 | Queued |
+| E13 | minor | Production job's dry-run step says nothing will deploy (no promotion simulated) | [#1653](https://github.com/opentidehq/opentide/issues/1653) | fixer 1 | Queued |
+| E15 | minor | On a push to main the live gate checks to-be-promoted rules only against PREVIEW tenants; a RELEASE-only setup exits 2 | [#1653](https://github.com/opentidehq/opentide/issues/1653) | fixer 1 | Queued |
+| R1 | minor | A first push of several commits deploys only the last commit's rules | [#1683](https://github.com/opentidehq/opentide/issues/1683) | fixer 6 | Queued |
+| R3 | minor | No LSP completion at the end of a HarfangLab decomposed yara.condition | [#1685](https://github.com/opentidehq/opentide/issues/1685) | fixer 5 | Queued |
+| R4 | minor | Azure CI steps get every platform's secrets; map only the platform's own | [#1689](https://github.com/opentidehq/opentide/issues/1689) | fixer 2 | Queued |
+| R5 | minor | Generated explorer job checks out opentidehq/explorer at unpinned main | [#1693](https://github.com/opentidehq/opentide/issues/1693) | fixer 2 | Queued |
+| R6 | minor | Flaky wall-clock test: kql lexer_stack unclosed_typed_literals_are_linear failed once on a base push | [#1694](https://github.com/opentidehq/opentide/issues/1694) | fixer 5 | Queued |
+| A14 | docs | Getting-started pages: 0.28.1 pin, validate query exit 2, layout, skills, Python-era text | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) (docs merged); pins: release #[#1623](https://github.com/opentidehq/opentide/pull/1623) | Needs decision |
+| B6 | docs | Docs contradict on placeholder queries; a YARA-L placeholder counts as 1 query valid | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) (docs merged); code: fixer 3 | Queued |
+| B13 | docs | validate.md describes unknown schema identifiers wrongly | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| B14 | docs | Tutorial sample outputs drifted (file counts, missing queries check) | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| C12 | docs | MCP docs say validate_query refuses unless live: true; it checks offline | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C13 | docs | MCP install pages pin opentide==0.28.1 *(same as A14)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | fixer 4 (docs PR) | Queued |
+| C14 | docs | Stale MCP docs: exit code row, deploy_rule message, --uuid, engine shape | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1679](https://github.com/opentidehq/opentide/pull/1679) | Fixed |
+| C15 | docs | docs/cli/lsp.md disagrees with the server (configurationSchemas, custom requests, editor setup) | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1682](https://github.com/opentidehq/opentide/pull/1682) | Fix in PR |
+| C17 | docs | lsp start caches nothing; docs describe a cache under OPENTIDE_CACHE_DIR | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1682](https://github.com/opentidehq/opentide/pull/1682) | Fix in PR |
+| D15 | docs | Docs list 3-5 platforms keeping vendor ids; 8 write state shards *(same as ED2)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| D16 | docs | SDK docs drift: models.md, 0.28.1 pin, check_query languages, dir(opentide) leaks | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1686](https://github.com/opentidehq/opentide/pull/1686) | Fix in PR |
+| ED1 | docs | configuration.md: 'info --platform' does not show what a platform expects | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| ED2 | docs | deployment-state.md: wrong platform count, misses Graylog/Bitdefender/SecOps, no Splunk rename caveat | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| ED3 | docs | platforms.md says Graylog validate query exits 2 offline; it runs offline *(same as A14)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| ED4 | docs | ci-cd.md: job summary lists UUIDs, not rule names | [#1671](https://github.com/opentidehq/opentide/issues/1671) | [#1688](https://github.com/opentidehq/opentide/pull/1688) | Fixed |
+| ED5 | docs | quickstart pins opentide==0.28.1 while the build is 0.12.0 *(same as A14)* | [#1671](https://github.com/opentidehq/opentide/issues/1671) | fixer 4 (docs PR) | Queued |
+| R2 | docs | OPENTIDE_CACHE_DIR documented in help, explain lsp_catalog and diagnostics but read by nothing | [#1684](https://github.com/opentidehq/opentide/issues/1684) | fixer 4 | Queued |
+
+## Fix progress
+
+As of this revision, 21 unique findings are fixed and merged into `integration/unified-core`, each with an independent review, a regression test that fails without the fix (docs aside), and green CI. Every open finding has an owner (a PR or a fixer's queue) except the version pins, which wait on the release step (#1623). The `State` column above is current; the live tracker is the smoke-test dashboard.
+
+Review of the fixes found six more problems, filed and tracked as `R1` to `R6` ([#1683](https://github.com/opentidehq/opentide/issues/1683), [#1684](https://github.com/opentidehq/opentide/issues/1684), [#1685](https://github.com/opentidehq/opentide/issues/1685), [#1689](https://github.com/opentidehq/opentide/issues/1689), [#1693](https://github.com/opentidehq/opentide/issues/1693), [#1694](https://github.com/opentidehq/opentide/issues/1694)). Two infrastructure fixes landed along the way: [#1677](https://github.com/opentidehq/opentide/pull/1677) (cargo deny failed every pull request on new `heapless` advisories; the base run at `d11702e9c` was red for it) and [#1694](https://github.com/opentidehq/opentide/issues/1694) (a wall-clock KQL lexer test that failed once on a base push).
 
 ## Go / no-go
 
-**No-go for 1.0.0-rc.1 at `d11702e9c`.** Land these first:
+**No-go for 1.0.0-rc.1 at `d11702e9c`.** Land these first (two of three are now merged):
 
 1. **[#1623](https://github.com/opentidehq/opentide/issues/1623)**: bump the workspace to 1.0.0 (`release.py bump 1.0.0`, release-management Step 0).
    - At 0.12.0, `doctor` tells users to downgrade-upgrade to 0.28.1.
