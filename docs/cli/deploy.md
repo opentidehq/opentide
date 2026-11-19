@@ -98,7 +98,7 @@ warning: sentinel has no tenants configured in .opentide/configurations/platform
 dry run, nothing sent
 ```
 
-Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps (and platform plugins) keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A dry run ends with `dry run, nothing sent` after the tally and any next steps. A real run reports each rule as it is sent and ends with a counted outcome line; see [A real run](#a-real-run). Which rules were created and which updated is the plan: it is predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
+Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps (and platform plugins) keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. Once sent, an Elastic rule's row says what Kibana did (`created` or `updated`). A dry run ends with `dry run, nothing sent` after the tally and any next steps. A real run reports each rule as it is sent and ends with a counted outcome line; see [A real run](#a-real-run). Which rules were created and which updated is the plan: it is predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -170,7 +170,7 @@ Deploying to sentinel / contoso · 14 rules
 
 | Line | Meaning |
 |------|---------|
-| `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. The word is the planned action. A platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
+| `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. The word is the planned action. A platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update, but Elastic, whose answer says which: `created` or `updated` |
 | `✗ failed` | The platform, or planning, refused the rule. The line carries the platform's own message and its HTTP status when it has one, so the cause is readable without a traceback. A long message continues on the lines below it on a terminal and stays on one line in a log |
 | `· skipped` | The rule was not sent, with the reason: an `INERT` status, a Sigma rule on a YARA tenant, a retirement of a rule that never reached the tenant (`external_id_missing`) |
 | `· skipped … not attempted: tenant <name> failed` | The tenant failed (it could not be reached or signed in to, or it refused the key on an earlier rule), so this rule was never sent to it. The tenant's other rules are listed right after its failed rule; the other tenants go on |

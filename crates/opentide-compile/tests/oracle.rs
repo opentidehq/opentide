@@ -138,7 +138,7 @@ fn without_nulls(value: Json) -> Json {
 /// same value, keys in another order) or `wrapped` (the oracle's request
 /// as the candidate's `payload`, beside the block the candidate adds);
 /// `None` for any other difference.
-fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
+fn dump_class(oracle: &str, mine: &str, writes: &dyn Fn(&str) -> bool) -> Option<&'static str> {
     let oracle: Json = serde_json::from_str(oracle).ok()?;
     if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
         return None;
@@ -170,25 +170,20 @@ fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
         return Some("nulls");
     }
     let value = |text: &str| serde_json::from_str::<Value>(text).ok();
-    let (trimmed, mine) = (value(&trimmed)?, value(mine)?);
+    let (mut trimmed, mine) = (value(&trimmed)?, value(mine)?);
     if trimmed == mine {
         return Some("order");
     }
-    // `unset`: the oracle's entry with members left out, at any depth (the
-    // model's defaults the block does not set), every value kept the same.
-    pruned_from(&trimmed, &mine).then_some("unset")
-}
-
-/// Whether `mine` is `oracle` with object members left out, at any depth.
-fn pruned_from(oracle: &Value, mine: &Value) -> bool {
-    match (oracle, mine) {
-        (Value::Object(oracle), Value::Object(mine)) => mine.iter().all(|(key, value)| {
-            oracle
-                .get(key)
-                .is_some_and(|known| pruned_from(known, value))
-        }),
-        _ => oracle == mine,
+    // `unset`: the oracle's entry without `api_request`'s `enabled` and
+    // `name`, each only where the rule's block does not write it (the
+    // model's defaults no deployer reads), every other member the same.
+    let request = trimmed.get_mut("api_request")?.as_object_mut()?;
+    for key in ["enabled", "name"] {
+        if !writes(key) {
+            request.remove(key);
+        }
     }
+    (trimmed == mine).then_some("unset")
 }
 
 /// The approved differences of the compile corpus (`[[diff]]` entries of
@@ -291,7 +286,11 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 used[at] = true;
             } else if oracle != mine
                 && !(what == "preview"
-                    && dump_class(&oracle, &mine).is_some_and(|class| {
+                    && dump_class(&oracle, &mine, &|key| {
+                        rule.block(platform)
+                            .is_some_and(|block| block.get(key).is_some())
+                    })
+                    .is_some_and(|class| {
                         classes.iter().any(|(rule, platforms)| {
                             rule == class && platforms.iter().any(|known| known == platform)
                         })

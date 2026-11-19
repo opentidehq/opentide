@@ -175,35 +175,20 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
 }
 
 /// The block of `platform` as the dry run shows it when it builds no body:
-/// [`config_dump`] without the fields the block does not set. A model's
-/// default (`enabled: false`, `name: ""`) is neither what the block says nor
-/// what a deploy sends (#1662, D12).
+/// [`config_dump`] without `enabled` and `name` when the block does not
+/// write them. Their model defaults (`enabled: false`, `name: ""`) are not
+/// what the block says, and no deployer reads them (#1662, D12); every other
+/// default stays, since a deploy sends it.
 pub fn block_preview(platform: &str, block: &Json) -> Json {
-    match model_config_dump(platform, block) {
-        Some(dumped) => only_set(dumped, block, true),
-        None => block.clone(),
-    }
-}
-
-/// `dumped` keeping only what `written` sets: at each level, a key of a
-/// mapping the written mapping has (at the top, `schema` for a block that
-/// writes it `platform_schema`, the model's alias).
-fn only_set(dumped: Json, written: &Json, top: bool) -> Json {
-    let (Json::Object(dumped), Some(written)) = (&dumped, written.as_object()) else {
-        return dumped;
+    let Some(Json::Object(mut dumped)) = model_config_dump(platform, block) else {
+        return config_dump(platform, block);
     };
-    let kept: Object = dumped
-        .iter()
-        .filter_map(|(key, value)| {
-            let source = written.get(key).or_else(|| {
-                (top && key == "schema")
-                    .then(|| written.get("platform_schema"))
-                    .flatten()
-            })?;
-            Some((key.clone(), only_set(value.clone(), source, false)))
-        })
-        .collect();
-    Json::Object(kept)
+    for key in ["enabled", "name"] {
+        if block.get(key).is_none() {
+            dumped.shift_remove(key);
+        }
+    }
+    Json::Object(dumped)
 }
 
 /// The block read by `platform`'s model, or `None` when the model refuses
@@ -554,26 +539,35 @@ mod tests {
         );
     }
 
-    /// The dry run's preview of a block is its dump without the model's
-    /// defaults the block does not set (#1662, D12): no `enabled: false`,
-    /// no `name: ""`; what the block writes stays, in the model's order,
-    /// and `platform_schema` reads as the model's `schema`.
+    /// The dry run's preview of a block is its dump without `enabled` and
+    /// `name` when the block does not write them (#1662, D12); every other
+    /// default, which a deploy sends, stays.
     #[test]
-    fn a_block_preview_leaves_out_what_the_block_does_not_set() {
+    fn a_block_preview_leaves_out_enabled_and_name_the_block_does_not_set() {
         let block: Json = serde_json::from_str(
-            r#"{"status":"STAGING","platform_schema":"platform::splunk::1.0","query":"index=main","advanced":{"action.x.param.tags":null}}"#,
+            r#"{"status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null}}"#,
         )
         .unwrap();
         assert_eq!(
             block_preview("splunk", &block).to_compact(),
-            r#"{"schema":"platform::splunk::1.0","status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null}}"#
+            r#"{"status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null}}"#
         );
         let named: Json =
-            serde_json::from_str(r#"{"enabled":true,"name":"N","status":"STAGING","query":"q"}"#)
+            serde_json::from_str(r#"{"enabled":false,"name":"N","status":"STAGING","query":"q"}"#)
                 .unwrap();
         assert_eq!(
             block_preview("splunk", &named).to_compact(),
-            r#"{"enabled":true,"name":"N","status":"STAGING","query":"q"}"#
+            r#"{"enabled":false,"name":"N","status":"STAGING","query":"q"}"#
+        );
+        // The model's other defaults stay: SentinelOne's response order and
+        // members are the dump's.
+        let sentinel_one: Json = serde_json::from_str(
+            r#"{"status":"STAGING","condition":{"type":"Single Event","single_event":{"query":"q"}},"response":{"network_quarantine":true,"treat_as_threat":false}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            block_preview("sentinel_one", &sentinel_one).to_compact(),
+            r#"{"status":"STAGING","condition":{"type":"Single Event","single_event":{"query":"q"}},"response":{"treat_as_threat":false,"network_quarantine":true}}"#
         );
         // A block the model refuses is shown as written.
         let refused: Json = serde_json::from_str(r#"{"query":"q","status":"S"}"#).unwrap();
