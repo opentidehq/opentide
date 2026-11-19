@@ -40,10 +40,12 @@ list (`scripts/engine/audit.py ignores`). Today there are eleven:
   through `rmcp` and `schemars`) and RUSTSEC-2026-0542 (`humantime`, dev-only through `trycmd`).
   [#1513](https://github.com/opentidehq/opentide/issues/1513) removes them.
 - Nine are unsound: RUSTSEC-2026-0574 to RUSTSEC-2026-0582 (`heapless` 0.8). It comes only through
-  `faster-hex` 0.10, under `gix-hash`. `faster-hex` uses it only without its `alloc` feature, which
-  `gix-hash` always enables, so it is compiled but never run.
-  [#1675](https://github.com/opentidehq/opentide/issues/1675) drops these ignores when gix moves to
-  `faster-hex` 1.0. An earlier one, RUSTSEC-2024-0449
+  `faster-hex` 0.10, under `gix-hash` and `gix-packetline`. `faster-hex` uses it only without its
+  `alloc` feature, which both always enable (through `std`), so it is compiled but never run.
+  [#1675](https://github.com/opentidehq/opentide/issues/1675) drops these ignores when both gix
+  crates move to `faster-hex` 1.0.
+
+An earlier one, RUSTSEC-2024-0449
 (`unsafe-libyaml`, unmaintained, through `serde_yaml` 0.9), went when the engine moved its Tide
 YAML onto the node tree every crate reads YAML with, `opentide_core::node` (saphyr, YAML 1.2)
 ([#850](https://github.com/opentidehq/opentide/issues/850)).
