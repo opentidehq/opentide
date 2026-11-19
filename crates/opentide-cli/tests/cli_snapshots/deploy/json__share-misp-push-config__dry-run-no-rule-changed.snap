@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/share-misp-push-config/dry-run-no-rule-changed
+---
+args: opentide --json deploy --dry-run --strategy PREVIEW
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rule file changed in this run's commits; pass --all to deploy every rule file",
+  "next_actions": [],
+  "ok": true,
+  "payloads": {},
+  "plan": {},
+  "schema_version": 1,
+  "status": "skipped",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {}
+}
+
+━━━ stderr · empty
