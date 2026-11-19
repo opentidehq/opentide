@@ -505,9 +505,10 @@ fn the_live_check_fails_every_rule_when_credentials_cannot_be_read() {
     );
 }
 
-/// A tenant that refuses the token on a rule (a 401 on the create) fails
-/// there: the other rule is not attempted, naming the tenant, and Google
-/// SecOps is not deployed.
+/// A tenant that signs in, then refuses the token on the first rule's
+/// create (a 401; its `verifyRuleText` check writes nothing) has taken
+/// nothing: each rule is not attempted, naming the tenant, and Google SecOps
+/// is not deployed (#1701).
 #[test]
 fn a_tenant_refusing_the_token_on_a_rule_stops_and_is_not_deployed() {
     let runtime = runtime();
@@ -540,7 +541,7 @@ fn a_tenant_refusing_the_token_on_a_rule_stops_and_is_not_deployed() {
         "{stderr}"
     );
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
-    assert_eq!(statuses, ["failed", "not_attempted"], "{stderr}");
+    assert_eq!(statuses, ["not_attempted", "not_attempted"], "{stderr}");
     let Json::Array(results) = value(&sent.result, "results") else {
         panic!("no results")
     };

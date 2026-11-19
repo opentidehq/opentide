@@ -252,6 +252,10 @@ impl Client {
         }
         if xsrf {
             builder = builder.header("kbn-xsrf", "true");
+        } else {
+            // Elasticsearch is only read: its checks (`POST /_query` among
+            // them) write no rule (`HttpClient::writes_taken`).
+            builder = builder.read_only();
         }
         if let Some(body) = body {
             builder =

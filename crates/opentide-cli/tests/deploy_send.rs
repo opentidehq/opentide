@@ -3090,8 +3090,9 @@ fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
     );
 }
 
-/// An Exabeam tenant that refuses the token on a rule fails there: its other
-/// rule is not attempted, naming the tenant, and Exabeam is not deployed.
+/// An Exabeam tenant that signs in, then refuses the token on the first
+/// rule's first request (a read), has taken nothing: each rule is not
+/// attempted, naming the tenant, and Exabeam is not deployed (#1701).
 #[test]
 fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     use wiremock::matchers::{method, path};
@@ -3138,7 +3139,7 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
         0,
     );
     rt.block_on(server.verify());
-    assert_eq!(rows(&sent)[0].0, "failed", "{:?}", rows(&sent));
+    assert_failed_before_any_rule(&sent, "exabeam", "lab", "");
     assert_tenant_stopped(&sent, "lab");
 }
 
@@ -4073,8 +4074,8 @@ fn a_tenant_failing_before_any_rule_leaves_each_of_its_rules_not_attempted() {
             );
             assert_eq!(document["status"], "failed", "{platform}: {out}");
             assert_eq!(document["exit_code"], 1, "{platform}: {out}");
-            assert_ne!(
-                document["failure"]["code"], "issues_found",
+            assert_eq!(
+                document["failure"]["code"], "command_failed",
                 "{platform}: {out}"
             );
             assert_eq!(document["summary"]["failed"], 0, "{platform}: {out}");
@@ -4147,6 +4148,9 @@ fn harfanglab_stops_a_tenant_refusing_the_token_before_any_rule() {
         "harfanglab",
         "lab",
         "harfanglab tenant 'lab': HarfangLab tenant lab refused the API token (HTTP 401)",
+    );
+}
+
 /// The summary's `skipped` counts the rows the run skipped (a rule no
 /// tenant takes) besides the rules a status left out of the plan, which
 /// once replaced them (#1653).
@@ -4198,4 +4202,326 @@ fn the_summary_counts_skipped_rows_and_rules_left_out() {
         "{:?}",
         sent.result
     );
+}
+
+/// The tenant setup on the stand-in at `uri` and the rule text of
+/// `platform`, for `a_tenant_that_signs_in_then_refuses_the_first_rule_fails_before_any_rule`.
+fn signed_in_case(platform: &str, uri: &str) -> (String, String) {
+    let (setup, block) = match platform {
+        "exabeam" => (
+            format!(
+                "region = \"eu\"\nclient_id = \"c\"\nclient_secret = \"$OPENTIDE_TEST_SECRET\"\napi_url = \"{uri}/\"\n"
+            ),
+            EXABEAM_BLOCK.to_owned(),
+        ),
+        "google_secops" => (
+            format!(
+                "ssl = false\nproject = \"p\"\nlocation = \"eu\"\ninstance = \"i\"\nendpoint = \"{uri}\"\n"
+            ),
+            String::new(),
+        ),
+        "graylog" => (
+            format!("url = \"{uri}\"\ntoken = \"$OPENTIDE_TEST_SECRET\"\n"),
+            graylog_block("STAGING", "EventID:1"),
+        ),
+        _ => (
+            format!(
+                "url = \"{uri}\"\nelasticsearch_url = \"{uri}\"\napi_key = \"$OPENTIDE_TEST_SECRET\"\nindex = [\"logs-*\"]\n"
+            ),
+            elastic_block("STAGING", ""),
+        ),
+    };
+    let text = if platform == "google_secops" {
+        std::fs::read_to_string(
+            repo().join("tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml"),
+        )
+        .unwrap()
+    } else {
+        rule(
+            "A rule",
+            "00000000-0000-4000-8099-000000000931",
+            "A.",
+            &block,
+        )
+    };
+    (setup, text)
+}
+
+/// A tenant that signs in, then refuses or cannot answer the first rule's
+/// first write, has taken nothing: its rules are `not attempted` (#1701).
+/// The sign-in and the read-only checks before the write (Elasticsearch's,
+/// Graylog's query check, Google SecOps' `verifyRuleText`) do not count as
+/// a rule sent. Exabeam and Google SecOps sign in before the first rule.
+#[test]
+fn a_tenant_that_signs_in_then_refuses_the_first_rule_fails_before_any_rule() {
+    use wiremock::matchers::{method, path_regex};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let mut failed = Vec::new();
+    for platform in ["exabeam", "google_secops", "graylog", "elastic"] {
+        let server = rt.block_on(wiremock::MockServer::start());
+        let uri = server.uri();
+        rt.block_on(async {
+            let ok = |body: serde_json::Value| {
+                wiremock::ResponseTemplate::new(200).set_body_json(body)
+            };
+            for (verb, route, answer) in [
+                ("POST", "^/auth/v1/token$", serde_json::json!({"access_token": "t", "expires_in": 3600})),
+                ("POST", "^/token$", serde_json::json!({"access_token": "t", "expires_in": 3600})),
+                ("POST", ":verifyRuleText$", serde_json::json!({"success": true, "allowedRunFrequencies": ["LIVE", "HOURLY", "DAILY"]})),
+                ("GET", "^/api/system$", serde_json::json!({"version": "7.2.1"})),
+                ("POST", "^/api/search/validate$", serde_json::json!({"status": "OK"})),
+                ("GET", "/_field_caps$", serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+                ("POST", "^/_query$", serde_json::json!({"columns": [], "values": []})),
+            ] {
+                wiremock::Mock::given(method(verb))
+                    .and(path_regex(route))
+                    .respond_with(ok(answer))
+                    .mount(&server)
+                    .await;
+            }
+            // Every other request: the tenant refuses the credentials.
+            wiremock::Mock::given(path_regex(".*"))
+                .respond_with(wiremock::ResponseTemplate::new(401))
+                .mount(&server)
+                .await;
+        });
+        let (setup, text) = signed_in_case(platform, &uri);
+        let ws = workspace(platform, "lab", &setup, &[("a.yaml", text)]);
+        let adc = ws.path().join("adc.json");
+        std::fs::write(
+            &adc,
+            format!(
+                r#"{{"type": "authorized_user", "client_id": "c", "client_secret": "s",
+                    "refresh_token": "r", "token_uri": "{uri}/token"}}"#
+            ),
+        )
+        .unwrap();
+        let env = Env::from_pairs([
+            ("OPENTIDE_TEST_SECRET".to_owned(), SECRET.to_owned()),
+            (
+                "GOOGLE_APPLICATION_CREDENTIALS".to_owned(),
+                adc.display().to_string(),
+            ),
+        ]);
+        let (sent, text) = deploy(
+            ws.path(),
+            platform,
+            &env,
+            &opentide_connectors::builtin(),
+            0,
+        );
+        let checked = std::panic::catch_unwind(|| {
+            let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+            assert_eq!(statuses, ["not_attempted"], "{platform}: {text}");
+            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{platform}");
+        });
+        if checked.is_err() {
+            failed.push(platform);
+        }
+    }
+    assert!(failed.is_empty(), "failed on {failed:?}");
+}
+
+/// Google SecOps signs in, then its instance cannot be reached: nothing was
+/// sent, so its rule is `not attempted` (#1701).
+#[test]
+fn a_secops_tenant_signed_in_but_unreachable_fails_before_any_rule() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"access_token": "t", "expires_in": 3600})),
+            )
+            .expect(1)
+            .mount(&server),
+    );
+    let setup = "ssl = false\nproject = \"p\"\nlocation = \"eu\"\ninstance = \"i\"\nendpoint = \"http://127.0.0.1:9\"\n";
+    let text = std::fs::read_to_string(
+        repo().join("tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml"),
+    )
+    .unwrap();
+    let ws = workspace("google_secops", "lab", setup, &[("a.yaml", text)]);
+    let adc = ws.path().join("adc.json");
+    std::fs::write(
+        &adc,
+        format!(
+            r#"{{"type": "authorized_user", "client_id": "c", "client_secret": "s",
+                "refresh_token": "r", "token_uri": "{}/token"}}"#,
+            server.uri()
+        ),
+    )
+    .unwrap();
+    let env = Env::from_pairs([(
+        "GOOGLE_APPLICATION_CREDENTIALS".to_owned(),
+        adc.display().to_string(),
+    )]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "google_secops",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_failed_before_any_rule(&sent, "google_secops", "lab", "");
+}
+
+/// A write that left and got no answer (the connection closed once the
+/// request was sent) may have landed: the rule it came on stays `failed`,
+/// never `not attempted`, even as the tenant's first (#1701).
+#[test]
+fn a_first_write_whose_connection_dropped_stays_failed() {
+    use std::io::Read as _;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            // Read the request, then close without an answer.
+            let mut buffer = vec![0_u8; 65536];
+            let _ = stream.read(&mut buffer);
+        }
+    });
+    let setup =
+        format!("url = \"http://{address}\"\naccount_id = 1001\napi_token = \"$S1_API_TOKEN\"\n");
+    let ws = workspace(
+        "sentinel_one",
+        "lab",
+        &setup,
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "First rule",
+                    "00000000-0000-4000-8099-000000000941",
+                    "A.",
+                    &s1_block("STAGING"),
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Second rule",
+                    "00000000-0000-4000-8099-000000000942",
+                    "B.",
+                    &s1_block("STAGING"),
+                ),
+            ),
+        ],
+    );
+    let env = Env::from_pairs([("S1_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, text) = deploy(
+        ws.path(),
+        "sentinel_one",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses[0], "failed", "{text}");
+}
+
+/// A tenant failure on a later rule, after an earlier rule was sent and
+/// refused on its own, is a failure on a rule: that rule is `failed` and
+/// the rest `not attempted` (#1701).
+#[test]
+fn a_tenant_failure_after_a_rule_was_sent_fails_its_rule() {
+    use wiremock::matchers::method;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(400)
+                    .set_body_json(serde_json::json!({"errors": [{"title": "invalid"}]})),
+            )
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"errors": [{"title": "Unauthorized"}]})),
+            )
+            .mount(&server)
+            .await;
+    });
+    let setup = format!(
+        "url = \"{}\"\naccount_id = 1001\napi_token = \"$S1_API_TOKEN\"\n",
+        server.uri()
+    );
+    let rules: Vec<(String, String)> = (1..=3)
+        .map(|n| {
+            (
+                format!("r{n}.yaml"),
+                rule(
+                    &format!("Rule {n}"),
+                    &format!("00000000-0000-4000-8099-00000000095{n}"),
+                    "A.",
+                    &s1_block("STAGING"),
+                ),
+            )
+        })
+        .collect();
+    let refs: Vec<(&str, String)> = rules.iter().map(|(f, t)| (f.as_str(), t.clone())).collect();
+    let ws = workspace("sentinel_one", "lab", &setup, &refs);
+    let env = Env::from_pairs([("S1_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, text) = deploy(
+        ws.path(),
+        "sentinel_one",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["failed", "failed", "not_attempted"], "{text}");
+}
+
+/// Kibana answering the first rule's lookup (a `GET`) with a gateway's
+/// 503, retried, has taken nothing: the tenant failed before any rule and
+/// its rule is `not attempted` (#1701).
+#[test]
+fn an_elastic_gateway_error_on_the_first_lookup_fails_before_any_rule() {
+    use wiremock::matchers::{method, path_regex};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/api/detection_engine/rules$"))
+            .respond_with(wiremock::ResponseTemplate::new(503).set_body_string("<html>down</html>"))
+            .mount(&server)
+            .await;
+    });
+    let ws = elastic_workspace(
+        &server.uri(),
+        &[(
+            "a.yaml",
+            "First rule",
+            "00000000-0000-4000-8099-000000000961",
+            elastic_block("STAGING", ""),
+        )],
+    );
+    let env = Env::from_pairs([("ELASTIC_API_KEY".to_owned(), "key".to_owned())]);
+    let (sent, text) = deploy(
+        ws.path(),
+        "elastic",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["not_attempted"], "{text}");
 }

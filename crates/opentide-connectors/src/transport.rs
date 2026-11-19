@@ -50,6 +50,7 @@ pub struct Request {
     body: Option<Vec<u8>>,
     timeout: Option<Duration>,
     idempotent: Option<bool>,
+    read_only: bool,
 }
 
 /// The headers that carry a credential (#1142): marked sensitive when set,
@@ -94,6 +95,7 @@ impl std::fmt::Debug for Request {
             .field("body_bytes", &self.body.as_ref().map(Vec::len))
             .field("timeout", &self.timeout)
             .field("idempotent", &self.idempotent)
+            .field("read_only", &self.read_only)
             .finish()
     }
 }
@@ -108,6 +110,7 @@ impl Request {
             body: None,
             timeout: None,
             idempotent: None,
+            read_only: false,
         }
     }
 
@@ -166,6 +169,21 @@ impl Request {
     /// version.
     pub fn set_idempotent(&mut self, idempotent: bool) {
         self.idempotent = Some(idempotent);
+    }
+
+    /// Whether it changes nothing on the tenant, whatever its method: a
+    /// `GET`, `HEAD` or `OPTIONS`, or a request marked so
+    /// ([`set_read_only`](Self::set_read_only)).
+    pub fn is_read_only(&self) -> bool {
+        self.read_only || matches!(self.method, Method::GET | Method::HEAD | Method::OPTIONS)
+    }
+
+    /// Marks a request that changes nothing on the tenant although its
+    /// method could (a sign-in's `POST`, a query check's): what
+    /// [`HttpClient::writes_taken`](crate::HttpClient::writes_taken) does
+    /// not count.
+    pub fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
     }
 
     #[cfg(not(target_os = "wasi"))]
@@ -269,6 +287,16 @@ impl RequestBuilder {
         let body: Vec<u8> = body.into();
         self.with(|request| {
             request.body = Some(body);
+            Ok(())
+        })
+    }
+
+    /// Marks the request as one that changes nothing on the tenant
+    /// ([`Request::set_read_only`]).
+    #[must_use]
+    pub fn read_only(self) -> Self {
+        self.with(|request| {
+            request.read_only = true;
             Ok(())
         })
     }

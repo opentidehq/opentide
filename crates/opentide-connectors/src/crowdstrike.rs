@@ -112,7 +112,9 @@ async fn sign_in(cx: TenantContext<'_>, base: &str) -> Result<Issued, ConnectorE
                 &format!("{base}/oauth2/token"),
             )
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(form),
+            .body(form)
+            // A sign-in writes no rule (`HttpClient::writes_taken`).
+            .read_only(),
         cx,
     )?;
     let answer = Answer::fetch(cx.http, request, cx.cancel).await?;

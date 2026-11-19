@@ -2013,9 +2013,6 @@ enum Stops {
 struct Raised {
     problem: String,
     stops: Stops,
-    /// The tenant did nothing with the request that failed
-    /// ([`took_nothing`]): never sent, or refused.
-    unsent: bool,
 }
 
 impl Raised {
@@ -2024,19 +2021,12 @@ impl Raised {
         Self {
             problem: problem.into(),
             stops: Stops::Rule,
-            unsent: false,
         }
     }
 
     /// The same failure, stopping `stops`.
     fn stopping(self, stops: Stops) -> Self {
         Self { stops, ..self }
-    }
-
-    /// The same failure, of a request the tenant did nothing with when
-    /// `unsent`.
-    fn unsent(self, unsent: bool) -> Self {
-        Self { unsent, ..self }
     }
 
     /// The problem, for the run's message.
@@ -2132,38 +2122,7 @@ fn raised(error: &ConnectorError) -> Raised {
         | ConnectorError::Refused { .. }
         | ConnectorError::QueryTimedOut { .. } => Stops::Rule,
     };
-    described(error).stopping(stops).unsent(took_nothing(error))
-}
-
-/// Whether the tenant did nothing with a request that failed with *error*:
-/// it was never sent (the connection, the address, a certificate refused,
-/// an unset or unusable credential, no network), or the tenant refused it
-/// (its credentials, or another refusal). A request that timed out, got a
-/// gateway's error or an answer cannot be read, or stopped on a bug or an
-/// interrupt may have been taken (#1701).
-fn took_nothing(error: &ConnectorError) -> bool {
-    match error {
-        ConnectorError::Unreachable { .. }
-        | ConnectorError::Setup { .. }
-        | ConnectorError::MissingCredential { .. }
-        | ConnectorError::Authentication { .. }
-        | ConnectorError::NetworkUnavailable { .. }
-        | ConnectorError::Refused { .. } => true,
-        // Exhaustive: a new kind must say whether it was taken.
-        ConnectorError::Timeout { .. }
-        | ConnectorError::Gateway { .. }
-        | ConnectorError::Answer { .. }
-        | ConnectorError::Crashed { .. }
-        | ConnectorError::Cancelled
-        | ConnectorError::QueryTimedOut { .. } => false,
-    }
-}
-
-/// [`took_nothing`] for a deploy's failure: one that did part of its work
-/// ([`DeployError::partial`]) took something; one a platform built itself,
-/// with no connector error, is the tenant's refusal.
-fn deploy_took_nothing(error: &DeployError) -> bool {
-    error.partial.is_none() && error.connector.as_deref().is_none_or(took_nothing)
+    described(error).stopping(stops)
 }
 
 /// A `Deployer`'s failure, raised by `raise` from its connector error: the
@@ -2171,8 +2130,7 @@ fn deploy_took_nothing(error: &DeployError) -> bool {
 /// report it (`DeployError::scope`), whatever the error's kind.
 fn scoped(failed: DeployError, raise: impl FnOnce(ConnectorError) -> Raised) -> Raised {
     let tenant = failed.scope == DeployScope::Tenant;
-    let unsent = deploy_took_nothing(&failed);
-    let raised = raise(failed.into_connector()).unsent(unsent);
+    let raised = raise(failed.into_connector());
     if tenant && raised.stops == Stops::Rule {
         raised.stopping(Stops::Tenant)
     } else {
@@ -2243,15 +2201,26 @@ struct Sender<'s, 'c> {
 struct Connection {
     tenant: Tenant,
     http: HttpClient,
-    /// The writes the tenant had accepted once it was opened (its sign-in):
-    /// while none more is accepted, the tenant has taken no rule.
-    opened: std::cell::Cell<usize>,
+    /// The requests sent to the tenant once it was opened (its sign-in).
+    opened_sent: std::cell::Cell<usize>,
+    /// The writes the tenant may have taken once it was opened: while none
+    /// more is taken, the tenant has taken no rule.
+    opened_taken: std::cell::Cell<usize>,
+    /// The requests sent to the tenant when its current rule began.
+    rule_sent: std::cell::Cell<usize>,
 }
 
 impl Connection {
     /// The tenant is open: what it accepts from now on is a rule's.
     fn mark_opened(&self) {
-        self.opened.set(self.http.writes_accepted());
+        self.opened_sent.set(self.http.requests_sent());
+        self.opened_taken.set(self.http.writes_taken());
+        self.rule_sent.set(self.http.requests_sent());
+    }
+
+    /// A rule of the tenant begins: what was sent before is earlier rules'.
+    fn rule_begins(&self) {
+        self.rule_sent.set(self.http.requests_sent());
     }
 }
 
@@ -2325,7 +2294,9 @@ impl Sender<'_, '_> {
         Ok(Connection {
             tenant,
             http,
-            opened: std::cell::Cell::new(0),
+            opened_sent: std::cell::Cell::new(0),
+            opened_taken: std::cell::Cell::new(0),
+            rule_sent: std::cell::Cell::new(0),
         })
     }
 
@@ -2444,22 +2415,25 @@ impl Sender<'_, '_> {
     }
 
     /// Whether a failure of the tenant on a rule came before the tenant took
-    /// anything: the request was never sent, or refused (`unsent`), the
-    /// tenant has accepted no write since it was opened, and no rule of it
-    /// was deployed. Its connection or its credentials, resolved on that
-    /// first request, failed, so no rule was sent (#1701): the platforms
-    /// with no sign-in reach the tenant first with a rule's own request.
+    /// anything, so before any rule was sent (#1701): no write the rule's
+    /// requests made may have been taken (none left, or the tenant refused
+    /// it, [`HttpClient::writes_taken`]), no earlier rule of the tenant sent
+    /// a request since it was opened, and none was deployed. Its connection
+    /// or its credentials, resolved on that first rule's first requests,
+    /// failed: the platforms with no sign-in of their own reach the tenant
+    /// first with a rule's own request. A write that left and may have
+    /// landed (no answer, a dropped connection, a 5xx) keeps the rule
+    /// `failed`.
     fn before_any_rule(
         &self,
         connection: &Connection,
         platform: &str,
         tenant: &str,
         log: &DeployLog<'_>,
-        unsent: bool,
     ) -> bool {
-        unsent
-            && !self.interrupted()
-            && connection.http.writes_accepted() == connection.opened.get()
+        !self.interrupted()
+            && connection.http.writes_taken() == connection.opened_taken.get()
+            && connection.rule_sent.get() == connection.opened_sent.get()
             && !log.deployed_on(platform, tenant)
     }
 
@@ -2477,8 +2451,7 @@ impl Sender<'_, '_> {
         let Err(raised) = outcome else {
             return false;
         };
-        if raised.stops != Stops::Tenant
-            || !self.before_any_rule(connection, platform, tenant, log, raised.unsent)
+        if raised.stops != Stops::Tenant || !self.before_any_rule(connection, platform, tenant, log)
         {
             return false;
         }
@@ -2512,13 +2485,7 @@ impl Sender<'_, '_> {
         mut result: RuleResult,
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
-        let before_any = self.before_any_rule(
-            connection,
-            platform,
-            tenant,
-            log,
-            deploy_took_nothing(&error),
-        );
+        let before_any = self.before_any_rule(connection, platform, tenant, log);
         let text = error.into_connector().text();
         tracing::error!(tenant, error = text.as_str(), critical = true, "{event}");
         if before_any {
@@ -2701,6 +2668,7 @@ impl Sender<'_, '_> {
                     }
                 }
                 let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
+                connection.rule_begins();
                 let outcome = self.by_uuid_rule(platform, &connection, batch, rule, &mut result);
                 if self.raised_before_any_rule(&connection, platform, &tenant, log, &outcome) {
                     break;
@@ -3227,6 +3195,7 @@ impl Sender<'_, '_> {
             for (rule, action) in planned {
                 let tenant = batch.tenant.name.as_str();
                 let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
+                connection.rule_begins();
                 let outcome = self.state_rule(
                     platform,
                     &batch.table,
@@ -3277,6 +3246,7 @@ impl Sender<'_, '_> {
             for (rule, action) in planned {
                 let tenant = batch.tenant.name.as_str();
                 let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
+                connection.rule_begins();
                 let outcome =
                     self.plugin_rule(deployer, platform, &connection, rule, &action, &mut result);
                 if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
@@ -3319,7 +3289,9 @@ impl Sender<'_, '_> {
         Ok(Connection {
             tenant,
             http,
-            opened: std::cell::Cell::new(0),
+            opened_sent: std::cell::Cell::new(0),
+            opened_taken: std::cell::Cell::new(0),
+            rule_sent: std::cell::Cell::new(0),
         })
     }
 
@@ -3542,7 +3514,6 @@ impl Sender<'_, '_> {
         use opentide_connectors::sentinel_one::SentinelOne;
         // The console's refusal, by its code: each kind's event.
         let refused = |error: DeployError, action: &Planned| {
-            let unsent = deploy_took_nothing(&error);
             let failure = &error.failure;
             let detail = failure.field("detail").unwrap_or_default();
             match failure.code {
@@ -3591,7 +3562,6 @@ impl Sender<'_, '_> {
                 failure.message
             ))
             .stopping(stops)
-            .unsent(unsent)
         };
         // The Deployer's request: the stored id addresses an update
         // or a delete; the body is the compiled rule.
@@ -3683,6 +3653,7 @@ impl Sender<'_, '_> {
                 warned_rules: Vec::new(),
             };
             for sent in &batch.rules {
+                connection.rule_begins();
                 if self.elastic_rule(&connection, batch, &sent.rule, &mut tenant_state, log)? {
                     break;
                 }
@@ -3703,8 +3674,7 @@ impl Sender<'_, '_> {
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
         const PLATFORM: &str = PlatformId::Elastic.as_str();
-        let unsent = deploy_took_nothing(&error);
-        let before_any = self.before_any_rule(connection, PLATFORM, tenant, log, unsent);
+        let before_any = self.before_any_rule(connection, PLATFORM, tenant, log);
         let stopped = match error.connector {
             // The tenant could not be reached.
             Some(connector) => {
@@ -3983,6 +3953,7 @@ impl Sender<'_, '_> {
                     _ => Vec::new(),
                 };
             for (rule, action) in planned {
+                connection.rule_begins();
                 if self.sysdig_rule(&connection, batch, rule, &action, &tenant_policies, log)? {
                     break;
                 }
@@ -4149,6 +4120,7 @@ impl Sender<'_, '_> {
             let automatic =
                 opentide_compile::bitdefender::automatic_actions_on(&batch.table).unwrap_or(true);
             for (rule, action) in planned {
+                connection.rule_begins();
                 if self.bitdefender_rule(&connection, batch, rule, &action, automatic, log)? {
                     break;
                 }
@@ -4397,13 +4369,21 @@ impl Sender<'_, '_> {
             let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
                 continue;
             };
-            let ready = Instance::of(&connection.tenant).and_then(|instance| {
-                connector
-                    .authorizer(&connection.tenant)
-                    .map(|authorizer| (instance, authorizer))
-            });
+            // The instance and credentials, then the sign-in, once: the
+            // rules reuse the token (#1701).
+            let ready = Instance::of(&connection.tenant)
+                .and_then(|_| connector.authorizer(&connection.tenant))
+                .and_then(|_| {
+                    self.block(async {
+                        Ok(connector
+                            .open(self.context(&connection))
+                            .await
+                            .map_err(DeployError::into_connector))
+                    })
+                    .and_then(|opened| opened)
+                });
             match ready {
-                Ok(_) => {}
+                Ok(()) => connection.mark_opened(),
                 Err(error) => {
                     // Unset or unreadable credentials: no rule on the tenant can deploy.
                     let text = error.text();
@@ -4419,6 +4399,7 @@ impl Sender<'_, '_> {
                 }
             }
             for (rule, action) in planned {
+                connection.rule_begins();
                 if self.google_secops_rule(&connection, batch, rule, &action, &connector, log)? {
                     break;
                 }
@@ -4552,13 +4533,7 @@ impl Sender<'_, '_> {
             }
             Err(error) => {
                 // Refused credentials or an unreachable instance fail every rule on it.
-                let before_any = self.before_any_rule(
-                    connection,
-                    platform,
-                    &tenant,
-                    log,
-                    deploy_took_nothing(&error),
-                );
+                let before_any = self.before_any_rule(connection, platform, &tenant, log);
                 let text = error.into_connector().text();
                 self.google_secops_tenant_failed(&tenant, &text);
                 if before_any {
@@ -4713,7 +4688,10 @@ impl Sender<'_, '_> {
                     "graylog_version_vulnerable"
                 );
             }
+            // The version read was the tenant's opening: what follows is a rule's.
+            connection.mark_opened();
             for (rule, action) in planned {
+                connection.rule_begins();
                 if self.graylog_rule(&connection, batch, rule, &action, version, log)? {
                     break;
                 }
@@ -4896,13 +4874,7 @@ impl Sender<'_, '_> {
                 log.finished(result);
             }
             Err(error) => {
-                let before_any = self.before_any_rule(
-                    connection,
-                    PLATFORM,
-                    &tenant,
-                    log,
-                    deploy_took_nothing(&error),
-                );
+                let before_any = self.before_any_rule(connection, PLATFORM, &tenant, log);
                 let error = error.into_connector();
                 let text = error.text();
                 let code = match &error {
@@ -4986,9 +4958,16 @@ impl Sender<'_, '_> {
                 http: &connection.http,
                 cancel: &cancel,
             };
-            if let Err(error) = exabeam.session(context) {
-                // An unset credential variable: no rule on the tenant can deploy.
-                let text = error.text();
+            // The credentials, then the sign-in, once: the rules reuse the
+            // token (#1701).
+            let opened = self
+                .block(async { Ok(exabeam.open(context).await) })
+                .map_err(DeployError::from)
+                .and_then(|opened| opened);
+            if let Err(error) = opened {
+                // An unset credential variable, or a sign-in refused or never
+                // answered: no rule on the tenant can deploy.
+                let text = error.into_connector().text();
                 tracing::error!(
                     tenant = tenant.as_str(),
                     error = text.as_str(),
@@ -5004,7 +4983,9 @@ impl Sender<'_, '_> {
                 );
                 continue;
             }
+            connection.mark_opened();
             for (rule, action) in planned {
+                connection.rule_begins();
                 if self.exabeam_rule(&connection, batch, rule, &action, &exabeam, log)? {
                     break;
                 }
@@ -5167,13 +5148,7 @@ impl Sender<'_, '_> {
             critical = true,
             "exabeam_tenant_deployment_failed"
         );
-        if self.before_any_rule(
-            connection,
-            platform,
-            tenant,
-            log,
-            deploy_took_nothing(error),
-        ) {
+        if self.before_any_rule(connection, platform, tenant, log) {
             // The sign-in or the connection failed on the tenant's first
             // request: no rule was sent (#1701).
             self.unused(platform, tenant, log, &error.failure.message);
@@ -5220,11 +5195,6 @@ impl Sender<'_, '_> {
     }
 }
 
-/// What a platform plugin's `Deployer` receives as the body (UC-4.5b): the
-/// rule's document with the tenant's modifiers applied, its block for the
-/// platform, and, for an update, a disable or a delete, the id deployment
-/// state holds. `opentide.plugins` hands the plugin `remote_id` as the
-/// request's own field.
 /// A platform with no engine opens nothing: its first rule says so
 /// (`Sender::deployer`).
 struct NoOpen;
@@ -5244,6 +5214,11 @@ impl Deployer for NoOpen {
     }
 }
 
+/// What a platform plugin's `Deployer` receives as the body (UC-4.5b): the
+/// rule's document with the tenant's modifiers applied, its block for the
+/// platform, and, for an update, a disable or a delete, the id deployment
+/// state holds. `opentide.plugins` hands the plugin `remote_id` as the
+/// request's own field.
 fn plugin_body(rule: &opentide_compile::Rule, platform: &str, stored: Option<&str>) -> CJson {
     let mut body = opentide_compile::json::Object::new();
     body.insert("rule".into(), rule.data.clone());

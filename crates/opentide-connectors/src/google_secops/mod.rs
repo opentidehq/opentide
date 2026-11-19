@@ -319,15 +319,16 @@ impl QueryRunner for GoogleSecops {
 }
 
 impl Deployer for GoogleSecops {
-    /// The instance and the credentials, loaded: nothing is sent; the first
-    /// rule signs in.
+    /// The instance and the credentials, loaded, then the sign-in, once:
+    /// the first rule's requests reuse the token.
     fn open<'a>(
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
         crate::connector::opening(async move {
             Instance::of(cx.tenant)?;
-            self.authorizer(cx.tenant).map(|_| ())
+            // Signed in once: the first rule's requests reuse the token.
+            self.authorizer(cx.tenant)?.token(cx).await.map(|_| ())
         })
     }
 
