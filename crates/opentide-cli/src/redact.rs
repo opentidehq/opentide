@@ -323,6 +323,10 @@ fn redact_assignments(text: &str) -> String {
         let Some(value) = p.assignment_value.find(&text[whole.end..]) else {
             continue;
         };
+        if is_http_status(value.as_str(), &text[whole.end + value.end()..]) {
+            // `refused the access token: HTTP 401`: a status, not a value.
+            continue;
+        }
         out.push_str(&text[position..whole.end]);
         out.push_str(&masked(value.as_str()));
         position = whole.end + value.end();
@@ -333,6 +337,16 @@ fn redact_assignments(text: &str) -> String {
     }
     out.push_str(&text[position..]);
     out
+}
+
+/// Whether `value`, then `rest`, read `HTTP <status>`: what a message says
+/// a tenant answered, never a secret (#1658, E12).
+fn is_http_status(value: &str, rest: &str) -> bool {
+    value == "HTTP"
+        && rest.strip_prefix(' ').is_some_and(|rest| {
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            digits.len() == 3 && !rest[3..].starts_with(|c: char| c.is_alphanumeric())
+        })
 }
 
 /// The password (as written, percent escapes kept) and the host of a
@@ -546,6 +560,18 @@ mod tests {
             "https://host token=***"
         );
         assert_eq!(redactor.redact("conn: ok"), "conn: ok");
+        // A status after a secret's name is not its value (#1658, E12).
+        assert_eq!(
+            redactor.redact("refused the access token: HTTP 401"),
+            "refused the access token: HTTP 401"
+        );
+        assert_eq!(
+            redactor.redact("refused the API key: HTTP 403 Forbidden"),
+            "refused the API key: HTTP 403 Forbidden"
+        );
+        assert_eq!(redactor.redact("token: HTTP"), "token: ***");
+        assert_eq!(redactor.redact("token: HTTP 4011"), "token: *** 4011");
+        assert_eq!(redactor.redact("token: HTTPabc"), "token: ***");
         assert_eq!(redactor.redact("a=b"), "a=b");
     }
 

@@ -637,7 +637,7 @@ Find the rule by name in the GravityZone console and record its id in the rule's
 
 A GravityZone create got no answer, and its retry found the name already taken.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, could not be sent (its connection refused), or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A first create that was never sent (its connection or the tenant's certificate refused) is `bitdefender_tenant_unreachable`, never this code.
 
 ### Example
 
@@ -1051,7 +1051,7 @@ Check the variable `api_key` names, and enable the Incidents API for the key in 
 
 A call to the GravityZone tenant got no answer, so no further rule deploys to it.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant, and so does a first create that was never sent (its connection refused, DNS, the connect timeout, a proxy that would not connect, or the tenant's certificate refused): nothing can have been created. A create sent with no answer is retried once instead; a retry with no answer, one that could not be sent, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
 
 ### Example
 
@@ -4379,7 +4379,7 @@ Use `Info`, `Low`, `Medium`, `High` or `Critical`, or remove the key: `severity`
 
 A Google SecOps instance refused opentide's credentials.
 
-Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or its token endpoint did not answer): no rule on that tenant is deployed or checked. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
+Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or answered with no token): no rule on that tenant is deployed or checked. A token endpoint that cannot be reached, or that sends no answer in time, is `google_secops_tenant_unreachable`. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
 
 ### Example
 
@@ -4395,7 +4395,7 @@ Give the service account (or the Application Default Credentials principal) the 
 
 A Google SecOps instance did not answer, so no rule was deployed to it.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint, or to Google's token endpoint, failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
 
 ### Example
 
