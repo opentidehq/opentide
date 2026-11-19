@@ -139,7 +139,7 @@ pub enum Source {
 pub struct Columns {
     list: Vec<Arc<Column>>,
     /// The position of the first column of each name.
-    index: Option<hashbrown::HashTable<usize>>,
+    index: Option<Index>,
     /// The columns the changes have scanned, toward building the index.
     scanned: usize,
 }
@@ -152,8 +152,39 @@ const SCAN_ONLY: usize = 8;
 /// table costs less than building it.
 const SCANNED_BEFORE_INDEX: usize = 8;
 
-fn name_hash(name: &str) -> u64 {
-    foldhash::fast::FixedState::default().hash_one(name)
+/// A schema's name index: positions in its list, hashed with a seed of its
+/// own. Column names come from the query, so a fixed seed would let a query
+/// pick names that collide and bring the n² back (ADR 0014 §5b).
+#[derive(Clone)]
+struct Index {
+    table: hashbrown::HashTable<usize>,
+    hasher: foldhash::fast::RandomState,
+}
+
+impl Index {
+    fn hash(&self, name: &str) -> u64 {
+        self.hasher.hash_one(name)
+    }
+
+    fn find(&self, list: &[Arc<Column>], name: &str) -> Option<usize> {
+        #[cfg(test)]
+        tests::count_name_compared();
+        self.table
+            .find(self.hash(name), |&i| list[i].name == name)
+            .copied()
+    }
+
+    /// Record position `i` for `name` unless an earlier column has the name;
+    /// `list` may not hold the column yet (`i == list.len()`).
+    fn insert(&mut self, list: &[Arc<Column>], i: usize, name: &str) {
+        let hash = self.hash(name);
+        if self.table.find(hash, |&j| list[j].name == name).is_none() {
+            let hasher = &self.hasher;
+            self.table.insert_unique(hash, i, |&j| {
+                hasher.hash_one(list.get(j).map_or(name, |c| c.name.as_str()))
+            });
+        }
+    }
 }
 
 impl Columns {
@@ -169,25 +200,13 @@ impl Columns {
     #[inline]
     pub fn position(&self, name: &str) -> Option<usize> {
         match &self.index {
-            Some(index) => Self::indexed(index, &self.list, name),
+            Some(index) => index.find(&self.list, name),
             None => self.list.iter().position(|c| {
                 #[cfg(test)]
                 tests::count_name_compared();
                 c.name == name
             }),
         }
-    }
-
-    fn indexed(
-        index: &hashbrown::HashTable<usize>,
-        list: &[Arc<Column>],
-        name: &str,
-    ) -> Option<usize> {
-        #[cfg(test)]
-        tests::count_name_compared();
-        index
-            .find(name_hash(name), |&i| list[i].name == name)
-            .copied()
     }
 
     /// [`Self::position`] for a change: counts what it scans, and builds the
@@ -198,11 +217,14 @@ impl Columns {
         if self.index.is_none() && len > SCAN_ONLY {
             self.scanned += found.map_or(len, |i| i + 1);
             if self.scanned >= SCANNED_BEFORE_INDEX * len {
-                let mut index = hashbrown::HashTable::with_capacity(len);
-                for i in 0..len {
+                let mut index = Index {
+                    table: hashbrown::HashTable::with_capacity(len),
+                    hasher: foldhash::fast::RandomState::default(),
+                };
+                for (i, column) in self.list.iter().enumerate() {
                     #[cfg(test)]
                     tests::count_name_compared();
-                    Self::index_insert(&mut index, &self.list, i, &self.list[i].name);
+                    index.insert(&self.list, i, &column.name);
                 }
                 self.index = Some(index);
             }
@@ -210,27 +232,12 @@ impl Columns {
         found
     }
 
-    /// Record position `i` for `name` unless an earlier column has the name.
-    fn index_insert(
-        index: &mut hashbrown::HashTable<usize>,
-        list: &[Arc<Column>],
-        i: usize,
-        name: &str,
-    ) {
-        let hash = name_hash(name);
-        if index.find(hash, |&j| list[j].name == name).is_none() {
-            index.insert_unique(hash, i, |&j| {
-                name_hash(list.get(j).map_or(name, |c| c.name.as_str()))
-            });
-        }
-    }
-
     /// Add `column` at the end.
     pub fn push(&mut self, column: impl Into<Arc<Column>>) {
         let column = column.into();
         if let Some(index) = &mut self.index {
             // Before the push: `list` does not hold the column yet.
-            Self::index_insert(index, &self.list, self.list.len(), &column.name);
+            index.insert(&self.list, self.list.len(), &column.name);
         }
         self.list.push(column);
     }
@@ -1362,6 +1369,12 @@ pub(crate) mod tests {
         );
         let copy = columns.clone();
         assert!(copy.index.is_some(), "a copy keeps the index");
+        // Each index has a seed of its own (ADR 0014 §5b): names a query
+        // picks cannot be made to collide in every analysis.
+        let mut other = columns.iter().cloned().collect::<Columns>();
+        build(&mut other);
+        let seed = |c: &Columns| c.index.as_ref().map(|i| i.hash("c1"));
+        assert_ne!(seed(&columns), seed(&other), "seeded per index");
         check(&copy, &names);
         columns.retain(|c| c.name != "c5" && c.name != "c0");
         assert!(columns.index.is_none(), "a removal forgets the index");
