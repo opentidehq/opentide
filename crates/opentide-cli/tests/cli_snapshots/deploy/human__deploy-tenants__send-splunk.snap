@@ -16,14 +16,3 @@ exit: 0
   ␛[2m[1/2]␛[0m ␛[32m✓ deployed  ␛[0mSplunk create rule ␛[2m<SECONDS>␛[0m
   ␛[2m[2/2]␛[0m ␛[32m✓ deleted   ␛[0mSplunk retire rule ␛[2m<SECONDS>␛[0m
   ␛[1m␛[32m✓␛[0m  ␛[1msplunk␛[0m  ␛[2m2 deployed, 0 failed, 0 not attempted␛[0m ␛[2m<SECONDS>␛[0m
-
-━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000041.json · created 0644
-{
-  "object_uuid": "00000000-0000-4000-8047-000000000041",
-  "platforms": {
-    "splunk": {
-      "lab": "Splunk create rule"
-    }
-  },
-  "schema": "deployment.state::1.0"
-}

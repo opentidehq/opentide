@@ -18,7 +18,8 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::{Answer, describe_answer, gateway_answer, page_title};
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    BoxFuture, DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployWarning, Deployer,
+    LiveCheck, LiveValidator,
     Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
     columns_of,
 };
@@ -404,15 +405,19 @@ impl Splunk {
         Ok(format!("https://{host}:{port}"))
     }
 
-    /// The app's namespace (`/servicesNS/nobody/<app>/`).
-    fn namespace(cx: TenantContext<'_>) -> Result<String, ConnectorError> {
-        let app = match cx.tenant.setup.get("app") {
+    /// The tenant's app (`search` when it names none).
+    fn app(cx: TenantContext<'_>) -> Result<String, ConnectorError> {
+        Ok(match cx.tenant.setup.get("app") {
             Some(_) => cx.tenant.secret("app")?.expose().to_owned(),
             None => "search".to_owned(),
-        };
+        })
+    }
+
+    /// The app's namespace (`/servicesNS/nobody/<app>/`).
+    fn namespace(cx: TenantContext<'_>) -> Result<String, ConnectorError> {
         Ok(format!(
             "/servicesNS/nobody/{}/",
-            utf8_percent_encode(&app, PATH_SEGMENT)
+            utf8_percent_encode(&Self::app(cx)?, PATH_SEGMENT)
         ))
     }
 
@@ -628,6 +633,44 @@ impl Splunk {
             return Err(refused_call(cx, &reply));
         }
         Ok(())
+    }
+
+    /// The saved searches of the tenant's app, but *keep*, whose search
+    /// names the rule *uuid* (`MDR_UUID="<uuid>"`): the ones an earlier
+    /// name of the rule left (#1657). One listing, narrowed by Splunk's
+    /// `search` filter to the UUID, then to the exact `MDR_UUID` and the
+    /// app here; keyed by the rule's own UUID, so another rule's saved search
+    /// is never among them, whatever its name.
+    pub async fn other_saved_searches(
+        &self,
+        cx: TenantContext<'_>,
+        uuid: &str,
+        keep: &str,
+    ) -> Result<Vec<String>, ConnectorError> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([("search", uuid), ("count", "0")])
+            .finish();
+        let path = format!("{}saved/searches?{query}", Self::namespace(cx)?);
+        let reply = Self::send(cx, crate::transport::Method::GET, &path, None).await?;
+        reply.log_failure();
+        if reply.failed() {
+            return Err(refused_call(cx, &reply));
+        }
+        let marker = format!("MDR_UUID=\"{uuid}\"");
+        let app = Self::app(cx)?;
+        Ok(entries(&reply.answer.body)
+            .iter()
+            .filter(|entry| entry.key("search").is_some_and(|search| search.contains(&marker)))
+            .filter(|entry| entry.key("app").is_none_or(|owner| owner == app))
+            .filter_map(SavedSearch::from_entry)
+            .filter_map(|saved| {
+                saved
+                    .path
+                    .strip_prefix("saved/searches/")
+                    .map(str::to_owned)
+            })
+            .filter(|name| name != keep)
+            .collect())
     }
 
     /// Deletes the saved search *name* (`saved_searches.delete`).
@@ -936,6 +979,41 @@ fn html_answer(cx: TenantContext<'_>, url: &str, answer: &Answer) -> ConnectorEr
     }
 }
 
+/// The warning of a saved search an earlier name of its rule left, deleted
+/// after the rule was written under its name now; its message is the old
+/// name.
+pub const RENAMED_DELETED: &str = "splunk_renamed_search_deleted";
+
+/// The code of a rule written under its name whose old saved search could
+/// not be looked up or deleted.
+pub const RENAMED_CLEANUP_FAILED: &str = "splunk_renamed_search_not_deleted";
+
+/// The rule `MDR_UUID="<uuid>"` in *search* names (`create_query`'s `eval`).
+fn mdr_uuid(search: &str) -> Option<String> {
+    let (_, rest) = search.split_once("MDR_UUID=\"")?;
+    let (uuid, _) = rest.split_once('"')?;
+    Some(uuid.to_owned()).filter(|uuid| !uuid.is_empty())
+}
+
+/// The rule's failure when the saved search *written* is in place but an old
+/// one (*old*, when known) of the same rule could not be found or deleted:
+/// the next deploy finds it again.
+fn renamed_failure(written: &str, old: Option<&str>, error: &ConnectorError) -> DeployError {
+    let message = match old {
+        Some(old) => format!(
+            "saved search {written:?} was written, but {old:?}, the saved search an earlier \
+             name of this rule left, could not be deleted: {}",
+            error.text()
+        ),
+        None => format!(
+            "saved search {written:?} was written, but the saved searches an earlier name of \
+             this rule left could not be looked up: {}",
+            error.text()
+        ),
+    };
+    DeployError::rule(DeployFailure::new(RENAMED_CLEANUP_FAILED, message))
+}
+
 impl Deployer for Splunk {
     /// The saved search `rule_id` with the compiled settings in `body` (a
     /// JSON object: the rule's settings, its actions and `search`), through
@@ -973,10 +1051,29 @@ impl Deployer for Splunk {
             }
             self.apply_saved_search(cx, &request.rule_id, &settings, false)
                 .await?;
-            Ok(DeployOutcome::new(
-                Some(request.rule_id.clone()),
-                request.operation,
-            ))
+            // The saved searches an earlier name of the rule left (a rename,
+            // or ` - Rule` added or dropped), found by the rule's UUID in
+            // their search, are deleted once the new one is written (#1657).
+            let mut warnings = Vec::new();
+            if let Some(uuid) = settings.get("search").map(json_text).as_deref().and_then(mdr_uuid)
+            {
+                let written = &request.rule_id;
+                let others = self
+                    .other_saved_searches(cx, &uuid, written)
+                    .await
+                    .map_err(|error| renamed_failure(written, None, &error))?;
+                for old in others {
+                    self.delete_saved_search(cx, &old)
+                        .await
+                        .map_err(|error| renamed_failure(written, Some(&old), &error))?;
+                    // Said, not raised: what the run did, not what to check.
+                    warnings.push(DeployWarning::new(RENAMED_DELETED, old).unraised());
+                }
+            }
+            Ok(
+                DeployOutcome::new(Some(request.rule_id.clone()), request.operation)
+                    .with_warnings(warnings),
+            )
         })
     }
 }

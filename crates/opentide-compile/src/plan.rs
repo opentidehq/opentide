@@ -712,9 +712,7 @@ pub fn action(
     }
     // A platform plugin records the ids its platform gives, as the built-in
     // platforms whose external id the deployment state keeps do (UC-4.5b).
-    // Splunk records its saved search's name, but writes by that name
-    // whether the search exists or not (#1657).
-    if !opentide_workspace::state::stores_ids(platform) || platform == crate::splunk::PLATFORM {
+    if !opentide_workspace::state::stores_ids(platform) {
         return "upsert";
     }
     if !has_tenant {

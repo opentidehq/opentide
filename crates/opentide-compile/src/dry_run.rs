@@ -729,8 +729,27 @@ pub fn run(
         is_set,
         &request.cwd,
     );
+    // A Splunk saved search is named after its rule: writing one deletes
+    // the ones an earlier name of the rule left, which the tenant alone
+    // knows (#1657).
+    if planned
+        .iter()
+        .any(|change| change.platform == crate::splunk::PLATFORM && change.action == "upsert")
+    {
+        let note = SPLUNK_RENAMED_NOTE.to_owned();
+        let detail = match outcome.payload.get("detail").and_then(Json::as_str) {
+            Some(detail) => format!("{detail}; {note}"),
+            None => note,
+        };
+        outcome.payload.insert("detail".into(), detail.into());
+    }
     outcome
 }
+
+/// What a dry run says of the Splunk saved searches it cannot see.
+pub const SPLUNK_RENAMED_NOTE: &str = "splunk: once a rule's saved search is written, any other \
+    saved search in the tenant's app whose search names the rule's MDR_UUID (one an earlier name \
+    of the rule left) is deleted";
 
 /// A compile failure as the plan's diagnostic (`compile_diagnostics`).
 fn diagnostic(platform: &str, entry: &Json, root: &Path) -> Json {

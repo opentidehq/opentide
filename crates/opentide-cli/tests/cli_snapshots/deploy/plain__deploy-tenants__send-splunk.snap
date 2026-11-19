@@ -16,14 +16,3 @@ Deploying to splunk / lab · 2 rules
   [1/2] ✓ deployed  Splunk create rule <SECONDS>
   [2/2] ✓ deleted   Splunk retire rule <SECONDS>
 ✓ splunk · 2 deployed, 0 failed, 0 not attempted · <SECONDS>
-
-━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000041.json · created 0644
-{
-  "object_uuid": "00000000-0000-4000-8047-000000000041",
-  "platforms": {
-    "splunk": {
-      "lab": "Splunk create rule"
-    }
-  },
-  "schema": "deployment.state::1.0"
-}

@@ -444,7 +444,7 @@ mod tests {
             assert!(errors[0].message.contains(needle), "{}", errors[0].message);
         }
         let (fs, _) = shard(&format!(
-            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"sentinel":{{}}}}}}"#
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"splunk":{{}}}}}}"#
         ));
         assert_eq!(
             scan(&fs, Path::new("/w"))[0].code,

@@ -6,7 +6,8 @@ are the ones the Python suite's Splunk stand-in gives (``tests/splunk_support.py
 its mocks (``tests/test_platforms/test_query_runners.py``):
 
 - ``server/info``: Splunk 9.3.0, so splunklib takes the v2 search endpoints;
-- ``saved/searches``: an Atom feed per saved search, 404 for one it does not hold;
+- ``saved/searches``: an Atom feed per saved search, 404 for one it does not hold; the
+  listing (no name) holds the saved searches a field of which holds ``search``;
   an argument the REST handler does not know is refused (400);
 - ``search/v2/jobs`` (``exec_mode=oneshot``): rows as JSON; ``badcommand`` is a
   refusal (400, ``FATAL``), ``errors`` an answer carrying an ``ERROR`` message,
@@ -219,6 +220,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._reply(404, b"")
                 return
             self._reply(200, _feed())
+            return
+        if not name:
+            # The listing, narrowed by `search` as Splunk's REST filter does:
+            # the saved searches with a field that holds the text.
+            needle = args.get("search", "")
+            found = [
+                _entry(saved, content)
+                for saved, content in SAVED.items()
+                if needle in saved or any(needle in value for value in content.values())
+            ]
+            self._reply(200, _feed(*found))
             return
         if name in SAVED:
             self._reply(200, _feed(_entry(name, SAVED[name])))

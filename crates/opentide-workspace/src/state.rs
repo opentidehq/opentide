@@ -208,18 +208,11 @@ mod tests {
 
     #[test]
     fn a_plugins_ids_may_be_kept_but_not_a_builtin_platforms_without_state() {
-        // Splunk keeps its saved searches' names (#1657).
-        for platform in ["crowdstrike", "sysdig", "splunk", "acme", "acme_2"] {
+        for platform in ["crowdstrike", "sysdig", "acme", "acme_2"] {
             assert!(stores_ids(platform), "{platform}");
         }
         for platform in [
-            "sentinel",
-            "carbon_black_cloud",
-            "elastic",
-            "Acme",
-            "2acme",
-            "ac-me",
-            "",
+            "sentinel", "splunk", "elastic", "Acme", "2acme", "ac-me", "",
         ] {
             assert!(!stores_ids(platform), "{platform}");
         }
