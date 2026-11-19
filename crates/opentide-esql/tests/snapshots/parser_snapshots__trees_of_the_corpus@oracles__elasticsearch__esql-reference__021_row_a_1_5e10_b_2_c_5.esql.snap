@@ -1,0 +1,45 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/021_row_a_1_5e10_b_2_c_5.esql
+---
+SOURCE_FILE@0..31
+  QUERY@0..30
+    ROW_COMMAND@0..30
+      ROW_KW@0..3 "ROW"
+      WHITESPACE@3..4 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@4..14
+        QUALIFIED_NAME@4..5
+          IDENTIFIER@4..5
+            IDENT@4..5 "a"
+        WHITESPACE@5..6 " "
+        EQ@6..7 "="
+        WHITESPACE@7..8 " "
+        NUMBER@8..14
+          NUMBER_LIT@8..14 "1.5e10"
+      COMMA@14..15 ","
+      WHITESPACE@15..16 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@16..22
+        QUALIFIED_NAME@16..17
+          IDENTIFIER@16..17
+            IDENT@16..17 "b"
+        WHITESPACE@17..18 " "
+        EQ@18..19 "="
+        WHITESPACE@19..20 " "
+        UNARY_EXPRESSION@20..22
+          MINUS@20..21 "-"
+          NUMBER@21..22
+            NUMBER_LIT@21..22 "2"
+      COMMA@22..23 ","
+      WHITESPACE@23..24 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@24..30
+        QUALIFIED_NAME@24..25
+          IDENTIFIER@24..25
+            IDENT@24..25 "c"
+        WHITESPACE@25..26 " "
+        EQ@26..27 "="
+        WHITESPACE@27..28 " "
+        NUMBER@28..30
+          NUMBER_LIT@28..30 ".5"
+  WHITESPACE@30..31 "\n"
+--- errors

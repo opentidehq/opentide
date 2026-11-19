@@ -1,0 +1,1 @@
+FROM logs | STATS d = COUNT_DISTINCT(a, 1000)

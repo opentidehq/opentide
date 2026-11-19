@@ -1,0 +1,82 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/115_stats_c1_count_where_a_1_c2_count_where_a_1_by_h.esql
+---
+SOURCE_FILE@0..80
+  QUERY@0..79
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    STATS_COMMAND@12..79
+      STATS_KW@12..17 "STATS"
+      WHITESPACE@17..18 " "
+      AGGREGATE_FIELD@18..43
+        QUALIFIED_NAME@18..20
+          IDENTIFIER@18..20
+            IDENT@18..20 "c1"
+        WHITESPACE@20..21 " "
+        EQ@21..22 "="
+        WHITESPACE@22..23 " "
+        FUNCTION_CALL@23..31
+          IDENTIFIER@23..28
+            IDENT@23..28 "COUNT"
+          L_PAREN@28..29 "("
+          STAR@29..30
+            STAR_TOKEN@29..30 "*"
+          R_PAREN@30..31 ")"
+        WHITESPACE@31..32 " "
+        WHERE_KW@32..37 "WHERE"
+        WHITESPACE@37..38 " "
+        COMPARISON@38..43
+          QUALIFIED_NAME@38..39
+            IDENTIFIER@38..39
+              IDENT@38..39 "a"
+          WHITESPACE@39..40 " "
+          GT@40..41 ">"
+          WHITESPACE@41..42 " "
+          NUMBER@42..43
+            NUMBER_LIT@42..43 "1"
+      COMMA@43..44 ","
+      WHITESPACE@44..45 " "
+      AGGREGATE_FIELD@45..71
+        QUALIFIED_NAME@45..47
+          IDENTIFIER@45..47
+            IDENT@45..47 "c2"
+        WHITESPACE@47..48 " "
+        EQ@48..49 "="
+        WHITESPACE@49..50 " "
+        FUNCTION_CALL@50..58
+          IDENTIFIER@50..55
+            IDENT@50..55 "COUNT"
+          L_PAREN@55..56 "("
+          STAR@56..57
+            STAR_TOKEN@56..57 "*"
+          R_PAREN@57..58 ")"
+        WHITESPACE@58..59 " "
+        WHERE_KW@59..64 "WHERE"
+        WHITESPACE@64..65 " "
+        COMPARISON@65..71
+          QUALIFIED_NAME@65..66
+            IDENTIFIER@65..66
+              IDENT@65..66 "a"
+          WHITESPACE@66..67 " "
+          LT_EQ@67..69 "<="
+          WHITESPACE@69..70 " "
+          NUMBER@70..71
+            NUMBER_LIT@70..71 "1"
+      WHITESPACE@71..72 " "
+      BY_KW@72..74 "BY"
+      WHITESPACE@74..75 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@75..79
+        QUALIFIED_NAME@75..79
+          IDENTIFIER@75..79
+            IDENT@75..79 "host"
+  WHITESPACE@79..80 "\n"
+--- errors

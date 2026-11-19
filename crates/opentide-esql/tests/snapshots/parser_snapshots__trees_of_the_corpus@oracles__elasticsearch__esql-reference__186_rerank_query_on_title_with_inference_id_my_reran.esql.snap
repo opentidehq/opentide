@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/186_rerank_query_on_title_with_inference_id_my_reran.esql
+---
+SOURCE_FILE@0..73
+  QUERY@0..72
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    RERANK_COMMAND@12..72
+      RERANK_KW@12..18 "RERANK"
+      WHITESPACE@18..19 " "
+      STRING@19..26
+        STRING_LIT@19..26 "\"query\""
+      WHITESPACE@26..27 " "
+      ON_KW@27..29 "ON"
+      WHITESPACE@29..30 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@30..35
+        QUALIFIED_NAME@30..35
+          IDENTIFIER@30..35
+            IDENT@30..35 "title"
+      WHITESPACE@35..36 " "
+      NAMED_PARAMETERS@36..72
+        WITH_KW@36..40 "WITH"
+        WHITESPACE@40..41 " "
+        MAP_EXPRESSION@41..72
+          L_BRACE@41..42 "{"
+          MAP_ENTRY@42..71
+            STRING@42..56
+              STRING_LIT@42..56 "\"inference_id\""
+            COLON@56..57 ":"
+            WHITESPACE@57..58 " "
+            STRING@58..71
+              STRING_LIT@58..71 "\"my-reranker\""
+          R_BRACE@71..72 "}"
+  WHITESPACE@72..73 "\n"
+--- errors

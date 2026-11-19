@@ -1,0 +1,1 @@
+FROM logs | FUSE SCORE BY s GROUP BY g KEY BY k

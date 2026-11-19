@@ -1,0 +1,49 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/159_enrich_policy_on_a_with_x_b_c.esql
+---
+SOURCE_FILE@0..45
+  QUERY@0..44
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    ENRICH_COMMAND@12..44
+      ENRICH_KW@12..18 "ENRICH"
+      WHITESPACE@18..19 " "
+      ENRICH_POLICY@19..25
+        POLICY_NAME@19..25
+          POLICY_PART@19..25 "policy"
+      WHITESPACE@25..26 " "
+      ON_KW@26..28 "ON"
+      WHITESPACE@28..29 " "
+      NAME_PATTERN@29..30
+        ID_PATTERN@29..30
+          ID_PATTERN_TEXT@29..30 "a"
+      WHITESPACE@30..31 " "
+      WITH_KW@31..35 "WITH"
+      WHITESPACE@35..36 " "
+      ENRICH_WITH_CLAUSE@36..41
+        NAME_PATTERN@36..37
+          ID_PATTERN@36..37
+            ID_PATTERN_TEXT@36..37 "x"
+        WHITESPACE@37..38 " "
+        EQ@38..39 "="
+        WHITESPACE@39..40 " "
+        NAME_PATTERN@40..41
+          ID_PATTERN@40..41
+            ID_PATTERN_TEXT@40..41 "b"
+      COMMA@41..42 ","
+      WHITESPACE@42..43 " "
+      ENRICH_WITH_CLAUSE@43..44
+        NAME_PATTERN@43..44
+          ID_PATTERN@43..44
+            ID_PATTERN_TEXT@43..44 "c"
+  WHITESPACE@44..45 "\n"
+--- errors

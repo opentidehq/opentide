@@ -1,0 +1,53 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/190_sort_a_limit_10_stats_c_count.esql
+---
+SOURCE_FILE@0..51
+  QUERY@0..50
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    SORT_COMMAND@12..18
+      SORT_KW@12..16 "SORT"
+      WHITESPACE@16..17 " "
+      ORDER_EXPRESSION@17..18
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "a"
+    WHITESPACE@18..19 " "
+    PIPE@19..20 "|"
+    WHITESPACE@20..21 " "
+    LIMIT_COMMAND@21..29
+      LIMIT_KW@21..26 "LIMIT"
+      WHITESPACE@26..27 " "
+      NUMBER@27..29
+        NUMBER_LIT@27..29 "10"
+    WHITESPACE@29..30 " "
+    PIPE@30..31 "|"
+    WHITESPACE@31..32 " "
+    STATS_COMMAND@32..50
+      STATS_KW@32..37 "STATS"
+      WHITESPACE@37..38 " "
+      AGGREGATE_FIELD@38..50
+        QUALIFIED_NAME@38..39
+          IDENTIFIER@38..39
+            IDENT@38..39 "c"
+        WHITESPACE@39..40 " "
+        EQ@40..41 "="
+        WHITESPACE@41..42 " "
+        FUNCTION_CALL@42..50
+          IDENTIFIER@42..47
+            IDENT@42..47 "COUNT"
+          L_PAREN@47..48 "("
+          STAR@48..49
+            STAR_TOKEN@48..49 "*"
+          R_PAREN@49..50 ")"
+  WHITESPACE@50..51 "\n"
+--- errors

@@ -1,0 +1,1 @@
+FROM logs | STATS c1 = COUNT(*) WHERE a > 1, c2 = COUNT(*) WHERE a <= 1 BY host

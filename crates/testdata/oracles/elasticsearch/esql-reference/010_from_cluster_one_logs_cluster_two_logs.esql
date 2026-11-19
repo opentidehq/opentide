@@ -1,0 +1,1 @@
+FROM cluster_one:logs, cluster_two:logs-*

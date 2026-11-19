@@ -68,6 +68,19 @@ const EXCEPTIONS: &[(&str, &str)] = &[
     ("esql-syntax/eval_no_space.esql", NEWER),
     ("esql-syntax/where_no_space.esql", NEWER),
     ("esql-syntax/like_non_literal.esql", NEWER),
+    // The catalog's 9.6 commands and the `LOOKUP JOIN … AS` qualifier: every
+    // recorded release rejects them, and the engine gates them to 9.6.
+    (
+        "esql-reference/170_lookup_join_lookup_idx_as_l_on_key.esql",
+        NEWER,
+    ),
+    ("esql-reference/193_dedup.esql", NEWER),
+    ("esql-reference/203_highlight_on_message.esql", NEWER),
+    (
+        "esql-reference/204_highlight_error_on_message_title_with_number_of.esql",
+        NEWER,
+    ),
+    ("esql-reference/206_dense_vector_v_text.esql", NEWER),
     // `??f` is valid syntax; the request did not bind the parameter.
     (
         "esql-syntax/identifier_parameter_unbound.esql",

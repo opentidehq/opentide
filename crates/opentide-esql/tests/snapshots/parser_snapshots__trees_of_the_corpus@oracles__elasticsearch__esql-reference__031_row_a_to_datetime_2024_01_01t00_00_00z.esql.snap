@@ -1,0 +1,26 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/031_row_a_to_datetime_2024_01_01t00_00_00z.esql
+---
+SOURCE_FILE@0..44
+  QUERY@0..43
+    ROW_COMMAND@0..43
+      ROW_KW@0..3 "ROW"
+      WHITESPACE@3..4 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@4..43
+        QUALIFIED_NAME@4..5
+          IDENTIFIER@4..5
+            IDENT@4..5 "a"
+        WHITESPACE@5..6 " "
+        EQ@6..7 "="
+        WHITESPACE@7..8 " "
+        FUNCTION_CALL@8..43
+          IDENTIFIER@8..19
+            IDENT@8..19 "TO_DATETIME"
+          L_PAREN@19..20 "("
+          STRING@20..42
+            STRING_LIT@20..42 "\"2024-01-01T00:00:00Z\""
+          R_PAREN@42..43 ")"
+  WHITESPACE@43..44 "\n"
+--- errors

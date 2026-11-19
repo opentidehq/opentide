@@ -1,0 +1,1 @@
+FROM logs | RERANK "q" ON title WITH {"inference_id": "r", "timeout": "10s"}

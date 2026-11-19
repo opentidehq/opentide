@@ -1,0 +1,1 @@
+FROM logs | DENSE_VECTOR v = text
