@@ -1912,9 +1912,7 @@ fn raised(error: &ConnectorError) -> Raised {
         | ConnectorError::Refused { .. }
         | ConnectorError::QueryTimedOut { .. } => Stops::Rule,
     };
-    described(error)
-        .stopping(stops)
-        .unsent(took_nothing(error))
+    described(error).stopping(stops).unsent(took_nothing(error))
 }
 
 /// Whether the tenant did nothing with a request that failed with *error*:
@@ -3478,11 +3476,15 @@ impl Sender<'_, '_> {
     /// otherwise the tenant's other rules are not attempted.
     fn elastic_tenant_failed(
         &mut self,
+        connection: &Connection,
         error: DeployError,
         mut result: RuleResult,
         tenant: &str,
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
+        const PLATFORM: &str = PlatformId::Elastic.as_str();
+        let unsent = deploy_took_nothing(&error);
+        let before_any = self.before_any_rule(connection, PLATFORM, tenant, log, unsent);
         let stopped = match error.connector {
             // The tenant could not be reached.
             Some(connector) => {
@@ -3495,13 +3497,19 @@ impl Sender<'_, '_> {
                 error.failure.message
             }
         };
-        log.finished(result);
         tracing::error!(
             tenant = tenant,
             error = stopped.as_str(),
             critical = true,
             "elastic_tenant_deployment_failed"
         );
+        if before_any {
+            // The key or the connection failed on the tenant's first
+            // request: no rule was sent (#1701).
+            self.unused(PLATFORM, tenant, log, &stopped);
+            return Ok(());
+        }
+        log.finished(result);
         // An interrupt stops the run, not the tenant.
         if self.interrupted() {
             return Err(Raised::new("interrupted").stopping(Stops::Run));
@@ -3604,29 +3612,8 @@ impl Sender<'_, '_> {
                 );
                 return Err(Raised::new("interrupted").stopping(Stops::Run));
             }
-            // The key or the connection failed on the tenant's first
-            // request: no rule was sent (#1701).
-            Err(error)
-                if self.before_any_rule(
-                    connection,
-                    PLATFORM,
-                    &tenant,
-                    log,
-                    deploy_took_nothing(&error),
-                ) =>
-            {
-                let stopped = error.into_connector().text();
-                tracing::error!(
-                    tenant = tenant.as_str(),
-                    error = stopped.as_str(),
-                    critical = true,
-                    "elastic_tenant_deployment_failed"
-                );
-                self.unused(PLATFORM, &tenant, log, &stopped);
-                return Ok(true);
-            }
             Err(error) => {
-                self.elastic_tenant_failed(error, result, &tenant, log)?;
+                self.elastic_tenant_failed(connection, error, result, &tenant, log)?;
                 return Ok(true);
             }
         }
@@ -4933,37 +4920,54 @@ impl Sender<'_, '_> {
                 log.finished(result);
             }
             Err(error) => {
-                tracing::error!(
-                    code = error.failure.code,
-                    tenant = tenant.as_str(),
-                    error = error.failure.message.as_str(),
-                    critical = true,
-                    "exabeam_tenant_deployment_failed"
-                );
-                if self.before_any_rule(
-                    connection,
-                    platform,
-                    &tenant,
-                    log,
-                    deploy_took_nothing(&error),
-                ) {
-                    // The sign-in or the connection failed on the tenant's
-                    // first request: no rule was sent (#1701).
-                    self.unused(platform, &tenant, log, &error.failure.message);
-                    return Ok(true);
-                }
-                self.failed = true;
-                result.fail(&error.failure.message);
-                log.finished(result);
-                // An interrupt stops the run, not the tenant.
-                if self.interrupted() {
-                    return Err(Raised::new("interrupted").stopping(Stops::Run));
-                }
-                self.stop_tenant(PlatformId::Exabeam.as_str(), &tenant, log);
+                self.exabeam_tenant_failed(connection, &tenant, &error, result, log)?;
                 return Ok(true);
             }
         }
         Ok(false)
+    }
+
+    /// An Exabeam deploy the tenant failed on: the rule fails, an interrupt
+    /// stops the run, and otherwise the tenant's other rules are not
+    /// attempted. A failure before the tenant took anything
+    /// ([`Sender::before_any_rule`]) leaves the rule `not attempted` too.
+    fn exabeam_tenant_failed(
+        &mut self,
+        connection: &Connection,
+        tenant: &str,
+        error: &DeployError,
+        mut result: RuleResult,
+        log: &mut DeployLog<'_>,
+    ) -> Result<(), Raised> {
+        let platform = PlatformId::Exabeam.as_str();
+        tracing::error!(
+            code = error.failure.code,
+            tenant,
+            error = error.failure.message.as_str(),
+            critical = true,
+            "exabeam_tenant_deployment_failed"
+        );
+        if self.before_any_rule(
+            connection,
+            platform,
+            tenant,
+            log,
+            deploy_took_nothing(error),
+        ) {
+            // The sign-in or the connection failed on the tenant's first
+            // request: no rule was sent (#1701).
+            self.unused(platform, tenant, log, &error.failure.message);
+            return Ok(());
+        }
+        self.failed = true;
+        result.fail(&error.failure.message);
+        log.finished(result);
+        // An interrupt stops the run, not the tenant.
+        if self.interrupted() {
+            return Err(Raised::new("interrupted").stopping(Stops::Run));
+        }
+        self.stop_tenant(platform, tenant, log);
+        Ok(())
     }
 
     /// What an Exabeam deploy did, failed or not: its warnings (the two

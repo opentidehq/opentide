@@ -720,9 +720,7 @@ impl Deployer for CarbonBlack {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            Org::of(cx).map(|_| ())
-        })
+        crate::connector::opening(async move { Org::of(cx).map(|_| ()) })
     }
 
     /// The rule's report: `body` is a JSON object with the

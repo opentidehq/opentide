@@ -37,25 +37,23 @@ exit: 1
   "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to sysdig failed on Sysdig create rule: Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "error": "Deployment to sysdig failed on tenant lab: Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "issues_found",
+    "code": "command_failed",
     "crash_log": null,
-    "message": "Deployment to sysdig failed on Sysdig create rule: Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "message": "Deployment to sysdig failed on tenant lab: Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
     "suggestion": null
   },
   "failures": [
     {
       "error": "Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
-      "id": "00000000-0000-4000-8047-000000000031",
-      "name": "Sysdig create rule",
       "platform": "sysdig",
       "tenant": "lab"
     }
   ],
-  "message": "Deployment failed · 1 failed, 2 not attempted · <SECONDS>",
+  "message": "Deployment to sysdig failed on tenant lab: Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "next_actions": [],
   "ok": false,
   "plan": {
@@ -68,13 +66,13 @@ exit: 1
   "results": [
     {
       "action": "create",
-      "error": "Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "error": null,
       "id": "00000000-0000-4000-8047-000000000031",
       "name": "Sysdig create rule",
       "platform": "sysdig",
-      "reason": null,
+      "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
-      "status": "failed",
+      "status": "not_attempted",
       "tenant": "lab"
     },
     {
@@ -110,8 +108,8 @@ exit: 1
     "create": 0,
     "delete": 0,
     "disable": 0,
-    "failed": 1,
-    "not_attempted": 2,
+    "failed": 0,
+    "not_attempted": 3,
     "platforms": 1,
     "seconds": 0.0,
     "skipped": 0,

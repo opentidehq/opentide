@@ -359,7 +359,8 @@ fn a_failed_live_query_check_carries_no_exit_code() {
 
 /// A real `deploy_rule` that fails says why, as `opentide --json deploy`
 /// does in its `error`, not only the run's tally (smoke C2). The tenant's
-/// secret names an environment variable that is unset, so nothing is sent.
+/// secret names an environment variable that is unset, so nothing is sent:
+/// the failure is the tenant's, before any rule (#1701).
 #[test]
 fn a_failed_deploy_names_its_cause() {
     let scratch = tempfile::tempdir().unwrap();
@@ -382,7 +383,7 @@ fn a_failed_deploy_names_its_cause() {
     assert_eq!(failed["error"], "deployment_failed", "{failed}");
     let message = failed["message"].as_str().unwrap();
     assert!(
-        message.starts_with("Deployment to sentinel failed on Sentinel KQL Rule: ")
+        message.starts_with("sentinel tenant 'lab' setup: ")
             && message.contains("OPENTIDE_TEST_UNSET_SECRET"),
         "{message}"
     );

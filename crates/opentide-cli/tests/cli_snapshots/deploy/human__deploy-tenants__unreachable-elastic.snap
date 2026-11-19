@@ -10,15 +10,14 @@ exit: 1
 ━━━ stderr
 ␛[1mDeploy plan␛[0m␛[1m␛[2m · strategy ␛[0m␛[1mPREVIEW RELEASE␛[0m␛[1m␛[2m · 1 platform, 1 tenant␛[0m
 ␛[2mPlan: 0 to create, 0 to update, 3 to create or update, 0 to disable, 1 to delete␛[0m
+error: Elastic tenant deployment failed · tenant: *** · error: Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 
 ␛[1mDeploying to elastic / soc␛[0m␛[1m␛[2m · 4 rules␛[0m
-  ␛[2m[1/4]␛[0m ␛[1m␛[31m✗ failed    ␛[0m␛[1mElastic create rule  ␛[0m  ␛[31mCannot reach elastic tenant 'soc' at
-                                           https://kibana.elastic.invalid: error sending request:
-                                           client error (Connect): tunnel error: failed to create
-                                           underlying connection: tcp connect error: Connection…␛[0m
-error: Elastic tenant deployment failed · tenant: *** · error: Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+  ␛[2m[1/4]␛[0m ␛[2m· skipped   ␛[0mElastic create rule    ␛[2mnot attempted: tenant soc failed␛[0m
   ␛[2m[2/4]␛[0m ␛[2m· skipped   ␛[0mElastic update rule    ␛[2mnot attempted: tenant soc failed␛[0m
   ␛[2m[3/4]␛[0m ␛[2m· skipped   ␛[0mElastic prebuilt rule  ␛[2mnot attempted: tenant soc failed␛[0m
   ␛[2m[4/4]␛[0m ␛[2m· skipped   ␛[0mElastic retire rule    ␛[2mnot attempted: tenant soc failed␛[0m
-  ␛[1m␛[31m✗␛[0m  ␛[1melastic␛[0m  ␛[2m0 deployed, 1 failed, 3 not attempted␛[0m ␛[2m<SECONDS>␛[0m
-␛[1m␛[31m✗␛[0m Deployment failed · 1 failed, 3 not attempted · <SECONDS>
+  ␛[1m␛[31m✗␛[0m  ␛[1melastic␛[0m  ␛[2m0 deployed, 0 failed, 4 not attempted␛[0m ␛[2m<SECONDS>␛[0m
+␛[1m␛[31merror:␛[0m Deployment to elastic failed on tenant soc: Cannot reach elastic tenant 'soc' at
+       https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error:
+       failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)

@@ -11,10 +11,10 @@ exit: 1
 error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a deploy.
 ␛[1mDeploy plan␛[0m␛[1m␛[2m · strategy ␛[0m␛[1mPREVIEW␛[0m␛[1m␛[2m · 1 platform, 1 tenant␛[0m
 ␛[2mPlan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete␛[0m
+error: Tenant deployment failed · platform: elastic · tenant: *** · error: elastic tenant '***' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset
 
 ␛[1mDeploying to elastic / staging␛[0m␛[1m␛[2m · 1 rule␛[0m
-  ␛[2m[1/1]␛[0m ␛[1m␛[31m✗ failed    ␛[0m␛[1mElastic KQL Rule␛[0m  ␛[31melastic tenant 'staging' setup: api_key names the environment
-                                      variable ELASTIC_API_KEY, which is unset␛[0m
-error: Elastic tenant deployment failed · tenant: *** · error: elastic tenant '***' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset
-  ␛[1m␛[31m✗␛[0m  ␛[1melastic␛[0m  ␛[2m0 deployed, 1 failed, 0 not attempted␛[0m ␛[2m<SECONDS>␛[0m
-␛[1m␛[31m✗␛[0m Deployment failed · 1 failed, 0 not attempted · <SECONDS>
+  ␛[2m[1/1]␛[0m ␛[2m· skipped   ␛[0mElastic KQL Rule  ␛[2mnot attempted: tenant staging failed␛[0m
+  ␛[1m␛[31m✗␛[0m  ␛[1melastic␛[0m  ␛[2m0 deployed, 0 failed, 1 not attempted␛[0m ␛[2m<SECONDS>␛[0m
+␛[1m␛[31merror:␛[0m Deployment to elastic failed on tenant staging: elastic tenant 'staging' setup: api_key names
+       the environment variable ELASTIC_API_KEY, which is unset

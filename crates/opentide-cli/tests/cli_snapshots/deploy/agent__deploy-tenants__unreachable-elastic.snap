@@ -10,13 +10,13 @@ exit: 1
 ━━━ stderr
 Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
 Plan: 0 to create, 0 to update, 3 to create or update, 0 to disable, 1 to delete
+error: Elastic tenant deployment failed · tenant: *** · error: Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 
 Deploying to elastic / soc · 4 rules
-  [1/4] ✗ failed    Elastic create rule    Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
-error: Elastic tenant deployment failed · tenant: *** · error: Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+  [1/4] · skipped   Elastic create rule    not attempted: tenant soc failed
   [2/4] · skipped   Elastic update rule    not attempted: tenant soc failed
   [3/4] · skipped   Elastic prebuilt rule  not attempted: tenant soc failed
   [4/4] · skipped   Elastic retire rule    not attempted: tenant soc failed
-✗ elastic · 0 deployed, 1 failed, 3 not attempted · <SECONDS>
-✗ Deployment failed · 1 failed, 3 not attempted · <SECONDS>
+✗ elastic · 0 deployed, 0 failed, 4 not attempted · <SECONDS>
+error: Deployment to elastic failed on tenant soc: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output

@@ -840,9 +840,19 @@ fn epoch(at: jiff::Timestamp) -> String {
     format!("{seconds:.3}")
 }
 
-/// A saved search call the tenant refused.
+/// A saved search call the tenant refused: a 401 refuses the token, so the
+/// tenant ([`ConnectorError::Authentication`], #1701); any other status the
+/// rule.
 fn refused_call(cx: TenantContext<'_>, reply: &Reply) -> ConnectorError {
-    ConnectorError::refused(PLATFORM, &cx.tenant.label.tenant, reply.http_error(), None)
+    call_refusal(&cx.tenant.label.tenant, reply)
+}
+
+/// [`refused_call`] on *tenant*.
+fn call_refusal(tenant: &str, reply: &Reply) -> ConnectorError {
+    if reply.answer.status == 401 {
+        return ConnectorError::authentication(PLATFORM, tenant, reply.http_error());
+    }
+    ConnectorError::refused(PLATFORM, tenant, reply.http_error(), None)
 }
 
 /// An HTML page, which the REST API never sends (`_looks_like_html`): a
@@ -1203,6 +1213,33 @@ mod tests {
             "Splunk refused the credential (HTTP 401): call not properly authenticated"
         );
         let error = reply(400, body).check_failure("lab").unwrap_err();
+        assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
+    }
+
+    /// A saved search call refused with HTTP 401 refuses the token: the
+    /// tenant's failure, so its other rules are not sent (#1701); any other
+    /// refusal is the rule's.
+    #[test]
+    fn a_saved_search_call_refused_with_401_is_the_credentials() {
+        let reply = |status, body: &[u8]| Reply {
+            answer: Answer {
+                status,
+                content_type: None,
+                body: body.to_vec(),
+                elapsed: Duration::ZERO,
+                credentials: crate::answer::Credentials::default(),
+            },
+        };
+        let body = b"<response><messages><msg type=\"WARN\">call not properly authenticated</msg></messages></response>";
+        let error = call_refusal("lab", &reply(401, body));
+        let ConnectorError::Authentication { message, .. } = &error else {
+            panic!("{error:?}")
+        };
+        assert_eq!(
+            message,
+            "Splunk answered HTTP 401 Unauthorized: call not properly authenticated"
+        );
+        let error = call_refusal("lab", &reply(400, body));
         assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
     }
 

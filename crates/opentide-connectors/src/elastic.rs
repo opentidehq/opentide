@@ -1344,9 +1344,7 @@ impl Deployer for Elastic {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            client(cx).map(|_| ())
-        })
+        crate::connector::opening(async move { client(cx).map(|_| ()) })
     }
 
     /// One rule, Kibana's `rule_id` the request's: deleted, or checked

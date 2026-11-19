@@ -1454,9 +1454,7 @@ impl Deployer for Exabeam {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            self.session(cx).map(|_| ())
-        })
+        crate::connector::opening(async move { self.session(cx).map(|_| ()) })
     }
 
     /// One rule from the compiled body alone: its name is the body's, a

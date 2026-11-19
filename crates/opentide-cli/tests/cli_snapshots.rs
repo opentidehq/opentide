@@ -108,7 +108,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
         303,
     ),
     // Dry runs, and sends to tenants served from cassettes.
-    ("deploy", &["deploy", "deploy.migrate-state"], 163),
+    ("deploy", &["deploy", "deploy.migrate-state"], 167),
     // Offline, and against tenants served from cassettes.
     ("query", &["query", "validate.query"], 222),
     // The MISP destinations served from cassettes.

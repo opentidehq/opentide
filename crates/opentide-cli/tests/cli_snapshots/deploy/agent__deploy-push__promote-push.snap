@@ -11,12 +11,12 @@ exit: 1
 ✓ status promotion · 1 rule · <SECONDS>
 Deploy plan · strategy RELEASE · 1 platform, 1 tenant
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+error: Tenant deployment failed · platform: splunk · tenant: *** · error: Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 
 Deploying to splunk / lab · 1 rule
-  [1/1] ✗ failed    Splunk create rule  Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
-error: Tenant deployment failed · platform: splunk · tenant: *** · error: Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
-✗ splunk · 0 deployed, 1 failed, 0 not attempted · <SECONDS>
-✗ Deployment failed · 1 failed, 0 not attempted · <SECONDS>
+  [1/1] · skipped   Splunk create rule  not attempted: tenant lab failed
+✗ splunk · 0 deployed, 0 failed, 1 not attempted · <SECONDS>
+error: Deployment to splunk failed on tenant lab: Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output
 
 ━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644

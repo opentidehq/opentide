@@ -11,9 +11,9 @@ exit: 1
 error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a deploy.
 Deploy plan · strategy PREVIEW · 1 platform, 1 tenant
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+error: Tenant deployment failed · platform: elastic · tenant: *** · error: elastic tenant '***' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset
 
 Deploying to elastic / staging · 1 rule
-  [1/1] ✗ failed    Elastic KQL Rule  elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset
-error: Elastic tenant deployment failed · tenant: *** · error: elastic tenant '***' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset
-✗ elastic · 0 deployed, 1 failed, 0 not attempted · <SECONDS>
-✗ Deployment failed · 1 failed, 0 not attempted · <SECONDS>
+  [1/1] · skipped   Elastic KQL Rule  not attempted: tenant staging failed
+✗ elastic · 0 deployed, 0 failed, 1 not attempted · <SECONDS>
+error: Deployment to elastic failed on tenant staging: elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset

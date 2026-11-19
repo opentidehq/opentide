@@ -744,7 +744,10 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
         "{:?}",
         sent.result
     );
-    assert_eq!(value(&sent, "deployed"), &Json::Array(vec![Json::str("sentinel")]));
+    assert_eq!(
+        value(&sent, "deployed"),
+        &Json::Array(vec![Json::str("sentinel")])
+    );
 }
 
 /// A rule refused before planning (vendor ids on the rule) is a failure
@@ -1725,7 +1728,12 @@ fn bitdefender_forgets_a_lost_rule_to_disable_and_stops_a_tenant_refusing_the_ke
     rt.block_on(refusing.verify());
     // The key was refused on the tenant's first request: no rule was sent
     // (#1701).
-    assert_failed_before_any_rule(&sent, "bitdefender", "lab", "bitdefender_tenant_unauthorized: ");
+    assert_failed_before_any_rule(
+        &sent,
+        "bitdefender",
+        "lab",
+        "bitdefender_tenant_unauthorized: ",
+    );
     assert_tenant_stopped(&sent, "lab");
 }
 
@@ -3050,7 +3058,11 @@ fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
     assert_eq!(value(&sent, "status"), &Json::str("failed"));
     let rows = rows(&sent);
     let statuses: Vec<&str> = rows.iter().map(|(status, _)| status.as_str()).collect();
-    assert_eq!(statuses, ["deployed", "failed", "not_attempted"], "{rows:?}");
+    assert_eq!(
+        statuses,
+        ["deployed", "failed", "not_attempted"],
+        "{rows:?}"
+    );
     let Json::Array(results) = value(&sent, "results") else {
         panic!("no results")
     };
@@ -3187,13 +3199,17 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
 /// `$NAME`) and whose every address is `address`.
 type Setup = fn(credential: &str, address: &str) -> String;
 
+/// A platform, its tenant setup and the rule files (name, text) it deploys.
+type Case = (&'static str, Setup, Vec<(String, String)>);
+
 /// Each platform's tenant setup and one rule it deploys, for
 /// `a_tenant_failing_before_any_rule_leaves_each_of_its_rules_not_attempted`.
-fn first_request_cases() -> Vec<(&'static str, Setup, Vec<(String, String)>)> {
+#[expect(clippy::too_many_lines, reason = "one row per platform, as a table")]
+fn first_request_cases() -> Vec<Case> {
     let fixture = |file: &str| {
-        let text = std::fs::read_to_string(
-            repo().join(format!("tests/golden/fixtures/deploy-tenants/objects/rules/{file}")),
-        )
+        let text = std::fs::read_to_string(repo().join(format!(
+            "tests/golden/fixtures/deploy-tenants/objects/rules/{file}"
+        )))
         .unwrap();
         vec![(file.to_owned(), text)]
     };
@@ -3215,9 +3231,7 @@ fn first_request_cases() -> Vec<(&'static str, Setup, Vec<(String, String)>)> {
     vec![
         (
             "sentinel",
-            |credential, _| {
-                SENTINEL_SETUP.replace("$AZURE_CLIENT_SECRET", credential)
-            },
+            |credential, _| SENTINEL_SETUP.replace("$AZURE_CLIENT_SECRET", credential),
             fixture("sentinel-a-create.yaml"),
         ),
         (
@@ -3279,9 +3293,7 @@ fn first_request_cases() -> Vec<(&'static str, Setup, Vec<(String, String)>)> {
         (
             "sysdig",
             |credential, address| {
-                format!(
-                    "url = \"{address}\"\napi_token = \"{credential}\"\npolicies = [\"p\"]\n"
-                )
+                format!("url = \"{address}\"\napi_token = \"{credential}\"\npolicies = [\"p\"]\n")
             },
             fixture("sysdig-a-create.yaml"),
         ),
@@ -3326,6 +3338,42 @@ fn first_request_cases() -> Vec<(&'static str, Setup, Vec<(String, String)>)> {
     ]
 }
 
+/// A workspace whose `platform` has two tenants of `setup` at `address`:
+/// `unset`, whose credential variable is unset, and `unreachable`, whose
+/// credential is set; and the rule files `rules`.
+fn two_failing_tenants(
+    platform: &str,
+    setup: Setup,
+    rules: &[(String, String)],
+    address: &str,
+) -> tempfile::TempDir {
+    let ws = tempfile::tempdir().unwrap();
+    let platforms = ws.path().join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    let tenant = |name: &str, credential: &str| {
+        format!(
+            "[[tenants]]\nname = \"{name}\"\nstrategies = [\"PREVIEW\", \"RELEASE\"]\n\
+             [tenants.setup]\n{}\n",
+            setup(credential, address)
+        )
+    };
+    std::fs::write(
+        platforms.join(format!("{platform}.toml")),
+        format!(
+            "[platform]\nenabled = true\nname = \"Stand-in\"\n\n{}{}",
+            tenant("unset", "$OPENTIDE_TEST_UNSET"),
+            tenant("unreachable", "$OPENTIDE_TEST_SECRET"),
+        ),
+    )
+    .unwrap();
+    let dir = ws.path().join("objects/rules");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (file, text) in rules {
+        std::fs::write(dir.join(file), text).unwrap();
+    }
+    ws
+}
+
 /// A tenant that fails before any rule is sent to it, whatever the
 /// platform: its credential variable unset, or the tenant unreachable
 /// (every connection refused, through a proxy that is not there). Each of
@@ -3338,31 +3386,9 @@ fn first_request_cases() -> Vec<(&'static str, Setup, Vec<(String, String)>)> {
 fn a_tenant_failing_before_any_rule_leaves_each_of_its_rules_not_attempted() {
     let dead = "http://127.0.0.1:9".to_owned();
     let address = "https://127.0.0.1:9";
+    let mut failed = Vec::new();
     for (platform, setup, rules) in first_request_cases() {
-        let ws = tempfile::tempdir().unwrap();
-        let platforms = ws.path().join(".opentide/configurations/platforms");
-        std::fs::create_dir_all(&platforms).unwrap();
-        let tenant = |name: &str, credential: &str| {
-            format!(
-                "[[tenants]]\nname = \"{name}\"\nstrategies = [\"PREVIEW\", \"RELEASE\"]\n\
-                 [tenants.setup]\n{}\n",
-                setup(credential, address)
-            )
-        };
-        std::fs::write(
-            platforms.join(format!("{platform}.toml")),
-            format!(
-                "[platform]\nenabled = true\nname = \"Stand-in\"\n\n{}{}",
-                tenant("unset", "$OPENTIDE_TEST_UNSET"),
-                tenant("unreachable", "$OPENTIDE_TEST_SECRET"),
-            ),
-        )
-        .unwrap();
-        let dir = ws.path().join("objects/rules");
-        std::fs::create_dir_all(&dir).unwrap();
-        for (file, text) in &rules {
-            std::fs::write(dir.join(file), text).unwrap();
-        }
+        let ws = two_failing_tenants(platform, setup, &rules, address);
         let adc = ws.path().join("adc.json");
         std::fs::write(
             &adc,
@@ -3392,46 +3418,114 @@ fn a_tenant_failing_before_any_rule_leaves_each_of_its_rules_not_attempted() {
             "--keep-deprecated",
         ];
         let (code, out, err) = cli(ws.path(), &argv, &env);
-        assert_eq!(code, 1, "{platform}: {out}{err}");
-        let document: serde_json::Value = serde_json::from_str(&out)
-            .unwrap_or_else(|error| panic!("{platform}: {error}: {out}{err}"));
-        let results = document["results"].as_array().unwrap();
-        assert_eq!(results.len(), 2 * rules.len(), "{platform}: {out}");
-        for row in results {
-            let tenant = row["tenant"].as_str().unwrap();
-            assert_eq!(row["status"], "not_attempted", "{platform}: {out}");
-            assert_eq!(
-                row["reason"],
-                format!("not attempted: tenant {tenant} failed").as_str(),
+        // Each platform is checked, then every one that failed is named.
+        let checked = std::panic::catch_unwind(|| {
+            assert_eq!(code, 1, "{platform}: {out}{err}");
+            let document: serde_json::Value = serde_json::from_str(&out)
+                .unwrap_or_else(|error| panic!("{platform}: {error}: {out}{err}"));
+            let results = document["results"].as_array().unwrap();
+            assert_eq!(results.len(), 2 * rules.len(), "{platform}: {out}");
+            for row in results {
+                let tenant = row["tenant"].as_str().unwrap();
+                assert_eq!(row["status"], "not_attempted", "{platform}: {out}");
+                assert_eq!(
+                    row["reason"],
+                    format!("not attempted: tenant {tenant} failed").as_str(),
+                    "{platform}: {out}"
+                );
+            }
+            let failures = document["failures"].as_array().unwrap();
+            let tenants: Vec<&str> = failures
+                .iter()
+                .map(|failure| failure["tenant"].as_str().unwrap())
+                .collect();
+            assert_eq!(tenants, ["unset", "unreachable"], "{platform}: {out}");
+            for failure in failures {
+                assert_eq!(failure["platform"], platform, "{platform}: {out}");
+                assert!(failure.get("id").is_none(), "{platform}: {out}");
+            }
+            assert!(
+                failures[0]["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("OPENTIDE_TEST_UNSET"),
                 "{platform}: {out}"
             );
+            assert_eq!(document["status"], "failed", "{platform}: {out}");
+            assert_eq!(document["exit_code"], 1, "{platform}: {out}");
+            assert_ne!(
+                document["failure"]["code"], "issues_found",
+                "{platform}: {out}"
+            );
+            assert_eq!(document["summary"]["failed"], 0, "{platform}: {out}");
+            assert_eq!(
+                document["summary"]["not_attempted"],
+                2 * rules.len(),
+                "{platform}: {out}"
+            );
+            assert_eq!(
+                document["deployed"],
+                serde_json::json!([]),
+                "{platform}: {out}"
+            );
+        });
+        if checked.is_err() {
+            failed.push(platform);
         }
-        let failures = document["failures"].as_array().unwrap();
-        let tenants: Vec<&str> = failures
-            .iter()
-            .map(|failure| failure["tenant"].as_str().unwrap())
-            .collect();
-        assert_eq!(tenants, ["unset", "unreachable"], "{platform}: {out}");
-        for failure in failures {
-            assert_eq!(failure["platform"], platform, "{platform}: {out}");
-            assert!(failure.get("id").is_none(), "{platform}: {out}");
-        }
-        assert!(
-            failures[0]["error"]
-                .as_str()
-                .unwrap()
-                .contains("OPENTIDE_TEST_UNSET"),
-            "{platform}: {out}"
-        );
-        assert_eq!(document["status"], "failed", "{platform}: {out}");
-        assert_eq!(document["exit_code"], 1, "{platform}: {out}");
-        assert_ne!(document["failure"]["code"], "issues_found", "{platform}: {out}");
-        assert_eq!(document["summary"]["failed"], 0, "{platform}: {out}");
-        assert_eq!(
-            document["summary"]["not_attempted"],
-            2 * rules.len(),
-            "{platform}: {out}"
-        );
-        assert_eq!(document["deployed"], serde_json::json!([]), "{platform}: {out}");
     }
+    assert!(failed.is_empty(), "failed on {failed:?}");
+}
+
+/// A HarfangLab tenant that refuses the API token (401) on its first
+/// request fails before any rule was sent: each rule is not attempted and
+/// nothing more is sent to it. A 401 was the rule's refusal, so every rule
+/// was sent and failed in turn (#1701).
+#[test]
+fn harfanglab_stops_a_tenant_refusing_the_token_before_any_rule() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(wiremock::matchers::any())
+            .respond_with(
+                wiremock::ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"detail": "Invalid token."})),
+            )
+            .expect(1)
+            .mount(&server),
+    );
+    let setup = format!(
+        "url = \"{}\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"s\"\n",
+        server.uri()
+    );
+    let fixture = |file: &str| {
+        std::fs::read_to_string(repo().join(format!(
+            "tests/golden/fixtures/deploy-tenants/objects/rules/{file}"
+        )))
+        .unwrap()
+    };
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        &setup,
+        &[
+            ("a.yaml", fixture("harfanglab-a-sigma.yaml")),
+            ("b.yaml", fixture("harfanglab-b-yara.yaml")),
+        ],
+    );
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent).len(), 2, "{:?}", rows(&sent));
+    assert_failed_before_any_rule(
+        &sent,
+        "harfanglab",
+        "lab",
+        "harfanglab tenant 'lab': HarfangLab tenant lab refused the API token (HTTP 401)",
+    );
 }

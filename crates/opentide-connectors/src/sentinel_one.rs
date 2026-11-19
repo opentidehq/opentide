@@ -635,9 +635,7 @@ impl Deployer for SentinelOne {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            setup(cx).map(|_| ())
-        })
+        crate::connector::opening(async move { setup(cx).map(|_| ()) })
     }
 
     fn deploy<'a>(
