@@ -333,7 +333,12 @@ impl Run<'_> {
         };
         Console {
             colour,
-            width: self.host.width.filter(|_| tty),
+            // A coding agent's pty is no person's terminal: its lines stay
+            // whole, as off a terminal.
+            width: self
+                .host
+                .width
+                .filter(|_| tty && matches!(self.mode, Mode::Human | Mode::Plain)),
         }
     }
 
@@ -1723,7 +1728,7 @@ impl Run<'_> {
         // Lines wrap at a terminal only: a pipe, a file, a CI log or an
         // agent keeps each line whole, a long path on one line, as 0.28.1
         // did (`docs/cli/json-output.md`, Output modes). 0 is no wrap.
-        let width = if self.host.stdout_tty {
+        let width = if self.host.stdout_tty && self.mode != Mode::Agent {
             self.stdout_width()
         } else {
             0
@@ -4116,6 +4121,46 @@ mod tests {
             subcommand.stdout.contains("usage_unknown_option"),
             "{}",
             subcommand.stdout
+        );
+    }
+
+    #[test]
+    fn an_agent_at_a_terminal_keeps_each_line_whole() {
+        // Review of #1691: an agent's pty is a terminal, and its output
+        // must not wrap there either.
+        let scratch = tempfile::tempdir().unwrap();
+        let path = scratch.path().join("w");
+        let line = format!(
+            "setup --yes --path {} --name X --platform sentinel --platform defender_for_endpoint",
+            path.display()
+        );
+        let ran = dispatched_at(&line, &[("OPENTIDE_OUTPUT", "agent")], 60);
+        assert_eq!(ran.code, 0, "{}{}", ran.stdout, ran.stderr);
+        let row = ran
+            .stdout
+            .lines()
+            .find(|row| row.contains("platforms/defender_for_endpoint.toml"))
+            .unwrap_or_else(|| panic!("{}", ran.stdout));
+        assert!(
+            row.trim_end().ends_with("platform configuration"),
+            "{row:?}"
+        );
+        assert!(
+            ran.stdout
+                .lines()
+                .any(|row| row.contains("objects/") && row.contains("your detection catalogue")),
+            "{}",
+            ran.stdout
+        );
+        // A person's terminal of 60 columns wraps the same rows.
+        std::fs::remove_dir_all(&path).unwrap();
+        let ran = dispatched_at(&line, &[("OPENTIDE_OUTPUT", "human")], 60);
+        assert!(
+            !ran.stdout
+                .lines()
+                .any(|row| row.contains("objects/") && row.contains("your detection catalogue")),
+            "{}",
+            ran.stdout
         );
     }
 
