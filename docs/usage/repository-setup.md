@@ -56,7 +56,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
 | `setup hooks` | `.pre-commit-config.yaml` plus validate-on-commit Git hook |
 | `setup mcp` | Editor MCP config that runs `opentide mcp start` |
-| `setup skills` | Agent skills: three authoring skills from the package and `detection-engineering` from the catalogue (the package's copy when it cannot be downloaded), other slugs as the full opentidehq/skills tree (`discover`, `show`, install) |
+| `setup skills` | Agent skills: by default `opentide-detection-rule`, from the package, and `detection-engineering`, from the catalogue (the package's copy when it cannot be downloaded); `--install <slug>` or `--all` for others, each the full opentidehq/skills tree (`discover`, `show`, install) |
 
 ### Expected layout after setup + generate
 
@@ -71,18 +71,22 @@ detection-repo/
 │   ├── configurations/
 │   │   └── platforms/
 │   ├── schemas/                  # opentide generate schemas
-│   ├── templates/
-│   ├── exports/
-│   └── states/
-│       ├── deployment/           # vendor rule ids, committed (written by deploy)
-│       └── sharing.jsonl         # sharing cache, gitignored
+│   ├── templates/                # opentide generate templates
+│   ├── exports/                  # opentide generate exports
+│   ├── inflight/                 # opentide generate inflight
+│   ├── lsp/                      # the language server's catalogs
+│   └── hooks/                    # when setup hooks
+├── .vscode/                      # the editor snippets (generate)
 ├── .github/workflows/            # when --ci github
-├── .env.example                 # when setup env
+├── .pre-commit-config.yaml       # when setup hooks
+├── .env.example                  # when setup env
 ├── README.md
 └── AGENTS.md                     # when --skills generic
 ```
 
-Client configuration overrides live under `.opentide/configurations/`. Package defaults ship in the PyPI wheel.
+`.opentide/states/` is not created by setup or generate: `opentide deploy` writes `states/deployment/` (vendor rule ids, committed) the first time a platform returns one, and `opentide share` writes `states/sharing.jsonl` (gitignored).
+
+Client configuration overrides live under `.opentide/configurations/`. The defaults are compiled into opentide.
 
 ## Scoped subcommands
 
@@ -110,10 +114,10 @@ opentide setup skills --yes --generic --name SOC --org "Example Corp"
 
 | Skills target | Output |
 |---------------|--------|
-| `--cursor` | `.cursor/skills/<slug>/` |
+| `--cursor` | `.cursor/skills/<slug>/`, and `.agents/skills/<slug>/` |
 | `--claude-code` | `CLAUDE.md`, `.claude/skills/` |
 | `--generic` | `AGENTS.md`, `.agents/skills/` |
-| `--github-copilot` | `.github/copilot-instructions.md` |
+| `--github-copilot` | `.github/copilot-instructions.md`, and `AGENTS.md` and `.agents/skills/` as `--generic` |
 
 See [Agentic setup](./workflows/agentic-setup.md) for details.
 
@@ -133,4 +137,4 @@ opentide validate --strict
 opentide setup mcp --cursor --yes   # if not done during setup
 ```
 
-`generate` writes `.opentide/templates/*.template.yaml` from Pydantic models (required keys live, optional fields commented with `#` hugging each key, no YAML `null`). The `metadata` keys that [`opentide lint`](../cli/lint.md#configuration) requires, `author` and `organisation` by default, are live too. Copy a template into `objects/` or use the `tide-threat` / `tide-objective` / `tide-rule` VS Code snippets.
+`generate` writes `.opentide/templates/*.template.yaml` from the Tide models compiled into opentide (required keys live, optional fields commented with `#` hugging each key, no YAML `null`). The `metadata` keys that [`opentide lint`](../cli/lint.md#configuration) requires, `author` and `organisation` by default, are live too. Copy a template into `objects/` or use the `tide-threat` / `tide-objective` / `tide-rule` VS Code snippets.

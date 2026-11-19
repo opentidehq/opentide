@@ -86,7 +86,7 @@ azure_client_secret = "$AZURE_CLIENT_SECRET"
 A `setup` value that is `$NAME` or `${NAME}` as a whole, `NAME` being letters, digits and underscores, is read from that environment variable. Any other value is used as written, one that starts with `$` (a secret such as `$uP3r-S3cret!`) included. Releases through 0.21.0 read any value that starts with `$` from the variable named by the rest; when a variable of exactly that name is set (`$AZ-SECRET` and a variable `AZ-SECRET`), it is still read, with a warning to rename it: a later release will use the value as written.
 
 <Callout type="info">
-Exact connection keys differ per platform. Use `opentide info --platform <name>` to see what a platform expects, and never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
+Exact connection keys differ per platform. The commented `[[tenants]]` template that `opentide setup platforms` writes into `.opentide/configurations/platforms/<name>.toml` lists the keys a platform expects; `opentide info --platform <name>` shows the tenants it configures. Never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
 </Callout>
 
 If you sit behind an outbound proxy, pass it on the command, or set `OPENTIDE_PROXY`. Either wins over `HTTP_PROXY` and `HTTPS_PROXY`; omitting both leaves those variables as they are. Hosts listed in `NO_PROXY` are still reached directly, so an internal tenant can bypass the proxy that a cloud tenant needs ([global options](../cli/global-options.md#proxy)).
