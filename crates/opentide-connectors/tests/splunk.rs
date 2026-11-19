@@ -36,6 +36,29 @@ fn replay(scenario: &str) -> Replayed {
     )
 }
 
+/// The `deploy` recording, as opentide sends it: `client.py`'s second step
+/// deploys the rule its first step wrote, unchanged, so the two updates the
+/// Python client sent again (interactions 5 and 6) are not sent: the lookup
+/// already shows every setting (#1711).
+fn replay_deploy() -> Replayed {
+    let mut cassette = support::cassette("splunk/deploy");
+    let kept: Vec<_> = cassette
+        .interactions
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !matches!(index, 5 | 6))
+        .map(|(_, interaction)| interaction.clone())
+        .collect();
+    cassette.interactions = kept;
+    Replayed::start_with(
+        cassette,
+        splunk::PLATFORM,
+        SETUP,
+        "SPLUNK_TOKEN",
+        &splunk::http_settings(Duration::from_secs(120)),
+    )
+}
+
 /// The settings `_apply_saved_search` sends for one step of `client.py`:
 /// the rule's, its actions', then `search`.
 fn settings(step: &Json) -> Object {
@@ -50,7 +73,7 @@ fn settings(step: &Json) -> Object {
 #[test]
 fn splunk_deploy_sends_what_the_python_deployer_sent() {
     let inputs = fixture("splunk");
-    let tenant = replay("splunk/deploy");
+    let tenant = replay_deploy();
     let connector = Splunk::new();
     let done = block_on(async {
         let mut done = Vec::new();
@@ -72,8 +95,9 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
     })
     .unwrap();
     assert_eq!(tenant.verify(), Vec::new());
-    // client.py: create true, update true, delete null, absent null.
-    assert_eq!(done, [Some(true), Some(true), None, None]);
+    // client.py: create true, update true, delete null, absent null; the
+    // update found the saved search as it is, so nothing was written.
+    assert_eq!(done, [Some(true), Some(false), None, None]);
 }
 
 /// The same recording through `Deployer::deploy`, as `opentide deploy`
@@ -84,7 +108,7 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
 fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
     use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
     let inputs = fixture("splunk");
-    let tenant = replay("splunk/deploy");
+    let tenant = replay_deploy();
     let connector = Splunk::new();
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
@@ -136,6 +160,14 @@ fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
             .collect::<Vec<_>>(),
         [true, true, false, false]
     );
+    // The second step's saved search was there as it is (#1711).
+    assert_eq!(
+        outcomes
+            .iter()
+            .map(opentide_connectors::connector::DeployOutcome::unchanged)
+            .collect::<Vec<_>>(),
+        [false, true, false, false]
+    );
 }
 
 /// Every tracing event's level and message, from the first test that asks.
@@ -181,7 +213,7 @@ fn splunk_creating_an_absent_saved_search_logs_no_warning() {
     let logs = logs();
     let inputs = fixture("splunk");
     let step = &items(inputs.get("deploy").unwrap())[0];
-    let tenant = replay("splunk/deploy");
+    let tenant = replay_deploy();
     let written = block_on(async {
         Splunk::new()
             .apply_saved_search(
@@ -227,7 +259,7 @@ fn splunk_a_single_byte_off_fails() {
         "description".into(),
         Json::Str("Simulated Splunk rule!".into()),
     );
-    let tenant = replay("splunk/deploy");
+    let tenant = replay_deploy();
     let _ = block_on(async {
         Splunk::new()
             .apply_saved_search(tenant.cx(), "Splunk SPL Rule", &altered, false)

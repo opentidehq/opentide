@@ -5181,6 +5181,7 @@ mod tests {
                 "upsert",
                 "disable",
                 "delete",
+                "unchanged",
                 "failed",
                 "skipped",
                 "not_attempted",
