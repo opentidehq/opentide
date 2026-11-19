@@ -44,7 +44,7 @@ impl SourceFile {
     }
 }
 
-/// `LetStatement = 'let' name:'ident' '=' value:LetValue ';'`
+/// `LetStatement = 'let' name:'ident' '=' value:LetValue ';'?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LetStatement {
     syntax: SyntaxNode,
@@ -86,7 +86,7 @@ impl LetStatement {
     }
 }
 
-/// `QueryParametersStatement = 'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'`
+/// `QueryParametersStatement = 'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QueryParametersStatement {
     syntax: SyntaxNode,
@@ -1927,7 +1927,7 @@ impl DatatableColumn {
     }
 }
 
-/// `OptionValue = value:('ident' | 'boolean' | 'number' | 'string')`
+/// `OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'string')`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OptionValue {
     syntax: SyntaxNode,
@@ -1947,6 +1947,10 @@ impl AstNode for OptionValue {
 }
 
 impl OptionValue {
+    /// The token child.
+    pub fn sign(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![-], T![+]])
+    }
     /// The token child.
     pub fn value(&self) -> Option<SyntaxToken> {
         support::token_in(
@@ -2988,7 +2992,7 @@ impl DistinctOperator {
     }
 }
 
-/// `RenderOperator = 'render' kind:'ident' RenderWith?`
+/// `RenderOperator = 'render' kind:'ident' NamedArgument* RenderWith?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderOperator {
     syntax: SyntaxNode,
@@ -3015,6 +3019,10 @@ impl RenderOperator {
     /// The token child.
     pub fn kind(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![ident])
+    }
+    /// The `NamedArgument` children.
+    pub fn named_arguments(&self) -> AstChildren<NamedArgument> {
+        support::children(&self.syntax)
     }
     /// The `RenderWith` child.
     pub fn render_with(&self) -> Option<RenderWith> {
@@ -4262,6 +4270,40 @@ impl StarArg {
     }
 }
 
+/// `NamedArgument = name:'ident' '=' value:Expr`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NamedArgument {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for NamedArgument {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::NAMED_ARGUMENT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl NamedArgument {
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![=])
+    }
+    /// The `Expr` child.
+    pub fn value(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
+
 /// `RenderWith = 'with' '(' (RenderProperty (',' RenderProperty)*)? ')'`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderWith {
@@ -4343,40 +4385,6 @@ impl From<NamedArgument> for RenderProperty {
 impl From<NameRef> for RenderProperty {
     fn from(node: NameRef) -> Self {
         Self::NameRef(node)
-    }
-}
-
-/// `NamedArgument = name:'ident' '=' value:Expr`
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct NamedArgument {
-    syntax: SyntaxNode,
-}
-
-impl AstNode for NamedArgument {
-    type Language = Lang;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::NAMED_ARGUMENT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl NamedArgument {
-    /// The token child.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
-    }
-    /// The token child.
-    pub fn eq_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![=])
-    }
-    /// The `Expr` child.
-    pub fn value(&self) -> Option<Expr> {
-        support::child(&self.syntax)
     }
 }
 
@@ -5536,7 +5544,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::LET_STATEMENT as u16,
         name: "LetStatement",
-        text: "'let' name:'ident' '=' value:LetValue ';'",
+        text: "'let' name:'ident' '=' value:LetValue ';'?",
         rule: Rule::Seq(&[
             Rule::Kind(T![let] as u16),
             Rule::Kind(T![ident] as u16),
@@ -5564,13 +5572,13 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::TABULAR_EXPRESSION as u16),
                 Rule::Kind(SyntaxKind::FUNCTION_DEFINITION as u16),
             ]),
-            Rule::Kind(T![;] as u16),
+            Rule::Opt(&Rule::Kind(T![;] as u16)),
         ]),
     },
     NodeRule {
         kind: SyntaxKind::QUERY_PARAMETERS_STATEMENT as u16,
         name: "QueryParametersStatement",
-        text: "'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'",
+        text: "'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?",
         rule: Rule::Seq(&[
             Rule::Kind(T![declare] as u16),
             Rule::Kind(T![ident] as u16),
@@ -5581,7 +5589,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::PARAMETER as u16),
             ])),
             Rule::Kind(T![')'] as u16),
-            Rule::Kind(T![;] as u16),
+            Rule::Opt(&Rule::Kind(T![;] as u16)),
         ]),
     },
     NodeRule {
@@ -6271,12 +6279,18 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::OPTION_VALUE as u16,
         name: "OptionValue",
-        text: "value:('ident' | 'boolean' | 'number' | 'string')",
-        rule: Rule::Alt(&[
-            Rule::Kind(T![ident] as u16),
-            Rule::Kind(T![boolean] as u16),
-            Rule::Kind(T![number] as u16),
-            Rule::Kind(T![string] as u16),
+        text: "sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'string')",
+        rule: Rule::Seq(&[
+            Rule::Opt(&Rule::Alt(&[
+                Rule::Kind(T![-] as u16),
+                Rule::Kind(T![+] as u16),
+            ])),
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![boolean] as u16),
+                Rule::Kind(T![number] as u16),
+                Rule::Kind(T![string] as u16),
+            ]),
         ]),
     },
     NodeRule {
@@ -7274,10 +7288,11 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::RENDER_OPERATOR as u16,
         name: "RenderOperator",
-        text: "'render' kind:'ident' RenderWith?",
+        text: "'render' kind:'ident' NamedArgument* RenderWith?",
         rule: Rule::Seq(&[
             Rule::Kind(T![render] as u16),
             Rule::Kind(T![ident] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16)),
             Rule::Opt(&Rule::Kind(SyntaxKind::RENDER_WITH as u16)),
         ]),
     },
@@ -8134,29 +8149,6 @@ pub static RULES: &[NodeRule] = &[
         rule: Rule::Kind(T![*] as u16),
     },
     NodeRule {
-        kind: SyntaxKind::RENDER_WITH as u16,
-        name: "RenderWith",
-        text: "'with' '(' (RenderProperty (',' RenderProperty)*)? ')'",
-        rule: Rule::Seq(&[
-            Rule::Kind(T![with] as u16),
-            Rule::Kind(T!['('] as u16),
-            Rule::Opt(&Rule::Seq(&[
-                Rule::Alt(&[
-                    Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
-                    Rule::Kind(SyntaxKind::NAME_REF as u16),
-                ]),
-                Rule::Rep(&Rule::Seq(&[
-                    Rule::Kind(T![,] as u16),
-                    Rule::Alt(&[
-                        Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
-                        Rule::Kind(SyntaxKind::NAME_REF as u16),
-                    ]),
-                ])),
-            ])),
-            Rule::Kind(T![')'] as u16),
-        ]),
-    },
-    NodeRule {
         kind: SyntaxKind::NAMED_ARGUMENT as u16,
         name: "NamedArgument",
         text: "name:'ident' '=' value:Expr",
@@ -8182,6 +8174,29 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
             ]),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::RENDER_WITH as u16,
+        name: "RenderWith",
+        text: "'with' '(' (RenderProperty (',' RenderProperty)*)? ')'",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![with] as u16),
+            Rule::Kind(T!['('] as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
+                    Rule::Kind(SyntaxKind::NAME_REF as u16),
+                ]),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Alt(&[
+                        Rule::Kind(SyntaxKind::NAMED_ARGUMENT as u16),
+                        Rule::Kind(SyntaxKind::NAME_REF as u16),
+                    ]),
+                ])),
+            ])),
+            Rule::Kind(T![')'] as u16),
         ]),
     },
     NodeRule {
