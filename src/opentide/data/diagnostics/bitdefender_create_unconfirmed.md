@@ -2,7 +2,7 @@
 
 A GravityZone create got no answer, and its retry found the name already taken.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A create whose connection could not be made was never sent: that is `bitdefender_tenant_unreachable`, never this code.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, could not be sent (its connection refused), or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A first create that was never sent (its connection or the tenant's certificate refused) is `bitdefender_tenant_unreachable`, never this code.
 
 ## Example
 

@@ -523,13 +523,19 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
             stopped_early(platform, early, &reach)
         }
         Ok(report) => {
-            // A run that rejected a query is no tick (#1658, E8).
-            step.status = if report.checks.iter().any(|check| !check.errors.is_empty()) {
+            // A run that rejected a query, or that a tenant refused, is no
+            // tick (#1658, E8).
+            step.status = if !report.refused.is_empty()
+                || report.checks.iter().any(|check| !check.errors.is_empty())
+            {
                 StepStatus::Failed
             } else {
                 StepStatus::Ok
             };
-            checked_result(platform, &report, &reach, timeout)
+            match report.refused.first() {
+                Some(refused) => refused_result(platform, refused, &report),
+                None => checked_result(platform, &report, &reach, timeout),
+            }
         }
     };
     scoped(
@@ -804,6 +810,41 @@ fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
     }
 }
 
+/// The result of a check a tenant refused: the first refusal's tenant, host,
+/// message and advice; the other tenants refused named, and the queries the
+/// other tenants checked counted (their rejections were logged as they
+/// came).
+fn refused_result(platform: &str, refused: &Refused, report: &CheckReport) -> Fields {
+    let mut result = refused.result(platform);
+    let at = result.len() - 1;
+    let mut extra: Fields = Vec::new();
+    if report.refused.len() > 1 {
+        extra.push((
+            "refused_tenants".into(),
+            Json::Array(
+                report
+                    .refused
+                    .iter()
+                    .map(|refused| Json::str(&refused.tenant))
+                    .collect(),
+            ),
+        ));
+    }
+    if !report.checks.is_empty() {
+        extra.push(("queries_validated".into(), Json::from(report.checks.len())));
+        let rejected = report
+            .checks
+            .iter()
+            .filter(|check| !check.errors.is_empty())
+            .count();
+        extra.push(("queries_rejected".into(), Json::from(rejected)));
+    }
+    for (offset, field) in extra.into_iter().enumerate() {
+        result.insert(at + offset, field);
+    }
+    result
+}
+
 /// The result of a check every tenant answered: passed, or failed with the
 /// rejected queries; the checks that timed out, and the warnings.
 fn checked_result(platform: &str, report: &CheckReport, reach: &Reach<'_>, timeout: f64) -> Fields {
@@ -1046,6 +1087,9 @@ impl RuleCheck {
 #[derive(Debug, Default)]
 struct CheckReport {
     checks: Vec<RuleCheck>,
+    /// The tenants that refused the check itself, in order: their other
+    /// rules were not sent, and the next tenant was checked (#1658, E8).
+    refused: Vec<Refused>,
 }
 
 /// A tenant reported unreachable (`TenantUnreachableError`).
@@ -1487,7 +1531,7 @@ async fn generic(
     let window = check_window(platform, cx.now);
     let cancel = CancellationToken::new();
     let mut report = CheckReport::default();
-    for batch in batches {
+    'tenants: for batch in batches {
         let tenant = &batch.tenant;
         let host = tenant_host(platform, tenant);
         let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
@@ -1542,9 +1586,16 @@ async fn generic(
                     label: item.label.clone(),
                     timeout,
                 };
-                report
-                    .checks
-                    .push(asked.outcome(found, &request.text, &mut streak)?);
+                match asked.outcome(found, &request.text, &mut streak) {
+                    Ok(check) => report.checks.push(check),
+                    // The tenant refused the check itself: its other rules
+                    // are not sent, the next tenant is checked (#1658, E8).
+                    Err(Early::Refused(refused)) => {
+                        report.refused.push(refused);
+                        continue 'tenants;
+                    }
+                    Err(early) => return Err(early),
+                }
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
@@ -1735,11 +1786,12 @@ async fn google_secops(
             // Credentials that cannot be loaded: no rule can be checked on
             // the instance, so the tenant fails, not each query (#1658, D4).
             Err(error) => {
-                return Err(Early::Refused(Refused::with_message(
+                report.refused.push(Refused::with_message(
                     &tenant.name,
                     &host,
                     format!("{platform} tenant '{}': {}", tenant.name, error.text()),
-                )));
+                ));
+                continue;
             }
         };
         let context = TenantContext {
@@ -1816,11 +1868,12 @@ async fn google_secops(
                         critical = true,
                         "google_secops_tenant_validation_failed"
                     );
-                    return Err(Early::Refused(Refused::with_message(
+                    report.refused.push(Refused::with_message(
                         &tenant.name,
                         &host,
                         format!("{platform} tenant '{}': {text}", tenant.name),
-                    )));
+                    ));
+                    break;
                 }
                 Err(ConnectorError::Timeout {
                     address, seconds, ..
@@ -2271,13 +2324,12 @@ async fn elastic(
                         "elastic_tenant_validation_failed"
                     );
                     // The tenant refused the check itself (a key, a
-                    // privilege): no query was checked (#1658, E8).
-                    return Err(Early::Refused(Refused::new(
-                        "elastic",
-                        &tenant.name,
-                        &host,
-                        &error,
-                    )));
+                    // privilege): its other rules are not sent, the next
+                    // tenant is checked (#1658, E8).
+                    report
+                        .refused
+                        .push(Refused::new("elastic", &tenant.name, &host, &error));
+                    break;
                 }
                 Err(RuleFailure::Rule(error)) => {
                     streak.answered();

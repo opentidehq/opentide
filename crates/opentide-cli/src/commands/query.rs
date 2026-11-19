@@ -611,8 +611,8 @@ pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) 
         .collect();
     (!missing.is_empty()).then(|| {
         format!(
-            "{client} credentials are unset ({}). Set those environment variables before a live \
-             check.",
+            "{client} credentials are unset ({}). Set those environment variables, then run \
+             the command again.",
             missing.join(", ")
         )
     })
@@ -913,7 +913,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             }
         };
     let (available, config_path) = configured(cx, platform);
-    log_unset(&available, cx.env, "a live check");
+    log_unset(&available, cx.env, "a query");
     let selected = match select(platform, &args.tenants, &available, &config_path) {
         Ok(selected) => selected,
         Err((message, value, choices)) => {
@@ -1602,7 +1602,7 @@ mod tests {
             unset_credentials("sentinel_one", &tenant, &Env::from_pairs([("S1_URL", "x")])),
             Some(
                 "SentinelOne credentials are unset (${S1_TOKEN}). Set those environment \
-                 variables before a live check."
+                 variables, then run the command again."
                     .to_owned()
             )
         );
@@ -2201,7 +2201,7 @@ mod tests {
         assert_eq!(
             unset_credentials("elastic", &tenant, &env).as_deref(),
             Some(
-                "Elastic credentials are unset ($KEY). Set those environment variables before a live check."
+                "Elastic credentials are unset ($KEY). Set those environment variables, then run the command again."
             )
         );
         assert_eq!(unset_credentials("splunk", &tenant, &env), None);

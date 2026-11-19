@@ -637,7 +637,7 @@ Find the rule by name in the GravityZone console and record its id in the rule's
 
 A GravityZone create got no answer, and its retry found the name already taken.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A create whose connection could not be made was never sent: that is `bitdefender_tenant_unreachable`, never this code.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, could not be sent (its connection refused), or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A first create that was never sent (its connection or the tenant's certificate refused) is `bitdefender_tenant_unreachable`, never this code.
 
 ### Example
 
@@ -1051,7 +1051,7 @@ Check the variable `api_key` names, and enable the Incidents API for the key in 
 
 A call to the GravityZone tenant got no answer, so no further rule deploys to it.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant, and so does a create whose connection could not be made (refused, DNS, the connect timeout, a proxy that would not connect): it was never sent, so nothing can have been created. A create sent with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant, and so does a first create that was never sent (its connection refused, DNS, the connect timeout, a proxy that would not connect, or the tenant's certificate refused): nothing can have been created. A create sent with no answer is retried once instead; a retry with no answer, one that could not be sent, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
 
 ### Example
 

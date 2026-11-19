@@ -676,6 +676,52 @@ fn usage_errors_and_skips_answer_before_any_check() {
     );
 }
 
+/// A tenant that refuses the credential stops only its own rules: the next
+/// tenant is checked, its results kept and counted (#1658, E8).
+#[test]
+fn a_refused_tenant_does_not_drop_the_next_tenants_checks() {
+    let ws = splunk_rules(2);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        format!(
+            "{text}\n[[tenants]]\nname = \"lab2\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nurl = \
+             \"splunk2.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n"
+        ),
+    )
+    .unwrap();
+    let rejection = LiveCheck {
+        errors: vec!["Unknown search command 'stat'".into()],
+        ..LiveCheck::default()
+    };
+    let live = scripted(
+        ws.path(),
+        vec![
+            Err(ConnectorError::authentication(
+                "splunk",
+                "lab",
+                "Splunk refused the credential (HTTP 401)",
+            )),
+            Ok(rejection),
+            Ok(LiveCheck::default()),
+        ],
+    );
+    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(
+        value(&live, "message"),
+        &Json::str(
+            "splunk tenant 'lab' refused the check: Splunk refused the credential (HTTP 401)"
+        )
+    );
+    // lab2's two queries were checked, one rejected.
+    assert_eq!(value(&live, "queries_validated"), &Json::Int(2));
+    assert_eq!(value(&live, "queries_rejected"), &Json::Int(1));
+    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+}
+
 /// An Elastic tenant that refuses the API key fails the tenant: no query
 /// counts as rejected, and the result names the tenant, its host and what to
 /// check (#1658, E8).

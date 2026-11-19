@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -721,21 +722,73 @@ fn an_unreachable_tenant_stops() {
     );
 }
 
-/// A create whose connection is refused was never sent, so nothing can have
-/// been created: the tenant is unreachable, not the create unconfirmed, and
-/// it is not sent again (#1658, D6).
-#[test]
-fn a_create_refused_a_connection_is_an_unreachable_tenant_not_unconfirmed() {
-    let run = Run::new();
-    // Port 1 on the loopback: nothing listens there.
+/// A tenant whose transport answers each request with the next failure of
+/// a script, counting the requests it was given; every other tenant gets
+/// the default transport, so the other tests of this file are unaffected.
+#[derive(Debug, Default)]
+struct ScriptedWire {
+    failures: Mutex<VecDeque<opentide_connectors::transport::TransportFailure>>,
+    sent: AtomicUsize,
+}
+
+impl opentide_connectors::transport::Transport for ScriptedWire {
+    fn execute<'a>(
+        &'a self,
+        _request: opentide_connectors::transport::Request,
+        _cancel: &'a CancellationToken,
+    ) -> opentide_connectors::connector::BoxFuture<
+        'a,
+        Result<
+            opentide_connectors::transport::Response,
+            opentide_connectors::transport::TransportFailure,
+        >,
+    > {
+        self.sent.fetch_add(1, Ordering::SeqCst);
+        let next = self.failures.lock().unwrap().pop_front().unwrap();
+        Box::pin(async move { Err(next) })
+    }
+}
+
+/// The tenant whose transport is scripted.
+const SCRIPTED: &str = "gravityzone-scripted";
+
+struct ScriptedFactory(Arc<ScriptedWire>);
+
+impl opentide_connectors::transport::TransportFactory for ScriptedFactory {
+    fn make(
+        &self,
+        spec: &opentide_connectors::transport::TransportSpec<'_>,
+    ) -> Result<Arc<dyn opentide_connectors::transport::Transport>, String> {
+        if spec.label.tenant == SCRIPTED {
+            Ok(self.0.clone())
+        } else {
+            Ok(Arc::new(
+                opentide_connectors::transport::ReqwestTransport::new(spec)?,
+            ))
+        }
+    }
+}
+
+/// A create on the scripted tenant whose transport fails in turn as
+/// `failures` says: its outcome, and how many requests reached the wire.
+fn create_with(
+    run: &Run,
+    failures: Vec<opentide_connectors::transport::TransportFailure>,
+) -> (Result<RuleOutcome, ConnectorError>, usize) {
+    let scripted = Arc::new(ScriptedWire {
+        failures: Mutex::new(failures.into()),
+        sent: AtomicUsize::new(0),
+    });
+    let _installed =
+        opentide_connectors::transport::install(Arc::new(ScriptedFactory(scripted.clone())));
     let setup: toml::Table = toml::from_str(
-        "ssl = false\nurl = \"http://127.0.0.1:1/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
+        "ssl = false\nurl = \"https://gz.invalid/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
     )
     .unwrap();
     let env = Environment::from_pairs([("NO_PROXY", "*"), ("GRAVITYZONE_API_KEY", "key")]);
     let tenant = Tenant::from_setup(
         "bitdefender",
-        "gravityzone-eu",
+        SCRIPTED,
         &setup,
         &env,
         Mode::Required,
@@ -749,18 +802,56 @@ fn a_create_refused_a_connection_is_an_unreachable_tenant_not_unconfirmed() {
         http: &http,
         cancel: &cancel,
     };
-    let error = block_on(deploy_rule_with(cx, &create(), &run.pacer))
-        .unwrap()
-        .unwrap_err();
-    let text = error.to_string();
-    assert!(
-        text.starts_with(
-            "bitdefender_tenant_unreachable: Cannot reach bitdefender tenant 'gravityzone-eu' at \
-             http://127.0.0.1:1"
-        ),
-        "{text}"
+    let outcome = block_on(deploy_rule_with(cx, &create(), &run.pacer)).unwrap();
+    (outcome, scripted.sent.load(Ordering::SeqCst))
+}
+
+/// A create that was never sent (its connection refused, or the tenant's
+/// certificate refused) cannot have created anything: the tenant is
+/// unreachable, not the create unconfirmed, and it is not sent again. A
+/// create sent with no answer is retried once; when that retry cannot be
+/// sent, the first may still have landed: unconfirmed, the tenant going on
+/// (#1658, D6). One test: the scripted transport is the process's.
+#[test]
+fn an_unsent_create_fails_the_tenant_and_an_unsent_retry_is_unconfirmed() {
+    use opentide_connectors::transport::TransportFailure;
+    let run = Run::new();
+    for first in [
+        TransportFailure::Connect {
+            reason: "tcp connect error: Connection refused".into(),
+        },
+        TransportFailure::CertificateRefused {
+            reason: "invalid peer certificate: UnknownIssuer".into(),
+        },
+    ] {
+        let (outcome, sent) = create_with(&run, vec![first.clone()]);
+        let text = outcome.unwrap_err().to_string();
+        assert!(
+            text.starts_with(&format!(
+                "bitdefender_tenant_unreachable: Cannot reach bitdefender tenant '{SCRIPTED}'"
+            )),
+            "{first:?}: {text}"
+        );
+        assert!(!text.contains("GravityZone console"), "{text}");
+        assert_eq!(sent, 1, "{first:?}: not sent again");
+    }
+    let (outcome, sent) = create_with(
+        &run,
+        vec![
+            TransportFailure::Timeout,
+            TransportFailure::Connect {
+                reason: "tcp connect error: Connection refused".into(),
+            },
+        ],
     );
-    assert!(!text.contains("GravityZone console"), "{text}");
+    let outcome = outcome.unwrap();
+    assert_eq!(sent, 2);
+    assert_eq!(code(&outcome), Some("bitdefender_create_unconfirmed"));
+    assert_eq!(
+        events(&outcome),
+        [("bitdefender_create_retried", false)],
+        "the first create's retry is said"
+    );
 }
 
 #[test]

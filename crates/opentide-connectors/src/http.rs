@@ -127,14 +127,14 @@ impl HttpClient {
         let tenant = self.label.tenant.clone();
         let address = error::origin(url);
         match failure {
-            TransportFailure::Connect { reason } | TransportFailure::Unreachable { reason } => {
-                ConnectorError::Unreachable {
-                    platform,
-                    tenant,
-                    address,
-                    reason,
-                }
-            }
+            TransportFailure::Connect { reason }
+            | TransportFailure::CertificateRefused { reason }
+            | TransportFailure::Unreachable { reason } => ConnectorError::Unreachable {
+                platform,
+                tenant,
+                address,
+                reason,
+            },
             TransportFailure::Timeout => ConnectorError::Timeout {
                 platform,
                 tenant,
@@ -167,8 +167,10 @@ impl HttpClient {
 
     /// [`send`](Self::send), saying of a failure whether the request never
     /// left ([`SendFailure::unsent`]): its connection could not be made
-    /// (refused, DNS, the connect timeout, a proxy that would not connect),
-    /// so the tenant did nothing with it. A platform that never sends a
+    /// (refused, DNS, the connect timeout, a proxy that would not connect)
+    /// or the tenant's certificate was refused, so the tenant did nothing
+    /// with it. A connection dropped while the request was sent is not
+    /// unsent: the tenant may have taken it. A platform that never sends a
     /// write twice reads it to tell an unreachable tenant from a write that
     /// may have happened.
     ///
@@ -199,7 +201,10 @@ impl HttpClient {
         // A request is cloned only for an attempt a retry may follow; the
         // last attempt takes it.
         let unsent = |failure: TransportFailure| SendFailure {
-            unsent: matches!(failure, TransportFailure::Connect { .. }),
+            unsent: matches!(
+                failure,
+                TransportFailure::Connect { .. } | TransportFailure::CertificateRefused { .. }
+            ),
             error: self.error(failure, &url),
         };
         for retried in 0..retry.max_retries {
@@ -271,8 +276,8 @@ impl HttpClient {
 pub struct SendFailure {
     /// Why, as [`HttpClient::send`] says it.
     pub error: ConnectorError,
-    /// The request never left: its connection could not be made, so the
-    /// tenant did nothing with it.
+    /// The request never left: its connection could not be made, or the
+    /// tenant's certificate was refused, so the tenant did nothing with it.
     pub unsent: bool,
 }
 
