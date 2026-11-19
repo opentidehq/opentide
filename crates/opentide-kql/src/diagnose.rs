@@ -492,12 +492,19 @@ fn operators(
     }
 }
 
-/// Names bound by `let` anywhere in the query.
+/// Names bound by `let` or `declare query_parameters` anywhere in the query.
 fn let_names(nodes: &[SyntaxNode]) -> BTreeSet<String> {
+    let parameters = nodes
+        .iter()
+        .filter(|n| n.kind() == K::QUERY_PARAMETERS_STATEMENT)
+        .flat_map(SyntaxNode::children)
+        .filter(|n| n.kind() == K::PARAMETER);
     nodes
         .iter()
         .filter(|n| n.kind() == K::LET_STATEMENT)
-        .filter_map(|n| name_of(n).map(|t| t.text().to_owned()))
+        .cloned()
+        .chain(parameters)
+        .filter_map(|n| name_of(&n).map(|t| t.text().to_owned()))
         .collect()
 }
 

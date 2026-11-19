@@ -55,6 +55,7 @@ fn run<'a>(
     for child in root.children() {
         match child.kind() {
             K::LET_STATEMENT => pass.let_statement(&child, &mut scope),
+            K::QUERY_PARAMETERS_STATEMENT => pass.query_parameters(&child, &mut scope),
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
                     pass.tabular(&body, &scope);
@@ -244,6 +245,25 @@ impl<'a> Pass<'a> {
     }
 
     // --- bindings ---------------------------------------------------------
+
+    /// `declare query_parameters(p: string, t: (a: int))`: a scalar is a value
+    /// and a tabular parameter a table of unknown columns, as in a function.
+    fn query_parameters(&self, node: &SyntaxNode, scope: &mut Scope) {
+        for parameter in node.children().filter(|c| c.kind() == K::PARAMETER) {
+            let Some(name) = ident(&parameter).map(|t| Self::token_text(&t)) else {
+                continue;
+            };
+            let tabular = child_of(&parameter, K::TYPE)
+                .is_some_and(|t| self.text(&t).trim_start().starts_with('('));
+            if tabular {
+                let mut schema = Schema::open();
+                schema.source = Source::Let(name.clone());
+                scope.tabular.insert(name, schema);
+            } else {
+                scope.scalars.insert(name);
+            }
+        }
+    }
 
     fn let_statement(&mut self, node: &SyntaxNode, scope: &mut Scope) {
         let Some(name) = ident(node).map(|t| Self::token_text(&t)) else {
@@ -561,7 +581,7 @@ impl<'a> Pass<'a> {
                 }
                 input
             }
-            K::TAKE_OPERATOR | K::LIMIT_OPERATOR | K::RENDER_OPERATOR => input,
+            K::TAKE_OPERATOR | K::LIMIT_OPERATOR | K::RENDER_OPERATOR | K::AS_OPERATOR => input,
             K::COUNT_OPERATOR => {
                 let mut out = Schema::closed(
                     vec![Column {
@@ -670,7 +690,8 @@ impl<'a> Pass<'a> {
                 out.rename_all(renames, kind);
                 out
             }
-            K::EXTEND_OPERATOR => {
+            // `serialize rn = row_number()` adds columns as `extend` does.
+            K::EXTEND_OPERATOR | K::SERIALIZE_OPERATOR => {
                 let mut out = input.clone();
                 let mut defined = Defined::default();
                 comma_quirk(&mut out, op.children().count());
@@ -779,15 +800,12 @@ impl<'a> Pass<'a> {
                     .next()
                     .map(|k| k.text().to_ascii_lowercase())
                     .unwrap_or_default();
-                let bare = op.first_child().is_none();
-                match keyword.as_str() {
-                    "as" | "sample" => input,
-                    "serialize" if bare => input,
-                    _ => {
-                        let mut out = input;
-                        out.make_open();
-                        out
-                    }
+                if keyword == "sample" {
+                    input
+                } else {
+                    let mut out = input;
+                    out.make_open();
+                    out
                 }
             }
             _ => {

@@ -280,8 +280,41 @@ fn operator(p: &mut P<'_>) {
         K::RENDER_KW => {
             p.bump();
             p.expect_name();
+            if p.at(K::WITH_KW) {
+                render_with(p);
+            }
             K::RENDER_OPERATOR
         }
+        K::SERIALIZE_KW => {
+            p.bump();
+            if expr::at_expr_start(p) {
+                list(p, assignment_or_expr);
+            }
+            K::SERIALIZE_OPERATOR
+        }
+        K::AS_KW => {
+            p.bump();
+            // `hint.materialized` is the one hint `as` takes.
+            while p.at(K::HINT_NAME) && p.nth_text(0) == "hint.materialized" && p.nth(1) == K::EQ {
+                option_after_name(p, K::HINT_OPTION);
+            }
+            p.expect_name();
+            K::AS_OPERATOR
+        }
+        K::TOP_HITTERS_KW => {
+            p.bump();
+            expr::expr(p);
+            p.expect(K::OF_KW);
+            expr::expr(p);
+            if p.at(K::BY_KW) {
+                let by = p.start();
+                p.bump();
+                expr::expr(p);
+                p.done(by, K::TOP_HITTERS_BY);
+            }
+            K::TOP_HITTERS_OPERATOR
+        }
+        K::REDUCE_KW => reduce(p),
         K::TOP_NESTED_KW => {
             list(p, top_nested_clause);
             K::TOP_NESTED_OPERATOR
@@ -308,19 +341,15 @@ fn operator(p: &mut P<'_>) {
         K::SEARCH_KW
         | K::FIND_KW
         | K::INVOKE_KW
-        | K::SERIALIZE_KW
-        | K::AS_KW
         | K::GETSCHEMA_KW
         | K::SAMPLE_KW
         | K::EXTERNALDATA_KW
         | K::CONSUME_KW
-        | K::REDUCE_KW
         | K::MAKE_GRAPH_KW
         | K::GRAPH_MATCH_KW
         | K::GRAPH_SHORTEST_PATHS_KW
         | K::GRAPH_TO_TABLE_KW
-        | K::GRAPH_MARK_COMPONENTS_KW
-        | K::TOP_HITTERS_KW => {
+        | K::GRAPH_MARK_COMPONENTS_KW => {
             p.bump();
             if expr::at_expr_start(p) {
                 expr::expr(p);
@@ -996,4 +1025,69 @@ fn search_source(p: &mut P<'_>) {
     p.eat(K::WHERE_KW);
     expr::expr(p);
     p.done(m, K::SEARCH_SOURCE);
+}
+
+// ------------------------------------------------- render, reduce
+
+/// `with (title = "x", ycolumns = a, b)`: a property's value is an expression,
+/// and a bare name after it continues its column list.
+fn render_with(p: &mut P<'_>) {
+    let m = p.start();
+    p.bump();
+    p.expect(K::L_PAREN);
+    if !p.at(K::R_PAREN) {
+        // Whether a bare name may come: only after a property whose value is
+        // a list of columns, as Kusto.Language reads them.
+        let mut in_list = false;
+        loop {
+            if p.name_at(0) && p.nth(1) == K::EQ {
+                in_list = matches!(p.nth_text(0), "ycolumns" | "series" | "anomalycolumns");
+                let property = p.start();
+                p.bump_as(K::IDENT);
+                p.bump();
+                expr::expr(p);
+                p.done(property, K::NAMED_ARGUMENT);
+            } else if in_list && p.name_at(0) {
+                name_ref(p);
+            } else {
+                p.error("expected `name = value`");
+                break;
+            }
+            if !p.eat(K::COMMA) {
+                break;
+            }
+        }
+    }
+    p.expect(K::R_PAREN);
+    p.done(m, K::RENDER_WITH);
+}
+
+/// Whether `name = value` starts here with one of `names`, spelt exactly.
+fn at_named_option(p: &P<'_>, names: &[&str]) -> bool {
+    p.name_at(0) && p.nth(1) == K::EQ && names.contains(&p.nth_text(0))
+}
+
+/// `reduce kind=source by x with threshold=0.1, characters="ab"`
+fn reduce(p: &mut P<'_>) -> K {
+    const WITH: &[&str] = &["kind", "threshold", "characters"];
+    p.bump();
+    while at_named_option(p, &["kind"]) {
+        option_after_name(p, K::OPERATOR_OPTION);
+    }
+    p.expect(K::BY_KW);
+    expr::expr(p);
+    // Kusto.Language accepts a `with` that no option follows.
+    if p.eat(K::WITH_KW) && p.name_at(0) && p.nth(1) == K::EQ {
+        loop {
+            if !at_named_option(p, WITH) {
+                p.error("expected `threshold`, `characters` or `kind`");
+                break;
+            }
+            option_after_name(p, K::OPERATOR_OPTION);
+            if !p.eat(K::COMMA) {
+                break;
+            }
+        }
+    }
+    K::REDUCE_OPERATOR
 }
