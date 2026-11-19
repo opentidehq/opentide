@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/plain/vscode-folded-comment/folded-comment-strict
+---
+args: opentide lint --strict
+exit: 0
+
+━━━ stdout
+✓ 3 notes in 2 files
+→ opentide lint --strict --verbose · show 3 notes, such as a missing optional field
+
+━━━ stderr · empty

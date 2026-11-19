@@ -7,13 +7,14 @@
 //! filter a reader sees is not the one deployed (smoke test B16). The query
 //! text itself is valid, so no engine reports it; this check reads the
 //! comment tokens the engine highlighted against the source lines they
-//! cover.
+//! cover. An error: the rule that deploys is not the one written, and
+//! `opentide validate` fails on it.
 
 use crate::{InjectedQuery, remap_span};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 use opentide_highlight::HighlightToken;
 
-/// A `query_folded_comment` warning for each `//` comment of `inj` that
+/// A `query_folded_comment` error for each `//` comment of `inj` that
 /// folding joined to a later source line holding more than another comment.
 pub(crate) fn folded_comments(
     source: &str,
@@ -56,7 +57,7 @@ pub(crate) fn folded_comments(
             shorten(lost)
         );
         out.push(
-            Diagnostic::warning(
+            Diagnostic::error(
                 codes::QUERY_FOLDED_COMMENT,
                 message,
                 span_to_range(source, comment),

@@ -110,6 +110,12 @@ source = "tests/golden/fixtures/vscode-workspace"
 about = "vscode with signal entities written without their stage or in the wrong case, which `migrate vocab-scope --apply` rewrites in place"
 edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - hostname  # no stage\n        - 'host::command line'\n    - name: Dump\n      entities: [Process, Host::Hostname]\n" }]
 
+[fixtures.vscode-folded-comment]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with the Sentinel query written as a folded `>-` block holding a `//` line, which comments out the filter after it (`query_folded_comment`, B16)"
+edits = [{ path = "detections/rules/custom-folder-rule.yaml", find = "    query: |\n      DeviceProcessEvents\n", replace = "    query: >-\n      DeviceProcessEvents\n      // procdump only\n" }]
+
 [fixtures.vscode-ambiguous]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -3190,3 +3196,22 @@ args = ["share", "push", "--changed", "--uuid", "00000000-0000-4000-8048-0000000
 fixtures = ["share-misp-push"]
 modes = ["plain", "json"]
 env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY = "<WS>" }
+
+# B16: a `//` line in a folded query comments out the rest of it.
+[[case]]
+command = "validate"
+variant = "folded-comment"
+args = ["validate"]
+fixtures = ["vscode-folded-comment"]
+
+[[case]]
+command = "lint"
+variant = "folded-comment"
+args = ["lint"]
+fixtures = ["vscode-folded-comment"]
+
+[[case]]
+command = "lint"
+variant = "folded-comment-strict"
+args = ["lint", "--strict"]
+fixtures = ["vscode-folded-comment"]

@@ -270,7 +270,7 @@ pub fn fixture(name: &str, ws: &Path) {
             pushed_from_cases(name, ws);
         }
         // #1139: the vscode workspace with the edits cases.toml declares.
-        "vscode-unscoped" | "vscode-ambiguous" => {
+        "vscode-unscoped" | "vscode-ambiguous" | "vscode-folded-comment" => {
             fixture("vscode", ws);
             apply_edits(name, ws);
         }

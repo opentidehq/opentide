@@ -496,7 +496,7 @@ objective:
     }
 
     #[test]
-    fn a_comment_that_folding_carries_over_the_next_lines_is_a_warning() {
+    fn a_comment_that_folding_carries_over_the_next_lines_is_an_error() {
         // Smoke test B16: `>-` folds the lines into one, so the `//` line
         // comments out every filter after it, and the deployed rule matches
         // every event.
@@ -510,7 +510,7 @@ objective:
                 .collect();
             assert_eq!(found.len(), 1, "{header}: {found:?}");
             let d = &found[0];
-            assert_eq!(d.severity, opentide_core::Severity::Warning);
+            assert_eq!(d.severity, opentide_core::Severity::Error);
             assert_eq!((d.range.start.line, d.range.start.character), (8, 6));
             assert_eq!((d.range.end.line, d.range.end.character), (8, 28));
             assert!(text_at(&source, d).starts_with("// only failed handles"));
