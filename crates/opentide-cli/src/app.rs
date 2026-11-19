@@ -570,10 +570,12 @@ impl Run<'_> {
             let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = Some(named.into());
             let mut outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
-            outcome.next_actions = vec![NextAction::new(
-                "opentide --help",
-                "--repo takes the folder with .opentide/ in it",
-            )];
+            let reason = if named == "--repo" {
+                "--repo takes the folder with .opentide/ in it"
+            } else {
+                "OPENTIDE_REPO_ROOT names the folder with .opentide/ in it, as --repo does"
+            };
+            outcome.next_actions = vec![NextAction::new("opentide --help", reason)];
             return self.emit(&outcome, &[], out, err);
         }
         if self.globals.quiet && self.globals.verbose {

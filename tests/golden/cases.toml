@@ -311,7 +311,7 @@ command = ""
 variant = "repo-root-env-missing"
 args = ["validate"]
 fixtures = ["none"]
-env = { OPENTIDE_REPO_ROOT = "/nonexistent" }
+env = { OPENTIDE_REPO_ROOT = "<TMP>/no-such-folder" }
 
 # --debug: logs on stderr.
 [[case]]

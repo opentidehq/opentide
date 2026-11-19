@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/agent/vscode-config-parse/config-parse
+---
+args: opentide validate
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+✗ .opentide/configurations/platforms/sentinel.toml:2:10: invalid table header
+tip: add --json for machine-readable output

@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/plain/vscode-config-parse/config-parse
+---
+args: opentide lint
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+✗ .opentide/configurations/platforms/sentinel.toml:2:10: invalid table header

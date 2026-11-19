@@ -649,7 +649,7 @@ warning[filename_mismatch]: Filename "hidden-downgrade-threat-0005-v2.yaml" does
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/lint.sarif · created 0644
-(1086719 bytes; long strings and the largest parts elided)
+(1087415 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -663,7 +663,7 @@ warning[filename_mismatch]: Filename "hidden-downgrade-threat-0005-v2.yaml" does
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 277288 bytes, sha256 0af47f051876833952307776ac02e143d7941e70f736a3002611d6bb4cd21d86>",
+          "rules": "<elided 277086 bytes, sha256 b9c43179dde1d41231bf42ccd6062a477761d53278ccedb2fdb4dd8cd58a3ce6>",
           "version": "0.28.1"
         }
       }
