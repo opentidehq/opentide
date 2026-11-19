@@ -130,36 +130,49 @@ pub fn received(uuid: &str) {
     pending().retain(|held| held.uuid.as_deref() != Some(uuid));
 }
 
-/// Puts back every pending file before the process ends at once, holding
-/// the lock while it does. Called from a signal's thread, where nothing
-/// logs: what it did is written on stderr.
+/// Set by [`restore_pending`]: the process is ending, and the promotion
+/// writes nothing more (it checks this under the pending lock, before each
+/// write).
+static ENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Puts back every pending file before the process ends at once, and stops
+/// the promotion from writing another: under the pending lock, which it
+/// releases before it writes on stderr, so a thread that holds stderr and
+/// waits for the pending files (or the reverse) never blocks it. Called
+/// from a signal's thread, where nothing logs: what it did is written on
+/// stderr.
 pub fn restore_pending() {
     use std::io::Write as _;
-    let mut held = pending();
+    let lines: Vec<String> = {
+        let mut held = pending();
+        ENDING.store(true, std::sync::atomic::Ordering::SeqCst);
+        held.drain(..)
+            .map(|file| {
+                let path = file.path.display();
+                match file.restore() {
+                    Ok(Restored::Done) => format!(
+                        "warning: {path}: status promotion undone, as no tenant received the rule"
+                    ),
+                    Ok(Restored::Missing) => format!(
+                        "warning: {path} was deleted during the deploy, so its status promotion \
+                         was not undone"
+                    ),
+                    Ok(Restored::Edited) => format!(
+                        "error: {path} changed during the deploy, so its status promotion was \
+                         not undone: no tenant received the rule; set its status back before \
+                         committing"
+                    ),
+                    Err(error) => format!(
+                        "error: could not undo the status promotion of {path}, which no tenant \
+                         received: {error}"
+                    ),
+                }
+            })
+            .collect()
+    };
     let mut err = std::io::stderr().lock();
-    for file in held.drain(..) {
-        let path = file.path.display();
-        let _ignored = match file.restore() {
-            Ok(Restored::Done) => writeln!(
-                err,
-                "warning: {path}: status promotion undone, as no tenant received the rule"
-            ),
-            Ok(Restored::Missing) => writeln!(
-                err,
-                "warning: {path} was deleted during the deploy, so its status promotion was not \
-                 undone"
-            ),
-            Ok(Restored::Edited) => writeln!(
-                err,
-                "error: {path} changed during the deploy, so its status promotion was not \
-                 undone: no tenant received the rule; set its status back before committing"
-            ),
-            Err(error) => writeln!(
-                err,
-                "error: could not undo the status promotion of {path}, which no tenant \
-                 received: {error}"
-            ),
-        };
+    for line in lines {
+        let _ignored = writeln!(err, "{line}");
     }
 }
 
@@ -348,6 +361,12 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> (Vec<Promoted>, Result<(
             // Pending before it is written, under the lock: a signal waits
             // for the write, then puts the file back.
             let mut held = pending();
+            // The process is ending ([`restore_pending`] ran): nothing more
+            // is written, and what was is back.
+            if ENDING.load(std::sync::atomic::Ordering::SeqCst) {
+                ended = Some(Stop::Failed("interrupted".to_owned()));
+                break;
+            }
             held.push(written.clone());
             // `_write_atomically`: through a temporary file beside it, the
             // rule's permission bits kept (#987).

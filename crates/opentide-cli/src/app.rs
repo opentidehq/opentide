@@ -2408,8 +2408,7 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
 pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
     let _ignored = ctrlc::set_handler(move || {
-        if let Some(code) = on_interrupt(&interrupt, &mut std::io::stderr().lock()) {
-            crate::commands::deploy_promote::restore_pending();
+        if let Some(code) = on_ctrl_c(&interrupt) {
             std::process::exit(code);
         }
         let interrupt = interrupt.clone();
@@ -2419,6 +2418,20 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
             std::process::exit(interrupt.report(&mut std::io::stderr().lock()));
         });
     });
+}
+
+/// What one Ctrl-C does short of ending the process: [`on_interrupt`] on
+/// stderr, then, when the process ends now, a deploy's pending promoted
+/// files put back ([`crate::commands::deploy_promote::restore_pending`]);
+/// the exit code then, `None` on a first Ctrl-C. stderr is released before
+/// the pending files are taken: a run that holds them and logs waits for
+/// stderr, so taking both in the other order could block both threads.
+pub fn on_ctrl_c(interrupt: &Interrupt) -> Option<i32> {
+    let code = on_interrupt(interrupt, &mut std::io::stderr().lock());
+    if code.is_some() {
+        crate::commands::deploy_promote::restore_pending();
+    }
+    code
 }
 
 /// One Ctrl-C: the first tells the jobs and returns `None` (the run stops
