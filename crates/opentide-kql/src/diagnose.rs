@@ -833,9 +833,7 @@ mod tests {
     #[test]
     fn a_parameter_scope_ends_with_its_function() {
         assert_eq!(
-            unknown_tables(
-                "let f = (T:(*)) { T };\nlet g = (U:(*)) { T | union U };\nT | union U"
-            ),
+            unknown_tables("let f = (T:(*)) { T };\nlet g = (U:(*)) { T | union U };\nT | union U"),
             ["T", "T", "U"]
         );
         assert_eq!(
