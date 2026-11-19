@@ -34,6 +34,7 @@ fn merge_script() -> String {
         docs_output: "docs".into(),
         rules_folder: "objects/rules".into(),
         credentials: IndexMap::new(),
+        sharing_credentials: Vec::new(),
     })
     .unwrap();
     let document = opentide_schema::node::load(&pipeline).unwrap();
