@@ -631,7 +631,11 @@ fn deploy(
             Err(message) => return failed(&message),
         }
     };
-    if promotes(args, &runs, cx.env) {
+    // Promotion rewrites the promoted rules' status on disk; the workspace
+    // read before it still holds the old status, which routes those rules
+    // to no RELEASE tenant and compiles them with the old status.
+    let reopened;
+    let workspace = if promotes(args, &runs, cx.env) {
         let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
         let debug = cx.debug || cx.env.opentide_debug();
         let local = if debug {
@@ -648,7 +652,24 @@ fn deploy(
         if let Err(stop) = super::deploy_promote::run(&promotion, &cx.lines) {
             return super::deploy_promote::stopped(&stop);
         }
-    }
+        // Read the files the promotion may have rewritten again (a clone
+        // shares every other parse), so the plan and the payloads see the
+        // promoted status.
+        let changes: Vec<opentide_workspace::Change> = scope
+            .files
+            .iter()
+            .chain(&local)
+            .map(opentide_workspace::Change::changed)
+            .collect();
+        let mut promoted = workspace.clone();
+        if let Err(error) = promoted.invalidate(&changes) {
+            return failed(&error.to_string());
+        }
+        reopened = promoted;
+        &reopened
+    } else {
+        workspace
+    };
     let enabled = plan::enabled_with(&owned.config, &crate::plugins::plugin_ids());
     let read = |path: &Path| -> Result<opentide_schema::node::Node, String> {
         let bytes = fs.read(path).map_err(|error| error.to_string())?;
