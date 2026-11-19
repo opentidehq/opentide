@@ -659,19 +659,19 @@ pub(crate) fn prepare(
             branch
         }
     };
+    // Every enabled platform's tenants: the jobs that reach a tenant map
+    // these from the CI secret store, whatever names they chose.
     let mut credentials = IndexMap::new();
     for platform in &platforms {
-        if ci::query_validation_platforms().contains(&platform.as_str()) {
-            let file = root
-                .join(".opentide/configurations/platforms")
-                .join(format!("{platform}.toml"));
-            let names = files::read_text(stage, &file)
-                .ok()
-                .flatten()
-                .map(|text| ci::tenant_variables(&text))
-                .unwrap_or_default();
-            credentials.insert(platform.clone(), names);
-        }
+        let file = root
+            .join(".opentide/configurations/platforms")
+            .join(format!("{platform}.toml"));
+        let names = files::read_text(stage, &file)
+            .ok()
+            .flatten()
+            .map(|text| ci::tenant_variables(&text))
+            .unwrap_or_default();
+        credentials.insert(platform.clone(), names);
     }
     let options = ci::Options {
         provider: args.provider,
