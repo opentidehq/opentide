@@ -442,40 +442,6 @@ exit: 1
         "yaml_line": 41
       },
       {
-        "code": "kql_parse_error",
-        "column": 33,
-        "context": {
-          "language": "kql",
-          "platform": "sentinel",
-          "position": {
-            "column": 33,
-            "end_column": 34,
-            "end_line": 45,
-            "line": 45
-          },
-          "source": "engine"
-        },
-        "end_column": 34,
-        "end_line": 45,
-        "explain": "opentide explain kql_parse_error",
-        "field_path": [
-          "configurations",
-          "sentinel",
-          "query"
-        ],
-        "file_path": "<WS>/objects/rules/covert-exfiltration-rule-0157.yaml",
-        "fix": null,
-        "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
-        "line": 45,
-        "message": "KQL syntax error: expected a name",
-        "object_type": "rule",
-        "object_uuid": "7e3599fb-f2cc-46e9-86f1-e82bbf62a6ee",
-        "path": "objects/rules/covert-exfiltration-rule-0157.yaml",
-        "severity": "error",
-        "suggestion": null,
-        "yaml_line": 44
-      },
-      {
         "code": "falco_output_syntax",
         "column": 30,
         "context": {
@@ -598,40 +564,6 @@ exit: 1
         "severity": "error",
         "suggestion": "\"cannot run\"",
         "yaml_line": 47
-      },
-      {
-        "code": "kql_parse_error",
-        "column": 13,
-        "context": {
-          "language": "kql",
-          "platform": "sentinel",
-          "position": {
-            "column": 13,
-            "end_column": 14,
-            "end_line": 49,
-            "line": 49
-          },
-          "source": "engine"
-        },
-        "end_column": 14,
-        "end_line": 49,
-        "explain": "opentide explain kql_parse_error",
-        "field_path": [
-          "configurations",
-          "sentinel",
-          "query"
-        ],
-        "file_path": "<WS>/objects/rules/covert-tunnel-rule-0170.yaml",
-        "fix": null,
-        "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
-        "line": 49,
-        "message": "KQL syntax error: expected a name",
-        "object_type": "rule",
-        "object_uuid": "284f1a57-9937-4de4-8cdf-0a3a9b4747e4",
-        "path": "objects/rules/covert-tunnel-rule-0170.yaml",
-        "severity": "error",
-        "suggestion": null,
-        "yaml_line": 48
       },
       {
         "code": "spl_search_operator",
@@ -1973,40 +1905,6 @@ exit: 1
         "yaml_line": 48
       },
       {
-        "code": "kql_parse_error",
-        "column": 13,
-        "context": {
-          "language": "kql",
-          "platform": "sentinel",
-          "position": {
-            "column": 13,
-            "end_column": 14,
-            "end_line": 75,
-            "line": 75
-          },
-          "source": "engine"
-        },
-        "end_column": 14,
-        "end_line": 75,
-        "explain": "opentide explain kql_parse_error",
-        "field_path": [
-          "configurations",
-          "sentinel",
-          "query"
-        ],
-        "file_path": "<WS>/objects/rules/remote-dropper-rule-0140.yaml",
-        "fix": null,
-        "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
-        "line": 75,
-        "message": "KQL syntax error: expected a name",
-        "object_type": "rule",
-        "object_uuid": "602ab076-b4a0-4a2b-b07f-11f07e52f005",
-        "path": "objects/rules/remote-dropper-rule-0140.yaml",
-        "severity": "error",
-        "suggestion": null,
-        "yaml_line": 74
-      },
-      {
         "code": "eql_not_boolean",
         "column": 21,
         "context": {
@@ -3211,8 +3109,8 @@ exit: 1
   "schema_version": 1,
   "status": "failed",
   "summary": {
-    "errors": 102,
-    "files": 90,
+    "errors": 99,
+    "files": 87,
     "fixable": 0,
     "objects": 872,
     "queries": 2025,

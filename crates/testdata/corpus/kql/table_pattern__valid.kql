@@ -1,0 +1,3 @@
+// prod:table_pattern valid
+let events = union isfuzzy=true Security*, *Logs, SigninLogs | union withsource=Source Sign*, SecurityAlert;
+search in (Sec*, SigninLogs) "mimikatz" | take 10

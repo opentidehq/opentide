@@ -441,6 +441,8 @@ impl<'a> Pass<'a> {
                 && literal_kind(&arg) == Some(K::STRING)
             {
                 let text = self.text(&arg);
+                // An obfuscated name (`table(h"SigninLogs")`) names the table too.
+                let text = text.strip_prefix(['h', 'H']).unwrap_or(text);
                 let table = text.trim_matches(|c| c == '"' || c == '\'' || c == '@');
                 return self.named_source(table, scope).unwrap_or_else(Schema::open);
             }
@@ -526,6 +528,9 @@ impl<'a> Pass<'a> {
                     }
                 }
                 K::FUNCTION_CALL => legs.push(self.call_source(&child, scope)),
+                // The tables a pattern matches are the workspace's: their
+                // columns are not known here.
+                K::TABLE_PATTERN => legs.push(Schema::open()),
                 _ => {}
             }
         }
