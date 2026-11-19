@@ -1913,9 +1913,11 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
     let (code, out, err) = cli(ws.path(), &argv, &push());
     let text = std::fs::read_to_string(&rule).unwrap();
     assert!(text.contains("    status: PRODUCTION\n"), "{text}");
-    // The promoted rule goes to the tenant, which does not resolve here.
+    // The promoted rule goes to the tenant, which does not resolve here:
+    // the failure is that tenant's own.
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("\"tenant\":\"lab\""), "{out}");
+    assert!(out.contains("\"failures\":[{"), "{out}");
 }
 
 /// The rule a RELEASE push promotes is deployed to the tenants that take
@@ -2028,9 +2030,20 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
         "--strategy",
         "RELEASE",
     ];
-    let (_, out, err) = cli(ws.path(), &argv, &env);
-    // The promoted rule is routed to the tenant (which has no token here).
-    assert!(out.contains("\"tenant\":\"lab\""), "{out}{err}");
+    let (code, out, err) = cli(ws.path(), &argv, &env);
+    // The promoted rule is routed to the tenant, which has no token here:
+    // the tenant's own refusal fails the run.
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(
+        out.contains("\"tenant\":\"lab\"") && out.contains("SPLUNK_TOKEN"),
+        "{out}{err}"
+    );
+    // Whole-folder promotion rewrites s.yaml too, but only the files the
+    // push changed are deployed (#1653 tracks that gap).
+    assert!(
+        !out.contains("00000000-0000-4000-8047-000000000903"),
+        "{out}"
+    );
     let read = |name: &str| std::fs::read_to_string(ws.path().join("objects/rules").join(name));
     let changed = read("r.yaml").unwrap();
     assert!(changed.contains("    status: PRODUCTION\n"), "{changed}");

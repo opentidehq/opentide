@@ -652,12 +652,20 @@ fn deploy(
         if let Err(stop) = super::deploy_promote::run(&promotion, &cx.lines) {
             return super::deploy_promote::stopped(&stop);
         }
-        // Read it again, so the plan and the payloads see the promoted status.
-        let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-        reopened = match super::open(options) {
-            Ok(workspace) => workspace,
-            Err(message) => return failed(&message),
-        };
+        // Read the files the promotion may have rewritten again (a clone
+        // shares every other parse), so the plan and the payloads see the
+        // promoted status.
+        let changes: Vec<opentide_workspace::Change> = scope
+            .files
+            .iter()
+            .chain(&local)
+            .map(opentide_workspace::Change::changed)
+            .collect();
+        let mut promoted = workspace.clone();
+        if let Err(error) = promoted.invalidate(&changes) {
+            return failed(&error.to_string());
+        }
+        reopened = promoted;
         &reopened
     } else {
         workspace
