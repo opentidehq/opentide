@@ -1076,8 +1076,8 @@ fn find_project(p: &mut P<'_>) {
     let smart = p.nth(1) == K::MINUS
         && p.nth(2) == K::IDENT
         && p.nth_text(2) == "smart"
-        && touching(p, 0, 1)
-        && touching(p, 1, 2);
+        && p.tokens_touch(0, 1)
+        && p.tokens_touch(1, 2);
     p.bump();
     if smart {
         p.bump();
@@ -1086,11 +1086,6 @@ fn find_project(p: &mut P<'_>) {
         list(p, find_column);
     }
     p.done(m, K::FIND_PROJECT);
-}
-
-/// Whether the tokens `a` and `b` ahead touch, no blank or comment between.
-fn touching(p: &P<'_>, a: usize, b: usize) -> bool {
-    matches!((p.nth_range(a), p.nth_range(b)), (Some(a), Some(b)) if a.end() == b.start())
 }
 
 /// `name` or `name: type`, the type a scalar one.

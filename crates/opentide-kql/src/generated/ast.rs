@@ -4928,7 +4928,7 @@ impl NotExpr {
     }
 }
 
-/// `ComparisonExpr = lhs:Expr (op:'cmp_op' | ('matches' 'regex')) rhs:Expr`
+/// `ComparisonExpr = lhs:Expr (op:('cmp_op' | ':') | ('matches' 'regex')) rhs:Expr`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ComparisonExpr {
     syntax: SyntaxNode,
@@ -4954,7 +4954,7 @@ impl ComparisonExpr {
     }
     /// The token child.
     pub fn op(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![cmp_op])
+        support::token_in(&self.syntax, &[T![cmp_op], T![:]])
     }
     /// The token child.
     pub fn matches_token(&self) -> Option<SyntaxToken> {
@@ -8791,7 +8791,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::COMPARISON_EXPR as u16,
         name: "ComparisonExpr",
-        text: "lhs:Expr (op:'cmp_op' | ('matches' 'regex')) rhs:Expr",
+        text: "lhs:Expr (op:('cmp_op' | ':') | ('matches' 'regex')) rhs:Expr",
         rule: Rule::Seq(&[
             Rule::Alt(&[
                 Rule::Kind(SyntaxKind::OR_EXPR as u16),
@@ -8813,7 +8813,7 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
             ]),
             Rule::Alt(&[
-                Rule::Kind(T![cmp_op] as u16),
+                Rule::Alt(&[Rule::Kind(T![cmp_op] as u16), Rule::Kind(T![:] as u16)]),
                 Rule::Seq(&[Rule::Kind(T![matches] as u16), Rule::Kind(T![regex] as u16)]),
             ]),
             Rule::Alt(&[

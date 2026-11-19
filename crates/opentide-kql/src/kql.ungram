@@ -334,7 +334,7 @@ OrExpr = Expr ('or' Expr)*
 AndExpr = Expr ('and' Expr)*
 NotExpr = 'not' operand:Expr
 // `a == b`, `a has "x"`, `a matches regex "x"`, `a !~ b`.
-ComparisonExpr = lhs:Expr (op:'cmp_op' | 'matches' 'regex') rhs:Expr
+ComparisonExpr = lhs:Expr (op:('cmp_op' | ':') | 'matches' 'regex') rhs:Expr
 // `a in (1, 2)`, `a !in~ (T | project x)`, `a has_any (...)`.
 InExpr = lhs:Expr op:('in' | 'set_op') set:ExpressionList
 BetweenExpr = lhs:Expr op:'between_op' range:Range

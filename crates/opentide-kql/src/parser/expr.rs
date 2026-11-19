@@ -83,7 +83,7 @@ fn not_expr(p: &mut P<'_>) -> Option<CompletedMarker> {
 /// `a == b`, `a matches regex b`, `a in (..)`, `a between (x .. y)`: one
 /// operator, not a chain.
 fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
-    let lhs = additive(p)?;
+    let lhs = colon(p)?;
     let (kind, shape) = match p.current() {
         K::CMP_OP => (K::COMPARISON_EXPR, Shape::Operand),
         K::MATCHES_KW => (K::COMPARISON_EXPR, Shape::Matches),
@@ -95,7 +95,7 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     let m = p.precede(lhs);
     p.bump();
     match shape {
-        Shape::Operand => operand_or_error(p, additive),
+        Shape::Operand => operand_or_error(p, colon),
         Shape::Matches => {
             p.expect(K::REGEX_KW);
             operand_or_error(p, additive);
@@ -104,6 +104,20 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
         Shape::Range => range(p),
     }
     Some(p.done(m, kind))
+}
+
+/// `Column : "value"`, a search term: Kusto.Language reads `:` anywhere an
+/// expression goes, binding tighter than `==` (`a : "x" == true`) and once
+/// (`a : b : c` is an error).
+fn colon(p: &mut P<'_>) -> Option<CompletedMarker> {
+    let lhs = additive(p)?;
+    if !p.at(K::COLON) {
+        return Some(lhs);
+    }
+    let m = p.precede(lhs);
+    p.bump();
+    operand_or_error(p, additive);
+    Some(p.done(m, K::COMPARISON_EXPR))
 }
 
 enum Shape {
