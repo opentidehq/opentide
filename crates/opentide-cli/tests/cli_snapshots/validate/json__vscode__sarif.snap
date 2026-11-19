@@ -595,7 +595,7 @@ exit: 1
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/validate.sarif · created 0644
-(1014972 bytes; long strings and the largest parts elided)
+(1018558 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -635,7 +635,7 @@ exit: 1
             "opentide/v1": "b441baeacd087661b05b01e48688e14d6db09199f077345c600a0b7e43cb51a5"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -667,7 +667,7 @@ exit: 1
             "opentide/v1": "686ab1f18c38609c25f9de4871a25c2dc535ae9e9574fead69aca0c2d4b5ebec"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -699,7 +699,7 @@ exit: 1
             "opentide/v1": "bc5d05e90d1ac4581768379f93f74494398ec18bf2355afc179795caa07bab72"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -731,7 +731,7 @@ exit: 1
             "opentide/v1": "3f9f7e87d118643df703f62d5b064d90e12eb6593468eb0d8f668c8e131bbf3e"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -763,7 +763,7 @@ exit: 1
             "opentide/v1": "7f4f22a76d2022e6036682201d0106e9899b1d3637c4b6c1cca761af193ef5f8"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -795,7 +795,7 @@ exit: 1
             "opentide/v1": "6f8d4a3b9686b339065f2989571707385c45d96c7b2865041817ee341830c711"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -827,7 +827,7 @@ exit: 1
             "opentide/v1": "ce27db057d7b42f67136a552a521c779880434d8b3c633e9d800c48b8679c515"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -859,7 +859,7 @@ exit: 1
             "opentide/v1": "ced771cbe643ade8148536e38b006e9c5e9e545b2ac6eec3fd1b6ea65cdd7cf7"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -891,7 +891,7 @@ exit: 1
             "opentide/v1": "8e6778004faf7d8ddf8f33d5228133ea2559ff5c46f6f67bf1243b98b2412f66"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -923,7 +923,7 @@ exit: 1
             "opentide/v1": "19441adf66ea44cf709387c934c4eb234dce696cf8d32da4e4c82ad8b314b8e2"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -955,7 +955,7 @@ exit: 1
             "opentide/v1": "2e4bd88c990e114fff2bfb1e87caebf17587fcbcd88a223217278d2b80939f70"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -987,7 +987,7 @@ exit: 1
             "opentide/v1": "7e9d8bc4c21780bf05d943326eec2190b69993440c3946c4141aee33df0952fd"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -1019,7 +1019,7 @@ exit: 1
             "opentide/v1": "c04c886dba9acd3286394ec6fb7d9b7472439cb325ce855430325038941902f2"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -1051,7 +1051,7 @@ exit: 1
             "opentide/v1": "ed9d4f5fde351a8d94df4eee4b15b18dd8cd77de42dc47d6db5be5facb462a00"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "fixes": [
@@ -1111,7 +1111,7 @@ exit: 1
             "opentide/v1": "454734f14ca20aef7a8fd8660f7a7009e27bfbd0a770d368d695e6e84e80db6e"
           },
           "ruleId": "vocab_unknown",
-          "ruleIndex": 402
+          "ruleIndex": 403
         },
         {
           "level": "error",
@@ -1143,7 +1143,7 @@ exit: 1
             "opentide/v1": "a77db4ccb8c3388d784fd4d9a438a6840ee217da15a6d67514f0c35fb8061216"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -1175,7 +1175,7 @@ exit: 1
             "opentide/v1": "693fa98315df709263e5a0854df6139b653e77b0e5f3850e28cfb88d5421bc77"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -1207,7 +1207,7 @@ exit: 1
             "opentide/v1": "8872d5aa2873b3b8ebd75b7020b9c9c73820561aaa76008b7f47b576814abdc1"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "error",
@@ -1239,7 +1239,7 @@ exit: 1
             "opentide/v1": "d27b34a07aa0a1a6dc23d2158678732165d6bb6c534edc850abff355fc1c4083"
           },
           "ruleId": "schema_validation",
-          "ruleIndex": 356
+          "ruleIndex": 357
         },
         {
           "level": "warning",
@@ -1310,7 +1310,7 @@ exit: 1
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 277288 bytes, sha256 0af47f051876833952307776ac02e143d7941e70f736a3002611d6bb4cd21d86>",
+          "rules": "<elided 277928 bytes, sha256 d4898545fd826b7bf688adbea4eebda7ca391966289a8b911e3586f804f22915>",
           "version": "0.28.1"
         }
       }

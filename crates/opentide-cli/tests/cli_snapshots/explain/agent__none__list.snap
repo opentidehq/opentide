@@ -355,6 +355,7 @@ promotion_target_unknown                  `deployment.toml` `[promotion] promoti
 proxy                                     The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection.
 python_version                            The Python interpreter running opentide.
 query_check_timeout                       `validate query --live` failed because a tenant did not answer a query's check within the check timeout.
+query_folded_comment                      A `//` comment in a query that YAML folds into one line comments out the lines after it.
 recommended_field_missing                 A field the templates ask for is missing; `opentide validate` accepts the object without it.
 reference_not_found                       `--objective` or `--threat` names a UUID that no object in the catalogue carries.
 retired_configuration_file                A file or folder under `.opentide/configurations/` that opentide does not read.
@@ -473,6 +474,6 @@ yaral_unfiltered_event                    An event variable has no equality on `
 yaral_unknown_function                    The function is not in Google's YARA-L function list, or it takes a different number of arguments.
 yaral_unknown_udm_field                   The field path is not in the Unified Data Model.
 yaral_window_bound                        `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
-✓ 467 diagnostic codes
+✓ 468 diagnostic codes
 
 ━━━ stderr · empty

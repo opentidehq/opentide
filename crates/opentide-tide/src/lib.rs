@@ -19,6 +19,7 @@
 mod bitdefender;
 mod elastic;
 mod falco;
+mod folded;
 mod google_secops;
 mod injection;
 mod intel;
@@ -937,6 +938,7 @@ fn analyze_injections(
                     .map(|d| remap_diagnostic(&lines, &inner, &inj, d)),
             );
             diagnostics.extend(extra);
+            diagnostics.extend(folded::folded_comments(source, &inj, &query_tokens));
         }
         let tokens = query_tokens
             .iter()

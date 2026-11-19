@@ -669,6 +669,8 @@ exit: 0
 ␛[1mpython_version                            ␛[0mThe Python interpreter running opentide.
 ␛[1mquery_check_timeout                       ␛[0m`validate query --live` failed because a tenant did not
                                           answer a query's check within the check timeout.
+␛[1mquery_folded_comment                      ␛[0mA `//` comment in a query that YAML folds into one line
+                                          comments out the lines after it.
 ␛[1mrecommended_field_missing                 ␛[0mA field the templates ask for is missing; `opentide
                                           validate` accepts the object without it.
 ␛[1mreference_not_found                       ␛[0m`--objective` or `--threat` names a UUID that no object in
@@ -913,6 +915,6 @@ exit: 0
 ␛[1myaral_unknown_udm_field                   ␛[0mThe field path is not in the Unified Data Model.
 ␛[1myaral_window_bound                        ␛[0m`window_start` or `window_end` is used in `events`, or in
                                           a rule or search with no `match` window.
-␛[1m␛[32m✓␛[0m 467 diagnostic codes
+␛[1m␛[32m✓␛[0m 468 diagnostic codes
 
 ━━━ stderr · empty

@@ -265,7 +265,7 @@ Plain `lint` and `validate` still pass, so a draft can be committed (a placehold
 
 ### Queries
 
-The `queries` check runs the analysis engine that [`opentide validate`](./validate.md#queries) runs, and reports what `validate` leaves out: the engine's warnings and notes. A query the platform would reject is an error, and `validate`'s; what lint reports would deploy, but reads as a slow query shape (`kql_where_not_first`, `spl_wildcard`), a deprecated command, or an Elastic block setting that misses events (`lookback_zero`, `risk_band`). Each finding prints as the engine frames it, at its place in the rule file, with the query coloured at a terminal; its help links the language's reference, and `opentide explain <code>` describes it.
+The `queries` check runs the analysis engine that [`opentide validate`](./validate.md#queries) runs, and reports what `validate` leaves out: the engine's warnings and notes. A query the platform would reject is an error, and `validate`'s; what lint reports would deploy, but reads as a slow query shape (`kql_where_not_first`, `spl_wildcard`), a deprecated command, a `//` comment that a folded (`>`) query carries over the lines after it (`query_folded_comment`), or an Elastic block setting that misses events (`lookback_zero`, `risk_band`). Each finding prints as the engine frames it, at its place in the rule file, with the query coloured at a terminal; its help links the language's reference, and `opentide explain <code>` describes it.
 
 ```text illustrative
 warning[kql_where_not_first]: `where` is not the first operator after the table reference; filter before later operators

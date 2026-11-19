@@ -148,6 +148,7 @@ pub fn lint_owned(code: &str) -> bool {
             .any(|(prefix, _, _)| code.starts_with(prefix))
         || ELASTIC_ADVISORIES.contains(&code)
         || code == "sysdig_list_self_reference"
+        || code == opentide_core::codes::QUERY_FOLDED_COMMENT
         || DECLARED_DATASET_CODES.contains(&code)
 }
 
@@ -1159,6 +1160,8 @@ mod tests {
             assert!(lint_owned(code), "{code}");
         }
         assert!(lint_owned("sysdig_list_self_reference"));
+        // B16: the folded-comment warning is lint's.
+        assert!(lint_owned(opentide_core::codes::QUERY_FOLDED_COMMENT));
         assert!(!lint_owned("vocab_unknown"));
         // A Graylog finding names Graylog's search syntax page.
         assert!(

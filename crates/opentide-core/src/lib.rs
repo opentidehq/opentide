@@ -722,6 +722,9 @@ pub mod codes {
     pub const KQL_UNSCOPED_UNION: &str = "kql_unscoped_union";
     pub const KQL_WILDCARD_TABLE: &str = "kql_wildcard_table";
     pub const KQL_JOIN_SUMMARIZE_BEFORE_PROJECT: &str = "kql_join_summarize_before_project";
+    /// A `//` comment in a query that YAML folds into one line, so the
+    /// comment swallows the lines after it.
+    pub const QUERY_FOLDED_COMMENT: &str = "query_folded_comment";
     pub const SPL_UNKNOWN_COMMAND: &str = "spl_unknown_command";
     pub const SPL_PARSE_ERROR: &str = "spl_parse_error";
     pub const SPL_WILDCARD: &str = "spl_wildcard";
@@ -1062,6 +1065,7 @@ pub mod codes {
         KQL_UNSCOPED_UNION,
         KQL_WILDCARD_TABLE,
         KQL_JOIN_SUMMARIZE_BEFORE_PROJECT,
+        QUERY_FOLDED_COMMENT,
         SPL_UNKNOWN_COMMAND,
         SPL_PARSE_ERROR,
         SPL_WILDCARD,
@@ -1389,6 +1393,9 @@ pub mod codes {
             KQL_WILDCARD_TABLE => "A wildcard table name reads every matching table.",
             KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
                 "join or summarize runs before project, so it carries every column."
+            }
+            QUERY_FOLDED_COMMENT => {
+                "A `//` comment in a query that YAML folds into one line comments out the lines after it."
             }
             SPL_UNKNOWN_COMMAND => {
                 "The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command."
