@@ -127,14 +127,14 @@ impl HttpClient {
         let tenant = self.label.tenant.clone();
         let address = error::origin(url);
         match failure {
-            TransportFailure::Connect { reason } | TransportFailure::Unreachable { reason } => {
-                ConnectorError::Unreachable {
-                    platform,
-                    tenant,
-                    address,
-                    reason,
-                }
-            }
+            TransportFailure::Connect { reason }
+            | TransportFailure::CertificateRefused { reason }
+            | TransportFailure::Unreachable { reason } => ConnectorError::Unreachable {
+                platform,
+                tenant,
+                address,
+                reason,
+            },
             TransportFailure::Timeout => ConnectorError::Timeout {
                 platform,
                 tenant,
@@ -160,38 +160,76 @@ impl HttpClient {
         request: Request,
         cancel: &CancellationToken,
     ) -> Result<Response, ConnectorError> {
+        self.send_or_unsent(request, cancel)
+            .await
+            .map_err(|failed| failed.error)
+    }
+
+    /// [`send`](Self::send), saying of a failure whether the request never
+    /// left ([`SendFailure::unsent`]): its connection could not be made
+    /// (refused, DNS, the connect timeout, a proxy that would not connect)
+    /// or the tenant's certificate was refused, so the tenant did nothing
+    /// with it. A connection dropped while the request was sent is not
+    /// unsent: the tenant may have taken it. A platform that never sends a
+    /// write twice reads it to tell an unreachable tenant from a write that
+    /// may have happened.
+    ///
+    /// # Errors
+    ///
+    /// [`SendFailure`]: the [`ConnectorError`] [`send`](Self::send) returns,
+    /// and whether the request was never sent.
+    pub async fn send_or_unsent(
+        &self,
+        request: Request,
+        cancel: &CancellationToken,
+    ) -> Result<Response, SendFailure> {
+        let failed = |error: ConnectorError| SendFailure {
+            error,
+            unsent: false,
+        };
         // `biased`: a connection cancelled before (or while) a step is
         // ready is interrupted, never answered by whichever branch tokio
         // happens to poll first.
         let _permit = tokio::select! {
             biased;
-            () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
-            permit = self.permits.acquire() => permit.map_err(|_| ConnectorError::Cancelled)?,
+            () = cancel.cancelled() => return Err(failed(ConnectorError::Cancelled)),
+            permit = self.permits.acquire() => permit.map_err(|_| failed(ConnectorError::Cancelled))?,
         };
         let url = request.url().clone();
         let idempotent = request.is_idempotent();
         let retry = &self.settings.retry;
         // A request is cloned only for an attempt a retry may follow; the
         // last attempt takes it.
+        let unsent = |failure: TransportFailure| SendFailure {
+            unsent: matches!(
+                failure,
+                TransportFailure::Connect { .. } | TransportFailure::CertificateRefused { .. }
+            ),
+            error: self.error(failure, &url),
+        };
         for retried in 0..retry.max_retries {
-            let outcome = self.attempt(request.clone(), cancel).await?;
+            let outcome = self
+                .attempt(request.clone(), cancel)
+                .await
+                .map_err(failed)?;
             let Some(delay) = retry.wait_for(
                 idempotent,
                 retry_outcome(&outcome),
                 retried,
                 jiff::Timestamp::now(),
             ) else {
-                return outcome.map_err(|failure| self.error(failure, &url));
+                return outcome.map_err(unsent);
             };
             tokio::select! {
                 biased;
-                () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
+                () = cancel.cancelled() => return Err(failed(ConnectorError::Cancelled)),
                 () = tokio::time::sleep(delay) => {}
             }
         }
         self.attempt(request, cancel)
-            .await?
-            .map_err(|failure| self.error(failure, &url))
+            .await
+            .map_err(failed)?
+            .map_err(unsent)
     }
 
     /// One attempt at *request*, stopped with [`ConnectorError::Cancelled`]
@@ -231,6 +269,16 @@ impl HttpClient {
             .into_body()
             .map_err(|failure| self.error(failure, &url))
     }
+}
+
+/// A request [`HttpClient::send_or_unsent`] could not complete.
+#[derive(Debug)]
+pub struct SendFailure {
+    /// Why, as [`HttpClient::send`] says it.
+    pub error: ConnectorError,
+    /// The request never left: its connection could not be made, or the
+    /// tenant's certificate was refused, so the tenant did nothing with it.
+    pub unsent: bool,
 }
 
 /// What a retry policy reads of an attempt.

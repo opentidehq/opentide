@@ -289,3 +289,28 @@ fn a_2xx_json_answer_an_error_quotes_never_shows_the_token() {
     assert!(context.contains("ApiToken ***"), "{context}");
     assert!(!context.contains(TOKEN), "{context}");
 }
+
+/// A PowerQuery answered 401 is the API token's refusal, not the query's:
+/// `validate query --live` fails the tenant on it (#1658, E8). Any other
+/// refusal stays the query's.
+#[test]
+fn a_powerquery_answered_401_is_the_tokens_refusal() {
+    let window = TimeWindow::check(jiff::Timestamp::from_second(1_800_000_000).unwrap());
+    let request = QueryRequest::new("src.x = 1", "powerquery", window);
+    let reply = ResponseTemplate::new(401)
+        .set_body_json(json!({"errors": [{"title": "Authentication Failed"}]}));
+    let api = server("POST", QUERY_PATH, reply);
+    let error = with_tenant(&api, |cx| wait(SentinelOne.run(cx, &request))).unwrap_err();
+    let ConnectorError::Authentication { message, .. } = &error else {
+        panic!("{error:?}")
+    };
+    assert_eq!(
+        message,
+        "SentinelOne refused the API token on s1 (HTTP 401): Authentication Failed"
+    );
+    let reply = ResponseTemplate::new(400)
+        .set_body_json(json!({"errors": [{"detail": "unknown field src.x"}]}));
+    let api = server("POST", QUERY_PATH, reply);
+    let error = with_tenant(&api, |cx| wait(SentinelOne.run(cx, &request))).unwrap_err();
+    assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
+}

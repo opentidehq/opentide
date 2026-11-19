@@ -9,5 +9,5 @@ exit: 1
 
 ━━━ stderr
 error: Query rejected · detail: Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant *** · reason: Carbon Black Cloud refused the query on ***: ensure each term has a value, and escape slashes, colons and spaces
-  ␛[1m␛[32m✓␛[0m  ␛[1mCarbon Black Cloud Enterprise EDR queries␛[0m  ␛[2m2 rules␛[0m ␛[2m<SECONDS>␛[0m
+  ␛[1m␛[31m✗␛[0m  ␛[1mCarbon Black Cloud Enterprise EDR queries␛[0m  ␛[2m2 rules␛[0m ␛[2m<SECONDS>␛[0m
 ␛[1m␛[31merror:␛[0m Queries rejected on carbon_black_cloud · 2 checked on 1 tenant
