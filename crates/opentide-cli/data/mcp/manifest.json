@@ -269,7 +269,7 @@
     },
     {
       "name": "deploy_rule",
-      "description": "Preview one rule's deployment to a platform. dry_run false deploys it for real.\n\nReturns {action: dry-run | deploy | error, rule_id, status, dry_run, platform,\nmessage}. When nothing was deployed, action is error and status is failed,\nnot_found or unknown_platform. Keep dry_run true unless a person asks for a\nreal deployment: people review, merge and deploy.\n",
+      "description": "Preview one rule's deployment to a platform. dry_run false deploys it for real.\n\nReturns {action: dry-run | deploy | error, rule_id, status, dry_run, platform,\nmessage}. When nothing was deployed, action is error and status is failed,\nerror (the rule has no block or status for the platform), not_found or\nunknown_platform; a dry run says what the real call would. Keep dry_run true unless a person asks for a\nreal deployment: people review, merge and deploy.\n",
       "inputSchema": {
         "properties": {
           "uuid": {

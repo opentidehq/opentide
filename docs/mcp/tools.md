@@ -387,7 +387,7 @@ Offline, the result has `valid` (`false` when the engine found an error), `statu
 }
 ```
 
-SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed. A missing SDK, a missing plan or a tenant it cannot reach is a failed live check.
+SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed. A missing plan or a tenant it cannot reach is a failed live check.
 
 **Unsupported platforms** return:
 
@@ -467,7 +467,7 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
 }
 ```
 
-`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing, or has no block for `platform`). `status` is the `status` of the rule's block for `platform` (the status deploy reads), not a planned-action label. A rule with no block for `platform` (or a block with no `status`) is refused the same way with or without `dry_run`: `"action": "error"`, `"status": "error"` and a `message` such as `Rule "Sentinel KQL Rule" has no splunk status to deploy`, so the preview says what the real call would. Through 0.20.1 it was the rule-level `status`, which no command reads and which defaulted to `STAGING` when left out.
+`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing, or has no block for `platform`). `status` is the `status` of the rule's block for `platform` (the status deploy reads), not a planned-action label. A rule with no block for `platform` (or a block with no `status`) is refused the same way with or without `dry_run`: `"action": "error"`, `"status": "error"` and a `message` such as `Rule "Sentinel KQL Rule" has no splunk status to deploy`, so the preview says what the real call would. So is a status the deployment configuration does not define: both answer `isError`, naming the statuses it defines. Through 0.20.1 it was the rule-level `status`, which no command reads and which defaulted to `STAGING` when left out.
 
 A real deploy the deployer refused or failed returns `"action": "error"`, `"status": "failed"` and `"error": "deployment_failed"`, with no vendor call for a refused rule: for example a rule that still carries `rule_id` (`external_id_in_rule`), or a create whose id could not be written (`deployment_state_write_failed`). `message` is the cause, as the `error` of `opentide --json deploy` gives it: the platform, the rule and the tenant's or the platform's own words. Each call starts from a clean outcome, so one failed call does not mark the next as failed.
 

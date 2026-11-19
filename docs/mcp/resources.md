@@ -5,7 +5,7 @@ description: opentide:// resource URIs for catalogue indexes, objects, schemas, 
 
 # MCP resources
 
-Read-only resources registered on the opentide MCP server. Each is served as `text/plain`: a JSON document, or for a template its YAML as a JSON string.
+Read-only resources registered on the opentide MCP server. Each is served as `text/plain`: a JSON document; for an object template, its YAML as a JSON string; for `templates/systems`, a JSON object of each platform's block template, a YAML string each.
 
 ## URI catalogue
 
@@ -19,7 +19,7 @@ Read-only resources registered on the opentide MCP server. Each is served as `te
 | `opentide://objectives` | All objectives |
 | `opentide://objectives/{uuid}` | Single objective body |
 | `opentide://schemas/{object_type}` | JSON Schema for `rule`, `threat`, or `objective` |
-| `opentide://templates/{object_type}` | Template metadata for object type |
+| `opentide://templates/{object_type}` | The YAML template of an object family or revision (`rule`, `rule::1.0`); `systems`, every configured platform's block template |
 | `opentide://vocabularies` | Vocabulary index: `{name: {metadata, entry_count, uri}}` — entries are **not** inlined |
 | `opentide://vocabularies/{+name}` | Named vocabulary: `{metadata, entries}`. `{+name}` keeps the `&` in `att&ck` literal |
 | `opentide://platforms` | Platform capability list |

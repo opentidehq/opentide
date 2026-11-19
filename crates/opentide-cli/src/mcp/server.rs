@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, CustomRequest, CustomResult,
-    ErrorCode, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ConstString, CustomRequest,
+    CustomResult, ErrorCode, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
     PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
     ServerConfig,
 };
@@ -377,16 +377,23 @@ impl ServerHandler for Server {
     }
 }
 
-/// MCP's methods that take params: a request for one that reaches
-/// [`Server::on_custom_request`] had params rmcp could not read.
-const METHODS_WITH_PARAMS: [&str; 7] = [
-    "tools/call",
-    "resources/read",
-    "resources/subscribe",
-    "resources/unsubscribe",
-    "prompts/get",
-    "completion/complete",
-    "logging/setLevel",
+/// MCP's client requests that take params, as rmcp names them: a request
+/// for one that reaches [`Server::on_custom_request`] had params rmcp could
+/// not read.
+const METHODS_WITH_PARAMS: [&str; 13] = [
+    <rmcp::model::InitializeResultMethod as ConstString>::VALUE,
+    <rmcp::model::CallToolRequestMethod as ConstString>::VALUE,
+    <rmcp::model::ReadResourceRequestMethod as ConstString>::VALUE,
+    <rmcp::model::ReadResourceDirectoryRequestMethod as ConstString>::VALUE,
+    <rmcp::model::SubscribeRequestMethod as ConstString>::VALUE,
+    <rmcp::model::UnsubscribeRequestMethod as ConstString>::VALUE,
+    <rmcp::model::GetPromptRequestMethod as ConstString>::VALUE,
+    <rmcp::model::CompleteRequestMethod as ConstString>::VALUE,
+    <rmcp::model::SetLevelRequestMethod as ConstString>::VALUE,
+    <rmcp::model::GetTaskMethod as ConstString>::VALUE,
+    <rmcp::model::UpdateTaskMethod as ConstString>::VALUE,
+    <rmcp::model::CancelTaskMethod as ConstString>::VALUE,
+    <rmcp::model::GetSkillRequestMethod as ConstString>::VALUE,
 ];
 
 /// The error for a request no handler took: `Invalid params` for a method of
@@ -440,7 +447,7 @@ mod tests {
 
     #[test]
     fn a_known_method_with_unreadable_params_is_invalid_params() {
-        for method in ["tools/call", "resources/read"] {
+        for method in ["tools/call", "resources/read", "initialize", "tasks/get"] {
             let error = unhandled(method.to_owned());
             assert_eq!(error.code, ErrorCode::INVALID_PARAMS, "{method}");
             assert_eq!(error.data, Some(json!(method)));

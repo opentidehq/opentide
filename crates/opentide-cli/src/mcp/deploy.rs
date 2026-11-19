@@ -63,6 +63,32 @@ fn missing_tenants(workspace: &Workspace, uuid: &str, platform: &str) -> Option<
     ))
 }
 
+/// Why a deploy failed, from its `--json` document: its `error`, which names
+/// the rule and the tenant's or the platform's own words (the `message` is
+/// only the tally). An `error` equal to the message is the envelope's copy of
+/// the tally, no cause: then the first failure's own `error`. Empty when the
+/// document names none.
+fn failure_cause(document: Option<&Json>, message: &str) -> String {
+    let text = |value: Option<&Json>| {
+        value
+            .and_then(Json::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    };
+    let error = text(document.and_then(|document| document.get("error")))
+        .filter(|error| error != message.trim());
+    error
+        .or_else(|| {
+            let first = match document.and_then(|document| document.get("failures")) {
+                Some(Json::Array(items)) => items.first(),
+                _ => None,
+            };
+            text(first.and_then(|failure| failure.get("error")))
+        })
+        .unwrap_or_default()
+}
+
 /// `deploy_rule`.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn deploy_rule(
@@ -127,6 +153,12 @@ pub fn deploy_rule(
             ],
         ));
     };
+    // The status resolves to its strategy before the dry run returns too: a
+    // status the deployment configuration does not define is refused either way.
+    let statuses = Statuses::from_resolved(&workspace.configuration().resolved);
+    let strategy = statuses
+        .strategy(&status)
+        .map_err(|problem| problem.to_string())?;
     if dry_run {
         return Ok(Json::object([
             ("action", Json::str("dry-run")),
@@ -138,10 +170,6 @@ pub fn deploy_rule(
             ("message", Json::str("dry-run")),
         ]));
     }
-    let statuses = Statuses::from_resolved(&workspace.configuration().resolved);
-    let strategy = statuses
-        .strategy(&status)
-        .map_err(|problem| problem.to_string())?;
     let runs = deployed_by(strategy);
     let deployed = |message: &str| {
         Json::object([
@@ -196,9 +224,7 @@ pub fn deploy_rule(
     };
     let message = text_of("message");
     if run.exit_code != 0 {
-        // The run's `error` names the cause (the rule and the tenant's or the
-        // platform's own words); its `message` is only the tally.
-        let cause = text_of("error");
+        let cause = failure_cause(document.as_ref(), &message);
         let mut rest = vec![
             ("platform", Json::str(platform)),
             (
@@ -248,6 +274,25 @@ mod tests {
             deploy_rule("u", "sentinel", true, &context),
             Err("workspace_not_found: none".to_owned())
         );
+    }
+
+    #[test]
+    fn the_cause_is_the_error_unless_it_is_the_tally() {
+        let tally = "Deployment failed · 1 failed, 0 not attempted · 0.0s";
+        let parse = |text: &str| Json::parse(text).unwrap();
+        let own = parse(r#"{"message": "t", "error": "Deployment to x failed on R: why"}"#);
+        assert_eq!(
+            failure_cause(Some(&own), "t"),
+            "Deployment to x failed on R: why"
+        );
+        // The envelope copies the tally into `error`: the first failure says why.
+        let copied = parse(&format!(
+            r#"{{"message": "{tally}", "error": "{tally}", "failures": [{{"id": "u", "error": "refused"}}]}}"#
+        ));
+        assert_eq!(failure_cause(Some(&copied), tally), "refused");
+        let bare = parse(&format!(r#"{{"message": "{tally}", "error": "{tally}"}}"#));
+        assert_eq!(failure_cause(Some(&bare), tally), "");
+        assert_eq!(failure_cause(None, ""), "");
     }
 
     #[test]

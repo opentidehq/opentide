@@ -154,10 +154,13 @@ fn known_stack(stack: &str) -> bool {
     if stack.eq_ignore_ascii_case("serverless") {
         return true;
     }
-    let digits = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    // Each part a number, as `StackTarget::parse` reads it (`u32`): `9.5`,
+    // not `9.99999999999`.
+    let number =
+        |part: &str| part.bytes().all(|byte| byte.is_ascii_digit()) && part.parse::<u32>().is_ok();
     stack
         .split_once('.')
-        .is_some_and(|(major, minor)| digits(major) && digits(minor))
+        .is_some_and(|(major, minor)| number(major) && number(minor))
 }
 
 /// `validate_query`: `query` checked offline, or with `live` the

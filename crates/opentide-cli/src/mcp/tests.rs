@@ -408,6 +408,27 @@ fn a_dry_run_without_the_platforms_block_is_refused_as_the_deploy_is() {
     );
 }
 
+/// A status the deployment configuration does not define is refused by the
+/// dry run as by the real call, not previewed as `dry-run` (smoke C16).
+#[test]
+fn a_dry_run_of_a_status_that_is_not_defined_is_refused() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let path = ws.join("objects/rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("status: STAGING"), "{text}");
+    std::fs::write(&path, text.replace("status: STAGING", "status: NOWHERE")).unwrap();
+    let Answer::Result(result) = server(&ws).call(
+        "deploy_rule",
+        &arguments(json!({"uuid": SENTINEL_RULE, "platform": "sentinel"})),
+    ) else {
+        panic!("not a result");
+    };
+    assert_eq!(result["isError"], true, "{result}");
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("NOWHERE"), "{text}");
+}
+
 /// A client that sends its next message only once the answer it waits for
 /// has been written: reading on before that is the hang an interactive
 /// client sees under WASI, where a read blocks the one thread.
