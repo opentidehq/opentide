@@ -997,30 +997,11 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
     };
     let root = workspace.root().to_path_buf();
     let dir = Settings::new(workspace.configuration(), &root).dir;
+    // Like a phase of `generate`, the explorer fails on an object file the
+    // index could not load, after its own error if it has one (D1).
     let phase = run_phase("explorer", cx.cwd, &root, |changes| {
-        std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-        // Open pull requests' objects, previewed (`inflight_preview`).
-        let shards = inflight::load(&root.join(".opentide").join("inflight"));
-        let index = inflight::overlay(workspace.index(), &shards);
-        let generated_at = now_iso();
-        let outputs = explorer::outputs(&index, &dir, &generated_at)
-            .map_err(|PhaseError { detail }| detail)?;
-        write(changes, &outputs)?;
-        let visibility_path = dir.join(explorer::VISIBILITY);
-        if options.include_visibility {
-            let report = visibility_report(&workspace, &index, &root);
-            let document = explorer::visibility(report, &generated_at, &tlp);
-            write(
-                changes,
-                &[Output::text(visibility_path, document.to_compact())],
-            )?;
-        } else if visibility_path.is_file() {
-            // Opt-in per run: an inventory an earlier run wrote is not published again.
-            changes
-                .remove(&visibility_path)
-                .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
-        }
-        Ok(())
+        let raised = explorer_phase(changes, &workspace, &root, &dir, options, &tlp);
+        with_logged(raised, &workspace)
     });
     match phase.error {
         Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
@@ -1030,6 +1011,41 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
             vec![phase.step],
         ),
     }
+}
+
+/// The explorer's files under `dir`, and its visibility inventory when
+/// `options` ask for it.
+fn explorer_phase(
+    changes: &mut Changes,
+    workspace: &Workspace,
+    root: &Path,
+    dir: &Path,
+    options: &ExplorerOptions,
+    tlp: &str,
+) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    // Open pull requests' objects, previewed (`inflight_preview`).
+    let shards = inflight::load(&root.join(".opentide").join("inflight"));
+    let index = inflight::overlay(workspace.index(), &shards);
+    let generated_at = now_iso();
+    let outputs =
+        explorer::outputs(&index, dir, &generated_at).map_err(|PhaseError { detail }| detail)?;
+    write(changes, &outputs)?;
+    let visibility_path = dir.join(explorer::VISIBILITY);
+    if options.include_visibility {
+        let report = visibility_report(workspace, &index, root);
+        let document = explorer::visibility(report, &generated_at, tlp);
+        write(
+            changes,
+            &[Output::text(visibility_path, document.to_compact())],
+        )?;
+    } else if visibility_path.is_file() {
+        // Opt-in per run: an inventory an earlier run wrote is not published again.
+        changes
+            .remove(&visibility_path)
+            .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
+    }
+    Ok(())
 }
 
 /// The object files the change set touches (`changed_object_yaml_paths`):
@@ -1982,6 +1998,21 @@ mod tests {
         for report in [docs(&DocsArgs::default(), &cx), exports(None, &cx)] {
             assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
         }
+        // `generate explorer` reads the catalogue too (review round 2).
+        let explored = explorer(&ExplorerOptions::default(), &cx);
+        assert_eq!(
+            explored.outcome.exit_code, 1,
+            "{}",
+            explored.outcome.message
+        );
+        assert!(
+            explored
+                .outcome
+                .message
+                .starts_with("explorer: logged an error: malformed_object_yaml"),
+            "{}",
+            explored.outcome.message
+        );
         let templates = phases(&["templates".to_owned()], &cx, "0.0.0");
         assert_eq!(phase_of(&templates), Some(Json::str("templates")));
         // A second broken file: counted, the first named.

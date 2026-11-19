@@ -542,25 +542,34 @@ impl Run<'_> {
             // The tree and its derive disagree: a bug, reported as one.
             Err(error) => return Err(std::io::Error::other(error.to_string())),
         };
-        // `OPENTIDE_REPO_ROOT` is held to the same test (A10): a typo in a CI
-        // variable would otherwise read as an empty catalogue that passes.
-        // The servers a host starts (`mcp`, `lsp`, `serve`) answer for it
-        // per request instead: MCP's catalogue tools refuse with
-        // `workspace_not_found`; `doctor` reports it as its failed
-        // `workspace` check, which exists to diagnose it. An empty value
-        // names no folder.
+        // `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` are held to the
+        // same test (A10): a typo in a CI variable would otherwise read as
+        // an empty catalogue that passes. Each one set must name a folder,
+        // as the MCP server requires. The servers a host starts (`mcp`,
+        // `lsp`, `serve`) answer for it per request instead: MCP's catalogue
+        // tools refuse with `workspace_not_found`; `doctor` reports it as its
+        // failed `workspace` check, which exists to diagnose it. An empty
+        // value names no folder. A typed `--repo` replaces both.
         let first = words.first().map(String::as_str);
-        let named = match &self.globals.repo {
-            Some(repo) => (first != Some("setup")).then(|| ("--repo", repo.clone())),
-            None => self
-                .env
-                .get("OPENTIDE_REPO_ROOT")
-                .filter(|repo| !repo.is_empty())
-                .filter(|_| !matches!(first, Some("setup" | "mcp" | "lsp" | "serve" | "doctor")))
-                .map(|repo| ("OPENTIDE_REPO_ROOT", repo.to_owned())),
+        let named: Vec<(&str, String)> = match &self.globals.repo {
+            Some(repo) if first != Some("setup") => vec![("--repo", repo.clone())],
+            Some(_) => Vec::new(),
+            None if matches!(first, Some("setup" | "mcp" | "lsp" | "serve" | "doctor")) => {
+                Vec::new()
+            }
+            None => ["OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE"]
+                .into_iter()
+                .filter_map(|name| {
+                    self.env
+                        .get(name)
+                        .filter(|value| !value.is_empty())
+                        .map(|value| (name, value.to_owned()))
+                })
+                .collect(),
         };
         if let Some((named, repo)) = named
-            && !self.resolve(&repo).is_dir()
+            .into_iter()
+            .find(|(_, repo)| !self.resolve(repo).is_dir())
         {
             let problem = if self.resolve(&repo).exists() {
                 "is not a directory"
@@ -570,15 +579,17 @@ impl Run<'_> {
             let message = if named == "--repo" {
                 format!("--repo {repo} {problem}")
             } else {
-                format!("OPENTIDE_REPO_ROOT={repo} {problem}")
+                format!("{named}={repo} {problem}")
             };
             let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = Some(named.into());
             let mut outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
-            let reason = if named == "--repo" {
-                "--repo takes the folder with .opentide/ in it"
-            } else {
-                "OPENTIDE_REPO_ROOT names the folder with .opentide/ in it, as --repo does"
+            let reason = match named {
+                "--repo" => "--repo takes the folder with .opentide/ in it",
+                "OPENTIDE_REPO_ROOT" => {
+                    "OPENTIDE_REPO_ROOT names the folder with .opentide/ in it, as --repo does"
+                }
+                _ => "OPENTIDE_TIDE_WORKSPACE names the folder whose objects are read",
             };
             outcome.next_actions = vec![NextAction::new("opentide --help", reason)];
             return self.emit(&outcome, &[], out, err);
@@ -4182,6 +4193,39 @@ mod tests {
         assert_eq!(
             dispatched("--json commands", &[("OPENTIDE_REPO_ROOT", "")], false).code,
             0
+        );
+        // OPENTIDE_TIDE_WORKSPACE is held to the same test, as the MCP
+        // server holds it: a real repository root with a typo in the Tide
+        // workspace checked an empty catalogue.
+        let root = tempfile::tempdir().unwrap();
+        let shown_root = root.path().to_string_lossy().into_owned();
+        let split = [
+            ("OPENTIDE_REPO_ROOT", shown_root.as_str()),
+            ("OPENTIDE_TIDE_WORKSPACE", shown.as_str()),
+        ];
+        let ran = dispatched("--json validate", &split, false);
+        assert_eq!(ran.code, USAGE_EXIT_CODE, "{}", ran.stdout);
+        assert!(
+            ran.stdout
+                .contains(&format!("OPENTIDE_TIDE_WORKSPACE={shown} does not exist")),
+            "{}",
+            ran.stdout
+        );
+        assert!(
+            ran.stdout
+                .contains("\"argument\":\"OPENTIDE_TIDE_WORKSPACE\"")
+        );
+        // A Tide workspace that is a folder passes the test.
+        let detections = root.path().join("detections");
+        std::fs::create_dir_all(detections.join(".opentide")).unwrap();
+        let shown_detections = detections.to_string_lossy().into_owned();
+        let fine = [
+            ("OPENTIDE_REPO_ROOT", shown_root.as_str()),
+            ("OPENTIDE_TIDE_WORKSPACE", shown_detections.as_str()),
+        ];
+        assert_ne!(
+            dispatched("--json validate", &fine, false).code,
+            USAGE_EXIT_CODE
         );
         // `doctor` reports it as its failed workspace check instead.
         let doctor = dispatched("--json doctor --offline", &pairs, false);

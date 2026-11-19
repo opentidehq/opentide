@@ -63,7 +63,7 @@ A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_W
 
 Setup commands honour `--repo` when `--path` is `.` (default).
 
-A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `OPENTIDE_REPO_ROOT` is held to the same test when no `--repo` is typed (`OPENTIDE_REPO_ROOT=/srv/detections does not exist`, `argument` `OPENTIDE_REPO_ROOT`). `setup` is the exception, since it may name the folder it is about to create; the servers a host starts (`mcp start`, `lsp start`, `serve`) start anyway, and the MCP server's catalogue tools refuse with `workspace_not_found`; [`doctor`](./doctor.md) runs and reports the variable's folder as its failed `workspace` check (`Workspace /srv/detections does not exist`).
+A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` are held to the same test when no `--repo` is typed (`OPENTIDE_REPO_ROOT=/srv/detections does not exist`, `argument` the variable's name), as the MCP server holds them. `setup` is the exception, since it may name the folder it is about to create; the servers a host starts (`mcp start`, `lsp start`, `serve`) start anyway, and the MCP server's catalogue tools refuse with `workspace_not_found`; [`doctor`](./doctor.md) runs and reports the variable's folder as its failed `workspace` check (`Workspace /srv/detections does not exist`).
 
 ## Proxy
 

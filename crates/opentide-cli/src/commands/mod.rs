@@ -465,11 +465,22 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
         }
         _ => return Err(Box::new(Report::error(command, error.to_string()))),
     };
-    // Shown from the workspace root, as 0.28.1 showed it.
-    let shown = Path::new(&path).strip_prefix(&root).map_or_else(
-        |_| path.clone(),
-        |relative| relative.to_string_lossy().replace('\\', "/"),
-    );
+    // Shown from the workspace root, as 0.28.1 showed it; through a symbolic
+    // link (macOS's `/tmp`, a linked checkout) on both resolved.
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let shown = Path::new(&path)
+        .strip_prefix(&root)
+        .map(Path::to_path_buf)
+        .or_else(|_| {
+            canonical(Path::new(&path))
+                .strip_prefix(canonical(&root))
+                .map(Path::to_path_buf)
+        })
+        .map_or_else(
+            |_| path.clone(),
+            |relative| relative.to_string_lossy().replace('\\', "/"),
+        );
     let place = match (line, column) {
         (Some(line), Some(column)) => format!("{shown}:{line}:{column}"),
         (Some(line), None) => format!("{shown}:{line}"),
@@ -610,6 +621,26 @@ mod tests {
             matches!(first.get("column"), Some(Json::Int(_))),
             "{first:?}"
         );
+        // Placed through a symbolic link, the file is still shown from the
+        // workspace root, not as an absolute path.
+        #[cfg(unix)]
+        {
+            let links = tempfile::tempdir().unwrap();
+            let link = links.path().join("linked");
+            std::os::unix::fs::symlink(dir.path(), &link).unwrap();
+            let (_, options) = placement(None, &Env::default(), &link);
+            let Err(report) = open_for("validate", options) else {
+                panic!("the workspace opened");
+            };
+            assert!(
+                report
+                    .outcome
+                    .message
+                    .starts_with(".opentide/configurations/platforms/sentinel.toml:2:"),
+                "{}",
+                report.outcome.message
+            );
+        }
         // generate keeps the code too, on its failed phase.
         let env = Env::default();
         let cx = generate::Context {
