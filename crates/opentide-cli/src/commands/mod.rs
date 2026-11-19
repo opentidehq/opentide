@@ -421,6 +421,78 @@ pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) ->
     Some(report)
 }
 
+/// Opens the workspace `options` place for `command`, or the report of why
+/// it does not open. A configuration TOML file that does not parse is
+/// `config_parse` (D9, B10: it was `command_failed` with no position), its
+/// message `path:line:column: problem`, and `diagnostics` holds the file,
+/// line and column, as `docs/cli/json-output.md` documents; any other
+/// problem is `command_failed`, as before.
+pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Report>> {
+    use opentide_schema::configuration::resolve::ResolveError;
+    use opentide_workspace::ConfigError;
+    let root = options
+        .repo
+        .as_deref()
+        .map(|repo| options.absolute(repo))
+        .unwrap_or_default();
+    let error = match Workspace::open(Arc::new(OsFs), opentide_workspace::Options { roots: options }) {
+        Ok(workspace) => return Ok(workspace),
+        Err(error) => error,
+    };
+    let (path, problem, line, column) = match &error {
+        ConfigError::Resolve(ResolveError::Parse {
+            path,
+            message,
+            line,
+            column,
+        }) => (path.clone(), message.clone(), *line, *column),
+        ConfigError::Unreadable { path, message } => (path.clone(), message.clone(), None, None),
+        _ => return Err(Box::new(Report::error(command, error.to_string()))),
+    };
+    // Shown from the workspace root, as 0.28.1 showed it.
+    let shown = Path::new(&path)
+        .strip_prefix(&root)
+        .map_or_else(|_| path.clone(), |relative| relative.to_string_lossy().replace('\\', "/"));
+    let place = match (line, column) {
+        (Some(line), Some(column)) => format!("{shown}:{line}:{column}"),
+        (Some(line), None) => format!("{shown}:{line}"),
+        _ => shown.clone(),
+    };
+    let number = |value: Option<usize>| value.map_or(Json::Null, Json::from);
+    let diagnostic = Json::object([
+        ("code", Json::str(CONFIG_PARSE)),
+        ("severity", Json::str("error")),
+        (
+            "message",
+            Json::Str(format!("Could not parse configuration TOML: {problem}")),
+        ),
+        ("path", Json::str(&shown)),
+        ("file_path", Json::str(&path)),
+        ("line", number(line)),
+        ("column", number(column)),
+        ("end_line", number(line)),
+        ("end_column", number(column.map(|column| column + 1))),
+        (
+            "help",
+            Json::str("fix the TOML syntax at this position, then run the command again"),
+        ),
+        ("explain", Json::str("opentide explain config_parse")),
+    ]);
+    let mut report = Report::failed(
+        command,
+        1,
+        Failure::new(CONFIG_PARSE, format!("{place}: {problem}")),
+    );
+    report
+        .outcome
+        .data
+        .push(("diagnostics".to_owned(), Json::Array(vec![diagnostic])));
+    Err(Box::new(report))
+}
+
+/// `failure.code` of a configuration TOML file that does not parse.
+pub const CONFIG_PARSE: &str = "config_parse";
+
 /// Opens the workspace `options` place, on disk.
 ///
 /// # Errors
@@ -451,6 +523,57 @@ mod tests {
     fn counts() {
         assert_eq!(counted(1, "rule"), "1 rule");
         assert_eq!(counted(0, "rule"), "0 rules");
+    }
+
+    #[test]
+    fn a_configuration_file_that_does_not_parse_is_config_parse_with_its_place() {
+        // D9, B10 (smoke test): `[platform` in a platform TOML failed every
+        // command with `command_failed`, an absolute path and no position.
+        let dir = tempfile::tempdir().unwrap();
+        let platforms = dir.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::create_dir_all(dir.path().join("objects")).unwrap();
+        std::fs::write(platforms.join("sentinel.toml"), "enabled = true\n[platform\n").unwrap();
+        let (_, options) = placement(None, &Env::default(), dir.path());
+        let Err(report) = open_for("validate", options) else {
+            panic!("the workspace opened");
+        };
+        let failure = report.outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, "config_parse");
+        assert_eq!(report.outcome.exit_code, 1);
+        assert!(
+            report.outcome.message.contains("sentinel.toml:2:"),
+            "{}",
+            report.outcome.message
+        );
+        let Some((_, Json::Array(diagnostics))) = report
+            .outcome
+            .data
+            .iter()
+            .find(|(key, _)| key == "diagnostics")
+        else {
+            panic!("no diagnostics: {:?}", report.outcome.data);
+        };
+        let Json::Object(first) = &diagnostics[0] else {
+            panic!("not an object");
+        };
+        assert_eq!(first.get("code"), Some(&Json::str("config_parse")));
+        assert_eq!(first.get("line"), Some(&Json::from(2usize)));
+        assert!(matches!(first.get("column"), Some(Json::Int(_))), "{first:?}");
+        // generate keeps the code too, on its failed phase.
+        let env = Env::default();
+        let cx = generate::Context {
+            repo: None,
+            env: &env,
+            cwd: dir.path(),
+            proxy: None,
+            version: "0.0.0",
+        };
+        let generated = generate::docs(&generate::DocsArgs::default(), &cx);
+        assert_eq!(
+            generated.outcome.failure.as_ref().map(|f| f.code.as_str()),
+            Some("config_parse")
+        );
     }
 
     #[test]
