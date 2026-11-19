@@ -646,3 +646,100 @@ fn usage_errors_and_skips_answer_before_any_check() {
         elsewhere.result
     );
 }
+
+/// Graylog's stream aliases reach the check (smoke E3/D3, #1654): the
+/// tenant's `streams` and a rule's own `streams` are resolved through the
+/// tenant's `[tenants.setup.stream_ids]` table, as deploy resolves them,
+/// rather than refused as `graylog_alias_unknown`.
+#[test]
+fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/search/validate"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"status": "OK"})),
+            )
+            .mount(&server),
+    );
+    let block = |streams: &str| {
+        format!(
+            "  graylog:\n    schema: platform::graylog::1.0\n    status: STAGING\n    query: \
+             'EventID:1'\n{streams}"
+        )
+    };
+    let ws = workspace(
+        "graylog",
+        &format!(
+            "url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\nstreams = [\"endpoint\"]\n\
+             [tenants.setup.stream_ids]\nendpoint = \"65f0c0ffee0123456789abcd\"\nsysmon = \
+             \"65f0c0ffee0123456789abce\"\n",
+            server.uri()
+        ),
+        &[
+            (
+                "a-tenant-streams.yaml",
+                rule(
+                    "Tenant streams",
+                    "00000000-0000-4000-8046-000000000301",
+                    &block(""),
+                ),
+            ),
+            (
+                "b-own-streams.yaml",
+                rule(
+                    "Own streams",
+                    "00000000-0000-4000-8046-000000000302",
+                    &block("    streams: sysmon\n"),
+                ),
+            ),
+        ],
+    );
+    let env = Env::from_pairs([("GRAYLOG_TOKEN".to_owned(), "token".to_owned())]);
+    let args = Args {
+        platform: Some("graylog".to_owned()),
+        live: true,
+        ..Args::default()
+    };
+    let never = || false;
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(opentide_connectors::graylog::Graylog::new()))
+        .unwrap();
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &registry,
+        },
+    );
+    assert_eq!(
+        value(&live, "status"),
+        &Json::str("passed"),
+        "{:?}",
+        live.result
+    );
+    let streams: Vec<serde_json::Value> = rt
+        .block_on(server.received_requests())
+        .unwrap()
+        .iter()
+        .map(|request| {
+            serde_json::from_slice::<serde_json::Value>(&request.body).unwrap()["streams"].clone()
+        })
+        .collect();
+    assert_eq!(
+        streams,
+        [
+            serde_json::json!(["65f0c0ffee0123456789abcd"]),
+            serde_json::json!(["65f0c0ffee0123456789abce"]),
+        ]
+    );
+}

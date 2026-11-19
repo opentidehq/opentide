@@ -214,8 +214,10 @@ pub fn configured(config: &opentide_compile::Json, platform: &str) -> Vec<(Strin
         .collect()
 }
 
-/// A setup value as `toml` holds it.
-fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
+/// A setup value as `toml` holds it, for [`Tenant::from_setup`]: a table
+/// (Graylog's `stream_ids`) is kept, for [`Tenant::table`]; a null, which
+/// TOML cannot hold, is left out, in a table or a list too.
+pub fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
     use opentide_compile::Json as J;
     Some(match value {
         J::Str(text) => toml::Value::String(text.clone()),
