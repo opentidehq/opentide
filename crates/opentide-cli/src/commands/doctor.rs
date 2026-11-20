@@ -800,7 +800,7 @@ impl Doctor<'_> {
                     .fix(fix);
                 }
             };
-            if generated != version {
+            if !network::same(&generated, version) {
                 let from = if generated.is_empty() {
                     "?"
                 } else {
@@ -1961,6 +1961,44 @@ mod tests {
         );
         std::fs::write(generated.join("fields.json"), r#"{"opentide": "9.9.9"}"#).unwrap();
         assert_eq!(doctor.lsp_catalog().status, "pass");
+    }
+
+    /// The Python package spells a candidate `1.0.0rc1`, the crates and the
+    /// binaries `1.0.0-rc.1`: one release, so a catalog one of them committed
+    /// passes in the other (RC1-3); another release warns whatever its spelling.
+    #[test]
+    fn a_catalog_from_the_same_release_in_the_other_spelling_passes() {
+        let env = Env::default();
+        let dir = tempfile::tempdir().unwrap();
+        let generated = dir.path().join(".opentide/lsp/catalogs/generated");
+        std::fs::create_dir_all(&generated).unwrap();
+        for (running, committed, status) in [
+            ("1.0.0-rc.1", "1.0.0rc1", "pass"),
+            ("1.0.0rc1", "1.0.0-rc.1", "pass"),
+            ("1.0.0-rc.1", "1.0.0-rc.1", "pass"),
+            ("1.0.0-rc.1", "1.0.0rc2", "warn"),
+            ("1.0.0-rc.1", "1.0.0", "warn"),
+        ] {
+            let cx = Context {
+                version: running,
+                ..context(&env, dir.path())
+            };
+            let doctor = Doctor {
+                cx: &cx,
+                workspace: dir.path().to_path_buf(),
+                explicit: false,
+                cwd: dir.path().to_path_buf(),
+                tide_workspace: None,
+                config: None,
+            };
+            std::fs::write(
+                generated.join("fields.json"),
+                format!(r#"{{"opentide": "{committed}"}}"#),
+            )
+            .unwrap();
+            let check = doctor.lsp_catalog();
+            assert_eq!(check.status, status, "{committed} under {running}");
+        }
     }
 
     #[test]

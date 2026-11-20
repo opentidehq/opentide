@@ -48,3 +48,7 @@ pub mod tui;
 pub mod usage;
 
 pub use app::{Host, exit, main, run};
+
+/// The version the command line reports (`opentide --version`): the one every
+/// opentide build reports, [`opentide_core::VERSION`].
+pub const VERSION: &str = opentide_core::VERSION;

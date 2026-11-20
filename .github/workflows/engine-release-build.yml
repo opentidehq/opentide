@@ -48,7 +48,7 @@ permissions:
 
 jobs:
   # The tag, the version the asset names carry (`v0.24.0`, `v0.24.0-rc.1`), and
-  # the one the binaries report (`0.24.0-rc.1`, OPENTIDE_VERSION).
+  # the one the binaries report (`0.24.0-rc.1`, OPENTIDE_BUILD_VERSION).
   meta:
     name: Release tag
     runs-on: ubuntu-latest
@@ -81,13 +81,13 @@ jobs:
   # `opentide-lsp` and `opentide` (the facade with `cli`, as `cargo install
   # opentide --features cli` builds it) for each target, two cargo builds so
   # that neither takes the other's features. `opentide` reports the release's
-  # version (OPENTIDE_VERSION, which a release candidate's crates cannot carry).
+  # version (OPENTIDE_BUILD_VERSION, which a release candidate's crates cannot carry).
   native:
     name: Binaries ${{ matrix.target }}
     needs: meta
     env:
       VERSION: ${{ needs.meta.outputs.version }}
-      OPENTIDE_VERSION: ${{ needs.meta.outputs.semver }}
+      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
     strategy:
       fail-fast: false
       matrix:

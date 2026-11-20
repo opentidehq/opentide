@@ -78,11 +78,11 @@ for target in "${targets[@]}"; do
       # threads; requests to the network fail with network_unavailable.
       rustup target add wasm32-wasip1 >/dev/null
       wasi_sdk
-      # The version the module reports: the release's (OPENTIDE_VERSION, as
+      # The version the module reports: the release's (OPENTIDE_BUILD_VERSION, as
       # the release train sets it), else a development one of the shape an
       # editable install of the Python package reports (`0.1.devN+g<sha>`),
       # never the engine crates' own.
-      OPENTIDE_VERSION="${OPENTIDE_VERSION:-0.1.dev0+wasi}" \
+      OPENTIDE_BUILD_VERSION="${OPENTIDE_BUILD_VERSION:-0.1.dev0+wasi}" \
       CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot -Oz" \

@@ -178,8 +178,8 @@ jobs:
         working-directory: bindings/node
         shell: bash
         run: |
-          OPENTIDE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' ../../Cargo.toml | head -n 1)"
-          export OPENTIDE_VERSION
+          OPENTIDE_BUILD_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' ../../Cargo.toml | head -n 1)"
+          export OPENTIDE_BUILD_VERSION
           node build.mjs --profile develop
 
       # rust-cache saves target/ and restores it on the next run without the

@@ -158,14 +158,14 @@ GitHub Release body, in the order of the release-notes skill:
 
 #### 4. User-facing install pins
 
-Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of them: `README.md` (the PyPI page) keeps the newest stable pin and names `pip install --pre opentide` for candidates (never an exact `opentide==1.0.0rcN`, which the pin check reads as `1.0.0`); the pins move at the final release's notes PR. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
+Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of the release pins: `README.md` (the PyPI page) keeps the newest stable pin and names `pip install --pre opentide` for candidates (an exact `opentide==1.0.0rcN` is a pre-release pin, which `scripts/build/release.py`'s `_PIN` and `tests/test_docs/test_docs_version_claims.py` do not read as a release pin); the pins move at the final release's notes PR. A candidate does update the candidate's own text: the **Release candidates** section of `docs/usage/installation.md` (the `1.0.0rcN` and `1.0.0-rc.N` pins, the tag in the GitHub Release URLs, the installer and `SHA256SUMS` commands) and the `=1.0.0-rc.N` pins in `docs/sdk/rust.md`'s Install section; the final release removes both, with the section's pointers from the PyPI install paragraph and the Rust page. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
 
 | File | Notes |
 |------|--------|
 | `README.md` | |
 | `docs/index.md` | |
 | `docs/usage/index.md` | Card copy too |
-| `docs/usage/installation.md` | pip and uv pins |
+| `docs/usage/installation.md` | pip and uv pins; the **Release candidates** section: updated by each candidate, removed by the final release |
 | `docs/usage/quickstart.md` | |
 | `docs/usage/why-opentide.md` | Latest-patch mention |
 | `docs/usage/troubleshooting.md` | Pins **and** mention the new patch in the relevant bug sections |
@@ -174,6 +174,7 @@ Search the repo for the old pin (`opentide==0.1.3` or whatever the previous vers
 | `docs/cli/index.md` | |
 | `docs/mcp/index.md` | |
 | `docs/mcp/installation.md` | |
+| `docs/sdk/rust.md` | Install: the `=1.0.0-rc.N` pins of a candidate; the final release installs `opentide = "1"` and drops the candidate text |
 | `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well |
 
 ```bash

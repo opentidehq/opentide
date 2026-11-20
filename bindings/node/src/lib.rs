@@ -35,7 +35,7 @@ pub use tenants::{
 };
 
 /// The version the command line reports (`opentide --version`): the npm
-/// package's, which the build passes as `OPENTIDE_VERSION`.
+/// package's, which the build passes as `OPENTIDE_BUILD_VERSION`.
 #[napi]
 pub const VERSION: &str = opentide::cli::VERSION;
 

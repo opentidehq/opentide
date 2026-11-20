@@ -1064,6 +1064,16 @@ jobs:
             exit 1
           fi
 
+      # `queries` is a default feature (a first program that validates with the
+      # default options needs the engines), so the build without them is the
+      # one that needs its own run: its tests (`cfg(not(feature = "queries"))`,
+      # the `engine_unavailable` message that names the feature) and, on the
+      # default features, the doctests that validate with the default options.
+      - name: The default features, and the facade without the query engines
+        run: |
+          cargo test -p opentide --doc --locked
+          cargo test -p opentide --no-default-features --features compile --locked
+
       # Against the first parent until the crate is on crates.io; then the
       # last published version is the baseline (docs/sdk/rust.md, Stability).
       # A commit that adds the crate has no baseline to compare with. The
@@ -1143,7 +1153,7 @@ jobs:
       # The workspace version, as the conformance suite builds the addon: Node
       # compiles its own addon, so this job starts beside `build`, not after it.
       - name: The workspace version
-        run: echo "OPENTIDE_VERSION=$(python3 scripts/engine/release.py version)" >> "$GITHUB_ENV"
+        run: echo "OPENTIDE_BUILD_VERSION=$(python3 scripts/engine/release.py version)" >> "$GITHUB_ENV"
 
       - name: npm ci
         working-directory: bindings/node

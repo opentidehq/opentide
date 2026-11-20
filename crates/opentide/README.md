@@ -37,7 +37,7 @@ cargo run -p opentide --example deploy_plan -- path/to/workspace PREVIEW
 | `analysis` | no | Check one query on its own and highlight a text, without a workspace (`opentide::analysis`) |
 | `workspace` | yes | `Workspace`: open, validate, lint, info, catalogue, coverage |
 | `compile` | yes | `Workspace::deploy_plan` |
-| `queries` | no | The offline query engines behind validate's and lint's queries checks |
+| `queries` | yes | The offline query engines behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::{main, run_json}` and the `opentide` binary (`cargo install opentide --features cli`) |
 | `lsp` | no | The language server (`opentide::lsp`) |
 | `connectors` | no | Tenant operations (`opentide::connectors`): a query run, a live query check and a rule deploy on a workspace's tenants; async, on tokio |

@@ -174,9 +174,15 @@ jobs:
       # candidate's (X.Y.ZrcN) or a development build's (X.Y.Z.devN) is
       # written there and in the lock, in this checkout only
       # (scripts/engine/release.py pypi-version).
+      #
+      # The engine and the language server report that version too, not the
+      # workspace's: scripts/build/report_version.py sets OPENTIDE_BUILD_VERSION in
+      # .cargo/config.toml, which cargo reads in maturin's container as well.
       - name: The wheel at the build's version
         shell: bash
-        run: python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+        run: |
+          python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+          python scripts/build/report_version.py "${PYPI_VERSION}"
 
       # rust-toolchain.toml's release, which maturin-action installs (in the
       # manylinux container on Linux) and sets as the directory's override,
@@ -352,7 +358,7 @@ jobs:
       - name: Build the addon
         shell: bash
         working-directory: bindings/node
-        run: OPENTIDE_VERSION="${NPM_VERSION}" node build.mjs --release --target "${TARGET}"
+        run: OPENTIDE_BUILD_VERSION="${NPM_VERSION}" node build.mjs --release --target "${TARGET}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-native-${{ matrix.platform }}

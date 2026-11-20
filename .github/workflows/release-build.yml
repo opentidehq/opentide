@@ -190,8 +190,12 @@ jobs:
           python-version: "3.12"
       # As build-packages.yml's wheels: maturin takes the version from
       # bindings/python/'s crate (scripts/engine/release.py pypi-version).
+      # The sdist carries .cargo/config.toml (pyproject.toml's `include`), so a
+      # build from it reports the same version (scripts/build/report_version.py).
       - name: The sdist at the wheels' version
-        run: python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+        run: |
+          python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+          python scripts/build/report_version.py "${PYPI_VERSION}"
       - name: Build sdist
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:

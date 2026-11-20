@@ -323,7 +323,7 @@ fn hint(runner: &str) -> &'static str {
         "python" => "it runs the SDK `uv sync --group dev` built",
         "node" => {
             "it loads the addon `npm ci && npm run build` (or `node build.mjs --profile develop`) \
-             writes in bindings/node, built with OPENTIDE_VERSION set to the workspace's version"
+             writes in bindings/node, built with OPENTIDE_BUILD_VERSION set to the workspace's version"
         }
         _ => "its output above says why",
     }

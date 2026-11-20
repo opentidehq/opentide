@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url)
 const opentide = require(PACKAGE)
 
 test('VERSION is the version the build was given, the package\'s by default', () => {
-  assert.equal(opentide.VERSION, process.env.OPENTIDE_VERSION || MANIFEST.version)
+  assert.equal(opentide.VERSION, process.env.OPENTIDE_BUILD_VERSION || MANIFEST.version)
 })
 
 test('runJson returns the document in the command line\'s key order', async () => {
