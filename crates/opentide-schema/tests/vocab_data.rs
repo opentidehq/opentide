@@ -52,3 +52,18 @@ fn the_bundled_pins_are_the_data_directory() {
         );
     }
 }
+
+/// `stakeholders` is retired upstream (opentidehq/specifications#96), as
+/// `responders` was in #512: neither the compiled-in set nor the bundled
+/// folder carries it, so no workspace reads its one-organisation text.
+#[test]
+fn the_stakeholders_vocabulary_is_retired() {
+    assert!(
+        !bundled::FILES
+            .iter()
+            .any(|(field, _)| *field == "stakeholders"),
+        "stakeholders is still compiled in"
+    );
+    let file = std::path::Path::new(DATA).join(format!("vocabulary/stakeholders{SUFFIX}"));
+    assert!(!file.exists(), "{} is still bundled", file.display());
+}

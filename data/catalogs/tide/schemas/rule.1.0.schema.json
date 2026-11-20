@@ -1447,11 +1447,11 @@
           "description": "Alert suppression."
         },
         "tags": {
-          "description": "Rule tags, after OpenTide and the tenant tags.",
+          "description": "Rule tags, after opentide and the tenant tags.",
           "items": {
             "type": "string"
           },
-          "markdownDescription": "Rule tags, after `OpenTide` and the tenant tags.",
+          "markdownDescription": "Rule tags, after `opentide` and the tenant tags.",
           "type": [
             "array",
             "null"

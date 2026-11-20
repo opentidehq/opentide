@@ -356,6 +356,20 @@ impl Setup {
     }
 }
 
+/// The tag every rule opentide writes to Kibana carries first: the product
+/// name, lower case, as every other platform's marker writes it.
+pub const MARKER_TAG: &str = "opentide";
+
+/// The tag opentide 0.28.1 and earlier wrote in [`MARKER_TAG`]'s place. Rules
+/// a deploy of those releases wrote still carry it until their next update,
+/// so whatever reads a tenant's rules back treats it as the marker too.
+pub const LEGACY_MARKER_TAG: &str = "OpenTide";
+
+/// Whether `tag` is the marker opentide writes, or wrote before 0.29.
+pub fn is_marker_tag(tag: &str) -> bool {
+    tag == MARKER_TAG || tag == LEGACY_MARKER_TAG
+}
+
 /// Pushes each string not already there.
 fn extend_unique(into: &mut Vec<String>, items: impl IntoIterator<Item = String>) {
     for item in items {
@@ -784,7 +798,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             body.insert("exceptions_list".into(), Json::Array(lists));
         }
     }
-    let mut tags = vec!["OpenTide".to_owned()];
+    let mut tags = vec![MARKER_TAG.to_owned()];
     extend_unique(&mut tags, setup.tags.iter().cloned());
     extend_unique(&mut tags, strings(get(block, "tags")));
     body.insert("tags".into(), tags.into());

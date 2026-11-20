@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
-assertion_line: 875
 description: setup.ci/agent/tide-corpus/explorer-pages
 ---
 args: opentide setup ci github --default-branch main --explorer-pages --yes
@@ -33,11 +32,6 @@ exit: 0
 #   ELASTIC_API_KEY
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
-#   EXABEAM_CLIENT_ID
-#   EXABEAM_CLIENT_SECRET
-#   GOOGLE_SECOPS_CREDENTIALS
-#   GRAVITYZONE_API_KEY
-#   GRAYLOG_TOKEN
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET
@@ -67,35 +61,6 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
-      CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
-      CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
-      CBC_URL: ${{ secrets.CBC_URL }}
-      CROWDSTRIKE_CLIENT_ID: ${{ secrets.CROWDSTRIKE_CLIENT_ID }}
-      CROWDSTRIKE_CLIENT_SECRET: ${{ secrets.CROWDSTRIKE_CLIENT_SECRET }}
-      ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
-      ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
-      ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
-      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
-      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
-      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
-      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
-      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
-      HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
-      MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
-      MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
-      MDE_TENANT_ID: ${{ secrets.MDE_TENANT_ID }}
-      SENTINEL_ONE_API_TOKEN: ${{ secrets.SENTINEL_ONE_API_TOKEN }}
-      SPLUNK_APP: ${{ secrets.SPLUNK_APP }}
-      SPLUNK_PORT: ${{ secrets.SPLUNK_PORT }}
-      SPLUNK_TOKEN: ${{ secrets.SPLUNK_TOKEN }}
-      SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
-      SYSDIG_SECURE_API_TOKEN: ${{ secrets.SYSDIG_SECURE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,18 +71,78 @@ jobs:
       - run: pip install "opentide==$OPENTIDE_VERSION"
       - run: opentide validate --strict --format sarif --output opentide-reports/validate.sarif
       - run: opentide lint --strict --format sarif --output opentide-reports/lint.sarif
-      - name: Validate queries on reviewed tenants
+      - name: Validate carbon_black_cloud queries on reviewed tenants
         if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          CBC_ORG_KEY: ${{ secrets.CBC_ORG_KEY }}
+          CBC_TOKEN: ${{ secrets.CBC_TOKEN }}
+          CBC_URL: ${{ secrets.CBC_URL }}
         run: |
           rm -rf -- .opentide/configurations
           if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
           if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
           git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/carbon_black_cloud.toml; then opentide validate query --platform carbon_black_cloud --live --changed; else echo "The default branch has no carbon_black_cloud tenant yet, so no tenant is reviewed. Skipped carbon_black_cloud live query validation without using platform credentials."; fi
+      - name: Validate defender_for_endpoint queries on reviewed tenants
+        if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
+          MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
+          MDE_TENANT_ID: ${{ secrets.MDE_TENANT_ID }}
+        run: |
+          rm -rf -- .opentide/configurations
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+          if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+          git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/defender_for_endpoint.toml; then opentide validate query --platform defender_for_endpoint --live --changed; else echo "The default branch has no defender_for_endpoint tenant yet, so no tenant is reviewed. Skipped defender_for_endpoint live query validation without using platform credentials."; fi
+      - name: Validate elastic queries on reviewed tenants
+        if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
+          ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
+          ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
+        run: |
+          rm -rf -- .opentide/configurations
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+          if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+          git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/elastic.toml; then if [ -z "$ELASTIC_API_KEY" ]; then echo skip elastic live query validation ELASTIC_API_KEY; exit 2; else opentide validate query --platform elastic --live --changed; fi; else echo "The default branch has no elastic tenant yet, so no tenant is reviewed. Skipped elastic live query validation without using platform credentials."; fi
+      - name: Validate sentinel queries on reviewed tenants
+        if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
+        run: |
+          rm -rf -- .opentide/configurations
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+          if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+          git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/sentinel.toml; then opentide validate query --platform sentinel --live --changed; else echo "The default branch has no sentinel tenant yet, so no tenant is reviewed. Skipped sentinel live query validation without using platform credentials."; fi
+      - name: Validate sentinel_one queries on reviewed tenants
+        if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          SENTINEL_ONE_API_TOKEN: ${{ secrets.SENTINEL_ONE_API_TOKEN }}
+        run: |
+          rm -rf -- .opentide/configurations
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+          if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+          git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/sentinel_one.toml; then opentide validate query --platform sentinel_one --live --changed; else echo "The default branch has no sentinel_one tenant yet, so no tenant is reviewed. Skipped sentinel_one live query validation without using platform credentials."; fi
+      - name: Validate splunk queries on reviewed tenants
+        if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
+        env:
+          SPLUNK_APP: ${{ secrets.SPLUNK_APP }}
+          SPLUNK_PORT: ${{ secrets.SPLUNK_PORT }}
+          SPLUNK_TOKEN: ${{ secrets.SPLUNK_TOKEN }}
+          SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
+        run: |
+          rm -rf -- .opentide/configurations
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+          if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+          git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/splunk.toml; then opentide validate query --platform splunk --live --changed; else echo "The default branch has no splunk tenant yet, so no tenant is reviewed. Skipped splunk live query validation without using platform credentials."; fi
       - name: Upload opentide reports
         if: ${{ !cancelled() }}
@@ -182,11 +207,6 @@ jobs:
       ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
-      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
-      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
-      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
-      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
-      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
       HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
       MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
       MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
@@ -330,11 +350,6 @@ jobs:
       ELASTIC_API_KEY: ${{ secrets.ELASTIC_API_KEY }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
-      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
-      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
-      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
-      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
-      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
       HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
       MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
       MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
@@ -477,7 +492,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: opentidehq/explorer
-          ref: main
+          # v0.6.0, the explorer release this opentide's bundle is built for
+          ref: 7a34f7bcb0bfc24f40d222298d5fca9f30e00e3e
           path: explorer
 
       - uses: actions/setup-python@v5

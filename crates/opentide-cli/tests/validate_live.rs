@@ -466,6 +466,59 @@ fn each_outcome_of_a_check_is_the_oracles() {
     assert_eq!(report.outcome.exit_code, 1);
 }
 
+/// A buffer the test's log layer writes to.
+#[derive(Clone, Default)]
+struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Captured {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Each check's log events name the rule with `rule_name` (it was
+/// `mdr_name`, a name from the product opentide grew out of).
+#[test]
+fn the_check_events_name_the_rule_with_rule_name() {
+    use opentide_cli::logging::{Config, LogLayer, Sink, subscriber};
+    use opentide_cli::redact::Redactor;
+
+    let ws = splunk_rules(1);
+    let buffer = Captured::default();
+    let sink: Sink = std::sync::Arc::new(std::sync::Mutex::new(buffer.clone()));
+    let layer = LogLayer::new(
+        Config {
+            debug: true,
+            quiet: false,
+            json_lines: true,
+        },
+        sink,
+        Redactor::new(Vec::new(), Vec::new()),
+        || "12:00:00".to_owned(),
+    );
+    tracing::subscriber::with_default(subscriber(layer), || {
+        scripted(ws.path(), vec![Ok(LiveCheck::default())]);
+    });
+    let text = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    let events: Vec<serde_json::Value> = text
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for event in ["validating_query", "valid_query"] {
+        let line = events
+            .iter()
+            .find(|line| line["event"] == event)
+            .unwrap_or_else(|| panic!("no {event} in {text}"));
+        assert_eq!(line["rule_name"], "Splunk rule 1", "{line}");
+    }
+    assert!(!text.contains("mdr_name"), "{text}");
+}
+
 #[test]
 fn checks_that_only_timed_out_name_their_code() {
     let ws = splunk_rules(2);

@@ -56,7 +56,7 @@ pub struct Report {
 }
 
 /// The report `rule` deploys on `tenant`, or `None` for a block with no
-/// query (`deploy_mdr`'s `rule_skipped`).
+/// query (the Python deployer's `rule_skipped`).
 pub fn report(
     cx: &Context<'_>,
     rule: &Rule,
