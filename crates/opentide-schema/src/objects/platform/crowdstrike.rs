@@ -6,8 +6,59 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::FromNode;
+use crate::from_node::Context;
+use crate::node::Node;
+use crate::objects::checks::Violation;
 use crate::objects::platform::platform_block;
 use crate::pins::Pins;
+
+/// The values `details.trigger` takes, in any case.
+const TRIGGERS: [&str; 2] = ["verbose", "summary"];
+/// The values `details.outcome` takes, in any case.
+const OUTCOMES: [&str; 2] = ["detection", "incident"];
+
+/// A `details` value is one of `choices` in any case, as deploy lowercases
+/// it and then refuses anything else (B2: `trigger: sometimes` passed
+/// `validate` and the dry run, and failed the deploy).
+fn check_one_of(value: &str, choices: &[&str]) -> Result<(), Violation> {
+    if choices.contains(&value.to_lowercase().as_str()) {
+        return Ok(());
+    }
+    // The CLI puts the field's path before the message, and its help names
+    // the values from `expected` (the template lists none).
+    let expected = choices.join(" or ");
+    let mut violation =
+        Violation::value_error(format!("deploy takes {expected} (any case), not {value:?}"));
+    violation.context.push(("expected", expected));
+    Err(violation)
+}
+
+fn one_of(choices: &[&str], node: &Node, cx: &mut Context) -> Option<String> {
+    let value = String::from_node(node, cx)?;
+    match check_one_of(&value, choices) {
+        Ok(()) => Some(value),
+        Err(violation) => {
+            violation.report(node, cx);
+            None
+        }
+    }
+}
+
+fn trigger(node: &Node, cx: &mut Context) -> Option<String> {
+    one_of(&TRIGGERS, node, cx)
+}
+
+fn outcome(node: &Node, cx: &mut Context) -> Option<String> {
+    one_of(&OUTCOMES, node, cx)
+}
+
+fn garde_trigger(value: &str, _pins: &Pins) -> garde::Result {
+    check_one_of(value, &TRIGGERS).map_err(Violation::into_garde)
+}
+
+fn garde_outcome(value: &str, _pins: &Pins) -> garde::Result {
+    check_one_of(value, &OUTCOMES).map_err(Violation::into_garde)
+}
 
 /// Correlation outcome, trigger mode, and alert metadata (`CrowdstrikeDetails`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
@@ -35,8 +86,12 @@ use crate::pins::Pins;
 )]
 pub struct CrowdstrikeDetails {
     /// `verbose` or `summary`, any case. Deploy lowercases the value.
+    #[from_node(with = "trigger")]
+    #[garde(custom(garde_trigger))]
     pub trigger: String,
     /// `detection` or `incident`, any case. Deploy lowercases the value.
+    #[from_node(with = "outcome")]
+    #[garde(custom(garde_outcome))]
     pub outcome: String,
     /// Falcon rule name. Deploy uses the Tide rule `name` when omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]

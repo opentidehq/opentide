@@ -102,7 +102,7 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 | null-forms | `"a: ~\nb: null\nc: Null\nd: NULL\ne:\nf: nULL\ng: 'null'\nh: \"~\"\ni: !!null ''\n"` | {"a": null, "b": null, "c": null, "d": null, "e": null, "f": "nULL", "g": "null", "h": "~", "i": null} | {"a": null, "b": null, "c": null, "d": null, "e": null, "f": "nULL", "g": "null", "h": "~", "i": null} | same |
 | null-in-flow | `"a: [~, null]\nb: {x: , y: ~}\n"` | {"a": [null, null], "b": {"x": null, "y": null}} | {"a": [null, null], "b": {"x": null, "y": null}} | same |
 | null-flow-empty-entry | `"a: [~, , ]\n"` | refused: while parsing a flow node | refused: while parsing a node, did not find expected node content (line 1, column 8) | same |
-| null-key | `"~: a\nnull: b\n"` | {null: "b"} | refused: the key 'null' is repeated; it is first written on line 1 (line 2, column 1) | [duplicate-keys](#duplicate-keys) |
+| null-key | `"~: a\nnull: b\n"` | {null: "b"} | refused: the key 'null' is repeated (first written on line 1) (line 2, column 1) | [duplicate-keys](#duplicate-keys) |
 
 ### timestamp
 
@@ -158,11 +158,11 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 
 | Case | YAML | Oracle (PyYAML, YAML 1.1) | opentide-schema (saphyr, YAML 1.2) | |
 |---|---|---|---|---|
-| duplicate-key | `"a: 1\nb: 2\na: 3\n"` | refused: duplicate key 'a' at line 3 | refused: the key 'a' is repeated; it is first written on line 1 (line 3, column 1) | same |
-| duplicate-key-nested | `"a:\n  x: 1\n  x: 2\n"` | refused: duplicate key 'x' at line 3 | refused: the key 'x' is repeated; it is first written on line 2 (line 3, column 3) | same |
+| duplicate-key | `"a: 1\nb: 2\na: 3\n"` | refused: duplicate key 'a' at line 3 | refused: the key 'a' is repeated (first written on line 1) (line 3, column 1) | same |
+| duplicate-key-nested | `"a:\n  x: 1\n  x: 2\n"` | refused: duplicate key 'x' at line 3 | refused: the key 'x' is repeated (first written on line 2) (line 3, column 3) | same |
 | duplicate-key-int-and-str | `"1: a\n'1': b\n"` | refused: duplicate key '1' at line 2 | {1: "a", "1": "b"} | [duplicate-keys](#duplicate-keys) |
 | duplicate-key-bool-spellings | `"yes: a\ntrue: b\n"` | {true: "b"} | {"yes": "a", true: "b"} | [booleans](#booleans) |
-| duplicate-key-in-flow | `"a: {x: 1, x: 2}\n"` | refused: duplicate key 'x' at line 1 | refused: the key 'x' is repeated; it is first written on line 1 (line 1, column 11) | same |
+| duplicate-key-in-flow | `"a: {x: 1, x: 2}\n"` | refused: duplicate key 'x' at line 1 | refused: the key 'x' is repeated (first written on line 1) (line 1, column 11) | same |
 
 ### alias
 
@@ -186,7 +186,7 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 | merge-scalar | `"item:\n  <<: 1\n"` | refused: while constructing a mapping | {"item": {"<<": 1}} | [merge-keys](#merge-keys) |
 | merge-quoted-key | `"item:\n  '<<': {x: 1}\n"` | {"item": {"<<": {"x": 1}}} | {"item": {"<<": {"x": 1}}} | same |
 | merge-nested | `"a: &a {x: 1}\nb: &b {<<: *a, y: 2}\nc:\n  <<: *b\n  z: 3\n"` | {"a": {"x": 1}, "b": {"x": 1, "y": 2}, "c": {"x": 1, "y": 2, "z": 3}} | {"a": {"x": 1}, "b": {"<<": {"x": 1}, "y": 2}, "c": {"<<": {"<<": {"x": 1}, "y": 2}, "z": 3}} | [merge-keys](#merge-keys) |
-| merge-twice | `"a: &a {x: 1}\nitem:\n  <<: *a\n  <<: *a\n"` | refused: duplicate key '<<' at line 4 | refused: the key '<<' is repeated; it is first written on line 3 (line 4, column 3) | same |
+| merge-twice | `"a: &a {x: 1}\nitem:\n  <<: *a\n  <<: *a\n"` | refused: duplicate key '<<' at line 4 | refused: the key '<<' is repeated (first written on line 3) (line 4, column 3) | same |
 | merge-overrides-int-key | `"base: &b {1: x}\nitem:\n  <<: *b\n  True: y\n"` | {"base": {1: "x"}, "item": {1: "y"}} | {"base": {1: "x"}, "item": {"<<": {1: "x"}, true: "y"}} | [merge-keys](#merge-keys) |
 
 ### documents
@@ -217,7 +217,7 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 | tab-indent | `"a:\n\tb: 1\n"` | refused: while scanning for the next token | refused: tabs disallowed within this context (block indentation) (line 2, column 2) | same |
 | tab-after-colon | `"a:\t1\nb: \tx\n"` | {"a": 1, "b": "x"} | refused: ':' must be followed by a valid YAML whitespace (line 1, column 4) | [tab-after-colon](#tab-after-colon) |
 | tab-in-value | `"a: x\ty\n"` | {"a": "x\ty"} | {"a": "x\ty"} | same |
-| tab-appended-key | `"a: 1\n\tindent: tab\n"` | refused: while scanning a plain scalar | refused: while scanning a plain scalar, found a tab (line 1, column 4) | same |
+| tab-appended-key | `"a: 1\n\tindent: tab\n"` | refused: while scanning a plain scalar | refused: while scanning a plain scalar, found a tab (line 2, column 1) | same |
 | tab-in-flow | `"a: [1,\t2]\n"` | {"a": [1, 2]} | {"a": [1, 2]} | same |
 | tab-in-block-scalar | `"a: \|\n  x\ty\n"` | {"a": "x\ty\n"} | {"a": "x\ty\n"} | same |
 | tab-before-comment | `"a: 1\t# c\n"` | {"a": 1} | {"a": 1} | same |

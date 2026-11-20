@@ -23,7 +23,7 @@ import json
 import os
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -64,9 +64,6 @@ OperationName = Literal["create", "update", "disable", "delete"]
 DEFAULT_LIMIT = 100
 #: Seconds an asynchronous search may run when the caller names no timeout.
 DEFAULT_TIMEOUT = 120.0
-#: The window :meth:`Connection.query` searches when given no *start*:
-#: ``opentide query``'s ``--since 24h``.
-DEFAULT_SINCE = timedelta(hours=24)
 
 _T = TypeVar("_T")
 
@@ -266,7 +263,9 @@ class Workspace:
         or ``objects/``, or a folder inside one. Paths in findings are shown
         from *cwd* (default: the workspace's own folder).
 
-        Raises :class:`OpentideError` (``io_error``, ``configuration_invalid``).
+        Raises :class:`OpentideError` (``usage_invalid_value`` for a *path* that
+        is not a folder, as ``--repo`` refuses it; ``io_error``,
+        ``configuration_invalid``).
         """
         _load()
         from opentide._native.sdk import Workspace as NativeWorkspace
@@ -307,7 +306,10 @@ class Workspace:
         """Runs every check of ``opentide validate`` (or *check* alone).
 
         The options are the command's flags: ``--file``, ``--uuid``,
-        ``--type``, ``--strict`` and ``--queries``.
+        ``--type``, ``--strict`` and ``--queries``. Raises
+        :class:`OpentideError` ``usage_invalid_choice`` for an option the
+        command refuses: a *types* entry that is not ``rule``, ``threat`` or
+        ``objective``, an unknown *check* or *queries* mode.
         """
         data = json.loads(
             _call(
@@ -383,12 +385,16 @@ class Workspace:
         environment: Mapping[str, str] | None = None,
     ) -> DeployPlan:
         """``opentide deploy --dry-run``: the rules the strategies select, the
-        tenants each reaches and the request bodies a real run would send.
+        tenants each reaches and the requests a real run would send.
         Nothing is sent and nothing is written. Without *uuids* or *files* it
         plans every rule file (``--all``). *environment* is where the tenants'
         ``$NAME`` credentials are looked up, to say which are unset, as
         :meth:`Connection.open`'s names the one a connection reads; ``None``:
-        the process's."""
+        the process's.
+
+        Raises :class:`OpentideError` ``usage_invalid_choice`` for a *strategy*
+        the configured statuses refuse, or a *platform* ``--platform`` refuses
+        (neither built in nor a loaded platform plugin's)."""
         document, summary, ok = _call(
             self._inner.deploy_plan,
             strategies=list(strategies),
@@ -408,7 +414,9 @@ class Workspace:
         """The tenants the workspace configures for *platform* (its
         ``[[tenants]]`` in ``.opentide/configurations/platforms/<platform>.toml``),
         in file order; empty when it configures none. Open one with
-        :meth:`Connection.open`."""
+        :meth:`Connection.open`. Raises :class:`OpentideError`
+        ``usage_invalid_choice`` for a *platform* ``--platform`` refuses
+        (neither built in nor a loaded platform plugin's)."""
         return [TenantConfig._wrap(tenant) for tenant in _call(self._inner.tenants, platform)]
 
     def run_json(self, argv: Sequence[str]) -> Any:
@@ -523,11 +531,22 @@ def _query_result(data: Document) -> QueryResult:
     return QueryResult(**data)
 
 
-def _instant(at: datetime) -> str:
-    """*at* as an RFC 3339 instant; a naive datetime is taken as UTC."""
-    if at.tzinfo is None:
-        at = at.replace(tzinfo=timezone.utc)
-    return at.isoformat()
+def _instant(name: str, at: object) -> str | None:
+    """*at*, a ``start`` or ``end`` argument, as the RFC 3339 instant the
+    engine reads: a datetime written out (a naive one taken as UTC), a string
+    passed as it is (the engine parses it as the Node SDK's does, and refuses
+    one that is no RFC 3339 instant with ``usage_invalid_value``), ``None`` as
+    ``None``. Any other type is refused with ``usage_invalid_value``."""
+    if at is None or isinstance(at, str):
+        return at
+    if isinstance(at, datetime):
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        return at.isoformat()
+    raise OpentideError(
+        "usage_invalid_value",
+        f"{name}: a datetime or an RFC 3339 string, not {type(at).__name__}",
+    )
 
 
 def platforms() -> list[str]:
@@ -685,8 +704,8 @@ class Connection:
         text: str,
         language: str = "",
         *,
-        start: datetime | None = None,
-        end: datetime | None = None,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
         limit: int = DEFAULT_LIMIT,
         index: Sequence[str] = (),
         data_view: str | None = None,
@@ -699,21 +718,22 @@ class Connection:
         *language* is the query's (``kql``, ``esql``, ``s1ql``); empty takes the
         platform's first. *index* is the Elastic indices, the HarfangLab
         telemetry source or the CrowdStrike repository; *data_view* Elastic's;
-        *timeout* how long, in seconds, an asynchronous search may run. A naive
-        datetime is taken as UTC.
+        *timeout* how long, in seconds, an asynchronous search may run. *start*
+        and *end* are datetimes (a naive one is taken as UTC) or RFC 3339
+        strings (``"2026-11-12T09:00:00Z"``). *limit* is 1 to 5000, as
+        ``opentide query --limit`` takes it.
 
         Raises :class:`OpentideError` (``tenant_refused``, ``query_timed_out``,
         ``tenant_unreachable``, ``authentication_failed``, ``interrupted``,
-        ``operation_unsupported``, ...).
+        ``operation_unsupported``, ...; ``usage_invalid_value`` for a *start*,
+        *end* or *limit* the command line would refuse).
         """
-        end = end or datetime.now(timezone.utc)
-        start = start or end - DEFAULT_SINCE
         data = await _document(
             self._inner.query,
             text,
             language,
-            start=_instant(start),
-            end=_instant(end),
+            start=_instant("start", start),
+            end=_instant("end", end),
             limit=limit,
             index=list(index),
             data_view=data_view,
@@ -726,8 +746,8 @@ class Connection:
         text: str,
         language: str = "",
         *,
-        start: datetime | None = None,
-        end: datetime | None = None,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
         limit: int = DEFAULT_LIMIT,
         index: Sequence[str] = (),
         data_view: str | None = None,
@@ -747,8 +767,8 @@ class Connection:
             self._inner.validate_query,
             text,
             language,
-            start=None if start is None else _instant(start),
-            end=None if end is None else _instant(end),
+            start=_instant("start", start),
+            end=_instant("end", end),
             limit=limit,
             index=list(index),
             data_view=data_view,

@@ -8,6 +8,13 @@
 //! remote ids, and a threat's CVEs have no recording: their tests assert
 //! what 0.28.x writes for them (compared with its pages on the same edits of
 //! the fixture when they were written).
+//!
+//! When the fixture changes, record the pages again with 0.28.1 itself, not
+//! by hand: in a venv with `pip install opentide==0.28.1`, lay the fixture
+//! out as `common/golden.rs` does (`.opentide/configurations` and the
+//! `objects/<family>` links) and run `opentide generate docs --flavor
+//! <flavor> --output <dir>` in it, then copy `<dir>` over
+//! `tests/docs_0_28/<flavor>`.
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a broken fixture is a failure")]
@@ -383,7 +390,7 @@ fn the_flavour_comes_from_ci_then_origin_then_the_configuration() {
     .unwrap();
     assert_eq!(
         unknown.detail,
-        "unknown docs flavor `wiki` (expected generic, github, gitlab or azure-devops)"
+        "unknown docs flavor `wiki` (expected generic, github, gitlab or azure_devops)"
     );
     // Without documentation.toml the default is CommonMark.
     let (_dir, plain) = open("tide-corpus");

@@ -1,4 +1,4 @@
-//! Detection rule (MDR) models, schemas `rule::1.0` and `rule::1.1`
+//! Detection rule models, schemas `rule::1.0` and `rule::1.1`
 //! (`models/rule.py`), with the `configurations` container
 //! (`models/platform.py` `RuleConfigurations`).
 //!

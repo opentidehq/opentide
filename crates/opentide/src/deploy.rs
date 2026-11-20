@@ -172,8 +172,8 @@ impl DeployPlan {
 
 impl Workspace {
     /// Plans a deploy (`opentide deploy --dry-run`): the rules the
-    /// strategies select, the tenants each reaches, and the request bodies a
-    /// real run would send. Nothing is sent and nothing is written.
+    /// strategies select, the tenants each reaches, and the requests a real
+    /// run would send. Nothing is sent and nothing is written.
     ///
     /// ```
     /// use opentide::deploy::{DeployPlanOptions, Strategy};
@@ -186,10 +186,14 @@ impl Workspace {
     ///
     /// # Errors
     ///
-    /// [`Error::Usage`] when `options` has no strategy (`usage_missing_option`)
-    /// or a strategy the configured statuses refuse (`usage_invalid_choice`).
+    /// [`Error::Usage`] when `options` has no strategy (`usage_missing_option`),
+    /// or a strategy the configured statuses refuse or a `platform` that
+    /// `opentide deploy --platform` refuses (`usage_invalid_choice`).
     pub fn deploy_plan(&self, options: &DeployPlanOptions) -> Result<DeployPlan, Error> {
         let ws = self.inner();
+        if let Some(platform) = &options.platform {
+            crate::workspace::known_platform(platform)?;
+        }
         let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
         let request = Request {
             strategies: options

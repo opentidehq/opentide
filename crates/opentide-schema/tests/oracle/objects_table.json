@@ -9444,7 +9444,7 @@
   {
    "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
    "family": "rule",
-   "yaml": "name: CrowdStrike Deploy Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000006\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  crowdstrike:\n    enabled: true\n    name: CrowdStrike Deploy Rule\n    status: STAGING\n    query: index=main\n    details:\n      trigger: event\n      outcome: detection\n    schedule:\n      frequency: 1h\n      lookback: 2h\n",
+   "yaml": "name: CrowdStrike Deploy Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000006\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  crowdstrike:\n    enabled: true\n    name: CrowdStrike Deploy Rule\n    status: STAGING\n    query: index=main\n    details:\n      trigger: verbose\n      outcome: detection\n    schedule:\n      frequency: 1h\n      lookback: 2h\n",
    "value": {
     "name": "CrowdStrike Deploy Rule",
     "metadata": {
@@ -9472,7 +9472,7 @@
       "name": "CrowdStrike Deploy Rule",
       "status": "STAGING",
       "details": {
-       "trigger": "event",
+       "trigger": "verbose",
        "outcome": "detection"
       },
       "schedule": {

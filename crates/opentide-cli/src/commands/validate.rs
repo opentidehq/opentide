@@ -135,27 +135,14 @@ pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
     if let Some(failure) = check_report_options(format, args.output.is_some(), mode == Mode::Json) {
         return Some(Report::failed(COMMAND, USAGE_EXIT_CODE, failure));
     }
-    let types = ["rule", "threat", "objective"];
-    let mut unknown: Vec<&str> = args
-        .selection
-        .types
-        .iter()
-        .map(String::as_str)
-        .filter(|family| !types.contains(family))
-        .collect();
-    unknown.sort_unstable();
-    unknown.dedup();
-    if let Some(first) = unknown.first() {
+    if let Some(refusal) = opentide_workspace::validate::unknown_types(&args.selection.types) {
         return Some(Report::usage(
             COMMAND,
-            format!(
-                "Unknown object type(s): {}. Choose rule, threat, or objective.",
-                unknown.join(", ")
-            ),
+            refusal.message,
             code::USAGE_INVALID_CHOICE,
-            "--type",
-            Some(first),
-            &types,
+            refusal.argument,
+            Some(&refusal.value),
+            &opentide_workspace::validate::OBJECT_TYPES,
         ));
     }
     if args.dry_run && !args.fix {
@@ -438,9 +425,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let format = args.format;
     let queries = args.queries.unwrap_or_default();
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
-    let mut ws = match super::open(root_options) {
+    let mut ws = match super::open_for(COMMAND, root_options) {
         Ok(ws) => ws,
-        Err(message) => return Report::error(COMMAND, message),
+        Err(report) => return *report,
     };
     let cve = match online_cve(args, &ws, cx) {
         Ok(cve) => cve,

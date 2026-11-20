@@ -986,22 +986,30 @@ fn is_secops_section(query: &CheckedQuery) -> bool {
 fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
     let mut out: Vec<CheckedQuery> = Vec::with_capacity(checked.len());
     let mut rule: Option<usize> = None;
-    for query in checked {
+    for mut query in checked {
         if !is_secops_section(&query) {
             out.push(query);
             continue;
         }
+        // The rule is the placeholder `opentide new` wrote, skipped as
+        // 0.28.1 skipped it, while its `events` is the stand-in (B6: `events:
+        // ...` beside the template's written `outcome` counted as "1 query
+        // valid"). Once `events` is written the rule is checked, and a
+        // section still the stand-in keeps the parse error the engine finds
+        // in it (opentide-tide's `analyze_queries`): the rule cannot deploy.
+        let stand_in_events =
+            query.placeholder && query.field_path.last().map(String::as_str) == Some("events");
         match rule {
             Some(index) => {
                 let merged = &mut out[index];
                 if (query.line, query.column) < (merged.line, merged.column) {
                     (merged.line, merged.column) = (query.line, query.column);
                 }
-                merged.placeholder &= query.placeholder;
+                merged.placeholder |= stand_in_events;
                 merged.findings.extend(query.findings);
             }
             None => {
-                let mut query = query;
+                query.placeholder = stand_in_events;
                 query.field_path.truncate(2);
                 rule = Some(out.len());
                 out.push(query);
@@ -1128,6 +1136,98 @@ mod tests {
             queries
                 .iter()
                 .all(|query| query.platform != "google_secops"),
+            "{queries:?}"
+        );
+    }
+
+    #[test]
+    fn a_google_secops_rule_with_a_stand_in_section_is_a_placeholder() {
+        // B6 (smoke test): as `opentide new` writes the block, `events` and
+        // `condition` the stand-in, `outcome` a value.
+        let text = "name: A\nconfigurations:\n  google_secops:\n    events: |  # opentide:placeholder\n      \
+                    ...\n    outcome: |  # opentide:placeholder\n      $risk_score = 40\n    \
+                    condition: |  # opentide:placeholder\n      ...\n";
+        let profiles = Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            datasets: crate::Datasets::of_workspace(None).unwrap(),
+            visibility_problem: None,
+            graylog_tenants: Vec::new(),
+        };
+        let queries = profiles.check_object(text);
+        let rule = queries
+            .iter()
+            .find(|query| query.platform == "google_secops")
+            .unwrap_or_else(|| panic!("{queries:?}"));
+        assert!(rule.placeholder, "{rule:?}");
+        let secops = |text: &str| -> CheckedQuery {
+            let queries = profiles.check_object(text);
+            queries
+                .into_iter()
+                .find(|query| query.platform == "google_secops")
+                .unwrap_or_else(|| panic!("no google_secops query in {text}"))
+        };
+        let section = |finding: &Finding| finding.field_path.last().cloned().unwrap_or_default();
+        // `events` the stand-in and `condition` written with an error: still
+        // the placeholder, skipped as 0.28.1 skipped it.
+        let bad_condition = text.replace(
+            "condition: |  # opentide:placeholder\n      ...",
+            "condition: |\n      $e and and",
+        );
+        assert!(secops(&bad_condition).placeholder);
+        // `events` written with an engine error and `condition` the
+        // stand-in: the rule is checked, and the error in the written
+        // `events` is reported.
+        let events_wrong = text.replace(
+            "events: |  # opentide:placeholder\n      ...",
+            "events: |\n      $e.metadata.event_type = = \"USER_LOGIN\"",
+        );
+        let rule = secops(&events_wrong);
+        assert!(!rule.placeholder, "{rule:?}");
+        assert!(
+            rule.findings
+                .iter()
+                .any(|finding| section(finding) == "events" && finding.code == "yaral_parse_error"),
+            "{:?}",
+            rule.findings
+        );
+        // `events` written and right, `condition` still the stand-in: the
+        // rule cannot deploy, and 0.28.1 refused it with
+        // `yaral_parse_error` at `condition`.
+        let events_written = text.replace(
+            "events: |  # opentide:placeholder\n      ...",
+            "events: |\n      $e.metadata.event_type = \"USER_LOGIN\"",
+        );
+        let rule = secops(&events_written);
+        assert!(!rule.placeholder, "{rule:?}");
+        assert!(
+            rule.findings
+                .iter()
+                .any(|finding| section(finding) == "condition"
+                    && finding.code == "yaral_parse_error"
+                    && finding.severity == EngineSeverity::Error),
+            "{:?}",
+            rule.findings
+        );
+        assert!(
+            rule.findings
+                .iter()
+                .all(|finding| section(finding) == "condition"),
+            "{:?}",
+            rule.findings
+        );
+        // Written out, it is a query again.
+        let written = text
+            .replace(
+                "      ...\n    outcome",
+                "      $e.metadata.event_type = \"USER_LOGIN\"\n    outcome",
+            )
+            .replace(
+                "condition: |  # opentide:placeholder\n      ...",
+                "condition: |\n      $e",
+            );
+        let queries = profiles.check_object(&written);
+        assert!(
+            queries.iter().all(|query| !query.placeholder),
             "{queries:?}"
         );
     }

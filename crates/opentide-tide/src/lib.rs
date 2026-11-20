@@ -761,7 +761,9 @@ pub struct QueryAnalysis {
 /// The object's other fields are not checked. A file that is not YAML has no
 /// queries. Spans and ranges are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]). A query `opentide new` left as a
-/// placeholder (`...` under `# opentide:placeholder`) has no diagnostics.
+/// placeholder (`...` under `# opentide:placeholder`) has no diagnostics,
+/// except a Google SecOps section whose block's `events` is written: the
+/// sections are one rule, and a stand-in in it does not parse.
 pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
     let source = opentide_core::strip_bom(source);
     opentide_core::with_line_index(source, || analyze_queries_lines(source, elastic_tenants))
@@ -869,6 +871,15 @@ fn analyze_injections(
         .then(|| google_secops::assembled(source, configurations))
         .flatten();
     let mut secops_block = secops.as_ref().map(|found| found.block().to_vec());
+    // The rule is written once its `events` is: a section still the stand-in
+    // is then part of a rule that does not parse, as 0.28.1 and deploy read
+    // it, and keeps the rule's findings in it. While `events` is the
+    // stand-in, the rule is the placeholder `opentide validate` skips.
+    let secops_written = injections.iter().any(|inj| {
+        is_secops_section(inj)
+            && inj.field_path.last().map(String::as_str) == Some("events")
+            && !placeholder::is_placeholder_query(source, inj)
+    });
     for inj in injections {
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
@@ -1007,7 +1018,9 @@ fn analyze_injections(
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
-        if !placeholder::is_placeholder_query(source, &inj) {
+        if !placeholder::is_placeholder_query(source, &inj)
+            || (secops_written && is_secops_section(&inj))
+        {
             // One line table for the query: each finding's position is found in it, not by
             // scanning the query from its start (a long `in` list has a finding per element).
             let inner = opentide_core::LineIndex::new(&inj.inner);

@@ -52,7 +52,7 @@ pub fn environment() -> Vec<(String, String)> {
         ("OPENTIDE_REPO_ROOT", "Repository root, like --repo".into()),
         (
             "OPENTIDE_DATA_ROOT",
-            "Bundled data root, like --data".into(),
+            "Data root, like --data: only --technique completion reads it".into(),
         ),
         ("OPENTIDE_PROXY", "HTTP(S) proxy, like --proxy".into()),
         (
@@ -87,10 +87,6 @@ pub fn environment() -> Vec<(String, String)> {
             "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal; json writes \
              progress events on stderr"
                 .into(),
-        ),
-        (
-            "OPENTIDE_CACHE_DIR",
-            "Where opentide caches the language-server catalogs it generates".into(),
         ),
     ]
     .into_iter()

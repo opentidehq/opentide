@@ -16,9 +16,8 @@
 //!   #977): it does not run on Python, and the platforms are its own
 //!   connectors, which import no Python SDK.
 //! - `analysis_engine` passes: the engine is compiled into this program.
-//! - `lsp_catalog` reports the catalog compiled in (the field catalog is not
-//!   generated from Rust yet, UC-2.6), and still warns about a committed one
-//!   from another opentide.
+//! - `lsp_catalog` warns about a committed catalog from another opentide;
+//!   no program reads it (the language server generates its own, #926).
 
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -134,6 +133,10 @@ struct Doctor<'a> {
     workspace: PathBuf,
     explicit: bool,
     cwd: PathBuf,
+    /// The Tide workspace `placement` resolves, against the working
+    /// directory: `OPENTIDE_TIDE_WORKSPACE` when it is set, else the
+    /// repository path.
+    tide_workspace: Option<PathBuf>,
     /// The merged configuration, when it loads.
     config: Option<Node>,
 }
@@ -145,11 +148,16 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     let workspace = resolve(&cx.cwd.join(&shown));
     let discovered = resolve(&root::find_workspace_root(&OsFs, cx.cwd));
     let explicit = cx.repo.is_some() || workspace != discovered;
+    let tide_workspace = options
+        .tide_workspace_env
+        .as_deref()
+        .map(|path| resolve(&cx.cwd.join(path)));
     let mut doctor = Doctor {
         cx,
         workspace,
         explicit,
         cwd,
+        tide_workspace,
         config: None,
     };
     let roots = root::resolve(&OsFs, &options_for(&options));
@@ -316,6 +324,38 @@ impl Doctor<'_> {
         } else {
             "found from the current directory"
         };
+        if !self.workspace.is_dir() {
+            let problem = if self.workspace.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Check::new(
+                "workspace",
+                "fail",
+                format!("Workspace {shown} {problem} ({how})"),
+            )
+            .fix("set --repo or OPENTIDE_REPO_ROOT to your detection repository".to_owned());
+        }
+        // The command line refuses an `OPENTIDE_TIDE_WORKSPACE` that names no
+        // folder; `doctor` runs anyway and reports it here (#1659).
+        if let Some(tide) = self.tide_workspace.as_ref().filter(|tide| !tide.is_dir()) {
+            let shown = self.shown(tide, None);
+            let problem = if tide.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Check::new(
+                "workspace",
+                "fail",
+                format!("OPENTIDE_TIDE_WORKSPACE={shown} {problem}"),
+            )
+            .fix(
+                "set OPENTIDE_TIDE_WORKSPACE to the folder whose objects are read, or unset it"
+                    .to_owned(),
+            );
+        }
         if self.workspace.join(OPENTIDE_DIR).is_dir() {
             return Check::new(
                 "workspace",
@@ -356,7 +396,7 @@ impl Doctor<'_> {
     }
 
     fn git(&self) -> Vec<Check> {
-        let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
+        let path = self.cx.env.search_path().unwrap_or_default().to_owned();
         let Some(git) = on_path("git", &path, &self.cwd) else {
             return vec![
                 Check::new(
@@ -735,7 +775,7 @@ impl Doctor<'_> {
                     "warn",
                     format!(
                         "The language-server catalog committed in {shown} is from opentide \
-                         {from}, not {version}: editors that run opentide-lsp on their own use it"
+                         {from}, not {version}"
                     ),
                 )
                 .fix(fix);
@@ -1229,7 +1269,7 @@ impl Doctor<'_> {
                 "; the opentide extension ({EXTENSION_ID}) also provides the server to VS Code"
             ));
         }
-        let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
+        let path = self.cx.env.search_path().unwrap_or_default().to_owned();
         let mut unresolved: Vec<String> = commands
             .into_iter()
             .filter(|command| !command.is_empty() && on_path(command, &path, &self.cwd).is_none())
@@ -1468,7 +1508,7 @@ pub const GIT_VERSION_NOT_CHECKED: &str =
 /// The program `name` resolves to on `path` (a `PATH` value), relative to
 /// `cwd`, as a shell finds it.
 #[cfg(not(target_os = "wasi"))]
-fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     which::which_in(name, Some(path), cwd).ok()
 }
 
@@ -1477,7 +1517,7 @@ fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::P
 /// folders, the first that holds a file of that name (WASI has no execute
 /// bit to check).
 #[cfg(target_os = "wasi")]
-fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     let candidate = std::path::Path::new(name);
     if candidate.components().count() > 1 {
         let found = cwd.join(candidate);
@@ -1587,6 +1627,37 @@ mod tests {
         );
     }
 
+    /// A committed catalog from another opentide warns, naming both versions
+    /// and nothing that reads it (#1684); one from this opentide, or none,
+    /// passes.
+    #[test]
+    fn a_committed_catalog_from_another_opentide_warns() {
+        let env = Env::default();
+        let dir = tempfile::tempdir().unwrap();
+        let generated = dir.path().join(".opentide/lsp/catalogs/generated");
+        std::fs::create_dir_all(&generated).unwrap();
+        let cx = context(&env, dir.path());
+        let doctor = Doctor {
+            cx: &cx,
+            workspace: dir.path().to_path_buf(),
+            explicit: false,
+            cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
+            config: None,
+        };
+        assert_eq!(doctor.lsp_catalog().status, "pass");
+        std::fs::write(generated.join("fields.json"), r#"{"opentide": "0.18.0"}"#).unwrap();
+        let check = doctor.lsp_catalog();
+        assert_eq!(check.status, "warn");
+        assert_eq!(
+            check.message,
+            "The language-server catalog committed in .opentide/lsp/catalogs/generated is from \
+             opentide 0.18.0, not 9.9.9"
+        );
+        std::fs::write(generated.join("fields.json"), r#"{"opentide": "9.9.9"}"#).unwrap();
+        assert_eq!(doctor.lsp_catalog().status, "pass");
+    }
+
     #[test]
     fn a_proxy_that_accepts_passes_and_names_a_no_proxy_bypass() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1602,6 +1673,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         let check = doctor.proxy(false);
@@ -1821,6 +1893,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         doctor.proxy(false)

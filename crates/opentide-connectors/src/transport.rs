@@ -379,10 +379,17 @@ pub enum TransportFailure {
     },
     /// Connected, then no answer (or no more of it) within the read limit.
     Timeout,
-    /// The request could not reach the tenant for another reason: a
-    /// certificate the tenant's TLS settings refuse, or a URL, header or
-    /// setting the transport refuses. Never sent again: it would fail the
-    /// same way.
+    /// The tenant's certificate was refused during the TLS handshake (the
+    /// tenant's TLS settings do not trust it): the request was never sent.
+    /// Never sent again: it would fail the same way.
+    CertificateRefused {
+        /// What failed, without the URL.
+        reason: String,
+    },
+    /// The request could not reach the tenant for another reason: a URL,
+    /// header or setting the transport refuses, or a connection dropped
+    /// while the request was sent (it may have been taken). Never sent
+    /// again: it would fail the same way.
     Unreachable {
         /// What failed, without the URL.
         reason: String,
@@ -654,6 +661,8 @@ impl ReqwestTransport {
         let reason = crate::error::describe(error);
         if connect && !refused {
             TransportFailure::Connect { reason }
+        } else if refused {
+            TransportFailure::CertificateRefused { reason }
         } else if unreachable {
             TransportFailure::Unreachable { reason }
         } else {

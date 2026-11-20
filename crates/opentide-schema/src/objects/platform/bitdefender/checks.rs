@@ -162,6 +162,15 @@ fn criterion_path(index: usize) -> Vec<PathSegment> {
     vec![key("detection"), key("criteria"), PathSegment::Index(index)]
 }
 
+/// A criterion's `field`: where a finding about the field itself points, so
+/// its frame underlines the field's name (B5: it underlined the `f` of the
+/// criterion's first key).
+fn field_path(index: usize) -> Vec<PathSegment> {
+    let mut path = criterion_path(index);
+    path.push(key("field"));
+    path
+}
+
 fn get<'n>(node: &'n Node, name: &str) -> Option<&'n Node> {
     node.get(name).map(AsRef::as_ref)
 }
@@ -449,14 +458,19 @@ fn detection_findings<'n>(
             // On every target, open ones included (bitdefender-1.0, as the language server).
             found.push(Finding {
                 code: CRITERION_FIELD,
-                path: criterion_path(index),
+                path: field_path(index),
                 message: Some(ALERT_MESSAGE),
             });
             criterion_found = true;
         } else if let Some(target) = target
             && let Some(code) = criterion_code(catalogue, target, criterion)
         {
-            found.push(Finding::new(code, criterion_path(index)));
+            let path = if code == CRITERION_FIELD {
+                field_path(index)
+            } else {
+                criterion_path(index)
+            };
+            found.push(Finding::new(code, path));
             criterion_found = true;
         }
     }

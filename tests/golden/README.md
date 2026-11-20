@@ -1,22 +1,39 @@
 # The command line's snapshot cases
 
-What every `opentide` command prints and writes is held by Rust-owned insta snapshots
-(`crates/opentide-cli/tests/cli_snapshots.rs`). This folder holds their inputs:
-[`cases.toml`](cases.toml), the argument sets, and [`fixtures/`](fixtures/), the workspaces
-they run in; [`payloads/`](payloads/) is the deploy compile's corpus
-(`crates/opentide-compile/tests/oracle.rs`).
+What the command line guarantees is held by unit tests and end-to-end assertions: the renderers'
+(`crates/opentide-cli/tests/render.rs`), each command's own tests, the MCP and stdio tests. The
+Rust-owned insta snapshots (`crates/opentide-cli/tests/cli_snapshots.rs`) hold only what the
+**exact output is the product** for:
 
-Until #1139 and #1142 this folder also held the recordings of the frozen Python CLI (the
-oracle: `cases/`, `blobs/`, `mcp/`, `APPROVED_DIFFS.toml`) and `cargo xtask golden`, `compare`
-and `mcp` compared the Rust engine with them. Once the snapshots and the crates' own tests held
-the same behaviour, the recordings and that tooling were deleted; git history keeps them.
+- the **`--json` contract**: the document a script reads, as a parsed value;
+- the **files a command creates, modifies or deletes**: the pipelines `setup ci` writes, the
+  objects `new` scaffolds, the reports `--output` writes, which users commit or publish;
+- the **exit code** of each case;
+- a small **rendering set** in the text modes (colours, wrapping, code frames, the tally, the
+  checklist), and the few behaviours only a text mode has.
+
+A behaviour change is therefore a unit or end-to-end assertion first; a snapshot diff follows only
+when the `--json` document, a written file, an exit code or the rendering set changes. This folder
+holds the snapshots' inputs: [`cases.toml`](cases.toml), the argument sets, and
+[`fixtures/`](fixtures/), the workspaces they run in; [`payloads/`](payloads/) is the deploy
+compile's corpus (`crates/opentide-compile/tests/oracle.rs`), which compares with 0.28.1's real
+requests and is not part of this slimming.
+
+Until #1139 and #1142 this folder also held the recordings of the frozen Python CLI (the oracle:
+`cases/`, `blobs/`, `mcp/`, `APPROVED_DIFFS.toml`) and `cargo xtask golden`, `compare` and `mcp`
+compared the Rust engine with them. Once the snapshots and the crates' own tests held the same
+behaviour, the recordings and that tooling were deleted; git history keeps them. Until #1723 every
+case was also recorded in the `human`, `plain` and `agent` modes, which repeated the json case's
+behaviour in another layout (1,906 files, most of them rewritten by any help-text, message or
+explain-page edit).
 
 ## Snapshots
 
 `cases.toml` is the manifest of the CLI's snapshot tests,
 `crates/opentide-cli/tests/cli_snapshots.rs`. Each case (its command, flags, mode, fixture and
 cassette) runs in-process through `opentide_cli::run` on a fresh copy of its fixture, and what
-it did is held to an insta snapshot of the **Rust CLI's own output**, one file per case:
+it did is held to an insta snapshot of the **Rust CLI's own output** (its `view` says how much, see
+"Views"), one file per case:
 `crates/opentide-cli/tests/cli_snapshots/<command>/<mode>__<fixture>__<variant>.snap`. A
 snapshot holds the arguments, the exit code, stdout, stderr, and every file the run created,
 modified or deleted under the workspace, home and the temporary directory, with its mode.
@@ -28,11 +45,21 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   its text as written (key order, indentation and final newline included), with control
   characters shown.
 - **Control characters are shown**: ESC as `␛`, so a colour or cursor change is a visible diff.
-- **A file over 64 KiB**: a JSON one (the editor schemas, the SARIF report) keeps its structure
-  with strings over 200 characters, then its largest parts (a schema's definitions, SARIF's rule
-  catalogue), replaced by their size and SHA-256 until it fits in 16 KiB; any other is its size
-  and SHA-256. Only the case's paths are replaced in such a file (the full normaliser takes
-  seconds on megabytes), so it must hold nothing else that changes between runs.
+- **A file over 64 KiB**: a JSON one (the editor schemas) keeps its structure with strings over
+  200 characters, then its largest parts (a schema's definitions), replaced by their size and
+  SHA-256 until it fits in 16 KiB; any other is its size and SHA-256. Only the case's paths are
+  replaced in such a file (the full normaliser takes seconds on megabytes), so it must hold
+  nothing else that changes between runs.
+- **SARIF holds no explain text.** A SARIF report (a `.sarif` file, or SARIF on stdout) is held as
+  its parsed value, without the rules' short and full descriptions and their help (generated from
+  the explain pages) and without the catalogue's order: `tool.driver.rules` is cut to the rules
+  the results name, each as one line, `id | level | name | helpUri`, and each result's `ruleIndex`
+  is checked against its `ruleId` (a mismatch fails the case) and dropped. The same cut holds the
+  renderers' SARIF snapshots (`tests/render/snapshots/render__*_sarif.snap`). An explain-page edit, or a
+  new diagnostic code, rewrites none of them. The pages are held once, by the `explain` cases; a
+  rule's full shape (its descriptions, help text and Markdown) is asserted for the whole catalogue by
+  `tests/render.rs` before the cut, and `render::report`'s unit tests. The results, with their
+  levels and locations, and the document's structure stay.
 - **Normalised, and only because it differs between two runs or two hosts** (the snapshots'
   normaliser, `crates/opentide-cli/tests/common/normalise.rs`, the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of
   fixed length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`;
@@ -42,7 +69,9 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   a refused connection's errno (`<ECONNREFUSED>`, 111 on Linux, 61 on macOS), and `validate`'s worker counts in JSON
   (`<CORES>`). The host reports a fixed version (`0.28.1`, `tests/common/snapshot.rs`
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
-  standard input, and the fixtures get fixed modes.
+  standard input, and the fixtures get fixed modes. A case's `PATH` is `/usr/local/bin:/usr/bin:/bin`
+  unless its `env` names one: `<TMP>/bin` holds a stand-in `opentide` and `<TMP>/empty` nothing, so a
+  case that looks for `opentide` (`setup mcp`) names the one it means rather than reading the host's.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
 - **Left out**: `serve`'s session, which feeds standard input: `tests/serve.rs` holds it in its own
   snapshots (#1285), while `cli_snapshots` still lists `serve` among its skipped commands.
@@ -53,9 +82,10 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   `fault-lint` is `fault` with lint's recommended check off, which the harness derives itself. The Linux PR gate and the Coverage workflow
   write them and set `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping
   them. The nightly `engine-test-os` (macOS, Windows) does not write them, by
-  design (minutes of debug-build CPU per OS for output the Linux snapshots already hold): the 101
-  cases are a Linux-gate check. To run or record
-  them (about 4 minutes of CPU in a debug build):
+  design (minutes of debug-build CPU per OS for output the Linux snapshots already hold): the 34
+  cases are a Linux-gate check. They are held in the `diagnostics` view (below), so a reworded
+  message, a help text or a generator tweak that moves no diagnostic rewrites none of them. To run
+  or record them (about 4 minutes of CPU in a debug build):
 
   ```sh
   out=$(mktemp -d)
@@ -76,7 +106,9 @@ INSTA_UPDATE=always cargo nextest run -p opentide-cli --test cli_snapshots   # a
 ```
 
 Commit the accepted `.snap` files with the change that causes them: the diff is the review of the
-user-visible change. Never edit a `.snap` by hand, never commit a `.snap.new`, and never widen a
+change to the `--json` contract, the written files, the exit codes or the rendering set. A change
+to a message, a help text or an explain page is held by the unit test of the code that owns it,
+and moves a snapshot only where the exact text is held (`explain`, `--help`, the rendering set). Never edit a `.snap` by hand, never commit a `.snap.new`, and never widen a
 normalisation rule to make a diff go away. A new case is a `[[case]]` in `cases.toml`; its
 snapshot is written on the first run outside CI (CI sets `INSTA_UPDATE=no`, so a missing
 snapshot fails there).
@@ -102,9 +134,22 @@ content, so it is never masked as the clock: no snapshot depends on the day it i
 ## Cases
 
 [`cases.toml`](cases.toml) is the reviewed source. Each `[[case]]` is an argument set run in each
-of its modes (`human`, a terminal; `plain`, pipes; `json`, `--json` right after `opentide`;
-`agent`, `AI_AGENT` set) against every fixture it lists; `crates/opentide-cli/tests/common/snapshot.rs`
-sets the mode, the environment and the case's root up. `mcp start` is not a mode of these
+of its modes against every fixture it lists; `crates/opentide-cli/tests/common/snapshot.rs`
+sets the mode, the environment and the case's root up. A case runs in **`json` mode alone**
+(`--json` right after `opentide`) unless it lists `modes`, and a case that lists more is a decision:
+
+| Mode | What it is | When a case runs in it |
+|------|------------|------------------------|
+| `json` | `--json` | the default of every case: the document, the written files, the exit code |
+| `human` | a terminal (colours, a width of 100) | the rendering set (the home screen of a bare `opentide`, validate's frames, a wrapped query line, lint, the deploy plan's tally), a flag that only changes a terminal's text (`--no-color`, `--quiet`) |
+| `plain` | pipes | the rendering set; a text mode's own output (`explain` as a person reads it, the CSV and JSON-lines `query` formats, SARIF and code-quality on stdout, the CI annotations and sinks); a case whose json twin answers in other words (`opentide setup` without a terminal: json says `usage_needs_input`) |
+| `agent` | `AI_AGENT` set | the rendering set; the bare `opentide`, whose exit code is 0 for an agent and 2 as `--json` |
+
+Everything a text mode printed for the other cases is in the json case: the same exit code, the
+same files, and the document the text was laid out from. The text's wording and layout are held
+by the renderers' snapshots (`tests/render.rs`) and the commands' own tests. The cases that run
+in a text mode are at the end of `cases.toml`, under "The text modes", each with the reason; add
+one there only for a behaviour no other test holds. `mcp start` is not a mode of these
 cases: the MCP server's own tests (`crates/opentide-cli/src/mcp/tests.rs`, `tests/mcp_stdio.rs`)
 hold it. Tenant-contacting paths (`deploy`, `query`, `share`, `validate query --live`,
 `generate extract`) run to their failure without tenants, unless the case names a cassette. A case with
@@ -114,7 +159,22 @@ fails unless its requests are the cassette's, byte for byte and in order. The ca
 recorded from the oracle and are checked with `cargo xtask cassettes check`
 (`crates/opentide-cassette/AGENTS.md`).
 
-A command no case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is run by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`): the files it writes load to the oracle's data, and their bytes are held to a snapshot of the Rust command's own output (`tests/extract_sentinel/snapshots/`, #1139).
+### Views
+
+How much of a run a snapshot holds is its `view`, set on a fixture (`[fixtures.<name>]`) or
+overridden by a case:
+
+| View | Holds | Used for |
+|------|-------|----------|
+| `full` (default) | the exit code, stdout, stderr (JSON as a parsed value) and every file written, with its text | the cases on the committed fixtures |
+| `streams` | the same, and the paths written with what happened to each, but not the files' text | a text-mode run of a command whose generated files its json case holds (`generate`) |
+| `diagnostics` | the exit code and, for every JSON stream and written report, each finding as `code \| severity \| file \| line \| column`, the integer fields and array lengths by path, and the `status` and `ok` values; the text of every `warnings[]` string (a warning has no code); stderr's log events (JSON lines) as `event \| level \| file`; the paths written; never any other message, a frame, help text or a file's text | the generated corpora (`fault`, `fault-lint`, `heavy-small`) |
+
+A case with `same_as = "<variant>"` holds no snapshot: it must do exactly what that variant does in
+json mode on the same fixture (exit code, streams, files; a JSON stream's layout aside). It keeps a
+flag or a variable that must change nothing (`DEBUG=*`, `OPENTIDE_JSON_INDENT`, flags after the
+subcommand) from costing a copy of a 390 KB document. The harness refuses two cases with one
+command, mode, fixture and variant.
 
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
 of `docs/internal/cli-experience.md` ("Errors people and agents make": a typo in a command, an
@@ -122,7 +182,7 @@ option or a choice, a missing option, a prompt without a terminal, `--json` afte
 `DEBUG='*'`), and one `--help` case per command path. Two things do not run in human mode:
 `opentide tui` (only `tui --help`: the full-screen app redraws on a timer) and an interactive prompt
 (prompt_toolkit works the terminal in raw mode and asks it for the cursor position, which needs a
-terminal emulator); their non-terminal behaviour, exit 2 naming the flags, runs in the other modes.
+terminal emulator); their non-terminal behaviour, exit 2 naming the flags, runs in json mode.
 
 Examples in `docs/cli` that are not cases, and why: `--install-completion` and
 `--show-completion` (they detect the shell from the parent process); `--proxy
@@ -143,12 +203,15 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `tide-corpus` | [`tests/fixtures/tide_corpus/current`](../fixtures/tide_corpus/), moved to the `.opentide/` layout as `tests/corpus_support.py` does |
 | `vscode` | the VS Code extension's fixture workspace, vendored unchanged in [`fixtures/vscode-workspace/`](fixtures/vscode-workspace/) (source and commit in `vscode-workspace.SOURCE.toml`, MIT licence in `vscode-workspace.LICENSE`) |
 | `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is snapshotted |
+| `tide-corpus-bad-values` | `tide-corpus` with two declared edits: CrowdStrike `trigger: sometimes` and SentinelOne `treat_as_threat: maybe`, values the models do not take, whose help and `context.expected` name the values the field takes (#1663) |
+| `vscode-own-pipeline` | `vscode` with one declared edit: a `.gitlab-ci.yml` of the user's own, which `setup ci gitlab` and `setup --ci gitlab` keep (#1656) |
 | `vscode-unscoped` | `vscode` with one declared edit: signal entities written without their stage or in the wrong case (`hostname`, `'host::command line'`, `Process`), so the file `migrate vocab-scope --apply` rewrites is snapshotted (`tide-corpus` links its object folders, which the command does not follow) |
 | `vscode-folded-comment` | `vscode` with one declared edit: the Sentinel query of `detections/rules/custom-folder-rule.yaml` as a folded `>-` block with a `//` line, which comments out the filter after it (`query_folded_comment`, an error `validate` reports) |
 | `vscode-long-query` | `vscode` with one declared edit: `long.lucene`, a Lucene query on one line longer than a frame shows, whose `(` never closes, so the frame shows the line in part |
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
+| `vscode-config-parse` | `vscode` with one declared edit, a new `.opentide/configurations/platforms/sentinel.toml` whose `[platform` header is never closed: `validate`, `lint` and `generate` stop with `config_parse`, the file's place and its diagnostic |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
-| `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are snapshotted as they are, not asserted against the fault manifest |
+| `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are held in the `diagnostics` view, not asserted against the fault manifest |
 | `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
 | `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |

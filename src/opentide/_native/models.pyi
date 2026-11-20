@@ -3266,7 +3266,7 @@ class ElasticConfig:
     @property
     def tags(self, /) -> list[str] | None:
         """
-        Rule tags, after `OpenTide` and the tenant tags.
+        Rule tags, after `opentide` and the tenant tags.
         """
     @property
     def tenants(self, /) -> list[str] | None:

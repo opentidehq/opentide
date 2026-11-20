@@ -324,13 +324,31 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
 /// a status kept out.
 fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    let workspace = match super::open_for(COMMAND, options) {
         Ok(workspace) => workspace,
-        Err(message) => return failed(&message),
+        Err(refused) => {
+            // A TOML file that does not parse keeps `config_parse`.
+            let (code, message, diagnostics) = super::refusal_parts(&refused);
+            let mut result = failed(&message);
+            result.push(("_failure_code".to_owned(), Json::Str(code)));
+            if let Some(diagnostics) = diagnostics {
+                result.insert(2, ("diagnostics".to_owned(), diagnostics));
+            }
+            return result;
+        }
     };
     let mut warnings: Vec<String> = Vec::new();
     let mut skipped: Vec<plan::Skipped> = Vec::new();
-    let mut result = deploy(args, cx, &workspace, &mut warnings, &mut skipped);
+    let mut promoted = Unpromote::default();
+    let mut result = deploy(
+        args,
+        cx,
+        &workspace,
+        &mut warnings,
+        &mut skipped,
+        &mut promoted,
+    );
+    promoted.finish().apply(&mut result, &mut warnings);
     if (!args.uuids.is_empty() || !args.files.is_empty()) && !has(&result, "scope") {
         result.push(("scope".into(), Json::str("selected")));
     }
@@ -350,7 +368,7 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
         set(&mut result, "warnings", Json::Array(all));
     }
     if !skipped.is_empty() {
-        report_skipped(&mut result, &skipped, &workspace);
+        report_skipped(&mut result, &skipped, &workspace, &args.strategies);
     }
     let skipped_run = text_of(&result, "status").as_deref() == Some("skipped");
     if skipped_run
@@ -425,9 +443,20 @@ fn report_skipped(
     result: &mut Vec<(String, Json)>,
     skipped: &[plan::Skipped],
     workspace: &Workspace,
+    strategies: &[String],
 ) {
-    let (rules, in_status) = left_out(skipped);
-    let runs = run_strategies(result);
+    let (_, in_status) = left_out(skipped);
+    let owned = opentide_compile::Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    // The result's `strategies`, else `--strategy`'s: a run that planned
+    // nothing for its `--platform` names the platform instead (#1662, D11).
+    let mut runs = run_strategies(result);
+    if runs.is_empty() {
+        runs = strategy::parse_strategies(strategies, &owned.statuses, "--strategy")
+            .unwrap_or_default();
+    }
     let run_names = if runs.is_empty() {
         "this run".to_owned()
     } else {
@@ -449,12 +478,32 @@ fn report_skipped(
         Some((_, Json::Object(members))) => members.clone(),
         _ => Object::new(),
     };
-    summary.insert("skipped".into(), Json::from(rules));
+    // The rows the run skipped (a rule no tenant takes, an `INERT` block),
+    // and the rules a status left out that have no such row: a rule is
+    // never counted twice.
+    let rows = match summary.get("skipped") {
+        Some(Json::Int(rows)) => usize::try_from(*rows).unwrap_or(0),
+        _ => 0,
+    };
+    let skipped_rows: std::collections::HashSet<String> =
+        match result.iter().find(|(key, _)| key == "results") {
+            Some((_, Json::Array(rows))) => rows
+                .iter()
+                .filter(|row| row.get("status").and_then(Json::as_str) == Some("skipped"))
+                .filter_map(|row| row.get("id").and_then(Json::as_str))
+                .map(opentide_compile::rule::canonical_uuid)
+                .collect(),
+            _ => std::collections::HashSet::new(),
+        };
+    let mut left: Vec<String> = skipped
+        .iter()
+        .map(|entry| opentide_compile::rule::canonical_uuid(&entry.uuid))
+        .filter(|uuid| !skipped_rows.contains(uuid))
+        .collect();
+    left.sort_unstable();
+    left.dedup();
+    summary.insert("skipped".into(), Json::from(rows + left.len()));
     set(result, "_summary", Json::Object(summary));
-    let owned = opentide_compile::Owned::new(
-        &Vocabularies::bundled(),
-        &workspace.configuration().resolved,
-    );
     let deployable = if runs.is_empty() {
         Vec::new()
     } else {
@@ -523,15 +572,8 @@ fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Js
 /// Whether the run would promote statuses (`StatusStrategy.RELEASE in run`
 /// on a push in CI, reading the changed files, without `--skip-promotion`).
 fn promotes(args: &Args, runs: &[StatusStrategy], env: &Env) -> bool {
-    let lookup = |name: &str| env.get(name).map(str::to_owned);
-    let ci = opentide_compile::git::ci(&lookup);
-    runs.contains(&StatusStrategy::Release)
-        && !args.all
-        && args.uuids.is_empty()
-        && args.files.is_empty()
-        && !args.skip_promotion
-        && ci != opentide_compile::git::Ci::Local
-        && !opentide_compile::git::is_change_request(ci, &lookup)
+    let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
+    !args.skip_promotion && super::promotion_preview::applies(runs, reads_changes, env)
 }
 
 /// `_deploy` for a run that sends.
@@ -545,6 +587,7 @@ fn deploy(
     workspace: &Workspace,
     plan_warnings: &mut Vec<String>,
     plan_skipped: &mut Vec<plan::Skipped>,
+    promoted: &mut Unpromote,
 ) -> Vec<(String, Json)> {
     if let Some(value) = cx
         .env
@@ -597,7 +640,7 @@ fn deploy(
         cwd: cx.cwd.to_path_buf(),
         plugins: crate::plugins::plugin_ids(),
     };
-    let scope: Scope = if selecting {
+    let mut scope: Scope = if selecting {
         let (scope, unmatched) =
             opentide_compile::dry_run::selected_scope(fs, workspace, &local, &request, cx.cwd);
         if !unmatched.is_empty() {
@@ -649,8 +692,22 @@ fn deploy(
             local: &local,
             debug,
         };
-        if let Err(stop) = super::deploy_promote::run(&promotion, &cx.lines) {
+        super::deploy_promote::guard_termination();
+        // The files it rewrote, even when a write failed part-way: put
+        // back unless a tenant receives their rule (#1653).
+        let (rewritten, outcome) = super::deploy_promote::run(&promotion, &cx.lines);
+        promoted.files = rewritten;
+        if let Err(stop) = outcome {
             return super::deploy_promote::stopped(&stop);
+        }
+        if debug {
+            // Whole-folder promotion: deploy what it promoted besides the
+            // files the push changed, never the rest of the folder (#1653).
+            for file in &promoted.files {
+                if !scope.files.contains(&file.path) {
+                    scope.files.push(file.path.clone());
+                }
+            }
         }
         // Read the files the promotion may have rewritten again (a clone
         // shares every other parse), so the plan and the payloads see the
@@ -707,7 +764,15 @@ fn deploy(
         }
     };
     plan_warnings.extend(selection.warnings.iter().cloned());
-    plan_skipped.extend(selection.skipped.iter().cloned());
+    // `--platform`: another platform's blocks are not this run's to count
+    // as left out (#1662, D11).
+    plan_skipped.extend(
+        selection
+            .skipped
+            .iter()
+            .filter(|entry| args.platform.as_ref().is_none_or(|p| p == &entry.platform))
+            .cloned(),
+    );
     // The commits changed no rule file: say so, rather than blame a status.
     let unchanged = !selecting && !args.all && scope.files.is_empty() && scope.nested.is_empty();
     let refused = !selection.refused.is_empty();
@@ -809,6 +874,8 @@ fn deploy(
     }
     // Each platform's tenants, resolved before anything is sent.
     let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
+    // The rules no tenant of a platform takes: (platform, uuid, reason).
+    let mut unrouted: Vec<(String, String, String)> = Vec::new();
     let index = workspace.index();
     for (platform, uuids) in &deployment {
         let tables = plan::tenants(config, platform);
@@ -823,7 +890,7 @@ fn deploy(
                     .unwrap_or_default(),
             })
             .collect();
-        log_unset(&configured, cx.env);
+        log_unset(&configured, cx.env, "a deploy");
         let tenants: Vec<plan::Tenant> = tables
             .iter()
             .map(|table| plan::Tenant::from_json(table))
@@ -845,7 +912,23 @@ fn deploy(
             let Ok(rule_strategy) = owned.statuses.strategy(status) else {
                 continue;
             };
-            for tenant in plan::rule_tenants(&tenants, &block, rule_strategy, &runs, args.wide) {
+            let routed = plan::rule_tenants(&tenants, &block, rule_strategy, &runs, args.wide);
+            if routed.is_empty() {
+                unrouted.push((
+                    platform.clone(),
+                    opentide_compile::rule::canonical_uuid(uuid),
+                    plan::unrouted_reason(
+                        platform,
+                        &tenants,
+                        &block,
+                        status,
+                        rule_strategy,
+                        &runs,
+                        args.wide,
+                    ),
+                ));
+            }
+            for tenant in routed {
                 per_tenant
                     .entry(tenant.name.clone())
                     .or_default()
@@ -878,6 +961,17 @@ fn deploy(
     );
     let compile_cx = owned.context(index);
     let mut log = DeployLog::new(&cx.lines, &changes);
+    // A rule no tenant takes was never sent: skipped, with why, never
+    // `deployed` (#1653).
+    for (platform, uuid, reason) in &unrouted {
+        let name = index
+            .get("rule", uuid)
+            .and_then(|object| object.root())
+            .map(CJson::from_node)
+            .and_then(|data| data.get("name").and_then(CJson::as_str).map(str::to_owned))
+            .unwrap_or_else(|| uuid.clone());
+        log.unrouted(platform, uuid, &name, reason);
+    }
     let mut sender = Sender {
         cx,
         workspace,
@@ -958,6 +1052,8 @@ fn deploy(
                 };
             }
         }
+        // What reached a tenant stays promoted, whatever ends the run next.
+        promoted.received(&log.results);
         step.seconds = step_started.elapsed().as_secs_f64();
         completed += 1;
         cx.lines.step(&step, completed, total);
@@ -978,7 +1074,7 @@ fn deploy(
                     platform == system && Some(stopped.as_str()) == *tenant
                 })
             });
-        if sent && !unusable {
+        if sent && !unusable && !planned_on.is_empty() {
             deployed.push(system.clone());
         }
     }
@@ -1140,6 +1236,156 @@ fn deploy(
     result
 }
 
+/// The files a status promotion rewrote: put back as they were before the
+/// result is built ([`Unpromote::finish`]) unless a tenant received their
+/// rule, so the write-back commits no status that was never deployed
+/// (#1653). A file is kept promoted when any platform block of its rule
+/// reached any tenant. Dropping the guard puts back what `finish` did not
+/// (a panic); a forced exit puts back what is still pending
+/// ([`super::deploy_promote::restore_pending`]).
+#[derive(Default)]
+struct Unpromote {
+    files: Vec<super::deploy_promote::Promoted>,
+    /// The canonical UUIDs of the rules a tenant received.
+    sent: std::collections::HashSet<String>,
+}
+
+/// What putting the promoted files back did: warnings for the files left
+/// as they were, failures for the files that could not be written.
+#[derive(Debug, Default)]
+struct Settled {
+    warnings: Vec<String>,
+    failures: Vec<(String, String)>,
+}
+
+impl Unpromote {
+    /// The rules of `results` a tenant received (`deployed`): their files
+    /// are kept promoted, and a forced exit no longer puts them back.
+    fn received(&mut self, results: &[RuleResult]) {
+        self.sent.extend(
+            results
+                .iter()
+                .filter(|result| reached(result))
+                .map(|result| opentide_compile::rule::canonical_uuid(&result.id)),
+        );
+        let kept: Vec<_> = self
+            .files
+            .iter()
+            .filter(|file| self.keeps(file))
+            .cloned()
+            .collect();
+        super::deploy_promote::settle(&kept);
+    }
+
+    fn keeps(&self, file: &super::deploy_promote::Promoted) -> bool {
+        file.uuid
+            .as_ref()
+            .is_some_and(|uuid| self.sent.contains(uuid))
+    }
+
+    /// Puts back every file no tenant received the rule of, once, holding
+    /// the pending files' lock: a signal meanwhile waits for it, then finds
+    /// nothing left to put back.
+    fn finish(&mut self) -> Settled {
+        use super::deploy_promote::Restored;
+        let files = std::mem::take(&mut self.files);
+        let mut settled = Settled::default();
+        // Restored under the pending lock, logged once it is released: a
+        // log line may wait for stderr, which a signal's thread can hold
+        // while it waits for the pending files.
+        let mut undone = Vec::new();
+        let mut held = super::deploy_promote::pending();
+        for file in files.iter().filter(|file| !self.keeps(file)) {
+            let path = file.path.display().to_string();
+            match file.restore() {
+                Ok(Restored::Done) => undone.push(path),
+                Ok(Restored::Missing) => settled.warnings.push(format!(
+                    "{path} was deleted during the deploy, so its status promotion was not undone"
+                )),
+                // The write-back would commit the edit, and with it a
+                // status no tenant received.
+                Ok(Restored::Edited) => settled.failures.push((
+                    path,
+                    "the file changed during the deploy, so it was left as it is; set its \
+                     status back before committing"
+                        .to_owned(),
+                )),
+                Err(error) => settled.failures.push((path, error)),
+            }
+        }
+        held.retain(|pending| !files.iter().any(|file| file.path == pending.path));
+        drop(held);
+        for path in undone {
+            tracing::info!(
+                path = path.as_str(),
+                detail = "no tenant received the rule, so its status stays as it was",
+                "rule_promotion_undone"
+            );
+        }
+        for (path, error) in &settled.failures {
+            tracing::error!(
+                path = path.as_str(),
+                detail = error.as_str(),
+                critical = true,
+                "rule_promotion_undo_failed"
+            );
+        }
+        settled
+    }
+}
+
+/// A result a tenant received: `deployed`, on a tenant.
+fn reached(result: &RuleResult) -> bool {
+    result.status == "deployed" && result.tenant.is_some()
+}
+
+impl Settled {
+    /// The run's result with the files left as they were among its
+    /// warnings, and a file that could not be put back as a failure: the
+    /// run fails (exit 1), since a commit would carry a status no tenant
+    /// received.
+    fn apply(self, result: &mut Vec<(String, Json)>, warnings: &mut Vec<String>) {
+        warnings.extend(self.warnings);
+        if self.failures.is_empty() {
+            return;
+        }
+        let lines: Vec<String> = self
+            .failures
+            .iter()
+            .map(|(path, error)| {
+                format!(
+                    "Could not undo the status promotion of {path}, which no tenant received: \
+                     {error}"
+                )
+            })
+            .collect();
+        let entries = self.failures.iter().zip(&lines).map(|((path, _), line)| {
+            Json::object([("path", Json::str(path)), ("error", Json::str(line))])
+        });
+        let mut all = match result.iter().find(|(key, _)| key == "failures") {
+            Some((_, Json::Array(own))) => own.clone(),
+            _ => Vec::new(),
+        };
+        all.extend(entries);
+        set(result, "failures", Json::Array(all));
+        if text_of(result, "status").as_deref() != Some("failed") {
+            set(result, "status", Json::str("failed"));
+            set(result, "message", Json::str(&lines[0]));
+            set(result, "error", Json::str(&lines[0]));
+        }
+        set(result, "_exit_code", Json::Int(1));
+    }
+}
+
+impl Drop for Unpromote {
+    fn drop(&mut self) {
+        let settled = self.finish();
+        for warning in settled.warnings {
+            tracing::warn!(detail = warning.as_str(), "rule_promotion_not_undone");
+        }
+    }
+}
+
 /// Every rule on every tenant the targets resolved; rules on tenantless
 /// platforms once (`plan_changes`).
 fn plan_changes(
@@ -1153,8 +1399,9 @@ fn plan_changes(
     let root = workspace.root().to_path_buf();
     let mut changes = Vec::new();
     for (platform, uuids) in deployment {
-        let tenants = targets.get(platform).filter(|tenants| !tenants.is_empty());
-        let pairs: Vec<(Option<String>, String)> = match tenants {
+        // A platform whose tenants were resolved plans what they take: a
+        // rule none takes is reported skipped, never sent (#1653).
+        let pairs: Vec<(Option<String>, String)> = match targets.get(platform) {
             Some(tenants) => tenants
                 .iter()
                 .flat_map(|(tenant, ids)| ids.iter().map(|id| (Some(tenant.clone()), id.clone())))
@@ -1441,8 +1688,23 @@ impl<'l> DeployLog<'l> {
                 }
             }
         }
+        if reached(&result) {
+            // Kept promoted from now on, whatever ends the run (#1653).
+            super::deploy_promote::received(&opentide_compile::rule::canonical_uuid(&result.id));
+        }
         self.print(&result);
         self.results.push(result);
+    }
+
+    /// The plan's action for a rule on a tenant (else on its platform).
+    fn planned_action(&self, platform: &str, tenant: Option<&str>, id: &str) -> Option<&str> {
+        [tenant.map(str::to_owned), None]
+            .into_iter()
+            .find_map(|tenant| {
+                self.actions
+                    .get(&(platform.to_owned(), tenant, id.to_owned()))
+            })
+            .map(String::as_str)
     }
 
     /// A rule planning refused before anything was sent (`refused`).
@@ -1457,6 +1719,16 @@ impl<'l> DeployLog<'l> {
     /// A rule the engine decided not to send (`skipped`).
     fn skipped(&mut self, platform: &str, tenant: &str, id: &str, name: &str, reason: &str) {
         let mut result = RuleResult::new(platform, Some(tenant), id, name);
+        result.status = "skipped";
+        result.reason = Some(reason.to_owned());
+        result.seconds = Some(0.0);
+        self.finished(result);
+    }
+
+    /// A rule no tenant of `platform` takes: skipped before anything is
+    /// sent, with no tenant.
+    fn unrouted(&mut self, platform: &str, id: &str, name: &str, reason: &str) {
+        let mut result = RuleResult::new(platform, None, id, name);
         result.status = "skipped";
         result.reason = Some(reason.to_owned());
         result.seconds = Some(0.0);
@@ -2355,7 +2627,7 @@ impl Sender<'_, '_> {
                 u32::try_from(civil.hour()).unwrap_or(0),
             ),
         };
-        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, clock)
+        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, Some(clock))
             .map_err(compile_error)?;
         let mut name = rule.name.trim().to_owned();
         let correlation = match rule
@@ -3333,6 +3605,11 @@ impl Sender<'_, '_> {
         match deployed {
             Ok(done) => {
                 self.elastic_warnings(rule, &done);
+                // An `upsert` reads as what Kibana did: a create, or an
+                // update (#1662, E10).
+                if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert") {
+                    result.action = elastic_done_action(&done).map(str::to_owned);
+                }
                 log.finished(result);
             }
             // The rule itself failed: the other rules go on.
@@ -4753,6 +5030,18 @@ fn operation_of(action: &Planned, strategy: StatusStrategy) -> (Operation, Optio
         Planned::Update(id) => (Operation::Update, Some(id.as_str())),
         Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
     }
+}
+
+/// What an Elastic deploy did to a rule, as a plan's action: `create` for a
+/// rule Kibana did not have, `update` for one it replaced or recreated.
+fn elastic_done_action(done: &DeployOutcome) -> Option<&'static str> {
+    done.events
+        .iter()
+        .find_map(|event| match event.name.as_str() {
+            "elastic_rule_created" => Some("create"),
+            "elastic_rule_updated" | "elastic_rule_recreated" => Some("update"),
+            _ => None,
+        })
 }
 
 /// What an Elastic tenant's rules share: its `setup`, whether it turns

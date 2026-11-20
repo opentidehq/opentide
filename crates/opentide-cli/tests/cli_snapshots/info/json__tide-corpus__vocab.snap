@@ -181,7 +181,7 @@ exit: 0
       "name": "alert_severity",
       "removed": 0,
       "staged": false,
-      "title": "MDR Alert Severity"
+      "title": "Alert Severity"
     },
     {
       "entries": 962,
@@ -398,14 +398,6 @@ exit: 0
       "removed": 0,
       "staged": false,
       "title": "Adversary Sophistication"
-    },
-    {
-      "entries": 10,
-      "latest_revision": "1.0",
-      "name": "stakeholders",
-      "removed": 0,
-      "staged": false,
-      "title": "Stakeholders to Notify"
     },
     {
       "entries": 895,

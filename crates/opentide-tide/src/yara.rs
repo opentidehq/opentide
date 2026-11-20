@@ -804,13 +804,21 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
     }
     // The closing brace ends the condition: a condition cut short is found here.
     b.synthetic("}", host_of(&condition_p), &condition_path);
-    // The assembled text covers the bodies' scalars and what lies between.
-    let real: Vec<usize> = b
-        .parts
-        .iter()
-        .filter(|p| !p.synthetic)
-        .flat_map(|p| b.map[p.start..p.end].iter().copied())
-        .collect();
+    // The assembled text covers the bodies' scalars and what lies between:
+    // the block's own fields. The meta lines deploy writes from the object
+    // (`id` is `metadata.uuid`) are not the query's place (B4: `validate
+    // query` placed the rule at the UUID, line 4), unless nothing else is.
+    let written = |own: bool| -> Vec<usize> {
+        b.parts
+            .iter()
+            .filter(|p| !p.synthetic && (!own || p.field_path.starts_with(&yara_path)))
+            .flat_map(|p| b.map[p.start..p.end].iter().copied())
+            .collect()
+    };
+    let mut real = written(true);
+    if real.is_empty() {
+        real = written(false);
+    }
     let start = real.iter().copied().min()?;
     let end = real.iter().copied().max()? + 1;
     Some(InjectedQuery {

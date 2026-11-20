@@ -24,16 +24,16 @@ fn small(seed: u64, layout: Layout) -> Options {
 #[test]
 fn recorded_digests() {
     let cases = [
-        (small(1, Layout::Explicit), "8e24e8ec3f1cd9dd"),
-        (small(1, Layout::Standard), "ec03b888527a9fd5"),
-        (Options::new(20_261_107), "38a7ea8ef0ab2e96"),
+        (small(1, Layout::Explicit), "033ea64985f8d121"),
+        (small(1, Layout::Standard), "2187b33654363b09"),
+        (Options::new(20_261_107), "80e20a47f99737e3"),
         (
             Options {
                 counts: Counts::scaled(0.1).unwrap(),
                 layout: Layout::Custom,
                 ..Options::new(20_261_107)
             },
-            "35e3916591775555",
+            "626f15aed7c6fc65",
         ),
         // The benchmarks' workspace: the platforms their 0.23.0 oracle knows,
         // the corpus their baselines were measured on (tests/bench/budgets.toml).
@@ -42,7 +42,7 @@ fn recorded_digests() {
                 platforms: xtask::bench::oracle::ORACLE_PLATFORMS,
                 ..Options::new(20_261_107)
             },
-            "5978a2ab7c093587",
+            "aa03d09a58068a06",
         ),
     ];
     for (options, digest) in cases {

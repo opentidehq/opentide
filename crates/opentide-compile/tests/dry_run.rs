@@ -123,11 +123,26 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
         r#"["a real deploy would need $DEFENDER_TENANT, which is unset"]"#
     );
     assert_eq!(outcome.outcome_kind, Some("plan"));
-    // Defender's preview is the block's model dump; a block its model
-    // refuses (no query, alert, ...) is shown as written.
+    // Defender's preview is the request a deploy sends to the first tenant
+    // (#1712): a create for the rule the deployment state does not record,
+    // an update of the id it records (`42`) for the other; it was the block.
+    let body = |uuid: &str| {
+        format!(
+            r#"{{"displayName":"Rule {uuid}","queryCondition":{{"queryText":""}},"schedule":{{"period":""}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"informational","category":"","mitreTechniques":[],"impactedAssets":[],"recommendedActions":null}},"responseActions":[],"organizationalScope":null}},"isEnabled":true}}"#
+        )
+    };
+    let (a, b) = (
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+    );
+    let endpoint = "https://graph.microsoft.com/beta/security/rules/detectionRules";
     assert_eq!(
         text(&outcome, "payloads"),
-        r#"{"defender_for_endpoint":[{"uuid":"00000000-0000-4000-8000-00000000000a","name":"Rule 00000000-0000-4000-8000-00000000000a","api_request":{"status":"STAGING"}},{"uuid":"00000000-0000-4000-8000-00000000000b","name":"Rule 00000000-0000-4000-8000-00000000000b","api_request":{"status":"STAGING"}}]}"#
+        format!(
+            r#"{{"defender_for_endpoint":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"POST","url":"{endpoint}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/42","body":{}}}],"tenant":"one"}}]}}"#,
+            body(a),
+            body(b)
+        )
     );
 }
 
@@ -175,6 +190,57 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
         text(&release, "message"),
         "\"Plan: 1 to create, 0 to update, 1 to disable, 0 to delete\""
     );
+}
+
+/// Under `--platform`, the blocks a status kept out are that platform's
+/// only: another platform's PRODUCTION block is not "not in the plan" of a
+/// PREVIEW run of this one (#1662, D11).
+#[test]
+fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
+    let ws = workspace(&[
+        (
+            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            DEFENDER,
+        ),
+        (
+            ".opentide/configurations/platforms/sentinel.toml",
+            "[platform]\nenabled = true\n",
+        ),
+        (
+            "objects/rules/a.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000a",
+                "defender_for_endpoint",
+                "STAGING",
+                "",
+            ),
+        ),
+        (
+            "objects/rules/b.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000b",
+                "sentinel",
+                "PRODUCTION",
+                "",
+            ),
+        ),
+    ]);
+    let all_platforms = run(&ws, all(&["PREVIEW"]), &[]);
+    assert!(
+        text(&all_platforms, "detail").contains("not in the plan: 1 rule in PRODUCTION"),
+        "{}",
+        text(&all_platforms, "detail")
+    );
+    let defender = run(
+        &ws,
+        Request {
+            platform: Some("defender_for_endpoint".to_owned()),
+            ..all(&["PREVIEW"])
+        },
+        &[],
+    );
+    assert_eq!(text(&defender, "detail"), "");
+    assert_eq!(text(&defender, "skipped"), "");
 }
 
 #[test]

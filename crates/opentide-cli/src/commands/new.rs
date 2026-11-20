@@ -35,7 +35,7 @@ use serde_json::Value;
 
 use self::scaffold::{FieldPath, Fill, Model, Scalar, collect_fields, fill_template};
 use super::setup::wizard::{Prompter, Stop};
-use super::{COMMAND_FAILED, Report, open, placement};
+use super::{COMMAND_FAILED, Report, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, USAGE_EXIT_CODE, code};
 use crate::json::Json;
@@ -500,6 +500,17 @@ fn needs_input(command: &str, family: &str, missing: &str) -> Report {
     Report::failed(command, USAGE_EXIT_CODE, failure)
 }
 
+/// A name that is empty or only spaces, given or answered: `message`.
+fn empty_name(command: &str, message: &str) -> Report {
+    new_error(
+        command,
+        message.to_owned(),
+        code::USAGE_INVALID_VALUE,
+        USAGE_EXIT_CODE,
+        Some("--name"),
+    )
+}
+
 /// A scaffold that cannot be written: `failure.code`, exit code, argument.
 fn new_error(
     command: &str,
@@ -544,31 +555,29 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         report.next("opentide setup", "create a workspace first");
         return report;
     }
-    let name = match args
-        .name
-        .as_deref()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-    {
+    let name = match args.name.as_deref().map(str::trim) {
+        Some("") => return empty_name(&command, "--name cannot be empty"),
         Some(name) => name.to_owned(),
         None => match cx.prompter.filter(|_| cx.can_prompt) {
             Some(prompter) => {
-                let asked =
-                    prompter
-                        .borrow_mut()
-                        .text(&format!("{} name", capitalised(family)), "", None);
+                // `required`: the question asks again on an empty answer.
+                let asked = prompter.borrow_mut().text(
+                    &format!("{} name", capitalised(family)),
+                    "",
+                    Some("a name"),
+                );
                 match asked {
                     Ok(answer) if !answer.trim().is_empty() => answer.trim().to_owned(),
-                    Ok(_) => return needs_input(&command, family, "--name"),
+                    Ok(_) => return empty_name(&command, "The name cannot be empty"),
                     Err(stop) => return stopped(&command, stop, cx),
                 }
             }
             None => return needs_input(&command, family, "--name"),
         },
     };
-    let workspace = match open(options) {
+    let workspace = match super::open_for(&command, options) {
         Ok(workspace) => workspace,
-        Err(message) => return Report::error(&command, message),
+        Err(report) => return *report,
     };
     let config = workspace.configuration().resolved.tree.clone();
     let enabled: Vec<String> = enabled_platforms(&config)
@@ -617,7 +626,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     let generated = missing(&paths);
     let mut steps = Vec::new();
     if !generated.is_empty() {
-        let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version);
+        let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version, false);
         steps = run.steps;
         if let Some((phase, detail)) = run.failed {
             return super::generate::phase_failed(&command, &phase, &detail, Vec::new(), steps);
@@ -908,6 +917,11 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     }
 
     let shown_path = shown(&destination, cx.cwd, &root);
+    // The catalogue reads a family's objects from its folder alone, not
+    // from a folder below it or elsewhere (`nested_object_file`).
+    let in_catalogue = destination
+        .parent()
+        .is_some_and(|parent| dunce_canonical(parent) == dunce_canonical(&paths.objects));
     let count = filled.placeholders.len();
     let mut message = format!("Created {shown_path}");
     if count > 0 {
@@ -943,6 +957,13 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         ),
     ];
     let mut warnings: Vec<String> = Vec::new();
+    if !in_catalogue {
+        warnings.push(format!(
+            "{shown_path} is not directly in {}/, so opentide will not index, validate, share, \
+             document or deploy it; move it there",
+            folder_shown(&paths.objects, cx.cwd, &root)
+        ));
+    }
     if family == "rule" && !platforms.is_empty() && status.is_none() {
         warnings.push(
             "No deployment status has strategy INERT, so the new platform blocks are disabled \
@@ -1023,10 +1044,13 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
         ),
     ];
-    report.next(
-        &format!("opentide validate --file {shown_path}"),
-        "check it",
-    );
+    if in_catalogue {
+        // Outside the catalogue, validate --file refuses the file.
+        report.next(
+            &format!("opentide validate --file {shown_path}"),
+            "check it",
+        );
+    }
     report.warnings = warnings;
     report.steps = steps;
     report

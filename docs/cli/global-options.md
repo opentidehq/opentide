@@ -20,7 +20,7 @@ A word that starts with `-` is an option, never the value of the option before i
 | Flag | Environment variable | Default | Description |
 |------|---------------------|---------|-------------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Discovered from the current directory | Detection workspace root |
-| `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
+| `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Changes only [`--technique` completion](#shell-completion), which reads `<data>/vocabulary/att&ck.vocab.toml` when it is there: the commands read the vocabularies and default configurations compiled into opentide |
 | `--debug` | `OPENTIDE_DEBUG`, or `DEBUG` when it is a boolean | off | Enable debug logging, with timestamps |
 | `--quiet` | — | off | Print only the outcome line and errors |
 | `--verbose` | — | off | Also print notes: findings worth knowing that are not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide them by default and say how many. Cannot be combined with `--quiet` (exit `2`). `--json` and reports always include notes |
@@ -63,7 +63,7 @@ A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_W
 
 Setup commands honour `--repo` when `--path` is `.` (default).
 
-A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `setup` is the exception, since it may name the folder it is about to create.
+A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` are held to the same test when no `--repo` is typed (`OPENTIDE_REPO_ROOT=/srv/detections does not exist`, `argument` the variable's name), as the MCP server holds them. `setup` is the exception, since it may name the folder it is about to create; the servers a host starts (`mcp start`, `lsp start`, `serve`) start anyway, and the MCP server's catalogue tools refuse with `workspace_not_found`; [`doctor`](./doctor.md) runs and reports the variable's folder as its failed `workspace` check (`Workspace /srv/detections does not exist` for `OPENTIDE_REPO_ROOT`, `OPENTIDE_TIDE_WORKSPACE=/srv/detections does not exist` for the Tide workspace).
 
 ## Proxy
 
@@ -99,7 +99,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `CLICOLOR_FORCE` | Any non-blank value but `0` forces colour, like `FORCE_COLOR=1`: only `0` counts as off, so `false` and `no` force colour too; `FORCE_COLOR` wins over it, so `FORCE_COLOR=0` beats `CLICOLOR_FORCE=1` |
 | `OPENTIDE_JSON_INDENT` | `0` prints every `--json` document on one line, `2` indents it; default: indented at a terminal, one line otherwise |
 | `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
-| `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
+| `OPENTIDE_DATA_ROOT` | Like `--data`: changes only `--technique` completion |
 | `OPENTIDE_PROXY` | HTTP(S) proxy, like `--proxy` |
 | `OPENTIDE_TIDE_WORKSPACE` | Folder whose objects are read, when it is not the repository root; see [Repository root resolution](#repository-root-resolution) |
 | `OPENTIDE_LINKS` | Link scheme of code-frame paths: `file`, `vscode`, `cursor` or `none`; default `vscode` inside VS Code, else `file` |
@@ -108,7 +108,6 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
 | `OPENTIDE_QUERY_CHECK_TIMEOUT` | Seconds each `validate query --live` check may wait for a tenant's answer, like `--check-timeout` (default 120); see [Slow queries](./validate.md#slow-queries-and-timeouts) |
 | `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar). `json` writes progress events on stderr instead, in every mode; see [Progress events](./json-output.md#progress-events) |
-| `OPENTIDE_CACHE_DIR` | Not read: the language server generates its catalog in memory each time it starts and caches nothing on disk. `opentide commands` still lists it |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
 ## Environment propagation
@@ -160,7 +159,7 @@ $ opentide --install-completion
 | `--uuid` (`validate`, `validate query`, `deploy`, `share` and its subcommands) | Object UUIDs, with the object's name and kind | The `name` and `metadata.uuid` lines at the top of each object file |
 | `--file` (the same commands, `lint` and `query`) | Object file paths, relative to the current directory when inside it, otherwise to the workspace; a bare file name when no path matches | The object folders |
 | `--type` | `rule`, `threat`, `objective`, with their folders | — |
-| `--technique` (`info`) | ATT&CK ids, with their titles | The bundled ATT&CK vocabulary (`--data` or `OPENTIDE_DATA_ROOT` when set) |
+| `--technique` (`info`) | ATT&CK ids, with their titles | `<data>/vocabulary/att&ck.vocab.toml` when `--data` or `OPENTIDE_DATA_ROOT` is set, else the ATT&CK vocabulary compiled into opentide |
 | `--platform` | The platforms enabled in the workspace first, marked `enabled`, then the others | `.opentide/configurations/platforms/*.toml` |
 | `--tenant` (`query`) | The tenants of the `--platform` on the command line (else of every enabled platform), with their descriptions, then `all` | `[[tenants]]` in the platform's configuration |
 | `--strategy` (`deploy`, `validate query`) | `PREVIEW`, `RELEASE`, with what each deploys | — |

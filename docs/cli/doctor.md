@@ -28,13 +28,13 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `python_version` | The running Python | Older than 3.10 | | |
 | `opentide_version` | The installed opentide version | | | |
 | `opentide_latest` | Whether PyPI has a newer release | | A newer release exists, or PyPI did not answer | `--offline` |
-| `workspace` | Where the workspace is and why: `.opentide/` or `objects/`, found from the current directory or set by `--repo` / `OPENTIDE_REPO_ROOT` | Neither folder is there | `objects/` without `.opentide/` | |
+| `workspace` | Where the workspace is and why: `.opentide/` or `objects/`, found from the current directory or set by `--repo` / `OPENTIDE_REPO_ROOT` | Neither folder is there, or the folder `OPENTIDE_REPO_ROOT` or `OPENTIDE_TIDE_WORKSPACE` names does not exist or is not a directory (other commands exit `2` on it; a `--repo` naming no folder exits `2` here too) | `objects/` without `.opentide/` | |
 | `git` | git is on `PATH` | | git is missing | |
 | `git_repository` | The workspace is in a repository, and its default branch (`origin/HEAD`) | | Not a repository, or `origin/HEAD` is not set | |
 | `configuration` | The workspace configuration TOMLs (`.opentide/configurations/`, and a parent instance's) load | One does not parse: the message names the file and line | | |
 | `templates_fresh` | Every template this version generates exists and matches what it would write, with the metadata keys `lint.toml` requires rendered live as `generate templates` does | | A template is missing or differs, or `lint.toml` holds a value opentide rejects | |
 | `schemas_fresh` | Every schema this version generates exists | | A schema is missing | |
-| `lsp_catalog` | opentide generates the language server's catalog for this workspace, and a committed copy (`.opentide/lsp/catalogs/generated/`, for editors that run `opentide-lsp` on its own) comes from this opentide version | | It cannot be generated, or the committed copy does not parse or comes from another version | No workspace |
+| `lsp_catalog` | No catalog is committed, or the committed copy (`.opentide/lsp/catalogs/generated/`, which no program reads: the language server generates its own) comes from this opentide version | | The committed copy does not parse or comes from another version | No workspace |
 | `platforms_enabled` | Which platforms are enabled | | None is | |
 | `platform_sdk` | Each enabled platform's SDK imports | It does not | | |
 | `analysis_engine` | The analysis engine compiled into opentide loads, and the language-server version it was built from: what `validate`, `validate query`, `lint` and `opentide lsp` run | It does not | | |

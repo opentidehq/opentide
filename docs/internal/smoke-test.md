@@ -145,7 +145,7 @@ opentide --json deploy --dry-run --all --strategy PREVIEW --strategy RELEASE --p
 ```
 
 The deploy is expected to exit 0 with `"dry_run": true`; `payloads` is keyed by platform, and each
-rule's entry under it has an `api_request`. Read one payload per platform: it is the request a live deploy would send.
+rule's entry under it has an `api_request`. Read one payload per platform: it is the request a live deploy would send, on every platform ([`deploy`](../cli/deploy.md#payloads)). For Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud it is the list of requests the entry's `tenant` receives, each `{method, url, body}`: a Defender create is a `POST` whose body carries `displayName`, `queryCondition` and `isEnabled: true`, and a rule the deployment state records is a `PATCH` of its id. A value a deploy learns only as it sends is a placeholder: Splunk's `<send-time:minute>` in a `frequency` schedule, Carbon Black's `<send-time:timestamp>` and `<tenant-read:watchlist>`.
 
 | Platform | Offline engine (`validate query`) | Dry-run deploy (`summary`) | `--live` (optional, needs a tenant) |
 |---|---|---|---|

@@ -419,7 +419,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`vscode_settings`](#vscode_settings) | The workspace recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object files to opentide's JSON schemas in `yaml.schemas`. |
 | [`vscode_snippets`](#vscode_snippets) | The editor snippet file `opentide generate snippets` writes exists. |
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
-| [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
+| [`workspace_not_found`](#workspace_not_found) | `opentide new`, `opentide generate` or `opentide migrate vocab-scope` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server has no workspace to serve: it was started in an Agent Plugin's directory, or in any folder that is not in a workspace, and nothing named one, or `OPENTIDE_REPO_ROOT` names a folder that does not exist. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
 | [`yara_duplicate_rule`](#yara_duplicate_rule) | Two YARA rules in one signature have the same name. |
 | [`yara_duplicate_string`](#yara_duplicate_string) | Two strings of one YARA rule have the same identifier. |
@@ -638,7 +638,7 @@ Find the rule by name in the GravityZone console and record its id in the rule's
 
 A GravityZone create got no answer, and its retry found the name already taken.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, could not be sent (its connection refused), or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A first create that was never sent (its connection or the tenant's certificate refused) is `bitdefender_tenant_unreachable`, never this code.
 
 ### Example
 
@@ -1052,7 +1052,7 @@ Check the variable `api_key` names, and enable the Incidents API for the key in 
 
 A call to the GravityZone tenant got no answer, so no further rule deploys to it.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant, and so does a first create that was never sent (its connection refused, DNS, the connect timeout, a proxy that would not connect, or the tenant's certificate refused): nothing can have been created. A create sent with no answer is retried once instead; a retry with no answer, one that could not be sent, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
 
 ### Example
 
@@ -4380,7 +4380,7 @@ Use `Info`, `Low`, `Medium`, `High` or `Critical`, or remove the key: `severity`
 
 A Google SecOps instance refused opentide's credentials.
 
-Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or its token endpoint did not answer): no rule on that tenant is deployed or checked. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
+Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or answered with no token): no rule on that tenant is deployed or checked. A token endpoint that cannot be reached, or that sends no answer in time, is `google_secops_tenant_unreachable`. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
 
 ### Example
 
@@ -4396,7 +4396,7 @@ Give the service account (or the Application Default Credentials principal) the 
 
 A Google SecOps instance did not answer, so no rule was deployed to it.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint, or to Google's token endpoint, failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
 
 ### Example
 
@@ -5745,18 +5745,18 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 opentide can generate the language server's catalog for this workspace, and a committed copy is current.
 
-Reported by `opentide doctor`. `opentide lsp start` and `opentide tui` check objects with the catalog this opentide generates from its models and the workspace's configuration, cached under the user cache directory (`OPENTIDE_CACHE_DIR` overrides it). The copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/` is read only by editors that run the `opentide-lsp` binary on its own, and when generation fails. Warns when the catalog cannot be generated, or when a committed copy does not parse or comes from another opentide version.
+Reported by `opentide doctor`. `opentide lsp start`, the `opentide-lsp` binary on its own and `opentide tui` check objects with the catalog they generate in memory, each time they start, from the models they were built with and the workspace's configuration; nothing is cached. No program reads the copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`: it is there for other tools. Warns when a committed copy does not parse or comes from another opentide version.
 
 ### Example
 
 ```text illustrative
-! The language-server catalog committed in .opentide/lsp/catalogs/generated is from opentide 0.18.0, not 0.19.0: editors that run opentide-lsp on their own use it · lsp_catalog
+! The language-server catalog committed in .opentide/lsp/catalogs/generated is from opentide 0.18.0, not 0.19.0 · lsp_catalog
   → opentide generate schemas
 ```
 
 ### How to fix
 
-For a committed copy, run `opentide generate schemas` (or `opentide generate`) and commit the files it writes, so editors that run `opentide-lsp` on its own use the same catalog. When the catalog cannot be generated, `opentide doctor --debug` shows why; until then objects are checked with the committed or the bundled catalog.
+For a committed copy, run `opentide generate schemas` (or `opentide generate`) and commit the files it writes, so a tool that reads them sees this opentide's catalog, or delete the folder: opentide and its language server do not read it.
 
 ## lucene_bare_term
 
@@ -7469,9 +7469,9 @@ Run `opentide doctor` from inside your detection repository, or pass `--repo`. R
 
 ## workspace_not_found
 
-`opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one.
+`opentide new`, `opentide generate` or `opentide migrate vocab-scope` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server has no workspace to serve: it was started in an Agent Plugin's directory, or in any folder that is not in a workspace, and nothing named one, or `OPENTIDE_REPO_ROOT` names a folder that does not exist.
 
-Exit 1, as `failure.code`. `new` writes only into a workspace, the folder `--repo` names or the one discovery finds, so a stray run in your home directory cannot make it a workspace that every folder below it would discover.
+Exit 1, as `failure.code`. `new`, `generate` and `migrate` write only into a workspace, the folder `--repo` names or the one discovery finds, so a stray run in your home directory cannot make it a workspace that every folder below it would discover.
 
 The MCP server reports it as an error from every tool and resource that reads the catalogue (`search`, `validation_report`, `deploy_rule`, `opentide://rules`, ...). An Agent Plugins client starts a plugin's server in the plugin's directory; the server never serves that directory, such as the opentidehq/skills package, as the catalogue. `explain` and offline `validate_query` still answer.
 

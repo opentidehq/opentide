@@ -21,7 +21,7 @@ exit: 0
   "deployed": [
     "splunk"
   ],
-  "detail": "not in the plan: 11 rules left out: 7 in REMOVED, 2 in PRODUCTION, 2 in DISABLED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it",
+  "detail": "not in the plan: 1 rule in REMOVED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it",
   "dry_run": true,
   "duration_ms": 0,
   "exit_code": 0,
@@ -32,18 +32,37 @@ exit: 0
   "payloads": {
     "splunk": [
       {
-        "api_request": {
-          "enabled": false,
-          "name": "",
-          "query": "index=main EventCode=4688",
-          "scheduling": {
-            "schedule": {
-              "cron": "0 * * * *"
-            }
+        "api_request": [
+          {
+            "body": {
+              "name": "Splunk create rule",
+              "search": "index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
           },
-          "status": "STAGING"
-        },
+          {
+            "body": {
+              "alert.managedBy": "",
+              "alert.severity": 5,
+              "cron_schedule": "0 * * * *",
+              "description": "A rule the splunk stand-in tenant receives in a deploy that sends.",
+              "search": "index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
+          },
+          {
+            "body": {
+              "is_scheduled": 1,
+              "search": "index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
+          }
+        ],
         "name": "Splunk create rule",
+        "tenant": "lab",
         "uuid": "00000000-0000-4000-8047-000000000041"
       }
     ]
@@ -56,81 +75,11 @@ exit: 0
   "schema_version": 1,
   "skipped": [
     {
-      "platform": "carbon_black_cloud",
-      "rule": "Carbon Black retire rule",
-      "status": "REMOVED",
-      "strategy": "DELETION",
-      "uuid": "00000000-0000-4000-8047-000000000061"
-    },
-    {
-      "platform": "crowdstrike",
-      "rule": "CrowdStrike update rule",
-      "status": "PRODUCTION",
-      "strategy": "RELEASE",
-      "uuid": "00000000-0000-4000-8047-000000000022"
-    },
-    {
-      "platform": "crowdstrike",
-      "rule": "CrowdStrike retire rule",
-      "status": "REMOVED",
-      "strategy": "DELETION",
-      "uuid": "00000000-0000-4000-8047-000000000023"
-    },
-    {
-      "platform": "defender_for_endpoint",
-      "rule": "Defender retire rule",
-      "status": "REMOVED",
-      "strategy": "DELETION",
-      "uuid": "00000000-0000-4000-8047-000000000003"
-    },
-    {
-      "platform": "elastic",
-      "rule": "Elastic update rule",
-      "status": "PRODUCTION",
-      "strategy": "RELEASE",
-      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002"
-    },
-    {
-      "platform": "elastic",
-      "rule": "Elastic retire rule",
-      "status": "REMOVED",
-      "strategy": "DELETION",
-      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005"
-    },
-    {
-      "platform": "sentinel",
-      "rule": "Sentinel retire rule",
-      "status": "REMOVED",
-      "strategy": "DELETION",
-      "uuid": "00000000-0000-4000-8047-000000000072"
-    },
-    {
-      "platform": "sentinel_one",
-      "rule": "SentinelOne retire rule",
-      "status": "REMOVED",
-      "strategy": "DELETION",
-      "uuid": "00000000-0000-4000-8047-000000000012"
-    },
-    {
-      "platform": "sentinel_one",
-      "rule": "SentinelOne disable rule never deployed",
-      "status": "DISABLED",
-      "strategy": "DISABLEMENT",
-      "uuid": "00000000-0000-4000-8047-000000000013"
-    },
-    {
       "platform": "splunk",
       "rule": "Splunk retire rule",
       "status": "REMOVED",
       "strategy": "DELETION",
       "uuid": "00000000-0000-4000-8047-000000000042"
-    },
-    {
-      "platform": "sysdig",
-      "rule": "Sysdig rule to disable the tenant lost",
-      "status": "DISABLED",
-      "strategy": "DISABLEMENT",
-      "uuid": "00000000-0000-4000-8047-000000000033"
     }
   ],
   "status": "completed",
@@ -142,7 +91,7 @@ exit: 0
     "delete": 0,
     "disable": 0,
     "platforms": 1,
-    "skipped": 11,
+    "skipped": 1,
     "tenants": 1,
     "update": 0,
     "upsert": 1

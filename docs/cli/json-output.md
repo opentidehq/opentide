@@ -67,6 +67,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `share_failed` | 1 | `share`: objects failed and none succeeded |
 | `scope_no_match`, `api_key_unset`, … | 1 | `share` preflight failures; the code is the `preflight` value |
 | `reference_not_found` | 2 | `new`: `--objective` or `--threat` names no object in the catalogue |
+| `workspace_not_found` | 1 | `new`, `generate`, `migrate vocab-scope`: neither `.opentide/` nor `objects/` is in the folder or above it, so nothing is written |
 | `path_exists` | 1 | `new`: the file it would write already exists; it never overwrites |
 | `path_not_writable` | 1 | `new`: the folder or the file it would write cannot be written (read-only checkout, permissions) |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
@@ -229,6 +230,25 @@ check-jsonschema --schemafile validate.schema.json validate.json
 ```
 
 The schemas allow keys they do not name, because new keys are added without notice. A key a schema names keeps its type.
+
+## Placeholders
+
+A value a command cannot know when it prints is a placeholder in its place. `deploy --dry-run` writes them in the requests a deploy would send ([Payloads](./deploy.md#payloads)).
+
+A placeholder is `<KIND:NAME>`, where `KIND` is `send-time`, `tenant-read` or `tenant` and `NAME` is lowercase letters, digits and underscores. It can sit anywhere inside a string, alone or among other text, as in `"<send-time:minute> */2 * * *"` or `"<tenant:url>/web/api/v2.1/cloud-detection/rules"`. Find placeholders with the pattern `<(send-time|tenant-read|tenant):[a-z0-9_]+>`, anywhere in every string. Do not test whether a whole string starts with `<` and ends with `>`: that misses the placeholders inside longer strings, and it takes a real value written as markup (a description such as `<b>`) for one.
+
+Only a placeholder that is the whole string can stand for a value of another type: `<send-time:timestamp>` stands for a number and `<tenant-read:watchlist>` for an object. Every other placeholder stands for text.
+
+| Placeholder | What a deploy sends in its place |
+|---|---|
+| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule, drawn at random or read from the clock as the request is sent |
+| `<send-time:timestamp>` | Carbon Black Cloud: the report's `timestamp`, the time it is sent, a number |
+| `<tenant-read:watchlist_id>` | Carbon Black Cloud: the id of the watchlist the new report joins, read from the tenant |
+| `<tenant-read:watchlist>` | Carbon Black Cloud: that watchlist as the tenant holds it, an object, with the report's id added to `report_ids` |
+| `<tenant:url>`, `<tenant:port>`, `<tenant:app>`, `<tenant:api>`, `<tenant:customer_id>`, `<tenant:site_id>`, `<tenant:source_id>`, `<tenant:org_key>` | The tenant's `setup` value of that key, when the run reaches no tenant of the platform |
+| `<tenant:KEY>`, any `setup` key | The tenant's `setup.KEY` when it names an environment variable (`$NAME` or `${NAME}`): a dry run resolves no variable, set or not |
+
+The entry that holds a `<tenant:KEY>` placeholder lists its keys in `unresolved.setup`, with the reason in `unresolved.reason`.
 
 ## Related
 

@@ -86,6 +86,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus",
     "tide-corpus-folders",
     "tide-corpus-typo",
+    "tide-corpus-bad-values",
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
     "tide-corpus-legacy-id-error",
@@ -101,6 +102,7 @@ pub const FIXTURES: &[&str] = &[
     "setup-merge",
     "skills-merge",
     "vscode-docs-folder",
+    "vscode-own-pipeline",
     "tenants",
     "live-tenants",
     "deploy-tenants",
@@ -274,7 +276,12 @@ pub fn fixture(name: &str, ws: &Path) {
             pushed_from_cases(name, ws);
         }
         // #1139: the vscode workspace with the edits cases.toml declares.
-        "vscode-unscoped" | "vscode-ambiguous" | "vscode-folded-comment" | "vscode-long-query" => {
+        "vscode-unscoped"
+        | "vscode-ambiguous"
+        | "vscode-folded-comment"
+        | "vscode-config-parse"
+        | "vscode-own-pipeline"
+        | "vscode-long-query" => {
             fixture("vscode", ws);
             apply_edits(name, ws);
         }
@@ -304,7 +311,8 @@ pub fn fixture(name: &str, ws: &Path) {
         | "tide-corpus-compile-empty-block"
         | "tide-corpus-compile-invalid-rule"
         | "tide-corpus-compile-elastic-severity"
-        | "tide-corpus-compile-hidden" => {
+        | "tide-corpus-compile-hidden"
+        | "tide-corpus-bad-values" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }

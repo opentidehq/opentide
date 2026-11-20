@@ -174,9 +174,14 @@ pub fn validate_json(request: &ValidateRequest, env: &Env, cwd: &Path) -> String
         }
     };
     let (_, roots) = crate::commands::placement(request.repo.as_deref(), env, cwd);
-    let workspace = match crate::commands::open(roots) {
+    // A configuration file that does not parse is `config_parse`, its message
+    // `path:line:column: problem`, as `opentide validate` reports it (D9, B10).
+    let workspace = match crate::commands::open_for("validate", roots) {
         Ok(workspace) => workspace,
-        Err(message) => return error(crate::commands::COMMAND_FAILED, message),
+        Err(refused) => {
+            let (code, message, _) = crate::commands::refusal_parts(&refused);
+            return error(&code, message);
+        }
     };
     let selection = Selection {
         files: request.files.clone(),
@@ -193,6 +198,9 @@ pub fn validate_json(request: &ValidateRequest, env: &Env, cwd: &Path) -> String
         platform_configurations: crate::plugins::configurations(),
         compile_check: Some(&opentide_compile::validate::Compilers),
     });
+    if let Some(refusal) = &validation.refused {
+        return error(refusal.code, refusal.message.clone());
+    }
     // Each part serialised on its own: a struct keeps its fields' order (the
     // contract's), where a `serde_json::Value` map would sort them.
     let part = |value: Result<String, serde_json::Error>| value.unwrap_or_else(|_| "null".into());
