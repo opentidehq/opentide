@@ -68,14 +68,22 @@
 //!         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
 //!     )],
 //! )?;
-//! // The default options, on the default features.
+//! // The default options. The default features carry the engines; a build
+//! // with `default-features = false` and no `queries` does not.
 //! let validation = ws.validate(&opentide::ValidateOptions::default());
-//! assert!(opentide::queries::AVAILABLE, "the default features carry the engines");
-//! assert!(validation
+//! let missing = validation
 //!     .report
 //!     .issues
 //!     .iter()
-//!     .all(|d| d.code != opentide::queries::ENGINE_UNAVAILABLE));
+//!     .find(|d| d.code == opentide::queries::ENGINE_UNAVAILABLE);
+//! if opentide::queries::AVAILABLE {
+//!     assert!(missing.is_none());
+//! } else {
+//!     // Without `queries`: one error, which says what to enable.
+//!     let error = missing.expect("a build without the engines reports it");
+//!     assert!(validation.failed);
+//!     assert!(error.message.contains("features = [\"queries\"]"), "{}", error.message);
+//! }
 //! # Ok::<(), opentide::Error>(())
 //! ```
 //!
