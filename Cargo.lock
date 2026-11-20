@@ -3248,6 +3248,7 @@ dependencies = [
  "insta",
  "jiff",
  "jsonc-parser",
+ "jsonschema",
  "opentide-analysis",
  "opentide-cassette",
  "opentide-compile",

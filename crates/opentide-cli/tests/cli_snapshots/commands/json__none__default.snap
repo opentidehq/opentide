@@ -5699,10 +5699,36 @@ exit: 0
               "type": "object"
             },
             {
+              "items": {
+                "additionalProperties": true,
+                "properties": {
+                  "body": {
+                    "description": "The JSON body: an object; for CrowdStrike's update, a list holding the one rule; for Carbon Black Cloud's watchlist update, the text `<tenant-read:watchlist>`, a placeholder for the watchlist the tenant returns; null when the request has none",
+                    "title": "Body"
+                  },
+                  "method": {
+                    "title": "Method",
+                    "type": "string"
+                  },
+                  "url": {
+                    "title": "Url",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "method",
+                  "url",
+                  "body"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
               "type": "null"
             }
           ],
-          "description": "The vendor API body; null when the rule could not be compiled",
+          "description": "The request a deploy sends. For Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud, a list of {method, url, body} requests; for the other platforms an object in the platform's own shape (Elastic {payload, block}, Graylog and Exabeam {method, path, body}, Bitdefender a JSON-RPC body); null when the rule could not be compiled",
           "title": "Api Request"
         },
         "code": {
