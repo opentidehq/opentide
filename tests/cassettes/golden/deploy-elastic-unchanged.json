@@ -6,7 +6,7 @@
     "-c",
     "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated >/dev/null; exec opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
   ],
-  "digest": "sha256:cad3e1e6f6daeed7b1f38887f2b1162eff1ef96487af1cff549ea49534c27c83",
+  "digest": "sha256:7488740cba8595a8cbd343bb76f6d6d5fc64ae0156e44c6c77c5646fe6ed7848",
   "interactions": [
     {
       "request": {
@@ -44,7 +44,7 @@
             "application/json; charset=utf-8"
           ]
         ],
-        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\", \"type\": \"query\", \"name\": \"Elastic create rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"]}"
+        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\", \"type\": \"query\", \"name\": \"Elastic create rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"opentide\"]}"
       }
     },
     {
@@ -83,7 +83,7 @@
             "application/json; charset=utf-8"
           ]
         ],
-        "body": "{\"id\": \"kb-2\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"name\": \"Elastic update rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+        "body": "{\"id\": \"kb-2\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"name\": \"Elastic update rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"opentide\"], \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
       }
     },
     {
