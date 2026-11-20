@@ -1460,6 +1460,9 @@ struct RuleResult {
     seconds: Option<f64>,
     error: Option<String>,
     reason: Option<String>,
+    /// Old copies the platform deleted beside the rule (a renamed Splunk
+    /// rule's saved searches).
+    removed: Vec<String>,
     started: Instant,
 }
 
@@ -1475,6 +1478,7 @@ impl RuleResult {
             seconds: None,
             error: None,
             reason: None,
+            removed: Vec::new(),
             started: Instant::now(),
         }
     }
@@ -1498,7 +1502,7 @@ impl RuleResult {
     /// The row `results` carries (`to_dict`).
     fn to_json(&self) -> Json {
         let text = |value: &Option<String>| value.as_ref().map_or(Json::Null, Json::str);
-        Json::object([
+        let mut members = vec![
             ("platform", Json::str(&self.platform)),
             ("tenant", text(&self.tenant)),
             ("id", Json::str(&self.id)),
@@ -1513,7 +1517,15 @@ impl RuleResult {
             ),
             ("error", text(&self.error)),
             ("reason", text(&self.reason)),
-        ])
+        ];
+        // Only a rule that deleted an old copy says so (#1657).
+        if !self.removed.is_empty() {
+            members.push((
+                "removed",
+                Json::Array(self.removed.iter().map(Json::str).collect()),
+            ));
+        }
+        Json::object(members)
     }
 }
 
@@ -2837,7 +2849,14 @@ impl Sender<'_, '_> {
                 Operation::Update
             },
             if deletion {
-                Vec::new()
+                // A retirement names the rule too, so the connector deletes
+                // the saved searches an earlier name of it left (#1657).
+                let mut named = opentide_compile::json::Object::new();
+                named.insert(
+                    "description".into(),
+                    opentide_compile::splunk::retired_description(rule).into(),
+                );
+                CJson::Object(named).to_compact().into_bytes()
             } else {
                 CJson::Object(settings).to_compact().into_bytes()
             },
@@ -2949,15 +2968,32 @@ impl Sender<'_, '_> {
         };
         let deployer = self.deployer(platform)?;
         let context = self.context(connection);
-        let outcome = self
+        let answer = self
             .block(async { Ok(deployer.deploy(context, &request).await) })
-            .map_err(|error| raised(&error))?
-            .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+            .map_err(|error| raised(&error))?;
+        let (outcome, failed) = match answer {
+            Ok(outcome) => (outcome, None),
+            // What the deploy did before it failed (the old saved searches
+            // a Splunk rule's cleanup deleted) is still reported.
+            Err(mut failed) => {
+                let done = failed
+                    .partial
+                    .take()
+                    .map(|done| *done)
+                    .unwrap_or_else(|| DeployOutcome::new(None, request.operation));
+                (done, Some(failed))
+            }
+        };
         for warning in &outcome.warnings {
             match id {
-                // `splunk_alert_deleted`: the saved search the tenant had.
+                // `splunk_alert_deleted`: the saved search the tenant had;
+                // `splunk_renamed_search_deleted`: one an earlier name of
+                // the rule left, which the result lists (#1657).
                 Some(PlatformId::Splunk) => {
                     tracing::warn!(name = warning.message.as_str(), "{}", warning.code);
+                    if warning.code == opentide_connectors::splunk::RENAMED_DELETED {
+                        result.removed.push(warning.message.clone());
+                    }
                 }
                 // `report_deleted_with_rule`, `report_auto_deleted`: said, not raised.
                 Some(PlatformId::CarbonBlackCloud) => {
@@ -2966,8 +3002,10 @@ impl Sender<'_, '_> {
                 _ => {}
             }
         }
-        let _ = result;
-        Ok(())
+        match failed {
+            Some(failed) => Err(scoped(failed, |error| raised(&error))),
+            None => Ok(()),
+        }
     }
 
     /// `report_failure`: a coded refusal of one rule on one tenant.

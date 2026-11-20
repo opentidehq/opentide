@@ -95,6 +95,7 @@ exit: 0
     "elastic",
     "sysdig"
   ],
+  "detail": "splunk: once a rule's saved search is written or deleted, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted",
   "dry_run": true,
   "duration_ms": 0,
   "exit_code": 0,
@@ -468,7 +469,7 @@ exit: 0
           {
             "body": {
               "name": "Splunk SPL Rule",
-              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+              "search": "index=main | head 1"
             },
             "method": "POST",
             "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/"
@@ -478,8 +479,8 @@ exit: 0
               "alert.managedBy": "",
               "alert.severity": 5,
               "cron_schedule": "0 * * * *",
-              "description": "Simulated Splunk rule for CLI E2E corpus.\n",
-              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+              "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003",
+              "search": "index=main | head 1"
             },
             "method": "POST",
             "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
@@ -487,7 +488,7 @@ exit: 0
           {
             "body": {
               "is_scheduled": 1,
-              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+              "search": "index=main | head 1"
             },
             "method": "POST",
             "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"

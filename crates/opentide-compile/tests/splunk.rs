@@ -177,8 +177,12 @@ fn an_advanced_key_wins_over_the_block_and_yields_to_an_overriding_modifier() {
         text(&body, "alert.digest_mode").as_deref(),
         Some("modifier")
     );
-    // `description` is the rule's, written after the table.
-    assert_eq!(text(&body, "description").as_deref(), Some("Canary token"));
+    // `description` is the rule's, written after the table, and names the
+    // rule on its last line (#1657).
+    assert_eq!(
+        text(&body, "description"),
+        Some(format!("Canary token\n\nopentide rule {UUID}"))
+    );
 }
 
 #[test]
@@ -191,4 +195,38 @@ fn without_the_table_nothing_of_it_is_sent() {
     );
     assert_eq!(text(&body, "alert.track").as_deref(), Some("default"));
     assert_eq!(text(&body, "actions").as_deref(), Some("notable"));
+}
+
+/// The saved search is the author's SPL: the block's `query`, trimmed, with
+/// nothing appended (no `MDR_UUID`/`MDR_status` `eval`, no mapping macro).
+/// `alert.managedBy` is written empty, Splunk's default, so a saved search
+/// 0.28.1 deployed with the rule's responders there loses them on its next
+/// update, which sends only the settings opentide writes. Its description
+/// names the rule (#1657).
+#[test]
+fn the_saved_search_is_the_query_as_written() {
+    let body = settings("");
+    assert_eq!(
+        text(&body, "search").as_deref(),
+        Some("index=main sourcetype=canarytokens")
+    );
+    assert_eq!(text(&body, "alert.managedBy").as_deref(), Some(""));
+    let description = text(&body, "description").unwrap();
+    assert_eq!(splunk::marked_rule(&description), Some(UUID));
+}
+
+/// The marker is the description's last line only: a description that
+/// mentions it elsewhere names no rule, and an empty one is the marker.
+#[test]
+fn the_rule_marker_is_the_last_line() {
+    assert_eq!(splunk::described("", UUID), format!("opentide rule {UUID}"));
+    assert_eq!(
+        splunk::marked_rule(&splunk::described("A rule.\n\n", UUID)),
+        Some(UUID)
+    );
+    assert_eq!(
+        splunk::marked_rule(&format!("opentide rule {UUID}\nmore")),
+        None
+    );
+    assert_eq!(splunk::marked_rule("opentide rule "), None);
 }

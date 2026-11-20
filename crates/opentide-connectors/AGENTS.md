@@ -93,7 +93,7 @@ credential in any cassette).
 `cargo nextest run -p opentide-connectors defender elastic sentinel_one splunk carbon_black sentinel`: each platform against its
 cassettes (`tests/cassettes/<platform>/<scenario>.json`, recorded from the oracle against the stand-in tenant
 `tenant.py` beside them), the inputs the Python client was given in `tests/fixtures/<platform>.json` (written by
-`client.py fixture`); a changed value fails.
+`client.py fixture`; Splunk's deploy steps by `cargo run -p opentide-connectors --example splunk_client -- fixture`, and its `splunk/deploy` cassette is recorded from that example, #1657); a changed value fails.
 
 The SDK platforms (UC-4.3) are recorded from the SDKs themselves: the stand-in tenants answer as
 the SDK expects (Splunk's Atom feeds, cbc_sdk's search jobs, MSAL's OpenID configuration), and

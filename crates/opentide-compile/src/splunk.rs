@@ -207,48 +207,59 @@ fn flag(value: &Json) -> Json {
     Json::Int(i64::from(value.is_true()))
 }
 
-/// The search a rule deploys (`create_query`): its query and the macro that
-/// maps it to the rule.
-pub fn create_query(rule: &Rule, block: &Json) -> String {
-    let status = block.get("status").map(deploy::text).unwrap_or_default();
-    let spl = block
+/// The search a rule deploys: its block's `query`, trimmed, exactly as
+/// the author wrote it. Nothing is appended (0.28.1 appended an `eval` of
+/// `MDR_UUID` and `MDR_status` and a site's mapping macro).
+pub fn create_query(block: &Json) -> String {
+    block
         .get("query")
         .and_then(Json::as_str)
         .unwrap_or_default()
-        .trim();
-    format!(
-        "{spl}\n| eval MDR_UUID=\"{}\", MDR_status=\"{status}\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
-        rule.uuid
-    )
-}
-
-/// `response.responders`, or `[deployment] default_responders`
-/// (`resolve_responders`).
-fn responders(cx: &Context<'_>, rule: &Rule) -> String {
-    if let Some(authored) = rule
-        .response()
-        .and_then(|response| response.get("responders"))
-        .filter(|value| !value.is_null())
-    {
-        let text = deploy::text(authored);
-        if !text.trim().is_empty() {
-            return text.trim().to_owned();
-        }
-    }
-    cx.config
-        .get("deployment")
-        .and_then(|deployment| deployment.get("default_responders"))
-        .and_then(Json::as_str)
-        .unwrap_or_default()
+        .trim()
         .to_owned()
 }
 
-/// The saved search's settings from the block (`config_mdr`).
+/// What starts the last line of a saved search's `description`, before the
+/// rule's UUID: how a deploy finds the saved searches an earlier name of the
+/// rule left (#1657), with no state and nothing added to the search.
+pub const RULE_MARKER: &str = "opentide rule ";
+
+/// *description* with the line that names the rule *uuid* after it.
+pub fn described(description: &str, uuid: &str) -> String {
+    let description = description.trim_end();
+    if description.is_empty() {
+        format!("{RULE_MARKER}{uuid}")
+    } else {
+        format!("{description}\n\n{RULE_MARKER}{uuid}")
+    }
+}
+
+/// The description a retirement sends to name *rule* (the rule's own,
+/// [`described`]), which [`compile`] leaves out for a DELETION status: the
+/// Splunk `Deployer` deletes, after the saved search, the ones an earlier
+/// name of the rule left.
+pub fn retired_description(rule: &Rule) -> String {
+    described(rule.description(), &crate::rule::canonical_uuid(&rule.uuid))
+}
+
+/// The rule a saved search's *description* names ([`described`]): the
+/// UUID on its last line, when that line is the marker's.
+pub fn marked_rule(description: &str) -> Option<&str> {
+    description
+        .lines()
+        .last()?
+        .trim()
+        .strip_prefix(RULE_MARKER)
+        .map(str::trim)
+        .filter(|uuid| !uuid.is_empty())
+}
+
+/// The saved search's settings from the block (0.28.1's `config_mdr`).
 #[expect(
     clippy::too_many_lines,
     reason = "one setting after another, in the oracle's order"
 )]
-fn config_mdr(
+fn saved_search_settings(
     cx: &Context<'_>,
     rule: &Rule,
     block: &Json,
@@ -484,7 +495,11 @@ fn config_mdr(
             }
         }
     }
-    config.insert("alert.managedBy".into(), responders(cx, rule).into());
+    // Empty, Splunk's own default: opentide sets nothing here, and an update
+    // sends only the settings it writes, so a saved search 0.28.1 deployed
+    // (which put the rule's responders here) would otherwise keep them.
+    // `advanced` can still set it.
+    config.insert("alert.managedBy".into(), "".into());
     if let Some(Json::Object(advanced)) = block.get("advanced") {
         for (key, value) in advanced {
             config.insert(key.clone(), saved_search_value(value).into());
@@ -658,10 +673,10 @@ pub fn compile(
         Some(Json::Bool(set)) => *set,
         _ => settings.enterprise_security,
     };
-    let mut config = config_mdr(cx, rule, block, &settings, clock, correlation)?;
+    let mut config = saved_search_settings(cx, rule, block, &settings, clock, correlation)?;
     let mut name = rule.name.trim().to_owned();
     let status = block.get("status").map(deploy::text).unwrap_or_default();
-    let query = create_query(rule, block);
+    let query = create_query(block);
     if correlation {
         name.push_str(" - Rule");
     }
@@ -687,6 +702,14 @@ pub fn compile(
     for (key, value) in actions {
         first.insert(key, value);
     }
+    let description = first
+        .get("description")
+        .map(deploy::text)
+        .unwrap_or_default();
+    first.insert(
+        "description".into(),
+        described(&description, &crate::rule::canonical_uuid(&rule.uuid)).into(),
+    );
     // Each update sends the saved search's `search` first, as Splunk's REST
     // API takes it (`SavedSearch.update`): on a new saved search, the one
     // just created.

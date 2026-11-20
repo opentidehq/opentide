@@ -5233,3 +5233,147 @@ fn the_summary_counts_a_skipped_rule_once() {
         sent.result
     );
 }
+
+/// A Splunk tenant that answers an update with one old copy deleted, and a
+/// delete with a cleanup that failed after one old copy was deleted; it
+/// keeps each request's name, operation and body.
+struct SplunkCleanup {
+    seen: Mutex<Vec<(String, Operation, String)>>,
+}
+
+impl Deployer for SplunkCleanup {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        use opentide_connectors::connector::{DeployFailure, DeployWarning};
+        use opentide_connectors::splunk::{RENAMED_CLEANUP_FAILED, RENAMED_DELETED};
+        self.seen.lock().unwrap().push((
+            request.rule_id.clone(),
+            request.operation,
+            String::from_utf8_lossy(&request.body).into_owned(),
+        ));
+        let operation = request.operation;
+        Box::pin(async move {
+            if operation == Operation::Delete {
+                Err(DeployError::rule(DeployFailure::new(
+                    RENAMED_CLEANUP_FAILED,
+                    "saved search \"Retired\" was deleted (or already absent), but \"Old B 2\" \
+                     could not be deleted",
+                ))
+                .with_partial(DeployOutcome::new(None, operation).with_warnings(vec![
+                    DeployWarning::new(RENAMED_DELETED, "Old B 1").unraised(),
+                ])))
+            } else {
+                Ok(
+                    DeployOutcome::new(Some("Kept".into()), operation).with_warnings(vec![
+                        DeployWarning::new(RENAMED_DELETED, "Old A").unraised(),
+                    ]),
+                )
+            }
+        })
+    }
+}
+
+struct SplunkCleanupPlatform(&'static SplunkCleanup);
+
+impl Platform for SplunkCleanupPlatform {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A retired Splunk rule's request names the rule (its description, whose
+/// last line is `opentide rule <uuid>`), so the connector can delete the
+/// copies an earlier name left; and the old saved searches a cleanup
+/// deleted are listed under `removed`, on a deployed row and on a row whose
+/// cleanup failed part way (#1657).
+#[test]
+fn a_splunk_retirement_names_the_rule_and_removed_survives_a_failed_cleanup() {
+    const KEPT: &str = "00000000-0000-4000-8047-000000000a01";
+    const RETIRED: &str = "00000000-0000-4000-8047-000000000a02";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[
+            ("a.yaml", rule("Kept", KEPT, "A rule.", SPLUNK_BLOCK)),
+            (
+                "b.yaml",
+                rule(
+                    "Retired",
+                    RETIRED,
+                    "A retired rule.",
+                    "  splunk:\n    status: REMOVED\n    query: index=main\n",
+                ),
+            ),
+        ],
+    );
+    let deployer: &'static SplunkCleanup = Box::leak(Box::new(SplunkCleanup {
+        seen: Mutex::new(Vec::new()),
+    }));
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(SplunkCleanupPlatform(deployer)))
+        .unwrap();
+    let args = Args {
+        strategies: vec!["PREVIEW".into(), "RELEASE".into()],
+        platform: Some("splunk".into()),
+        all: true,
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs([("X", "y")]),
+        &registry,
+        0,
+    );
+    let seen = deployer.seen.lock().unwrap().clone();
+    let retired = seen
+        .iter()
+        .find(|(name, ..)| name == "Retired")
+        .unwrap_or_else(|| panic!("{seen:?}\n{text}"));
+    assert_eq!(retired.1, Operation::Delete);
+    let body: serde_json::Value = serde_json::from_str(&retired.2).unwrap();
+    assert_eq!(
+        body["description"].as_str(),
+        Some(format!("A retired rule.\n\nopentide rule {RETIRED}").as_str()),
+        "{body}"
+    );
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results: {text}")
+    };
+    let row = |uuid: &str| {
+        results
+            .iter()
+            .find(|row| row.get("id").and_then(Json::as_str) == Some(uuid))
+            .unwrap_or_else(|| panic!("no row for {uuid}: {results:?}"))
+    };
+    let removed = |uuid: &str| -> Vec<String> {
+        match row(uuid).get("removed") {
+            Some(Json::Array(names)) => names
+                .iter()
+                .map(|name| name.as_str().unwrap().to_owned())
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    assert_eq!(
+        row(KEPT).get("status").and_then(Json::as_str),
+        Some("deployed")
+    );
+    assert_eq!(removed(KEPT), ["Old A"]);
+    assert_eq!(
+        row(RETIRED).get("status").and_then(Json::as_str),
+        Some("failed"),
+        "{text}"
+    );
+    assert_eq!(removed(RETIRED), ["Old B 1"]);
+}

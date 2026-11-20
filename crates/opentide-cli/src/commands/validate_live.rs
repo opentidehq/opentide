@@ -1495,7 +1495,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
         "splunk" => {
             required(block, "query", name, platform)?;
             Ok(vec![RuleQuery::plain(
-                opentide_compile::splunk::create_query(rule, block),
+                opentide_compile::splunk::create_query(block),
             )])
         }
         "sentinel_one" => {
