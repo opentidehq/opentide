@@ -1733,7 +1733,7 @@ pub enum RootCommand {
     #[command(
         name = "new",
         about = "Scaffold a threat, objective or rule from its template",
-        long_about = "Scaffold a threat, objective or rule from its template\n\nThe new file gets a fresh UUID, today's date, your git author and the catalogue's organisation, and is named the way opentide lint expects. Required values nobody has chosen yet are placeholders, listed in the output: replace them, then run opentide validate --file on the path.",
+        long_about = "Scaffold a threat, objective or rule from its template\n\nThe new file gets a fresh UUID, today's date, your git author and the organisation `opentide setup --org` configured, and is named the way opentide lint expects. Required values nobody has chosen yet are placeholders, listed in the output: replace them, then run opentide validate --file on the path.",
         after_help = "Examples:\n  $ opentide new threat --name \"Credential Dumping\"",
         subcommand_required = true,
         arg_required_else_help = true,

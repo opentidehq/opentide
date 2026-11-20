@@ -4821,7 +4821,7 @@
               "type": "null"
             }
           ],
-          "description": "The organisation most catalogue objects carry; null when none does"
+          "description": "The organisation in .opentide/configurations/organisation.toml; null when none is usable"
         },
         "platforms": {
           "description": "Platform blocks written into a rule",
