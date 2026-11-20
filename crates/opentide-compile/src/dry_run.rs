@@ -655,7 +655,11 @@ pub fn run(
                         .collect()
                 })
                 .unwrap_or_default();
-            let entry = preview::preview_on(&cx, platform, &rule, &tenants);
+            // The id each tenant's deployment state records: what a deploy
+            // updates or deletes on the platforms that keep one.
+            let known =
+                |tenant: &str| plan::state_id(fs, &workspace_root, &canonical, platform, tenant);
+            let entry = preview::preview_planned(&cx, platform, &rule, &tenants, &known);
             if entry.get("status").and_then(Json::as_str) == Some("failed") {
                 failing.push((platform.clone(), rule.uuid.clone()));
                 diagnostics.push(diagnostic(platform, &entry, workspace.root()));
