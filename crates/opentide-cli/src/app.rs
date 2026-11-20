@@ -2484,6 +2484,9 @@ pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
 static PROCESS_ENDS: AtomicBool = AtomicBool::new(false);
 
 /// Whether opentide is the whole process ([`exit`]), not a host's call.
+/// Read only by the unix signal guard of the promotion
+/// (`deploy_promote::guard_termination`).
+#[cfg(unix)]
 pub(crate) fn process_ends() -> bool {
     PROCESS_ENDS.load(Ordering::Relaxed)
 }
