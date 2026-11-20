@@ -2627,19 +2627,8 @@ impl Sender<'_, '_> {
         // A schedule drawn at random takes its minute and hour from the
         // rule's UUID: the same on every deploy, so a rule redeployed as it
         // is stays unchanged on the tenant (#1711), and rules still spread
-        // over the hour and the day.
-        let bytes: [u8; 16] = uuid::Uuid::parse_str(&rule.uuid).map_or_else(
-            |_| *uuid::Uuid::new_v4().as_bytes(),
-            |uuid| *uuid.as_bytes(),
-        );
-        let civil = jiff::tz::Offset::UTC.to_datetime(self.cx.now);
-        let clock = opentide_compile::splunk::Clock {
-            random: (u32::from(bytes[0]) % 60, u32::from(bytes[1]) % 24),
-            now: (
-                u32::try_from(civil.minute()).unwrap_or(0),
-                u32::try_from(civil.hour()).unwrap_or(0),
-            ),
-        };
+        // over the day.
+        let clock = opentide_compile::splunk::Clock::for_rule(&rule.uuid, self.cx.now);
         let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, Some(clock))
             .map_err(compile_error)?;
         let mut name = rule.name.trim().to_owned();

@@ -94,6 +94,17 @@ fn workspace(block: &str) -> Workspace {
 /// The settings update a deploy of the block sends (the second write):
 /// its keys and values, in order.
 fn settings(block: &str) -> Object {
+    settings_at(
+        block,
+        Some(splunk::Clock {
+            random: (7, 7),
+            now: (4, 3),
+        }),
+    )
+}
+
+/// [`settings`] compiled with `clock`: `None` is a dry run's.
+fn settings_at(block: &str, clock: Option<splunk::Clock>) -> Object {
     let workspace = workspace(block);
     let owned = Owned::new(
         &Vocabularies::bundled(),
@@ -104,11 +115,7 @@ fn settings(block: &str) -> Object {
     let object = index.get("rule", UUID).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
     let tenant = deploy::tenants(&cx, splunk::PLATFORM)[0];
-    let clock = splunk::Clock {
-        random: (7, 7),
-        now: (4, 3),
-    };
-    let writes = splunk::compile(&cx, &rule, tenant, Some(clock)).unwrap();
+    let writes = splunk::compile(&cx, &rule, tenant, clock).unwrap();
     assert_eq!(writes.len(), 3, "create, settings, then the late settings");
     let Json::Object(body) = writes[1].body.clone() else {
         panic!("a settings update is an object")
@@ -191,4 +198,28 @@ fn without_the_table_nothing_of_it_is_sent() {
     );
     assert_eq!(text(&body, "alert.track").as_deref(), Some("default"));
     assert_eq!(text(&body, "actions").as_deref(), Some("notable"));
+}
+
+/// A drawn schedule (`frequency` with no `custom_time`, the tenant's
+/// `frequency_scheduling` unset) runs at the rule's own minute and hour
+/// (#1711): a deploy at any time and a dry run, which has no clock, write
+/// the same `cron_schedule`.
+#[test]
+fn a_drawn_schedule_is_the_rules_own_in_a_deploy_and_a_dry_run() {
+    let block = "    scheduling:\n      schedule:\n        frequency: 2h\n";
+    let (minute, _) = splunk::rule_minute_and_hour(UUID);
+    let expected = format!("{minute} */2 * * *");
+    for now in [0, 3_600 * 13 + 60 * 21] {
+        let clock = splunk::Clock::for_rule(UUID, jiff::Timestamp::from_second(now).unwrap());
+        let sent = settings_at(block, Some(clock));
+        assert_eq!(
+            text(&sent, "cron_schedule").as_deref(),
+            Some(expected.as_str())
+        );
+    }
+    let shown = settings_at(block, None);
+    assert_eq!(
+        text(&shown, "cron_schedule").as_deref(),
+        Some(expected.as_str())
+    );
 }

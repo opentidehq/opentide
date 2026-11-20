@@ -59,6 +59,28 @@ fn replay_deploy() -> Replayed {
     )
 }
 
+/// The whole `deploy` recording, its second lookup (interaction 4)
+/// answering a `cron_schedule` the rule does not send, as a saved search
+/// someone changed in Splunk: the second step finds the saved search, sees
+/// a setting differ, and updates it with the two writes the Python client
+/// sent (interactions 5 and 6), byte for byte.
+fn replay_deploy_changed() -> Replayed {
+    let mut cassette = support::cassette("splunk/deploy");
+    let Body::Text(answer) = &mut cassette.interactions[4].response.body else {
+        panic!("the lookup's answer is text");
+    };
+    let held = "<s:key name=\"cron_schedule\">0 * * * *</s:key>";
+    assert!(answer.contains(held), "{answer}");
+    *answer = answer.replace(held, "<s:key name=\"cron_schedule\">30 * * * *</s:key>");
+    Replayed::start_with(
+        cassette,
+        splunk::PLATFORM,
+        SETUP,
+        "SPLUNK_TOKEN",
+        &splunk::http_settings(Duration::from_secs(120)),
+    )
+}
+
 /// The settings `_apply_saved_search` sends for one step of `client.py`:
 /// the rule's, its actions', then `search`.
 fn settings(step: &Json) -> Object {
@@ -98,6 +120,38 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
     // client.py: create true, update true, delete null, absent null; the
     // update found the saved search as it is, so nothing was written.
     assert_eq!(done, [Some(true), Some(false), None, None]);
+}
+
+/// A saved search the tenant has with a setting that differs from the
+/// rule's is updated (#1711): the lookup, then both of the update's writes
+/// (the settings, then those Splunk takes only once the others are set), as
+/// the Python client sent them.
+#[test]
+fn splunk_a_saved_search_that_differs_is_updated() {
+    let inputs = fixture("splunk");
+    let tenant = replay_deploy_changed();
+    let connector = Splunk::new();
+    let done = block_on(async {
+        let mut done = Vec::new();
+        for step in items(inputs.get("deploy").unwrap()) {
+            let deletion = text(step.get("status").unwrap()) == "REMOVED";
+            done.push(
+                connector
+                    .apply_saved_search(
+                        tenant.cx(),
+                        text(step.get("name").unwrap()),
+                        &settings(step),
+                        deletion,
+                    )
+                    .await
+                    .unwrap(),
+            );
+        }
+        done
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert_eq!(done, [Some(true), Some(true), None, None]);
 }
 
 /// The same recording through `Deployer::deploy`, as `opentide deploy`

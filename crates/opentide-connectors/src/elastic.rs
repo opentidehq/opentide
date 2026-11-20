@@ -90,10 +90,10 @@ fn kibana_default(key: &str) -> Option<Json> {
 
 /// Whether the tenant's rule, as its lookup answered it (`remote`), is
 /// already what a replace with `compiled` would leave (#1711): every field
-/// `compiled` sends has the same value on the tenant ([`same`]), and every
+/// `compiled` sends has the same value on the tenant (`same`), and every
 /// other field the tenant has is one Kibana writes itself
-/// ([`KIBANA_WRITES`]), or holds what Kibana gives a field the rule leaves
-/// out (empty, or [`kibana_default`]), so a replace would not change it.
+/// (`KIBANA_WRITES`), or holds what Kibana gives a field the rule leaves
+/// out (empty, or `kibana_default`), so a replace would not change it.
 /// A field opentide sent once and no longer sends keeps its value on the
 /// tenant until a replace drops it: the rule is then not held, and is
 /// replaced.

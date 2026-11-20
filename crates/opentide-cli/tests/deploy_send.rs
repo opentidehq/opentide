@@ -3928,11 +3928,16 @@ fn a_drawn_splunk_schedule_is_the_same_on_every_deploy() {
     deploy(ws.path(), "splunk", &env, &registry, 3600 * 7 + 60 * 13);
     let bodies = recording.0.lock().unwrap().clone();
     assert_eq!(bodies.len(), 6);
+    let mut crons = std::collections::BTreeSet::new();
     for rule in 0..3 {
         assert_eq!(bodies[rule], bodies[rule + 3], "rule {rule}");
         let cron = cron(&bodies[rule]);
         assert!(cron.ends_with(" */1 * *"), "{cron}");
+        crons.insert(cron);
     }
+    // The three UUIDs differ only in their last byte, and still get three
+    // schedules: the whole UUID is hashed.
+    assert_eq!(crons.len(), 3, "{crons:?}");
 }
 
 // #1712: a dry run's `api_request` is the requests a deploy sends. For each

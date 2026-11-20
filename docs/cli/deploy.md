@@ -150,7 +150,7 @@ A value the dry run cannot know is a placeholder in `api_request`, `<KIND:NAME>`
 
 | Placeholder | What a deploy sends |
 |---|---|
-| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule, drawn at random or read from the clock as the request is sent (the tenant's `frequency_scheduling`), as in `"cron_schedule": "<send-time:minute> */2 * * *"` |
+| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule read from the clock as the request is sent (a tenant's `frequency_scheduling = "current"`), as in `"cron_schedule": "<send-time:minute> */2 * * *"`. A schedule opentide draws (`random`, the default) is shown as the deploy sends it: its minute and hour come from the rule's UUID |
 | `<send-time:timestamp>` | Carbon Black Cloud: the report's `timestamp`, the time it is sent (a number, where the placeholder is a string) |
 | `<tenant-read:watchlist_id>`, `<tenant-read:watchlist>` | Carbon Black Cloud: the id of the watchlist the new report joins, and that watchlist as the tenant holds it (an object, where the placeholder is a string), sent back with the report's id added to `report_ids` |
 | `<tenant:KEY>` | The tenant's `setup.KEY`: when the run reaches no tenant of the platform (`url`, `port`, `app`, `api`, `customer_id`, `site_id`, `source_id`, `org_key`), or when the value names an environment variable (`$NAME`, `${NAME}`), which a dry run never resolves, set or not, so it needs no credential and prints no secret. The entry's `unresolved` lists the keys in `setup` and says why in `reason`. With no tenant, the requests are compiled for a tenant whose `setup` sets nothing else, with no exclusion or modifier scoped to a tenant, and SentinelOne's scope is shown as `siteIds` (a tenant with `account_id` gets `accountIds`) |
@@ -274,9 +274,22 @@ A deploy does not rewrite a rule the tenant already holds as the run would write
 | Elastic | Kibana's rule against the replace a deploy would send | the fields Kibana writes itself (`id`, `created_at`, `updated_at`, `revision`, `version`, …), a field holding Kibana's default (empty, `max_signals: 100`, `interval: 5m`, `from: now-6m`, `to: now`), an empty member Kibana adds inside a sent object, `73` against `73.0` |
 | Splunk | the saved search's settings against each setting a deploy sends (an update writes no other) | Splunk's `1` and `0` for `true` and `false` |
 
-A field opentide sent before and no longer sends, while the tenant still holds a value in it, is a change: the rule is replaced, which drops it. A Splunk schedule opentide draws (a `frequency` with no `custom_time`) takes its minute and hour from the rule's UUID, so it is the same on every deploy; a `frequency_scheduling = "current"` tenant draws it from the deploy's time, so its rules are rewritten on every deploy.
+A field opentide sent before and no longer sends is handled as each platform's write handles it:
 
-The other platforms still write each selected rule: their deploy makes no lookup to compare with, and comparing would cost a request per rule and a reading of each vendor's own form of the rule.
+- **Elastic.** A deploy replaces the whole rule, which drops such a field. While the tenant still holds a value in it, the rule is a change, and the replace removes the value.
+- **Splunk.** An update writes only the settings opentide sends, and the others keep their value on the saved search: a setting removed from the block's `advanced` table (or `alert.managedBy`, which 0.28.1 set) stays on the tenant, and the rule reads `unchanged` when every setting opentide sends is the same. Clear such a setting in Splunk.
+
+A Splunk schedule opentide draws (a `frequency` with no `custom_time`) takes its minute and hour from the rule's UUID, so it is the same on every deploy, and rules spread over the day; a `frequency_scheduling = "current"` tenant takes the deploy's time, so its rules are rewritten on every deploy.
+
+The other platforms still write each selected rule, each for its own reason:
+
+| Platform | Why it is rewritten |
+|----------|---------------------|
+| Sentinel | A deploy is a `PUT` that creates or updates, with no lookup. ARM's answer adds an `etag`, a `lastModifiedUtc` and defaults that depend on the rule's kind |
+| Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Exabeam, Google SecOps | An update goes by the stored vendor id, with no lookup. Comparing would need a `GET` per rule and a reading of each vendor's own form of the rule (fields it renames or computes), and a wrong `unchanged` would leave a changed rule undeployed |
+| Graylog | An update is a `PUT` by the stored id, with no lookup. Graylog's form of an event definition adds ids and per-type `config` defaults |
+| Carbon Black Cloud | A deploy rewrites the rule's report inside its watchlist. It reads the watchlist, but a report's IOCs come back in another form than the one sent |
+| HarfangLab | A deploy is a `PUT`, then a `POST` when the rule is not there (a `404`), with no lookup |
 
 ### Connectors and status promotion
 

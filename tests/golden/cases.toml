@@ -2013,6 +2013,18 @@ modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/deploy-elastic"
 
+# A second deploy of the same rules: each rule Elastic already holds as the
+# run would write it is not written, and reads unchanged (#1711).
+[[case]]
+command = "deploy"
+variant = "send-elastic-unchanged"
+args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+modes = ["human", "plain", "json"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/deploy-elastic-unchanged"
+
 [[case]]
 command = "deploy"
 variant = "send-splunk"

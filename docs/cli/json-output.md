@@ -241,7 +241,7 @@ Only a placeholder that is the whole string can stand for a value of another typ
 
 | Placeholder | What a deploy sends in its place |
 |---|---|
-| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule, drawn at random or read from the clock as the request is sent |
+| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule read from the clock as the request is sent (`frequency_scheduling = "current"`); a drawn schedule's come from the rule's UUID and are shown |
 | `<send-time:timestamp>` | Carbon Black Cloud: the report's `timestamp`, the time it is sent, a number |
 | `<tenant-read:watchlist_id>` | Carbon Black Cloud: the id of the watchlist the new report joins, read from the tenant |
 | `<tenant-read:watchlist>` | Carbon Black Cloud: that watchlist as the tenant holds it, an object, with the report's id added to `report_ids` |

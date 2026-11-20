@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you build an `opentide_connectors::splunk::SavedSearch` with a struct literal, set its new `content` field (`Vec::new()` when you have no settings to compare).
 - If you build or match `opentide_core::node::Value::Str` or `Value::Datetime` (also through `opentide_schema::node`), they hold an `opentide_core::node::CompactString` where they held a `String`: build one with `.into()` from a `&str` or a `String`, read it as a `&str` (it derefs; `as_str()`), and call `.to_string()` where you need an owned `String`.
 - If you read or build an `opentide_core::node::Mark` (or `opentide_schema::node::Mark`), call `mark.index()`, `mark.line()` and `mark.column()` where you read its fields, and `Mark::new(index, line, column)` where you wrote a struct literal: its fields are private `u32`s.
 - If you read `opentide_kql::schema::Schema::columns` (from `opentide_kql::columns`), it is an `Arc<Vec<Arc<Column>>>`: iterate it with `.iter()` (each item derefs to a `Column`), or take the columns with `Arc::unwrap_or_clone` and `Arc::unwrap_or_clone` again on each. If you match `opentide_kql::schema::Origin`, `Table`'s name and `Asim`'s `schema` and `class` are `Arc<str>`: compare them through `&*`.
@@ -46,6 +47,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Breaking
 
+- **`opentide_connectors::splunk::SavedSearch` has a `content` field** ([opentide#1711](https://github.com/opentidehq/opentide/issues/1711)). It holds the saved search's settings as the tenant answered them, which `SavedSearch::holds` compares; a struct literal must set it (`content: Vec::new()` for none).
 - **`opentide_core::node::Value::Str` and `Value::Datetime` hold a `CompactString`.** It keeps a string of up to 24 bytes inline (12 on 32-bit targets) in the space a `String` takes, so most of a document's scalars allocate nothing (#1071).
 - **`opentide_core::node::Mark`'s fields are private.** A position is three `u32`s, read through `index()`, `line()` and `column()` and made with `Mark::new`, which saturates past 4 Gi: every YAML node holds two, and a `Node` is 72 bytes where it was 96 (#1071).
 - **`opentide_kql::schema::Schema::columns` is an `Arc<Vec<Arc<Column>>>`, and `Origin`'s names are `Arc<str>`.** They were a `Vec<Column>` and `String`s: the stages of a pipeline share their columns until one changes them, and a change copies the list, not each column's strings. Code that moved the columns out, changed them in place, or matched an `Origin` name as a `String` no longer compiles.
@@ -83,6 +85,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- **A deploy that finds the rule already there writes nothing, and says so** ([opentide#1711](https://github.com/opentidehq/opentide/issues/1711)). Elastic's and Splunk's `Deployer::deploy` compare what they would write with the lookup they already make, and write nothing when the tenant holds it: the outcome carries the event `connector::RULE_UNCHANGED` (`rule_unchanged`), which `DeployOutcome::unchanged()` reads. `opentide_connectors::elastic::holds(remote, compiled)` is Elastic's comparison (the replace a deploy would send against Kibana's rule), and `splunk::SavedSearch::holds(settings)` Splunk's (each setting an update sends, against the saved search's `content`, Splunk's `1`/`0` as booleans); `Splunk::apply_saved_search` answers `Some(false)` when it wrote nothing. `opentide_compile::splunk::rule_minute_and_hour(uuid)` is the minute and hour a drawn (`random`) Splunk schedule runs at, from a hash of the rule's whole UUID, and `splunk::Clock::for_rule(uuid, now)` the clock a deploy compiles with; `splunk::compile` without a clock (a dry run) writes a drawn schedule with the rule's own minute and hour, and only a `current` one with `<send-time:…>` placeholders.
 - **`opentide_yara::analyze_document`: the analysis and the outline of a `.yar` file from one parse** ([#1571](https://github.com/opentidehq/opentide/issues/1571)). It returns `analyze`'s result and `editor::symbols`, which each parsed the file; `opentide_analysis::analyze` uses it.
 - **`opentide_core::suggest::bag_distance`: a lower bound of the edit distance, cheap to measure.** The characters one string has that the other lacks, counting repeats; `suggest::Candidates` uses it to skip candidates before measuring their distance.
 - **`opentide_highlight::HighlightSpec::shared`: the compiled-in spec, borrowed.** `load` still returns a copy; the language crates now borrow it for each analysis.
