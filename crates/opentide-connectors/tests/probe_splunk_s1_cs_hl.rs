@@ -468,8 +468,20 @@ fn crowdstrike_token_endpoint_statuses_are_told_apart() {
         (503, "tenant_gateway"),
     ] {
         let replayed = crowdstrike_replay(vec![token_call(status)]);
-        let failed = block_on(probe(crowdstrike::PLATFORM, replayed.cx())).unwrap();
-        assert_eq!(code(failed), expected, "token endpoint answered {status}");
+        let failed = block_on(probe(crowdstrike::PLATFORM, replayed.cx()))
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            failed.failure.code, expected,
+            "token endpoint answered {status}"
+        );
+        let message = &failed.failure.message;
+        assert!(message.contains(&format!("HTTP {status}")), "{message}");
+        if expected != "authentication_failed" {
+            // Said as the tenant's or a gateway's answer, never as bad
+            // credentials.
+            assert!(!message.contains("authenticate"), "{message}");
+        }
         // Nothing was read without a token, and the sign-in was not repeated.
         assert_eq!(methods(&replayed), ["POST token"], "{status}");
     }

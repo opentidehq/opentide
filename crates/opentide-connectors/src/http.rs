@@ -77,7 +77,32 @@ impl HttpClient {
         env: &Environment,
         explicit_proxy: Option<&str>,
     ) -> Result<Self, ConnectorError> {
-        let proxies = ProxySettings::from_env(env, explicit_proxy);
+        Self::with_proxies(
+            label,
+            settings,
+            env,
+            ProxySettings::from_env(env, explicit_proxy),
+        )
+    }
+
+    /// A client of *label* that **never** uses a proxy, whatever *env* or the
+    /// run's `--proxy` name: for a request that must reach the machine it
+    /// runs on (Google's metadata server, which google-auth also asks
+    /// direct).
+    pub fn direct(
+        label: &TenantLabel,
+        settings: &HttpSettings,
+        env: &Environment,
+    ) -> Result<Self, ConnectorError> {
+        Self::with_proxies(label, settings, env, ProxySettings::default())
+    }
+
+    fn with_proxies(
+        label: &TenantLabel,
+        settings: &HttpSettings,
+        env: &Environment,
+        proxies: ProxySettings,
+    ) -> Result<Self, ConnectorError> {
         let transport = transport::make(&TransportSpec {
             label,
             settings,

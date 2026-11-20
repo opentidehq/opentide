@@ -417,11 +417,24 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         ))
         .and(header("Metadata-Flavor", "Google"))
         .and(query_param("scopes", SCOPE))
+        // A metadata server marks its answers `Metadata-Flavor: Google`.
         .respond_with(
             ResponseTemplate::new(200)
+                .insert_header("Metadata-Flavor", "Google")
                 .set_body_json(serde_json::json!({"access_token": "ya29.gce", "expires_in": 100})),
         )
         .mount(&server)
+        .await;
+    // The same path from a host that is not a metadata server (a proxy's or a
+    // gateway's page, a resolver's): no `Metadata-Flavor`, so no credentials.
+    let impostor = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({"access_token": "not-a-token", "expires_in": 100}),
+            ),
+        )
+        .mount(&impostor)
         .await;
     let (tenant, http) = tenant();
     let cancel = CancellationToken::new();
@@ -486,6 +499,27 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
             .unwrap()
             .expose(),
         "ya29.gce"
+    );
+    // Any answer without `Metadata-Flavor: Google` is no metadata server,
+    // whatever its status or body.
+    let impostor_host = impostor.uri().trim_start_matches("http://").to_owned();
+    let error = Authorizer::new(
+        Credentials::Metadata {
+            host: impostor_host,
+            quota_project: None,
+        },
+        fixed(NOW),
+    )
+    .token(cx)
+    .await
+    .unwrap_err();
+    assert!(
+        error.to_string().starts_with(
+            "google_secops_credentials_missing: no credentials: the tenant names none"
+        ) && error
+            .to_string()
+            .contains("without Metadata-Flavor: Google"),
+        "{error}"
     );
     let none = Credentials::Metadata {
         host: "127.0.0.1:9".to_owned(),

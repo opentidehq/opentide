@@ -478,12 +478,14 @@ impl Authorizer {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     // A sign-in writes no rule (`HttpClient::writes_taken`).
                     .read_only()
-                    .body(url::form_urlencoded::Serializer::new(String::new())
-.extend_pairs([
-                        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-                        ("assertion", jwt.as_str()),
-                    ])
-.finish())
+                    .body(
+                        url::form_urlencoded::Serializer::new(String::new())
+                            .extend_pairs([
+                                ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+                                ("assertion", jwt.as_str()),
+                            ])
+                            .finish(),
+                    )
             }
             Credentials::AuthorizedUser {
                 client_id,
@@ -495,42 +497,25 @@ impl Authorizer {
                 .http
                 .request(crate::transport::Method::POST, token_uri)
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                    // A sign-in writes no rule (`HttpClient::writes_taken`).
-                    .read_only()
-                .body(url::form_urlencoded::Serializer::new(String::new())
-.extend_pairs([
-                    ("grant_type", "refresh_token"),
-                    ("client_id", client_id.as_str()),
-                    ("client_secret", client_secret.expose()),
-                    ("refresh_token", refresh_token.expose()),
-                ])
-.finish()),
-            Credentials::Metadata { host, .. } => cx
-                .http
-                .request(
-                    crate::transport::Method::GET,
-                    &format!(
-                        "http://{host}/computeMetadata/v1/instance/service-accounts/default/token?{}",
-                        url::form_urlencoded::Serializer::new(String::new())
-.extend_pairs([("scopes", SCOPE)])
-.finish()
-                    ),
-                )
-                .header("Metadata-Flavor", "Google"),
+                // A sign-in writes no rule (`HttpClient::writes_taken`).
+                .read_only()
+                .body(
+                    url::form_urlencoded::Serializer::new(String::new())
+                        .extend_pairs([
+                            ("grant_type", "refresh_token"),
+                            ("client_id", client_id.as_str()),
+                            ("client_secret", client_secret.expose()),
+                            ("refresh_token", refresh_token.expose()),
+                        ])
+                        .finish(),
+                ),
+            Credentials::Metadata { host, .. } => {
+                return Self::fetch_metadata(cx, host, now).await;
+            }
         };
         let answer = match crate::answer::exchange(cx, request).await {
             Ok(answer) => answer,
             Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled),
-            Err(error) if matches!(self.credentials, Credentials::Metadata { .. }) => {
-                // No metadata server: google-auth finds no default credentials.
-                return Err(credentials_missing(
-                    &tenant,
-                    &LoadError(format!(
-                        "no credentials: the tenant names none and Application Default \
-                         Credentials are not set up (the metadata server did not answer: {error})"
-                    )),
-                ));
-            }
             // The token endpoint could not be reached, or sent no answer in
             // time: the network's failure, not the credentials' (#1658, D5).
             Err(error @ (ConnectorError::Unreachable { .. } | ConnectorError::Timeout { .. })) => {
@@ -543,6 +528,47 @@ impl Authorizer {
                 ));
             }
         };
+        Self::token_from(cx, &answer, now)
+    }
+
+    /// The token of the metadata server (`GET .../service-accounts/default/token`),
+    /// asked as google-auth asks it: **direct** (never through the run's
+    /// proxy, which would answer for a host it cannot reach), within
+    /// [`METADATA_TIMEOUT`], and only an answer that carries
+    /// `Metadata-Flavor: Google` is a metadata server's. A transport error, a
+    /// timeout or an answer without the header is no metadata server: no
+    /// Application Default Credentials (`google_secops_credentials_missing`).
+    async fn fetch_metadata(
+        cx: TenantContext<'_>,
+        host: &str,
+        now: Timestamp,
+    ) -> Result<Token, ConnectorError> {
+        let tenant = cx.tenant.label.tenant.clone();
+        let missing = |reason: String| {
+            credentials_missing(
+                &tenant,
+                &LoadError(format!(
+                    "no credentials: the tenant names none and Application Default Credentials \
+                     are not set up (the metadata server did not answer: {reason})"
+                )),
+            )
+        };
+        let answer = match metadata_answer(cx, host).await {
+            Ok(answer) => answer,
+            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled),
+            Err(error) => return Err(missing(error.to_string())),
+        };
+        Self::token_from(cx, &answer, now)
+    }
+
+    /// The token in a token endpoint's *answer*, or why the credentials were
+    /// refused.
+    fn token_from(
+        cx: TenantContext<'_>,
+        answer: &Answer,
+        now: Timestamp,
+    ) -> Result<Token, ConnectorError> {
+        let tenant = cx.tenant.label.tenant.clone();
         let body = answer.json().unwrap_or(Json::Null);
         let token = body
             .get("access_token")
@@ -555,7 +581,7 @@ impl Authorizer {
                     format!("tenant {tenant}: the credentials gave no access token"),
                 ));
             }
-            let reason = refusal_reason(&answer);
+            let reason = refusal_reason(answer);
             return Err(unauthorized(
                 cx,
                 format!("tenant {tenant}: Google refused the credentials ({reason})"),
@@ -575,6 +601,75 @@ impl Authorizer {
                 .unwrap_or(now),
         })
     }
+}
+
+/// How long the metadata server has to answer: google-auth's GCE check waits
+/// about this long, so a machine that is not on Google Cloud is found out at
+/// once and not after a tenant's timeout.
+const METADATA_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// The answer of the metadata server *host* to the default service account's
+/// token request, over a client that uses no proxy.
+///
+/// # Errors
+///
+/// The transport's error (unreachable, timeout), or
+/// [`ConnectorError::Answer`] when the answer lacks `Metadata-Flavor: Google`.
+async fn metadata_answer(cx: TenantContext<'_>, host: &str) -> Result<Answer, ConnectorError> {
+    let label = &cx.tenant.label;
+    let settings = crate::HttpSettings {
+        timeout: METADATA_TIMEOUT,
+        max_in_flight: 1,
+        ..crate::HttpSettings::default()
+    };
+    let http = crate::HttpClient::direct(label, &settings, &Environment::default())?;
+    let url = format!(
+        "http://{host}/computeMetadata/v1/instance/service-accounts/default/token?{}",
+        url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([("scopes", SCOPE)])
+            .finish()
+    );
+    let request = http
+        .request(crate::transport::Method::GET, &url)
+        .header("Metadata-Flavor", "Google")
+        .build()
+        .map_err(|error| ConnectorError::Setup {
+            platform: label.platform.clone(),
+            tenant: label.tenant.clone(),
+            message: error.describe(),
+        })?;
+    let started = std::time::Instant::now();
+    let response = http.send(request, cx.cancel).await?;
+    let flavored = response
+        .headers()
+        .get("metadata-flavor")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case("google"));
+    if !flavored {
+        return Err(ConnectorError::Answer {
+            platform: label.platform.clone(),
+            tenant: label.tenant.clone(),
+            address: format!("http://{host}"),
+            reason: format!(
+                "HTTP {} without Metadata-Flavor: Google, so not a metadata server",
+                response.status().as_u16()
+            ),
+        });
+    }
+    let status = response.status().as_u16();
+    let content_type = response
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let body = http.bytes(response, cx.cancel).await?;
+    Ok(Answer::new(
+        status,
+        content_type,
+        body,
+        started.elapsed(),
+        &crate::answer::Credentials::default(),
+    ))
 }
 
 /// What Google's token endpoint said when it refused: `error: description`,

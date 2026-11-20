@@ -114,16 +114,30 @@ async fn sign_in(cx: TenantContext<'_>, base: &str) -> Result<Issued, ConnectorE
 /// reported as bad credentials.
 fn token_refusal(cx: TenantContext<'_>, status: u16) -> ConnectorError {
     let tenant = &cx.tenant.label.tenant;
-    let message = format!("Cannot authenticate against {tenant} (HTTP {status})");
     match status {
-        400 | 401 | 403 => ConnectorError::authentication(PLATFORM, tenant, message),
+        400 | 401 | 403 => ConnectorError::authentication(
+            PLATFORM,
+            tenant,
+            format!("Cannot authenticate against {tenant} (HTTP {status})"),
+        ),
+        // Said as what it is, never as bad credentials.
         502..=504 => ConnectorError::Gateway {
             platform: PLATFORM.to_owned(),
             tenant: tenant.clone(),
-            message,
+            message: format!(
+                "A gateway answered HTTP {status} for the token endpoint of {tenant}: it is not \
+                 answering, which says nothing about the credentials"
+            ),
             status,
         },
-        _ => refused(cx, message, None),
+        _ => refused(
+            cx,
+            format!(
+                "The token endpoint of {tenant} answered HTTP {status} and issued no token: the \
+                 tenant refused the request, which says nothing about the credentials"
+            ),
+            None,
+        ),
     }
 }
 

@@ -89,7 +89,7 @@ Ctrl-C stops a request in flight at once, as it does for `deploy`; the tenants n
 
 A failing tenant fails the check, and `doctor` exits `1`. A tenant that is skipped never changes the exit code. A platform with no tenant, or none enabled, is one `skip` line.
 
-The requests go through the tenant's own HTTP client, as a deploy's do: its `ssl` setting, CA bundle, the run's `--proxy` and `no_proxy`, and the platform's timeout and retries (Sentinel's ARM session 60 s, Elastic 30 s, 120 s otherwise). A tenant that never answers is therefore reported after its timeout, not after the 3 seconds the `opentide_latest` and `proxy` checks wait.
+The requests go through the tenant's own HTTP client, as a deploy's do: its `ssl` setting, CA bundle, the run's `--proxy` and `no_proxy`, and the platform's timeout and retries (Sentinel's ARM session 60 s, Elastic 30 s, 120 s otherwise). The one exception is Google's metadata server, asked only for a Google SecOps tenant that names no `credentials` and finds none locally: it is asked **direct**, never through the proxy, and within 3 seconds, as Google's own libraries ask it. Only an answer that carries `Metadata-Flavor: Google` is a metadata server's; a transport error, a timeout or any other answer (a proxy's 502, a resolver's page) means no credentials, and the tenant is skipped. A tenant that never answers is therefore reported after its timeout, not after the 3 seconds the `opentide_latest` and `proxy` checks wait.
 
 The sign-in and the request for each platform:
 

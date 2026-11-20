@@ -46,10 +46,30 @@ enum Read {
     Hold,
 }
 
+/// What the metadata host `metadata.google.internal` does.
+#[derive(Clone, Copy, Debug)]
+enum Metadata {
+    /// No such host: the connection fails at once.
+    Unreachable,
+    /// Answers `status`, with `Metadata-Flavor: Google` or without it, and
+    /// an access token when it is `200`.
+    Answers { status: u16, flavored: bool },
+    /// Takes the request and says nothing for as long as its client waits
+    /// (at most fifteen seconds).
+    Stalls,
+}
+
 #[derive(Clone, Debug)]
 struct Wire {
     sign_in: u16,
     read: Read,
+    metadata: Metadata,
+    /// Whether the client this wire was made for routes `http://` through a
+    /// proxy, and the timeout it was given: what `make` saw.
+    proxied: bool,
+    timeout: Duration,
+    /// For each request to the metadata host, whether its client had a proxy.
+    metadata_proxied: Arc<Mutex<Vec<bool>>>,
     interrupt: Option<Interrupt>,
     seen: Arc<Mutex<Vec<String>>>,
     /// `host` and the `Authorization` header of each request that had one.
@@ -61,10 +81,25 @@ impl Wire {
         Self {
             sign_in: 200,
             read,
+            metadata: Metadata::Unreachable,
+            proxied: false,
+            timeout: Duration::ZERO,
+            metadata_proxied: Arc::default(),
             interrupt: None,
             seen: Arc::default(),
             keyed: Arc::default(),
         }
+    }
+
+    fn metadata(mut self, metadata: Metadata) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Whether each request to the metadata host came from a client with a
+    /// proxy.
+    fn metadata_proxied(&self) -> Vec<bool> {
+        self.metadata_proxied.lock().unwrap().clone()
     }
 
     fn signing_in(mut self, status: u16) -> Self {
@@ -129,12 +164,41 @@ impl Transport for Wire {
         if held && let Some(interrupt) = &self.interrupt {
             interrupt.request();
         }
-        let outcome = if host == "metadata.google.internal" {
-            // No Google Cloud host: the metadata server does not answer.
-            Err(TransportFailure::Connect {
-                reason: "no such host".into(),
-            })
-        } else if host == "login.microsoftonline.com" {
+        if host == "metadata.google.internal" {
+            self.metadata_proxied.lock().unwrap().push(self.proxied);
+            let metadata = self.metadata;
+            let waits = self.timeout.min(Duration::from_secs(15));
+            return Box::pin(async move {
+                match metadata {
+                    Metadata::Unreachable => Err(TransportFailure::Connect {
+                        reason: "no such host".into(),
+                    }),
+                    Metadata::Stalls => {
+                        tokio::time::sleep(waits).await;
+                        Err(TransportFailure::Timeout)
+                    }
+                    Metadata::Answers { status, flavored } => {
+                        let mut headers = HeaderMap::new();
+                        if flavored {
+                            headers.insert("metadata-flavor", "Google".parse().unwrap());
+                        }
+                        let body = if status == 200 {
+                            br#"{"access_token":"stand-in-token","expires_in":3600}"#.to_vec()
+                        } else {
+                            b"<html>Bad gateway</html>".to_vec()
+                        };
+                        Ok(Response::new(
+                            StatusCode::from_u16(status).unwrap(),
+                            headers,
+                            url,
+                            (Duration::ZERO, Duration::ZERO),
+                            Ok(body),
+                        ))
+                    }
+                }
+            });
+        }
+        let outcome = if host == "login.microsoftonline.com" {
             Ok(match self.sign_in {
                 200 => (
                     200,
@@ -178,8 +242,13 @@ impl Transport for Wire {
 }
 
 impl TransportFactory for Wire {
-    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
-        Ok(Arc::new(self.clone()))
+    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+        let metadata = url::Url::parse("http://metadata.google.internal/").unwrap();
+        Ok(Arc::new(Self {
+            proxied: spec.proxies.route(&metadata).is_some(),
+            timeout: spec.settings.timeout,
+            ..self.clone()
+        }))
     }
 }
 
@@ -729,4 +798,114 @@ fn ctrl_c_stops_a_probe_that_the_tenant_holds() {
         raw.stderr
     );
     assert!(raw.took < Duration::from_secs(3), "{:?}", raw.took);
+}
+
+// ---- the metadata server (#1726, round 3) ----
+
+/// A proxy that accepts connections, so `doctor`'s own `proxy` check passes:
+/// the metadata request must not reach it. Its address, and the listener to
+/// keep alive.
+fn listening_proxy() -> (String, std::net::TcpListener) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    (address, listener)
+}
+
+#[test]
+fn a_proxys_answer_for_the_metadata_host_is_no_metadata_server() {
+    let (_scratch, ws) = workspace();
+    platform(&ws, "google_secops", GOOGLE_SECOPS);
+    // A 502 with no `Metadata-Flavor`: a gateway's page, not Google's.
+    let wire = Wire::new(Read::Status(200)).metadata(Metadata::Answers {
+        status: 502,
+        flavored: false,
+    });
+    let ran = doctor(&ws, &["--live"], &[], Some(&wire));
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "google_secops/secops"), "skip");
+    // Even a 200 with a token, from a host that is not a metadata server.
+    let wire = Wire::new(Read::Status(200)).metadata(Metadata::Answers {
+        status: 200,
+        flavored: false,
+    });
+    let ran = doctor(&ws, &["--live"], &[], Some(&wire));
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "google_secops/secops"), "skip");
+}
+
+#[test]
+fn the_metadata_request_never_goes_through_the_runs_proxy() {
+    let (_scratch, ws) = workspace();
+    platform(&ws, "google_secops", GOOGLE_SECOPS);
+    let (proxy, _listener) = listening_proxy();
+    let wire = Wire::new(Read::Status(200)).metadata(Metadata::Answers {
+        status: 502,
+        flavored: false,
+    });
+    let env = [
+        ("http_proxy", proxy.as_str()),
+        ("all_proxy", proxy.as_str()),
+    ];
+    let ran = doctor(&ws, &["--live"], &env, Some(&wire));
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "google_secops/secops"), "skip");
+    // The proxy was configured and reachable, and the tenant's own client has
+    // it; the metadata request's did not.
+    let proxy_check = ran.document["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["code"] == "proxy")
+        .unwrap();
+    assert_eq!(proxy_check["status"], "pass", "{proxy_check}");
+    assert_eq!(wire.metadata_proxied(), [false]);
+    // `--proxy` is no different.
+    let ran = doctor(
+        &ws,
+        &["--live"],
+        &[("OPENTIDE_PROXY", proxy.as_str())],
+        Some(&wire),
+    );
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    assert_eq!(wire.metadata_proxied(), [false, false]);
+}
+
+#[test]
+fn a_metadata_host_that_stalls_is_skipped_within_a_short_timeout() {
+    let (_scratch, ws) = workspace();
+    platform(&ws, "google_secops", GOOGLE_SECOPS);
+    let wire = Wire::new(Read::Status(200)).metadata(Metadata::Stalls);
+    let raw = run_doctor(&ws, &["--live"], &[], Some(&wire), &Interrupt::default());
+    let document: serde_json::Value = serde_json::from_str(&raw.stdout).unwrap();
+    assert_eq!(raw.code, 0, "{document}");
+    // The wire holds a request for as long as its client's timeout, at most
+    // fifteen seconds: google-auth's three, not a tenant's two minutes.
+    assert!(raw.took < Duration::from_secs(8), "{:?}", raw.took);
+    let check = document["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["code"] == "connectivity" && check["subject"] == "google_secops/secops")
+        .unwrap();
+    assert_eq!(check["status"], "skip", "{check}");
+}
+
+#[test]
+fn a_real_metadata_server_supplies_the_credentials() {
+    let (_scratch, ws) = workspace();
+    platform(&ws, "google_secops", GOOGLE_SECOPS);
+    let wire = Wire::new(Read::Status(200)).metadata(Metadata::Answers {
+        status: 200,
+        flavored: true,
+    });
+    let ran = doctor(&ws, &["--live"], &[], Some(&wire));
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "google_secops/secops"), "pass");
+    assert!(
+        wire.seen()
+            .iter()
+            .any(|line| line.starts_with("GET eu-chronicle.googleapis.com/")),
+        "{:?}",
+        wire.seen()
+    );
 }
