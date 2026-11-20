@@ -104,7 +104,7 @@ fn setup(cx: TenantContext<'_>, message: String) -> ConnectorError {
 
 /// The console's `url` and `api_token`, resolved: what a deploy's open and a
 /// connectivity probe both start with.
-async fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
     Client::new(cx).base()?;
     cx.tenant.secret("api_token").map(|_| ())
 }
@@ -426,7 +426,7 @@ impl Prober for HarfangLab {
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
         crate::connector::probing(async move {
-            resolve(cx).await?;
+            resolve(cx)?;
             Client::new(cx).probe().await
         })
     }
@@ -438,7 +438,7 @@ impl Deployer for HarfangLab {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(resolve(cx))
+        crate::connector::opening(async move { resolve(cx) })
     }
 
     /// Puts a Sigma rule (creating it on a 404) or posts a YARA file, by

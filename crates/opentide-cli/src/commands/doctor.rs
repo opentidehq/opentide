@@ -22,22 +22,22 @@
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
+use opentide_compile::Json as CJson;
+use opentide_connectors::connector::{DeployError, TenantContext};
+use opentide_connectors::credentials::Mode as Resolve;
+use opentide_connectors::{ConnectorError, HttpClient, Tenant};
 use opentide_schema::configuration::lint::parse_lint_config;
 use opentide_schema::generate::router::{schema_artifact_name, template_artifact_name};
 use opentide_schema::generate::template::Options;
 use opentide_schema::generate::workspace::{
     CORE_OBJECT_TYPES, identifiers_for_families, object_template,
 };
-use opentide_compile::Json as CJson;
-use opentide_connectors::connector::{DeployError, TenantContext};
-use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::{ConnectorError, HttpClient, Tenant};
 use opentide_schema::node::{Node, Value};
-use tokio_util::sync::CancellationToken;
 use opentide_workspace::info::env_reference;
 use opentide_workspace::root::{self, RootOptions};
 use opentide_workspace::{OsFs, config};
 use serde_json::Value as JsonValue;
+use tokio_util::sync::CancellationToken;
 
 use super::doctor_network as network;
 use super::{Block, Report, placement};
@@ -1078,8 +1078,13 @@ impl Doctor<'_> {
             &settings,
         )
         .and_then(|connected| {
-            HttpClient::new(&connected.label, &connected.http, environment, self.cx.proxy)
-                .map(|http| (connected, http))
+            HttpClient::new(
+                &connected.label,
+                &connected.http,
+                environment,
+                self.cx.proxy,
+            )
+            .map(|http| (connected, http))
         })
         .map_err(DeployError::from)
         .and_then(|(connected, http)| {

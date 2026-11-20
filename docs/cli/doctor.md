@@ -91,7 +91,19 @@ The sign-in and the request for each platform:
 
 | Platform | Sign-in | Read-only request |
 |----------|---------|-------------------|
-PLATFORM_TABLE
+| `sentinel` | Entra ID client credentials | `GET` the workspace's analytics rules (first page) |
+| `defender_for_endpoint` | Entra ID client credentials | `GET` one custom detection rule (`$top=1`) |
+| `splunk` | None: the token | `GET /services/server/info` |
+| `sentinel_one` | None: the API token | `GET` one STAR rule (`cloud-detection/rules?limit=1`) |
+| `crowdstrike` | OAuth2 token | `GET` one correlation rule id (`limit=1`) |
+| `harfanglab` | None: the API token | `GET` one Sigma rule (`limit=1`) |
+| `carbon_black_cloud` | None: the API token | `GET` the organisation's watchlists |
+| `elastic` | None: the API key | `GET` one detection rule from Kibana (`per_page=1`) |
+| `sysdig` | None: the API token | `GET /api/v2/policies` |
+| `graylog` | None: the API token | `GET /api/system` |
+| `exabeam` | OAuth2 token | `GET` the correlation rules named `opentide` |
+| `google_secops` | Google OAuth2 token | `GET` one rule of the instance (`pageSize=1`) |
+| `bitdefender` | None | Not checked: the connector only sends rule writes, so there is no read-only request to make (`skip`) |
 
 `--live` and `--offline` contradict each other: together they exit `2` (`usage_error`).
 
