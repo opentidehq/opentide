@@ -50,7 +50,7 @@ of a run on this commit (wheels, `npm-packages`, the binaries; development versi
   git -C "$REPO" worktree add --detach "$OUT/npm-tree" HEAD
   (cd "$OUT/npm-tree" \
     && python3 scripts/engine/release.py npm-version "$V-dev.1" \
-    && (cd bindings/node && npm ci && OPENTIDE_VERSION="$V-dev.1" node build.mjs --release) \
+    && (cd bindings/node && npm ci && OPENTIDE_BUILD_VERSION="$V-dev.1" node build.mjs --release) \
     && node scripts/engine/npm-local-registry/test.mjs --version "$V-dev.1" --pack "$OUT/npm" --work "$OUT/npm-work" --keep)
   ```
   This is CI's npm install test on this machine's build:

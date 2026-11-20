@@ -6,7 +6,7 @@ runs on every corpus through each SDK, and the documents must be byte-identical.
 
 ```bash
 uv sync --group dev                                    # the Python SDK (opentide._native)
-(cd bindings/node && npm ci && OPENTIDE_VERSION=<workspace version> node build.mjs --profile develop)
+(cd bindings/node && npm ci && OPENTIDE_BUILD_VERSION=<workspace version> node build.mjs --profile develop)
 cargo xtask conformance --runners rust,python,node     # 0: identical
 cargo xtask conformance --diverge python               # the suite's own test: 0 when caught
 ```

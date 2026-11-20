@@ -14,13 +14,11 @@ use opentide_cli::logging::Sink;
 use crate::{Document, Error};
 
 /// The version the command line reports (`opentide --version`, the
-/// `version` of `opentide --json commands`): `OPENTIDE_VERSION` when the
-/// build sets it (the release builds, to the package's version), otherwise
-/// the crate's.
-pub const VERSION: &str = match option_env!("OPENTIDE_VERSION") {
-    Some(version) => version,
-    None => env!("CARGO_PKG_VERSION"),
-};
+/// `version` of `opentide --json commands`): the one every opentide build
+/// reports. `OPENTIDE_BUILD_VERSION` when the build sets it (the release
+/// builds, to the release's version, a candidate's included), otherwise the
+/// crate's.
+pub const VERSION: &str = opentide_cli::VERSION;
 
 /// Runs `opentide` with `argv` (without the program name) as the process:
 /// its environment, working directory, stdin, stdout and stderr, a panic

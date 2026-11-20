@@ -290,7 +290,7 @@ fn the_handshake_names_the_server_its_version_and_workflow() {
     assert_eq!(result["protocolVersion"], PROTOCOL_VERSION);
     assert_eq!(result["serverInfo"]["name"], "opentide");
     // opentide's version, not the MCP library's.
-    let version = option_env!("OPENTIDE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
+    let version = opentide_cli::VERSION;
     assert_eq!(result["serverInfo"]["version"], version);
     assert!(result["capabilities"]["tools"].is_object(), "{result}");
     let instructions = result["instructions"].as_str().unwrap();

@@ -28,5 +28,5 @@ pub use server::{
 
 /// The server's version: the one every `opentide-*` build reports
 /// ([`opentide_core::VERSION`]): the crate version, or the release
-/// candidate's when the build sets `OPENTIDE_VERSION`.
+/// candidate's when the build sets `OPENTIDE_BUILD_VERSION`.
 pub const VERSION: &str = opentide_core::VERSION;

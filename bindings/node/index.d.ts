@@ -452,6 +452,6 @@ export interface ValidateOptions {
 
 /**
  * The version the command line reports (`opentide --version`): the npm
- * package's, which the build passes as `OPENTIDE_VERSION`.
+ * package's, which the build passes as `OPENTIDE_BUILD_VERSION`.
  */
 export declare const VERSION: string
