@@ -14,6 +14,20 @@ use crate::mode::Mode;
 use crate::render::text::{Text, layer};
 use anstyle::{AnsiColor, Style};
 
+/// The shortest code that starts with `value` (three characters or more,
+/// in any case), the first in code order on a tie.
+fn prefixed<'c>(value: &str, codes: &[&'c str]) -> Option<&'c str> {
+    let value = value.trim().to_lowercase();
+    if value.chars().count() < 3 {
+        return None;
+    }
+    codes
+        .iter()
+        .copied()
+        .filter(|code| code.starts_with(&value))
+        .min_by_key(|code| code.len())
+}
+
 /// Runs `explain`, with `code` when one was given.
 pub fn run(code: Option<&str>, terminal: &Terminal) -> Report {
     let Some(code) = code else {
@@ -21,7 +35,7 @@ pub fn run(code: Option<&str>, terminal: &Terminal) -> Report {
     };
     let Some(page) = explain::page(code.trim()) else {
         let codes = explain::codes();
-        return Report::usage(
+        let mut report = Report::usage(
             "explain",
             format!("No diagnostic code {code:?}. Run 'opentide explain' to list them."),
             USAGE_INVALID_CHOICE,
@@ -29,6 +43,14 @@ pub fn run(code: Option<&str>, terminal: &Terminal) -> Report {
             Some(code),
             &codes,
         );
+        // A code the value starts (`kql_parse` of `kql_parse_error`) wins
+        // over one a few edits away (`yaml_parse`, B19).
+        if let Some(prefixed) = prefixed(code, &codes)
+            && let Some(failure) = report.outcome.failure.as_mut()
+        {
+            failure.suggestion = Some(prefixed.to_owned());
+        }
+        return report;
     };
     let mut report = Report::completed(
         "explain",
@@ -246,6 +268,18 @@ mod tests {
         };
         assert!(text.starts_with("# vocab_unknown\n\nA value"));
         assert!(text.ends_with("recommends it).\n"));
+    }
+
+    #[test]
+    fn a_code_the_value_starts_is_suggested_before_a_near_one() {
+        // B19 (smoke test): `explain kql_parse` suggested "yaml_parse".
+        let report = run(Some("kql_parse"), &Terminal::plain(Mode::Json));
+        assert_eq!(report.outcome.exit_code, 2);
+        let failure = report.outcome.failure.unwrap();
+        assert_eq!(failure.suggestion.as_deref(), Some("kql_parse_error"));
+        let report = run(Some("SPL_PARSE"), &Terminal::plain(Mode::Json));
+        let failure = report.outcome.failure.unwrap();
+        assert_eq!(failure.suggestion.as_deref(), Some("spl_parse_error"));
     }
 
     #[test]

@@ -176,11 +176,14 @@ mod stdio {
 }
 
 /// Set once `serve` handles SIGTERM and SIGHUP itself: a run it hosts
-/// leaves them alone.
+/// leaves them alone. Signals are handled on unix only (the `Termination`
+/// guard), so the flag and its reader exist only there.
+#[cfg(unix)]
 static HANDLES_TERMINATION: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
 /// Whether `serve` handles termination signals now.
+#[cfg(unix)]
 pub(crate) fn handles_termination() -> bool {
     HANDLES_TERMINATION.load(std::sync::atomic::Ordering::SeqCst)
 }

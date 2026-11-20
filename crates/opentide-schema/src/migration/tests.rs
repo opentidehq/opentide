@@ -27,9 +27,15 @@ fn text() -> impl Strategy<Value = String> {
     ]
 }
 
+/// A date `created` and `modified` take (`2026-01-01`).
+fn date() -> impl Strategy<Value = String> {
+    (1u16..=9999, 1u8..=12, 1u8..=28)
+        .prop_map(|(year, month, day)| format!("{year:04}-{month:02}-{day:02}"))
+}
+
 fn metadata_v1_0() -> impl Strategy<Value = ObjectMetadata> {
     (
-        (text(), text(), text(), text()),
+        (text(), date(), date(), text()),
         prop_oneof![
             text().prop_map(Version::Str),
             any::<i64>().prop_map(Version::Int)
