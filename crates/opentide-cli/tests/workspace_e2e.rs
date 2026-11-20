@@ -714,6 +714,86 @@ fn the_first_user_workflow_passes_end_to_end() {
     );
 }
 
+/// `setup --org` reaches `new` (#1670, smoke B17): a threat, an objective and
+/// a rule written after `opentide setup --org "Example Corp"` carry
+/// `metadata.organisation` and no warning about it, on a catalogue that has
+/// no object to copy it from. Rerunning `setup` without `--org` keeps it, the
+/// same `--org` keeps its uuid, and the scaffold still validates and lints.
+#[test]
+fn setup_org_fills_metadata_organisation_of_new_objects() {
+    let (_dir, root) = scratch();
+    let fresh = root.join("detections");
+    let path = fresh.to_str().unwrap();
+    let setup = |extra: &[&str]| {
+        let base = ["setup", "--yes", "--platform", "sentinel", "--path", path];
+        opentide(&root, &[&base[..], extra].concat(), &[]).ok()
+    };
+    setup(&["--org", "Example Corp"]);
+    let configured =
+        std::fs::read_to_string(fresh.join(".opentide/configurations/organisation.toml")).unwrap();
+    let uuid = configured
+        .lines()
+        .find_map(|line| line.strip_prefix("uuid = \""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or_else(|| panic!("no uuid in {configured}"))
+        .to_owned();
+    in_workspace(&fresh, &["generate"]).ok();
+
+    let new_objects = |suffix: &str| {
+        let threat = in_workspace(
+            &fresh,
+            &["new", "threat", "--name", &format!("Threat {suffix}")],
+        )
+        .ok();
+        let objective = in_workspace(
+            &fresh,
+            &["new", "objective", "--name", &format!("Objective {suffix}")],
+        )
+        .ok();
+        let rule = in_workspace(
+            &fresh,
+            &[
+                "new",
+                "rule",
+                "--name",
+                &format!("Rule {suffix}"),
+                "--platform",
+                "sentinel",
+            ],
+        )
+        .ok();
+        [threat, objective, rule]
+    };
+    let check = |documents: &[Value; 3]| {
+        for document in documents {
+            assert_eq!(
+                document["organisation"],
+                serde_json::json!({"uuid": uuid, "name": "Example Corp"}),
+                "{document}"
+            );
+            let warnings = document["warnings"].to_string();
+            assert!(!warnings.contains("organisation"), "{warnings}");
+            let file = std::fs::read_to_string(document["file_path"].as_str().unwrap()).unwrap();
+            assert!(file.contains(&format!("uuid: {uuid}")), "{file}");
+            assert!(file.contains("name: Example Corp"), "{file}");
+        }
+    };
+    check(&new_objects("one"));
+
+    // A rerun without `--org` keeps the file; the same `--org` keeps its uuid.
+    setup(&[]);
+    assert_eq!(
+        std::fs::read_to_string(fresh.join(".opentide/configurations/organisation.toml")).unwrap(),
+        configured
+    );
+    setup(&["--org", "Example Corp"]);
+    assert_eq!(
+        std::fs::read_to_string(fresh.join(".opentide/configurations/organisation.toml")).unwrap(),
+        configured
+    );
+    check(&new_objects("two"));
+}
+
 /// `opentide setup --hooks` then the first `git commit` of the scaffold:
 /// the commit hook it installs runs `validate --strict --allow-empty`, so a
 /// workspace with no detection object yet commits; `validate --strict`

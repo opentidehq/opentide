@@ -338,6 +338,22 @@ fn catalogue_organisation(objects_root: &Path) -> Option<(String, String)> {
         .map(|(key, _)| key)
 }
 
+/// The organisation `setup --org` kept in `organisation.toml`, as the
+/// resolved configuration holds it: its `{uuid, name}`, or `None` when the
+/// file is absent, or holds no UUID and name `new` can write.
+fn configured_organisation(config: &Node) -> Option<(String, String)> {
+    let organisation = config.get("organisation")?;
+    let uuid = text_of(organisation, "uuid")?.trim();
+    let name = text_of(organisation, "name")?.trim();
+    (is_uuid(uuid) && !name.is_empty()).then(|| (uuid.to_owned(), name.to_owned()))
+}
+
+/// The organisation a new object carries: the one most objects in the
+/// catalogue name, or else the one `setup --org` kept.
+fn organisation_for(objects_root: &Path, config: &Node) -> Option<(String, String)> {
+    catalogue_organisation(objects_root).or_else(|| configured_organisation(config))
+}
+
 /// `metadata.uuid` of every object under `folder`, lower-cased.
 fn catalogue_uuids(folder: &Path) -> HashSet<String> {
     object_files(folder)
@@ -368,7 +384,7 @@ fn inert_status(config: &Node) -> Option<String> {
 }
 
 /// Whether `value` is a UUID in its canonical 8-4-4-4-12 hex form.
-fn is_uuid(value: &str) -> bool {
+pub(crate) fn is_uuid(value: &str) -> bool {
     let parts: Vec<&str> = value.split('-').collect();
     parts.len() == 5
         && parts
@@ -780,7 +796,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         .objects
         .parent()
         .map_or_else(|| paths.objects.clone(), Path::to_path_buf);
-    let organisation = catalogue_organisation(&objects_root);
+    let organisation = organisation_for(&objects_root, &config);
 
     let today = today(cx.env);
     let mut values: HashMap<FieldPath, Scalar> = HashMap::from([

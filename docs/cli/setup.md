@@ -46,7 +46,8 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
-| `--name`, `--org`, `--description` | README metadata. `opentide new` does not read them: it copies `metadata.organisation` from the objects already in the catalogue, so fill it in the first object by hand ([new](./new.md#what-the-new-file-holds)) |
+| `--name`, `--description` | README metadata |
+| `--org` | The organisation, in the README and in `.opentide/configurations/organisation.toml` (a fresh `uuid` and the `name`), which [`opentide new`](./new.md#what-the-new-file-holds) writes as `metadata.organisation` when no object in the catalogue names one. A rerun with the same `--org` changes nothing, with another one renames the organisation and keeps its `uuid`, and a rerun without `--org` leaves the file as it is. An existing README is still left as it is; `--org` reaches `organisation.toml` all the same |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |
@@ -131,7 +132,7 @@ Given before the subcommand, `--path` and `--yes` still apply to it: `opentide s
 
 ### setup repo
 
-Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`).
+Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`). `--org` also writes `.opentide/configurations/organisation.toml`, listed under `files` when it is created or renamed and under `skipped` when it already says the same; a file that is not valid TOML is left alone with a warning.
 
 On an existing repository the command keeps what is there. A `README.md` is left as it is (`skipped`). An existing `.gitignore` keeps its content, byte-order mark and line endings and gains only the lines opentide needs that it lacks: `.opentide/exports/*.export.json`, `.opentide/states/sharing.jsonl` (the sharing cache; `.opentide/states/deployment/` must be committed) and `opentide-reports/`. A line counts as present with or without a leading or trailing `/` (`/opentide-reports` does). The Python lines a new `.gitignore` starts with (`build/`, `dist/`, ...) are not added to an existing one. `--json` lists the lines added under `gitignore_added`, and `.gitignore` under `files` when it changed, under `skipped` when it did not; a rerun adds nothing. A `.gitignore` that is not UTF-8 is left alone with a warning naming the lines to add.
 

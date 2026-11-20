@@ -96,6 +96,65 @@ fn the_most_common_organisation_wins_and_ties_go_to_the_first_in_path_order() {
     assert_eq!(catalogue_uuids(dir.path()), HashSet::from(["x".to_owned()]));
 }
 
+fn configuration(text: &str) -> std::sync::Arc<Node> {
+    let root = opentide_schema::configuration::toml::parse(text).unwrap();
+    std::sync::Arc::new(root)
+}
+
+/// `setup --org` keeps `{uuid, name}` in `organisation.toml`; `new` reads it
+/// when no catalogue object names an organisation (#1670, smoke B17).
+#[test]
+fn the_configured_organisation_is_used_when_the_catalogue_names_none() {
+    let uuid = "11111111-2222-4333-8444-555555555555";
+    let tree = |organisation: &str| configuration(&format!("[organisation]\n{organisation}\n"));
+    let valid = tree(&format!("uuid = \"{uuid}\"\nname = \" Example Corp \""));
+    assert_eq!(
+        configured_organisation(&valid),
+        Some((uuid.to_owned(), "Example Corp".to_owned()))
+    );
+    // Nothing `new` can write: no file, a name without a uuid, a uuid
+    // that is not one, an empty name.
+    assert_eq!(configured_organisation(&configuration("x = 1\n")), None);
+    assert_eq!(configured_organisation(&tree("name = \"A\"")), None);
+    assert_eq!(
+        configured_organisation(&tree(&format!("uuid = \"{uuid}\""))),
+        None
+    );
+    assert_eq!(
+        configured_organisation(&tree("uuid = \"u1\"\nname = \"A\"")),
+        None
+    );
+    assert_eq!(
+        configured_organisation(&tree(&format!("uuid = \"{uuid}\"\nname = \"  \""))),
+        None
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let configured = configuration(&format!(
+        "[organisation]\nuuid = \"{uuid}\"\nname = \"Example Corp\"\n"
+    ));
+    // An empty catalogue falls back to the configuration, and with neither
+    // there is no organisation.
+    assert_eq!(
+        organisation_for(dir.path(), &configured),
+        Some((uuid.to_owned(), "Example Corp".to_owned()))
+    );
+    assert_eq!(
+        organisation_for(dir.path(), &configuration("x = 1\n")),
+        None
+    );
+    // An object that names one wins: the catalogue is the explicit value.
+    std::fs::write(
+        dir.path().join("a.yaml"),
+        "metadata:\n  uuid: x\n  organisation:\n    uuid: u2\n    name: Two\n",
+    )
+    .unwrap();
+    assert_eq!(
+        organisation_for(dir.path(), &configured),
+        Some(("u2".to_owned(), "Two".to_owned()))
+    );
+}
+
 #[test]
 fn object_files_are_in_path_order() {
     let dir = tempfile::tempdir().unwrap();

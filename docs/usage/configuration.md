@@ -27,6 +27,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 ├── visibility.toml         # what is exposed/deployed
 ├── documentation.toml      # `opentide generate docs` settings
 ├── lint.toml               # `opentide lint` checks and required metadata
+├── organisation.toml       # the organisation `opentide new` writes (from `setup --org`)
 └── platforms/
     ├── sentinel.toml
     └── splunk.toml
@@ -311,6 +312,18 @@ pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expres
 A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
 The editor (`opentide lsp start`) reports what `opentide validate` reports; the file-name and metadata recommendations are `opentide lint`'s alone.
+
+## Organisation
+
+`opentide setup --org "Example Corp"` writes `organisation.toml`, the `{uuid, name}` that `opentide new` puts in `metadata.organisation` when no object in the catalogue names an organisation. The uuid is a fresh UUID v4: replace it with your organisation's own.
+
+```toml
+# .opentide/configurations/organisation.toml
+uuid = "6f0a3d6e-52a1-4c43-9a3e-0d8f1c2b7e11"
+name = "Example Corp"
+```
+
+An organisation the catalogue's objects carry wins over this file. Running `setup` again without `--org` leaves the file alone, and with `--org` changes its `name` and keeps its `uuid`.
 
 ## Paths
 

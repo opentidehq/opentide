@@ -521,6 +521,82 @@ fn readme(target: &Path, options: &RepoOptions) -> String {
     )
 }
 
+/// Where `setup repo --org` keeps the organisation, relative to the
+/// repository: `opentide new` reads it when no object in the catalogue names
+/// one (`commands/new.rs`).
+pub const ORGANISATION_FILE: &str = ".opentide/configurations/organisation.toml";
+
+/// What [`organisation`] did to `organisation.toml`.
+enum Organisation {
+    /// The file was created or its name changed.
+    Written,
+    /// The file already says what `--org` names.
+    Unchanged,
+    /// The file is not TOML, or not UTF-8: left as it is, with the reason.
+    Kept(String),
+}
+
+/// Keeps `--org` in `organisation.toml`, the `{uuid, name}` `opentide new`
+/// writes into `metadata.organisation`.
+///
+/// A uuid already in the file stays, so renaming the organisation keeps its
+/// identity and a rerun changes nothing; otherwise a fresh UUID v4 is
+/// written, which a team replaces with its real one. Every other key and
+/// comment of the file, and its line endings, are kept.
+///
+/// # Errors
+///
+/// The file cannot be read.
+fn organisation(stage: &mut Stage, target: &Path, org: &str) -> Result<Organisation, String> {
+    let path = target.join(ORGANISATION_FILE);
+    let current = match read_text(stage, &path) {
+        Ok(current) => current,
+        Err(error) if error == not_utf8(&path) => {
+            return Ok(Organisation::Kept(format!(
+                "{ORGANISATION_FILE} is not UTF-8"
+            )));
+        }
+        Err(error) => return Err(error),
+    };
+    let existed = current.is_some();
+    let text = current.unwrap_or_default();
+    let mut document: toml_edit::DocumentMut = match text.parse() {
+        Ok(document) => document,
+        Err(error) => {
+            return Ok(Organisation::Kept(format!(
+                "{ORGANISATION_FILE} is not valid TOML ({})",
+                error.message()
+            )));
+        }
+    };
+    let uuid = document
+        .get("uuid")
+        .and_then(toml_edit::Item::as_str)
+        .filter(|uuid| crate::commands::new::is_uuid(uuid))
+        .map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
+    if !existed {
+        document.decor_mut().set_prefix(
+            "# The organisation `opentide new` writes into metadata.organisation when no\n\
+             # object in the catalogue names one. Replace the uuid with your organisation's.\n",
+        );
+    }
+    document["uuid"] = toml_edit::value(uuid);
+    document["name"] = toml_edit::value(org);
+    let written = document.to_string();
+    // A key toml_edit adds ends in `\n`: a CRLF file keeps CRLF throughout.
+    let written = if text.contains("\r\n") {
+        written.replace("\r\n", "\n").replace('\n', "\r\n")
+    } else {
+        written
+    };
+    if written == text {
+        return Ok(Organisation::Unchanged);
+    }
+    stage.mkdir(&target.join(OPENTIDE_DIR).join("configurations"));
+    stage.write(&path, written);
+    Ok(Organisation::Written)
+}
+
 /// `setup repo`: the scaffold, the README, `.gitignore`, and the platforms.
 ///
 /// # Errors
@@ -539,9 +615,9 @@ pub fn repo(stage: &mut Stage, target: &Path, options: &RepoOptions) -> Result<S
     let readme_path = target.join("README.md");
     if stage.is_file(&readme_path) {
         skipped.push("README.md".to_owned());
+        // `--org` is not ignored: it reaches `organisation.toml` below.
         let ignored: Vec<&str> = [
             ("--name", &options.name),
-            ("--org", &options.org),
             ("--description", &options.description),
         ]
         .into_iter()
@@ -585,6 +661,21 @@ pub fn repo(stage: &mut Stage, target: &Path, options: &RepoOptions) -> Result<S
         skipped.push(GITIGNORE_PATH.to_owned());
     } else {
         files.push(GITIGNORE_PATH.to_owned());
+    }
+    // Without `--org` the file is not touched: a rerun never erases it.
+    if let Some(org) = options
+        .org
+        .as_deref()
+        .map(str::trim)
+        .filter(|org| !org.is_empty())
+    {
+        match organisation(stage, target, org)? {
+            Organisation::Written => files.push(ORGANISATION_FILE.to_owned()),
+            Organisation::Unchanged => skipped.push(ORGANISATION_FILE.to_owned()),
+            Organisation::Kept(reason) => warnings.push(format!(
+                "Left {ORGANISATION_FILE} unchanged: {reason}, so `opentide new` will not use --org"
+            )),
+        }
     }
     let name = options
         .name
@@ -942,6 +1033,100 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    /// `setup repo --org` keeps the organisation where `opentide new` reads
+    /// it (#1670, smoke B17): a uuid and the name, kept across reruns.
+    #[test]
+    fn org_is_kept_in_organisation_toml_and_a_rerun_neither_changes_nor_erases_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let file = root.join(ORGANISATION_FILE);
+        let options = RepoOptions {
+            org: Some("Example Corp".into()),
+            ..RepoOptions::default()
+        };
+        let mut stage = Stage::new();
+        let first = repo(&mut stage, root, &options).unwrap();
+        assert!(
+            first
+                .strings("files")
+                .contains(&ORGANISATION_FILE.to_owned())
+        );
+        let text = written(stage, &file);
+        let document: toml_edit::DocumentMut = text.parse().unwrap();
+        let uuid = document["uuid"].as_str().unwrap().to_owned();
+        assert!(crate::commands::new::is_uuid(&uuid), "{text}");
+        assert_eq!(document["name"].as_str(), Some("Example Corp"), "{text}");
+
+        // The same `--org` again: the file already says it.
+        let mut stage = Stage::new();
+        let again = repo(&mut stage, root, &options).unwrap();
+        assert!(
+            again
+                .strings("skipped")
+                .contains(&ORGANISATION_FILE.to_owned())
+        );
+        assert!(
+            !again
+                .strings("files")
+                .contains(&ORGANISATION_FILE.to_owned())
+        );
+        assert_eq!(written(stage, &file), text);
+
+        // No `--org`: the file is not touched.
+        let mut stage = Stage::new();
+        repo(&mut stage, root, &RepoOptions::default()).unwrap();
+        assert_eq!(written(stage, &file), text);
+
+        // Another name renames the organisation and keeps its uuid, and the
+        // README that is already there is not why `--org` is ignored.
+        let renamed = RepoOptions {
+            org: Some("  Other Corp ".into()),
+            ..RepoOptions::default()
+        };
+        let mut stage = Stage::new();
+        std::fs::write(root.join("README.md"), "mine").unwrap();
+        let result = repo(&mut stage, root, &renamed).unwrap();
+        assert!(
+            result.strings("warnings").is_empty(),
+            "{:?}",
+            result.strings("warnings")
+        );
+        let text = written(stage, &file);
+        let document: toml_edit::DocumentMut = text.parse().unwrap();
+        assert_eq!(document["uuid"].as_str(), Some(uuid.as_str()), "{text}");
+        assert_eq!(document["name"].as_str(), Some("Other Corp"), "{text}");
+    }
+
+    /// A file the user wrote keeps its other keys, its comments and its
+    /// line endings; one that is not TOML is left alone with a warning.
+    #[test]
+    fn organisation_toml_keeps_what_the_user_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let file = root.join(ORGANISATION_FILE);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let mine =
+            "# ours\r\nuuid = \"11111111-2222-4333-8444-555555555555\"\r\nname = \"Old\"\r\n";
+        std::fs::write(&file, mine).unwrap();
+        let mut stage = Stage::new();
+        assert!(matches!(
+            organisation(&mut stage, root, "New").unwrap(),
+            Organisation::Written
+        ));
+        assert_eq!(
+            written(stage, &file),
+            "# ours\r\nuuid = \"11111111-2222-4333-8444-555555555555\"\r\nname = \"New\"\r\n"
+        );
+
+        std::fs::write(&file, "name = = 1\n").unwrap();
+        let mut stage = Stage::new();
+        let Organisation::Kept(reason) = organisation(&mut stage, root, "New").unwrap() else {
+            panic!("an invalid file is kept");
+        };
+        assert!(reason.contains("not valid TOML"), "{reason}");
+        assert_eq!(written(stage, &file), "name = = 1\n");
     }
 
     #[test]
