@@ -410,6 +410,10 @@ impl<'a> Client<'a> {
             .header("Content-Type", "application/json")
             .header("X-Requested-By", REQUESTED_BY)
             .basic_auth(token.expose(), Some("token"));
+        if path == VALIDATE_PATH || path == MESSAGES_PATH {
+            // A query's check or search writes nothing (`HttpClient::writes_taken`).
+            builder = builder.read_only();
+        }
         if let Some(timeout) = timeout {
             builder = builder.timeout(timeout);
         }
@@ -1078,6 +1082,18 @@ pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
 pub const FIELD_UNSUPPORTED: &str = "graylog_field_unsupported_version";
 
 impl Deployer for Graylog {
+    /// The tenant's `url` and `token`: nothing is sent. `opentide deploy`
+    /// then reads the version, once, before any write.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            cx.tenant.secret("url")?;
+            cx.tenant.secret("token").map(|_| ())
+        })
+    }
+
     /// One rule, from the compiled create body alone (a delete needs none):
     /// the definition is read back from it (flat, or wrapped in `entity`),
     /// then the tenant's version is read, as `opentide deploy` reads it

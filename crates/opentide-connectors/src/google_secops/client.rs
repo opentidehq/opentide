@@ -290,6 +290,10 @@ impl<'a> Client<'a> {
                 &url,
             )
             .header("Accept", "application/json");
+        if request.path.ends_with(":verifyRuleText") {
+            // A rule's check writes nothing (`HttpClient::writes_taken`).
+            builder = builder.read_only();
+        }
         for (name, value) in headers {
             builder = builder.header(name, value);
         }

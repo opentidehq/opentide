@@ -112,7 +112,9 @@ async fn sign_in(cx: TenantContext<'_>, base: &str) -> Result<Issued, ConnectorE
                 &format!("{base}/oauth2/token"),
             )
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(form),
+            .body(form)
+            // A sign-in writes no rule (`HttpClient::writes_taken`).
+            .read_only(),
         cx,
     )?;
     let answer = Answer::fetch(cx.http, request, cx.cancel).await?;
@@ -557,6 +559,19 @@ impl Crowdstrike {
 }
 
 impl Deployer for Crowdstrike {
+    /// The tenant's cloud and client id and secret: nothing is sent; the
+    /// first rule signs in.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            base_api(cx)?;
+            cx.tenant.secret("client_id")?;
+            cx.tenant.secret("client_secret").map(|_| ())
+        })
+    }
+
     /// Creates (`POST`), updates or disables (`PATCH` of the compiled
     /// one-rule list) or deletes (`DELETE ?ids=`) one rule; the remote id
     /// is the created rule's, or *request*'s for an update. The tenant is

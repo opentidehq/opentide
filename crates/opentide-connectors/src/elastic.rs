@@ -359,6 +359,10 @@ impl Client {
         }
         if xsrf {
             builder = builder.header("kbn-xsrf", "true");
+        } else {
+            // Elasticsearch is only read: its checks (`POST /_query` among
+            // them) write no rule (`HttpClient::writes_taken`).
+            builder = builder.read_only();
         }
         if let Some(body) = body {
             builder =
@@ -1451,6 +1455,14 @@ fn deploy_body(body: &[u8], rule_id: &str) -> Result<(Json, Option<Json>), Strin
 }
 
 impl Deployer for Elastic {
+    /// The tenant's addresses, space and key: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move { client(cx).map(|_| ()) })
+    }
+
     /// One rule, Kibana's `rule_id` the request's: deleted, or checked
     /// against Elasticsearch, then created when Kibana has no such rule,
     /// replaced (keeping the remote's fields the rule leaves out) or, when

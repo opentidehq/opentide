@@ -81,6 +81,14 @@ impl Deployer for Acme {
             SENT.lock()
                 .unwrap()
                 .push((request.operation, request.rule_id.clone(), body.clone()));
+            if body["configuration"]["severity"] == json!(8) {
+                return Err(ConnectorError::Authentication {
+                    platform: "acme".into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    message: "Acme refused the token".into(),
+                    detail: None,
+                });
+            }
             if body["configuration"]["severity"] == json!(9) {
                 return Err(ConnectorError::Refused {
                     platform: "acme".into(),
@@ -336,6 +344,87 @@ fn a_plugin_create_without_an_id_or_refused_fails_the_run() {
         error,
         "PlatformRefused: Acme answered 422: severity 9 is out of range"
     );
+}
+
+/// A plugin sends its own requests, so the command line cannot count what
+/// reached the tenant: once the plugin was called for a rule, a failure of
+/// the tenant is that rule's, never one "before any rule" (#1701). Here the
+/// first rule is refused, the second's call is refused the token, and only
+/// the third is `not attempted`.
+#[test]
+fn a_plugin_tenant_failure_after_a_rule_was_sent_fails_its_rule() {
+    let (_scratch, ws) = workspace();
+    let rules = ws.join("Objects/Detection Rules");
+    let original = std::fs::read_to_string(rule_file(&ws)).unwrap();
+    let mut files = Vec::new();
+    for (n, severity) in [(1, 9), (2, 8), (3, 3)] {
+        let uuid = format!("7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a1{n}");
+        let file = rules.join(format!("rule-acme-{n}.yaml"));
+        std::fs::write(
+            &file,
+            original
+                .replace(RULE, &uuid)
+                .replace("Acme Suspicious Shell", &format!("Acme rule {n}"))
+                .replace("severity: 3", &format!("severity: {severity}")),
+        )
+        .unwrap();
+        files.push(file.to_str().unwrap().to_owned());
+    }
+    let mut words = vec!["deploy", "--platform", "acme", "--strategy", "PREVIEW"];
+    for file in &files {
+        words.extend(["--file", file.as_str()]);
+    }
+    let (code, document) = opentide(&ws, &words);
+    assert_eq!(code, 1, "{document}");
+    let status = |n: u8| {
+        let uuid = format!("7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a1{n}");
+        document["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == json!(uuid))
+            .map(|row| row["status"].as_str().unwrap().to_owned())
+            .unwrap_or_else(|| panic!("no row for {uuid}: {document}"))
+    };
+    assert_eq!(
+        [status(1), status(2), status(3)],
+        ["failed", "failed", "not_attempted"],
+        "{document}"
+    );
+    assert_eq!(sent("7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a11").len(), 1);
+    assert_eq!(sent("7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a12").len(), 1);
+    assert!(sent("7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a13").is_empty());
+    // The tenant's failure names the rule it came on, not the tenant alone.
+    let failures = document["failures"].as_array().unwrap();
+    assert!(
+        failures.iter().any(|failure| {
+            failure["id"] == json!("7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a12")
+                && failure["error"]
+                    .as_str()
+                    .is_some_and(|error| error.contains("PlatformAuthenticationError"))
+        }),
+        "{document}"
+    );
+    assert!(
+        failures.iter().all(|failure| failure.get("id").is_some()),
+        "no tenant-only failure: {document}"
+    );
+}
+
+/// A plugin whose very first call is refused the token: the call was made,
+/// so the rule is `failed`, not `not attempted` (its request may have
+/// reached the tenant).
+#[test]
+fn a_plugin_first_rule_refused_the_token_stays_failed() {
+    let (_scratch, ws) = workspace();
+    let uuid = "7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a21";
+    edit(&ws, RULE, uuid);
+    edit(&ws, "severity: 3", "severity: 8");
+    let (code, document) = deploy(&ws, "PREVIEW");
+    assert_eq!(code, 1, "{document}");
+    assert_eq!(sent(uuid).len(), 1);
+    assert_eq!(document["results"][0]["status"], "failed", "{document}");
+    assert_eq!(document["failures"][0]["id"], uuid, "{document}");
 }
 
 #[test]

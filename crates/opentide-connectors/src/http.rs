@@ -10,6 +10,7 @@
 //! reqwest's.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use tokio::sync::Semaphore;
@@ -60,6 +61,9 @@ pub struct HttpClient {
     settings: HttpSettings,
     permits: Arc<Semaphore>,
     proxies: ProxySettings,
+    /// What reached the tenant ([`HttpClient::requests_sent`],
+    /// [`HttpClient::writes_taken`]), shared by the client's clones.
+    reached: Arc<Reached>,
 }
 
 impl HttpClient {
@@ -97,6 +101,7 @@ impl HttpClient {
             settings: settings.clone(),
             permits: Arc::new(Semaphore::new(settings.max_in_flight.max(1))),
             proxies,
+            reached: Arc::new(Reached::default()),
         })
     }
 
@@ -114,6 +119,24 @@ impl HttpClient {
     /// The settings it was built with.
     pub fn settings(&self) -> &HttpSettings {
         &self.settings
+    }
+
+    /// How many requests left for the tenant, through this client and its
+    /// clones: every attempt but one whose connection could not be made or
+    /// whose certificate was refused (those were never sent).
+    pub fn requests_sent(&self) -> usize {
+        self.reached.sent.load(Ordering::Relaxed)
+    }
+
+    /// How many requests that may change something
+    /// ([`Request::is_read_only`] is false) left for the tenant and were
+    /// not refused: answered with anything but a 4xx, or not answered at
+    /// all (a timeout, a connection dropped once sent), so the tenant may
+    /// have taken them. While it has not grown since a tenant was opened,
+    /// the tenant has taken nothing: a failure then sent no rule
+    /// (`opentide deploy`'s tenant failure before any rule, #1701).
+    pub fn writes_taken(&self) -> usize {
+        self.reached.taken.load(Ordering::Relaxed)
     }
 
     /// A request to *url*, to finish and pass to [`HttpClient::send`].
@@ -239,12 +262,24 @@ impl HttpClient {
         request: Request,
         cancel: &CancellationToken,
     ) -> Result<Result<Response, TransportFailure>, ConnectorError> {
+        let write = !request.is_read_only();
         // `biased`: see `send`.
-        tokio::select! {
+        let outcome = tokio::select! {
             biased;
-            () = cancel.cancelled() => Err(ConnectorError::Cancelled),
-            outcome = self.transport.execute(request, cancel) => Ok(outcome),
-        }
+            () = cancel.cancelled() => {
+                // Stopped while it may have been on its way: it counts.
+                self.reached.note(write, true, true);
+                return Err(ConnectorError::Cancelled);
+            }
+            outcome = self.transport.execute(request, cancel) => outcome,
+        };
+        let sent = !matches!(
+            outcome,
+            Err(TransportFailure::Connect { .. } | TransportFailure::CertificateRefused { .. })
+        );
+        let refused = matches!(&outcome, Ok(response) if response.status().is_client_error());
+        self.reached.note(write, sent, !refused);
+        Ok(outcome)
     }
 
     /// An answer's body, read whole by the transport, or why it could not
@@ -279,6 +314,28 @@ pub struct SendFailure {
     /// The request never left: its connection could not be made, or the
     /// tenant's certificate was refused, so the tenant did nothing with it.
     pub unsent: bool,
+}
+
+/// What reached a tenant, counted by [`HttpClient::attempt`].
+#[derive(Debug, Default)]
+struct Reached {
+    /// Requests that left.
+    sent: AtomicUsize,
+    /// Writes that left and were not refused.
+    taken: AtomicUsize,
+}
+
+impl Reached {
+    /// One attempt: a `write` or not, `sent` or never, and `not_refused`
+    /// when its answer (if any) was not a 4xx.
+    fn note(&self, write: bool, sent: bool, not_refused: bool) {
+        if sent {
+            self.sent.fetch_add(1, Ordering::Relaxed);
+            if write && not_refused {
+                self.taken.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
 }
 
 /// What a retry policy reads of an attempt.

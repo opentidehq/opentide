@@ -149,14 +149,24 @@ impl<'a> Client<'a> {
         Answer::fetch(self.cx.http, request, self.cx.cancel).await
     }
 
-    /// An answer that is not the one expected (`_http_errors`): 401 and
-    /// 403 are the token's permissions, any other the rule's refusal.
+    /// An answer that is not the one expected (`_http_errors`): a 401
+    /// refuses the token, so the tenant ([`ConnectorError::Authentication`],
+    /// #1701); a 403 is the token's permissions, any other the rule's
+    /// refusal.
     fn http_error(&self, answer: &Answer, failed: &str) -> ConnectorError {
         let tenant = &self.cx.tenant.label.tenant;
         let message = match answer.status {
-            401 => format!(
-                "HarfangLab tenant {tenant} refused the API token (HTTP 401): check the api_token"
-            ),
+            401 => {
+                return ConnectorError::Authentication {
+                    platform: PLATFORM.to_owned(),
+                    tenant: tenant.clone(),
+                    message: format!(
+                        "HarfangLab tenant {tenant} refused the API token (HTTP 401): check the \
+                         api_token"
+                    ),
+                    detail: Some(answer.text()).filter(|text| !text.trim().is_empty()),
+                };
+            }
             403 => format!(
                 "HarfangLab tenant {tenant} forbids it (HTTP 403): check the API token's permissions"
             ),
@@ -386,6 +396,17 @@ pub fn sources_detail() -> String {
 pub struct HarfangLab;
 
 impl Deployer for HarfangLab {
+    /// The console's `url` and `api_token`: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            Client::new(cx).base()?;
+            cx.tenant.secret("api_token").map(|_| ())
+        })
+    }
+
     /// Puts a Sigma rule (creating it on a 404) or posts a YARA file, by
     /// the kind *request*'s body names; a delete removes it from that kind's
     /// endpoint. *request*'s `rule_id` is the rule's UUID, its body

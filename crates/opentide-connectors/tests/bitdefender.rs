@@ -1168,3 +1168,30 @@ fn the_platform_keeps_the_warnings_before_a_refusal_and_scopes_a_refused_key() {
     assert_eq!(error.scope, DeployScope::Tenant);
     assert_eq!(error.failure.code, bitdefender::TENANT_UNAUTHORIZED);
 }
+
+/// An update that got no answer may have landed: the tenant's error names
+/// the tenant unreachable, and the tenant's client counts the call as a
+/// write the tenant may have taken, so `opentide deploy` keeps the rule
+/// `failed` rather than `not attempted` (#1701).
+#[test]
+fn an_update_with_no_answer_counts_as_a_write_the_tenant_may_have_taken() {
+    let run = Run::new();
+    run.script(|_| ResponseTemplate::new(200).set_delay(Duration::from_secs(2)));
+    let (tenant, http) = run.tenant("", Duration::from_millis(300));
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let outcome = block_on(deploy_rule_with(cx, &update(FIRST_ID), &run.pacer)).unwrap();
+    assert_eq!(run.methods(), ["updateCustomRule"]);
+    let Err(error) = outcome else {
+        panic!("the tenant's error: {outcome:?}");
+    };
+    assert!(
+        error.text().starts_with("bitdefender_tenant_unreachable: "),
+        "{error}"
+    );
+    assert_eq!((http.requests_sent(), http.writes_taken()), (1, 1));
+}

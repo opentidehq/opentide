@@ -877,12 +877,44 @@ pub struct LiveCheck {
 
 /// Deploys rules.
 pub trait Deployer: Send + Sync {
+    /// Makes the tenant ready, once, before its first rule: resolves the
+    /// credentials and settings a deploy reads, and signs in where the
+    /// platform has a sign-in of its own. It sends nothing but that sign-in,
+    /// which the first [`deploy`](Self::deploy) then reuses, so a deploy's
+    /// requests are the same with or without it. A failure here is the
+    /// tenant's, before any rule was sent: `opentide deploy` reports each of
+    /// its rules `not attempted` (#1701). By default, nothing to resolve.
+    ///
+    /// # Errors
+    ///
+    /// A [`DeployError`] of scope [`DeployScope::Tenant`]: a credential's
+    /// variable unset ([`ConnectorError::MissingCredential`]), a setup value
+    /// that cannot be used, a sign-in refused or never answered.
+    fn open<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        let _ = cx;
+        Box::pin(async { Ok(()) })
+    }
+
     /// Applies *request* to the tenant.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>>;
+}
+
+/// [`Deployer::open`]'s future from a resolution whose failures are connector
+/// errors: each the tenant's ([`DeployScope::Tenant`]), whatever its kind.
+pub fn opening<'a>(
+    future: impl Future<Output = Result<(), ConnectorError>> + Send + 'a,
+) -> BoxFuture<'a, Result<(), DeployError>> {
+    Box::pin(async move {
+        future.await.map_err(|error| {
+            let mut failed = DeployError::from(error);
+            failed.scope = DeployScope::Tenant;
+            failed
+        })
+    })
 }
 
 /// Checks queries on the tenant (`validate query --live`).
