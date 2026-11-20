@@ -206,6 +206,112 @@ class PublishTest(unittest.TestCase):
             self.assertIn("--no-verify", command)
 
 
+class RateLimitWaitTest(unittest.TestCase):
+    """`publish` waits until the time crates.io names, not a fixed eleven minutes."""
+
+    NOW = release.dt.datetime(2026, 11, 20, 12, 0, 0, tzinfo=release.dt.timezone.utc)
+    MESSAGE = (
+        "error: failed to publish to registry at https://crates.io\n\nCaused by:\n"
+        "  the remote server responded with an error (status 429 Too Many Requests): "
+        "You have published too many new crates in a short period of time. "
+        "Please try again after {when} or email help@crates.io to have your limit increased."
+    )
+
+    def wait(self, when: str) -> int:
+        return release.rate_limit_wait(self.MESSAGE.format(when=when), self.NOW)
+
+    def test_the_named_time_plus_a_margin(self) -> None:
+        self.assertEqual(
+            self.wait("Fri, 20 Nov 2026 12:03:30 GMT"), 210 + release.RATE_LIMIT_MARGIN
+        )
+
+    def test_a_time_past_waits_the_margin_only(self) -> None:
+        self.assertEqual(self.wait("Fri, 20 Nov 2026 11:00:00 GMT"), release.RATE_LIMIT_MARGIN)
+
+    def test_a_far_time_is_capped(self) -> None:
+        self.assertEqual(self.wait("Sat, 21 Nov 2026 12:00:00 GMT"), release.RATE_LIMIT_MAX_WAIT)
+
+    def test_an_offset_is_honoured(self) -> None:
+        self.assertEqual(
+            self.wait("Fri, 20 Nov 2026 14:05:00 +0200"), 300 + release.RATE_LIMIT_MARGIN
+        )
+
+    def test_no_time_or_an_unreadable_one_falls_back_to_the_fixed_wait(self) -> None:
+        for output in (
+            "error: 429 Too Many Requests",
+            "rate limit exceeded, please try again after a while",
+            self.MESSAGE.format(when="Fri, 99 Nov 2026 12:03:30 GMT"),
+            self.MESSAGE.format(when="Xyz, 20 Foo 2026 12:03:30 GMT"),
+        ):
+            with self.subTest(output=output):
+                self.assertEqual(release.rate_limit_wait(output, self.NOW), release.RATE_LIMIT_WAIT)
+
+    def test_publish_sleeps_for_the_named_time_and_flushes(self) -> None:
+        limited = subprocess.CompletedProcess(
+            [], 101, stdout="", stderr=self.MESSAGE.format(when="Fri, 20 Nov 2026 12:03:30 GMT")
+        )
+        done = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        clock = release.dt.datetime(2026, 11, 20, 12, 0, 0, tzinfo=release.dt.timezone.utc)
+        real_datetime = release.dt.datetime
+
+        class FrozenDatetime(real_datetime):
+            @classmethod
+            def now(cls, tz=None):  # type: ignore[override]
+                return clock
+
+        printed: list[tuple[tuple, dict]] = []
+        with (
+            mock.patch.object(release, "workspace_version", return_value="1.0.0"),
+            mock.patch.object(release, "publishable_crates", return_value=[{"name": "c"}]),
+            mock.patch.object(release, "publish_order", side_effect=lambda c: c),
+            mock.patch.object(release, "on_crates_io", return_value=False),
+            mock.patch.object(release.dt, "datetime", FrozenDatetime),
+            mock.patch.object(release.subprocess, "run", side_effect=[limited, done]),
+            mock.patch.object(release.time, "sleep") as sleep,
+            mock.patch("builtins.print", side_effect=lambda *a, **k: printed.append((a, k))),
+        ):
+            release.publish()
+        sleep.assert_called_once_with(210 + release.RATE_LIMIT_MARGIN)
+        self.assertTrue(printed)
+        for args, kwargs in printed:
+            self.assertTrue(kwargs.get("flush"), args)
+
+
+class CreatedWithTokenTest(unittest.TestCase):
+    """The workflow registers trusted publishing only when the trusted login
+    failed or a crate was created with the stored token: `publish` says so."""
+
+    def run_publish(self, results: list[subprocess.CompletedProcess], env: dict[str, str]):
+        output = Path(tempfile.mkdtemp()) / "output"
+        self.addCleanup(shutil.rmtree, output.parent)
+        env = {**env, "GITHUB_OUTPUT": str(output)}
+        with (
+            mock.patch.dict(release.os.environ, env, clear=True),
+            mock.patch.object(release, "workspace_version", return_value="1.0.0"),
+            mock.patch.object(release, "publishable_crates", return_value=[{"name": "c"}]),
+            mock.patch.object(release, "publish_order", side_effect=lambda c: c),
+            mock.patch.object(release, "on_crates_io", return_value=False),
+            mock.patch.object(release.subprocess, "run", side_effect=results),
+        ):
+            release.publish()
+        return output.read_text(encoding="utf-8") if output.exists() else ""
+
+    def test_a_crate_created_with_the_stored_token_is_noted(self) -> None:
+        refused = subprocess.CompletedProcess(
+            [], 101, stdout="", stderr=f"error: {release.NEW_CRATE_REFUSAL}"
+        )
+        done = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        out = self.run_publish(
+            [refused, done], {"CARGO_REGISTRY_TOKEN": "oidc", "NEW_CRATE_TOKEN": "stored"}
+        )
+        self.assertEqual(out, "created_with_token=true\n")
+
+    def test_a_crate_published_with_the_trusted_token_is_not(self) -> None:
+        done = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        out = self.run_publish([done], {"CARGO_REGISTRY_TOKEN": "oidc", "NEW_CRATE_TOKEN": ""})
+        self.assertEqual(out, "")
+
+
 class BumpTest(unittest.TestCase):
     """`bump` sets the workspace version and the pins: X.Y.Z in a release's
     pull request, X.Y.Z-rc.N in a candidate's workflow checkout (its crates
@@ -921,9 +1027,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
             needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.MULTILINE)
             self.assertIsNotNone(needs, job)
             self.assertIn("verify-assets", needs.group(1).split(", "), job)
-            # The implicit success(): every job it needs succeeded.
-            self.assertNotIn("always()", jobs[job], job)
-            self.assertNotIn("!cancelled()", jobs[job], job)
+            # The implicit success(): every job it needs succeeded. The job's own
+            # condition only (a step may run after a failed step of its job).
+            header = jobs[job].split("\n    steps:\n", 1)[0]
+            self.assertNotIn("always()", header, job)
+            self.assertNotIn("!cancelled()", header, job)
         # The release job does not check: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
 
@@ -984,6 +1092,57 @@ class ReleaseWorkflowTest(unittest.TestCase):
         attach = jobs["release"]
         self.assertIn("flags+=(--prerelease --latest=false)", attach)
         self.assertIn('"${flags[@]}"', attach)
+
+    def test_trust_registers_only_when_needed_and_never_fails_the_run(self) -> None:
+        """Every crate trusts publish.yml and the token is deleted after the
+        first publish: a run with the secret gone must not fail on the trust
+        step. It runs only when the trusted login failed or a crate was created
+        with the stored token, and a failure there is a warning."""
+        crates = workflow_jobs()["crates"]
+        steps = crates.split("      - name: ")
+        trust = next(step for step in steps if step.startswith("register trusted publishing"))
+        publish = next(step for step in steps if step.startswith("publish to crates.io"))
+        login = next(step for step in steps if step.startswith("crates.io login"))
+        # The login may fail without failing the job; the trust step reads its outcome
+        # (`conclusion` is `success` under continue-on-error).
+        self.assertIn("continue-on-error: true", login)
+        self.assertIn("id: trusted", login)
+        self.assertIn("id: publish", publish)
+        condition = re.search(r"^        if: (.*)$", trust, re.MULTILINE)
+        self.assertIsNotNone(condition, trust)
+        self.assertEqual(
+            condition.group(1),
+            "${{ !cancelled() && (steps.trusted.outcome != 'success' "
+            "|| steps.publish.outputs.created_with_token == 'true') }}",
+        )
+        # A failure is a warning, not an error: the step's command cannot fail the step.
+        self.assertIn("if ! python3 scripts/engine/release.py trust publish.yml; then", trust)
+        self.assertIn("::warning::", trust)
+        self.assertNotIn("::error::", trust)
+        self.assertNotIn("continue-on-error", trust)
+        # The output the condition reads is the one release.py writes.
+        self.assertIn("created_with_token=true", Path(release.__file__).read_text(encoding="utf-8"))
+        # The log keeps its order.
+        self.assertIn('PYTHONUNBUFFERED: "1"', publish)
+
+    def test_every_resume_message_names_a_ref_that_has_the_trigger(self) -> None:
+        """While development's publish.yml is a stub with no repository_dispatch,
+        a resume is a Run workflow on the ref the run is on (the integration
+        branch), never a `dispatches` call or a run on development."""
+        text = WORKFLOW.read_text(encoding="utf-8")
+        pypi = workflow_jobs()["pypi"]
+        self.assertNotIn("repos/opentidehq/opentide/dispatches", pypi)
+        self.assertNotIn("event_type=publish", pypi)
+        self.assertIn("gh workflow run publish.yml --repo opentidehq/opentide --ref {ref}", pypi)
+        self.assertIn('ref = os.environ["GITHUB_REF_NAME"]', pypi)
+        self.assertIn("-f checkout_ref=v{version}", pypi)
+        header = workflow_header()
+        self.assertIn("--ref integration/unified-core", header)
+        self.assertIn("a stub without that\n#     trigger", header)
+        # No printed message tells the reader to resume on development.
+        for line in text.splitlines():
+            if "::error::" in line and "checkout_ref" in line:
+                self.assertNotIn("from development", line.split("checkout_ref")[1], line)
 
     def test_the_release_ships_the_set_the_asset_build_checked(self) -> None:
         assets = workflow_jobs(BUILD)["assets"]
