@@ -174,9 +174,14 @@ pub fn validate_json(request: &ValidateRequest, env: &Env, cwd: &Path) -> String
         }
     };
     let (_, roots) = crate::commands::placement(request.repo.as_deref(), env, cwd);
-    let workspace = match crate::commands::open(roots) {
+    // A configuration file that does not parse is `config_parse`, its message
+    // `path:line:column: problem`, as `opentide validate` reports it (D9, B10).
+    let workspace = match crate::commands::open_for("validate", roots) {
         Ok(workspace) => workspace,
-        Err(message) => return error(crate::commands::COMMAND_FAILED, message),
+        Err(refused) => {
+            let (code, message, _) = crate::commands::refusal_parts(&refused);
+            return error(&code, message);
+        }
     };
     let selection = Selection {
         files: request.files.clone(),

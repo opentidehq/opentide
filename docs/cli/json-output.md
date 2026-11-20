@@ -67,6 +67,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `share_failed` | 1 | `share`: objects failed and none succeeded |
 | `scope_no_match`, `api_key_unset`, … | 1 | `share` preflight failures; the code is the `preflight` value |
 | `reference_not_found` | 2 | `new`: `--objective` or `--threat` names no object in the catalogue |
+| `workspace_not_found` | 1 | `new`, `generate`, `migrate vocab-scope`: neither `.opentide/` nor `objects/` is in the folder or above it, so nothing is written |
 | `path_exists` | 1 | `new`: the file it would write already exists; it never overwrites |
 | `path_not_writable` | 1 | `new`: the folder or the file it would write cannot be written (read-only checkout, permissions) |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |

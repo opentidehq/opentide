@@ -17,7 +17,7 @@ Spec-driven development for agentic detection engineering
           [env: OPENTIDE_REPO_ROOT]
 
       ␛[1m--data␛[0m <DATA>
-          Bundled data root
+          Data root; only --technique completion reads it
           
           [env: OPENTIDE_DATA_ROOT]
 

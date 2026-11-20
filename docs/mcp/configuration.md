@@ -101,7 +101,7 @@ Set in the MCP host's server environment block when the catalogue is not discove
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `OPENTIDE_REPO_ROOT` | When cwd is not the detection repo | Detection content repository root |
-| `OPENTIDE_DATA_ROOT` | No | Override bundled package data |
+| `OPENTIDE_DATA_ROOT` | No | Accepted, and changes nothing in this release: the vocabularies are compiled in |
 | `DEBUG` | No | Verbose logging |
 
 If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nearest directory holding `.opentide/` or `objects/`, without leaving the enclosing git checkout, and falls back to the git top level. See [Repository root resolution](../cli/global-options.md#repository-root-resolution). A literal unexpanded token such as `${workspaceFolder}` is treated as a path, not interpolated by the server.
@@ -150,7 +150,7 @@ An Agent Plugins client starts the server in the plugin's own directory, which i
 2. the plugin directory, when it is itself a detection workspace;
 3. the host's project directory: `CLAUDE_PROJECT_DIR`, else `PWD` (the directory the host was started in), when it lies in a detection workspace.
 
-Otherwise the catalogue tools and resources (`search`, `validation_report`, `opentide://rules`, ...) fail with `workspace_not_found`, naming the plugin directory; `explain` and offline `validate_query` still work. Set `OPENTIDE_REPO_ROOT` in the host's settings for the server, or add the server to the detection repository itself with [`opentide setup mcp`](#automated-setup), whose files name the project directory.
+Otherwise the catalogue tools and resources (`search`, `validation_report`, `opentide://rules`, ...) fail with `workspace_not_found`, naming the plugin directory. They fail the same way wherever the server finds no workspace: started in a folder with no `.opentide/` or `objects/` there or above it, or with `OPENTIDE_REPO_ROOT` naming a folder that does not exist, rather than answering an empty catalogue (`validation_report` would say `ok: true` having checked nothing). The test runs on each call, so a workspace created while the server runs is served; `explain` and offline `validate_query` still work. Set `OPENTIDE_REPO_ROOT` in the host's settings for the server, or add the server to the detection repository itself with [`opentide setup mcp`](#automated-setup), whose files name the project directory.
 
 ## Multi-repo workspaces
 
