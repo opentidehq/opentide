@@ -133,6 +133,10 @@ struct Doctor<'a> {
     workspace: PathBuf,
     explicit: bool,
     cwd: PathBuf,
+    /// The Tide workspace `placement` resolves, against the working
+    /// directory: `OPENTIDE_TIDE_WORKSPACE` when it is set, else the
+    /// repository path.
+    tide_workspace: Option<PathBuf>,
     /// The merged configuration, when it loads.
     config: Option<Node>,
 }
@@ -144,11 +148,16 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     let workspace = resolve(&cx.cwd.join(&shown));
     let discovered = resolve(&root::find_workspace_root(&OsFs, cx.cwd));
     let explicit = cx.repo.is_some() || workspace != discovered;
+    let tide_workspace = options
+        .tide_workspace_env
+        .as_deref()
+        .map(|path| resolve(&cx.cwd.join(path)));
     let mut doctor = Doctor {
         cx,
         workspace,
         explicit,
         cwd,
+        tide_workspace,
         config: None,
     };
     let roots = root::resolve(&OsFs, &options_for(&options));
@@ -315,6 +324,38 @@ impl Doctor<'_> {
         } else {
             "found from the current directory"
         };
+        if !self.workspace.is_dir() {
+            let problem = if self.workspace.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Check::new(
+                "workspace",
+                "fail",
+                format!("Workspace {shown} {problem} ({how})"),
+            )
+            .fix("set --repo or OPENTIDE_REPO_ROOT to your detection repository".to_owned());
+        }
+        // The command line refuses an `OPENTIDE_TIDE_WORKSPACE` that names no
+        // folder; `doctor` runs anyway and reports it here (#1659).
+        if let Some(tide) = self.tide_workspace.as_ref().filter(|tide| !tide.is_dir()) {
+            let shown = self.shown(tide, None);
+            let problem = if tide.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Check::new(
+                "workspace",
+                "fail",
+                format!("OPENTIDE_TIDE_WORKSPACE={shown} {problem}"),
+            )
+            .fix(
+                "set OPENTIDE_TIDE_WORKSPACE to the folder whose objects are read, or unset it"
+                    .to_owned(),
+            );
+        }
         if self.workspace.join(OPENTIDE_DIR).is_dir() {
             return Check::new(
                 "workspace",
@@ -1601,6 +1642,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         assert_eq!(doctor.lsp_catalog().status, "pass");
@@ -1631,6 +1673,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         let check = doctor.proxy(false);
@@ -1850,6 +1893,7 @@ mod tests {
             workspace: dir.path().to_path_buf(),
             explicit: false,
             cwd: dir.path().to_path_buf(),
+            tide_workspace: None,
             config: None,
         };
         doctor.proxy(false)

@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.docs/agent/tide-corpus/flavor-unknown
+---
+args: opentide generate docs --flavor bogus
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Unknown docs flavor `bogus`: choose generic, github, gitlab or azure_devops
+tip: add --json for machine-readable output

@@ -1,0 +1,44 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/vscode-config-parse/config-parse
+---
+args: opentide --json validate
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate",
+  "diagnostics": [
+    {
+      "code": "config_parse",
+      "column": 10,
+      "end_column": 11,
+      "end_line": 2,
+      "explain": "opentide explain config_parse",
+      "file_path": "<WS>/.opentide/configurations/platforms/sentinel.toml",
+      "help": "fix the TOML syntax at this position, then run the command again",
+      "line": 2,
+      "message": "Could not parse configuration TOML: invalid table header",
+      "path": ".opentide/configurations/platforms/sentinel.toml",
+      "severity": "error"
+    }
+  ],
+  "duration_ms": 0,
+  "error": ".opentide/configurations/platforms/sentinel.toml:2:10: invalid table header",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "config_parse",
+    "crash_log": null,
+    "message": ".opentide/configurations/platforms/sentinel.toml:2:10: invalid table header",
+    "suggestion": null
+  },
+  "message": ".opentide/configurations/platforms/sentinel.toml:2:10: invalid table header",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

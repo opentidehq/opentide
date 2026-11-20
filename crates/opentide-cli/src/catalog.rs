@@ -52,7 +52,7 @@ pub fn environment() -> Vec<(String, String)> {
         ("OPENTIDE_REPO_ROOT", "Repository root, like --repo".into()),
         (
             "OPENTIDE_DATA_ROOT",
-            "Bundled data root, like --data".into(),
+            "Data root, like --data: only --technique completion reads it".into(),
         ),
         ("OPENTIDE_PROXY", "HTTP(S) proxy, like --proxy".into()),
         (
