@@ -41,6 +41,9 @@ struct State {
     acl: BTreeMap<String, (String, String)>,
     seen: Vec<String>,
     refuse: Vec<(Method, String)>,
+    /// The user the token signs in as, which `authentication/current-context`
+    /// answers; none, and it answers a 500 (#1727).
+    user: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -129,6 +132,21 @@ impl FakeSplunk {
             })
             .unwrap_or_default();
         let method = request.method().clone();
+        if path == "/services/authentication/current-context" {
+            state.seen.push("GET current-context".to_owned());
+            assert_eq!(url.query(), Some("output_mode=json"));
+            return match state.user.clone() {
+                Some(user) => (
+                    200,
+                    format!(
+                        "{{\"entry\":[{{\"name\":\"current-context\",\"content\":\
+                         {{\"username\":\"{user}\",\"roles\":[\"admin\"]}}}}]}}"
+                    )
+                    .into_bytes(),
+                ),
+                None => (500, b"{\"messages\":[]}".to_vec()),
+            };
+        }
         state.seen.push(format!("{method} {name}"));
         if state
             .refuse
@@ -613,4 +631,121 @@ fn an_unchanged_rule_still_has_its_old_copies_deleted() {
         "{:?}",
         fake.0.lock().unwrap().seen
     );
+}
+
+/// How many times the deploy asked who the token signs in as.
+fn context_reads(fake: &FakeSplunk) -> usize {
+    fake.0
+        .lock()
+        .unwrap()
+        .seen
+        .iter()
+        .filter(|call| *call == "GET current-context")
+        .count()
+}
+
+/// Splunk records the user the token signs in as, not the `nobody` of the
+/// namespace opentide writes through, as the owner of a saved search it
+/// creates: a copy owned by that user is opentide's, and is deleted; the
+/// user is read once for the run, not once per rule (#1727).
+#[test]
+fn a_copy_owned_by_the_authenticated_user_is_deleted() {
+    let fake = holding(&[("Old name", A), ("Other old name", B)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.user = Some("admin".to_owned());
+        for name in ["Old name", "Other old name"] {
+            state
+                .acl
+                .insert(name.to_owned(), ("search".to_owned(), "admin".to_owned()));
+        }
+    }
+    let done = deploy(
+        &fake,
+        &[
+            ("New name", A, "index=main"),
+            ("Other new name", B, "index=main"),
+        ],
+    );
+    assert_eq!(
+        done,
+        [
+            Ok(vec![(RENAMED_DELETED.to_owned(), "Old name".to_owned())]),
+            Ok(vec![(
+                RENAMED_DELETED.to_owned(),
+                "Other old name".to_owned()
+            )]),
+        ]
+    );
+    assert_eq!(names(&fake), ["New name", "Other new name"]);
+    assert_eq!(context_reads(&fake), 1);
+}
+
+/// A copy another user owns is an analyst's, and is kept, beside the copy
+/// the authenticated user owns, which is deleted.
+#[test]
+fn a_copy_owned_by_another_user_is_kept() {
+    let fake = holding(&[("Old name", A), ("Analyst clone", A)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.user = Some("admin".to_owned());
+        state.acl.insert(
+            "Old name".to_owned(),
+            ("search".to_owned(), "admin".to_owned()),
+        );
+        state.acl.insert(
+            "Analyst clone".to_owned(),
+            ("search".to_owned(), "alice".to_owned()),
+        );
+    }
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(names(&fake), ["Analyst clone", "New name"]);
+}
+
+/// When the lookup of the authenticated user fails, only `nobody`'s copies
+/// are deleted: an `admin`-owned copy is kept, and the deploy still succeeds.
+#[test]
+fn a_failed_user_lookup_falls_back_to_nobody() {
+    let fake = holding(&[("Old name", A), ("Admin copy", A)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.user = None;
+        state.acl.insert(
+            "Admin copy".to_owned(),
+            ("search".to_owned(), "admin".to_owned()),
+        );
+    }
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(names(&fake), ["Admin copy", "New name"]);
+    assert_eq!(context_reads(&fake), 1);
+}
+
+/// Copies `nobody` owns need no lookup: the request is sent only when a
+/// copy of another owner is listed.
+#[test]
+fn nobodys_copies_are_deleted_without_asking_who_signs_in() {
+    let fake = holding(&[("Old name", A)]);
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(context_reads(&fake), 0);
 }
