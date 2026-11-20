@@ -88,7 +88,7 @@ On an objective's or a threat's `metadata.uuid`, the lens reads `N rules use thi
 ```json illustrative
 {
   "host": { "name": "opentide", "version": "0.21.0" },
-  "engine": "0.9.1",
+  "engine": "1.0.0",
   "catalog": "models",
   "configurationChecks": true,
   "configurationSchemas": true,

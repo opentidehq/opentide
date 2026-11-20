@@ -437,7 +437,8 @@ jobs:
 
   # The tag and the GitHub Release, on the commit this run built, with every asset, before anything reaches a registry. A
   # release's notes are the file the notes PR wrote
-  # (.github/release-notes/vX.Y.Z.md); a candidate's, CHANGELOG.md's
+  # (.github/release-notes/vX.Y.Z.md); a candidate's, its own short file
+  # (.github/release-notes/vX.Y.Z-rc.N.md) when it has one, else CHANGELOG.md's
   # [Unreleased] (scripts/build/release.py notes). A candidate is a
   # pre-release, never Latest; a release is Latest (no --latest flag).
   release:
