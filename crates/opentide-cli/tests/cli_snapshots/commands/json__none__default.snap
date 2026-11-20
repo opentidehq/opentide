@@ -5699,10 +5699,36 @@ exit: 0
               "type": "object"
             },
             {
+              "items": {
+                "additionalProperties": true,
+                "properties": {
+                  "body": {
+                    "description": "The JSON body: an object, text where the API takes text, or null when the request has none",
+                    "title": "Body"
+                  },
+                  "method": {
+                    "title": "Method",
+                    "type": "string"
+                  },
+                  "url": {
+                    "title": "Url",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "method",
+                  "url",
+                  "body"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
               "type": "null"
             }
           ],
-          "description": "The vendor API body; null when the rule could not be compiled",
+          "description": "The vendor API body; for Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud, the list of requests a deploy sends; null when the rule could not be compiled",
           "title": "Api Request"
         },
         "code": {

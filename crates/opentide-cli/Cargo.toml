@@ -206,6 +206,9 @@ opentide-cassette.workspace = true
 # of a real instance being shareable.
 wiremock.workspace = true
 tempfile = "3"
+# `tests/deploy_payload_schema.rs`: the published `deploy` output schema
+# against the dry-run documents it describes (the validator `xtask` uses).
+jsonschema = { version = "0.61.1", default-features = false }
 # A scratch folder's canonical path without Windows' `\\?\` prefix, which
 # git and the binary print otherwise (tests/workspace_e2e.rs).
 dunce.workspace = true
