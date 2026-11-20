@@ -445,7 +445,7 @@ fn report_skipped(
     workspace: &Workspace,
     strategies: &[String],
 ) {
-    let (rules, in_status) = left_out(skipped);
+    let (_, in_status) = left_out(skipped);
     let owned = opentide_compile::Owned::new(
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
@@ -478,13 +478,31 @@ fn report_skipped(
         Some((_, Json::Object(members))) => members.clone(),
         _ => Object::new(),
     };
-    // The rules a status left out, besides the rows the run skipped (a
-    // rule no tenant takes, an `INERT` block).
+    // The rows the run skipped (a rule no tenant takes, an `INERT` block),
+    // and the rules a status left out that have no such row: a rule is
+    // never counted twice.
     let rows = match summary.get("skipped") {
         Some(Json::Int(rows)) => usize::try_from(*rows).unwrap_or(0),
         _ => 0,
     };
-    summary.insert("skipped".into(), Json::from(rules + rows));
+    let skipped_rows: std::collections::HashSet<String> =
+        match result.iter().find(|(key, _)| key == "results") {
+            Some((_, Json::Array(rows))) => rows
+                .iter()
+                .filter(|row| row.get("status").and_then(Json::as_str) == Some("skipped"))
+                .filter_map(|row| row.get("id").and_then(Json::as_str))
+                .map(opentide_compile::rule::canonical_uuid)
+                .collect(),
+            _ => std::collections::HashSet::new(),
+        };
+    let mut left: Vec<String> = skipped
+        .iter()
+        .map(|entry| opentide_compile::rule::canonical_uuid(&entry.uuid))
+        .filter(|uuid| !skipped_rows.contains(uuid))
+        .collect();
+    left.sort_unstable();
+    left.dedup();
+    summary.insert("skipped".into(), Json::from(rows + left.len()));
     set(result, "_summary", Json::Object(summary));
     let deployable = if runs.is_empty() {
         Vec::new()
@@ -1271,16 +1289,16 @@ impl Unpromote {
     fn finish(&mut self) -> Settled {
         use super::deploy_promote::Restored;
         let files = std::mem::take(&mut self.files);
-        let mut held = super::deploy_promote::pending();
         let mut settled = Settled::default();
+        // Restored under the pending lock, logged once it is released: a
+        // log line may wait for stderr, which a signal's thread can hold
+        // while it waits for the pending files.
+        let mut undone = Vec::new();
+        let mut held = super::deploy_promote::pending();
         for file in files.iter().filter(|file| !self.keeps(file)) {
             let path = file.path.display().to_string();
             match file.restore() {
-                Ok(Restored::Done) => tracing::info!(
-                    path = path.as_str(),
-                    detail = "no tenant received the rule, so its status stays as it was",
-                    "rule_promotion_undone"
-                ),
+                Ok(Restored::Done) => undone.push(path),
                 Ok(Restored::Missing) => settled.warnings.push(format!(
                     "{path} was deleted during the deploy, so its status promotion was not undone"
                 )),
@@ -1292,19 +1310,26 @@ impl Unpromote {
                      status back before committing"
                         .to_owned(),
                 )),
-                Err(error) => {
-                    tracing::error!(
-                        path = path.as_str(),
-                        detail = error.as_str(),
-                        critical = true,
-                        "rule_promotion_undo_failed"
-                    );
-                    settled.failures.push((path, error));
-                }
+                Err(error) => settled.failures.push((path, error)),
             }
         }
         held.retain(|pending| !files.iter().any(|file| file.path == pending.path));
         drop(held);
+        for path in undone {
+            tracing::info!(
+                path = path.as_str(),
+                detail = "no tenant received the rule, so its status stays as it was",
+                "rule_promotion_undone"
+            );
+        }
+        for (path, error) in &settled.failures {
+            tracing::error!(
+                path = path.as_str(),
+                detail = error.as_str(),
+                critical = true,
+                "rule_promotion_undo_failed"
+            );
+        }
         settled
     }
 }
@@ -1357,14 +1382,6 @@ impl Drop for Unpromote {
         let settled = self.finish();
         for warning in settled.warnings {
             tracing::warn!(detail = warning.as_str(), "rule_promotion_not_undone");
-        }
-        for (path, error) in settled.failures {
-            tracing::error!(
-                path = path.as_str(),
-                detail = error.as_str(),
-                critical = true,
-                "rule_promotion_undo_failed"
-            );
         }
     }
 }
