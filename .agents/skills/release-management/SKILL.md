@@ -34,11 +34,11 @@ Never tag by hand. Trunk is `development`.
 | Fact | Detail |
 |------|--------|
 | Package | `opentide` on PyPI |
-| Tag | `v0.x.y` (leading `v`); a release candidate `v1.0.0-rc.N` (the Rust-core transition: 1.0.0, held at candidates; internal only for now: a draft GitHub pre-release) |
+| Tag | `v0.x.y` (leading `v`); a release candidate `v1.0.0-rc.N` (the Rust-core transition: 1.0.0, held at candidates; `internal_candidate` is a draft GitHub pre-release, `release_candidate` a public one on GitHub, PyPI and crates.io: `1.0.0-rc.1` is out) |
 | Release | **Run workflow** on `development`, no inputs → [`publish.yml`](../../../.github/workflows/publish.yml) checks, builds, smoke-tests, attests, creates the tag + GitHub Release, then publishes to PyPI, crates.io and npm. Nothing else publishes: no workflow runs on a `v*` tag or a Release made by hand |
 | Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
 | Lockstep | The crates are at that version: `python3 scripts/engine/release.py lockstep 0.x.y` (the workspace version and every internal pin). The workflow writes it into the npm packages (`release.py npm-version`) and checks them (`lockstep --npm`) |
-| Auth | OIDC trusted publishing on all three registries. PyPI environment `pypi`, for releases and candidates (no TestPyPI). Workflow filename `publish.yml` everywhere. `CARGO_REGISTRY_TOKEN` only for a crate's first version (the first candidate's, for the six new names) |
+| Auth | OIDC trusted publishing on all three registries. PyPI environment `pypi`, for releases and candidates (no TestPyPI). Workflow filename `publish.yml` everywhere. `CARGO_REGISTRY_TOKEN` only for a crate's first version (`1.0.0-rc.1` used it for the eight new names, and every crate now trusts `publish.yml`: **delete** the secret, do not only revoke the token, and add one again only for a crate added later) |
 | Engine tags | The engine's own `engine-vX.Y.Z` series (`engine-release.yml`) ended with the release train; its skill, `engine-release`, was removed |
 
 ## What a release publishes
@@ -48,7 +48,7 @@ Never tag by hand. Trunk is `development`.
 | PyPI | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64) and the sdist | maturin (`[tool.maturin]` in `pyproject.toml`) through PyO3/maturin-action in `build-packages.yml`, each wheel smoke-tested on its own OS; `maturin sdist` |
 | crates.io | Every crate without `publish = false`, dependencies first: the engine crates, `opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`, `-lsp`, and the facade `opentide` (`cargo install opentide --features cli`) | `scripts/engine/release.py publish` |
 | npm | `@opentide/opentide` and its six native packages (napi-rs), the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`, with provenance | `bindings/node/build.mjs` per target, `npm pack` |
-| GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` for six targets, `opentide-installer.sh` and `.ps1`, `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, the WASI build, the licences, seven CycloneDX SBOMs, `SHA256SUMS` (`release.py assets vX.Y.Z` lists them) | `engine-release-build.yml` |
+| GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` for six targets, `opentide-installer.sh` and `.ps1`, `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, the WASI build, the licences, eight CycloneDX SBOMs, `SHA256SUMS` (`release.py assets vX.Y.Z` lists them) | `engine-release-build.yml` |
 
 Every artifact carries a GitHub artifact attestation (build provenance). **No musl builds** (no musllinux wheel, musl binary or musl npm package): the maintainer's decision; Alpine builds from the sdist. **No free-threaded wheel** (`cp314t`): it has no stable ABI, and builds from the sdist. **npm:** the standard napi-rs layout, the native packages named `@opentide/opentide-<platform>` (each with its `os`, `cpu`, glibc `libc`, one `.node` and `LICENSE`), and **no WebAssembly fallback** (`wasm32-wasi`: WASI preview 1 has no sockets under Node.js, so tenant commands could not work), [ADR 0006](../../../docs/internal/adr/0006-npm-packages.md#amendment-2026-11-12-the-package-layout-and-names) as amended. All are recorded in [`docs/internal/publishing.md`](../../../docs/internal/publishing.md#the-release-train).
 
@@ -108,7 +108,7 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 | crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
 | npm | **Nothing.** Test the npm packages from ci.yml's `release` artifacts (`npm-packages`) |
 
-Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates").
+Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates"). The stub has no `repository_dispatch` trigger either: resume a candidate with a Run workflow **on `integration/unified-core`** (Step 2).
 
 **Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
 
@@ -158,7 +158,7 @@ GitHub Release body, in the order of the release-notes skill:
 
 #### 4. User-facing install pins
 
-Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. Known locations from 0.1.3:
+Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of them: `README.md` (the PyPI page) keeps the newest stable pin and names `pip install --pre opentide` for candidates (never an exact `opentide==1.0.0rcN`, which the pin check reads as `1.0.0`); the pins move at the final release's notes PR. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
 
 | File | Notes |
 |------|--------|
@@ -265,9 +265,15 @@ gh api "repos/opentidehq/opentide/actions/workflows/publish.yml/runs?per_page=1"
   --jq '.workflow_runs[0] | "\(.id) \(.status) \(.conclusion) \(.head_sha)"'
 ```
 
-**Resume a release that failed partway.** Never retag, never delete a published Release. Run **Publish** on `development` with `checkout_ref: v0.x.y` (cloud: `actions_run_trigger` with `inputs: {checkout_ref: v0.x.y}`; an App token without `actions: write`: the `repository_dispatch` below). It rebuilds from the tag, uploads nothing to its Release (consumers pinned those digests), verifies the published assets, and publishes only what each registry lacks (`skip-existing` on PyPI, crates already on crates.io and npm versions already there are skipped).
+**Resume a release that failed partway.** Never retag, never delete a published Release. Run **Publish** with `checkout_ref: v0.x.y` (a candidate: `vX.Y.Z-rc.N`). It rebuilds from the tag, uploads nothing to its Release (consumers pinned those digests), verifies the published assets, and publishes only what each registry lacks (`skip-existing` on PyPI, crates already on crates.io and npm versions already there are skipped). **The ref matters:** a run uses the `publish.yml` of the ref it is dispatched on.
+
+| When | Resume with |
+|------|-------------|
+| **While `integration/unified-core` has not merged** (`development`'s `publish.yml` is a stub with no `repository_dispatch`) | Run **on `integration/unified-core`**: `gh workflow run publish.yml --repo opentidehq/opentide --ref integration/unified-core -f checkout_ref=v1.0.0-rc.N`; cloud: `actions_run_trigger` with `method: run_workflow`, `workflow_id: publish.yml`, `ref: integration/unified-core`, `inputs: {checkout_ref: "v1.0.0-rc.N"}`. The `repository_dispatch` below does nothing here: GitHub runs it from the stub on `development` |
+| **After the merge** | Run on `development` with `checkout_ref: v0.x.y` (cloud: `actions_run_trigger`, `ref: development`, `inputs: {checkout_ref: v0.x.y}`); an App token without `actions: write`: the `repository_dispatch` below |
 
 ```bash
+# After the merge only: development's publish.yml has the repository_dispatch trigger.
 gh api repos/opentidehq/opentide/dispatches \
   -f event_type=publish \
   -f client_payload[checkout_ref]=v0.x.y
@@ -351,17 +357,19 @@ Link that pull request from the tracking issue in Step 4.
 | Guard: `… is not newer than …, the last release` (a candidate) | Bump the workspace past the last release first (Step 0) |
 | Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` (a `dry_run` runs anywhere) |
 | Guard: `Run a release candidate from integration/unified-core or development` / `Run an internal candidate from …` | A candidate was started on another branch. Pick one of those two |
-| Guard: `public release candidates are disabled while the internal channel exists` | Use `internal_candidate: N` (or `release_candidate` with `dry_run`, as a rehearsal). A `checkout_ref=vX.Y.Z-rc.N` resume is refused for the same reason |
+| Guard: `public release candidates are disabled while the internal channel exists` | `public_candidates` is `false` in the guard (it is `true` for 1.0.0-rc.N). Use `internal_candidate: N` (or `release_candidate` with `dry_run`, as a rehearsal). A `checkout_ref=vX.Y.Z-rc.N` resume is refused for the same reason |
 | Guard: `internal_candidate cannot be combined with …` | Pass `internal_candidate` alone |
 | `internal-release`: `two assets are named …` | Two artifacts carry one file name; fix the build, rerun (delete the draft and tag first if they were created) |
 | Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
 | A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
-| A registry job failed after the **GitHub Release** job created the tag | Run workflow with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
+| A registry job failed after the **GitHub Release** job created the tag | Run workflow with `checkout_ref=v0.x.y`, on `integration/unified-core` while `development`'s `publish.yml` is the stub, else on `development` (cloud: `actions_run_trigger` with `ref` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
 | `Verify the published assets` failed | It is the published assets that failed (sums, set, attestation): fix the cause, then resume with `checkout_ref`, or cut a patch release |
 | 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (a candidate's too). Re-run; do not retag |
-| crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume |
+| crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume, then **delete** it again. The trust step runs only when the trusted login failed or a crate was created with the token; a failure there is a warning |
+| crates.io: `::warning::Trusted publishing was not registered …` | The crates are published. Register `publish.yml` on the crates named in the log (crate settings, Trusted Publishing), or add a token with the `trusted-publishing` scope and resume |
+| crates.io: `rate limited, retrying in …` | Normal for new crates: the job waits until the time crates.io names (capped at 30 minutes, 11 without one) and tries again, 12 times at most |
 | npm: `E404` / `ENEEDAUTH` on publish | The package has no trusted publisher for `publish.yml`, or it expired (two days without a publish). Register it, resume |
-| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y`; `skip-existing` uploads only the missing files. The step log prints the dispatch command |
+| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y` on the ref that has the full `publish.yml` (`integration/unified-core` until it merges); `skip-existing` uploads only the missing files. The step log prints the command for the ref the run was on |
 | Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then resume |
 | New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |
 | Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag |
