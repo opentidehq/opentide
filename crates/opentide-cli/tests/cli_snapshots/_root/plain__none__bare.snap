@@ -17,7 +17,7 @@ Options:
           [env: OPENTIDE_REPO_ROOT]
 
       --data <DATA>
-          Bundled data root
+          Data root; only --technique completion reads it
           
           [env: OPENTIDE_DATA_ROOT]
 

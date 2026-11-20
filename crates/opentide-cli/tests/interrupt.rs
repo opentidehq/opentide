@@ -371,11 +371,15 @@ fn sighup_puts_the_promotion_back_unless_nohup_ignores_it() {
     );
 }
 
+/// Ctrl-C stops the deploy, which puts its promotion back. A second Ctrl-C
+/// cannot be timed from here (the run stops on the first, every wait it
+/// makes is cancellable): `tests/promotion_signals.rs` drives that path in
+/// the process.
 #[test]
-fn a_second_ctrl_c_during_a_deploy_puts_its_promotion_back() {
+fn ctrl_c_during_a_deploy_puts_its_promotion_back() {
     let (status, stderr) = signalled_deploy_puts_the_promotion_back(
         &[],
-        &[rustix::process::Signal::INT, rustix::process::Signal::INT],
+        &[rustix::process::Signal::INT],
         Duration::ZERO,
     );
     assert_eq!(status.code(), Some(130), "{stderr}");

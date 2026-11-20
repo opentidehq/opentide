@@ -26,8 +26,12 @@ pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
         .cwd
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
     let (_, roots) = crate::commands::placement(context.repo, context.env, &cwd);
-    crate::commands::open(roots)
-        .map_err(|message| format!("{}: {message}", crate::commands::COMMAND_FAILED))
+    // A configuration file that does not parse keeps `config_parse` and its
+    // place, as on the command line (D9, B10).
+    crate::commands::open_for("mcp", roots).map_err(|refused| {
+        let (code, message, _) = crate::commands::refusal_parts(&refused);
+        format!("{code}: {message}")
+    })
 }
 
 /// [`workspace`], refused with the reason when the launch found none

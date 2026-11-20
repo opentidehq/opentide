@@ -15294,7 +15294,7 @@ exit: 0
       "name": "OPENTIDE_REPO_ROOT"
     },
     {
-      "meaning": "Bundled data root, like --data",
+      "meaning": "Data root, like --data: only --technique completion reads it",
       "name": "OPENTIDE_DATA_ROOT"
     },
     {
@@ -15403,7 +15403,7 @@ exit: 0
       "flags": [
         "--data"
       ],
-      "help": "Bundled data root",
+      "help": "Data root; only --technique completion reads it",
       "is_flag": false,
       "multiple": false,
       "name": "data",

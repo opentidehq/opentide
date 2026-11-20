@@ -214,7 +214,7 @@ impl Settings {
             Some(name) => Flavor::from_name(name).ok_or_else(|| {
                 PhaseError::new(format!(
                     "unknown docs flavor `{name}` (expected generic, github, gitlab or \
-                     azure-devops)"
+                     azure_devops)"
                 ))
             })?,
             None if hints.azure => Flavor::AzureDevops,

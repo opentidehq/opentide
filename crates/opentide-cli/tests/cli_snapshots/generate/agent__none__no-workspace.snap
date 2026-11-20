@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate/agent/none/no-workspace
+---
+args: opentide generate
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+error: No workspace at <WS>: no .opentide/ or objects/ there or above it
+→ opentide setup · create a workspace first
+tip: add --json for machine-readable output
