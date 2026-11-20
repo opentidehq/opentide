@@ -100,6 +100,8 @@ pub async fn sign_in_at(
         .request(crate::transport::Method::POST, url.as_str())
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(form)
+        // A sign-in writes no rule (`HttpClient::writes_taken`).
+        .read_only()
         .build()
         .map_err(|error| ConnectorError::Setup {
             platform: label.platform.clone(),

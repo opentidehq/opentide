@@ -630,6 +630,14 @@ pub fn rule_id(text: &str) -> Result<i64, SentinelOneError> {
 }
 
 impl Deployer for SentinelOne {
+    /// The console's `url`, `api_token` and `account_id`: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move { setup(cx).map(|_| ()) })
+    }
+
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,

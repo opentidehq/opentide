@@ -2128,6 +2128,16 @@ fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 
+# #1701 (smoke D7): a tenant whose credential variable is unset fails before
+# any rule is sent, whatever the platform: each of its rules is `not
+# attempted`, the failure is the tenant's, and the run exits 1.
+
+[[case]]
+command = "deploy"
+variant = "unset-credential-splunk"
+args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+
 [[case]]
 command = "deploy"
 variant = "send-sentinel-no-rule"

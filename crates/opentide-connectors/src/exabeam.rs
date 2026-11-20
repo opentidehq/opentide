@@ -447,6 +447,10 @@ impl<'a> Session<'a> {
                 if let Some(token) = token {
                     builder = builder.header("Authorization", format!("Bearer {}", token.expose()));
                 }
+                if path == TOKEN_PATH || path == SEARCH_PATH {
+                    // A sign-in or a search writes no rule (`HttpClient::writes_taken`).
+                    builder = builder.read_only();
+                }
                 if let Some(timeout) = timeout {
                     builder = builder.timeout(timeout);
                 }
@@ -1448,6 +1452,28 @@ impl Exabeam {
 }
 
 impl Deployer for Exabeam {
+    /// The tenant's client id and secret and its API's address, then the
+    /// sign-in, once: the first rule's session reuses the token.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            let session = self.session(cx)?;
+            let tenant = cx.tenant.label.tenant.as_str();
+            let token = session
+                .token(false)
+                .await
+                .map_err(|failure| TenantFailure::of(failure).into_error(tenant))?;
+            // The first rule's session takes this token: no second sign-in.
+            self.tokens
+                .lock()
+                .await
+                .insert(cx.tenant.label.clone(), token);
+            Ok(())
+        })
+    }
+
     /// One rule from the compiled body alone: its name is the body's, a
     /// [`Operation::Disable`] disables; a delete takes no body. What was
     /// done is the outcome's event (`exabeam_rule_created`, `_updated`,

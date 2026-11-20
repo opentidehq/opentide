@@ -715,6 +715,14 @@ fn value_str(value: &Value) -> String {
 }
 
 impl Deployer for CarbonBlack {
+    /// The organisation's `url`, `org_key` and `token`: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move { Org::of(cx).map(|_| ()) })
+    }
+
     /// The rule's report: `body` is a JSON object with the
     /// [`ReportDeploy`] fields (`uuid`, `name`, `description`, `query`,
     /// `tags`, `severity`, `watchlist`, `report`); a disable or a delete

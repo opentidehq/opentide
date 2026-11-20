@@ -763,6 +763,19 @@ pub fn missing_required_column_groups(query: &str, returned: &[&str]) -> Vec<Str
 }
 
 impl Deployer for Defender {
+    /// The Entra ID sign-in, once: the first rule's request reuses its token.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            self.token(cx)
+                .await
+                .map(|_| ())
+                .map_err(|error| error.into_connector(&cx.tenant.label.tenant))
+        })
+    }
+
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,

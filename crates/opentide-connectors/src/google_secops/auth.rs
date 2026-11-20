@@ -466,6 +466,8 @@ impl Authorizer {
                 cx.http
                     .request(crate::transport::Method::POST, token_uri)
                     .header("Content-Type", "application/x-www-form-urlencoded")
+                    // A sign-in writes no rule (`HttpClient::writes_taken`).
+                    .read_only()
                     .body(url::form_urlencoded::Serializer::new(String::new())
 .extend_pairs([
                         ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
@@ -483,6 +485,8 @@ impl Authorizer {
                 .http
                 .request(crate::transport::Method::POST, token_uri)
                 .header("Content-Type", "application/x-www-form-urlencoded")
+                    // A sign-in writes no rule (`HttpClient::writes_taken`).
+                    .read_only()
                 .body(url::form_urlencoded::Serializer::new(String::new())
 .extend_pairs([
                     ("grant_type", "refresh_token"),

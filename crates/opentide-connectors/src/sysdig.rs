@@ -641,6 +641,17 @@ async fn rename_in_policies(
 pub struct Sysdig;
 
 impl Deployer for Sysdig {
+    /// The tenant's `url` and `api_token`: nothing is sent.
+    fn open<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::opening(async move {
+            cx.tenant.secret("url")?;
+            cx.tenant.secret("api_token").map(|_| ())
+        })
+    }
+
     /// One rule, from the compiled body alone: its name and whether it is a
     /// tuning are read from the body (`name`, `details.append`), a
     /// [`Operation::Disable`] disables, and the rule joins (or, disabled,

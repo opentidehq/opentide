@@ -1400,3 +1400,187 @@ fn framework_a_send_stops_when_cancelled() {
     assert!(matches!(outcome, Err(ConnectorError::Cancelled)));
     assert!(started.elapsed() < Duration::from_secs(5));
 }
+
+/// What one client counted, through it and its clones (#1701): a request is
+/// sent unless its connection or its certificate was refused, and a write
+/// (not a `GET`, nor a request marked read-only) that was sent may have been
+/// taken unless the tenant answered it with a 4xx. `opentide deploy` reads
+/// these to tell a tenant that failed before any rule.
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one client's counts across every outcome, in order"
+)]
+fn framework_counts_the_requests_sent_and_the_writes_the_tenant_may_have_taken() {
+    let (_runtime, server) = wiremock();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        for (route, status) in [
+            ("/ok", 200),
+            ("/unauthorized", 401),
+            ("/invalid", 400),
+            ("/unavailable", 503),
+        ] {
+            Mock::given(path(route))
+                .respond_with(ResponseTemplate::new(status))
+                .mount(&server)
+                .await;
+        }
+        Mock::given(path("/slow"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(10)))
+            .mount(&server)
+            .await;
+    });
+    // Reads the request, then closes the connection unanswered.
+    let dropping = TcpListener::bind("127.0.0.1:0").unwrap();
+    let dropped = format!("http://{}/", dropping.local_addr().unwrap());
+    std::thread::spawn(move || {
+        use std::io::Read as _;
+        for stream in dropping.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut buffer = [0_u8; 4096];
+            let _ = stream.read(&mut buffer);
+        }
+    });
+    let ca = TestCa::new().unwrap();
+    let (_tls, port) = tls_server(&ca);
+    let settings = HttpSettings {
+        retry: RetryPolicy::none(),
+        ..HttpSettings::default()
+    };
+    let client =
+        HttpClient::new(&label("counted"), &settings, &Environment::default(), None).unwrap();
+    let clone = client.clone();
+    let send = |client: &HttpClient,
+                verb: reqwest::Method,
+                url: &str,
+                shape: fn(
+        opentide_connectors::transport::RequestBuilder,
+    ) -> opentide_connectors::transport::RequestBuilder,
+                cancel: &CancellationToken| {
+        block_on(async {
+            let request = shape(client.request(verb, url)).build().unwrap();
+            let _ignored = client.send(request, cancel).await;
+        })
+        .unwrap();
+        (client.requests_sent(), client.writes_taken())
+    };
+    let plain = |builder| builder;
+    let never = CancellationToken::new();
+    let url = |route: &str| format!("{}{route}", server.uri());
+    // Never sent: a refused connection, a refused certificate.
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            "http://127.0.0.1:1/",
+            plain,
+            &never
+        ),
+        (0, 0),
+        "a refused connection"
+    );
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &format!("https://localhost:{port}/"),
+            plain,
+            &never
+        ),
+        (0, 0),
+        "a refused certificate"
+    );
+    // Sent and refused: not taken.
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &url("/unauthorized"),
+            plain,
+            &never
+        ),
+        (1, 0),
+        "a POST answered 401"
+    );
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &url("/invalid"),
+            plain,
+            &never
+        ),
+        (2, 0),
+        "a POST answered 400"
+    );
+    // Sent, and changing nothing.
+    assert_eq!(
+        send(&client, reqwest::Method::GET, &url("/ok"), plain, &never),
+        (3, 0),
+        "a GET answered 200"
+    );
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &url("/ok"),
+            |builder| builder.read_only(),
+            &never
+        ),
+        (4, 0),
+        "a read-only POST answered 200"
+    );
+    // Sent, and it may have landed.
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &url("/unavailable"),
+            plain,
+            &never
+        ),
+        (5, 1),
+        "a POST answered 503"
+    );
+    assert_eq!(
+        send(&client, reqwest::Method::POST, &dropped, plain, &never),
+        (6, 2),
+        "a POST whose connection dropped unanswered"
+    );
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &url("/slow"),
+            |builder| builder.timeout(Duration::from_millis(200)),
+            &never
+        ),
+        (7, 3),
+        "a POST whose answer timed out"
+    );
+    let cancel = CancellationToken::new();
+    let trigger = cancel.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        trigger.cancel();
+    });
+    assert_eq!(
+        send(
+            &client,
+            reqwest::Method::POST,
+            &url("/slow"),
+            plain,
+            &cancel
+        ),
+        (8, 4),
+        "a POST cancelled while it was on its way"
+    );
+    // A clone shares the counts.
+    assert_eq!(
+        send(&clone, reqwest::Method::POST, &url("/ok"), plain, &never),
+        (9, 5),
+        "a POST answered 200, through a clone"
+    );
+    assert_eq!((client.requests_sent(), client.writes_taken()), (9, 5));
+}
