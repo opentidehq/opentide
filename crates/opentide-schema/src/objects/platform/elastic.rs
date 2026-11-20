@@ -1056,16 +1056,20 @@ pub fn duration_detail(raw: &Node, named: bool) -> String {
         .join("; ")
 }
 
-/// What the `language` code's message adds: the rule's `type` takes no
-/// `language`, which applies only to `type: query` (E2E-3: it was the bare
-/// code).
+/// What the `language` code's message adds: `kuery` or `lucene` is the
+/// language of the event query of `query`, `threshold`, `new_terms` and
+/// `threat_match` rules, and the block's `type` is none of them (the code fires
+/// for `eql`, `esql` and `machine_learning` only). E2E-3: it was the bare
+/// code.
 pub fn language_detail(raw: &Node) -> String {
-    let rule_type = get(Some(raw), "type")
-        .and_then(|node| node.value.as_str())
-        .unwrap_or("query");
+    let (rule_type, why) = match get(Some(raw), "type").and_then(|node| node.value.as_str()) {
+        Some("eql") => ("eql", "whose query is EQL"),
+        Some("esql") => ("esql", "whose query is ES|QL"),
+        _ => ("machine_learning", "which has no query"),
+    };
     format!(
-        "language applies only to `type: query`, not `type: {rule_type}`; remove `language` \
-         from the block"
+        "`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` \
+         and `threat_match`, not to `type: {rule_type}`, {why}: remove `language` from the block"
     )
 }
 

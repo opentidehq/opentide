@@ -29,7 +29,7 @@ A word that starts with `-` is an option, never the value of the option before i
 | `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |
 
-An option given twice keeps its last value (`--repo a --repo b` uses `b`), except `--platform`: it chooses where a command acts, so `deploy --platform elastic --platform splunk` exits `2` and names `--platform` rather than plan only `splunk`. A repeatable option (`--strategy`, `--tenant`, `--file`) collects every value.
+An option given twice keeps its last value (`--repo a --repo b` uses `b`), except the single-value `--platform` of `deploy`, `deploy metadata`, `query`, `info` and `validate query`: it chooses where a command acts, so `deploy --platform elastic --platform splunk` exits `2` and names `--platform` rather than plan only `splunk`. `setup --platform` is repeatable. A repeatable option (`--strategy`, `--tenant`, `--file`) collects every value.
 
 ## Version
 

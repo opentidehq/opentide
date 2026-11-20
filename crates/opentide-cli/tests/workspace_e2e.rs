@@ -714,6 +714,188 @@ fn the_first_user_workflow_passes_end_to_end() {
     );
 }
 
+/// `setup --org` reaches `new` (#1670, smoke B17): a threat, an objective and
+/// a rule written after `opentide setup --org "Example Corp"` carry
+/// `metadata.organisation` and no warning about it, on a catalogue that has
+/// no object to copy it from. Rerunning `setup` without `--org` keeps it, the
+/// same `--org` keeps its uuid, and what `new` wrote still validates, and
+/// passes the `metadata` lint (the placeholders it holds fail the others).
+#[test]
+fn setup_org_fills_metadata_organisation_of_new_objects() {
+    let (_dir, root) = scratch();
+    let fresh = root.join("detections");
+    let path = fresh.to_str().unwrap();
+    let setup = |extra: &[&str]| {
+        let base = ["setup", "--yes", "--platform", "sentinel", "--path", path];
+        opentide(&root, &[&base[..], extra].concat(), &[]).ok()
+    };
+    setup(&["--org", "Example Corp"]);
+    let configured =
+        std::fs::read_to_string(fresh.join(".opentide/configurations/organisation.toml")).unwrap();
+    let uuid = configured
+        .lines()
+        .find_map(|line| line.strip_prefix("uuid = \""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or_else(|| panic!("no uuid in {configured}"))
+        .to_owned();
+    in_workspace(&fresh, &["generate"]).ok();
+
+    let new_objects = |suffix: &str| {
+        let threat = in_workspace(
+            &fresh,
+            &["new", "threat", "--name", &format!("Threat {suffix}")],
+        )
+        .ok();
+        let objective = in_workspace(
+            &fresh,
+            &["new", "objective", "--name", &format!("Objective {suffix}")],
+        )
+        .ok();
+        let rule = in_workspace(
+            &fresh,
+            &[
+                "new",
+                "rule",
+                "--name",
+                &format!("Rule {suffix}"),
+                "--platform",
+                "sentinel",
+            ],
+        )
+        .ok();
+        [threat, objective, rule]
+    };
+    let check = |documents: &[Value; 3]| {
+        for document in documents {
+            assert_eq!(
+                document["organisation"],
+                serde_json::json!({"uuid": uuid, "name": "Example Corp"}),
+                "{document}"
+            );
+            let warnings = document["warnings"].to_string();
+            assert!(!warnings.contains("organisation"), "{warnings}");
+            let file = std::fs::read_to_string(document["file_path"].as_str().unwrap()).unwrap();
+            assert!(file.contains(&format!("uuid: {uuid}")), "{file}");
+            assert!(file.contains("name: Example Corp"), "{file}");
+        }
+    };
+    check(&new_objects("one"));
+
+    // A rerun without `--org` keeps the file; the same `--org` keeps its uuid.
+    setup(&[]);
+    assert_eq!(
+        std::fs::read_to_string(fresh.join(".opentide/configurations/organisation.toml")).unwrap(),
+        configured
+    );
+    setup(&["--org", "Example Corp"]);
+    assert_eq!(
+        std::fs::read_to_string(fresh.join(".opentide/configurations/organisation.toml")).unwrap(),
+        configured
+    );
+    check(&new_objects("two"));
+
+    in_workspace(&fresh, &["generate"]).ok();
+    let validate = in_workspace(&fresh, &["validate", "--strict"]).ok();
+    assert_eq!(validate["report"]["ok"], true, "{validate}");
+    in_workspace(&fresh, &["lint", "--strict", "--check", "metadata"]).ok();
+}
+
+/// The organisation comes from `organisation.toml` only (#1670, smoke B17):
+/// objects already in the catalogue never supply it. With no file `new`
+/// leaves `metadata.organisation` out and says to run `setup --org`; with
+/// one it writes it, and a uuid edited in the file, or another `--org`,
+/// reaches the next `new`.
+#[test]
+fn the_organisation_comes_from_organisation_toml_only() {
+    let (_dir, root) = scratch();
+    let fresh = root.join("detections");
+    let path = fresh.to_str().unwrap();
+    let setup = |extra: &[&str]| {
+        let base = ["setup", "--yes", "--path", path];
+        opentide(&root, &[&base[..], extra].concat(), &[]).ok()
+    };
+    setup(&[]);
+    let file = fresh.join(".opentide/configurations/organisation.toml");
+    assert!(!file.exists());
+    in_workspace(&fresh, &["generate"]).ok();
+    // A catalogue object that names an organisation, and no configured one.
+    std::fs::write(
+        fresh.join("objects/threats/other.yaml"),
+        "name: Other\nmetadata:\n  uuid: 00000000-0000-4000-8001-000000000042\n  organisation:\n    \
+         uuid: 00000000-0000-4000-8000-000000000099\n    name: Other Corp\n",
+    )
+    .unwrap();
+
+    let new_threat = |name: &str| in_workspace(&fresh, &["new", "threat", "--name", name]).ok();
+    let organisation = |document: &Value| document["organisation"].clone();
+    let file_of = |document: &Value| {
+        std::fs::read_to_string(document["file_path"].as_str().unwrap()).unwrap()
+    };
+
+    // No organisation configured: none is written, whatever the catalogue
+    // holds, and the warning says what to do.
+    let none = new_threat("None");
+    assert_eq!(organisation(&none), Value::Null, "{none}");
+    let warnings = none["warnings"].to_string();
+    assert!(
+        warnings.contains("no organisation is configured")
+            && warnings.contains("opentide setup --org"),
+        "{warnings}"
+    );
+    assert!(!warnings.contains("catalogue"), "{warnings}");
+    assert!(!file_of(&none).contains("Other Corp"), "{}", file_of(&none));
+
+    // `setup --org` configures it: `new` writes it, not the catalogue's.
+    setup(&["--org", "Example Corp"]);
+    let configured = std::fs::read_to_string(&file).unwrap();
+    let uuid = configured
+        .lines()
+        .find_map(|line| line.strip_prefix("uuid = \""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or_else(|| panic!("no uuid in {configured}"))
+        .to_owned();
+    let first = new_threat("First");
+    assert_eq!(
+        organisation(&first),
+        serde_json::json!({"uuid": uuid, "name": "Example Corp"}),
+        "{first}"
+    );
+    assert!(!first["warnings"].to_string().contains("organisation"));
+
+    // Editing the uuid in the file reaches the next object, though the
+    // first one is now in the catalogue with the old one.
+    let edited = "11111111-2222-4333-8444-555555555555";
+    std::fs::write(&file, configured.replace(&uuid, edited)).unwrap();
+    let second = new_threat("Second");
+    assert_eq!(
+        organisation(&second),
+        serde_json::json!({"uuid": edited, "name": "Example Corp"}),
+        "{second}"
+    );
+    // So does another `--org`, which keeps the uuid.
+    setup(&["--org", "Renamed Corp"]);
+    let third = new_threat("Third");
+    assert_eq!(
+        organisation(&third),
+        serde_json::json!({"uuid": edited, "name": "Renamed Corp"}),
+        "{third}"
+    );
+    let text = file_of(&third);
+    assert!(text.contains("name: Renamed Corp"), "{text}");
+
+    // A file `new` cannot use is not worked around: no organisation, and the
+    // warning says what is wrong with it.
+    std::fs::write(&file, "name = \"Example Corp\"\n").unwrap();
+    let unusable = new_threat("Fourth");
+    assert_eq!(organisation(&unusable), Value::Null, "{unusable}");
+    let warnings = unusable["warnings"].to_string();
+    assert!(
+        warnings.contains("organisation.toml is not usable: it has no uuid"),
+        "{warnings}"
+    );
+    assert!(!warnings.contains("catalogue"), "{warnings}");
+}
+
 /// `opentide setup --hooks` then the first `git commit` of the scaffold:
 /// the commit hook it installs runs `validate --strict --allow-empty`, so a
 /// workspace with no detection object yet commits; `validate --strict`
@@ -941,4 +1123,34 @@ fn the_commit_hook_validates_a_root_and_a_nested_workspace() {
         "{stderr}"
     );
     assert!(!stderr.contains("opentide-hook."), "{stderr}");
+}
+
+/// `docs/cli/new.md`: "The new file validates as soon as it is written", for
+/// every platform. CrowdStrike's `details.trigger` and `details.outcome` take
+/// a closed set the schema cannot list, and `new` wrote `...` (#1728, E2E-1).
+#[test]
+fn a_new_rule_validates_and_generates_on_every_platform() {
+    for platform in opentide_schema::platforms::PLATFORMS {
+        let id = platform.id;
+        let (_guard, root) = scratch();
+        let workspace = root.join("w");
+        let path = workspace.to_str().unwrap();
+        let setup = ["setup", "--yes", "--name", "W", "--platform", id];
+        opentide(&root, &[&setup[..], &["--path", path]].concat(), &[]).ok();
+
+        let created = in_workspace(
+            &workspace,
+            &["new", "rule", "--name", "R", "--platform", id],
+        );
+        assert_eq!(created.code, Some(0), "{id}: {created:?}");
+        if id == "crowdstrike" {
+            let text = std::fs::read_to_string(workspace.join("objects/rules/r.yaml")).unwrap();
+            assert!(text.contains("trigger: verbose"), "{text}");
+            assert!(text.contains("outcome: detection"), "{text}");
+        }
+        let validated = in_workspace(&workspace, &["validate"]);
+        assert_eq!(validated.code, Some(0), "{id}: validate: {validated:?}");
+        let generated = in_workspace(&workspace, &["generate"]);
+        assert_eq!(generated.code, Some(0), "{id}: generate: {generated:?}");
+    }
 }

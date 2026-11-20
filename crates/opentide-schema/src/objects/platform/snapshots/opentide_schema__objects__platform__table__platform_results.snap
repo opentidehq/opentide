@@ -888,14 +888,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): esql_source, language (language applies only to `type: query`, not `type: esql`; remove `language` from the block; `index` set on `type: esql`, where the query's `FROM` command names the sources: remove it)"
+          "error": "ElasticConfig validation failed with code(s): esql_source, language (`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, not to `type: esql`, whose query is ES|QL: remove `language` from the block; `index` set on `type: esql`, where the query's `FROM` command names the sources: remove it)"
         },
         "field_path": [
           "configurations",
           "elastic"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): esql_source, language (language applies only to `type: query`, not `type: esql`; remove `language` from the block; `index` set on `type: esql`, where the query's `FROM` command names the sources: remove it)",
+        "msg": "ElasticConfig validation failed with code(s): esql_source, language (`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, not to `type: esql`, whose query is ES|QL: remove `language` from the block; `index` set on `type: esql`, where the query's `FROM` command names the sources: remove it)",
         "span": [
           11,
           3,
@@ -1413,14 +1413,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block (language applies only to `type: query`, not `type: esql`; remove `language` from the block; `index`, `data_view_id` set on `type: esql`, where the query's `FROM` command names the sources: remove them)"
+          "error": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block (`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, not to `type: esql`, whose query is ES|QL: remove `language` from the block; `index`, `data_view_id` set on `type: esql`, where the query's `FROM` command names the sources: remove them)"
         },
         "field_path": [
           "configurations",
           "elastic"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block (language applies only to `type: query`, not `type: esql`; remove `language` from the block; `index`, `data_view_id` set on `type: esql`, where the query's `FROM` command names the sources: remove them)",
+        "msg": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block (`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, not to `type: esql`, whose query is ES|QL: remove `language` from the block; `index`, `data_view_id` set on `type: esql`, where the query's `FROM` command names the sources: remove them)",
         "span": [
           11,
           3,
@@ -1519,14 +1519,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "ElasticConfig validation failed with code(s): language (language applies only to `type: query`, not `type: machine_learning`; remove `language` from the block)"
+          "error": "ElasticConfig validation failed with code(s): language (`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, not to `type: machine_learning`, which has no query: remove `language` from the block)"
         },
         "field_path": [
           "configurations",
           "elastic"
         ],
         "input": null,
-        "msg": "ElasticConfig validation failed with code(s): language (language applies only to `type: query`, not `type: machine_learning`; remove `language` from the block)",
+        "msg": "ElasticConfig validation failed with code(s): language (`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, not to `type: machine_learning`, which has no query: remove `language` from the block)",
         "span": [
           11,
           3,

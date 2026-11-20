@@ -96,7 +96,10 @@ fn the_invalid_elastic_fixture_reports_its_codes() {
         "{message}"
     );
     assert!(
-        message.contains("language applies only to `type: query`, not `type: esql`"),
+        message.contains(
+            "`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` \
+             and `threat_match`, not to `type: esql`, whose query is ES|QL"
+        ),
         "{message}"
     );
     assert!(message.contains("`index` set on `type: esql`"), "{message}");

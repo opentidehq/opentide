@@ -8,7 +8,7 @@ exit: 0
 ━━━ stdout
 Scaffold a threat, objective or rule from its template
 
-The new file gets a fresh UUID, today's date, your git author and the catalogue's organisation, and is named the way opentide lint expects. Required values nobody has chosen yet are placeholders, listed in the output: replace them, then run opentide validate --file on the path.
+The new file gets a fresh UUID, today's date, your git author and the organisation `opentide setup --org` configured, and is named the way opentide lint expects. Required values nobody has chosen yet are placeholders, listed in the output: replace them, then run opentide validate --file on the path.
 
 Usage: opentide new <COMMAND>
 

@@ -311,7 +311,7 @@ pub fn setup(
 fn repo_questions(prompter: &mut dyn Prompter, root: &Path) -> Answer<RepoOptions> {
     let folder = super::files::folder_name(root);
     let name = prompter.text("Repository name", &folder, Some("a name"))?;
-    let org = prompter.text("Organisation / team for the README (optional)", "", None)?;
+    let org = prompter.text("Organisation / team (optional)", "", None)?;
     let description = prompter.text("Description (optional)", "", None)?;
     let picked = prompter.checkbox("Detection platforms", &labels(&platforms()), &[], true)?;
     let given = |text: String| (!text.is_empty()).then_some(text);
@@ -829,7 +829,7 @@ pub(crate) mod tests {
             script.asked,
             [
                 "text Repository name [detections] Some(\"a name\")",
-                "text Organisation / team for the README (optional) [] None",
+                "text Organisation / team (optional) [] None",
                 "text Description (optional) [] None",
                 "checkbox Detection platforms [\"Microsoft Sentinel\", \"Microsoft Defender for Endpoint\", \"Splunk Enterprise Security\", \"SentinelOne\", \"CrowdStrike Falcon\", \"HarfangLab\", \"Carbon Black Cloud\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\"] [] required=true",
                 "select CI/CD platform [\"Configure later\", \"GitHub Actions\", \"GitLab CI\", \"Azure Pipelines\"] [0]",

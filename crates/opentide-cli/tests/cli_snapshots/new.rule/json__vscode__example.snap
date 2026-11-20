@@ -49,7 +49,7 @@ exit: 0
   "uuid": "<UUID-1>",
   "warnings": [
     "sentinel is not enabled in this workspace, so this block will not deploy; enable it with 'opentide setup platforms --sentinel'",
-    "metadata.author and metadata.organisation left out: no git user.name is set; no catalogue object names one"
+    "metadata.author and metadata.organisation left out: no git user.name is set; no organisation is configured; run 'opentide setup --org \"<name>\"'"
   ]
 }
 

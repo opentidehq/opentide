@@ -26,6 +26,7 @@ exit: 1
     }
   ],
   "ok": false,
+  "platform": "sentinel",
   "schema_version": 1,
   "status": "failed",
   "summary": {}

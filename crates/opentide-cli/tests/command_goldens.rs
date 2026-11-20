@@ -313,6 +313,73 @@ fn setup_trims_the_name_and_refuses_an_empty_one() {
     assert_eq!(readme("folder"), "# folder");
 }
 
+/// `setup skills` and `--org` follow `--name`'s rule (#1729): empty or only
+/// spaces is `usage_invalid_value`, refused before any request for the skills
+/// catalogue.
+#[test]
+fn setup_refuses_an_empty_org_and_an_empty_skills_name() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    std::fs::create_dir_all(&ws).unwrap();
+    for (command, flag, line) in [
+        (
+            "setup skills",
+            "--name",
+            &[
+                "--json",
+                "setup",
+                "skills",
+                "--yes",
+                "--generic",
+                "--path",
+                "none",
+            ][..],
+        ),
+        (
+            "setup skills",
+            "--org",
+            &[
+                "--json",
+                "setup",
+                "skills",
+                "--yes",
+                "--generic",
+                "--path",
+                "none",
+            ][..],
+        ),
+        (
+            "setup",
+            "--org",
+            &["--json", "setup", "--yes", "--path", "none"][..],
+        ),
+        (
+            "setup repo",
+            "--org",
+            &["--json", "setup", "repo", "--yes", "--path", "none"][..],
+        ),
+    ] {
+        for value in ["", "   "] {
+            let (code, stdout) = run_at(&ws, &[line, &[flag, value]].concat());
+            assert_eq!(code, 2, "{command} {flag} {value:?}: {stdout}");
+            let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+            assert_eq!(document["command"], command, "{stdout}");
+            assert_eq!(
+                document["failure"]["code"], "usage_invalid_value",
+                "{stdout}"
+            );
+            assert_eq!(document["failure"]["argument"], flag, "{stdout}");
+            assert_eq!(
+                document["failure"]["message"],
+                format!("{flag} cannot be empty"),
+                "{stdout}"
+            );
+        }
+    }
+    // Nothing was written by the refusals.
+    assert!(!ws.join("none").exists());
+}
+
 /// A repeated `--platform` is a usage error naming the flag, not the last
 /// value alone (#1729, E2E-5): `deploy --platform elastic --platform splunk`
 /// planned only `splunk`.
@@ -337,10 +404,16 @@ fn a_repeated_platform_is_a_usage_error() {
         ],
     );
     assert_eq!(code, 2, "{stdout}");
-    assert!(stdout.contains("--platform"), "{stdout}");
-    assert!(stdout.contains("cannot be used multiple times"), "{stdout}");
     let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(document["ok"], false, "{stdout}");
+    assert_eq!(document["failure"]["code"], "usage_error", "{stdout}");
+    assert_eq!(document["failure"]["argument"], "--platform", "{stdout}");
+    let message = document["failure"]["message"].as_str().unwrap();
+    assert!(message.contains("--platform"), "{stdout}");
+    assert!(
+        message.contains("cannot be used multiple times"),
+        "{stdout}"
+    );
 }
 
 /// `new --path` into a folder below the family's, or outside the

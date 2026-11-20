@@ -10,7 +10,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` checks the `query` argument offline with the analysis engine (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene): it proves the query parses in its platform's language and names slow shapes, not that it returns rows. `live: true` checks the catalogue rules against the tenant, not the argument; SentinelOne queries are checked that way only. A missing SDK is a failed live check. `run_query` refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as the [query command](../../cli/query.md) does. Both live calls use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` checks the `query` argument offline with the analysis engine (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, Exabeam and YARA-L, by platform): it proves the query parses in its platform's language and names slow shapes, not that it returns rows. `live: true` checks the catalogue rules against the tenant, not the argument; SentinelOne queries are checked that way only. A missing SDK is a failed live check. `run_query` refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as the [query command](../../cli/query.md) does. Both live calls use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |

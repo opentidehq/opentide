@@ -41,6 +41,28 @@ struct State {
     acl: BTreeMap<String, (String, String)>,
     seen: Vec<String>,
     refuse: Vec<(Method, String)>,
+    /// How `authentication/current-context` answers (#1727).
+    context: Context,
+    /// The answers for the tokens named here, in place of `context`.
+    by_token: BTreeMap<String, Context>,
+}
+
+/// How `authentication/current-context` answers a request.
+#[derive(Debug, Clone, Default)]
+enum Context {
+    /// A 500 (the default).
+    #[default]
+    Refused,
+    /// The user the token signs in as.
+    User(String),
+    /// A 200 whose `entry` is empty.
+    NoEntry,
+    /// A 200 whose `username` is empty.
+    EmptyUsername,
+    /// An HTML page, as a gateway answers.
+    Html,
+    /// No answer at all: the connection fails.
+    Unreachable,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -110,7 +132,24 @@ impl State {
 }
 
 impl FakeSplunk {
+    /// How the lookup of the user answers *request*, when it is that
+    /// request: by the request's token, else the default.
+    fn lookup(&self, request: &Request) -> Option<Context> {
+        if request.url().path() != "/services/authentication/current-context" {
+            return None;
+        }
+        let state = self.0.lock().unwrap();
+        let token = request
+            .headers()
+            .get("authorization")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Splunk "))
+            .unwrap_or_default();
+        Some(state.by_token.get(token).unwrap_or(&state.context).clone())
+    }
+
     fn answer(&self, request: &Request) -> (u16, Vec<u8>) {
+        let context = self.lookup(request);
         let mut state = self.0.lock().unwrap();
         let url = request.url();
         let path = url.path().to_owned();
@@ -129,6 +168,24 @@ impl FakeSplunk {
             })
             .unwrap_or_default();
         let method = request.method().clone();
+        if let Some(context) = context {
+            state.seen.push("GET current-context".to_owned());
+            assert_eq!(url.query(), Some("output_mode=json"));
+            let user = |user: &str| {
+                format!(
+                    "{{\"entry\":[{{\"name\":\"current-context\",\"content\":\
+                     {{\"username\":\"{user}\",\"roles\":[\"admin\"]}}}}]}}"
+                )
+                .into_bytes()
+            };
+            return match context {
+                Context::User(name) => (200, user(&name)),
+                Context::EmptyUsername => (200, user("")),
+                Context::NoEntry => (200, b"{\"entry\":[]}".to_vec()),
+                Context::Html => (200, b"<html><title>Sign in</title></html>".to_vec()),
+                Context::Refused | Context::Unreachable => (500, b"{\"messages\":[]}".to_vec()),
+            };
+        }
         state.seen.push(format!("{method} {name}"));
         if state
             .refuse
@@ -199,6 +256,13 @@ impl Transport for FakeSplunk {
         _cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Response, TransportFailure>> {
         let (status, body) = self.answer(&request);
+        if matches!(self.lookup(&request), Some(Context::Unreachable)) {
+            return Box::pin(async {
+                Err(TransportFailure::Unreachable {
+                    reason: "the connection dropped".to_owned(),
+                })
+            });
+        }
         let url = request.url().clone();
         Box::pin(async move {
             Ok(Response::new(
@@ -282,44 +346,58 @@ fn send(fake: &FakeSplunk, requests: &[DeployRequest]) -> Vec<Done> {
         .collect()
 }
 
-/// [`send`], with each step's outcome as the deployer returned it.
-fn send_outcomes(
+/// [`send`], with each step's outcome as the deployer returned it, on the
+/// tenant `lab`.
+fn send_outcomes(fake: &FakeSplunk, requests: &[DeployRequest]) -> Vec<Outcome> {
+    send_outcomes_on(fake, &["lab"], requests).remove(0)
+}
+
+type Outcome = Result<
+    opentide_connectors::connector::DeployOutcome,
+    opentide_connectors::connector::DeployError,
+>;
+
+/// *requests* sent in turn to each of *tenants* (named, each with the token
+/// `t-<name>`) by one connector, as one run does; each tenant's outcomes.
+fn send_outcomes_on(
     fake: &FakeSplunk,
+    tenants: &[&str],
     requests: &[DeployRequest],
-) -> Vec<
-    Result<
-        opentide_connectors::connector::DeployOutcome,
-        opentide_connectors::connector::DeployError,
-    >,
-> {
+) -> Vec<Vec<Outcome>> {
     let _one = ONE_AT_A_TIME
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let _installed = transport::install(Arc::new(fake.clone()));
-    let env = Environment::from_pairs([("SPLUNK_TOKEN", "token")]);
-    let setup: toml::Table =
-        toml::from_str("url = \"splunk.invalid\"\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n")
-            .unwrap();
-    let tenant = Tenant::from_setup(
-        splunk::PLATFORM,
-        "lab",
-        &setup,
-        &env,
-        Resolve::Required,
-        &splunk::http_settings(Duration::from_secs(5)),
-    )
-    .unwrap();
-    let http = HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
-    let cancel = CancellationToken::new();
-    let cx = TenantContext {
-        tenant: &tenant,
-        http: &http,
-        cancel: &cancel,
-    };
     let connector = Splunk::new();
-    requests
+    tenants
         .iter()
-        .map(|request| block_on(async { connector.deploy(cx, request).await }).unwrap())
+        .map(|name| {
+            let env = Environment::from_pairs([("SPLUNK_TOKEN", format!("t-{name}"))]);
+            let setup: toml::Table = toml::from_str(
+                "url = \"splunk.invalid\"\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+            )
+            .unwrap();
+            let tenant = Tenant::from_setup(
+                splunk::PLATFORM,
+                name,
+                &setup,
+                &env,
+                Resolve::Required,
+                &splunk::http_settings(Duration::from_secs(5)),
+            )
+            .unwrap();
+            let http = HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
+            let cancel = CancellationToken::new();
+            let cx = TenantContext {
+                tenant: &tenant,
+                http: &http,
+                cancel: &cancel,
+            };
+            requests
+                .iter()
+                .map(|request| block_on(async { connector.deploy(cx, request).await }).unwrap())
+                .collect()
+        })
         .collect()
 }
 
@@ -613,4 +691,281 @@ fn an_unchanged_rule_still_has_its_old_copies_deleted() {
         "{:?}",
         fake.0.lock().unwrap().seen
     );
+}
+
+/// How many times the deploy asked who the token signs in as.
+fn context_reads(fake: &FakeSplunk) -> usize {
+    fake.0
+        .lock()
+        .unwrap()
+        .seen
+        .iter()
+        .filter(|call| *call == "GET current-context")
+        .count()
+}
+
+/// Splunk records the user the token signs in as, not the `nobody` of the
+/// namespace opentide writes through, as the owner of a saved search it
+/// creates: a copy owned by that user is opentide's, and is deleted; the
+/// user is read once for the run, not once per rule (#1727).
+#[test]
+fn a_copy_owned_by_the_authenticated_user_is_deleted() {
+    let fake = holding(&[("Old name", A), ("Other old name", B)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.context = Context::User("admin".to_owned());
+        for name in ["Old name", "Other old name"] {
+            state
+                .acl
+                .insert(name.to_owned(), ("search".to_owned(), "admin".to_owned()));
+        }
+    }
+    let done = deploy(
+        &fake,
+        &[
+            ("New name", A, "index=main"),
+            ("Other new name", B, "index=main"),
+        ],
+    );
+    assert_eq!(
+        done,
+        [
+            Ok(vec![(RENAMED_DELETED.to_owned(), "Old name".to_owned())]),
+            Ok(vec![(
+                RENAMED_DELETED.to_owned(),
+                "Other old name".to_owned()
+            )]),
+        ]
+    );
+    assert_eq!(names(&fake), ["New name", "Other new name"]);
+    assert_eq!(context_reads(&fake), 1);
+}
+
+/// A copy another user owns is an analyst's, and is kept, beside the copy
+/// the authenticated user owns, which is deleted.
+#[test]
+fn a_copy_owned_by_another_user_is_kept() {
+    let fake = holding(&[("Old name", A), ("Analyst clone", A)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.context = Context::User("admin".to_owned());
+        state.acl.insert(
+            "Old name".to_owned(),
+            ("search".to_owned(), "admin".to_owned()),
+        );
+        state.acl.insert(
+            "Analyst clone".to_owned(),
+            ("search".to_owned(), "alice".to_owned()),
+        );
+    }
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(names(&fake), ["Analyst clone", "New name"]);
+}
+
+/// When the lookup of the authenticated user fails, only `nobody`'s copies
+/// are deleted: an `admin`-owned copy is kept, and the deploy still succeeds.
+#[test]
+fn a_failed_user_lookup_falls_back_to_nobody() {
+    let fake = holding(&[("Old name", A), ("Admin copy", A)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.context = Context::Refused;
+        state.acl.insert(
+            "Admin copy".to_owned(),
+            ("search".to_owned(), "admin".to_owned()),
+        );
+    }
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(names(&fake), ["Admin copy", "New name"]);
+    assert_eq!(context_reads(&fake), 1);
+}
+
+/// Copies `nobody` owns need no lookup: the request is sent only when a
+/// copy of another owner is listed.
+#[test]
+fn nobodys_copies_are_deleted_without_asking_who_signs_in() {
+    let fake = holding(&[("Old name", A)]);
+    let done = deploy(&fake, &[("New name", A, "index=main")]);
+    assert_eq!(
+        done,
+        [Ok(vec![(
+            RENAMED_DELETED.to_owned(),
+            "Old name".to_owned()
+        )])]
+    );
+    assert_eq!(context_reads(&fake), 0);
+}
+
+/// Every tracing event's level and its fields, one text each, from the
+/// first test that asks.
+#[derive(Clone, Default)]
+struct Logs(Arc<Mutex<Vec<(tracing::Level, String)>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Fields<'a>(&'a mut String);
+        impl tracing::field::Visit for Fields<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                self.0.push_str(&format!("{}={value:?} ", field.name()));
+            }
+        }
+        let mut text = String::new();
+        event.record(&mut Fields(&mut text));
+        self.0
+            .lock()
+            .unwrap()
+            .push((*event.metadata().level(), text));
+    }
+}
+
+/// The global subscriber, installed once, before any request.
+fn logs() -> &'static Logs {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    static LOGS: std::sync::OnceLock<Logs> = std::sync::OnceLock::new();
+    LOGS.get_or_init(|| {
+        let logs = Logs::default();
+        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(logs.clone()))
+            .unwrap();
+        logs
+    })
+}
+
+/// The warnings that say the user could not be read, on *tenant*.
+fn lookup_warnings(tenant: &str) -> Vec<String> {
+    logs()
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(level, text)| {
+            *level == tracing::Level::WARN
+                && text.contains(&format!("tenant={tenant} "))
+                && text.contains("could not read the user")
+        })
+        .map(|(_, text)| text.clone())
+        .collect()
+}
+
+/// A rule's deploy under *name*.
+fn request(name: &str, uuid: &str) -> DeployRequest {
+    DeployRequest::new(
+        name,
+        Operation::Update,
+        body(Operation::Update, uuid, "index=main"),
+    )
+}
+
+/// A lookup that answers *context* on a tenant of its own: only `nobody`'s
+/// copy of the rule is deleted, the `admin`-owned one is kept, the deploy
+/// succeeds, and exactly one warning on the tenant says why.
+fn falls_back_to_nobody(context: Context, tenant: &str) {
+    logs();
+    let fake = holding(&[("Old name", A), ("Admin copy", A)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.context = context;
+        state.acl.insert(
+            "Admin copy".to_owned(),
+            ("search".to_owned(), "admin".to_owned()),
+        );
+    }
+    let done = send_outcomes_on(&fake, &[tenant], &[request("New name", A)]).remove(0);
+    let done = done[0].as_ref().unwrap();
+    assert_eq!(
+        warnings(done),
+        [(RENAMED_DELETED.to_owned(), "Old name".to_owned())]
+    );
+    assert_eq!(names(&fake), ["Admin copy", "New name"]);
+    assert_eq!(context_reads(&fake), 1);
+    let warned = lookup_warnings(tenant);
+    assert_eq!(warned.len(), 1, "{warned:?}");
+}
+
+#[test]
+fn an_answer_without_a_user_falls_back_to_nobody() {
+    falls_back_to_nobody(Context::NoEntry, "no-entry");
+}
+
+#[test]
+fn an_empty_username_falls_back_to_nobody() {
+    falls_back_to_nobody(Context::EmptyUsername, "empty-username");
+}
+
+#[test]
+fn an_html_answer_falls_back_to_nobody() {
+    falls_back_to_nobody(Context::Html, "html");
+}
+
+#[test]
+fn a_refused_lookup_falls_back_to_nobody() {
+    falls_back_to_nobody(Context::Refused, "refused");
+}
+
+#[test]
+fn a_lookup_that_cannot_connect_falls_back_to_nobody() {
+    falls_back_to_nobody(Context::Unreachable, "unreachable");
+}
+
+/// A user that is read is not warned about.
+#[test]
+fn a_lookup_that_answers_logs_no_warning() {
+    logs();
+    let fake = holding(&[("Old name", A)]);
+    fake.0.lock().unwrap().acl.insert(
+        "Old name".to_owned(),
+        ("search".to_owned(), "admin".to_owned()),
+    );
+    fake.0.lock().unwrap().context = Context::User("admin".to_owned());
+    let done = send_outcomes_on(&fake, &["answers"], &[request("New name", A)]).remove(0);
+    assert!(done[0].is_ok());
+    assert_eq!(names(&fake), ["New name"]);
+    assert!(lookup_warnings("answers").is_empty());
+}
+
+/// Two tenants of one run each have their own user read: one lookup per
+/// tenant, and a tenant's user never applies to the other's copies.
+#[test]
+fn each_tenant_has_its_own_user_read() {
+    let fake = holding(&[("East copy", A), ("West copy", A)]);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state
+            .by_token
+            .insert("t-east".to_owned(), Context::User("admin".to_owned()));
+        state
+            .by_token
+            .insert("t-west".to_owned(), Context::User("svc".to_owned()));
+        state.acl.insert(
+            "East copy".to_owned(),
+            ("search".to_owned(), "admin".to_owned()),
+        );
+        state.acl.insert(
+            "West copy".to_owned(),
+            ("search".to_owned(), "svc".to_owned()),
+        );
+    }
+    let requests = [request("New name", A), request("New name", A)];
+    let east = send_outcomes_on(&fake, &["east"], &requests[..1]);
+    assert!(east[0][0].is_ok());
+    assert_eq!(names(&fake), ["New name", "West copy"]);
+    // A second tenant of the same run, on the same connector.
+    let both = send_outcomes_on(&fake, &["east", "west"], &requests[1..]);
+    assert!(both.iter().flatten().all(Result::is_ok));
+    assert_eq!(names(&fake), ["New name"]);
+    // One read for the first run, then one per tenant of the second.
+    assert_eq!(context_reads(&fake), 3);
 }

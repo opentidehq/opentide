@@ -243,7 +243,7 @@ fn elastic_invalid_rfc_block_reports_all_three_codes() {
         "{found}"
     );
     assert!(
-        found.contains("language applies only to `type: query`"),
+        found.contains("`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`"),
         "{found}"
     );
     assert!(found.contains("`index` set on `type: esql`"), "{found}");
@@ -268,17 +268,39 @@ fn elastic_language_on_another_type_says_why_and_what_to_do() {
         let found = errors("elastic", &block);
         assert!(
             found.contains(
-                "ElasticConfig validation failed with code(s): language (language applies only \
-                 to `type: query`"
+                "ElasticConfig validation failed with code(s): language (`language` (`kuery` or \
+                 `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, \
+                 not to `type: "
             ),
             "{rule_type}: {found}"
         );
+        let why = match rule_type {
+            "eql" => "whose query is EQL",
+            "esql" => "whose query is ES|QL",
+            _ => "which has no query",
+        };
         assert!(
             found.contains(&format!(
-                "not `type: {rule_type}`; remove `language` from the block)"
+                "not to `type: {rule_type}`, {why}: remove `language` from the block)"
             )),
             "{rule_type}: {found}"
         );
+    }
+}
+
+/// `language` is the event query's language on the types the message names:
+/// it is not refused there (the first wording said it applied to `query` only).
+#[test]
+fn elastic_language_is_accepted_where_the_message_says_it_applies() {
+    for block in [
+        json!({"type": "query", "language": "lucene"}),
+        json!({"type": "threshold", "language": "lucene",
+               "threshold": {"field": ["user.name"], "value": 5}}),
+        json!({"type": "new_terms", "language": "kuery",
+               "new_terms": {"fields": ["user.name"], "history_window_start": "14d"}}),
+    ] {
+        let found = errors("elastic", &merged(&elastic_base(), &block));
+        assert!(!found.contains("language"), "{block}: {found}");
     }
 }
 

@@ -374,6 +374,7 @@ fn outside_a_workspace_query_is_workspace_not_found() {
     let document = ran.document();
     assert_eq!(document["command"], "query");
     assert_eq!(document["failure"]["code"], "workspace_not_found");
+    assert_eq!(document["platform"], "elastic");
     let message = document["failure"]["message"].as_str().unwrap();
     assert!(message.starts_with("No workspace at "), "{message}");
     // A workspace without a tenant is still the tenant's refusal.

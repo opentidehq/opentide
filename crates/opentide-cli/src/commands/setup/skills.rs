@@ -776,13 +776,15 @@ pub fn install(
     let context = [
         (
             "name",
-            options
-                .name
-                .clone()
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| super::files::folder_name(root)),
+            super::files::trimmed(options.name.as_deref())
+                .map_or_else(|| super::files::folder_name(root), str::to_owned),
         ),
-        ("org", options.org.clone().unwrap_or_default()),
+        (
+            "org",
+            super::files::trimmed(options.org.as_deref())
+                .unwrap_or_default()
+                .to_owned(),
+        ),
         (
             "description",
             options.description.clone().unwrap_or_default(),
@@ -1048,6 +1050,55 @@ mod tests {
         assert_eq!(
             std::fs::read(root.join(".claude/skills/detection-engineering/SKILL.md")).unwrap(),
             BUNDLED[0].1[0].1
+        );
+    }
+
+    /// `--name` and `--org` reach the agent files without their surrounding
+    /// spaces, as they reach the README (#1729, E2E-2): `--name "  Mine  "`
+    /// wrote `#   Mine   — Agent Guide`.
+    #[test]
+    fn the_name_and_the_org_are_trimmed_in_the_agent_files() {
+        let env = offline_env();
+        let network = Network {
+            env: &env,
+            proxy: None,
+            interrupted: &never,
+        };
+        let catalogue = loaded(network, Ok(manifest()));
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let mut stage = Stage::new();
+        let options = Options {
+            targets: vec![Target::Generic, Target::ClaudeCode],
+            name: Some("  Mine  ".into()),
+            org: Some("  Acme  ".into()),
+            ..Options::default()
+        };
+        install(&mut stage, &root, &options, &catalogue).unwrap();
+        stage.commit().unwrap();
+        for file in ["AGENTS.md", "CLAUDE.md"] {
+            let text = read(&root.join(file));
+            let heading = text.lines().next().unwrap();
+            assert!(heading.starts_with("# Mine"), "{file}: {heading:?}");
+            assert!(!heading.contains("  "), "{file}: {heading:?}");
+            assert!(!text.contains("  Acme"), "{file}");
+        }
+        // A name of only spaces is the folder's.
+        let other = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(other.path()).unwrap();
+        let mut stage = Stage::new();
+        let options = Options {
+            targets: vec![Target::Generic],
+            name: Some("   ".into()),
+            ..Options::default()
+        };
+        install(&mut stage, &root, &options, &catalogue).unwrap();
+        stage.commit().unwrap();
+        let folder = root.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(
+            read(&root.join("AGENTS.md")).starts_with(&format!("# {folder}")),
+            "{}",
+            read(&root.join("AGENTS.md"))
         );
     }
 

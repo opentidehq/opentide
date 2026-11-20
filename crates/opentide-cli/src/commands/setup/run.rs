@@ -195,14 +195,21 @@ fn usage(command: &str, failure_code: &str, message: &str) -> Report {
     )
 }
 
-/// A `--name` with nothing in it (empty, or only spaces) is a usage error, as
-/// `new --name ""` gives; leaving `--name` out keeps the folder name.
-fn empty_name(command: &str, name: Option<&str>) -> Option<Report> {
-    name.is_some_and(|name| name.trim().is_empty()).then(|| {
-        let mut failure = Failure::new(code::USAGE_INVALID_VALUE, "--name cannot be empty");
-        failure.argument = Some("--name".to_owned());
+/// A `--name` or `--org` with nothing in it (empty, or only spaces) is a usage
+/// error, as `new --name ""` gives; leaving the option out keeps the folder
+/// name, or no organisation.
+fn empty_option(command: &str, flag: &str, value: Option<&str>) -> Option<Report> {
+    value.is_some_and(|value| value.trim().is_empty()).then(|| {
+        let mut failure =
+            Failure::new(code::USAGE_INVALID_VALUE, format!("{flag} cannot be empty"));
+        failure.argument = Some(flag.to_owned());
         Report::failed(command, USAGE_EXIT_CODE, failure)
     })
+}
+
+/// The first of `--name` and `--org` that is empty.
+fn empty_repo_option(command: &str, name: Option<&str>, org: Option<&str>) -> Option<Report> {
+    empty_option(command, "--name", name).or_else(|| empty_option(command, "--org", org))
 }
 
 /// The reason a prompt cannot be shown here, if one cannot
@@ -423,7 +430,8 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
         Err(report) => return *report,
     };
     if let Step::Repo(options) = step
-        && let Some(report) = empty_name(&command, options.name.as_deref())
+        && let Some(report) =
+            empty_repo_option(&command, options.name.as_deref(), options.org.as_deref())
     {
         return report;
     }
@@ -522,6 +530,11 @@ pub fn skills(args: &SkillsArgs, paths: &Paths, cx: &Context<'_>) -> Report {
         Err(report) => return *report,
     };
     let options = &args.options;
+    if let Some(report) =
+        empty_repo_option(COMMAND, options.name.as_deref(), options.org.as_deref())
+    {
+        return report;
+    }
     let chosen = !options.targets.is_empty() || options.plugin;
     if (args.yes || args.plan) && !chosen {
         return usage(
@@ -1255,7 +1268,9 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         Ok(shown) => shown,
         Err(report) => return *report,
     };
-    if let Some(report) = empty_name(COMMAND, args.repo.name.as_deref()) {
+    if let Some(report) =
+        empty_repo_option(COMMAND, args.repo.name.as_deref(), args.repo.org.as_deref())
+    {
         return report;
     }
     if !scripted {
