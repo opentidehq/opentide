@@ -418,10 +418,14 @@ fn form(pairs: &[(String, Json)]) -> String {
 
 /// The Splunk connector. A tenant's search endpoints (v1 or v2) are read
 /// from `server/info` once per tenant and kind of client (one for searches,
-/// one for the parser).
+/// one for the parser), and the user the token signs in as, once per tenant
+/// and only when a rename's cleanup needs it.
 #[derive(Debug, Default)]
 pub struct Splunk {
     v2: Mutex<BTreeMap<(TenantLabel, &'static str), bool>>,
+    /// The user each tenant's token authenticates as (`None`: the lookup
+    /// failed, and only `nobody`'s copies are opentide's).
+    user: Mutex<BTreeMap<TenantLabel, Option<String>>>,
 }
 
 impl Splunk {
@@ -675,13 +679,70 @@ impl Splunk {
         Ok(())
     }
 
+    /// The user the tenant's token authenticates as
+    /// (`authentication/current-context`, `entry[0].content.username`): one
+    /// read-only request per tenant, kept for the run. Splunk records this
+    /// user, not the `nobody` of the namespace opentide writes through, as
+    /// the owner of a saved search it creates (#1727). `None` when the
+    /// lookup fails, which is logged: the cleanup then keeps to `nobody`'s.
+    async fn current_user(&self, cx: TenantContext<'_>) -> Option<String> {
+        if let Some(known) = self
+            .user
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&cx.tenant.label)
+        {
+            return known.clone();
+        }
+        let found = match Self::send(
+            cx,
+            crate::transport::Method::GET,
+            "/services/authentication/current-context?output_mode=json",
+            None,
+        )
+        .await
+        {
+            Ok(reply) if !reply.failed() => {
+                serde_json::from_slice::<serde_json::Value>(&reply.answer.body)
+                    .ok()
+                    .and_then(|body| {
+                        body.pointer("/entry/0/content/username")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::trim)
+                            .filter(|user| !user.is_empty())
+                            .map(str::to_owned)
+                    })
+                    .ok_or_else(|| "its answer names no user".to_owned())
+            }
+            Ok(reply) => Err(format!("HTTP {}", reply.answer.status)),
+            Err(error) => Err(error.to_string()),
+        };
+        if let Err(why) = &found {
+            tracing::warn!(
+                tenant = %cx.tenant.label.tenant,
+                "could not read the user Splunk signs the token in as ({why}); \
+                 a renamed rule's old saved searches are deleted only where `nobody` owns them"
+            );
+        }
+        let found = found.ok();
+        self.user
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(cx.tenant.label.clone(), found.clone());
+        found
+    }
+
     /// The saved searches of the tenant's app, but *keep*, whose
     /// description names the rule *uuid* on its last line
     /// ([`opentide_compile::splunk::described`]): the ones an earlier name of
     /// the rule left (#1657). One listing, narrowed by Splunk's `search`
-    /// filter to the UUID, then to the exact marker, the app and its
-    /// `nobody` owner here; keyed by the rule's own UUID, so another rule's
-    /// saved search is never among them, whatever its name.
+    /// filter to the UUID, then to the exact marker, the app and the owner:
+    /// `nobody`, or the user the token signs in as, which Splunk records as
+    /// the owner of what opentide creates through `/servicesNS/nobody/`
+    /// (#1727). That user is read, once per tenant, only when the listing
+    /// holds a marked copy owned by someone else; a copy of a third owner is
+    /// an analyst's and is kept. Keyed by the rule's own UUID, so another
+    /// rule's saved search is never among them, whatever its name.
     pub async fn other_saved_searches(
         &self,
         cx: TenantContext<'_>,
@@ -698,7 +759,8 @@ impl Splunk {
             return Err(refused_call(cx, &reply));
         }
         let app = Self::app(cx)?;
-        Ok(entries(&reply.answer.body)
+        // (name, owner) of the marked copies of this app under another name.
+        let copies: Vec<(String, Option<String>)> = entries(&reply.answer.body)
             .iter()
             .filter(|entry| {
                 entry.key("description").is_some_and(|description| {
@@ -706,15 +768,27 @@ impl Splunk {
                 })
             })
             .filter(|entry| entry.key("app").is_none_or(|found| found == app))
-            .filter(|entry| entry.key("owner").is_none_or(|owner| owner == "nobody"))
-            .filter_map(SavedSearch::from_entry)
-            .filter_map(|saved| {
-                saved
-                    .path
-                    .strip_prefix("saved/searches/")
-                    .map(str::to_owned)
+            .filter_map(|entry| {
+                let saved = SavedSearch::from_entry(entry)?;
+                let name = saved.path.strip_prefix("saved/searches/")?.to_owned();
+                Some((name, entry.key("owner")))
             })
-            .filter(|name| name != keep)
+            .filter(|(name, _)| name != keep)
+            .collect();
+        let owned_by_nobody =
+            |owner: &Option<String>| owner.as_deref().is_none_or(|o| o == "nobody");
+        let user = if copies.iter().all(|(_, owner)| owned_by_nobody(owner)) {
+            None
+        } else {
+            self.current_user(cx).await
+        };
+        Ok(copies
+            .into_iter()
+            .filter(|(_, owner)| {
+                owned_by_nobody(owner)
+                    || owner.as_deref().is_some_and(|o| user.as_deref() == Some(o))
+            })
+            .map(|(name, _)| name)
             .collect())
     }
 
