@@ -100,6 +100,22 @@ pub fn newer(latest: &str, installed: &str) -> bool {
     }
 }
 
+/// Whether `a` and `b` name one release: equal as PEP 440 versions, which reads
+/// SemVer's pre-release spelling as its own (`1.0.0-rc.1` is `1.0.0rc1`,
+/// `1.0.0-alpha.2` is `1.0.0a2`, `1.0.0-dev.3` is `1.0.0.dev3`). The same
+/// release is spelled one way by the Python package and the other by the
+/// crates and the binaries. A version PEP 440 cannot read equals only itself.
+pub fn same(a: &str, b: &str) -> bool {
+    use std::str::FromStr as _;
+    match (
+        pep440_rs::Version::from_str(a),
+        pep440_rs::Version::from_str(b),
+    ) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 /// The first three dotted parts of `text` as numbers, a part that is not
 /// one as 0.
 fn loose_key(text: &str) -> Vec<u128> {
@@ -176,6 +192,25 @@ mod tests {
         // Neither reads as PEP 440: the loose key.
         assert!(newer("2.x.y", "1.x.y"));
         assert!(!newer("x", "y"));
+    }
+
+    #[test]
+    fn one_release_in_its_python_and_its_semver_spelling_is_one_version() {
+        // The wheel says `1.0.0rc1`, the crates and the binaries `1.0.0-rc.1`.
+        assert!(same("1.0.0rc1", "1.0.0-rc.1"));
+        assert!(same("1.0.0-rc.1", "1.0.0rc1"));
+        assert!(same("1.0.0a2", "1.0.0-alpha.2"));
+        assert!(same("1.0.0b3", "1.0.0-beta.3"));
+        assert!(same("1.0.0.dev4", "1.0.0-dev.4"));
+        assert!(same("1.0.0", "1.0.0"));
+        // Different releases stay different, whatever the spelling.
+        assert!(!same("1.0.0rc1", "1.0.0-rc.2"));
+        assert!(!same("1.0.0rc1", "1.0.0"));
+        assert!(!same("1.0.0-rc.1", "0.28.1"));
+        assert!(!same("1.0.0a1", "1.0.0-beta.1"));
+        // Neither reads as PEP 440: only the same text is the same version.
+        assert!(same("x", "x"));
+        assert!(!same("x", "y"));
     }
 
     #[test]
