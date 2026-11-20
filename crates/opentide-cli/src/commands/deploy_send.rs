@@ -2669,7 +2669,14 @@ impl Sender<'_, '_> {
                 Operation::Update
             },
             if deletion {
-                Vec::new()
+                // A retirement names the rule too, so the connector deletes
+                // the saved searches an earlier name of it left (#1657).
+                let mut named = opentide_compile::json::Object::new();
+                named.insert(
+                    "description".into(),
+                    opentide_compile::splunk::retired_description(rule).into(),
+                );
+                CJson::Object(named).to_compact().into_bytes()
             } else {
                 CJson::Object(settings).to_compact().into_bytes()
             },
@@ -2781,10 +2788,22 @@ impl Sender<'_, '_> {
         };
         let deployer = self.deployer(platform)?;
         let context = self.context(connection);
-        let outcome = self
+        let answer = self
             .block(async { Ok(deployer.deploy(context, &request).await) })
-            .map_err(|error| raised(&error))?
-            .map_err(|failed| scoped(failed, |error| raised(&error)))?;
+            .map_err(|error| raised(&error))?;
+        let (outcome, failed) = match answer {
+            Ok(outcome) => (outcome, None),
+            // What the deploy did before it failed (the old saved searches
+            // a Splunk rule's cleanup deleted) is still reported.
+            Err(mut failed) => {
+                let done = failed
+                    .partial
+                    .take()
+                    .map(|done| *done)
+                    .unwrap_or_else(|| DeployOutcome::new(None, request.operation));
+                (done, Some(failed))
+            }
+        };
         for warning in &outcome.warnings {
             match id {
                 // `splunk_alert_deleted`: the saved search the tenant had;
@@ -2803,7 +2822,10 @@ impl Sender<'_, '_> {
                 _ => {}
             }
         }
-        Ok(())
+        match failed {
+            Some(failed) => Err(scoped(failed, |error| raised(&error))),
+            None => Ok(()),
+        }
     }
 
     /// `report_failure`: a coded refusal of one rule on one tenant.

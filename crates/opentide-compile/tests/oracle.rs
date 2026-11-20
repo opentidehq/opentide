@@ -214,7 +214,7 @@ fn rewrites() -> Vec<(String, Vec<String>)> {
 /// The oracle's Splunk writes (compact JSON) as opentide writes them since
 /// #1657 (`splunk_as_written`): each `search` the rule's query alone, without
 /// the `| eval MDR_UUID=…, MDR_status=…` line and the mapping macro after it;
-/// no `alert.managedBy`; and the `description` ending with the line that
+/// `alert.managedBy` empty (the oracle's responders); and the `description` ending with the line that
 /// names the rule *uuid*. `None` for a text that is not a list of writes.
 fn splunk_as_written(oracle: &str, uuid: &str) -> Option<String> {
     let Json::Array(writes) = serde_json::from_str::<Json>(oracle).ok()? else {
@@ -232,7 +232,9 @@ fn splunk_as_written(oracle: &str, uuid: &str) -> Option<String> {
                 {
                     search.truncate(at);
                 }
-                body.shift_remove("alert.managedBy");
+                if let Some(managed) = body.get_mut("alert.managedBy") {
+                    *managed = Json::Str(String::new());
+                }
                 if let Some(Json::Str(description)) = body.get_mut("description") {
                     *description = splunk::described(description, uuid);
                 }

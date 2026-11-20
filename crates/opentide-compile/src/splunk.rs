@@ -229,6 +229,14 @@ pub fn described(description: &str, uuid: &str) -> String {
     }
 }
 
+/// The description a retirement sends to name *rule* (the rule's own,
+/// [`described`]), which [`compile`] leaves out for a DELETION status: the
+/// Splunk `Deployer` deletes, after the saved search, the ones an earlier
+/// name of the rule left.
+pub fn retired_description(rule: &Rule) -> String {
+    described(rule.description(), &crate::rule::canonical_uuid(&rule.uuid))
+}
+
 /// The rule a saved search's *description* names ([`described`]): the
 /// UUID on its last line, when that line is the marker's.
 pub fn marked_rule(description: &str) -> Option<&str> {
@@ -482,6 +490,11 @@ fn saved_search_settings(
             }
         }
     }
+    // Empty, Splunk's own default: opentide sets nothing here, and an update
+    // sends only the settings it writes, so a saved search 0.28.1 deployed
+    // (which put the rule's responders here) would otherwise keep them.
+    // `advanced` can still set it.
+    config.insert("alert.managedBy".into(), "".into());
     if let Some(Json::Object(advanced)) = block.get("advanced") {
         for (key, value) in advanced {
             config.insert(key.clone(), saved_search_value(value).into());

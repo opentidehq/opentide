@@ -3,14 +3,16 @@
   "scenario": "splunk/deploy",
   "recorded_from": [
     "cargo",
-    "test",
+    "run",
+    "-q",
     "-p",
     "opentide-connectors",
-    "--test",
-    "splunk",
-    "splunk_deploy_sends_what_the_python_deployer_sent"
+    "--example",
+    "splunk_client",
+    "--",
+    "deploy"
   ],
-  "digest": "sha256:eedd2fe34ae8e45189396ec774609b3ba9f214710e1615a07ba7a0f4268ddf17",
+  "digest": "sha256:b4a3e6f021881dc3ef0c2d6374ed86e5374b46278f559f17bc1ab06e87d89b97",
   "interactions": [
     {
       "request": {
@@ -84,7 +86,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "search=index%3Dmain+%7C+head+1&cron_schedule=0+*+*+*+*&alert.severity=5&description=Simulated+Splunk+rule+for+CLI+E2E+corpus.%0A%0Aopentide+rule+00000000-0000-4000-8003-000000000003"
+        "body": "search=index%3Dmain+%7C+head+1&cron_schedule=0+*+*+*+*&alert.severity=5&alert.managedBy=&description=Simulated+Splunk+rule+for+CLI+E2E+corpus.%0A%0Aopentide+rule+00000000-0000-4000-8003-000000000003"
       },
       "response": {
         "status": 200,
@@ -98,7 +100,7 @@
             "text/xml"
           ]
         ],
-        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
       }
     },
     {
@@ -129,7 +131,34 @@
             "text/xml"
           ]
         ],
-        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches?search=00000000-0000-4000-8003-000000000003&count=0",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
       }
     },
     {
@@ -156,7 +185,7 @@
             "text/xml"
           ]
         ],
-        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
       }
     },
     {
@@ -173,7 +202,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "search=index%3Dmain+%7C+head+1&cron_schedule=0+*+*+*+*&alert.severity=5&description=Simulated+Splunk+rule+for+CLI+E2E+corpus.%0A%0Aopentide+rule+00000000-0000-4000-8003-000000000003"
+        "body": "search=index%3Dmain+%7C+head+1&cron_schedule=0+*+*+*+*&alert.severity=5&alert.managedBy=&description=Simulated+Splunk+rule+for+CLI+E2E+corpus.%0A%0Aopentide+rule+00000000-0000-4000-8003-000000000003"
       },
       "response": {
         "status": 200,
@@ -187,7 +216,7 @@
             "text/xml"
           ]
         ],
-        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
       }
     },
     {
@@ -218,7 +247,34 @@
             "text/xml"
           ]
         ],
-        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches?search=00000000-0000-4000-8003-000000000003&count=0",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
       }
     },
     {
@@ -245,13 +301,40 @@
             "text/xml"
           ]
         ],
-        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
       }
     },
     {
       "request": {
         "method": "DELETE",
         "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+SPL+Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches?search=00000000-0000-4000-8003-000000000003&count=0",
         "headers": [
           [
             "authorization",
@@ -300,6 +383,33 @@
           ]
         ],
         "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\n  </messages>\n</response>\n"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches?search=00000000-0000-4000-8003-000000000003&count=0",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"></feed>"
       }
     }
   ]

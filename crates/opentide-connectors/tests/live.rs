@@ -232,8 +232,7 @@ fn live_splunk_deploy_validate_query_delete() {
     };
     let inputs = support::fixture("splunk");
     let step = &support::items(inputs.get("deploy").unwrap())[0];
-    let mut saved = step.get("config").unwrap().as_object().unwrap().clone();
-    saved.insert("search".into(), step.get("query").unwrap().clone());
+    let saved = step.get("body").unwrap().as_object().unwrap().clone();
     let name = "opentide live parity (UC-4.3)";
     let connector = Splunk::new();
     block_on(async {

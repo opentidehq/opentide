@@ -198,9 +198,11 @@ fn without_the_table_nothing_of_it_is_sent() {
 }
 
 /// The saved search is the author's SPL: the block's `query`, trimmed, with
-/// nothing appended (no `MDR_UUID`/`MDR_status` `eval`, no mapping macro),
-/// and opentide sets no `alert.managedBy` (0.28.1 set the rule's
-/// responders there). Its description names the rule (#1657).
+/// nothing appended (no `MDR_UUID`/`MDR_status` `eval`, no mapping macro).
+/// `alert.managedBy` is written empty, Splunk's default, so a saved search
+/// 0.28.1 deployed with the rule's responders there loses them on its next
+/// update, which sends only the settings opentide writes. Its description
+/// names the rule (#1657).
 #[test]
 fn the_saved_search_is_the_query_as_written() {
     let body = settings("");
@@ -208,7 +210,7 @@ fn the_saved_search_is_the_query_as_written() {
         text(&body, "search").as_deref(),
         Some("index=main sourcetype=canarytokens")
     );
-    assert!(!body.contains_key("alert.managedBy"), "{body:?}");
+    assert_eq!(text(&body, "alert.managedBy").as_deref(), Some(""));
     let description = text(&body, "description").unwrap();
     assert_eq!(splunk::marked_rule(&description), Some(UUID));
 }

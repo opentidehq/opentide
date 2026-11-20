@@ -710,47 +710,54 @@ impl Splunk {
                 .into());
             }
         };
-        if request.operation == Operation::Delete {
-            let mut warnings = Vec::new();
-            if self.saved_search(cx, &request.rule_id).await?.is_some() {
-                self.delete_saved_search(cx, &request.rule_id).await?;
-                // Said, not raised: the run's warnings are for what to check.
-                warnings.push(
-                    DeployWarning::new("splunk_alert_deleted", request.rule_id.clone()).unraised(),
-                );
-            }
-            return Ok(DeployOutcome::new(None, request.operation).with_warnings(warnings));
-        }
-        self.apply_saved_search(cx, &request.rule_id, &settings, false)
-            .await?;
-        // The saved searches an earlier name of the rule left (a rename,
-        // or ` - Rule` added or dropped), found by the rule's UUID on the
-        // last line of their description, are deleted once the new one is
-        // written (#1657).
-        let mut warnings = Vec::new();
-        let description = settings.get("description").map(json_text);
-        if let Some(uuid) = description
+        let uuid = settings
+            .get("description")
+            .map(json_text)
             .as_deref()
             .and_then(opentide_compile::splunk::marked_rule)
-            .map(str::to_owned)
-        {
-            let written = &request.rule_id;
-            let others = self
-                .other_saved_searches(cx, &uuid, written)
-                .await
-                .map_err(|error| renamed_failure(written, None, &error))?;
+            .map(str::to_owned);
+        let name = &request.rule_id;
+        let mut warnings = Vec::new();
+        if request.operation == Operation::Delete {
+            if self.saved_search(cx, name).await?.is_some() {
+                self.delete_saved_search(cx, name).await?;
+                // Said, not raised: the run's warnings are for what to check.
+                warnings.push(DeployWarning::new("splunk_alert_deleted", name.clone()).unraised());
+            }
+        } else {
+            self.apply_saved_search(cx, name, &settings, false).await?;
+        }
+        // The saved searches an earlier name of the rule left (a rename,
+        // or ` - Rule` added or dropped), found by the rule's UUID on the
+        // last line of their description, are deleted once the rule is
+        // written under its name now, or retired (#1657). A request whose
+        // body names no rule (an SDK's bare delete) looks for none.
+        if let Some(uuid) = uuid {
+            let done = Done {
+                name,
+                deleted: request.operation == Operation::Delete,
+            };
+            let others = match self.other_saved_searches(cx, &uuid, name).await {
+                Ok(others) => others,
+                Err(error) => {
+                    return Err(done.cleanup_failed(None, &error, request.operation, warnings));
+                }
+            };
             for old in others {
-                self.delete_saved_search(cx, &old)
-                    .await
-                    .map_err(|error| renamed_failure(written, Some(&old), &error))?;
+                if let Err(error) = self.delete_saved_search(cx, &old).await {
+                    return Err(done.cleanup_failed(
+                        Some(&old),
+                        &error,
+                        request.operation,
+                        warnings,
+                    ));
+                }
                 // Said, not raised: what the run did, not what to check.
                 warnings.push(DeployWarning::new(RENAMED_DELETED, old).unraised());
             }
         }
-        Ok(
-            DeployOutcome::new(Some(request.rule_id.clone()), request.operation)
-                .with_warnings(warnings),
-        )
+        let remote_id = (request.operation != Operation::Delete).then(|| name.clone());
+        Ok(DeployOutcome::new(remote_id, request.operation).with_warnings(warnings))
     }
 
     /// Writes the saved search *name* with *settings*
@@ -1049,23 +1056,57 @@ pub const RENAMED_DELETED: &str = "splunk_renamed_search_deleted";
 /// not be looked up or deleted.
 pub const RENAMED_CLEANUP_FAILED: &str = "splunk_renamed_search_not_deleted";
 
-/// The rule's failure when the saved search *written* is in place but an old
-/// one (*old*, when known) of the same rule could not be found or deleted:
-/// the next deploy finds it again.
-fn renamed_failure(written: &str, old: Option<&str>, error: &ConnectorError) -> DeployError {
-    let message = match old {
-        Some(old) => format!(
-            "saved search {written:?} was written, but {old:?}, the saved search an earlier \
-             name of this rule left, could not be deleted: {}",
-            error.text()
-        ),
-        None => format!(
-            "saved search {written:?} was written, but the saved searches an earlier name of \
-             this rule left could not be looked up: {}",
-            error.text()
-        ),
-    };
-    DeployError::rule(DeployFailure::new(RENAMED_CLEANUP_FAILED, message))
+/// The saved search a deploy wrote (or, with `deleted`, retired) under the
+/// rule's name now, before it looked for the ones an earlier name left.
+struct Done<'a> {
+    name: &'a str,
+    deleted: bool,
+}
+
+impl Done<'_> {
+    /// The rule's failure when the saved search is written (or retired) but
+    /// an old one (*old*, when known) of the same rule could not be found or
+    /// deleted: the next deploy finds it again. The old ones deleted before
+    /// it (*warnings*) stay in the failure's `partial`, so the caller still
+    /// lists them.
+    fn cleanup_failed(
+        &self,
+        old: Option<&str>,
+        error: &ConnectorError,
+        operation: Operation,
+        warnings: Vec<DeployWarning>,
+    ) -> DeployError {
+        let name = self.name;
+        let done = if self.deleted {
+            format!("saved search {name:?} was deleted (or already absent)")
+        } else {
+            format!("saved search {name:?} was written")
+        };
+        let deleted: Vec<String> = warnings
+            .iter()
+            .filter(|warning| warning.code == RENAMED_DELETED)
+            .map(|warning| format!("{:?}", warning.message))
+            .collect();
+        let before = if deleted.is_empty() {
+            String::new()
+        } else {
+            format!(" (deleted before it: {})", deleted.join(", "))
+        };
+        let message = match old {
+            Some(old) => format!(
+                "{done}, but {old:?}, a saved search an earlier name of this rule left, \
+                 could not be deleted{before}: {}",
+                error.text()
+            ),
+            None => format!(
+                "{done}, but the saved searches an earlier name of this rule left could not \
+                 be looked up: {}",
+                error.text()
+            ),
+        };
+        DeployError::rule(DeployFailure::new(RENAMED_CLEANUP_FAILED, message))
+            .with_partial(DeployOutcome::new(None, operation).with_warnings(warnings))
+    }
 }
 
 impl Deployer for Splunk {
@@ -1073,7 +1114,17 @@ impl Deployer for Splunk {
     /// JSON object: the rule's settings, its actions and `search`), through
     /// [`Splunk::apply_saved_search`]. A delete removes it when the tenant
     /// has it, with the warning `splunk_alert_deleted` (its message the
-    /// name), and does nothing when it is already gone.
+    /// name), and does nothing when it is already gone; its body may be
+    /// `{"description": ..}`, the compiled description, to name the rule.
+    ///
+    /// When the body's `description` ends with the rule's marker
+    /// ([`opentide_compile::splunk::described`]), the write or the delete is
+    /// followed by one listing of the tenant app's saved searches and a
+    /// delete of each other one owned by `nobody` that names the same rule:
+    /// the ones an earlier name of the rule left, each said with the warning
+    /// [`RENAMED_DELETED`] (its message the old name). A failed listing or
+    /// delete fails the rule with [`RENAMED_CLEANUP_FAILED`]; the old ones
+    /// deleted before it stay in the failure's `partial`.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,

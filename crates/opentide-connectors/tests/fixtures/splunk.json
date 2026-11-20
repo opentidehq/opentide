@@ -3,50 +3,40 @@
     {
       "name": "Splunk SPL Rule",
       "status": "STAGING",
-      "query": "index=main | head 1",
-      "config": {
-        "is_scheduled": 1,
+      "body": {
         "cron_schedule": "0 * * * *",
         "alert.severity": 5,
-        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
-      },
-      "actions_config": {}
+        "alert.managedBy": "",
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003",
+        "is_scheduled": 1,
+        "search": "index=main | head 1"
+      }
     },
     {
       "name": "Splunk SPL Rule",
       "status": "STAGING",
-      "query": "index=main | head 1",
-      "config": {
-        "is_scheduled": 1,
+      "body": {
         "cron_schedule": "0 * * * *",
         "alert.severity": 5,
-        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
-      },
-      "actions_config": {}
+        "alert.managedBy": "",
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003",
+        "is_scheduled": 1,
+        "search": "index=main | head 1"
+      }
     },
     {
       "name": "Splunk SPL Rule",
       "status": "REMOVED",
-      "query": "index=main | head 1",
-      "config": {
-        "is_scheduled": 1,
-        "cron_schedule": "0 * * * *",
-        "alert.severity": 5,
+      "body": {
         "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
-      },
-      "actions_config": {}
+      }
     },
     {
       "name": "Splunk SPL Rule",
       "status": "REMOVED",
-      "query": "index=main | head 1",
-      "config": {
-        "is_scheduled": 1,
-        "cron_schedule": "0 * * * *",
-        "alert.severity": 5,
+      "body": {
         "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003"
-      },
-      "actions_config": {}
+      }
     }
   ],
   "query": {

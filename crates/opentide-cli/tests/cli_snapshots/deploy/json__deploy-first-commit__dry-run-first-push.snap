@@ -21,7 +21,7 @@ exit: 0
   "deployed": [
     "splunk"
   ],
-  "detail": "not in the plan: 1 rule in REMOVED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it; splunk: once a rule's saved search is written, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted",
+  "detail": "not in the plan: 1 rule in REMOVED; set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it; splunk: once a rule's saved search is written or deleted, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted",
   "dry_run": true,
   "duration_ms": 0,
   "exit_code": 0,

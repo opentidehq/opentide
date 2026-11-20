@@ -1,8 +1,10 @@
-//! Splunk against the cassettes recorded from the Python client (Splunk's SDK on
-//! opentide's urllib handler; `tests/cassettes/splunk/`, `cargo xtask
-//! cassettes record splunk/<scenario>`): every request the connector sends
-//! must be the Python client's, in order (a JSON body as the same data), and the answers
-//! must read as Python read them (the outcomes `client.py` printed).
+//! Splunk against its cassettes (`tests/cassettes/splunk/`): `query` and
+//! `validate` recorded from the Python client (Splunk's SDK on opentide's
+//! urllib handler), `deploy` from the Rust connector since opentide stopped
+//! sending what Python sent (#1657; `examples/splunk_client.rs`). Every
+//! request the connector sends must be the recorded one, in order (a JSON
+//! body as the same data), and the answers must read as they were read
+//! then (the outcomes the client printed).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
@@ -36,21 +38,50 @@ fn replay(scenario: &str) -> Replayed {
     )
 }
 
-/// The settings `_apply_saved_search` sends for one step of `client.py`:
-/// the rule's, its actions', then `search`.
+/// The body `opentide deploy` sends for one step of the fixture (written by
+/// `cargo run -p opentide-connectors --example splunk_client -- fixture`):
+/// the saved search's settings (the rule's, its actions', then `search`),
+/// or, for a retirement, the description that names the rule.
 fn settings(step: &Json) -> Object {
-    let mut settings = step.get("config").unwrap().as_object().unwrap().clone();
-    for (key, value) in step.get("actions_config").unwrap().as_object().unwrap() {
-        settings.insert(key.clone(), value.clone());
-    }
-    settings.insert("search".into(), step.get("query").unwrap().clone());
-    settings
+    step.get("body").unwrap().as_object().unwrap().clone()
 }
 
+/// Whether *interaction* is the listing of the saved searches that name a
+/// rule, which only `Deployer::deploy` sends (#1657).
+fn listing(interaction: &opentide_cassette::Interaction) -> bool {
+    interaction.request.method == "GET" && interaction.request.url.contains("saved/searches?")
+}
+
+/// The recording without its listings: the writes and deletes alone, as
+/// [`Splunk::apply_saved_search`] sends them.
+fn writes_alone() -> Replayed {
+    let recorded = support::cassette("splunk/deploy");
+    let interactions = recorded
+        .interactions
+        .iter()
+        .filter(|interaction| !listing(interaction))
+        .cloned()
+        .collect();
+    Replayed::start_with(
+        opentide_cassette::Cassette::new(
+            &recorded.scenario,
+            recorded.recorded_from.clone(),
+            interactions,
+        ),
+        splunk::PLATFORM,
+        SETUP,
+        "SPLUNK_TOKEN",
+        &splunk::http_settings(Duration::from_secs(120)),
+    )
+}
+
+/// The steps' saved search written through `apply_saved_search`: created
+/// (looked up, 404; created; its settings in two updates), written again
+/// (found; updated), deleted, then already absent.
 #[test]
-fn splunk_deploy_sends_what_the_python_deployer_sent() {
+fn splunk_saved_search_writes_are_the_recorded_ones() {
     let inputs = fixture("splunk");
-    let tenant = replay("splunk/deploy");
+    let tenant = writes_alone();
     let connector = Splunk::new();
     let done = block_on(async {
         let mut done = Vec::new();
@@ -72,50 +103,31 @@ fn splunk_deploy_sends_what_the_python_deployer_sent() {
     })
     .unwrap();
     assert_eq!(tenant.verify(), Vec::new());
-    // client.py: create true, update true, delete null, absent null.
+    // Created, updated, deleted, absent.
     assert_eq!(done, [Some(true), Some(true), None, None]);
 }
 
-/// The same recording through `Deployer::deploy`, as `opentide deploy`
-/// sends it: each step's settings as the request body (written, then read
-/// back), a removal as a delete. The requests are the client's, byte for
-/// byte; only the delete of a saved search the tenant had warns.
+/// The recording through `Deployer::deploy`, as `opentide deploy` sends
+/// it (the scenario's client, `examples/splunk_client.rs`): each step's
+/// body as the request, a retirement as a delete. After each write and
+/// each delete, one listing of the saved searches that name the rule
+/// (#1657) finds only the one written, so nothing else is deleted; only
+/// the delete of a saved search the tenant had warns.
 #[test]
-fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
+fn splunk_the_deployer_sends_what_was_recorded() {
     use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
     let inputs = fixture("splunk");
-    // The recording is the client's, which looked for no old saved search:
-    // after each write the deployer now lists the saved searches whose
-    // description names the rule (#1657), answered with the one it wrote.
     let recorded = support::cassette("splunk/deploy");
-    let first = &items(inputs.get("deploy").unwrap())[0];
-    let description = text(first.get("config").unwrap().get("description").unwrap());
-    let uuid = opentide_compile::splunk::marked_rule(description)
-        .unwrap()
-        .to_owned();
-    let listing = |found: &opentide_cassette::Interaction| {
-        let mut listing = found.clone();
-        listing.request.url = format!(
-            "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches?search={uuid}&count=0"
-        );
-        listing
-    };
-    let mut interactions = recorded.interactions.clone();
-    let found = interactions[4].clone();
-    // After the create's second update (3), and after the update's (6+1).
-    interactions.insert(4, listing(&found));
-    interactions.insert(8, listing(&found));
-    let tenant = support::Replayed::start_with(
-        opentide_cassette::Cassette::new(
-            &recorded.scenario,
-            recorded.recorded_from.clone(),
-            interactions,
-        ),
-        splunk::PLATFORM,
-        SETUP,
-        "SPLUNK_TOKEN",
-        &splunk::http_settings(Duration::from_secs(120)),
+    assert_eq!(
+        recorded
+            .interactions
+            .iter()
+            .filter(|found| listing(found))
+            .count(),
+        4,
+        "one listing after each step"
     );
+    let tenant = replay("splunk/deploy");
     let connector = Splunk::new();
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
@@ -128,11 +140,7 @@ fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
                 } else {
                     Operation::Update
                 },
-                if deletion {
-                    Vec::new()
-                } else {
-                    Json::Object(settings(step)).to_compact().into_bytes()
-                },
+                Json::Object(settings(step)).to_compact().into_bytes(),
             );
             outcomes.push(connector.deploy(tenant.cx(), &request).await.unwrap());
         }
@@ -212,7 +220,7 @@ fn splunk_creating_an_absent_saved_search_logs_no_warning() {
     let logs = logs();
     let inputs = fixture("splunk");
     let step = &items(inputs.get("deploy").unwrap())[0];
-    let tenant = replay("splunk/deploy");
+    let tenant = writes_alone();
     let written = block_on(async {
         Splunk::new()
             .apply_saved_search(
@@ -258,7 +266,7 @@ fn splunk_a_single_byte_off_fails() {
         "description".into(),
         Json::Str("Simulated Splunk rule!".into()),
     );
-    let tenant = replay("splunk/deploy");
+    let tenant = writes_alone();
     let _ = block_on(async {
         Splunk::new()
             .apply_saved_search(tenant.cx(), "Splunk SPL Rule", &altered, false)
