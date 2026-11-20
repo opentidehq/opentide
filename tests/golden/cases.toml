@@ -110,6 +110,12 @@ source = "tests/golden/fixtures/vscode-workspace"
 about = "vscode with signal entities written without their stage or in the wrong case, which `migrate vocab-scope --apply` rewrites in place"
 edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - hostname  # no stage\n        - 'host::command line'\n    - name: Dump\n      entities: [Process, Host::Hostname]\n" }]
 
+[fixtures.vscode-config-parse]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with a platform TOML whose `[platform` header is never closed: `validate`, `lint` and `generate` stop on it with `config_parse`, the file's place and its diagnostic (#1659)"
+edits = [{ path = ".opentide/configurations/platforms/sentinel.toml", find = "", replace = "enabled = true\n[platform\n" }]
+
 [fixtures.vscode-long-query]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -310,6 +316,14 @@ command = ""
 variant = "repo-missing"
 args = ["--repo", "does-not-exist", "validate"]
 fixtures = ["none"]
+
+# OPENTIDE_REPO_ROOT naming no folder is held to --repo's test (#1659).
+[[case]]
+command = ""
+variant = "repo-root-env-missing"
+args = ["validate"]
+fixtures = ["none"]
+env = { OPENTIDE_REPO_ROOT = "<TMP>/no-such-folder" }
 
 # --debug: logs on stderr.
 [[case]]
@@ -873,6 +887,14 @@ variant = "debug-true"
 args = ["validate"]
 fixtures = ["tide-corpus"]
 env = { DEBUG = "1" }
+
+# A platform TOML that does not parse: config_parse, its place and its
+# diagnostic, as 0.28.1 reported it (#1659).
+[[case]]
+command = "validate"
+variant = "config-parse"
+args = ["validate"]
+fixtures = ["vscode-config-parse"]
 
 # --watch never ends on its own; under --json it is refused.
 [[case]]
@@ -1449,6 +1471,13 @@ variant = "default"
 args = ["lint"]
 fixtures = ["tide-corpus", "vscode", "heavy-small", "fault-lint", "empty", "none"]
 
+# A platform TOML that does not parse: config_parse, its place (#1659).
+[[case]]
+command = "lint"
+variant = "config-parse"
+args = ["lint"]
+fixtures = ["vscode-config-parse"]
+
 [[case]]
 command = "lint"
 variant = "strict"
@@ -1724,6 +1753,27 @@ command = "generate docs"
 variant = "changed"
 args = ["generate", "docs", "--changed"]
 fixtures = ["tide-corpus"]
+
+# A flavour no forge has: a usage error before anything is read (#1659).
+[[case]]
+command = "generate docs"
+variant = "flavor-unknown"
+args = ["generate", "docs", "--flavor", "bogus"]
+fixtures = ["tide-corpus"]
+
+# Outside a workspace generate writes nothing (#1659); a platform TOML that
+# does not parse fails its first phase with config_parse.
+[[case]]
+command = "generate"
+variant = "no-workspace"
+args = ["generate"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate"
+variant = "config-parse"
+args = ["generate"]
+fixtures = ["vscode-config-parse"]
 
 [[case]]
 command = "generate docs rules"
@@ -2681,6 +2731,13 @@ command = "migrate vocab-scope"
 variant = "default"
 args = ["migrate", "vocab-scope"]
 fixtures = ["tide-corpus-folders", "vscode", "fault"]
+
+# Outside a workspace: workspace_not_found, not "0 files scanned" (#1659).
+[[case]]
+command = "migrate vocab-scope"
+variant = "no-workspace"
+args = ["migrate", "vocab-scope"]
+fixtures = ["none"]
 
 [[case]]
 command = "migrate vocab-scope"

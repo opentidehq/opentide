@@ -4525,3 +4525,53 @@ fn an_elastic_gateway_error_on_the_first_lookup_fails_before_any_rule() {
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["not_attempted"], "{text}");
 }
+
+/// A rule that has a skipped row (its Splunk block, which no tenant takes)
+/// and a block a status left out (its Sentinel block) counts once in the
+/// summary's `skipped`.
+#[test]
+fn the_summary_counts_a_skipped_rule_once() {
+    let uuid = "00000000-0000-4000-8047-000000000925";
+    let block = format!(
+        "  splunk:\n    status: STAGING\n    query: index=main\n    tenants: [other]\n{}",
+        SENTINEL_STAGING.replace("status: STAGING", "status: PRODUCTION")
+    );
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("a.yaml", rule("Both", uuid, "A rule.", &block))],
+    );
+    std::fs::write(
+        ws.path()
+            .join(".opentide/configurations/platforms/sentinel.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Stand-in\"\n\n[[tenants]]\nname = \"soc\"\n\
+             strategies = [\"PREVIEW\", \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}"
+        ),
+    )
+    .unwrap();
+    let (registry, _) = scripted("splunk", Vec::new());
+    let args = Args {
+        strategies: vec!["PREVIEW".into()],
+        all: true,
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs(Vec::<(String, String)>::new()),
+        &registry,
+        0,
+    );
+    let Json::Array(left) = value(&sent, "skipped") else {
+        panic!("{:?}", sent.result)
+    };
+    assert_eq!(left.len(), 1, "the Sentinel block is left out: {left:?}");
+    assert_eq!(
+        value(&sent, "_summary").get("skipped"),
+        Some(&Json::Int(1)),
+        "{text}\n{:?}",
+        sent.result
+    );
+}

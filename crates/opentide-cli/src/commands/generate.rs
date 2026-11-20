@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
+use opentide_compile::generate::docs::flavor::Flavor;
 use opentide_compile::generate::docs::render::Pages;
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
@@ -28,7 +29,7 @@ use opentide_compile::strategy::Statuses;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, OsFs, Workspace};
 
-use super::{Report, open, placement};
+use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
@@ -194,8 +195,11 @@ pub(crate) fn phase_failed(
 
 /// The workspace a generate command reads, or the report of why it cannot.
 fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> {
+    if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
+        return Err(Box::new(refused));
+    }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    open(options).map_err(|message| Box::new(Report::error(command, message)))
+    super::open_for(command, options)
 }
 
 /// The workspace a generate command reads, opened as the first work of its
@@ -209,12 +213,107 @@ fn workspace_in_step(
     extra: Vec<(String, Json)>,
     cx: &Context<'_>,
 ) -> Result<Workspace, Box<Report>> {
+    if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
+        return Err(Box::new(refused));
+    }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    open(options).map_err(|detail| {
+    super::open_for(command, options).map_err(|opened| {
+        let detail = opened.outcome.message.clone();
         let ran = run_phase(step, cx.cwd, cx.cwd, |_| Err(detail));
         let detail = ran.error.clone().unwrap_or_default();
-        Box::new(phase_failed(command, phase, &detail, extra, vec![ran.step]))
+        let mut report = phase_failed(command, phase, &detail, extra, vec![ran.step]);
+        // A TOML file that does not parse keeps its code and its place.
+        if let Some(failure) = &opened.outcome.failure
+            && failure.code == super::CONFIG_PARSE
+            && let Some(own) = report.outcome.failure.as_mut()
+        {
+            own.code.clone_from(&failure.code);
+            report.outcome.data.extend(
+                opened
+                    .outcome
+                    .data
+                    .iter()
+                    .filter(|(key, _)| key == "diagnostics")
+                    .cloned(),
+            );
+        }
+        Box::new(report)
     })
+}
+
+/// The object files the index could not load, as a phase that logged an
+/// error and carried on reports them (`generate.md`, "When a phase fails"):
+/// `logged an error: malformed_object_yaml (path=…, error=…)`, or
+/// `logged 3 errors, first: …`. A phase that reads the registry fails on
+/// them (D1: `generate` skipped a broken rule and exited 0).
+fn logged_errors(workspace: &Workspace) -> Result<(), String> {
+    let errors = &workspace.index().load_errors;
+    let Some(first) = errors.first() else {
+        return Ok(());
+    };
+    let root = workspace.root();
+    let path = first
+        .path
+        .strip_prefix(root)
+        .unwrap_or(&first.path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let event = if first.code == "yaml_parse" {
+        "malformed_object_yaml"
+    } else {
+        first.code
+    };
+    let first = format!("{event} (path={path}, error={})", first.error);
+    Err(if errors.len() == 1 {
+        format!("logged an error: {first}")
+    } else {
+        format!("logged {} errors, first: {first}", errors.len())
+    })
+}
+
+/// `raised`, a phase's own result, with the errors it logged
+/// ([`logged_errors`]): a phase that logged an error and then raised reports
+/// both, the logged error after a `;` (`generate.md`, "When a phase fails"),
+/// because the skipped object is often what broke the later one (D1: a
+/// malformed objective a rule references failed `docs` on the reference and
+/// never named the file).
+fn with_logged(raised: Result<(), String>, workspace: &Workspace) -> Result<(), String> {
+    match (raised, logged_errors(workspace)) {
+        (Err(raised), Err(logged)) => Err(format!("{raised}; {logged}")),
+        (Err(raised), Ok(())) => Err(raised),
+        (Ok(()), logged) => logged,
+    }
+}
+
+/// Writes the exports of `targets`, one after another: the ones before a
+/// failure are on disk.
+fn exports_phase(
+    changes: &mut Changes,
+    targets: &[Target],
+    workspace: &Workspace,
+    settings: &Settings,
+    vocabularies: &Vocabularies,
+) -> Result<(), String> {
+    let mut outputs = Vec::new();
+    for target in targets {
+        match export(*target, workspace.index(), settings, vocabularies) {
+            Ok(output) => outputs.push(output),
+            Err(PhaseError { detail }) => {
+                write(changes, &outputs)?;
+                return Err(detail);
+            }
+        }
+    }
+    write(changes, &outputs)
+}
+
+/// Whether the phase `name` reads the object registry: a malformed object
+/// file fails it ([`logged_errors`]). `snippets` reads the templates only.
+fn reads_registry(name: &str) -> bool {
+    matches!(
+        name,
+        "docs" | "exports" | "schemas" | "templates" | "vocabs"
+    )
 }
 
 /// Writes `outputs`, as one phase's work.
@@ -251,19 +350,8 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
     let vocabularies = Vocabularies::bundled();
     let targets: Vec<Target> = target.map_or_else(|| Target::ALL.to_vec(), |one| vec![one]);
     let phase = run_phase(&name, cx.cwd, &root, |changes| {
-        let mut outputs = Vec::new();
-        for target in &targets {
-            match export(*target, workspace.index(), &settings, &vocabularies) {
-                Ok(output) => outputs.push(output),
-                Err(PhaseError { detail }) => {
-                    // The exports are written one after another: the
-                    // ones before a failure are on disk.
-                    write(changes, &outputs)?;
-                    return Err(detail);
-                }
-            }
-        }
-        write(changes, &outputs)
+        let raised = exports_phase(changes, &targets, &workspace, &settings, &vocabularies);
+        with_logged(raised, &workspace)
     });
     match phase.error {
         Some(detail) => phase_failed(
@@ -282,6 +370,10 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
         }
     }
 }
+
+/// The values `--flavor` takes, as the help spells them; `azure-devops`
+/// is read as `azure_devops` too.
+const FLAVORS: [&str; 4] = ["generic", "github", "gitlab", "azure_devops"];
 
 /// The page family a `generate docs` subcommand writes, or the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -469,6 +561,22 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         failure.argument = Some("--changed".into());
         return Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
     }
+    // A flavour no forge has is a usage error before anything is read (D8:
+    // it failed the docs phase with `command_failed`, exit 1).
+    if let Some(flavor) = args.flavor.as_deref().filter(|name| !name.is_empty())
+        && Flavor::from_name(flavor).is_none()
+    {
+        return Report::usage(
+            &command,
+            format!(
+                "Unknown docs flavor `{flavor}`: choose generic, github, gitlab or azure_devops"
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "--flavor",
+            Some(flavor),
+            &FLAVORS,
+        );
+    }
     let workspace = match workspace_in_step(&command, "docs", "docs", Vec::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
@@ -476,7 +584,8 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
     let root = workspace.root().to_path_buf();
     let mut run = DocsRun::default();
     let phase = run_phase("docs", cx.cwd, &root, |changes| {
-        docs_phase(args, &workspace, cx, &mut run, changes)
+        let raised = docs_phase(args, &workspace, cx, &mut run, changes);
+        with_logged(raised, &workspace)
     });
     let warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
     if let Some(detail) = phase.error {
@@ -888,30 +997,11 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
     };
     let root = workspace.root().to_path_buf();
     let dir = Settings::new(workspace.configuration(), &root).dir;
+    // Like a phase of `generate`, the explorer fails on an object file the
+    // index could not load, after its own error if it has one (D1).
     let phase = run_phase("explorer", cx.cwd, &root, |changes| {
-        std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-        // Open pull requests' objects, previewed (`inflight_preview`).
-        let shards = inflight::load(&root.join(".opentide").join("inflight"));
-        let index = inflight::overlay(workspace.index(), &shards);
-        let generated_at = now_iso();
-        let outputs = explorer::outputs(&index, &dir, &generated_at)
-            .map_err(|PhaseError { detail }| detail)?;
-        write(changes, &outputs)?;
-        let visibility_path = dir.join(explorer::VISIBILITY);
-        if options.include_visibility {
-            let report = visibility_report(&workspace, &index, &root);
-            let document = explorer::visibility(report, &generated_at, &tlp);
-            write(
-                changes,
-                &[Output::text(visibility_path, document.to_compact())],
-            )?;
-        } else if visibility_path.is_file() {
-            // Opt-in per run: an inventory an earlier run wrote is not published again.
-            changes
-                .remove(&visibility_path)
-                .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
-        }
-        Ok(())
+        let raised = explorer_phase(changes, &workspace, &root, &dir, options, &tlp);
+        with_logged(raised, &workspace)
     });
     match phase.error {
         Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
@@ -921,6 +1011,41 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
             vec![phase.step],
         ),
     }
+}
+
+/// The explorer's files under `dir`, and its visibility inventory when
+/// `options` ask for it.
+fn explorer_phase(
+    changes: &mut Changes,
+    workspace: &Workspace,
+    root: &Path,
+    dir: &Path,
+    options: &ExplorerOptions,
+    tlp: &str,
+) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    // Open pull requests' objects, previewed (`inflight_preview`).
+    let shards = inflight::load(&root.join(".opentide").join("inflight"));
+    let index = inflight::overlay(workspace.index(), &shards);
+    let generated_at = now_iso();
+    let outputs =
+        explorer::outputs(&index, dir, &generated_at).map_err(|PhaseError { detail }| detail)?;
+    write(changes, &outputs)?;
+    let visibility_path = dir.join(explorer::VISIBILITY);
+    if options.include_visibility {
+        let report = visibility_report(workspace, &index, root);
+        let document = explorer::visibility(report, &generated_at, tlp);
+        write(
+            changes,
+            &[Output::text(visibility_path, document.to_compact())],
+        )?;
+    } else if visibility_path.is_file() {
+        // Opt-in per run: an inventory an earlier run wrote is not published again.
+        changes
+            .remove(&visibility_path)
+            .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
+    }
+    Ok(())
 }
 
 /// The object files the change set touches (`changed_object_yaml_paths`):
@@ -1235,12 +1360,16 @@ pub(crate) fn phase_outputs(
 }
 
 /// Runs `phases` (each `schemas`, `templates`, `vocabs` or `snippets`) on `workspace`
-/// in order, each as a checklist step, until one fails.
+/// in order, each as a checklist step, until one fails. With `loaded`, a
+/// phase that reads the registry also fails on an object file the index
+/// could not load (`logged_errors`): `opentide generate` does, `opentide
+/// new` (which only fills in a missing template) does not.
 pub fn run_phases(
     phases: &[String],
     workspace: &Workspace,
     cwd: &Path,
     version: &str,
+    loaded: bool,
 ) -> PhasesRun {
     let root = workspace.root().to_path_buf();
     let mut steps = Vec::new();
@@ -1252,7 +1381,13 @@ pub fn run_phases(
             phase.as_str()
         };
         let ran = run_phase(name, cwd, &root, |changes| {
-            write(changes, &phase_outputs(phase, workspace, &root, version)?)
+            let raised = phase_outputs(phase, workspace, &root, version)
+                .and_then(|outputs| write(changes, &outputs));
+            if loaded && reads_registry(phase) {
+                with_logged(raised, workspace)
+            } else {
+                raised
+            }
         });
         steps.push(ran.step);
         if let Some(detail) = ran.error {
@@ -1300,7 +1435,8 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let mut steps = Vec::new();
     let mut run = DocsRun::default();
     let docs = run_phase("docs", cx.cwd, &root, |changes| {
-        docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes)
+        let raised = docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes);
+        with_logged(raised, &workspace)
     });
     steps.push(docs.step);
     if let Some(detail) = docs.error {
@@ -1309,17 +1445,8 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let settings = Settings::new(workspace.configuration(), &root);
     let vocabularies = Vocabularies::bundled();
     let exports = run_phase("exports", cx.cwd, &root, |changes| {
-        let mut outputs = Vec::new();
-        for target in Target::ALL {
-            match export(target, workspace.index(), &settings, &vocabularies) {
-                Ok(output) => outputs.push(output),
-                Err(PhaseError { detail }) => {
-                    write(changes, &outputs)?;
-                    return Err(detail);
-                }
-            }
-        }
-        write(changes, &outputs)
+        let raised = exports_phase(changes, &Target::ALL, &workspace, &settings, &vocabularies);
+        with_logged(raised, &workspace)
     });
     steps.push(exports.step);
     if let Some(detail) = exports.error {
@@ -1329,7 +1456,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
         .iter()
         .map(|phase| (*phase).to_owned())
         .collect();
-    let run = run_phases(&named, &workspace, cx.cwd, version);
+    let run = run_phases(&named, &workspace, cx.cwd, version, true);
     steps.extend(run.steps);
     if let Some((phase, detail)) = run.failed {
         return phase_failed(command, &phase, &detail, Vec::new(), steps);
@@ -1394,7 +1521,7 @@ fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
-    let run = run_phases(names, &workspace, cx.cwd, version);
+    let run = run_phases(names, &workspace, cx.cwd, version, true);
     if let Some((phase, detail)) = run.failed {
         return phase_failed(command, &phase, &detail, Vec::new(), run.steps);
     }
@@ -1790,6 +1917,198 @@ mod tests {
         let written = walk(&absolute);
         assert!(written > 1);
         assert_eq!(report.steps[0].count, Some(written));
+    }
+
+    #[test]
+    fn generate_outside_a_workspace_writes_nothing() {
+        // D17 (smoke test): `opentide generate` in a folder with no
+        // `.opentide/` or `objects/` wrote 20 files there and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let stray = OsFs.resolve(dir.path());
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &stray,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let reports = [
+            phases(&[], &cx, "0.0.0"),
+            phases(&["schemas".to_owned()], &cx, "0.0.0"),
+            docs(&DocsArgs::default(), &cx),
+            exports(None, &cx),
+        ];
+        for report in reports {
+            assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
+            let failure = report.outcome.failure.as_ref().unwrap();
+            assert_eq!(failure.code, "workspace_not_found");
+            assert!(
+                report.outcome.message.starts_with("No workspace at "),
+                "{}",
+                report.outcome.message
+            );
+        }
+        assert_eq!(walk(&stray), 0, "nothing is written");
+        assert_eq!(std::fs::read_dir(&stray).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_malformed_object_file_fails_the_first_phase_that_reads_the_registry() {
+        // D1 (smoke test): `generate` skipped a rule file that does not
+        // parse, said "Generated 63 files" and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::write(root.join("objects/rules/broken.yaml"), "name: [\n").unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let phase_of = |report: &Report| {
+            report
+                .outcome
+                .data
+                .iter()
+                .find(|(key, _)| key == "phase")
+                .map(|(_, value)| value.clone())
+        };
+        let all = phases(&[], &cx, "0.0.0");
+        assert_eq!(all.outcome.exit_code, 1, "{}", all.outcome.message);
+        assert!(
+            all.outcome.message.starts_with(
+                "docs: logged an error: malformed_object_yaml (path=objects/rules/broken.yaml, error="
+            ),
+            "{}",
+            all.outcome.message
+        );
+        assert_eq!(phase_of(&all), Some(Json::str("docs")));
+        let named: Vec<String> = ["schemas", "templates", "vocabs", "snippets"]
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        let editor = phases(&named, &cx, "0.0.0");
+        assert_eq!(editor.outcome.exit_code, 1, "{}", editor.outcome.message);
+        assert_eq!(phase_of(&editor), Some(Json::str("schemas")));
+        assert_eq!(editor.steps.len(), 1, "it stops at schemas");
+        for report in [docs(&DocsArgs::default(), &cx), exports(None, &cx)] {
+            assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
+        }
+        // `generate explorer` reads the catalogue too (review round 2).
+        let explored = explorer(&ExplorerOptions::default(), &cx);
+        assert_eq!(
+            explored.outcome.exit_code, 1,
+            "{}",
+            explored.outcome.message
+        );
+        assert!(
+            explored
+                .outcome
+                .message
+                .starts_with("explorer: logged an error: malformed_object_yaml"),
+            "{}",
+            explored.outcome.message
+        );
+        let templates = phases(&["templates".to_owned()], &cx, "0.0.0");
+        assert_eq!(phase_of(&templates), Some(Json::str("templates")));
+        // A second broken file: counted, the first named.
+        std::fs::write(root.join("objects/rules/also.yaml"), "a: b: c\n").unwrap();
+        let two = phases(&["schemas".to_owned()], &cx, "0.0.0");
+        assert!(
+            two.outcome
+                .message
+                .starts_with("schemas: logged 2 errors, first: "),
+            "{}",
+            two.outcome.message
+        );
+    }
+
+    #[test]
+    fn a_phase_that_raises_also_reports_the_error_it_logged() {
+        // D1 (review): a malformed objective that a rule references failed
+        // `docs` on the dangling reference alone, and never named the file
+        // that broke it; `generate.md` promises both, joined with `;`.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::create_dir_all(root.join("objects/objectives")).unwrap();
+        let corpus = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current/Objects");
+        let rule =
+            std::fs::read_to_string(corpus.join("Detection Rules/rule-0001-sentinel-kql.yaml"))
+                .unwrap();
+        std::fs::write(root.join("objects/rules/rule.yaml"), rule).unwrap();
+        // The objective the rule names, cut short so it does not parse.
+        std::fs::write(
+            root.join("objects/objectives/objective.yaml"),
+            "name: Credential access\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  tlp: [\n",
+        )
+        .unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        for report in [docs(&DocsArgs::default(), &cx), phases(&[], &cx, "0.0.0")] {
+            let message = &report.outcome.message;
+            assert_eq!(report.outcome.exit_code, 1, "{message}");
+            let (raised, logged) = message.split_once("; ").unwrap_or_else(|| {
+                panic!("one error where two were due: {message}");
+            });
+            assert!(
+                raised.starts_with("docs: ") && raised.contains("does not exist"),
+                "{message}"
+            );
+            assert!(
+                logged.starts_with(
+                    "logged an error: malformed_object_yaml (path=objects/objectives/objective.yaml, "
+                ),
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_docs_flavor_is_a_usage_error() {
+        // D8 (smoke test): `generate docs --flavor bogus` failed the phase,
+        // exit 1 `command_failed`, naming `azure-devops`.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects")).unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let args = DocsArgs {
+            flavor: Some("gitlabb".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&args, &cx);
+        assert_eq!(report.outcome.exit_code, 2);
+        let failure = report.outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, "usage_invalid_choice");
+        assert_eq!(failure.argument.as_deref(), Some("--flavor"));
+        assert_eq!(failure.suggestion.as_deref(), Some("gitlab"));
+        assert!(report.outcome.message.contains("azure_devops"));
+        assert!(!root.join("docs").exists(), "nothing is written");
+        for name in ["azure-devops", "azure_devops", "github"] {
+            let args = DocsArgs {
+                flavor: Some(name.into()),
+                ..DocsArgs::default()
+            };
+            assert_eq!(docs(&args, &cx).outcome.exit_code, 0, "{name}");
+        }
     }
 
     /// The files under `dir`, at any depth.
