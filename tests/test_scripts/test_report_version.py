@@ -14,11 +14,17 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # Python 3.10 is supported: the dev environment carries tomli
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -106,8 +112,6 @@ def test_the_script_writes_a_config_cargo_reads(
     script = _script()
     monkeypatch.setattr(script, "CONFIG", tmp_path / ".cargo" / "config.toml")
     script.main(["1.0.0rc1"])
-    import tomllib
-
     config = tomllib.loads(script.CONFIG.read_text(encoding="utf-8"))
     assert config["env"] == {"OPENTIDE_BUILD_VERSION": "1.0.0-rc.1"}
 
