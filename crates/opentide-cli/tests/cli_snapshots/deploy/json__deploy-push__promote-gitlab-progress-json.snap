@@ -77,7 +77,10 @@ exit: 1
     "tenants": 1,
     "update": 0,
     "upsert": 0
-  }
+  },
+  "warnings": [
+    "This push's diff starts at its last commit's parent: CI_COMMIT_BEFORE_SHA is not set. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file"
+  ]
 }
 
 ━━━ stderr

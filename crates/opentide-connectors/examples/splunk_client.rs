@@ -124,7 +124,7 @@ fn request(status: &str) -> Result<(String, Operation, Object), Failed> {
         );
         return Ok((name, Operation::Delete, named));
     }
-    let writes = compile::compile(&cx, &rule, tenant, clock)?;
+    let writes = compile::compile(&cx, &rule, tenant, Some(clock))?;
     let compiled = writes
         .first()
         .and_then(|create| create.body.get("name"))

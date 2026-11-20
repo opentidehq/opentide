@@ -32,16 +32,9 @@ exit: 0
   "payloads": {
     "splunk": [
       {
-        "api_request": {
-          "query": "index=main EventCode=4688",
-          "scheduling": {
-            "schedule": {
-              "cron": "0 * * * *"
-            }
-          },
-          "status": "REMOVED"
-        },
+        "api_request": [],
         "name": "Splunk retire rule",
+        "tenant": "lab",
         "uuid": "00000000-0000-4000-8047-000000000042"
       }
     ]

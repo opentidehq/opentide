@@ -172,8 +172,8 @@ impl DeployPlan {
 
 impl Workspace {
     /// Plans a deploy (`opentide deploy --dry-run`): the rules the
-    /// strategies select, the tenants each reaches, and the request bodies a
-    /// real run would send. Nothing is sent and nothing is written.
+    /// strategies select, the tenants each reaches, and the requests a real
+    /// run would send. Nothing is sent and nothing is written.
     ///
     /// ```
     /// use opentide::deploy::{DeployPlanOptions, Strategy};

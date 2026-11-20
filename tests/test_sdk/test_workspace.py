@@ -148,7 +148,10 @@ def test_catalog_and_coverage(ws: Workspace, tide_corpus_repo: Path) -> None:
 def test_deploy_plan_is_the_dry_run(ws: Workspace, tide_corpus_repo: Path) -> None:
     plan = ws.deploy_plan(strategies=["PREVIEW"])
     assert isinstance(plan, DeployPlan)
-    assert plan.ok
+    # The corpus's CrowdStrike rule sets `trigger: event`, which CrowdStrike's
+    # deploy refuses: the plan compiles its request and reports it (#1712).
+    assert not plan.ok
+    assert [found["platform"] for found in plan.document["diagnostics"]] == ["crowdstrike"]
     assert plan.document["dry_run"] is True
     assert plan.summary is not None
     cli = run_json(

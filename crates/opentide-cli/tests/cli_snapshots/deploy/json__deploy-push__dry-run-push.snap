@@ -32,16 +32,37 @@ exit: 0
   "payloads": {
     "splunk": [
       {
-        "api_request": {
-          "query": "index=main EventCode=4688",
-          "scheduling": {
-            "schedule": {
-              "cron": "0 * * * *"
-            }
+        "api_request": [
+          {
+            "body": {
+              "name": "Splunk create rule",
+              "search": "index=main EventCode=4688"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
           },
-          "status": "STAGING"
-        },
+          {
+            "body": {
+              "alert.managedBy": "",
+              "alert.severity": 5,
+              "cron_schedule": "0 * * * *",
+              "description": "A changed rule the splunk stand-in tenant receives in a deploy that sends.\n\nopentide rule 00000000-0000-4000-8047-000000000041",
+              "search": "index=main EventCode=4688"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
+          },
+          {
+            "body": {
+              "is_scheduled": 1,
+              "search": "index=main EventCode=4688"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
+          }
+        ],
         "name": "Splunk create rule",
+        "tenant": "lab",
         "uuid": "00000000-0000-4000-8047-000000000041"
       }
     ]
@@ -73,6 +94,7 @@ exit: 0
     }
   },
   "warnings": [
+    "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file",
     "a real deploy would need $SPLUNK_TOKEN, which is unset"
   ]
 }
