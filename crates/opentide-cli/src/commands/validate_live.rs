@@ -1704,7 +1704,7 @@ async fn generic(
                 request.timeout = seconds(timeout);
                 request.index = item.index.clone();
                 tracing::info!(
-                    mdr_name = rule.name.as_str(),
+                    rule_name = rule.name.as_str(),
                     uuid = rule.uuid.as_str(),
                     tenant = tenant.name.as_str(),
                     "validating_query"
@@ -1876,7 +1876,7 @@ fn answered(
         );
     }
     if found.errors.is_empty() {
-        tracing::info!(mdr_name = rule.name.as_str(), tenant, "valid_query");
+        tracing::info!(rule_name = rule.name.as_str(), tenant, "valid_query");
     }
     RuleCheck {
         rule: rule.uuid.clone(),
@@ -1956,7 +1956,7 @@ async fn google_secops(
         let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
         for rule in rules {
             tracing::info!(
-                mdr_name = rule.name.as_str(),
+                rule_name = rule.name.as_str(),
                 uuid = rule.uuid.as_str(),
                 tenant = tenant.name.as_str(),
                 "validating_query"
@@ -1996,7 +1996,7 @@ async fn google_secops(
                     }
                     if check.errors.is_empty() {
                         tracing::info!(
-                            mdr_name = rule.name.as_str(),
+                            rule_name = rule.name.as_str(),
                             tenant = tenant.name.as_str(),
                             "valid_query"
                         );

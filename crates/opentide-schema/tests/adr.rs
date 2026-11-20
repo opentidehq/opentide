@@ -1,4 +1,4 @@
-//! The ADR's metadata-key table and `keys::ALL` list the same 23 keys, each
+//! The ADR's metadata-key table and `keys::ALL` list the same 22 keys, each
 //! row with its attribute and an example (issue #807, acceptance criteria).
 
 use std::path::Path;
@@ -32,7 +32,7 @@ fn key_rows(text: &str) -> Vec<Vec<String>> {
 #[test]
 fn the_table_lists_every_key_once_with_attribute_and_example() {
     let rows = key_rows(&adr());
-    assert_eq!(rows.len(), 23, "rows: {rows:#?}");
+    assert_eq!(rows.len(), 22, "rows: {rows:#?}");
     for (index, (row, key)) in rows.iter().zip(keys::ALL).enumerate() {
         assert_eq!(row.len(), 6, "row {}: {row:?}", index + 1);
         assert_eq!(row[0], (index + 1).to_string());

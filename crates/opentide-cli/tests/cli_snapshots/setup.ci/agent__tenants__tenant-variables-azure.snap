@@ -29,11 +29,6 @@ exit: 0
 #   ELASTIC_API_KEY
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
-#   EXABEAM_CLIENT_ID
-#   EXABEAM_CLIENT_SECRET
-#   GOOGLE_SECOPS_CREDENTIALS
-#   GRAVITYZONE_API_KEY
-#   GRAYLOG_TOKEN
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET
@@ -44,7 +39,6 @@ exit: 0
 #   SPLUNK_PORT
 #   SPLUNK_TOKEN
 #   SPLUNK_URL
-#   SYSDIG_SECURE_API_TOKEN
 trigger:
   branches:
     include:
@@ -108,7 +102,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- CBC_ORG_KEY CBC_TOKEN CBC_URL; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -116,36 +110,9 @@ stages:
               git checkout FETCH_HEAD -- .opentide/configurations
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/carbon_black_cloud.toml; then if [ -z "$CBC_TOKEN" ]; then echo skip carbon_black_cloud live query validation CBC_TOKEN; exit 2; else opentide validate query --platform carbon_black_cloud --live --changed; fi; else echo "The default branch has no carbon_black_cloud tenant yet, so no tenant is reviewed. Skipped carbon_black_cloud live query validation without using platform credentials."; fi
             env:
-              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
-              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-              AZURE_WORKSPACE_ID: $(AZURE_WORKSPACE_ID)
               CBC_ORG_KEY: $(CBC_ORG_KEY)
               CBC_TOKEN: $(CBC_TOKEN)
               CBC_URL: $(CBC_URL)
-              CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
-              CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
-              DEFENDER_CLIENT_SECRET: $(DEFENDER_CLIENT_SECRET)
-              ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
-              HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
-              MDE_CLIENT_ID: $(MDE_CLIENT_ID)
-              MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
-              MDE_TENANT_ID: $(MDE_TENANT_ID)
-              S1_API_TOKEN: $(S1_API_TOKEN)
-              SENTINEL_ONE_API_TOKEN: $(SENTINEL_ONE_API_TOKEN)
-              SPLUNK_APP: $(SPLUNK_APP)
-              SPLUNK_PORT: $(SPLUNK_PORT)
-              SPLUNK_TOKEN: $(SPLUNK_TOKEN)
-              SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
       - job: validate_query_defender-for-endpoint
         displayName: Validate query (defender_for_endpoint)
         steps:
@@ -159,7 +126,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- DEFENDER_CLIENT_SECRET MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -167,36 +134,10 @@ stages:
               git checkout FETCH_HEAD -- .opentide/configurations
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/defender_for_endpoint.toml; then if [ -z "$DEFENDER_CLIENT_SECRET" ]; then echo skip defender_for_endpoint live query validation DEFENDER_CLIENT_SECRET; exit 2; else opentide validate query --platform defender_for_endpoint --live --changed; fi; else echo "The default branch has no defender_for_endpoint tenant yet, so no tenant is reviewed. Skipped defender_for_endpoint live query validation without using platform credentials."; fi
             env:
-              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
-              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-              AZURE_WORKSPACE_ID: $(AZURE_WORKSPACE_ID)
-              CBC_ORG_KEY: $(CBC_ORG_KEY)
-              CBC_TOKEN: $(CBC_TOKEN)
-              CBC_URL: $(CBC_URL)
-              CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
-              CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
               DEFENDER_CLIENT_SECRET: $(DEFENDER_CLIENT_SECRET)
-              ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
-              HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
               MDE_CLIENT_ID: $(MDE_CLIENT_ID)
               MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
               MDE_TENANT_ID: $(MDE_TENANT_ID)
-              S1_API_TOKEN: $(S1_API_TOKEN)
-              SENTINEL_ONE_API_TOKEN: $(SENTINEL_ONE_API_TOKEN)
-              SPLUNK_APP: $(SPLUNK_APP)
-              SPLUNK_PORT: $(SPLUNK_PORT)
-              SPLUNK_TOKEN: $(SPLUNK_TOKEN)
-              SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
       - job: validate_query_elastic
         displayName: Validate query (elastic)
         steps:
@@ -210,7 +151,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -218,36 +159,9 @@ stages:
               git checkout FETCH_HEAD -- .opentide/configurations
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/elastic.toml; then if [ -z "$ELASTIC_API_KEY" ]; then echo skip elastic live query validation ELASTIC_API_KEY; exit 2; else opentide validate query --platform elastic --live --changed; fi; else echo "The default branch has no elastic tenant yet, so no tenant is reviewed. Skipped elastic live query validation without using platform credentials."; fi
             env:
-              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
-              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-              AZURE_WORKSPACE_ID: $(AZURE_WORKSPACE_ID)
-              CBC_ORG_KEY: $(CBC_ORG_KEY)
-              CBC_TOKEN: $(CBC_TOKEN)
-              CBC_URL: $(CBC_URL)
-              CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
-              CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
-              DEFENDER_CLIENT_SECRET: $(DEFENDER_CLIENT_SECRET)
               ELASTIC_API_KEY: $(ELASTIC_API_KEY)
               ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
               ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
-              HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
-              MDE_CLIENT_ID: $(MDE_CLIENT_ID)
-              MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
-              MDE_TENANT_ID: $(MDE_TENANT_ID)
-              S1_API_TOKEN: $(S1_API_TOKEN)
-              SENTINEL_ONE_API_TOKEN: $(SENTINEL_ONE_API_TOKEN)
-              SPLUNK_APP: $(SPLUNK_APP)
-              SPLUNK_PORT: $(SPLUNK_PORT)
-              SPLUNK_TOKEN: $(SPLUNK_TOKEN)
-              SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
       - job: validate_query_sentinel
         displayName: Validate query (sentinel)
         steps:
@@ -261,7 +175,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -274,31 +188,6 @@ stages:
               AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
               AZURE_TENANT_ID: $(AZURE_TENANT_ID)
               AZURE_WORKSPACE_ID: $(AZURE_WORKSPACE_ID)
-              CBC_ORG_KEY: $(CBC_ORG_KEY)
-              CBC_TOKEN: $(CBC_TOKEN)
-              CBC_URL: $(CBC_URL)
-              CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
-              CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
-              DEFENDER_CLIENT_SECRET: $(DEFENDER_CLIENT_SECRET)
-              ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
-              HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
-              MDE_CLIENT_ID: $(MDE_CLIENT_ID)
-              MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
-              MDE_TENANT_ID: $(MDE_TENANT_ID)
-              S1_API_TOKEN: $(S1_API_TOKEN)
-              SENTINEL_ONE_API_TOKEN: $(SENTINEL_ONE_API_TOKEN)
-              SPLUNK_APP: $(SPLUNK_APP)
-              SPLUNK_PORT: $(SPLUNK_PORT)
-              SPLUNK_TOKEN: $(SPLUNK_TOKEN)
-              SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
       - job: validate_query_sentinel-one
         displayName: Validate query (sentinel_one)
         steps:
@@ -312,7 +201,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- S1_API_TOKEN SENTINEL_ONE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -320,36 +209,8 @@ stages:
               git checkout FETCH_HEAD -- .opentide/configurations
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/sentinel_one.toml; then if [ -z "$S1_API_TOKEN" ]; then echo skip sentinel_one live query validation S1_API_TOKEN; exit 2; else opentide validate query --platform sentinel_one --live --changed; fi; else echo "The default branch has no sentinel_one tenant yet, so no tenant is reviewed. Skipped sentinel_one live query validation without using platform credentials."; fi
             env:
-              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
-              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-              AZURE_WORKSPACE_ID: $(AZURE_WORKSPACE_ID)
-              CBC_ORG_KEY: $(CBC_ORG_KEY)
-              CBC_TOKEN: $(CBC_TOKEN)
-              CBC_URL: $(CBC_URL)
-              CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
-              CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
-              DEFENDER_CLIENT_SECRET: $(DEFENDER_CLIENT_SECRET)
-              ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
-              HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
-              MDE_CLIENT_ID: $(MDE_CLIENT_ID)
-              MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
-              MDE_TENANT_ID: $(MDE_TENANT_ID)
               S1_API_TOKEN: $(S1_API_TOKEN)
               SENTINEL_ONE_API_TOKEN: $(SENTINEL_ONE_API_TOKEN)
-              SPLUNK_APP: $(SPLUNK_APP)
-              SPLUNK_PORT: $(SPLUNK_PORT)
-              SPLUNK_TOKEN: $(SPLUNK_TOKEN)
-              SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
       - job: validate_query_splunk
         displayName: Validate query (splunk)
         steps:
@@ -363,7 +224,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -371,36 +232,10 @@ stages:
               git checkout FETCH_HEAD -- .opentide/configurations
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/splunk.toml; then if [ -z "$SPLUNK_TOKEN" ]; then echo skip splunk live query validation SPLUNK_TOKEN; exit 2; else opentide validate query --platform splunk --live --changed; fi; else echo "The default branch has no splunk tenant yet, so no tenant is reviewed. Skipped splunk live query validation without using platform credentials."; fi
             env:
-              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
-              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-              AZURE_WORKSPACE_ID: $(AZURE_WORKSPACE_ID)
-              CBC_ORG_KEY: $(CBC_ORG_KEY)
-              CBC_TOKEN: $(CBC_TOKEN)
-              CBC_URL: $(CBC_URL)
-              CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
-              CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
-              DEFENDER_CLIENT_SECRET: $(DEFENDER_CLIENT_SECRET)
-              ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
-              HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
-              MDE_CLIENT_ID: $(MDE_CLIENT_ID)
-              MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
-              MDE_TENANT_ID: $(MDE_TENANT_ID)
-              S1_API_TOKEN: $(S1_API_TOKEN)
-              SENTINEL_ONE_API_TOKEN: $(SENTINEL_ONE_API_TOKEN)
               SPLUNK_APP: $(SPLUNK_APP)
               SPLUNK_PORT: $(SPLUNK_PORT)
               SPLUNK_TOKEN: $(SPLUNK_TOKEN)
               SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
 
   - stage: Generate
     displayName: Generate
@@ -436,7 +271,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
@@ -459,11 +294,6 @@ stages:
               ELASTIC_API_KEY: $(ELASTIC_API_KEY)
               ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
               ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
               HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
               MDE_CLIENT_ID: $(MDE_CLIENT_ID)
               MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
@@ -474,7 +304,6 @@ stages:
               SPLUNK_PORT: $(SPLUNK_PORT)
               SPLUNK_TOKEN: $(SPLUNK_TOKEN)
               SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
       - job: inflight_shards
         displayName: Inflight preview shards
         condition: and(eq(variables['Build.Reason'], 'PullRequest'), eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/main'))
@@ -571,7 +400,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY EXABEAM_CLIENT_ID EXABEAM_CLIENT_SECRET GOOGLE_SECOPS_CREDENTIALS GRAVITYZONE_API_KEY GRAYLOG_TOKEN HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET DEFENDER_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID S1_API_TOKEN SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               git config user.email "azure-pipelines@opentide.local"
               git config user.name "azure-pipelines"
@@ -605,11 +434,6 @@ stages:
               ELASTIC_API_KEY: $(ELASTIC_API_KEY)
               ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
               ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
-              EXABEAM_CLIENT_ID: $(EXABEAM_CLIENT_ID)
-              EXABEAM_CLIENT_SECRET: $(EXABEAM_CLIENT_SECRET)
-              GOOGLE_SECOPS_CREDENTIALS: $(GOOGLE_SECOPS_CREDENTIALS)
-              GRAVITYZONE_API_KEY: $(GRAVITYZONE_API_KEY)
-              GRAYLOG_TOKEN: $(GRAYLOG_TOKEN)
               HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
               MDE_CLIENT_ID: $(MDE_CLIENT_ID)
               MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
@@ -620,7 +444,6 @@ stages:
               SPLUNK_PORT: $(SPLUNK_PORT)
               SPLUNK_TOKEN: $(SPLUNK_TOKEN)
               SPLUNK_URL: $(SPLUNK_URL)
-              SYSDIG_SECURE_API_TOKEN: $(SYSDIG_SECURE_API_TOKEN)
           - script: |
               set -e
               git config user.email "azure-pipelines@opentide.local"

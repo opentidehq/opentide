@@ -92,26 +92,12 @@ impl Default for PromotionSettings {
     }
 }
 
-/// `[debug]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+/// `[debug]`: no key. `mdr_test_uuids` and `ssl_enabled` were retired, as
+/// `proxy_enabled` was before them: nothing read them, so each is an unknown
+/// key.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct DebugSettings {
-    /// UUIDs of rules usable for debugging.
-    #[serde(default)]
-    pub mdr_test_uuids: Vec<String>,
-    /// Whether TLS certificates are verified in debug mode.
-    #[serde(default = "yes")]
-    pub ssl_enabled: bool,
-}
-
-impl Default for DebugSettings {
-    fn default() -> Self {
-        Self {
-            mdr_test_uuids: Vec::new(),
-            ssl_enabled: true,
-        }
-    }
-}
+pub struct DebugSettings {}
 
 /// Merged `deployment.toml`.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]

@@ -616,7 +616,7 @@ platform_block! {
         /// Known false positives.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub false_positives: Option<Vec<String>>,
-        /// Rule tags, after `OpenTide` and the tenant tags.
+        /// Rule tags, after `opentide` and the tenant tags.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub tags: Option<Vec<String>>,
         /// Exception lists to attach.

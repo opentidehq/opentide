@@ -6,7 +6,7 @@ args: opentide info vocab
 exit: 0
 
 ━━━ stdout
-Vocabularies (35)
+Vocabularies (34)
 Name                   Entries  Removed  Latest revision  Staged
 ---------------------  -------  -------  ---------------  ------
 actors                    1309        0  1.2              yes
@@ -38,7 +38,6 @@ sectors                     36        0  1.0              no
 severity                     6        0  1.0              no
 signal.entities             28        0  1.0              yes
 sophistication               7        0  1.0              no
-stakeholders                10        0  1.0              no
 surface                    895        0  1.0              yes
 tier                         7        0  1.0              no
 tlp                          5        0  1.0              no

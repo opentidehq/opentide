@@ -272,7 +272,7 @@ exit: 0
             "rule_id": "00000000-0000-4000-8003-000000000009",
             "severity": "high",
             "tags": [
-              "OpenTide"
+              "opentide"
             ],
             "threat": [
               {
