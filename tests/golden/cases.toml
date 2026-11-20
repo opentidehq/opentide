@@ -73,6 +73,12 @@ about = "tide-corpus with one typo `validate --fix` repairs in place (`severity:
 vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
 
+[fixtures.tide-corpus-bad-values]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with values the models do not take: CrowdStrike `trigger: sometimes`, SentinelOne `treat_as_threat: maybe`"
+edits = [{ path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      trigger: verbose\n", replace = "      trigger: sometimes\n" }, { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "      treat_as_threat: Malicious\n", replace = "      treat_as_threat: maybe\n" }]
+
 [fixtures.tide-corpus-splunk-advanced]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -2867,6 +2873,15 @@ command = "validate"
 variant = "typo"
 args = ["validate"]
 fixtures = ["tide-corpus-typo"]
+
+# A value the model does not take: the help writes what the field takes, in
+# YAML's spelling (`false`, not Python's `False`), and `--json` carries it as
+# `context.expected` (#1663 B2: CrowdStrike's `trigger`, deploy's values).
+[[case]]
+command = "validate"
+variant = "bad-values"
+args = ["validate"]
+fixtures = ["tide-corpus-bad-values"]
 
 # 0.24.0: a Splunk block's `advanced` table validates and deploys again
 # (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on

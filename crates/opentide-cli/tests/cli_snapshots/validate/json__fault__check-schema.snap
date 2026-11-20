@@ -27,7 +27,7 @@ findings: 42
   vocab_unknown | error | <WS>/objects/rules/encoded-tunnel-rule-0049.yaml | 9 | 8
   missing_uuid | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml | - | -
   schema_validation | error | <WS>/objects/rules/hidden-loader-rule-0008.yaml | 1 | 1
-  yaml_parse | error | <WS>/objects/rules/hidden-loader-rule-0024.yaml | 44 | 18
+  yaml_parse | error | <WS>/objects/rules/hidden-loader-rule-0024.yaml | 45 | 1
   schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0026.yaml | 1 | 1
   schema_validation | error | <WS>/objects/rules/persistent-loader-rule-0010.yaml | 9 | 13
   invalid_ref | error | <WS>/objects/rules/rapid-injection-rule-0013.yaml | 23 | 18

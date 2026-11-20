@@ -51,7 +51,7 @@ findings: 106
   eql_maxspan_unit | error | <WS>/objects/rules/hidden-dropper-rule-0194.yaml | 100 | 29
   missing_uuid | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml | - | -
   schema_validation | error | <WS>/objects/rules/hidden-loader-rule-0008.yaml | 1 | 1
-  yaml_parse | error | <WS>/objects/rules/hidden-loader-rule-0024.yaml | 44 | 18
+  yaml_parse | error | <WS>/objects/rules/hidden-loader-rule-0024.yaml | 45 | 1
   kql_unknown_table | error | <WS>/objects/rules/hidden-pivot-rule-0041.yaml | 41 | 7
   falco_unknown_event | error | <WS>/objects/rules/lateral-downgrade-rule-0139.yaml | 58 | 18
   schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0026.yaml | 1 | 1

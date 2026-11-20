@@ -295,6 +295,9 @@ pub struct LoadError {
     pub problem: String,
     /// Where the problem is, when the text has a place for it.
     pub mark: Option<Mark>,
+    /// What the parser was reading when it gave up, when that helps more
+    /// than the place it stopped: the `[` or `{` that is never closed.
+    pub note: Option<String>,
 }
 
 impl LoadError {
@@ -303,6 +306,7 @@ impl LoadError {
             kind,
             problem: problem.into(),
             mark,
+            note: None,
         }
     }
 
@@ -667,6 +671,99 @@ fn from_scalar(scalar: Scalar<'_>) -> Value {
     }
 }
 
+/// Whether the `[` or `{` at character `at` of `source` is never closed:
+/// its brackets counted to the end of the text, those in a quoted scalar
+/// or a comment left out. An error inside a collection that closes later
+/// names no bracket (B9). A quote opens a scalar only where a flow item
+/// starts (after `[`, `{`, `,` or `:`), so an apostrophe in a plain
+/// scalar (`[don't, x]`) is text; `''` in a single-quoted scalar is one
+/// quote.
+fn never_closes(source: &str, at: usize) -> bool {
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut comment = false;
+    let mut previous = ' ';
+    // The last character outside blanks, a quoted scalar and a comment.
+    let mut significant = ' ';
+    let mut characters = source.chars().skip(at).peekable();
+    while let Some(character) = characters.next() {
+        if comment {
+            comment = character != '\n' && character != '\r';
+        } else if let Some(open) = quote {
+            if character == open {
+                if open == '\'' && characters.peek() == Some(&'\'') {
+                    characters.next();
+                } else {
+                    quote = None;
+                    significant = character;
+                }
+            } else if open == '"' && character == '\\' {
+                characters.next();
+            }
+        } else {
+            match character {
+                '[' | '{' => depth += 1,
+                ']' | '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return false;
+                    }
+                }
+                '\'' | '"' if matches!(significant, '[' | '{' | ',' | ':') => {
+                    quote = Some(character);
+                }
+                '#' if previous.is_whitespace() => comment = true,
+                _ => {}
+            }
+            if !character.is_whitespace() && !comment && quote.is_none() {
+                significant = character;
+            }
+        }
+        previous = character;
+    }
+    true
+}
+
+/// The tab the scanner means when it reports one at `from`: the first tab
+/// at or after `from` with only blanks before it on its line, within the
+/// next lines. The scanner reports a tab used for indentation where it was
+/// reading on the line before (B9: `4:14` for a tab at `5:1`).
+fn tab_after(source: &str, from: Mark) -> Option<Mark> {
+    let mut line = from.line();
+    let mut column = from.column();
+    let mut previous = '\0';
+    let mut indent = false;
+    let mut breaks = 0;
+    for (offset, character) in source.chars().skip(from.index()).enumerate() {
+        match character {
+            '\t' if indent || offset == 0 => {
+                return Some(Mark::new(from.index() + offset, line, column));
+            }
+            // The `\n` of a CRLF: the line was counted at its `\r`.
+            '\n' if previous == '\r' => {
+                previous = character;
+                continue;
+            }
+            '\n' | '\r' => {
+                breaks += 1;
+                if breaks > 2 {
+                    return None;
+                }
+                line += 1;
+                column = 1;
+                indent = true;
+                previous = character;
+                continue;
+            }
+            ' ' | '\t' => {}
+            _ => indent = false,
+        }
+        column += 1;
+        previous = character;
+    }
+    None
+}
+
 /// The first character YAML 1.2 does not allow in a stream (§5.1: C0
 /// controls other than tab and line breaks, DEL, C1 controls other than NEL,
 /// U+FFFE and U+FFFF), with its position. saphyr reads them as text.
@@ -698,6 +795,35 @@ fn non_printable(source: &str) -> Option<(char, Mark)> {
 }
 
 impl Builder {
+    /// The parser's `error`, placed where a person looks, with what it was
+    /// reading (B9): a tab the scanner reports at the end of the line before
+    /// it moves onto the tab, and a `[` or `{` still open is named.
+    fn scan_error(&self, error: &ScanError, source: &str) -> LoadError {
+        let mut found = LoadError::from_scan(error);
+        if error.info().contains("tab")
+            && let Some(mark) = found.mark
+            && let Some(tab) = tab_after(source, mark)
+        {
+            found.mark = Some(tab);
+        }
+        let open = self.frames.iter().rev().find_map(|frame| {
+            let start = match frame {
+                Frame::Seq { start, .. } | Frame::Map { start, .. } => *start,
+            };
+            let opener = source.chars().nth(start.index())?;
+            (matches!(opener, '[' | '{') && never_closes(source, start.index()))
+                .then_some((opener, start))
+        });
+        if let Some((opener, start)) = open {
+            found.note = Some(format!(
+                "the `{opener}` opened at line {}, column {} is not closed",
+                start.line(),
+                start.column()
+            ));
+        }
+        found
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "the node builder's single pass over the parsed document, kept whole; split when next touched"
@@ -724,7 +850,7 @@ impl Builder {
         let last_line = source.rsplit(['\n', '\r']).next().unwrap_or_default();
         let unterminated_content = !last_line.trim_matches([' ', '\t']).is_empty();
         for event in Parser::new_from_str(source) {
-            let (event, span) = event.map_err(|error| LoadError::from_scan(&error))?;
+            let (event, span) = event.map_err(|error| self.scan_error(&error, source))?;
             let start = Mark::from_saphyr(span.start);
             let end = Mark::from_saphyr(span.end);
             match event {
@@ -902,7 +1028,7 @@ impl Builder {
                             return Err(LoadError::at(
                                 LoadErrorKind::DuplicateKey,
                                 format!(
-                                    "the key '{}' is repeated; it is first written on line {}",
+                                    "the key '{}' is repeated (first written on line {})",
                                     node.value,
                                     first.get()
                                 ),
@@ -1003,6 +1129,59 @@ mod tests {
         assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
         assert_eq!(error.mark.map(|m| (m.line(), m.column())), Some((2, 1)));
         assert!(error.problem.contains("first written on line 1"), "{error}");
+    }
+
+    #[test]
+    fn a_syntax_error_is_placed_where_a_person_looks_and_names_what_is_open() {
+        // B9 (smoke test): a tab indenting line 5 was reported at the end
+        // of line 4; an unclosed `[` had no note; the repeated key read as
+        // one run-on sentence once a place was added.
+        let tab =
+            load("name: X\nconfigurations:\n  splunk:\n    enabled: true\n\tstatus: STAGING\n")
+                .unwrap_err();
+        assert!(tab.problem.contains("tab"), "{tab}");
+        assert_eq!(tab.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
+        // The same with CRLF line endings, as an editor on Windows writes it.
+        let crlf = load(
+            "name: X\r\nconfigurations:\r\n  splunk:\r\n    enabled: true\r\n\tstatus: STAGING\r\n",
+        )
+        .unwrap_err();
+        assert!(crlf.problem.contains("tab"), "{crlf}");
+        assert_eq!(crlf.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
+        let unclosed = load(
+            "name: X\nmetadata:\n  uuid: u\n  tags: [a, b\nresponse:\n  alert_severity: High\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            unclosed.note.as_deref(),
+            Some("the `[` opened at line 4, column 9 is not closed")
+        );
+        let mapping = load("a: {x: 1\nb: 2\n").unwrap_err();
+        assert_eq!(
+            mapping.note.as_deref(),
+            Some("the `{` opened at line 1, column 4 is not closed")
+        );
+        // A block that fails names no bracket, nor does a collection that
+        // closes after the error.
+        assert_eq!(load("a: 'x\n").unwrap_err().note, None);
+        let closed = load("a: [x: y: z]\n").unwrap_err();
+        assert_eq!(closed.note, None, "{closed}");
+        // An apostrophe in a plain scalar opens no quote: the `]` after it
+        // still closes the `[`; a quoted `]` does not.
+        let apostrophe = load("a: [don't, x: y: z]\n").unwrap_err();
+        assert_eq!(apostrophe.note, None, "{apostrophe}");
+        let quoted = load("a: ['it''s ]', \"\\\" ]\", x: y: z]\n").unwrap_err();
+        assert_eq!(quoted.note, None, "{quoted}");
+        let open = load("a: [don't, b\nc: 1\n").unwrap_err();
+        assert_eq!(
+            open.note.as_deref(),
+            Some("the `[` opened at line 1, column 4 is not closed")
+        );
+        let repeated = load("a: 1\nb: 2\na: 3\n").unwrap_err();
+        assert_eq!(
+            repeated.problem,
+            "the key 'a' is repeated (first written on line 1)"
+        );
     }
 
     #[test]

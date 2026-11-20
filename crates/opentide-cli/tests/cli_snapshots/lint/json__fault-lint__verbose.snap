@@ -89,7 +89,7 @@ findings: 85
   filename_mismatch | warning | objects/threats/hidden-downgrade-threat-0005-v2.yaml | - | -
   name_missing | error | objects/rules/covert-injection-rule-0032.yaml | - | -
   yaml_parse | error | objects/rules/encoded-beacon-rule-0034.yaml | 83 | 1
-  yaml_parse | error | objects/rules/hidden-loader-rule-0024.yaml | 44 | 18
+  yaml_parse | error | objects/rules/hidden-loader-rule-0024.yaml | 45 | 1
   filename_mismatch | warning | objects/rules/renamed-1.yaml | - | -
   yaml_parse | error | objects/rules/staged-exfiltration-rule-0021.yaml | 72 | 1
   nested_object_file | warning | objects/rules/nested/encoded-spray-rule-0017.yaml | - | -
