@@ -3,23 +3,28 @@ source: crates/opentide-cli/tests/common/snapshot.rs
 description: query/json/none/example-docs
 ---
 args: opentide --json query --platform sentinel 'SecurityEvent | where EventID == 4688 | take 20'
-exit: 2
+exit: 1
 
 ━━━ stdout · json, 1 lines
 {
   "command": "query",
   "duration_ms": 0,
-  "error": "sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
-  "exit_code": 2,
+  "error": "No workspace at <WS>: no .opentide/ or objects/ there or above it",
+  "exit_code": 1,
   "failure": {
-    "argument": "--tenant",
-    "code": "usage_invalid_value",
+    "argument": null,
+    "code": "workspace_not_found",
     "crash_log": null,
-    "message": "sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
+    "message": "No workspace at <WS>: no .opentide/ or objects/ there or above it",
     "suggestion": null
   },
-  "message": "sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
-  "next_actions": [],
+  "message": "No workspace at <WS>: no .opentide/ or objects/ there or above it",
+  "next_actions": [
+    {
+      "command": "opentide --json setup",
+      "reason": "create a workspace first"
+    }
+  ],
   "ok": false,
   "platform": "sentinel",
   "schema_version": 1,

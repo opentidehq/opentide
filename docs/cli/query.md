@@ -39,7 +39,7 @@ Give exactly one query: `QUERY`, `--query-file`, `--rule` or `--file`.
 
 ## Tenants
 
-The query runs on the tenants `--tenant` names, in the order the platform file lists them. With no `--tenant`, a platform with one tenant uses it; with several, the command exits `2` and lists them, so a query never reaches a production tenant you did not name. `--tenant all` runs on every tenant. A rule's own `tenants` list and the tenants' `strategies` do not restrict a query.
+`query` reads the tenants from the workspace: outside one it exits `1` with `workspace_not_found`, as [`new`](./new.md) does. The query runs on the tenants `--tenant` names, in the order the platform file lists them. With no `--tenant`, a platform with one tenant uses it; with several, the command exits `2` and lists them, so a query never reaches a production tenant you did not name. `--tenant all` runs on every tenant. A rule's own `tenants` list and the tenants' `strategies` do not restrict a query.
 
 Each tenant runs independently: one that refuses the query or cannot be reached is reported, and the others still return their rows.
 

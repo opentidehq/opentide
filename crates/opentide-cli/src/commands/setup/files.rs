@@ -477,12 +477,18 @@ pub fn folder_name(target: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// `value` without its surrounding spaces; `None` when nothing is left.
+pub fn trimmed(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+/// The repository's name: `--name` without its surrounding spaces, else the folder's.
+fn repo_name(options: &RepoOptions, target: &Path) -> String {
+    trimmed(options.name.as_deref()).map_or_else(|| folder_name(target), str::to_owned)
+}
+
 fn readme(target: &Path, options: &RepoOptions) -> String {
-    let name = options
-        .name
-        .clone()
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| folder_name(target));
+    let name = repo_name(options, target);
     let platforms = if options.platforms.is_empty() {
         readme_no_platform()
     } else {
@@ -695,11 +701,7 @@ pub fn repo(stage: &mut Stage, target: &Path, options: &RepoOptions) -> Result<S
             )),
         }
     }
-    let name = options
-        .name
-        .clone()
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| folder_name(target));
+    let name = repo_name(options, target);
     let mut result = StepResult::new([
         ("message", Json::str("Repository scaffold created")),
         ("path", Json::str(shown(target))),

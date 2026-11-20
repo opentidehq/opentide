@@ -235,10 +235,89 @@ fn elastic_invalid_rfc_block_reports_all_three_codes() {
                 "type": "esql", "language": "kuery", "query": "FROM logs-* | LIMIT 10",
                 "index": ["logs-*"], "suppression": {"duration": "1h"}}),
     );
-    assert_eq!(
-        found,
-        ": ElasticConfig validation failed with code(s): esql_source, language, \
-         suppression_shape"
+    assert!(
+        found.starts_with(
+            ": ElasticConfig validation failed with code(s): esql_source, language, \
+                          suppression_shape ("
+        ),
+        "{found}"
+    );
+    assert!(
+        found.contains("`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`"),
+        "{found}"
+    );
+    assert!(found.contains("`index` set on `type: esql`"), "{found}");
+}
+
+#[test]
+fn elastic_language_on_another_type_says_why_and_what_to_do() {
+    // E2E-3 (#1729): `language: eql` on a `type: eql` rule was "code(s):
+    // language" with no reason.
+    for (rule_type, extra) in [
+        ("eql", json!({"eql": {"query": "any where true"}})),
+        ("esql", json!({"query": "FROM logs-* | LIMIT 10"})),
+        (
+            "machine_learning",
+            json!({"machine_learning": {"job_id": ["j"], "anomaly_threshold": 50}}),
+        ),
+    ] {
+        let block = merged(
+            &elastic_base(),
+            &merged(&json!({"type": rule_type, "language": rule_type}), &extra),
+        );
+        let found = errors("elastic", &block);
+        assert!(
+            found.contains(
+                "ElasticConfig validation failed with code(s): language (`language` (`kuery` or \
+                 `lucene`) applies to `type: query`, `threshold`, `new_terms` and `threat_match`, \
+                 not to `type: "
+            ),
+            "{rule_type}: {found}"
+        );
+        let why = match rule_type {
+            "eql" => "whose query is EQL",
+            "esql" => "whose query is ES|QL",
+            _ => "which has no query",
+        };
+        assert!(
+            found.contains(&format!(
+                "not to `type: {rule_type}`, {why}: remove `language` from the block)"
+            )),
+            "{rule_type}: {found}"
+        );
+    }
+}
+
+/// `language` is the event query's language on the types the message names:
+/// it is not refused there (the first wording said it applied to `query` only).
+#[test]
+fn elastic_language_is_accepted_where_the_message_says_it_applies() {
+    for block in [
+        json!({"type": "query", "language": "lucene"}),
+        json!({"type": "threshold", "language": "lucene",
+               "threshold": {"field": ["user.name"], "value": 5}}),
+        json!({"type": "new_terms", "language": "kuery",
+               "new_terms": {"fields": ["user.name"], "history_window_start": "14d"}}),
+    ] {
+        let found = errors("elastic", &merged(&elastic_base(), &block));
+        assert!(!found.contains("language"), "{block}: {found}");
+    }
+}
+
+#[test]
+fn elastic_sources_on_an_esql_rule_say_which_and_where_the_events_come_from() {
+    let block = merged(
+        &elastic_base(),
+        &json!({"type": "esql", "query": "FROM logs-* | LIMIT 10",
+                "index": ["logs-*"], "data_view_id": "dv"}),
+    );
+    let found = errors("elastic", &block);
+    assert!(
+        found.contains(
+            "`index`, `data_view_id` set on `type: esql`, where the query's `FROM` command \
+             names the sources: remove them"
+        ),
+        "{found}"
     );
 }
 

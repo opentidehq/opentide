@@ -114,6 +114,12 @@ pub fn root() -> Command {
     parse_settings(Cli::command())
 }
 
+/// The single-value options that refuse to be given twice: they choose where
+/// a command acts, and the last of two would drop the first without a word
+/// (`deploy --platform elastic --platform splunk` plans only `splunk`, #1729).
+/// Every other option keeps the last value it is given.
+const REPEAT_IS_AN_ERROR: [&str; 1] = ["platform"];
+
 /// What `--help` says of itself, on every command.
 pub const HELP_FLAG_HELP: &str = "Print help";
 
@@ -121,7 +127,9 @@ pub const HELP_FLAG_HELP: &str = "Print help";
 ///
 /// - an option or flag given twice keeps the last value (`--json commands
 ///   --json`, `--repo a --repo b`), as it always has; a repeatable option
-///   (`--strategy`) still collects every value;
+///   (`--strategy`) still collects every value. The exception is
+///   `REPEAT_IS_AN_ERROR`: `--platform` given twice is a usage error naming
+///   it;
 /// - a negative number is a value (`--limit -1` is a number out of range);
 ///   any other word that starts with `-` is an option, so `--query --json`
 ///   is missing its value (`--query=--json` searches for `--json`);
@@ -142,9 +150,25 @@ pub fn parse_settings(command: Command) -> Command {
                 .action(ArgAction::Help)
                 .help(HELP_FLAG_HELP),
         )
-        .args_override_self(true)
         .allow_negative_numbers(true)
-        .mut_args(|arg| arg.hide_env_values(true))
+        .mut_args(|arg| {
+            let id = arg.get_id().clone();
+            let arg = arg.hide_env_values(true);
+            // The last value wins, as `args_override_self` would make it for
+            // every option. That setting only lifts clap's refusal of a
+            // repeated single-value option; spelled on the option it also
+            // drops what a repeatable or counting one collected, so it goes
+            // on the options that take one value, and not on the exceptions.
+            let single = matches!(
+                arg.get_action(),
+                ArgAction::Set | ArgAction::SetTrue | ArgAction::SetFalse
+            );
+            if single && !REPEAT_IS_AN_ERROR.contains(&id.as_str()) {
+                arg.overrides_with(id)
+            } else {
+                arg
+            }
+        })
         .mut_subcommands(parse_settings)
 }
 
@@ -542,14 +566,13 @@ mod parse_settings_tests {
             repo.get_one::<String>("repo").map(String::as_str),
             Some("b")
         );
-        let platform = matches("query --platform sentinel --platform=splunk x").unwrap();
+        let limit = matches("query --platform sentinel --limit 5 --limit=7 x").unwrap();
         assert_eq!(
-            platform
+            limit
                 .subcommand_matches("query")
                 .unwrap()
-                .get_one::<crate::tree::PlatformValue>("platform")
-                .map(|platform| platform.0.as_str()),
-            Some("splunk")
+                .get_one::<i64>("limit"),
+            Some(&7)
         );
         // A repeatable option (`validate --file`) collects every value.
         let files = matches("validate --file a --file=b").unwrap();
@@ -569,6 +592,32 @@ mod parse_settings_tests {
             .unwrap()
             .collect();
         assert_eq!(all, ["PREVIEW", "RELEASE"]);
+    }
+
+    /// E2E-5 (#1729): `deploy --platform elastic --platform splunk` planned
+    /// only `splunk`, with no word of `elastic`.
+    #[test]
+    fn framework_parse_a_repeated_platform_is_a_usage_error_naming_the_flag() {
+        for line in [
+            "deploy --platform elastic --platform splunk",
+            "deploy --platform=elastic --platform elastic",
+            "query --platform sentinel --platform=splunk x",
+            "info --platform elastic --platform splunk",
+            "validate query --platform sentinel --platform splunk",
+            "deploy metadata --platform elastic --platform splunk",
+        ] {
+            let error = matches(line).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                clap::error::ErrorKind::ArgumentConflict,
+                "{line}"
+            );
+            assert!(error.to_string().contains("--platform"), "{line}: {error}");
+        }
+        // One `--platform` is as before, and `setup`'s repeatable one still
+        // collects every value.
+        assert!(matches("deploy --platform elastic").is_ok());
+        assert!(matches("setup --platform elastic --platform splunk").is_ok());
     }
 
     #[test]

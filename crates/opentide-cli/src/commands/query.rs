@@ -914,6 +914,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 }]
             }
         };
+    // No workspace is no tenants to choose from (E2E-7): say so as `new` and
+    // `doctor` do, not as a `--tenant` that names nothing.
+    if let Some(mut refused) = super::no_workspace(COMMAND, cx.repo, cx.env, cx.cwd) {
+        // Every `query` document names its platform, as `usage_with` does.
+        refused.outcome.data = vec![("platform".to_owned(), Json::str(platform))];
+        return refused;
+    }
     let (available, config_path) = configured(cx, platform);
     log_unset(&available, cx.env, "a query");
     let selected = match select(platform, &args.tenants, &available, &config_path) {

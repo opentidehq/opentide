@@ -87,8 +87,20 @@ fn the_invalid_elastic_fixture_reports_its_codes() {
         panic!("the invalid fixture validated");
     };
     assert_eq!(errors.len(), 1);
-    assert_eq!(
-        errors[0].message,
-        format!("ElasticConfig validation failed with code(s): {expected}")
+    // The codes, then (since #1729) what the `language` and `esql_source`
+    // codes mean for this block.
+    let prefix = format!("ElasticConfig validation failed with code(s): {expected} (");
+    let message = &errors[0].message;
+    assert!(
+        message.starts_with(&prefix) && message.ends_with(')'),
+        "{message}"
     );
+    assert!(
+        message.contains(
+            "`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` \
+             and `threat_match`, not to `type: esql`, whose query is ES|QL"
+        ),
+        "{message}"
+    );
+    assert!(message.contains("`index` set on `type: esql`"), "{message}");
 }

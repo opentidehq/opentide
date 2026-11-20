@@ -46,7 +46,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
-| `--name`, `--description` | README metadata |
+| `--name`, `--description` | README metadata. `--name` is kept without its surrounding spaces; an empty or all-space `--name` or `--org` exits `2` (`usage_invalid_value`). Leave `--name` out for the folder name |
 | `--org` | The organisation, in the README and in `.opentide/configurations/organisation.toml` (a fresh `uuid` and the `name`), which [`opentide new`](./new.md#what-the-new-file-holds) writes as `metadata.organisation`: the only place it comes from. A rerun with the same `--org` changes nothing, with another one renames the organisation and keeps its `uuid`, and a rerun without `--org` leaves the file as it is. Edit the `uuid` in the file to your organisation's own. A `uuid` you wrote that is not a UUID is kept, with a warning. An existing README is still left as it is; `--org` reaches `organisation.toml` all the same |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |

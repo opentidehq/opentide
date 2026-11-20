@@ -253,6 +253,169 @@ fn new_refuses_an_empty_name_as_an_invalid_value() {
     assert_eq!(document["failure"]["code"], "usage_needs_input", "{stdout}");
 }
 
+/// `setup --name` is trimmed, and a name that is empty or only spaces is an
+/// invalid `--name`, as it is for `new` (#1729, E2E-2): `setup --name "   "`
+/// wrote a README headed `#    `. Leaving `--name` out keeps the folder name.
+#[test]
+fn setup_trims_the_name_and_refuses_an_empty_one() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    std::fs::create_dir_all(&ws).unwrap();
+    let readme = |folder: &str| {
+        let text = std::fs::read_to_string(ws.join(folder).join("README.md")).unwrap();
+        text.lines().next().unwrap().to_owned()
+    };
+    for (command, line) in [
+        ("setup", &["--json", "setup", "--yes", "--path", "none"][..]),
+        (
+            "setup repo",
+            &["--json", "setup", "repo", "--yes", "--path", "none"][..],
+        ),
+    ] {
+        for name in ["", "   "] {
+            let (code, stdout) = run_at(&ws, &[line, &["--name", name]].concat());
+            assert_eq!(code, 2, "{command} {name:?}: {stdout}");
+            let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+            assert_eq!(document["command"], command, "{stdout}");
+            assert_eq!(
+                document["failure"]["code"], "usage_invalid_value",
+                "{stdout}"
+            );
+            assert_eq!(document["failure"]["argument"], "--name", "{stdout}");
+            assert_eq!(
+                document["failure"]["message"], "--name cannot be empty",
+                "{stdout}"
+            );
+        }
+    }
+    // Nothing was written by the refusals.
+    assert!(!ws.join("none").exists());
+    // A name is kept without its surrounding spaces, in the README and the
+    // document.
+    let (code, stdout) = run_at(
+        &ws,
+        &[
+            "--json", "setup", "--yes", "--path", "trimmed", "--name", "  Mine  ",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(readme("trimmed"), "# Mine");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let steps = document["steps"].as_array().unwrap();
+    let scaffold = steps
+        .iter()
+        .find(|step| step["scaffolded"] == true)
+        .unwrap();
+    assert_eq!(scaffold["name"], "Mine", "{stdout}");
+    // No `--name` keeps the folder name.
+    let (code, stdout) = run_at(&ws, &["--json", "setup", "--yes", "--path", "folder"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(readme("folder"), "# folder");
+}
+
+/// `setup skills` and `--org` follow `--name`'s rule (#1729): empty or only
+/// spaces is `usage_invalid_value`, refused before any request for the skills
+/// catalogue.
+#[test]
+fn setup_refuses_an_empty_org_and_an_empty_skills_name() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    std::fs::create_dir_all(&ws).unwrap();
+    for (command, flag, line) in [
+        (
+            "setup skills",
+            "--name",
+            &[
+                "--json",
+                "setup",
+                "skills",
+                "--yes",
+                "--generic",
+                "--path",
+                "none",
+            ][..],
+        ),
+        (
+            "setup skills",
+            "--org",
+            &[
+                "--json",
+                "setup",
+                "skills",
+                "--yes",
+                "--generic",
+                "--path",
+                "none",
+            ][..],
+        ),
+        (
+            "setup",
+            "--org",
+            &["--json", "setup", "--yes", "--path", "none"][..],
+        ),
+        (
+            "setup repo",
+            "--org",
+            &["--json", "setup", "repo", "--yes", "--path", "none"][..],
+        ),
+    ] {
+        for value in ["", "   "] {
+            let (code, stdout) = run_at(&ws, &[line, &[flag, value]].concat());
+            assert_eq!(code, 2, "{command} {flag} {value:?}: {stdout}");
+            let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+            assert_eq!(document["command"], command, "{stdout}");
+            assert_eq!(
+                document["failure"]["code"], "usage_invalid_value",
+                "{stdout}"
+            );
+            assert_eq!(document["failure"]["argument"], flag, "{stdout}");
+            assert_eq!(
+                document["failure"]["message"],
+                format!("{flag} cannot be empty"),
+                "{stdout}"
+            );
+        }
+    }
+    // Nothing was written by the refusals.
+    assert!(!ws.join("none").exists());
+}
+
+/// A repeated `--platform` is a usage error naming the flag, not the last
+/// value alone (#1729, E2E-5): `deploy --platform elastic --platform splunk`
+/// planned only `splunk`.
+#[test]
+fn a_repeated_platform_is_a_usage_error() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    replay::fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(
+        &ws,
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--strategy",
+            "PREVIEW",
+            "--all",
+            "--platform",
+            "elastic",
+            "--platform",
+            "splunk",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(document["ok"], false, "{stdout}");
+    assert_eq!(document["failure"]["code"], "usage_error", "{stdout}");
+    assert_eq!(document["failure"]["argument"], "--platform", "{stdout}");
+    let message = document["failure"]["message"].as_str().unwrap();
+    assert!(message.contains("--platform"), "{stdout}");
+    assert!(
+        message.contains("cannot be used multiple times"),
+        "{stdout}"
+    );
+}
+
 /// `new --path` into a folder below the family's, or outside the
 /// workspace, writes a file opentide does not read (#1670, smoke B7): it
 /// says so, and does not point at a `validate --file` that refuses it.
