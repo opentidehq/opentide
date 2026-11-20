@@ -65,21 +65,27 @@ const MAX_ERROR_LINES: usize = 4;
 /// Set by `--persist-state-externally` for the run (`PERSIST_EXTERNALLY_ENV`).
 pub const PERSIST_EXTERNALLY_ENV: &str = "OPENTIDE_PERSIST_STATE_EXTERNALLY";
 /// The actions in tally order, with what each reads as once done (`_DONE`).
-const DONE: [(&str, &str); 5] = [
+/// `unchanged`: the tenant already held the rule as the run would write it,
+/// so nothing was written (#1711).
+const DONE: [(&str, &str); 6] = [
     ("create", "created"),
     ("update", "updated"),
     ("upsert", "created or updated"),
     ("disable", "disabled"),
     ("delete", "deleted"),
+    ("unchanged", "unchanged"),
 ];
 /// What a sent rule is called by planned action (`_VERBS`).
-const VERBS: [(&str, &str); 5] = [
+const VERBS: [(&str, &str); 6] = [
     ("create", "created"),
     ("update", "updated"),
     ("upsert", "deployed"),
     ("disable", "disabled"),
     ("delete", "deleted"),
+    ("unchanged", "unchanged"),
 ];
+/// The action of a rule the tenant already held as the run would write it.
+const UNCHANGED: &str = "unchanged";
 /// Codes that skip the rule on that tenant without failing the run.
 const WARNING_CODES: [&str; 1] = ["external_id_missing"];
 
@@ -2810,15 +2816,11 @@ impl Sender<'_, '_> {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         let splunk_cx = self.compile;
-        let bytes: [u8; 16] = *uuid::Uuid::new_v4().as_bytes();
-        let civil = jiff::tz::Offset::UTC.to_datetime(self.cx.now);
-        let clock = opentide_compile::splunk::Clock {
-            random: (u32::from(bytes[0]) % 60, u32::from(bytes[1]) % 24),
-            now: (
-                u32::try_from(civil.minute()).unwrap_or(0),
-                u32::try_from(civil.hour()).unwrap_or(0),
-            ),
-        };
+        // A schedule drawn at random takes its minute and hour from the
+        // rule's UUID: the same on every deploy, so a rule redeployed as it
+        // is stays unchanged on the tenant (#1711), and rules still spread
+        // over the day.
+        let clock = opentide_compile::splunk::Clock::for_rule(&rule.uuid, self.cx.now);
         let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, Some(clock))
             .map_err(compile_error)?;
         let mut name = rule.name.trim().to_owned();
@@ -3001,6 +3003,11 @@ impl Sender<'_, '_> {
                 }
                 _ => {}
             }
+        }
+        // The tenant already held it: nothing was written (#1711). A
+        // rename's cleanup may still have deleted old copies (`removed`).
+        if failed.is_none() && outcome.unchanged() {
+            result.action = Some(UNCHANGED.to_owned());
         }
         match failed {
             Some(failed) => Err(scoped(failed, |error| raised(&error))),
@@ -3845,8 +3852,12 @@ impl Sender<'_, '_> {
             Ok(done) => {
                 self.elastic_warnings(rule, &done);
                 // An `upsert` reads as what Kibana did: a create, or an
-                // update (#1662, E10).
-                if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert") {
+                // update (#1662, E10); a rule Kibana already held as it is,
+                // whatever the plan, is unchanged (#1711).
+                if done.unchanged() {
+                    result.action = Some(UNCHANGED.to_owned());
+                } else if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert")
+                {
                     result.action = elastic_done_action(&done).map(str::to_owned);
                 }
                 log.finished(result);
@@ -5377,6 +5388,39 @@ struct ElasticTenant {
 mod tests {
     use super::*;
 
+    /// Every `action` a deploy result row can carry (`DONE` and `VERBS` name
+    /// them all; a row's action is a plan's action or `unchanged`) is in the
+    /// `RuleOutcome.action` enum that `opentide --json commands` publishes
+    /// for `deploy`, so a consumer validating `deploy --json` against it
+    /// accepts every row (#1711).
+    #[test]
+    fn every_action_a_result_row_can_carry_is_in_the_published_schema() {
+        let defs = crate::schemas::Schemas::load().defs();
+        let allowed: Vec<&str> = defs
+            .get("RuleOutcome")
+            .and_then(|outcome| outcome.get("properties"))
+            .and_then(|properties| properties.get("action"))
+            .and_then(|action| action.get("anyOf"))
+            .and_then(Json::as_array)
+            .and_then(|variants| variants.iter().find_map(|variant| variant.get("enum")))
+            .and_then(Json::as_array)
+            .expect("RuleOutcome.action is an enum")
+            .iter()
+            .filter_map(Json::as_str)
+            .collect();
+        let emitted = DONE
+            .iter()
+            .map(|(action, _)| *action)
+            .chain(VERBS.iter().map(|(action, _)| *action))
+            .chain([UNCHANGED]);
+        for action in emitted {
+            assert!(
+                allowed.contains(&action),
+                "a deploy row's action `{action}` is not in RuleOutcome.action ({allowed:?}) in data/output-schemas.json"
+            );
+        }
+    }
+
     /// A failure a `Deployer` builds itself has no connector error: its
     /// scope still says what stops (a Rust plugin's own tenant failure),
     /// whatever the connector error the arm reads its words from.
@@ -5508,6 +5552,7 @@ mod tests {
                 "upsert",
                 "disable",
                 "delete",
+                "unchanged",
                 "failed",
                 "skipped",
                 "not_attempted",

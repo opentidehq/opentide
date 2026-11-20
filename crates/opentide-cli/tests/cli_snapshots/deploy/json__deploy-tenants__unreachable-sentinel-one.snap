@@ -134,6 +134,7 @@ exit: 1
     "seconds": 0.0,
     "skipped": 1,
     "tenants": 1,
+    "unchanged": 0,
     "update": 0,
     "upsert": 0
   },

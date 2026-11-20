@@ -61,6 +61,110 @@ pub const PRESERVED_FIELDS: [&str; 11] = [
     "throttle",
 ];
 
+/// What Kibana writes itself on a rule: the fields its lookup answers that
+/// no deploy sends, and that a replace leaves to Kibana ([`holds`]).
+const KIBANA_WRITES: [&str; 10] = [
+    "id",
+    "created_at",
+    "created_by",
+    "updated_at",
+    "updated_by",
+    "revision",
+    "version",
+    "immutable",
+    "rule_source",
+    "execution_summary",
+];
+
+/// The value Kibana gives `key` when a rule leaves it out, where it is not
+/// empty ([`holds`]).
+fn kibana_default(key: &str) -> Option<Json> {
+    Some(match key {
+        "max_signals" => Json::Int(100),
+        "interval" => Json::Str("5m".into()),
+        "from" => Json::Str("now-6m".into()),
+        "to" => Json::Str("now".into()),
+        _ => return None,
+    })
+}
+
+/// Whether the tenant's rule, as its lookup answered it (`remote`), is
+/// already what a replace with `compiled` would leave (#1711): every field
+/// `compiled` sends has the same value on the tenant (`same`), and every
+/// other field the tenant has is one Kibana writes itself
+/// (`KIBANA_WRITES`), or holds what Kibana gives a field the rule leaves
+/// out (empty, or `kibana_default`), so a replace would not change it.
+/// A field opentide sent once and no longer sends keeps its value on the
+/// tenant until a replace drops it: the rule is then not held, and is
+/// replaced.
+pub fn holds(remote: &Json, compiled: &Json) -> bool {
+    let (Some(remote), Some(compiled)) = (remote.as_object(), compiled.as_object()) else {
+        return false;
+    };
+    let sent = compiled.iter().all(|(key, value)| match remote.get(key) {
+        Some(held) => same(value, held),
+        None => is_empty(value),
+    });
+    sent && remote.iter().all(|(key, held)| {
+        compiled.contains_key(key)
+            || KIBANA_WRITES.contains(&key.as_str())
+            || is_empty(held)
+            || kibana_default(key).is_some_and(|default| same(&default, held))
+    })
+}
+
+/// Whether the value a deploy sends (`sent`) is the one the tenant holds
+/// (`held`): the same scalar (a number by its value, `5` and `5.0` alike),
+/// the same items in the same order, and an object whose every member
+/// sent is the same on the tenant, the tenant's other members empty (a
+/// default Kibana adds, as a technique's `subtechnique: []`).
+fn same(sent: &Json, held: &Json) -> bool {
+    match (sent, held) {
+        (Json::Object(sent), Json::Object(held)) => {
+            sent.iter().all(|(key, value)| match held.get(key) {
+                Some(held) => same(value, held),
+                None => is_empty(value),
+            }) && held
+                .iter()
+                .all(|(key, value)| sent.contains_key(key) || is_empty(value))
+        }
+        (Json::Array(sent), Json::Array(held)) => {
+            sent.len() == held.len() && sent.iter().zip(held).all(|(sent, held)| same(sent, held))
+        }
+        (
+            Json::Int(_) | Json::UInt(_) | Json::Float(_),
+            Json::Int(_) | Json::UInt(_) | Json::Float(_),
+        ) => number(sent) == number(held),
+        _ => sent == held,
+    }
+}
+
+/// A number's value, for [`same`].
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "Kibana's numbers (a risk score, a threshold) are small; equal values stay equal"
+)]
+fn number(value: &Json) -> Option<f64> {
+    match value {
+        Json::Int(number) => Some(*number as f64),
+        Json::UInt(number) => Some(*number as f64),
+        Json::Float(number) => Some(*number),
+        _ => None,
+    }
+}
+
+/// Whether a value is what Kibana answers for a field nobody set: `null`,
+/// `false`, an empty string, list or object.
+fn is_empty(value: &Json) -> bool {
+    match value {
+        Json::Null | Json::Bool(false) => true,
+        Json::Str(text) => text.is_empty(),
+        Json::Array(items) => items.is_empty(),
+        Json::Object(members) => members.is_empty(),
+        _ => false,
+    }
+}
+
 /// The HTTP settings of an Elastic tenant: the connectors' retries and
 /// *timeout* (whole seconds, at least one).
 pub fn http_settings(timeout: std::time::Duration) -> HttpSettings {
@@ -119,6 +223,9 @@ pub enum Deployed {
     Created,
     /// It was there and was replaced (`PUT`), the remote's fields kept.
     Updated,
+    /// It was there as the rule has it ([`holds`]): nothing was written
+    /// (#1711).
+    Unchanged,
     /// Its type changed: it was deleted and created again.
     Recreated,
     /// It was deleted (or was not there).
@@ -1091,6 +1198,11 @@ impl Elastic {
             }
         }
         let compiled = Json::Object(compiled);
+        // The tenant holds the rule as a replace would write it: nothing to
+        // send (#1711).
+        if holds(&remote, &compiled) {
+            return Ok(with(Deployed::Unchanged));
+        }
         if remote.get("type") != compiled.get("type") {
             let deleted = client.delete_rule(cx, rule_id).await?;
             if deleted.status != 404
@@ -1444,6 +1556,7 @@ impl Deployer for Elastic {
             let event = match &outcome.deployed {
                 Deployed::Created => "elastic_rule_created",
                 Deployed::Updated => "elastic_rule_updated",
+                Deployed::Unchanged => crate::connector::RULE_UNCHANGED,
                 Deployed::Recreated => "elastic_rule_recreated",
                 Deployed::Deleted => "elastic_rule_deleted",
                 Deployed::Failed {
@@ -2504,6 +2617,44 @@ pub fn advisories(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The JSON text `text` as a rule body.
+    fn rule_json(text: &str) -> Json {
+        Json::parse(text).unwrap()
+    }
+
+    /// A rule Kibana holds as a replace would leave it is not written again
+    /// (#1711): the fields Kibana writes itself, empty defaults, nested
+    /// empties and a number's form are not differences; a changed value, a
+    /// field opentide no longer sends that still holds a value, or a field
+    /// the tenant lacks are.
+    #[test]
+    fn a_rule_is_held_when_a_replace_would_change_nothing() {
+        let sent = r#"{"rule_id": "r", "type": "query", "name": "N", "risk_score": 73,
+            "threat": [{"framework": "MITRE ATT&CK", "technique": [{"id": "T1059"}]}],
+            "enabled": true}"#;
+        let held = r#"{"id": "kb-1", "rule_id": "r", "type": "query", "name": "N",
+            "risk_score": 73.0, "enabled": true, "revision": 4, "version": 2,
+            "created_at": "x", "updated_at": "y", "immutable": false,
+            "rule_source": {"type": "internal"}, "max_signals": 100, "interval": "5m",
+            "references": [], "risk_score_mapping": [], "note": "",
+            "threat": [{"framework": "MITRE ATT&CK", "technique": [{"id": "T1059", "subtechnique": []}]}]}"#;
+        assert!(holds(&rule_json(held), &rule_json(sent)));
+        let changed = held.replace(r#""name": "N""#, r#""name": "Old""#);
+        assert!(!holds(&rule_json(&changed), &rule_json(sent)));
+        // A field the rule no longer sends keeps its value until replaced.
+        let stale = held.replace(r#""note": """#, r#""note": "old note""#);
+        assert!(!holds(&rule_json(&stale), &rule_json(sent)));
+        let raised = held.replace(r#""max_signals": 100"#, r#""max_signals": 500"#);
+        assert!(!holds(&rule_json(&raised), &rule_json(sent)));
+        let missing = held.replace(r#""risk_score": 73.0, "#, "");
+        assert!(!holds(&rule_json(&missing), &rule_json(sent)));
+        let more = held.replace(
+            r#""technique": [{"id": "T1059", "subtechnique": []}]"#,
+            r#""technique": [{"id": "T1059"}, {"id": "T1027"}]"#,
+        );
+        assert!(!holds(&rule_json(&more), &rule_json(sent)));
+    }
 
     /// #1142: a rule write Kibana answers with a redirect the client could
     /// not follow fails the rule; a 2xx is written.

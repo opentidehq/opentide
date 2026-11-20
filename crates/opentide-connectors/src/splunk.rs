@@ -18,9 +18,9 @@ use opentide_compile::json::{Json, Object};
 
 use crate::answer::{Answer, describe_answer, gateway_answer, page_title};
 use crate::connector::{
-    BoxFuture, DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployWarning, Deployer,
-    LiveCheck, LiveValidator, Operation, Platform, QueryColumn, QueryOutcome, QueryRequest,
-    QueryRunner, Row, TenantContext, columns_of,
+    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryColumn,
+    QueryOutcome, QueryRequest, QueryRunner, RULE_UNCHANGED, Row, TenantContext, columns_of,
 };
 use crate::error::ConnectorError;
 use crate::text::json_text;
@@ -291,6 +291,9 @@ pub struct SavedSearch {
     pub path: String,
     /// Its search as the tenant answered it (`content.search`).
     pub search: Option<String>,
+    /// Its settings as the tenant answered them (`content`), by name: the
+    /// first of a name wins.
+    pub content: Vec<(String, String)>,
 }
 
 impl SavedSearch {
@@ -298,7 +301,50 @@ impl SavedSearch {
         Some(Self {
             path: entity_path(entry.alternate.as_deref()?),
             search: entry.key("search"),
+            content: entry.keys.clone(),
         })
+    }
+
+    /// Whether the saved search already has every one of *settings*, as
+    /// an update would write them (#1711): an update only writes the
+    /// settings it sends, so the others are not compared. Splunk answers a
+    /// boolean as `1` or `0`; a list (sent as one value per item) is never
+    /// taken as held. A setting the tenant does not answer is held only
+    /// when the value sent is empty (the setting is then cleared, as unset).
+    ///
+    /// This is the one place the comparison is decided, over *every* key of
+    /// the body an update writes: a setting added to the body (a marker in
+    /// `description`, an emptied `alert.managedBy`) is compared without
+    /// another change here.
+    pub fn holds(&self, settings: &Object) -> bool {
+        settings.iter().all(|(key, value)| {
+            let sent = match value {
+                // `form` sends a null as the text `null`, which no tenant
+                // holds as "unset": a null is always a write.
+                Json::Array(_) | Json::Null => return false,
+                other => json_text(other),
+            };
+            let Some(held) = self
+                .content
+                .iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, held)| held.as_str())
+            else {
+                return sent.is_empty();
+            };
+            sent == held
+                || matches!((flag(&sent), flag(held)), (Some(sent), Some(held)) if sent == held)
+        })
+    }
+}
+
+/// A Splunk boolean as text (`1`, `true`, `0`, `false`, any case), for
+/// [`SavedSearch::holds`].
+fn flag(text: &str) -> Option<bool> {
+    match text.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" => Some(true),
+        "0" | "false" => Some(false),
+        _ => None,
     }
 }
 
@@ -718,6 +764,7 @@ impl Splunk {
             .map(str::to_owned);
         let name = &request.rule_id;
         let mut warnings = Vec::new();
+        let mut unchanged = false;
         if request.operation == Operation::Delete {
             if self.saved_search(cx, name).await?.is_some() {
                 self.delete_saved_search(cx, name).await?;
@@ -725,7 +772,10 @@ impl Splunk {
                 warnings.push(DeployWarning::new("splunk_alert_deleted", name.clone()).unraised());
             }
         } else {
-            self.apply_saved_search(cx, name, &settings, false).await?;
+            // The tenant already having it as sent (`Some(false)`) is
+            // unchanged; the rename cleanup below runs all the same, so an
+            // old copy a failed delete left is found on the next deploy.
+            unchanged = self.apply_saved_search(cx, name, &settings, false).await? == Some(false);
         }
         // The saved searches an earlier name of the rule left (a rename,
         // or ` - Rule` added or dropped), found by the rule's UUID on the
@@ -757,7 +807,13 @@ impl Splunk {
             }
         }
         let remote_id = (request.operation != Operation::Delete).then(|| name.clone());
-        Ok(DeployOutcome::new(remote_id, request.operation).with_warnings(warnings))
+        let mut done = DeployOutcome::new(remote_id, request.operation).with_warnings(warnings);
+        if unchanged {
+            done = done.with_events(vec![
+                DeployEvent::new(RULE_UNCHANGED).with_field("name", name.as_str()),
+            ]);
+        }
+        Ok(done)
     }
 
     /// Writes the saved search *name* with *settings*
@@ -766,7 +822,9 @@ impl Splunk {
     /// *deletion*, deleted instead (nothing when it is already gone). The
     /// settings Splunk takes only once the others are set
     /// ([`SECOND_STAGE`]) go in a second update. `Some(true)` when the saved
-    /// search was written, `None` when it was deleted or already absent.
+    /// search was written, `Some(false)` when the tenant already had it with
+    /// these settings ([`SavedSearch::holds`]), so nothing was written
+    /// (#1711), `None` when it was deleted or already absent.
     pub async fn apply_saved_search(
         &self,
         cx: TenantContext<'_>,
@@ -790,6 +848,9 @@ impl Splunk {
         if deletion {
             self.delete_saved_search(cx, name).await?;
             return Ok(None);
+        }
+        if saved.holds(settings) {
+            return Ok(Some(false));
         }
         self.update_saved_search(cx, &saved, &first).await?;
         if !second.is_empty() {
@@ -1202,6 +1263,82 @@ impl Platform for Splunk {
 mod tests {
     use super::*;
 
+    /// A saved search the tenant has with every setting a deploy sends is
+    /// not written again (#1711): Splunk's `1` and `0` are booleans, and
+    /// only the settings sent are compared, since an update writes no other.
+    /// A changed value, a list or a setting the tenant does not answer is a
+    /// change.
+    #[test]
+    fn a_saved_search_is_held_when_every_setting_sent_is_the_same() {
+        let saved = SavedSearch {
+            path: "saved/searches/r".into(),
+            search: Some("index=main".into()),
+            content: [
+                ("search", "index=main"),
+                ("is_scheduled", "1"),
+                ("alert.suppress", "0"),
+                ("alert.severity", "5"),
+                ("cron_schedule", "7 * * * *"),
+                ("dispatch.earliest_time", "-1h"),
+            ]
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .to_vec(),
+        };
+        let settings = |pairs: &[(&str, Json)]| -> Object {
+            pairs
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), value.clone()))
+                .collect()
+        };
+        let sent = settings(&[
+            ("search", Json::Str("index=main".into())),
+            ("is_scheduled", Json::Bool(true)),
+            ("alert.suppress", Json::Str("false".into())),
+            ("alert.severity", Json::Int(5)),
+            ("cron_schedule", Json::Str("7 * * * *".into())),
+        ]);
+        assert!(saved.holds(&sent));
+        let mut changed = sent.clone();
+        changed.insert("cron_schedule".into(), Json::Str("8 * * * *".into()));
+        assert!(!saved.holds(&changed));
+        let mut unknown = sent.clone();
+        unknown.insert("action.email".into(), Json::Str("1".into()));
+        assert!(!saved.holds(&unknown));
+        // A setting sent empty (cleared) is held by a tenant that does not
+        // answer it, and by one that answers it empty; not by a value.
+        let mut cleared = sent.clone();
+        cleared.insert("alert.managedBy".into(), Json::Str(String::new()));
+        assert!(saved.holds(&cleared));
+        let mut answered = saved.clone();
+        answered
+            .content
+            .push(("alert.managedBy".into(), String::new()));
+        assert!(answered.holds(&cleared));
+        answered.content[6].1 = "mdr".into();
+        assert!(!answered.holds(&cleared));
+        let mut listed = sent;
+        listed.insert("alert.severity".into(), Json::Array(vec![Json::Int(5)]));
+        assert!(!saved.holds(&listed));
+    }
+
+    /// A JSON null is sent as the text `null` (`form`), so it is never held,
+    /// not even by a tenant that holds the setting empty or does not answer it.
+    #[test]
+    fn a_null_setting_is_never_held() {
+        let mut saved = SavedSearch {
+            path: "saved/searches/r".into(),
+            search: None,
+            content: vec![("alert.managedBy".into(), String::new())],
+        };
+        let mut sent = Object::new();
+        sent.insert("alert.managedBy".into(), Json::Null);
+        assert!(!saved.holds(&sent));
+        saved.content.clear();
+        assert!(!saved.holds(&sent));
+        let pairs = [("alert.managedBy".to_owned(), Json::Null)];
+        assert_eq!(form(&pairs), "alert.managedBy=null");
+    }
+
     #[test]
     fn a_name_is_one_form_encoded_segment() {
         assert_eq!(entity_name("Splunk SPL Rule"), "Splunk+SPL+Rule");
@@ -1236,6 +1373,7 @@ mod tests {
             Some(SavedSearch {
                 path: "saved/searches/a b".into(),
                 search: Some("index=x & y <z>".into()),
+                content: vec![("search".into(), "index=x & y <z>".into())],
             })
         );
         assert!(entries(b"not xml at all").is_empty());

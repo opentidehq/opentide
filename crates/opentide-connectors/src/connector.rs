@@ -223,7 +223,18 @@ impl DeployOutcome {
         self.events = events;
         self
     }
+
+    /// Whether the tenant already held the rule as the request has it, so
+    /// nothing was written (its [`RULE_UNCHANGED`] event, #1711).
+    pub fn unchanged(&self) -> bool {
+        self.events.iter().any(|event| event.name == RULE_UNCHANGED)
+    }
 }
+
+/// The event of a deploy that wrote nothing: the tenant already held the
+/// rule as the request has it, in every field the request sends
+/// ([`DeployOutcome::unchanged`], #1711).
+pub const RULE_UNCHANGED: &str = "rule_unchanged";
 
 /// Something a deploy did, as an event: its name (`sysdig_rule_created`)
 /// and the fields it is logged with, in order (`rule_id`).

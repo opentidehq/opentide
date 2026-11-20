@@ -685,6 +685,17 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 mine = recorded.to_compact();
             }
             check(format!("tenant:{name}"), describe(tenant), mine);
+            // What a deploy at the probe's time sends: a drawn Splunk
+            // schedule is the rule's own minute and hour (#1711), where the
+            // probe pinned 7 and 7.
+            let deployed = Inputs {
+                clock: Some(splunk::Clock {
+                    random: splunk::rule_minute_and_hour(uuid),
+                    ..PROBE_CLOCK
+                }),
+                ..inputs
+            };
+            let compiled = preview::compile_tenant(&cx, platform, &rule, name, &deployed).unwrap();
             sent.push((name.to_owned(), compiled));
         }
         if writes_preview.contains(&platform) {

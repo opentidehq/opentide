@@ -507,6 +507,16 @@ cwd = "repo"
 exit = 1
 
 [[scenario]]
+name = "golden/deploy-elastic-unchanged"
+description = "deploy on Elastic's stand-in, the golden cases' cassette, run a second time: every rule the first run wrote is looked up and found as the run would write it, so none is written (#1711); the prebuilt rule is still refused and the retired one still absent. Recorded from the Rust command line through the proxy, after a first deploy of the same fixture to the same stand-in."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated >/dev/null; exec opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
 name = "golden/deploy-splunk"
 description = "deploy on Splunk's stand-in, the golden cases' cassette, recorded with the Rust CLI (#1657): a saved search looked up (404), created and its settings set in two updates, then the saved searches whose description names the rule listed (none other to delete); a retired one already absent, then the saved searches that name it listed (none)."
 client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec opentide --repo \"$HOME/ws\" --json deploy --platform splunk --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]

@@ -33,6 +33,52 @@ pub struct Clock {
     pub now: (u32, u32),
 }
 
+impl Clock {
+    /// The clock of a deploy of the rule `uuid` at `now`: the minute and
+    /// hour a `random` schedule runs at come from the rule's UUID
+    /// ([`rule_minute_and_hour`]), so a rule deployed again as it is keeps
+    /// its schedule, and `current` reads `now` in UTC.
+    pub fn for_rule(uuid: &str, now: jiff::Timestamp) -> Self {
+        let civil = jiff::tz::Offset::UTC.to_datetime(now);
+        Self {
+            random: rule_minute_and_hour(uuid),
+            now: (
+                u32::try_from(civil.minute()).unwrap_or(0),
+                u32::try_from(civil.hour()).unwrap_or(0),
+            ),
+        }
+    }
+}
+
+/// The minute (0 to 59) and hour (0 to 23) a `random` schedule of the rule
+/// `uuid` runs at (#1711): one of the day's 1440 minutes, from an FNV-1a
+/// hash of all 16 bytes of the UUID, so rules spread over the day whatever
+/// their UUIDs share (`00000000-…` ones too), and a rule keeps its minute
+/// on every deploy. A UUID is read in any case, with or without hyphens or
+/// braces; text that is not one is hashed as it is.
+pub fn rule_minute_and_hour(uuid: &str) -> (u32, u32) {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0100_0000_01b3;
+    let hex: String = uuid
+        .trim()
+        .trim_start_matches("urn:uuid:")
+        .chars()
+        .filter(|c| !matches!(c, '-' | '{' | '}'))
+        .collect();
+    let digits: Vec<u8> = Some(hex)
+        .filter(|hex| hex.len() == 32 && hex.chars().all(|c| c.is_ascii_hexdigit()))
+        .and_then(|hex| u128::from_str_radix(&hex, 16).ok())
+        .map_or_else(
+            || uuid.as_bytes().to_vec(),
+            |value| value.to_be_bytes().to_vec(),
+        );
+    let hash = digits.iter().fold(OFFSET, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
+    });
+    let minute_of_day = u32::try_from(hash % 1440).unwrap_or(0);
+    (minute_of_day % 60, minute_of_day / 60)
+}
+
 /// The frequency mode (`correct_timerange_mode`): unset is `random`, an
 /// unknown value `current`.
 fn timerange_mode(value: Option<&Json>) -> &str {
@@ -55,12 +101,32 @@ fn invalid(message: &str) -> CompileError {
 /// The cron of a frequency (`cron_to_timeframe`): `15m`, `2h` or `1d`.
 /// Without a `clock` (a dry run), the minute and hour a `random` or
 /// `current` schedule runs at are the placeholders `<send-time:minute>` and
-/// `<send-time:hour>`: the deploy draws or reads them as it sends.
+/// `<send-time:hour>`. [`compile`] knows the rule, so its dry run shows a
+/// `random` schedule's minute and hour, which come from the rule's UUID
+/// ([`rule_minute_and_hour`]).
 pub fn cron_to_timeframe(
     frequency: &str,
     mode: &str,
     custom_time: Option<&str>,
     clock: Option<Clock>,
+) -> Result<String, CompileError> {
+    timeframe(
+        frequency,
+        mode,
+        custom_time,
+        clock.map(|clock| clock.random),
+        clock.map(|clock| clock.now),
+    )
+}
+
+/// [`cron_to_timeframe`] with the `random` minute and hour and the `now`
+/// ones each known or not: one not known is a `<send-time:…>` placeholder.
+fn timeframe(
+    frequency: &str,
+    mode: &str,
+    custom_time: Option<&str>,
+    random: Option<(u32, u32)>,
+    now: Option<(u32, u32)>,
 ) -> Result<String, CompileError> {
     let mut chars = frequency.chars();
     let unit = chars.next_back();
@@ -69,10 +135,12 @@ pub fn cron_to_timeframe(
             "frequency {frequency:?} must be a whole number followed by m, h or d"
         ))
     })?;
-    let (minute, hour) = match (mode, clock) {
-        ("random" | "current", None) => (deploy::send_time("minute"), deploy::send_time("hour")),
-        ("random", Some(clock)) => (clock.random.0.to_string(), clock.random.1.to_string()),
-        ("current", Some(clock)) => (format!("{:02}", clock.now.0), format!("{:02}", clock.now.1)),
+    let (minute, hour) = match (mode, random, now) {
+        ("random", None, _) | ("current", _, None) => {
+            (deploy::send_time("minute"), deploy::send_time("hour"))
+        }
+        ("random", Some((minute, hour)), _) => (minute.to_string(), hour.to_string()),
+        ("current", _, Some((minute, hour))) => (format!("{minute:02}"), format!("{hour:02}")),
         _ => {
             let Some(custom) = custom_time.filter(|custom| !custom.is_empty()) else {
                 return Err(invalid(
@@ -286,11 +354,20 @@ fn saved_search_settings(
                 config.insert("cron_schedule".into(), cron.clone());
             } else if let Some(frequency) = filled(Some(schedule), "frequency") {
                 let frequency = deploy::text(frequency);
+                // A drawn schedule is the rule's own, known without a
+                // clock; the current one is the send's (#1711).
+                let random =
+                    clock.map_or_else(|| rule_minute_and_hour(&rule.uuid), |clock| clock.random);
+                let now = clock.map(|clock| clock.now);
                 let cron = match filled(Some(schedule), "custom_time") {
-                    Some(custom) => {
-                        cron_to_timeframe(&frequency, "custom", Some(&deploy::text(custom)), clock)?
-                    }
-                    None => cron_to_timeframe(&frequency, &settings.mode, None, clock)?,
+                    Some(custom) => timeframe(
+                        &frequency,
+                        "custom",
+                        Some(&deploy::text(custom)),
+                        Some(random),
+                        now,
+                    )?,
+                    None => timeframe(&frequency, &settings.mode, None, Some(random), now)?,
                 };
                 config.insert("cron_schedule".into(), cron.into());
             }
@@ -657,8 +734,10 @@ fn actions_config(
 /// does not exist yet: the create (`POST .../saved/searches/`, name and
 /// search), then the two updates of its settings
 /// (`POST .../saved/searches/<name>`), each with the `search` first; none
-/// for a DELETION status. Without a `clock`, a schedule drawn or read at
-/// send time is written with placeholders ([`cron_to_timeframe`]).
+/// for a DELETION status. Without a `clock` (a dry run), a schedule read
+/// at send time (`current`) is written with placeholders
+/// ([`cron_to_timeframe`]), and a drawn one (`random`) with the rule's own
+/// minute and hour ([`rule_minute_and_hour`]), as a deploy writes it.
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
@@ -942,4 +1021,56 @@ mod tests {
         );
         assert!(allowed.is_empty());
     }
+
+    /// A rule's `random` schedule comes from all 16 bytes of its UUID
+    /// (#1711): the same on every deploy and in every spelling of the UUID,
+    /// and spread over the day even for UUIDs that share their first bytes,
+    /// as hand-numbered or imported ones do.
+    #[test]
+    fn a_rules_random_schedule_comes_from_its_whole_uuid() {
+        let uuid = "00000000-0000-4000-8099-000000000001";
+        let drawn = rule_minute_and_hour(uuid);
+        assert_eq!(drawn, PINNED);
+        for spelling in [
+            "00000000-0000-4000-8099-000000000001".to_uppercase(),
+            "{00000000-0000-4000-8099-000000000001}".to_owned(),
+            "urn:uuid:00000000-0000-4000-8099-000000000001".to_owned(),
+            "00000000000040008099000000000001".to_owned(),
+        ] {
+            assert_eq!(rule_minute_and_hour(&spelling), drawn, "{spelling}");
+        }
+        let now = jiff::Timestamp::from_second(3_600 * 5 + 60 * 42).unwrap();
+        assert_eq!(
+            Clock::for_rule(uuid, now),
+            Clock {
+                random: drawn,
+                now: (42, 5)
+            }
+        );
+        // The tests' own UUIDs, which share all but their last byte.
+        let three: std::collections::BTreeSet<(u32, u32)> = (1..=3)
+            .map(|n| rule_minute_and_hour(&format!("00000000-0000-4000-8099-00000000000{n}")))
+            .collect();
+        assert_eq!(three.len(), 3, "{three:?}");
+        // A thousand UUIDs that differ only in their last bytes reach every
+        // hour and nearly every minute.
+        let (mut minutes, mut hours) = (
+            std::collections::BTreeSet::new(),
+            std::collections::BTreeSet::new(),
+        );
+        for n in 0..1000 {
+            let (minute, hour) = rule_minute_and_hour(&format!("00000000-0000-4000-8099-{n:012}"));
+            assert!(minute < 60 && hour < 24, "{minute} {hour}");
+            minutes.insert(minute);
+            hours.insert(hour);
+        }
+        assert_eq!(hours.len(), 24, "{hours:?}");
+        assert!(minutes.len() >= 55, "{minutes:?}");
+        // Text that is not a UUID is hashed as it is, still in range.
+        let (minute, hour) = rule_minute_and_hour("not a uuid");
+        assert!(minute < 60 && hour < 24);
+    }
+
+    /// [`rule_minute_and_hour`] of `00000000-0000-4000-8099-000000000001`.
+    const PINNED: (u32, u32) = (9, 13);
 }

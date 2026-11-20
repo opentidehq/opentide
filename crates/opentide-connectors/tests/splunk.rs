@@ -75,15 +75,71 @@ fn writes_alone() -> Replayed {
     )
 }
 
-/// The steps' saved search written through `apply_saved_search`: created
-/// (looked up, 404; created; its settings in two updates), written again
-/// (found; updated), deleted, then already absent.
-#[test]
-fn splunk_saved_search_writes_are_the_recorded_ones() {
+/// The recording as a deploy of an unchanged rule sends it: the second
+/// step's two updates (interactions 6 and 7) are not sent, because the
+/// lookup before them (interaction 5) already answers every setting the
+/// step sends, the marked description and the empty `alert.managedBy`
+/// among them (#1711). Its listing for a rename's cleanup is still sent.
+fn unchanged_second_step(listings: bool) -> Replayed {
+    let recorded = support::cassette("splunk/deploy");
+    let interactions = recorded
+        .interactions
+        .iter()
+        .enumerate()
+        .filter(|(index, interaction)| {
+            !matches!(index, 6 | 7) && (listings || !listing(interaction))
+        })
+        .map(|(_, interaction)| interaction.clone())
+        .collect();
+    Replayed::start_with(
+        opentide_cassette::Cassette::new(
+            &recorded.scenario,
+            recorded.recorded_from.clone(),
+            interactions,
+        ),
+        splunk::PLATFORM,
+        SETUP,
+        "SPLUNK_TOKEN",
+        &splunk::http_settings(Duration::from_secs(120)),
+    )
+}
+
+/// The recording whose second lookup (interaction 5) answers a
+/// `cron_schedule` the step does not send, as a saved search someone changed
+/// in Splunk, without its listings: the second step finds it, sees the
+/// setting differ, and updates it with the recorded two writes.
+fn changed_second_step() -> Replayed {
+    let mut recorded = support::cassette("splunk/deploy");
+    let Body::Text(answer) = &mut recorded.interactions[5].response.body else {
+        panic!("the lookup's answer is text");
+    };
+    let held = "<s:key name=\"cron_schedule\">0 * * * *</s:key>";
+    assert!(answer.contains(held), "{answer}");
+    *answer = answer.replace(held, "<s:key name=\"cron_schedule\">30 * * * *</s:key>");
+    let interactions = recorded
+        .interactions
+        .iter()
+        .filter(|interaction| !listing(interaction))
+        .cloned()
+        .collect();
+    Replayed::start_with(
+        opentide_cassette::Cassette::new(
+            &recorded.scenario,
+            recorded.recorded_from.clone(),
+            interactions,
+        ),
+        splunk::PLATFORM,
+        SETUP,
+        "SPLUNK_TOKEN",
+        &splunk::http_settings(Duration::from_secs(120)),
+    )
+}
+
+/// Every step of the fixture through `apply_saved_search` against *tenant*.
+fn apply_every_step(tenant: &Replayed) -> Vec<Option<bool>> {
     let inputs = fixture("splunk");
-    let tenant = writes_alone();
     let connector = Splunk::new();
-    let done = block_on(async {
+    block_on(async {
         let mut done = Vec::new();
         for step in items(inputs.get("deploy").unwrap()) {
             let deletion = text(step.get("status").unwrap()) == "REMOVED";
@@ -101,9 +157,30 @@ fn splunk_saved_search_writes_are_the_recorded_ones() {
         }
         done
     })
-    .unwrap();
+    .unwrap()
+}
+
+/// The steps' saved search written through `apply_saved_search`: created
+/// (looked up, 404; created; its settings in two updates), found as the
+/// step has it (nothing written, #1711), deleted, then already absent.
+#[test]
+fn splunk_saved_search_writes_are_the_recorded_ones() {
+    let tenant = unchanged_second_step(false);
+    let done = apply_every_step(&tenant);
     assert_eq!(tenant.verify(), Vec::new());
-    // Created, updated, deleted, absent.
+    assert_eq!(done, [Some(true), Some(false), None, None]);
+}
+
+/// A saved search the tenant has with a setting that differs from the
+/// step's is updated (#1711): the lookup, then both of the update's writes
+/// as recorded (the settings, then those Splunk takes only once the others
+/// are set). Without this nothing would run `update_saved_search` on a
+/// saved search found.
+#[test]
+fn splunk_a_saved_search_that_differs_is_updated() {
+    let tenant = changed_second_step();
+    let done = apply_every_step(&tenant);
+    assert_eq!(tenant.verify(), Vec::new());
     assert_eq!(done, [Some(true), Some(true), None, None]);
 }
 
@@ -127,7 +204,9 @@ fn splunk_the_deployer_sends_what_was_recorded() {
         4,
         "one listing after each step"
     );
-    let tenant = replay("splunk/deploy");
+    // The second step finds the saved search as the step has it: its two
+    // updates are not sent (#1711), but its rename-cleanup listing still is.
+    let tenant = unchanged_second_step(true);
     let connector = Splunk::new();
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
@@ -174,6 +253,14 @@ fn splunk_the_deployer_sends_what_was_recorded() {
             .map(|outcome| outcome.remote_id.is_some())
             .collect::<Vec<_>>(),
         [true, true, false, false]
+    );
+    assert_eq!(
+        outcomes
+            .iter()
+            .map(opentide_connectors::connector::DeployOutcome::unchanged)
+            .collect::<Vec<_>>(),
+        [false, true, false, false],
+        "only the rule the tenant already held is unchanged"
     );
 }
 

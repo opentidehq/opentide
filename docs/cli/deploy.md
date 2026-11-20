@@ -150,7 +150,7 @@ A value the dry run cannot know is a placeholder in `api_request`, `<KIND:NAME>`
 
 | Placeholder | What a deploy sends |
 |---|---|
-| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule, drawn at random or read from the clock as the request is sent (the tenant's `frequency_scheduling`), as in `"cron_schedule": "<send-time:minute> */2 * * *"` |
+| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule read from the clock as the request is sent (a tenant's `frequency_scheduling = "current"`), as in `"cron_schedule": "<send-time:minute> */2 * * *"`. A schedule opentide draws (`random`, the default) is shown as the deploy sends it: its minute and hour come from the rule's UUID |
 | `<send-time:timestamp>` | Carbon Black Cloud: the report's `timestamp`, the time it is sent (a number, where the placeholder is a string) |
 | `<tenant-read:watchlist_id>`, `<tenant-read:watchlist>` | Carbon Black Cloud: the id of the watchlist the new report joins, and that watchlist as the tenant holds it (an object, where the placeholder is a string), sent back with the report's id added to `report_ids` |
 | `<tenant:KEY>` | The tenant's `setup.KEY`: when the run reaches no tenant of the platform (`url`, `port`, `app`, `api`, `customer_id`, `site_id`, `source_id`, `org_key`), or when the value names an environment variable (`$NAME`, `${NAME}`), which a dry run never resolves, set or not, so it needs no credential and prints no secret. The entry's `unresolved` lists the keys in `setup` and says why in `reason`. With no tenant, the requests are compiled for a tenant whose `setup` sets nothing else, with no exclusion or modifier scoped to a tenant, and SentinelOne's scope is shown as `siteIds` (a tenant with `account_id` gets `accountIds`) |
@@ -197,6 +197,7 @@ Deploying to sentinel / contoso · 14 rules
 | Line | Meaning |
 |------|---------|
 | `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. Elastic's word is what Kibana did (`created` or `updated`); a platform that keeps vendor ids shows the planned action; any other platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
+| `✓ unchanged` | The tenant already held the rule as this run would write it, so nothing was written (Elastic and Splunk, below) |
 | `✗ failed` | The platform, or planning, refused the rule. The line carries the platform's own message and its HTTP status when it has one, so the cause is readable without a traceback. A long message continues on the lines below it on a terminal and stays on one line in a log |
 | `· skipped` | The rule was not sent, with the reason: an `INERT` status, a Sigma rule on a YARA tenant, a retirement of a rule that never reached the tenant (`external_id_missing`) |
 | `· skipped … not sent: no <platform> tenant takes its status <STATUS> (<STRATEGY> strategy)` | No tenant accepts the strategy the rule's status maps to (often a status a `RELEASE` push's promotion just wrote). The row has no tenant |
@@ -267,7 +268,36 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 }
 ```
 
-`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `removed`, on a Splunk row and only when not empty, lists the saved searches the deploy deleted because an earlier name of the rule left them ([Splunk's renamed rules](#splunks-renamed-rules)), including on a `failed` row whose cleanup stopped part way; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`), except that an `upsert` the platform reports as a create or an update once sent reads `create` or `update` (Elastic), and counts as one in the tally. `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped` (one per skipped result row, per platform and tenant, plus one per rule a status left out that has no such row), `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
+`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `removed`, on a Splunk row and only when not empty, lists the saved searches the deploy deleted because an earlier name of the rule left them ([Splunk's renamed rules](#splunks-renamed-rules)), including on a `failed` row whose cleanup stopped part way; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`), except that an `upsert` the platform reports as a create or an update once sent reads `create` or `update` (Elastic), and counts as one in the tally, and a rule the tenant already held as the run would write it reads `unchanged` (its `status` is `deployed`, and on a Splunk row `removed` can still list renamed copies the deploy deleted). `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `unchanged` (rules the tenant already held, nothing written), `failed`, `skipped` (one per skipped result row, per platform and tenant, plus one per rule a status left out that has no such row), `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
+
+### Unchanged rules
+
+A deploy does not rewrite a rule the tenant already holds as the run would write it, whether the run selected the rule from the commit or with `--all`. It compares what it would send with what the lookup it makes anyway answered, field by field, on the fields opentide sends:
+
+| Platform | Compared | Not a difference |
+|----------|----------|------------------|
+| Elastic | Kibana's rule against the replace a deploy would send | the fields Kibana writes itself (`id`, `created_at`, `updated_at`, `revision`, `version`, …), a field holding Kibana's default (empty, `max_signals: 100`, `interval: 5m`, `from: now-6m`, `to: now`), an empty member Kibana adds inside a sent object, `73` against `73.0` |
+| Splunk | the saved search's settings against each setting a deploy sends (an update writes no other), the `description` with its `opentide rule <uuid>` line and the empty `alert.managedBy` among them | Splunk's `1` and `0` for `true` and `false`; an emptied setting the tenant does not answer |
+
+A field opentide sent before and no longer sends is handled as each platform's write handles it:
+
+- **Elastic.** A deploy replaces the whole rule, which drops such a field. While the tenant still holds a value in it, the rule is a change, and the replace removes the value.
+- **Splunk.** An update writes only the settings opentide sends, and the others keep their value on the saved search: a setting removed from the block's `advanced` table stays on the tenant, and the rule reads `unchanged` when every setting opentide sends is the same. Clear such a setting in Splunk. A saved search 0.28.1 deployed has no `opentide rule` line and may hold responders in `alert.managedBy`, which opentide now sends empty: it reads as changed, and is rewritten once.
+
+The rename cleanup ([Splunk's renamed rules](#splunks-renamed-rules)) runs for an unchanged rule too, so a copy a failed delete left is found on the next deploy; the row reads `unchanged` and lists the copies it deleted under `removed`.
+
+A Splunk schedule opentide draws (a `frequency` with no `custom_time`) takes its minute and hour from the rule's UUID, so it is the same on every deploy, and rules spread over the day; a `frequency_scheduling = "current"` tenant takes the deploy's time, so its rules are rewritten on every deploy.
+
+The other platforms still write each selected rule, each for its own reason:
+
+| Platform | Why it is rewritten |
+|----------|---------------------|
+| Sentinel | A deploy is a `PUT` that creates or updates, with no lookup. ARM's answer adds an `etag`, a `lastModifiedUtc` and defaults that depend on the rule's kind |
+| Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Exabeam, Google SecOps | An update goes by the stored vendor id, with no lookup. Comparing would need a `GET` per rule and a reading of each vendor's own form of the rule (fields it renames or computes), and a wrong `unchanged` would leave a changed rule undeployed |
+| Graylog | An update is a `PUT` by the stored id, with no lookup. Graylog's form of an event definition adds ids and per-type `config` defaults |
+| Carbon Black Cloud | A deploy rewrites the rule's report inside its watchlist. It reads the watchlist, but a report's IOCs come back in another form than the one sent |
+| HarfangLab | A deploy is a `PUT`, then a `POST` when the rule is not there (a `404`), with no lookup |
+
 
 ### Splunk's renamed rules
 

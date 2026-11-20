@@ -4151,6 +4151,353 @@ fn harfanglab_stops_a_tenant_refusing_the_token_before_any_rule() {
     );
 }
 
+/// A stand-in Kibana that keeps the rules written to it: a lookup answers
+/// the rule as last written, with the fields Kibana adds itself (its id,
+/// times, revision, empty defaults); each create or replace is counted.
+#[derive(Clone, Default)]
+struct KeepingKibana {
+    rules: Arc<Mutex<std::collections::HashMap<String, serde_json::Value>>>,
+    writes: Arc<Mutex<Vec<String>>>,
+}
+
+impl wiremock::Respond for KeepingKibana {
+    fn respond(&self, request: &wiremock::Request) -> wiremock::ResponseTemplate {
+        let rule_id = request
+            .url
+            .query_pairs()
+            .find(|(key, _)| key == "rule_id")
+            .map(|(_, value)| value.into_owned());
+        let mut rules = self.rules.lock().unwrap();
+        match request.method.as_str() {
+            "GET" => match rule_id.and_then(|id| rules.get(&id).cloned()) {
+                Some(rule) => wiremock::ResponseTemplate::new(200).set_body_json(rule),
+                None => wiremock::ResponseTemplate::new(404),
+            },
+            method @ ("POST" | "PUT") => {
+                let mut rule: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                let id = rule["rule_id"].as_str().unwrap().to_owned();
+                let revision = rules
+                    .get(&id)
+                    .map_or(0, |held| held["revision"].as_i64().unwrap() + 1);
+                let added = serde_json::json!({
+                    "id": "kb-1", "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": format!("2026-01-01T00:00:{revision:02}Z"),
+                    "revision": revision, "version": revision + 1, "immutable": false,
+                    "rule_source": {"type": "internal"}, "max_signals": 100,
+                    "references": [], "false_positives": [], "risk_score_mapping": [],
+                    "severity_mapping": [], "exceptions_list": [], "actions": [],
+                });
+                for (key, value) in added.as_object().unwrap() {
+                    rule.as_object_mut()
+                        .unwrap()
+                        .entry(key.clone())
+                        .or_insert(value.clone());
+                }
+                self.writes.lock().unwrap().push(format!("{method} {id}"));
+                rules.insert(id, rule.clone());
+                wiremock::ResponseTemplate::new(200).set_body_json(rule)
+            }
+            _ => wiremock::ResponseTemplate::new(405),
+        }
+    }
+}
+
+/// `opentide --json deploy --platform elastic` in `ws`: the document.
+fn elastic_json(ws: &Path) -> serde_json::Value {
+    let (code, out, err) = cli(
+        ws,
+        &[
+            "--json",
+            "deploy",
+            "--platform",
+            "elastic",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[("ELASTIC_API_KEY", "key".to_owned())],
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    serde_json::from_str(&out).unwrap()
+}
+
+/// Deploying again with nothing changed writes nothing (#1711, smoke E10):
+/// Kibana already holds each rule as a replace would write it, so each is
+/// reported `unchanged`, in its row, the summary and the outcome line. A
+/// rule whose block changed is still replaced.
+#[test]
+fn a_redeploy_with_nothing_changed_writes_nothing_and_reports_unchanged() {
+    use wiremock::matchers::{path, path_regex};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let kibana = KeepingKibana::default();
+    rt.block_on(async {
+        wiremock::Mock::given(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(path("/api/detection_engine/rules"))
+            .respond_with(kibana.clone())
+            .mount(&server)
+            .await;
+    });
+    let (first, second) = (
+        "00000000-0000-4000-8099-000000000161",
+        "00000000-0000-4000-8099-000000000162",
+    );
+    let ws = elastic_workspace(
+        &server.uri(),
+        &[
+            ("a.yaml", "First rule", first, elastic_block("STAGING", "")),
+            (
+                "b.yaml",
+                "Second rule",
+                second,
+                elastic_block("STAGING", ""),
+            ),
+        ],
+    );
+    let created = elastic_json(ws.path());
+    assert_eq!(created["summary"]["create"], 2, "{created}");
+    assert_eq!(kibana.writes.lock().unwrap().len(), 2);
+
+    // Nothing changed: nothing is written.
+    let again = elastic_json(ws.path());
+    assert_eq!(kibana.writes.lock().unwrap().len(), 2, "{again}");
+    for row in again["results"].as_array().unwrap() {
+        assert_eq!(row["status"], "deployed", "{again}");
+        assert_eq!(row["action"], "unchanged", "{again}");
+    }
+    assert_eq!(again["summary"]["unchanged"], 2, "{again}");
+    assert_eq!(again["summary"]["update"], 0, "{again}");
+    assert!(
+        again["message"]
+            .as_str()
+            .unwrap()
+            .contains("2 unchanged · 0 failed, 0 not attempted"),
+        "{again}"
+    );
+    let (code, _, err) = cli(
+        ws.path(),
+        &[
+            "deploy",
+            "--platform",
+            "elastic",
+            "--strategy",
+            "PREVIEW",
+            "--all",
+        ],
+        &[("ELASTIC_API_KEY", "key".to_owned())],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(err.contains("✓ unchanged First rule"), "{err}");
+    assert_eq!(kibana.writes.lock().unwrap().len(), 2, "{err}");
+
+    // A changed query is replaced; the other rule is still unchanged.
+    let file = ws.path().join("objects/rules/a.yaml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, text.replace("cmd.exe", "powershell.exe")).unwrap();
+    let changed = elastic_json(ws.path());
+    assert_eq!(
+        *kibana.writes.lock().unwrap(),
+        [
+            format!("POST {first}"),
+            format!("POST {second}"),
+            format!("PUT {first}")
+        ],
+        "{changed}"
+    );
+    assert_eq!(changed["summary"]["update"], 1, "{changed}");
+    assert_eq!(changed["summary"]["unchanged"], 1, "{changed}");
+}
+
+/// A tenant that fails on the lookup that decides whether a rule is already
+/// there follows #1701's rule: a lookup is a read, so it is not a rule sent.
+/// When it is the first rule's, nothing was sent: every rule is `not
+/// attempted`, the tenant is failed and the run exits 1. When an earlier
+/// rule was looked up and found unchanged, the tenant was in use: that rule
+/// is `unchanged`, the one whose lookup failed is `failed`, the rest are not
+/// attempted.
+#[test]
+fn a_tenant_failing_the_unchanged_lookup_follows_the_failure_before_any_rule() {
+    use wiremock::matchers::{method, path, path_regex, query_param};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let kibana = KeepingKibana::default();
+    rt.block_on(async {
+        wiremock::Mock::given(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(path("/api/detection_engine/rules"))
+            .respond_with(kibana.clone())
+            .mount(&server)
+            .await;
+    });
+    let uuids = [
+        "00000000-0000-4000-8099-000000000171",
+        "00000000-0000-4000-8099-000000000172",
+        "00000000-0000-4000-8099-000000000173",
+    ];
+    let ws = elastic_workspace(
+        &server.uri(),
+        &[
+            (
+                "a.yaml",
+                "First rule",
+                uuids[0],
+                elastic_block("STAGING", ""),
+            ),
+            (
+                "b.yaml",
+                "Second rule",
+                uuids[1],
+                elastic_block("STAGING", ""),
+            ),
+            (
+                "c.yaml",
+                "Third rule",
+                uuids[2],
+                elastic_block("STAGING", ""),
+            ),
+        ],
+    );
+    // Kibana holds the three rules.
+    let created = elastic_json(ws.path());
+    assert_eq!(created["summary"]["create"], 3, "{created}");
+    let writes = kibana.writes.lock().unwrap().len();
+    let env = Env::from_pairs([("ELASTIC_API_KEY".to_owned(), "key".to_owned())]);
+
+    // The first rule's lookup fails: nothing was sent.
+    rt.block_on(
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/detection_engine/rules"))
+            .and(query_param("rule_id", uuids[0]))
+            .respond_with(wiremock::ResponseTemplate::new(503).set_body_string("<html>down</html>"))
+            .with_priority(1)
+            .mount(&server),
+    );
+    let (sent, text) = deploy(
+        ws.path(),
+        "elastic",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["not_attempted"; 3], "{text}");
+    assert_failed_before_any_rule(&sent, "elastic", "lab", "");
+    assert_eq!(kibana.writes.lock().unwrap().len(), writes, "{text}");
+
+    // The second rule's lookup fails after the first was found unchanged.
+    rt.block_on(server.reset());
+    rt.block_on(async {
+        wiremock::Mock::given(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(path("/api/detection_engine/rules"))
+            .respond_with(kibana.clone())
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/detection_engine/rules"))
+            .and(query_param("rule_id", uuids[1]))
+            .respond_with(wiremock::ResponseTemplate::new(503).set_body_string("<html>down</html>"))
+            .with_priority(1)
+            .mount(&server)
+            .await;
+    });
+    let (sent, text) = deploy(
+        ws.path(),
+        "elastic",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["deployed", "failed", "not_attempted"], "{text}");
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(kibana.writes.lock().unwrap().len(), writes, "{text}");
+}
+
+/// A Splunk deployer that keeps the body of each request it receives.
+struct Recording(Mutex<Vec<Vec<u8>>>);
+
+impl Deployer for Recording {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        self.0.lock().unwrap().push(request.body.clone());
+        deploying(async move { Ok(DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// [`Recording`] registered as the Splunk platform.
+struct Recorded(&'static Recording);
+
+impl Platform for Recorded {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A Splunk rule whose schedule opentide draws (a daily frequency, no
+/// custom time) gets the same minute and hour on every deploy, from its
+/// UUID, so a redeploy of the same rule sends the same settings and the
+/// tenant can hold it unchanged (#1711). It was drawn at random each run.
+#[test]
+fn a_drawn_splunk_schedule_is_the_same_on_every_deploy() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n    scheduling:\n      \
+                 schedule:\n        frequency: 1d\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &three_rules(block),
+    );
+    let recording: &'static Recording = Box::leak(Box::new(Recording(Mutex::new(Vec::new()))));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Recorded(recording))).unwrap();
+    let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
+    let cron = |body: &[u8]| -> String {
+        let settings: serde_json::Value = serde_json::from_slice(body).unwrap();
+        settings["cron_schedule"].as_str().unwrap().to_owned()
+    };
+    deploy(ws.path(), "splunk", &env, &registry, 0);
+    deploy(ws.path(), "splunk", &env, &registry, 3600 * 7 + 60 * 13);
+    let bodies = recording.0.lock().unwrap().clone();
+    assert_eq!(bodies.len(), 6);
+    let mut crons = std::collections::BTreeSet::new();
+    for rule in 0..3 {
+        assert_eq!(bodies[rule], bodies[rule + 3], "rule {rule}");
+        let cron = cron(&bodies[rule]);
+        assert!(cron.ends_with(" */1 * *"), "{cron}");
+        crons.insert(cron);
+    }
+    // The three UUIDs differ only in their last byte, and still get three
+    // schedules: the whole UUID is hashed.
+    assert_eq!(crons.len(), 3, "{crons:?}");
+}
+
 // #1712: a dry run's `api_request` is the requests a deploy sends. For each
 // platform whose writes are built from the tenant, the dry run of a
 // workspace is held to what the tenant's stand-in receives when the same

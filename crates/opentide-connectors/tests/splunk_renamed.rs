@@ -35,6 +35,9 @@ const SAVED: &str = "/servicesNS/nobody/search/saved/searches";
 #[derive(Debug, Default)]
 struct State {
     saved: BTreeMap<String, String>,
+    /// The settings an update wrote to a saved search, besides its
+    /// description, as the lookup answers them (#1711).
+    settings: BTreeMap<String, BTreeMap<String, String>>,
     acl: BTreeMap<String, (String, String)>,
     seen: Vec<String>,
     refuse: Vec<(Method, String)>,
@@ -43,19 +46,38 @@ struct State {
 #[derive(Debug, Clone, Default)]
 struct FakeSplunk(Arc<Mutex<State>>);
 
-/// An Atom feed of *entries* (name, description, (app, owner)), each with
-/// its ACL as Splunk answers it.
-fn feed(entries: &[(&String, &String, (&str, &str))]) -> Vec<u8> {
+/// A saved search as the feed shows it: name, description, (app, owner)
+/// and the other settings written to it.
+type Shown<'a> = (
+    &'a String,
+    &'a String,
+    (&'a str, &'a str),
+    &'a BTreeMap<String, String>,
+);
+
+/// No settings written.
+static NO_SETTINGS: BTreeMap<String, String> = BTreeMap::new();
+
+fn escaped(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;")
+}
+
+/// An Atom feed of *entries*, each with its ACL as Splunk answers it.
+fn feed(entries: &[Shown<'_>]) -> Vec<u8> {
     let mut text = String::new();
-    for (name, description, (app, owner)) in entries {
+    for (name, description, (app, owner), settings) in entries {
         let path = format!("{SAVED}/{}", urlencoding(name));
+        let mut others = String::new();
+        for (key, value) in *settings {
+            others.push_str(&format!("<s:key name=\"{key}\">{}</s:key>", escaped(value)));
+        }
         text.push_str(&format!(
             "<entry><title>{name}</title><link href=\"{path}\" rel=\"alternate\"/>\
-             <content type=\"text/xml\"><s:dict><s:key name=\"description\">{}</s:key>\
+             <content type=\"text/xml\"><s:dict><s:key name=\"description\">{}</s:key>{others}\
              <s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">{app}</s:key>\
              <s:key name=\"owner\">{owner}</s:key>\
              </s:dict></s:key></s:dict></content></entry>",
-            description.replace('&', "&amp;").replace('<', "&lt;")
+            escaped(description)
         ));
     }
     let entries = text;
@@ -74,10 +96,7 @@ fn urlencoding(name: &str) -> String {
 
 impl State {
     /// The saved search *name*'s feed entry: its description and ACL.
-    fn entry<'a>(
-        &'a self,
-        name: &'a String,
-    ) -> Option<(&'a String, &'a String, (&'a str, &'a str))> {
+    fn entry<'a>(&'a self, name: &'a String) -> Option<Shown<'a>> {
         let description = self.saved.get(name)?;
         let acl = self
             .acl
@@ -85,7 +104,8 @@ impl State {
             .map_or(("search", "nobody"), |(app, owner)| {
                 (app.as_str(), owner.as_str())
             });
-        Some((name, description, acl))
+        let settings = self.settings.get(name).unwrap_or(&NO_SETTINGS);
+        Some((name, description, acl, settings))
     }
 }
 
@@ -152,10 +172,19 @@ impl FakeSplunk {
                 if let Some(updated) = form.get("description") {
                     description.clone_from(updated);
                 }
+                let written = state.settings.entry(name.clone()).or_default();
+                for (key, value) in &form {
+                    if key != "description" && key != "name" {
+                        written.insert(key.clone(), value.clone());
+                    }
+                }
                 (200, feed(&[state.entry(&name).unwrap()]))
             }
             (Method::DELETE, name) => match state.saved.remove(name) {
-                Some(_) => (200, feed(&[])),
+                Some(_) => {
+                    state.settings.remove(name);
+                    (200, feed(&[]))
+                }
                 None => (404, Vec::new()),
             },
             _ => (405, Vec::new()),
@@ -239,6 +268,30 @@ fn deploy(fake: &FakeSplunk, steps: &[(&str, &str, &str)]) -> Vec<Done> {
 
 /// Sends *requests* on a tenant served by *fake*.
 fn send(fake: &FakeSplunk, requests: &[DeployRequest]) -> Vec<Done> {
+    send_outcomes(fake, requests)
+        .into_iter()
+        .map(|done| {
+            done.map(|done| warnings(&done)).map_err(|failed| {
+                (
+                    failed.failure.code.to_owned(),
+                    failed.failure.message.clone(),
+                    failed.partial.as_deref().map(warnings).unwrap_or_default(),
+                )
+            })
+        })
+        .collect()
+}
+
+/// [`send`], with each step's outcome as the deployer returned it.
+fn send_outcomes(
+    fake: &FakeSplunk,
+    requests: &[DeployRequest],
+) -> Vec<
+    Result<
+        opentide_connectors::connector::DeployOutcome,
+        opentide_connectors::connector::DeployError,
+    >,
+> {
     let _one = ONE_AT_A_TIME
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -266,18 +319,7 @@ fn send(fake: &FakeSplunk, requests: &[DeployRequest]) -> Vec<Done> {
     let connector = Splunk::new();
     requests
         .iter()
-        .map(|request| {
-            block_on(async { connector.deploy(cx, request).await })
-                .unwrap()
-                .map(|done| warnings(&done))
-                .map_err(|failed| {
-                    (
-                        failed.failure.code.to_owned(),
-                        failed.failure.message.clone(),
-                        failed.partial.as_deref().map(warnings).unwrap_or_default(),
-                    )
-                })
-        })
+        .map(|request| block_on(async { connector.deploy(cx, request).await }).unwrap())
         .collect()
 }
 
@@ -511,4 +553,64 @@ fn copies_deleted_before_a_failed_delete_are_kept_in_the_failure() {
         &[(RENAMED_DELETED.to_owned(), "Old name 1".to_owned())]
     );
     assert_eq!(names(&fake), ["New name", "Old name 2"]);
+}
+
+/// A rule the tenant already holds as the request has it is unchanged, and
+/// writes nothing (#1711); the rename cleanup runs all the same, so the
+/// copy an earlier name left is deleted, and a failed delete is found again
+/// by the next deploy of the rule, though it reads unchanged too.
+#[test]
+fn an_unchanged_rule_still_has_its_old_copies_deleted() {
+    let fake = FakeSplunk::default();
+    let request = DeployRequest::new(
+        "New name",
+        Operation::Update,
+        body(Operation::Update, A, "index=main"),
+    );
+    let first = send_outcomes(&fake, std::slice::from_ref(&request));
+    assert!(!first[0].as_ref().unwrap().unchanged());
+    // An earlier name of the rule is still on the tenant, which refuses its
+    // delete the first time.
+    fake.0
+        .lock()
+        .unwrap()
+        .saved
+        .insert("Old name".to_owned(), splunk_rule::described("Old.", A));
+    fake.0
+        .lock()
+        .unwrap()
+        .refuse
+        .push((Method::DELETE, "Old name".to_owned()));
+    fake.0.lock().unwrap().seen.clear();
+    let refused = send(&fake, std::slice::from_ref(&request));
+    assert_eq!(refused[0].as_ref().unwrap_err().0, RENAMED_CLEANUP_FAILED);
+    assert!(
+        !fake
+            .0
+            .lock()
+            .unwrap()
+            .seen
+            .contains(&"POST New name".to_owned()),
+        "nothing is written to a saved search the tenant already holds"
+    );
+    fake.0.lock().unwrap().refuse.clear();
+    fake.0.lock().unwrap().seen.clear();
+    let again = send_outcomes(&fake, std::slice::from_ref(&request));
+    let again = again[0].as_ref().unwrap();
+    assert!(again.unchanged());
+    assert_eq!(
+        warnings(again),
+        [(RENAMED_DELETED.to_owned(), "Old name".to_owned())]
+    );
+    assert_eq!(names(&fake), ["New name"]);
+    assert!(
+        !fake
+            .0
+            .lock()
+            .unwrap()
+            .seen
+            .contains(&"POST New name".to_owned()),
+        "{:?}",
+        fake.0.lock().unwrap().seen
+    );
 }
