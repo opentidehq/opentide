@@ -33,18 +33,27 @@ use tokio_util::sync::CancellationToken;
 static WIRE: Mutex<()> = Mutex::new(());
 
 /// What the wire does with a tenant's read (every request that is not Entra
-/// ID's token endpoint).
+/// ID's token endpoint, the metadata server's or a key check).
 #[derive(Clone, Copy, Debug)]
 enum Read {
     Status(u16),
     NoAnswer,
+    /// 401 for a request whose `Authorization` holds this key, 200 for any
+    /// other.
+    Rejecting(&'static str),
+    /// Presses Ctrl-C on the first request, then holds it until the run
+    /// cancels it (or five seconds, which the tests call a failure).
+    Hold,
 }
 
 #[derive(Clone, Debug)]
 struct Wire {
     sign_in: u16,
     read: Read,
+    interrupt: Option<Interrupt>,
     seen: Arc<Mutex<Vec<String>>>,
+    /// `host` and the `Authorization` header of each request that had one.
+    keyed: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 impl Wire {
@@ -52,12 +61,19 @@ impl Wire {
         Self {
             sign_in: 200,
             read,
+            interrupt: None,
             seen: Arc::default(),
+            keyed: Arc::default(),
         }
     }
 
     fn signing_in(mut self, status: u16) -> Self {
         self.sign_in = status;
+        self
+    }
+
+    fn pressing(mut self, interrupt: &Interrupt) -> Self {
+        self.interrupt = Some(interrupt.clone());
         self
     }
 
@@ -72,22 +88,53 @@ impl Wire {
             .cloned()
             .collect()
     }
+
+    /// The `Authorization` header values sent to `host`.
+    fn keys_sent_to(&self, host: &str) -> Vec<String> {
+        self.keyed
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(sent_to, _)| sent_to == host)
+            .map(|(_, key)| key.clone())
+            .collect()
+    }
 }
 
 impl Transport for Wire {
     fn execute<'a>(
         &'a self,
         request: Request,
-        _cancel: &'a CancellationToken,
+        cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Response, TransportFailure>> {
         let url = request.url().clone();
-        self.seen.lock().unwrap().push(format!(
-            "{} {}{}",
-            request.method(),
-            url.host_str().unwrap_or_default(),
-            url.path()
-        ));
-        let outcome = if url.host_str() == Some("login.microsoftonline.com") {
+        let host = url.host_str().unwrap_or_default().to_owned();
+        self.seen
+            .lock()
+            .unwrap()
+            .push(format!("{} {}{}", request.method(), host, url.path()));
+        let key = request
+            .headers()
+            .get("authorization")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        if let Some(key) = &key {
+            self.keyed.lock().unwrap().push((host.clone(), key.clone()));
+        }
+        // Only a tenant's request is held: doctor's own ask of PyPI is not
+        // the probe, and is answered at once.
+        let held = matches!(self.read, Read::Hold)
+            && host != "login.microsoftonline.com"
+            && host != "pypi.org";
+        if held && let Some(interrupt) = &self.interrupt {
+            interrupt.request();
+        }
+        let outcome = if host == "metadata.google.internal" {
+            // No Google Cloud host: the metadata server does not answer.
+            Err(TransportFailure::Connect {
+                reason: "no such host".into(),
+            })
+        } else if host == "login.microsoftonline.com" {
             Ok(match self.sign_in {
                 200 => (
                     200,
@@ -104,9 +151,20 @@ impl Transport for Wire {
             match self.read {
                 Read::Status(status) => Ok((status, b"{}".to_vec())),
                 Read::NoAnswer => Err(TransportFailure::Timeout),
+                Read::Rejecting(marker) => {
+                    let refused = key.as_deref().is_some_and(|key| key.contains(marker));
+                    Ok((if refused { 401 } else { 200 }, b"{}".to_vec()))
+                }
+                Read::Hold => Ok((200, b"{}".to_vec())),
             }
         };
         Box::pin(async move {
+            if held {
+                tokio::select! {
+                    () = cancel.cancelled() => return Err(TransportFailure::Cancelled),
+                    () = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
             let (status, body) = outcome?;
             Ok(Response::new(
                 StatusCode::from_u16(status).unwrap(),
@@ -186,9 +244,23 @@ fn workspace() -> (tempfile::TempDir, PathBuf) {
     (scratch, ws)
 }
 
+/// What a run printed, as it came.
+struct Raw {
+    code: i32,
+    stdout: String,
+    stderr: String,
+    took: Duration,
+}
+
 /// `opentide --json doctor <args>` in `ws` with `env` besides `HOME`, on
-/// `wire` when it is given.
-fn doctor(ws: &Path, args: &[&str], env: &[(&str, &str)], wire: Option<&Wire>) -> Ran {
+/// `wire` when it is given, Ctrl-C being `interrupt`.
+fn run_doctor(
+    ws: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    wire: Option<&Wire>,
+    interrupt: &Interrupt,
+) -> Raw {
     let _held: MutexGuard<'_, ()> = WIRE.lock().unwrap_or_else(|held| held.into_inner());
     let _installed = wire.map(|wire| transport::install(Arc::new(wire.clone())));
     let stderr = Buffer::default();
@@ -200,7 +272,7 @@ fn doctor(ws: &Path, args: &[&str], env: &[(&str, &str)], wire: Option<&Wire>) -
         log_sink: sink,
         cwd: Some(ws.to_path_buf()),
         width: None,
-        interrupt: Interrupt::default(),
+        interrupt: interrupt.clone(),
     };
     let mut words: Vec<String> = vec!["--json".into(), "doctor".into()];
     words.extend(args.iter().map(|word| (*word).to_owned()));
@@ -212,12 +284,33 @@ fn doctor(ws: &Path, args: &[&str], env: &[(&str, &str)], wire: Option<&Wire>) -
             .chain([("HOME".to_owned(), home.display().to_string())]),
     );
     let mut out = Vec::new();
-    let mut err = stderr;
+    let mut err = stderr.clone();
+    let started = std::time::Instant::now();
     let code = run(&words, &env, &host, &mut out, &mut err);
-    let stdout = String::from_utf8(out).unwrap();
-    let document = serde_json::from_str(&stdout)
-        .unwrap_or_else(|error| panic!("{error}: not one JSON document: {stdout}"));
-    Ran { code, document }
+    let took = started.elapsed();
+    Raw {
+        code,
+        stdout: String::from_utf8(out).unwrap(),
+        stderr: String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap(),
+        took,
+    }
+}
+
+/// [`run_doctor`] for a run that prints its one JSON document.
+fn doctor(ws: &Path, args: &[&str], env: &[(&str, &str)], wire: Option<&Wire>) -> Ran {
+    let raw = run_doctor(ws, args, env, wire, &Interrupt::default());
+    let document = serde_json::from_str(&raw.stdout)
+        .unwrap_or_else(|error| panic!("{error}: not one JSON document: {}", raw.stdout));
+    Ran {
+        code: raw.code,
+        document,
+    }
+}
+
+/// Writes the platform file `name` of the workspace `ws`.
+fn platform(ws: &Path, name: &str, text: &str) {
+    let folder = ws.join(".opentide/configurations/platforms");
+    std::fs::write(folder.join(format!("{name}.toml")), text).unwrap();
 }
 
 /// Both stand-in tenants' credentials; the fixture's other platforms get none.
@@ -393,4 +486,247 @@ fn live_and_offline_contradict_each_other() {
         shown.contains("--live") && shown.contains("--offline") && !shown.contains("unexpected"),
         "{shown}"
     );
+}
+
+// ---- the review's cases (#1726) ----
+
+const GOOGLE_SECOPS: &str = r#"
+[platform]
+enabled = true
+name = "Google Security Operations"
+
+[[tenants]]
+name = "secops"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+project = "acme-secops"
+location = "eu"
+instance = "3f0ac524-5ae1-4bfd-b86d-53afc953e7e6"
+"#;
+
+#[test]
+fn google_secops_with_no_credentials_anywhere_is_skipped_not_failed() {
+    let (_scratch, ws) = workspace();
+    platform(&ws, "google_secops", GOOGLE_SECOPS);
+    // No `credentials`, no GOOGLE_APPLICATION_CREDENTIALS, no gcloud file in
+    // HOME, and the wire answers no metadata server.
+    let wire = Wire::new(Read::Status(200));
+    let ran = doctor(&ws, &["--live"], &[], Some(&wire));
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    // The credentials check reports them missing, as a warning.
+    assert_eq!(ran.status("credentials", "google_secops/secops"), "warn");
+    assert!(
+        ran.message("credentials", "google_secops/secops")
+            .contains("no credentials"),
+        "{}",
+        ran.document
+    );
+    // Connectivity skips the tenant; no request reached Google's API.
+    assert_eq!(ran.status("connectivity", "google_secops/secops"), "skip");
+    assert!(
+        wire.seen()
+            .iter()
+            .all(|line| line.contains("metadata.google.internal")),
+        "{:?}",
+        wire.seen()
+    );
+}
+
+#[test]
+fn google_secops_whose_default_credentials_are_refused_fails() {
+    let (scratch, ws) = workspace();
+    platform(&ws, "google_secops", GOOGLE_SECOPS);
+    let key = scratch.path().join("adc.json");
+    std::fs::write(
+        &key,
+        r#"{"type":"authorized_user","client_id":"stand-in-client-id",
+            "client_secret":"stand-in-client-secret","refresh_token":"stand-in-refresh-token"}"#,
+    )
+    .unwrap();
+    let wire = Wire::new(Read::Status(401));
+    let key = key.display().to_string();
+    let ran = doctor(
+        &ws,
+        &["--live"],
+        &[("GOOGLE_APPLICATION_CREDENTIALS", key.as_str())],
+        Some(&wire),
+    );
+    assert_eq!(ran.code, 1, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "google_secops/secops"), "fail");
+    assert!(
+        ran.message("connectivity", "google_secops/secops")
+            .contains("authentication_failed"),
+        "{}",
+        ran.document
+    );
+    // The credentials were found, so no request went to the metadata server.
+    assert!(
+        wire.seen()
+            .iter()
+            .all(|line| !line.contains("metadata.google.internal")),
+        "{:?}",
+        wire.seen()
+    );
+}
+
+const BITDEFENDER: &str = r#"
+[platform]
+enabled = true
+name = "Bitdefender GravityZone"
+
+[[tenants]]
+name = "gz"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://gz.stand-in.invalid"
+api_key = "$STAND_IN_GZ_KEY"
+"#;
+
+#[test]
+fn bitdefender_is_not_supported_whatever_its_variables_are() {
+    // Stand-in variable names only, and the wire answers nothing for it.
+    for env in [&[][..], &[("STAND_IN_GZ_KEY", "stand-in-key-value")][..]] {
+        let (_scratch, ws) = workspace();
+        platform(&ws, "bitdefender", BITDEFENDER);
+        let wire = Wire::new(Read::Status(200));
+        let ran = doctor(&ws, &["--live"], env, Some(&wire));
+        assert_eq!(ran.code, 0, "{}", ran.document);
+        assert_eq!(ran.status("connectivity", "bitdefender/gz"), "skip");
+        let check = ran.check("connectivity", "bitdefender/gz");
+        assert!(
+            check["message"]
+                .as_str()
+                .unwrap()
+                .contains("not supported by doctor --live"),
+            "{check}"
+        );
+        // Never told to set a variable and run again: that would not check it.
+        assert!(check["fix"].is_null(), "{check}");
+        assert!(
+            !check["message"]
+                .as_str()
+                .unwrap()
+                .contains("STAND_IN_GZ_KEY"),
+            "{check}"
+        );
+        assert!(
+            wire.seen()
+                .iter()
+                .all(|line| !line.contains("stand-in.invalid")),
+            "{:?}",
+            wire.seen()
+        );
+    }
+}
+
+const TWO_ELASTIC: &str = r#"
+[platform]
+enabled = true
+name = "Elastic Security"
+
+[[tenants]]
+name = "soc"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://kibana.elastic.invalid"
+elasticsearch_url = "https://es.elastic.invalid"
+api_key = "$ELASTIC_API_KEY"
+space = "soc"
+index = ["logs-*"]
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://kibana.lab.invalid"
+elasticsearch_url = "https://es.lab.invalid"
+api_key = "$ELASTIC_LAB_KEY"
+space = "lab"
+index = ["logs-*"]
+"#;
+
+#[test]
+fn two_tenants_of_one_platform_each_have_their_own_result_and_settings() {
+    // One has credentials and answers; the other has none and is skipped:
+    // only the first's host is contacted, with the first's key.
+    let (_scratch, ws) = workspace();
+    platform(&ws, "elastic", TWO_ELASTIC);
+    let wire = Wire::new(Read::Status(200));
+    let ran = doctor(
+        &ws,
+        &["--live"],
+        &[("ELASTIC_API_KEY", "soc-key-value")],
+        Some(&wire),
+    );
+    assert_eq!(ran.code, 0, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "elastic/soc"), "pass");
+    assert_eq!(ran.status("connectivity", "elastic/lab"), "skip");
+    assert!(
+        ran.message("connectivity", "elastic/lab")
+            .contains("ELASTIC_LAB_KEY"),
+        "{}",
+        ran.document
+    );
+    assert_eq!(
+        wire.keys_sent_to("kibana.elastic.invalid"),
+        ["ApiKey soc-key-value"]
+    );
+    assert!(wire.keys_sent_to("kibana.lab.invalid").is_empty());
+
+    // Both have credentials, the second's is wrong: the first still passes,
+    // the second alone fails, each with its own host and key.
+    let wire = Wire::new(Read::Rejecting("lab-wrong-key"));
+    let ran = doctor(
+        &ws,
+        &["--live"],
+        &[
+            ("ELASTIC_API_KEY", "soc-key-value"),
+            ("ELASTIC_LAB_KEY", "lab-wrong-key"),
+        ],
+        Some(&wire),
+    );
+    assert_eq!(ran.code, 1, "{}", ran.document);
+    assert_eq!(ran.status("connectivity", "elastic/soc"), "pass");
+    assert_eq!(ran.status("connectivity", "elastic/lab"), "fail");
+    assert!(
+        ran.message("connectivity", "elastic/lab")
+            .contains("authentication_failed"),
+        "{}",
+        ran.document
+    );
+    assert_eq!(
+        wire.keys_sent_to("kibana.elastic.invalid"),
+        ["ApiKey soc-key-value"]
+    );
+    assert_eq!(
+        wire.keys_sent_to("kibana.lab.invalid"),
+        ["ApiKey lab-wrong-key"]
+    );
+}
+
+#[test]
+fn ctrl_c_stops_a_probe_that_the_tenant_holds() {
+    let (_scratch, ws) = workspace();
+    let interrupt = Interrupt::default();
+    // The wire presses Ctrl-C on the request and holds it for five seconds
+    // unless the run cancels it.
+    let wire = Wire::new(Read::Hold).pressing(&interrupt);
+    let raw = run_doctor(
+        &ws,
+        &["--live"],
+        &[("ELASTIC_API_KEY", "stand-in-api-key-value")],
+        Some(&wire),
+        &interrupt,
+    );
+    assert_eq!((raw.code, raw.stdout.as_str()), (130, ""), "{}", raw.stderr);
+    assert!(
+        raw.stderr.ends_with("error: interrupted\n"),
+        "{}",
+        raw.stderr
+    );
+    assert!(raw.took < Duration::from_secs(3), "{:?}", raw.took);
 }

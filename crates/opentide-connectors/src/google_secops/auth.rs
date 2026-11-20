@@ -240,6 +240,16 @@ pub fn well_known_file(env: &Environment) -> Option<PathBuf> {
     Some(directory.join("application_default_credentials.json"))
 }
 
+/// Whether Application Default Credentials have a source on this machine
+/// that needs no network: `GOOGLE_APPLICATION_CREDENTIALS` set, or gcloud's
+/// well-known file present. With neither, only the metadata server (a Google
+/// Cloud host) can supply them.
+pub fn has_local_default_credentials(env: &Environment) -> bool {
+    env.get("GOOGLE_APPLICATION_CREDENTIALS")
+        .is_some_and(|named| !named.is_empty())
+        || well_known_file(env).is_some_and(|path| path.is_file())
+}
+
 /// The credentials for a tenant's `credentials` setup value (`None` when
 /// the tenant names none: Application Default Credentials).
 ///

@@ -775,8 +775,10 @@ impl Defender {
 
 impl Prober for Defender {
     /// Opens the tenant as a deploy does (the Entra ID sign-in), then reads
-    /// one custom detection rule: `GET .../detectionRules?$top=1`, which
-    /// writes nothing and needs the token.
+    /// the first page of custom detection rules: `GET .../detectionRules`, the
+    /// collection URL a listing starts from (the recorded listing's), which
+    /// writes nothing and needs the token. No `$top`: no recording shows Graph
+    /// accepting it on this beta collection, and a 400 would fail every tenant.
     fn probe<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -784,9 +786,13 @@ impl Prober for Defender {
         crate::connector::probing(async move {
             let tenant = &cx.tenant.label.tenant;
             self.open_tenant(cx).await?;
-            let url = format!("{DETECTION_RULES_ENDPOINT}?$top=1");
             let answer = self
-                .graph(cx, crate::transport::Method::GET, &url, None)
+                .graph(
+                    cx,
+                    crate::transport::Method::GET,
+                    DETECTION_RULES_ENDPOINT,
+                    None,
+                )
                 .await
                 .map_err(|error| error.into_connector(tenant))?;
             probe_verdict(

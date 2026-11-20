@@ -105,12 +105,26 @@ fn sysdig_reads_the_policies_and_writes_nothing() {
 }
 
 #[test]
-fn sysdig_refusing_the_token_is_tenant_refused_and_a_5xx_too() {
+fn sysdig_refusing_the_token_is_authentication_failed_and_a_5xx_is_tenant_refused() {
     runtime().block_on(async {
-        for status in [401, 403, 500] {
+        for (status, expected) in [
+            (401, "authentication_failed"),
+            (403, "authentication_failed"),
+            (500, "tenant_refused"),
+        ] {
             let server = MockServer::start().await;
-            answering(&server, "GET", "/api/v2/policies", status).await;
-            assert_eq!(code(sysdig_probe(&server.uri()).await), "tenant_refused");
+            Mock::given(method("GET"))
+                .and(path("/api/v2/policies"))
+                .respond_with(ResponseTemplate::new(status).set_body_string("leaked-answer-text"))
+                .mount(&server)
+                .await;
+            let failed = sysdig_probe(&server.uri()).await.unwrap_err();
+            assert_eq!(failed.failure.code, expected, "HTTP {status}");
+            // The answer's body is not quoted.
+            assert!(
+                !failed.to_string().contains("leaked-answer-text"),
+                "{failed}"
+            );
         }
     });
 }

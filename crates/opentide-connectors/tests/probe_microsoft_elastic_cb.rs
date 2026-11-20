@@ -44,6 +44,8 @@ struct Wire {
     sign_in: u16,
     read: Read,
     seen: Arc<Mutex<Vec<String>>>,
+    /// The full URL of each request, query included.
+    urls: Arc<Mutex<Vec<String>>>,
 }
 
 impl Wire {
@@ -52,6 +54,7 @@ impl Wire {
             sign_in: 200,
             read,
             seen: Arc::default(),
+            urls: Arc::default(),
         }
     }
 
@@ -63,6 +66,10 @@ impl Wire {
     fn seen(&self) -> Vec<String> {
         self.seen.lock().unwrap().clone()
     }
+
+    fn urls(&self) -> Vec<String> {
+        self.urls.lock().unwrap().clone()
+    }
 }
 
 impl Transport for Wire {
@@ -72,6 +79,7 @@ impl Transport for Wire {
         _cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Response, TransportFailure>> {
         let url = request.url().clone();
+        self.urls.lock().unwrap().push(url.to_string());
         self.seen.lock().unwrap().push(format!(
             "{} {}{}",
             request.method(),
@@ -265,7 +273,7 @@ fn sentinel_with_an_unset_credential_fails_before_sending_anything() {
 // ---- Defender for Endpoint (Entra ID sign-in, then Graph) ----
 
 #[test]
-fn defender_signs_in_then_reads_one_detection_rule_and_nothing_else() {
+fn defender_signs_in_then_reads_the_first_page_of_detection_rules_and_nothing_else() {
     let wire = Wire::new(Read::Status(200));
     probe(
         &defender_platform(),
@@ -281,6 +289,12 @@ fn defender_signs_in_then_reads_one_detection_rule_and_nothing_else() {
             "POST login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/token",
             "GET graph.microsoft.com/beta/security/rules/detectionRules",
         ]
+    );
+    // The collection URL as it is, with no `$top`: no recording shows Graph
+    // accepting it on this beta collection.
+    assert_eq!(
+        wire.urls().last().map(String::as_str),
+        Some("https://graph.microsoft.com/beta/security/rules/detectionRules")
     );
 }
 

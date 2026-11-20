@@ -457,6 +457,25 @@ fn crowdstrike_whose_token_endpoint_refuses_the_client_is_authentication_failed(
 }
 
 #[test]
+fn crowdstrike_token_endpoint_statuses_are_told_apart() {
+    // Only 400, 401 and 403 are the credentials' fault; a rate limit or a
+    // failing endpoint is not (#1658, D5).
+    for (status, expected) in [
+        (400, "authentication_failed"),
+        (403, "authentication_failed"),
+        (429, "tenant_refused"),
+        (500, "tenant_refused"),
+        (503, "tenant_gateway"),
+    ] {
+        let replayed = crowdstrike_replay(vec![token_call(status)]);
+        let failed = block_on(probe(crowdstrike::PLATFORM, replayed.cx())).unwrap();
+        assert_eq!(code(failed), expected, "token endpoint answered {status}");
+        // Nothing was read without a token, and the sign-in was not repeated.
+        assert_eq!(methods(&replayed), ["POST token"], "{status}");
+    }
+}
+
+#[test]
 fn crowdstrike_refusing_the_token_on_the_read_is_authentication_failed() {
     // The 401 rule: one new sign-in and one resend, then the refusal.
     let replayed = crowdstrike_replay(vec![

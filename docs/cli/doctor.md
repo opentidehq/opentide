@@ -92,7 +92,7 @@ The sign-in and the request for each platform:
 | Platform | Sign-in | Read-only request |
 |----------|---------|-------------------|
 | `sentinel` | Entra ID client credentials | `GET` the workspace's analytics rules (first page) |
-| `defender_for_endpoint` | Entra ID client credentials | `GET` one custom detection rule (`$top=1`) |
+| `defender_for_endpoint` | Entra ID client credentials | `GET` the first page of custom detection rules |
 | `splunk` | None: the token | `GET /services/server/info` |
 | `sentinel_one` | None: the API token | `GET` one STAR rule (`cloud-detection/rules?limit=1`) |
 | `crowdstrike` | OAuth2 token | `GET` one correlation rule id (`limit=1`) |

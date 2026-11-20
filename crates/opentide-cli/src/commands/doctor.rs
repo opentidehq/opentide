@@ -23,7 +23,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use opentide_compile::Json as CJson;
-use opentide_connectors::connector::{DeployError, TenantContext};
+use opentide_connectors::connector::{CREDENTIALS_UNAVAILABLE, DeployError, TenantContext};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, HttpClient, Tenant};
 use opentide_schema::configuration::lint::parse_lint_config;
@@ -40,6 +40,7 @@ use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
 
 use super::doctor_network as network;
+use super::interrupt::watched;
 use super::{Block, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
@@ -130,6 +131,8 @@ pub struct Context<'a> {
     pub text: bool,
     /// `--proxy`, from the command line or `OPENTIDE_PROXY`.
     pub proxy: Option<&'a str>,
+    /// Whether Ctrl-C was pressed: `--live`'s requests stop at once.
+    pub interrupted: &'a (dyn Fn() -> bool + Sync),
 }
 
 /// What the checks share: the workspace and its configuration.
@@ -156,6 +159,11 @@ struct TenantEnv {
     variables: Vec<String>,
     /// The ones that are unset or empty.
     unset: Vec<String>,
+    /// A Google SecOps tenant that names no `credentials` on a machine with
+    /// no Application Default Credentials file and no variable naming one:
+    /// it holds no credentials locally (only a Google Cloud host's metadata
+    /// server could supply them).
+    adc_missing: bool,
     /// The tenant's table, for its setup.
     node: Node,
 }
@@ -896,11 +904,21 @@ impl Doctor<'_> {
                     })
                     .cloned()
                     .collect();
+                let names_credentials = tenant
+                    .get("setup")
+                    .and_then(|setup| setup.get("credentials"))
+                    .is_some_and(|node| !matches!(node.value, Value::Null));
+                let adc_missing = platform == "google_secops"
+                    && !names_credentials
+                    && !opentide_connectors::google_secops::auth::has_local_default_credentials(
+                        &opentide_connectors::Environment::from_pairs(self.cx.env.iter()),
+                    );
                 listed.push(TenantEnv {
                     subject: format!("{platform}/{name}"),
                     name,
                     variables,
                     unset,
+                    adc_missing,
                     node: (*tenant).clone(),
                 });
             }
@@ -939,9 +957,25 @@ impl Doctor<'_> {
                     subject,
                     variables,
                     unset,
+                    adc_missing,
                     ..
                 } = tenant;
-                let check = if !unset.is_empty() {
+                let check = if *adc_missing && unset.is_empty() {
+                    Check::new(
+                        "credentials",
+                        "warn",
+                        format!(
+                            "{subject}: no credentials: the tenant names none, \
+                             GOOGLE_APPLICATION_CREDENTIALS is unset and there is no gcloud \
+                             credentials file (a Google Cloud host's metadata server may still \
+                             supply them)"
+                        ),
+                    )
+                    .fix(
+                        "set `credentials` in the tenant's setup, or run \
+                         gcloud auth application-default login",
+                    )
+                } else if !unset.is_empty() {
                     Check::new(
                         "credentials",
                         "warn",
@@ -1012,10 +1046,17 @@ impl Doctor<'_> {
                 continue;
             }
             for tenant in tenants {
-                checks.push(
+                // After Ctrl-C no further tenant is contacted.
+                let check = if (self.cx.interrupted)() {
+                    Check::new(
+                        "connectivity",
+                        "skip",
+                        format!("{}: not reached, interrupted", tenant.subject),
+                    )
+                } else {
                     self.reach(platform, tenant, &registry, &environment)
-                        .subject(tenant.subject.clone()),
-                );
+                };
+                checks.push(check.subject(tenant.subject.clone()));
             }
         }
         checks
@@ -1071,7 +1112,12 @@ impl Doctor<'_> {
                 cancel: &cancel,
             };
             opentide_connectors::runtime::sync_call(|| {
-                opentide_connectors::runtime::block_on(prober.probe(context))
+                opentide_connectors::runtime::block_on(watched(
+                    async { Ok(prober.probe(context).await) },
+                    &cancel,
+                    self.cx.interrupted,
+                ))
+                .map(|watched| watched.map_err(DeployError::from).and_then(|probed| probed))
             })
             .unwrap_or_else(|_| Err("the check stopped unexpectedly".to_owned()))
             .unwrap_or_else(|message| {
@@ -1093,6 +1139,22 @@ impl Doctor<'_> {
         environment: &opentide_connectors::Environment,
     ) -> Check {
         let subject = &tenant.subject;
+        // What the platform can check comes first: a tenant of a platform
+        // with no read-only request is never told to set variables, since
+        // setting them would not make `--live` check it.
+        let prober = opentide_schema::platforms::get(platform)
+            .filter(|row| row.deploys)
+            .and_then(|_| registry.get(platform))
+            .and_then(|connector| connector.prober());
+        let Some(prober) = prober else {
+            return Check::new(
+                "connectivity",
+                "skip",
+                format!(
+                    "{subject}: not supported by doctor --live: {platform} has no read-only request to make"
+                ),
+            );
+        };
         if !tenant.unset.is_empty() {
             return Check::new(
                 "connectivity",
@@ -1107,17 +1169,6 @@ impl Doctor<'_> {
                 tenant.unset.join(", ")
             ));
         }
-        let prober = opentide_schema::platforms::get(platform)
-            .filter(|row| row.deploys)
-            .and_then(|_| registry.get(platform))
-            .and_then(|connector| connector.prober());
-        let Some(prober) = prober else {
-            return Check::new(
-                "connectivity",
-                "skip",
-                format!("{subject}: not reached, {platform} has no read-only check to make"),
-            );
-        };
         let outcome = self.probe(platform, tenant, prober, environment);
         match outcome {
             Ok(()) => Check::new(
@@ -1128,10 +1179,23 @@ impl Doctor<'_> {
             // A setup key the tenant lacks is a credential that is not there
             // (a literal value was never written, or the key is absent):
             // skipped, as an unset variable is.
-            Err(failed) if failed.failure.code == "credential_unset" => Check::new(
+            Err(failed)
+                if matches!(
+                    failed.failure.code,
+                    "credential_unset" | CREDENTIALS_UNAVAILABLE
+                ) =>
+            {
+                Check::new(
+                    "connectivity",
+                    "skip",
+                    format!("{subject}: not reached, {}", failed.failure.message),
+                )
+            }
+            // Ctrl-C: the run ends interrupted, whatever this line says.
+            Err(failed) if failed.failure.code == "interrupted" => Check::new(
                 "connectivity",
                 "skip",
-                format!("{subject}: not reached, {}", failed.failure.message),
+                format!("{subject}: not reached, interrupted"),
             ),
             Err(failed) if failed.failure.code == "network_unavailable" => Check::new(
                 "connectivity",
@@ -1781,6 +1845,7 @@ mod tests {
             version: "9.9.9",
             text: false,
             proxy: None,
+            interrupted: &|| false,
         }
     }
 

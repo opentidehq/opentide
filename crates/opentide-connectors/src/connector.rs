@@ -937,6 +937,12 @@ pub trait Prober: Send + Sync {
     fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>>;
 }
 
+/// The `failure.code` of a probe that found the tenant has **no credentials
+/// anywhere** (Google SecOps with no `credentials` key and no Application
+/// Default Credentials source): the user holds none, so `doctor --live`
+/// skips the tenant instead of failing it. Never a deploy's code.
+pub const CREDENTIALS_UNAVAILABLE: &str = "credentials_unavailable";
+
 /// [`Prober::probe`]'s future from one whose failures are connector errors,
 /// each the tenant's ([`DeployScope::Tenant`]).
 pub fn probing<'a>(

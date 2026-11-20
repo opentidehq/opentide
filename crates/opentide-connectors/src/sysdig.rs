@@ -133,6 +133,32 @@ impl<'a> Client<'a> {
         path: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Answer, ConnectorError> {
+        let answer = self.send_unclassified(method, path, body).await?;
+        if matches!(answer.status, 401 | 403) {
+            return Err(ConnectorError::Refused {
+                platform: PLATFORM.to_owned(),
+                tenant: self.tenant().to_owned(),
+                message: format!(
+                    "Tenant {} refused the API token: HTTP {}: {}",
+                    self.tenant(),
+                    answer.status,
+                    api_error(&answer)
+                ),
+                detail: None,
+            });
+        }
+        Ok(answer)
+    }
+
+    /// [`Self::send`] without its refusal of a 401 or 403: the answer as the
+    /// tenant gave it, for the connectivity probe, which judges the status
+    /// itself and quotes no body.
+    async fn send_unclassified(
+        &self,
+        method: crate::transport::Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+    ) -> Result<Answer, ConnectorError> {
         let base = self
             .cx
             .tenant
@@ -164,21 +190,7 @@ impl<'a> Client<'a> {
         if request.method() == crate::transport::Method::PUT {
             request.set_idempotent(false);
         }
-        let answer = Answer::fetch(self.cx.http, request, self.cx.cancel).await?;
-        if matches!(answer.status, 401 | 403) {
-            return Err(ConnectorError::Refused {
-                platform: PLATFORM.to_owned(),
-                tenant: self.tenant().to_owned(),
-                message: format!(
-                    "Tenant {} refused the API token: HTTP {}: {}",
-                    self.tenant(),
-                    answer.status,
-                    api_error(&answer)
-                ),
-                detail: None,
-            });
-        }
-        Ok(answer)
+        Answer::fetch(self.cx.http, request, self.cx.cancel).await
     }
 
     /// The answer's JSON, or the rule's failure (`_json`).
@@ -651,12 +663,13 @@ impl Prober for Sysdig {
     /// The credentials resolved as a deploy resolves them (Sysdig has no
     /// sign-in), then one `GET /api/v2/policies`, the read a deploy makes
     /// to add a rule to its policies: it lists and changes nothing. A 401 or
-    /// 403 is `tenant_refused` (the client's own refusal of the token).
+    /// 403 is `authentication_failed`, as for every platform (a deploy's own
+    /// refusal of the token keeps its message); no answer body is quoted.
     fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
         crate::connector::probing(async move {
             resolve(cx)?;
             let answer = Client::new(cx)
-                .send(crate::transport::Method::GET, POLICIES, None)
+                .send_unclassified(crate::transport::Method::GET, POLICIES, None)
                 .await?;
             crate::connector::probe_verdict(
                 PLATFORM,
