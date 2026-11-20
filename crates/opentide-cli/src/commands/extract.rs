@@ -1559,18 +1559,20 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         block.insert("false_positives".into(), string_list(positives));
     }
     if let Some(CJson::Array(tags)) = given(rule, "tags") {
-        block.insert(
-            "tags".into(),
-            CJson::Array(
-                tags.iter()
-                    .filter(|tag| {
-                        !tag.as_str()
-                            .is_some_and(opentide_compile::elastic::is_marker_tag)
-                    })
-                    .cloned()
-                    .collect(),
-            ),
-        );
+        // Deploy writes the marker first (`opentide`, `OpenTide` before
+        // 0.29), so only a leading marker is opentide's: the same word
+        // further on is a tag the rule's author wrote, and is kept.
+        let own = match tags.split_first() {
+            Some((first, rest))
+                if first
+                    .as_str()
+                    .is_some_and(opentide_compile::elastic::is_marker_tag) =>
+            {
+                rest
+            }
+            _ => tags.as_slice(),
+        };
+        block.insert("tags".into(), CJson::Array(own.to_vec()));
     }
     let mut overrides = Object::new();
     if let Some(name) = given(rule, "rule_name_override") {
@@ -2232,24 +2234,44 @@ mod elastic_tests {
         );
     }
 
-    /// opentide's marker tag is left out of an imported block, as written
-    /// now (`opentide`) and by 0.28.1 and earlier (`OpenTide`); any other
-    /// tag, whatever its case, is the rule's own.
-    #[test]
-    fn both_marker_tags_are_left_out_of_an_imported_rule() {
+    /// The block tags an import writes for a Kibana rule with `tags`.
+    fn imported_tags(tags: &str) -> Vec<String> {
         let converted = kibana_to_opentide(
-            &rule(
-                r#"{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "Tagged",
+            &rule(&format!(
+                r#"{{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "Tagged",
                     "description": "d", "severity": "low", "type": "query", "language": "kuery",
-                    "query": "x", "risk_score": 21,
-                    "tags": ["opentide", "OpenTide", "Windows", "OPENTIDE"]}"#,
-            ),
+                    "query": "x", "risk_score": 21, "tags": {tags}}}"#
+            )),
             true,
         );
         let text = rule_yaml(&converted).unwrap();
-        assert!(
-            text.contains("    tags:\n      - Windows\n      - OPENTIDE\n"),
-            "{text}"
+        let start = text.find("    tags:\n").expect("a tags key");
+        text[start..]
+            .lines()
+            .skip(1)
+            .take_while(|line| line.starts_with("      - "))
+            .map(|line| line["      - ".len()..].to_owned())
+            .collect()
+    }
+
+    /// The leading marker deploy writes is left out of an imported block, as
+    /// written now (`opentide`) and by 0.28.1 and earlier (`OpenTide`). The
+    /// same word anywhere else is a tag the rule's author wrote, so a block
+    /// tagged `OpenTide` (compiled as `opentide, OpenTide`) keeps it on the
+    /// way back, and any other tag keeps its case.
+    #[test]
+    fn only_the_leading_marker_tag_is_left_out_of_an_imported_rule() {
+        assert_eq!(
+            imported_tags(r#"["opentide", "OpenTide", "Windows", "OPENTIDE"]"#),
+            ["OpenTide", "Windows", "OPENTIDE"]
+        );
+        assert_eq!(
+            imported_tags(r#"["OpenTide", "Windows", "opentide"]"#),
+            ["Windows", "opentide"]
+        );
+        assert_eq!(
+            imported_tags(r#"["Windows", "OpenTide", "opentide"]"#),
+            ["Windows", "OpenTide", "opentide"]
         );
     }
 

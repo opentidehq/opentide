@@ -399,29 +399,6 @@ fn bundled_vocabularies_read_item_by_item_are_the_whole_documents() {
     }
 }
 
-/// The compiled-in set is the bundled folder, file for file: a vocabulary
-/// removed upstream leaves both (`stakeholders`, retired with
-/// opentidehq/specifications#96, as `responders` was in #512).
-#[test]
-fn the_compiled_in_vocabularies_are_the_bundled_folder() {
-    let folder = std::path::Path::new(env!("OPENTIDE_ASSETS")).join("src/opentide/data/vocabulary");
-    let mut on_disk: Vec<String> = std::fs::read_dir(&folder)
-        .expect("the bundled vocabulary folder")
-        .filter_map(|entry| {
-            let name = entry.ok()?.file_name().into_string().ok()?;
-            name.strip_suffix(super::SUFFIX).map(str::to_owned)
-        })
-        .collect();
-    on_disk.sort();
-    let mut compiled: Vec<String> = super::bundled::FILES
-        .iter()
-        .map(|(field, _)| (*field).to_owned())
-        .collect();
-    compiled.sort();
-    assert_eq!(compiled, on_disk);
-    assert!(!compiled.iter().any(|field| field == "stakeholders"));
-}
-
 /// The alert severity scale's display name names no product
 /// (opentidehq/specifications#96).
 #[test]

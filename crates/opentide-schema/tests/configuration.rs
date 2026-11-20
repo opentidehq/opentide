@@ -508,6 +508,31 @@ fn the_retired_debug_keys_are_unknown_keys() {
     }
 }
 
+/// The template declares no alert handling team, not even as a commented
+/// example: the CSIRC and CATCH examples were one organisation's teams. The
+/// field stays unconstrained until an instance declares its own (#507).
+#[test]
+fn the_deployment_template_declares_no_responders() {
+    let text = bundled::text("deployment.toml").unwrap();
+    for name in [
+        "CSIRC",
+        "CATCH",
+        "Incident Response Capability",
+        "Threat Analysis and Hunting",
+    ] {
+        assert!(!text.contains(name), "deployment.toml still names {name}");
+    }
+    let parsed = config_toml::parse(text).unwrap();
+    assert!(
+        parsed.get("responders").is_none(),
+        "deployment.toml declares responders"
+    );
+    assert!(
+        !text.lines().any(|line| line.trim() == "# [[responders]]"),
+        "deployment.toml carries a commented responders example"
+    );
+}
+
 #[test]
 fn configuration_buffer_takes_its_parent_layer_and_open_deployment() {
     let path = "/w/.opentide/configurations/sharing.toml";
