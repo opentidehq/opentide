@@ -202,8 +202,8 @@ fn doctor(ws: &Path, args: &[&str], env: &[(&str, &str)], wire: Option<&Wire>) -
         width: None,
         interrupt: Interrupt::default(),
     };
-    let mut argv: Vec<String> = vec!["--json".into(), "doctor".into()];
-    argv.extend(args.iter().map(|word| (*word).to_owned()));
+    let mut words: Vec<String> = vec!["--json".into(), "doctor".into()];
+    words.extend(args.iter().map(|word| (*word).to_owned()));
     let home = ws.with_file_name("home");
     std::fs::create_dir_all(&home).unwrap();
     let env = Env::from_pairs(
@@ -213,7 +213,7 @@ fn doctor(ws: &Path, args: &[&str], env: &[(&str, &str)], wire: Option<&Wire>) -
     );
     let mut out = Vec::new();
     let mut err = stderr;
-    let code = run(&argv, &env, &host, &mut out, &mut err);
+    let code = run(&words, &env, &host, &mut out, &mut err);
     let stdout = String::from_utf8(out).unwrap();
     let document = serde_json::from_str(&stdout)
         .unwrap_or_else(|error| panic!("{error}: not one JSON document: {stdout}"));

@@ -1021,40 +1021,16 @@ impl Doctor<'_> {
         checks
     }
 
-    /// One tenant's `connectivity` check.
-    fn reach(
+    /// Opens `tenant` as a deploy does and runs its platform's read-only
+    /// request, through the tenant's own client (its `ssl`, CA bundle,
+    /// timeouts and the run's `--proxy`).
+    fn probe(
         &self,
         platform: &str,
         tenant: &TenantEnv,
-        registry: &opentide_connectors::Registry,
+        prober: &dyn opentide_connectors::connector::Prober,
         environment: &opentide_connectors::Environment,
-    ) -> Check {
-        let subject = &tenant.subject;
-        if !tenant.unset.is_empty() {
-            return Check::new(
-                "connectivity",
-                "skip",
-                format!(
-                    "{subject}: not reached, credentials not set: {}",
-                    tenant.unset.join(", ")
-                ),
-            )
-            .fix(format!(
-                "set {} in the environment, then run opentide doctor --live",
-                tenant.unset.join(", ")
-            ));
-        }
-        let prober = opentide_schema::platforms::get(platform)
-            .filter(|row| row.deploys)
-            .and_then(|_| registry.get(platform))
-            .and_then(|connector| connector.prober());
-        let Some(prober) = prober else {
-            return Check::new(
-                "connectivity",
-                "skip",
-                format!("{subject}: not reached, {platform} has no read-only check to make"),
-            );
-        };
+    ) -> Result<(), DeployError> {
         let setup: toml::Table = CJson::from_node(&tenant.node)
             .get("setup")
             .and_then(CJson::as_object)
@@ -1069,7 +1045,7 @@ impl Doctor<'_> {
             })
             .unwrap_or_default();
         let settings = opentide_connectors::deploy_http_settings(platform);
-        let probed = Tenant::from_setup(
+        Tenant::from_setup(
             platform,
             &tenant.name,
             &setup,
@@ -1105,8 +1081,45 @@ impl Doctor<'_> {
                     message,
                 }))
             })
-        });
-        match probed {
+        })
+    }
+
+    /// One tenant's `connectivity` check.
+    fn reach(
+        &self,
+        platform: &str,
+        tenant: &TenantEnv,
+        registry: &opentide_connectors::Registry,
+        environment: &opentide_connectors::Environment,
+    ) -> Check {
+        let subject = &tenant.subject;
+        if !tenant.unset.is_empty() {
+            return Check::new(
+                "connectivity",
+                "skip",
+                format!(
+                    "{subject}: not reached, credentials not set: {}",
+                    tenant.unset.join(", ")
+                ),
+            )
+            .fix(format!(
+                "set {} in the environment, then run opentide doctor --live",
+                tenant.unset.join(", ")
+            ));
+        }
+        let prober = opentide_schema::platforms::get(platform)
+            .filter(|row| row.deploys)
+            .and_then(|_| registry.get(platform))
+            .and_then(|connector| connector.prober());
+        let Some(prober) = prober else {
+            return Check::new(
+                "connectivity",
+                "skip",
+                format!("{subject}: not reached, {platform} has no read-only check to make"),
+            );
+        };
+        let outcome = self.probe(platform, tenant, prober, environment);
+        match outcome {
             Ok(()) => Check::new(
                 "connectivity",
                 "pass",
