@@ -28,6 +28,8 @@ export OPENTIDE_REPO_ROOT="$PWD"
 
 You now have `objects/{threats,objectives,rules}/`, a `.opentide/` config directory, and platform scaffolding. See [Repository setup](./repository-setup.md) for what each piece is.
 
+`--org` also wrote `.opentide/configurations/organisation.toml`, the only place `opentide new` takes `metadata.organisation` from. The objects below name uuid `00000000-0000-4000-8000-000000000099`; to have `new` write the same, put it in that file's `uuid`.
+
 ## 2. Generate the framework artifacts
 
 Generate the editor's schemas and templates, the docs and the exports. Validation does not need them (`opentide validate` checks objects against the models compiled into opentide); the editor reads the schemas and snippets, and `opentide new` would generate what it needs on first use:

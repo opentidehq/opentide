@@ -50,7 +50,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 
 | Subcommand | Output |
 |------------|--------|
-| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML |
+| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML; `--org` also writes `.opentide/configurations/organisation.toml` |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
 | `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`). A share stage is written only with `--sharing` |
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
@@ -69,6 +69,7 @@ detection-repo/
 ├── docs/                         # opentide generate docs output
 ├── .opentide/
 │   ├── configurations/
+│   │   ├── organisation.toml     # only with `setup --org`
 │   │   └── platforms/
 │   ├── schemas/                  # opentide generate schemas
 │   ├── templates/                # opentide generate templates

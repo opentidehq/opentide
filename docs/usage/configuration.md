@@ -27,6 +27,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 ├── visibility.toml         # what is exposed/deployed
 ├── documentation.toml      # `opentide generate docs` settings
 ├── lint.toml               # `opentide lint` checks and required metadata
+├── organisation.toml       # the organisation `opentide new` writes (from `setup --org`)
 └── platforms/
     ├── sentinel.toml
     └── splunk.toml
@@ -311,6 +312,18 @@ pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expres
 A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
 The editor (`opentide lsp start`) reports what `opentide validate` reports; the file-name and metadata recommendations are `opentide lint`'s alone.
+
+## Organisation
+
+`opentide setup --org "Example Corp"` writes `organisation.toml`, the `{uuid, name}` that `opentide new` puts in `metadata.organisation`. The organisation is configured once per repository, in this file, and `new` carries it. The uuid is a fresh UUID v4: replace it with your organisation's own, which `opentide share push` uses as the MISP organisation when a target sets no `organisation_uuid`.
+
+```toml
+# .opentide/configurations/organisation.toml
+uuid = "6f0a3d6e-52a1-4c43-9a3e-0d8f1c2b7e11"
+name = "Example Corp"
+```
+
+`new` takes the organisation from this file only, never from objects already written. Edit the file, or run `setup --org` again, and every later `new` uses the result; objects already written keep what they were written with. With no file, or one without a valid `uuid` and `name`, `new` leaves `metadata.organisation` out and warns, saying to run `opentide setup --org "<name>"` or what is wrong with the file. Running `setup` without `--org` leaves the file alone; with `--org` it changes the `name` and keeps the `uuid`, and a `uuid` that is not a UUID is left as written, with a warning.
 
 ## Paths
 

@@ -53,7 +53,7 @@ pub const RETIRED_CONFIGURATIONS: [(&str, &str); 3] = [
 ];
 
 /// Bundled files opentide reads that have no model here.
-const UNMODELLED_FILES: [&str; 2] = ["resources.toml", "lint.toml"];
+const UNMODELLED_FILES: [&str; 3] = ["resources.toml", "lint.toml", "organisation.toml"];
 
 const RESPONDERS: &str = "responders";
 
