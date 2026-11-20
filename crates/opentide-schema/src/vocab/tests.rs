@@ -398,3 +398,17 @@ fn bundled_vocabularies_read_item_by_item_are_the_whole_documents() {
         assert_eq!(format!("{read:?}"), format!("{whole:?}"), "{file}");
     }
 }
+
+/// The alert severity scale's display name names no product
+/// (opentidehq/specifications#96).
+#[test]
+fn the_alert_severity_vocabulary_is_named_alert_severity() {
+    let (_, text) = super::bundled::FILES
+        .iter()
+        .find(|(field, _)| *field == "alert_severity")
+        .expect("alert_severity is bundled");
+    let vocabulary =
+        super::Vocabulary::from_file("alert_severity.vocab.toml", text).expect("it parses");
+    assert_eq!(vocabulary.metadata.name, "Alert Severity");
+    assert!(!text.contains("MDR"), "{text}");
+}

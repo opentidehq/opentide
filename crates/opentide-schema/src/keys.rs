@@ -1,4 +1,4 @@
-//! The 23 `tide.*` metadata keys (ADR 0001, "The `tide.*` metadata keys").
+//! The 22 `tide.*` metadata keys (ADR 0001, "The `tide.*` metadata keys").
 //!
 //! Each key keeps its name: a field carries it as
 //! `#[schemars(extend("tide.…" = value))]`, so the schema the struct derives
@@ -94,8 +94,6 @@ keys! {
     CONFIG_PARAMETER_LIST = "tide.config.parameter-list", ReadOnly;
     /// Values are the enabled platforms.
     CONFIG_SYSTEMS_ENABLED = "tide.config.systems::enabled", ReadOnly;
-    /// The platform's name for the parameter.
-    MDR_PARAMETER = "tide.mdr.parameter", ReadOnly;
     /// A scope's whole property map, in `lookup_schema_extra`.
     META = "tide.meta", Lookup;
     /// The stages a vocabulary entry belongs to.
@@ -112,10 +110,12 @@ mod tests {
     use std::collections::BTreeSet;
 
     #[test]
-    fn twenty_three_distinct_keys() {
+    fn twenty_two_distinct_keys() {
         let names: BTreeSet<_> = ALL.iter().map(|key| key.name).collect();
-        assert_eq!(ALL.len(), 23);
-        assert_eq!(names.len(), 23);
+        assert_eq!(ALL.len(), 22);
+        assert_eq!(names.len(), 22);
+        // `tide.mdr.parameter` had no reader in the port and was removed.
+        assert!(!names.contains("tide.mdr.parameter"));
         assert!(names.iter().all(|name| name.starts_with("tide.")));
     }
 
@@ -124,7 +124,7 @@ mod tests {
         let count = |origin| ALL.iter().filter(|key| key.origin == origin).count();
         assert_eq!(count(Origin::Field), 9);
         assert_eq!(count(Origin::Pipeline), 4);
-        assert_eq!(count(Origin::ReadOnly), 6);
+        assert_eq!(count(Origin::ReadOnly), 5);
         assert_eq!(count(Origin::Lookup), 1);
         assert_eq!(count(Origin::VocabularyEntry), 3);
     }

@@ -1,6 +1,6 @@
 //! HarfangLab: the Sigma rule or YARA file a deploy sends to one tenant
 //! (`platforms/harfanglab/deployer.py` `compile_sigma_deployment`,
-//! `compile_yara_deployment`, `deploy_mdr`, and the client's
+//! `compile_yara_deployment`, its deploy, and the client's
 //! `create_or_update_sigma_rule`, `create_or_update_yara_rule` and its
 //! deletes). The rule's UUID is its id on the platform: no deployment state.
 //!

@@ -491,7 +491,7 @@ mod tests {
             .iter()
             .map(|v| v.field().to_owned())
             .collect();
-        assert_eq!(names.len(), 35);
+        assert_eq!(names.len(), 34);
         assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }

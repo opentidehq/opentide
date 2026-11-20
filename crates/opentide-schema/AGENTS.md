@@ -3,7 +3,7 @@
 The Tide model as Rust code (plan D-2): object, platform and configuration models as plain structs
 with serde, garde, schemars and PyO3 derives, from which the JSON Schemas, field hints, templates,
 snippets, `.pyi` and `.d.ts` are generated. Today it holds the skeleton (UC-1.1, #807): the
-conventions, the `Pins` validation context, the typed errors, the 23 `tide.*` metadata keys and
+conventions, the `Pins` validation context, the typed errors, the 22 `tide.*` metadata keys and
 `sample`, their worked example; the vocabularies and pins (UC-1.6, `vocab`); the object models
 (UC-1.3, `objects`); the rule platform blocks (UC-1.4, `objects::platform`); and the revision
 registry and migrations (UC-1.7, `revisions`, `migration`,
@@ -20,7 +20,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 
 | Path | What |
 | --- | --- |
-| `src/keys.rs` | The 23 `tide.*` keys as constants, each with where the oracle sets it (`Origin`) |
+| `src/keys.rs` | The 22 `tide.*` keys as constants, each with where the oracle sets it (`Origin`) |
 | `src/error.rs` | `SchemaError`, `ErrorKind` (Pydantic's error type) and `code(Surface)` (the CLI's code) |
 | `src/pins.rs` | `Pins`: the contracts a revision pins, by field path (`contract`) and by vocabulary (`version`), garde's context; `PinTable`: every revision's, from `src/opentide/data/pins/*.toml` (`bundled`) |
 | `src/platforms.rs` | The platform registry (R0): `PLATFORMS`, one row per built-in platform (identifier, label, configuration name, model class, `ExternalId`, deploy/offline/live-check/query-runner capabilities, runner and offline languages, query-file suffixes, a rank per `Order`); `ordered(Order)` (a constant), `ids_where`, `select`, `get`. Every crate reads its platform lists from it: adding a platform is a row here plus its modules |
