@@ -319,8 +319,9 @@ impl SavedSearch {
     pub fn holds(&self, settings: &Object) -> bool {
         settings.iter().all(|(key, value)| {
             let sent = match value {
-                Json::Array(_) => return false,
-                Json::Null => String::new(),
+                // `form` sends a null as the text `null`, which no tenant
+                // holds as "unset": a null is always a write.
+                Json::Array(_) | Json::Null => return false,
                 other => json_text(other),
             };
             let Some(held) = self
@@ -1318,6 +1319,24 @@ mod tests {
         let mut listed = sent;
         listed.insert("alert.severity".into(), Json::Array(vec![Json::Int(5)]));
         assert!(!saved.holds(&listed));
+    }
+
+    /// A JSON null is sent as the text `null` (`form`), so it is never held,
+    /// not even by a tenant that holds the setting empty or does not answer it.
+    #[test]
+    fn a_null_setting_is_never_held() {
+        let mut saved = SavedSearch {
+            path: "saved/searches/r".into(),
+            search: None,
+            content: vec![("alert.managedBy".into(), String::new())],
+        };
+        let mut sent = Object::new();
+        sent.insert("alert.managedBy".into(), Json::Null);
+        assert!(!saved.holds(&sent));
+        saved.content.clear();
+        assert!(!saved.holds(&sent));
+        let pairs = [("alert.managedBy".to_owned(), Json::Null)];
+        assert_eq!(form(&pairs), "alert.managedBy=null");
     }
 
     #[test]

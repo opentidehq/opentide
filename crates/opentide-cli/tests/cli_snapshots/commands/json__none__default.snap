@@ -5589,7 +5589,8 @@ exit: 0
                 "update",
                 "upsert",
                 "disable",
-                "delete"
+                "delete",
+                "unchanged"
               ],
               "type": "string"
             },
@@ -5597,7 +5598,7 @@ exit: 0
               "type": "null"
             }
           ],
-          "description": "What the plan said the run would do to the rule",
+          "description": "The plan's action; an Elastic `upsert` reads `create` or `update` once sent, and a rule the tenant already held reads `unchanged`.",
           "title": "Action"
         },
         "error": {

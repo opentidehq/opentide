@@ -5388,6 +5388,39 @@ struct ElasticTenant {
 mod tests {
     use super::*;
 
+    /// Every `action` a deploy result row can carry (`DONE` and `VERBS` name
+    /// them all; a row's action is a plan's action or `unchanged`) is in the
+    /// `RuleOutcome.action` enum that `opentide --json commands` publishes
+    /// for `deploy`, so a consumer validating `deploy --json` against it
+    /// accepts every row (#1711).
+    #[test]
+    fn every_action_a_result_row_can_carry_is_in_the_published_schema() {
+        let defs = crate::schemas::Schemas::load().defs();
+        let allowed: Vec<&str> = defs
+            .get("RuleOutcome")
+            .and_then(|outcome| outcome.get("properties"))
+            .and_then(|properties| properties.get("action"))
+            .and_then(|action| action.get("anyOf"))
+            .and_then(Json::as_array)
+            .and_then(|variants| variants.iter().find_map(|variant| variant.get("enum")))
+            .and_then(Json::as_array)
+            .expect("RuleOutcome.action is an enum")
+            .iter()
+            .filter_map(Json::as_str)
+            .collect();
+        let emitted = DONE
+            .iter()
+            .map(|(action, _)| *action)
+            .chain(VERBS.iter().map(|(action, _)| *action))
+            .chain([UNCHANGED]);
+        for action in emitted {
+            assert!(
+                allowed.contains(&action),
+                "a deploy row's action `{action}` is not in RuleOutcome.action ({allowed:?}) in data/output-schemas.json"
+            );
+        }
+    }
+
     /// A failure a `Deployer` builds itself has no connector error: its
     /// scope still says what stops (a Rust plugin's own tenant failure),
     /// whatever the connector error the arm reads its words from.
