@@ -444,9 +444,15 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
         return Live::of(result);
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options.clone()) {
+    let workspace = match super::open_for("validate query", options.clone()) {
         Ok(workspace) => workspace,
-        Err(message) => return Live::of(failed(Some(platform), &message, 1)),
+        Err(refused) => {
+            // A TOML file that does not parse keeps `config_parse`.
+            let (code, message, _) = super::refusal_parts(&refused);
+            let mut result = failed(Some(platform), &message, 1);
+            result.push(("_failure_code".into(), Json::Str(code)));
+            return Live::of(result);
+        }
     };
     // A push that the deploy will promote is checked as the deploy sends
     // it: the promoted status, on the tenants that take it (#1653, smoke
