@@ -421,3 +421,36 @@ fn the_platforms_page_s_capability_matrix_is_the_registry_s() {
     }
     check(&wrong);
 }
+
+/// A count as English, for the prose that names how many platforms there are.
+fn count_word(n: usize) -> &'static str {
+    [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve", "thirteen",
+    ]
+    .get(n)
+    .copied()
+    .expect("a count of platforms")
+}
+
+#[test]
+fn the_facade_s_readme_and_crate_docs_name_the_platforms_opentide_deploys_to() {
+    // The README is the crates.io page; lib.rs is docs.rs's. Both said "nine"
+    // when there were thirteen.
+    let sentence = format!(
+        "to the {} platforms opentide deploys to",
+        count_word(count(|p| p.deploys))
+    );
+    let mut wrong = Vec::new();
+    for page in ["crates/opentide/README.md", "crates/opentide/src/lib.rs"] {
+        let text = read(page)
+            .lines()
+            .map(|line| line.trim_start_matches("//!").trim())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if !text.contains(&sentence) {
+            wrong.push(format!("{page}: does not say {sentence:?}"));
+        }
+    }
+    check(&wrong);
+}

@@ -58,8 +58,11 @@ looks when the workspace root is not there. `vendor --clean` removes the copies.
 nothing where the publishing tokens are (the release workflow's `checks` job
 built every package, with no token). It can be re-run: it skips each crate
 whose version crates.io already has, and waits out the rate limit crates.io puts
-on brand-new crates, so a first release that stops partway resumes where it
-stopped. A release candidate's crates are crates.io pre-releases
+on brand-new crates (until the "try again after <time>" crates.io names, capped, or
+eleven minutes when it names none), so a first release that stops partway resumes
+where it stopped. A crate created with the stored token (NEW_CRATE_TOKEN) is noted as
+`created_with_token=true` in $GITHUB_OUTPUT: the workflow registers trusted publishing
+only then, or when the trusted login failed. A release candidate's crates are crates.io pre-releases
 (`X.Y.Z-rc.N`, for the Rust-core transition): the workflow runs `bump
 X.Y.Z-rc.N` in its own checkout, so the branch keeps `X.Y.Z`, then packages and
 publishes as for a release. crates.io can yank a version, never delete it.
@@ -93,6 +96,8 @@ release, or one with notes only, passes.
 
 from __future__ import annotations
 
+import datetime as dt
+import email.utils
 import hashlib
 import json
 import os
@@ -495,8 +500,41 @@ def on_crates_io(name: str, version: str) -> bool:
 
 
 # crates.io lets an account publish a few new crates at once, then one every ten minutes.
+#: The wait when crates.io's answer names no time (or one we cannot read).
 RATE_LIMIT_WAIT = 11 * 60
+#: The longest one wait may be, whatever time crates.io names: a runaway date
+#: must not park the job for hours (the job's own timeout is four).
+RATE_LIMIT_MAX_WAIT = 30 * 60
+#: Added to the time crates.io names, for clock skew between it and the runner.
+RATE_LIMIT_MARGIN = 15
 RATE_LIMIT_TRIES = 12
+
+#: crates.io's refusal names when the account may publish again:
+#: "... Please try again after Fri, 20 Nov 2026 12:34:56 GMT or email help@crates.io ..."
+RETRY_AFTER = re.compile(
+    r"try again after\s+"
+    r"(\w{3},\s+\d{1,2}\s+\w{3}\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s+(?:GMT|UTC|[+-]\d{4}))",
+    re.IGNORECASE,
+)
+
+
+def rate_limit_wait(output: str, now: dt.datetime | None = None) -> int:
+    """Seconds to wait before publishing again, from crates.io's "try again
+    after <time>" in `output`: the time plus a small margin, never above
+    RATE_LIMIT_MAX_WAIT, and RATE_LIMIT_WAIT when the answer names no readable
+    time. A time already past waits the margin only."""
+    match = RETRY_AFTER.search(output)
+    if match is None:
+        return RATE_LIMIT_WAIT
+    try:
+        retry_at = email.utils.parsedate_to_datetime(match.group(1))
+    except (TypeError, ValueError):
+        return RATE_LIMIT_WAIT
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=dt.timezone.utc)
+    now = now or dt.datetime.now(dt.timezone.utc)
+    wait = int((retry_at - now).total_seconds()) + RATE_LIMIT_MARGIN
+    return max(RATE_LIMIT_MARGIN, min(wait, RATE_LIMIT_MAX_WAIT))
 
 
 #: crates.io's answer when a trusted-publishing token tries to create a crate.
@@ -539,14 +577,27 @@ def crate_patch(packages: Path, out: Path) -> Path:
     return config
 
 
+def note_created_with_token(crate: str) -> None:
+    """Record, in the step's outputs (`created_with_token=true`), that `crate`
+    was created with the stored token: only then does `trust` have work the
+    trusted login cannot do. Written at once, not at the end, so a run that
+    fails on a later crate still says it."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as output:
+            output.write("created_with_token=true\n")
+    print(f"{crate} was created with the stored token", flush=True)
+
+
 def publish() -> None:
     version = workspace_version()
     for package in publish_order(publishable_crates()):
         name = package["name"]
         if on_crates_io(name, version):
-            print(f"{name} {version} is already on crates.io")
+            print(f"{name} {version} is already on crates.io", flush=True)
             continue
         env = dict(os.environ)
+        created_with_token = False
         for attempt in range(1, RATE_LIMIT_TRIES + 1):
             result = subprocess.run(
                 # No verify build: this runs where the OIDC token and the registry
@@ -560,20 +611,30 @@ def publish() -> None:
                 check=False,
             )
             sys.stdout.write(result.stdout)
+            sys.stdout.flush()
             sys.stderr.write(result.stderr)
+            sys.stderr.flush()
             if result.returncode == 0:
+                if created_with_token:
+                    note_created_with_token(name)
                 break
-            output = (result.stdout + result.stderr).lower()
-            if NEW_CRATE_REFUSAL in output and use_new_crate_token(env):
-                print(f"{name} is a new crate: publishing it with the stored token")
+            output = result.stdout + result.stderr
+            lowered = output.lower()
+            if NEW_CRATE_REFUSAL in lowered and use_new_crate_token(env):
+                print(f"{name} is a new crate: publishing it with the stored token", flush=True)
                 env = {**env, "CARGO_REGISTRY_TOKEN": env["NEW_CRATE_TOKEN"]}
+                created_with_token = True
                 continue
-            if "429" not in output and "rate limit" not in output:
+            if "429" not in lowered and "rate limit" not in lowered:
                 sys.exit(f"cargo publish -p {name} failed")
             if attempt == RATE_LIMIT_TRIES:
                 sys.exit(f"{name}: still rate limited after {attempt} tries; re-run to resume")
-            print(f"{name}: rate limited, retrying in {RATE_LIMIT_WAIT // 60} minutes")
-            time.sleep(RATE_LIMIT_WAIT)
+            wait = rate_limit_wait(output)
+            print(
+                f"{name}: rate limited, retrying in {wait // 60} minutes {wait % 60} seconds",
+                flush=True,
+            )
+            time.sleep(wait)
 
 
 CRATES_IO_API = "https://crates.io/api/v1"
@@ -603,7 +664,7 @@ def trust(workflow: str) -> None:
     token = os.environ.get("CRATES_IO_TOKEN", "")
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     if not token:
-        print("CRATES_IO_TOKEN is unset: trusted publishing not registered")
+        print("::warning::CRATES_IO_TOKEN is unset: trusted publishing not registered", flush=True)
         return
     if "/" not in repository:
         sys.exit("GITHUB_REPOSITORY must be owner/name")
