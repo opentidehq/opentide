@@ -54,6 +54,39 @@
 //! package does when its engine does not load ([`queries`]). Turn the check
 //! off ([`validate::QueriesMode::Off`]) to validate without it.
 //!
+//! `queries` is not a default feature, and [`ValidateOptions::default`] asks
+//! for the queries check: a program that depends on `opentide` with its
+//! default features and validates with the default options gets that one
+//! `engine_unavailable` error, whose message names the feature. Add the
+//! feature (`cargo add opentide --features queries`), or pass
+//! `QueriesMode::Off` as the example above does:
+//!
+//! ```
+//! let ws = opentide::Workspace::from_files(
+//!     "/ws",
+//!     [(
+//!         "objects/rules/example.yaml",
+//!         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
+//!     )],
+//! )?;
+//! // The default options, on a build that may or may not carry the engines.
+//! let validation = ws.validate(&opentide::ValidateOptions::default());
+//! let missing = validation
+//!     .report
+//!     .issues
+//!     .iter()
+//!     .find(|d| d.code == opentide::queries::ENGINE_UNAVAILABLE);
+//! if opentide::queries::AVAILABLE {
+//!     assert!(missing.is_none());
+//! } else {
+//!     // Without `queries`: one error, which says what to enable.
+//!     let error = missing.expect("a build without the engines reports it");
+//!     assert!(validation.failed);
+//!     assert!(error.message.contains("features = [\"queries\"]"), "{}", error.message);
+//! }
+//! # Ok::<(), opentide::Error>(())
+//! ```
+//!
 //! With `connectors`, a [`connectors::Connection`] reaches one of the
 //! workspace's tenants ([`Workspace::tenants`]): it runs a query, checks one
 //! live and deploys a compiled rule, as `opentide query`,

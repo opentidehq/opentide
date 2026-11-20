@@ -12,13 +12,18 @@ use opentide_workspace::validate::{QueryCheck, QueryFindings, QueryObject};
 /// The code of the finding a queries check reports without its engines.
 pub const ENGINE_UNAVAILABLE: &str = "engine_unavailable";
 
-/// The message of that finding.
+/// The message of that finding. It names the feature, for a program that
+/// prints a diagnostic's code and message and nothing else: the `queries`
+/// feature is not a default one, and a first program's default build lands here.
 pub const ENGINE_UNAVAILABLE_MESSAGE: &str = "The opentide analysis engine does not load: this \
-     build of the opentide crate has no query engines (its `queries` feature is off)";
+     build of the opentide crate has no query engines (its `queries` feature is off, as it is by \
+     default); add `features = [\"queries\"]` to the opentide dependency, or turn the queries \
+     check off (QueriesMode::Off)";
 
 /// What to do about it.
-pub const ENGINE_UNAVAILABLE_ADVICE: &str = "Build the opentide crate with its `queries` (or \
-     `cli`) feature, or turn the queries check off (QueriesMode::Off)";
+pub const ENGINE_UNAVAILABLE_ADVICE: &str = "Enable the opentide crate's `queries` (or `cli`) \
+     feature (`cargo add opentide --features queries`), or turn the queries check off \
+     (QueriesMode::Off)";
 
 /// Whether this build carries the query engines (the `queries` feature).
 pub const AVAILABLE: bool = cfg!(feature = "queries");
@@ -81,9 +86,7 @@ impl LintQueryCheck for Unavailable {
         _: Option<&str>,
         _: &str,
     ) -> Result<Vec<LintFinding>, String> {
-        Err(format!(
-            "{ENGINE_UNAVAILABLE_MESSAGE}. {ENGINE_UNAVAILABLE_ADVICE}."
-        ))
+        Err(format!("{ENGINE_UNAVAILABLE_MESSAGE}."))
     }
 }
 
@@ -108,6 +111,12 @@ mod tests {
             assert_eq!(error.code, ENGINE_UNAVAILABLE);
             assert!(error.is_error());
             assert_eq!(error.suggestion.as_deref(), Some(ENGINE_UNAVAILABLE_ADVICE));
+            // A program that prints the code and the message alone (the
+            // registries' end-to-end test did) learns which feature to enable.
+            assert!(
+                error.message.contains("features = [\"queries\"]"),
+                "{error:?}"
+            );
         }
     }
 
@@ -116,7 +125,8 @@ mod tests {
         let refused = LintQueryCheck::check(&Unavailable, Path::new("a.yaml"), "a.yaml", None, "");
         let message = refused.unwrap_err();
         assert!(message.starts_with(ENGINE_UNAVAILABLE_MESSAGE), "{message}");
-        assert!(message.contains(ENGINE_UNAVAILABLE_ADVICE), "{message}");
+        assert!(message.contains("`queries` feature is off"), "{message}");
+        assert!(message.contains("features = [\"queries\"]"), "{message}");
     }
 
     #[test]
