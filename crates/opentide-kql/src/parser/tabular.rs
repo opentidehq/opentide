@@ -281,7 +281,7 @@ fn operator(p: &mut P<'_>) {
             p.bump();
             p.expect_name();
             // The legacy properties before `with`: `render barchart kind=stacked`.
-            // Kusto.Language reads `kind` and `accumulate` as an option value,
+            // Kusto reads `kind` and `accumulate` as an option value,
             // `title` as a primary expression with no operator after it.
             loop {
                 if at_named_option(p, &["kind", "accumulate"]) {
@@ -537,7 +537,7 @@ fn at_option(p: &P<'_>) -> bool {
 fn option_value(p: &mut P<'_>) {
     let v = p.start();
     match p.current() {
-        // `threshold=-0.1`: Kusto.Language takes a sign that touches its number.
+        // `threshold=-0.1`: Kusto takes a sign that touches its number.
         K::MINUS | K::PLUS
             if matches!(p.nth(1), K::NUMBER | K::TIMESPAN) && p.tokens_touch(0, 1) =>
         {
@@ -1055,7 +1055,7 @@ fn search_source(p: &mut P<'_>) {
     p.done(m, K::SEARCH_SOURCE);
 }
 
-/// The options `search` takes, as Kusto.Language reads them: `kind` with one
+/// The options `search` takes, as Kusto reads them: `kind` with one
 /// of its three values, `withsource` (or `with_source`), `bagexpansion` and
 /// `isfuzzy`. Any other name is not an option (`search foo=1 "x"`).
 fn search_options(p: &mut P<'_>) {
@@ -1098,7 +1098,7 @@ fn search_body(p: &mut P<'_>, find: bool) {
 
 /// `project a, ['b c']:long` or `project-smart` after a `find`: the columns
 /// are names with an optional scalar type, no expressions. `project-smart`
-/// is three tokens here, which must touch, as Kusto.Language reads them.
+/// is three tokens here, which must touch, as Kusto reads them.
 fn find_project(p: &mut P<'_>) {
     let m = p.start();
     let smart = p.nth(1) == K::MINUS
@@ -1142,7 +1142,7 @@ fn render_with(p: &mut P<'_>) {
     p.expect(K::L_PAREN);
     if !p.at(K::R_PAREN) {
         // Whether a bare name may come: only after a property whose value is
-        // a list of columns, as Kusto.Language reads them.
+        // a list of columns, as Kusto reads them.
         let mut in_list = false;
         loop {
             if p.name_at(0) && p.nth(1) == K::EQ {
@@ -1181,7 +1181,7 @@ fn reduce(p: &mut P<'_>) -> K {
     }
     p.expect(K::BY_KW);
     expr::expr(p);
-    // Kusto.Language accepts a `with` that no option follows.
+    // Kusto accepts a `with` that no option follows.
     if p.eat(K::WITH_KW) && p.name_at(0) && p.nth(1) == K::EQ {
         loop {
             if !at_named_option(p, WITH) {

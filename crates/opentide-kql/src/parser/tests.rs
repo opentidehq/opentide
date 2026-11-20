@@ -443,7 +443,7 @@ fn parse_kv_takes_its_keys_and_options() {
     assert!(!errors("T | parse-kv Text with (pair_delimiter)").is_empty());
 }
 
-// The operator forms Kusto.Language 12.4.1 accepts that were syntax errors.
+// The operator forms Kusto's parser (12.4.1) accepts that were syntax errors.
 snapshots! {
     serialize_assignment: "T | serialize rn = row_number(), x";
     render_with_properties: "T | render timechart with (title=\"x\", ycolumns=a, b, ymin=-1)";
@@ -491,7 +491,7 @@ fn operator_forms_parse_and_their_broken_twins_do_not() {
     }
 }
 
-// Forms Kusto.Language 12.4.1 accepts that were syntax errors after #1646.
+// Forms Kusto's parser (12.4.1) accepts that were syntax errors after #1646.
 snapshots! {
     render_legacy_properties: "T | render barchart kind=stacked title=\"x\" accumulate=true with (ymin=0)";
     option_signed_number: "T | reduce by x with threshold=-0.1, characters=\"a\"";
@@ -537,7 +537,7 @@ fn legacy_render_signed_options_and_a_last_statement_without_semicolon() {
     }
 }
 
-// The search and find forms Kusto.Language 12.4.1 accepts that were errors.
+// The search and find forms Kusto's parser (12.4.1) accepts that were errors.
 snapshots! {
     search_star_colon: "search * : \"error\" and Column : \"x\"";
     search_operator_kind_in: "T | search kind=case_sensitive in (U, V*) * has \"x\"";

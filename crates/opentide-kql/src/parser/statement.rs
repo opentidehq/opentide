@@ -44,7 +44,7 @@ fn query_parameters(p: &mut P<'_>) {
     p.bump();
     p.bump();
     p.bump();
-    // One parameter at least: Kusto.Language rejects `query_parameters()`.
+    // One parameter at least: Kusto rejects `query_parameters()`.
     loop {
         parameter(p);
         if !p.eat(K::COMMA) {
@@ -68,7 +68,7 @@ fn let_statement(p: &mut P<'_>) {
 }
 
 /// The `;` after a statement, which the last one of the text may leave out:
-/// `let x = 1` alone is a query to Kusto.Language.
+/// `let x = 1` alone is a query to Kusto.
 fn statement_end(p: &mut P<'_>) {
     if !p.at_eof() {
         p.expect(K::SEMICOLON);
