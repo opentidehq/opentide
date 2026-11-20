@@ -454,7 +454,6 @@ impl Authorizer {
         Ok(secret)
     }
 
-    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     async fn fetch(&self, cx: TenantContext<'_>, now: Timestamp) -> Result<Token, ConnectorError> {
         let tenant = cx.tenant.label.tenant.clone();
         let request = match &self.credentials {
