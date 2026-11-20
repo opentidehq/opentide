@@ -1,8 +1,7 @@
 //! The status promotion of `opentide deploy` (UC-4.6c, #979): a RELEASE run
 //! on a push in CI, without `--skip-promotion`, moves the platform blocks of
 //! the rule files the push changed to the promotion target before it plans
-//! (`cli/services/deploy.py` `_deploy`, `mutation/promotion.py`
-//! `PromoteMDR.promote`).
+//! (`cli/services/deploy.py` `_deploy`, `mutation/promotion.py`).
 //!
 //! The run shows one step, `status promotion`, counting the changed rule
 //! files, as its own checklist. Every file is read and planned before any is
@@ -438,7 +437,7 @@ type Before = (Vec<u8>, Option<String>);
 
 type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>, Before)>, Option<Stop>);
 
-/// Every file read and planned (`PromoteMDR.promote` up to its writes): the
+/// Every file read and planned (the Python promotion up to its writes): the
 /// events to log, the bytes to write, and how the run stops, if it does.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan(promotion: &Promotion<'_>) -> Planned {

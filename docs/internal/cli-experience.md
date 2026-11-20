@@ -187,7 +187,7 @@ Assets: `opentidehq/.github/assets` (Pantone Reflex Blue `#001489`, white, the M
 
 Rules: only in `human` mode, and only when the stream encoding can encode the block characters (otherwise none). Blue is a fill, never a text colour. `NO_COLOR` on its own selects `plain` (row 5 of the precedence table), so it prints no mark; where `human` is chosen explicitly (`OPENTIDE_OUTPUT=human`) on a console without colour, the marks keep their shapes in the terminal's foreground colour (`brand.is_mono()`). No yellow, no gradients. `print_banner()` is public API: it is deprecated with a warning and renders the new mark, and is removed in a later release. `coretide-logo.png` is removed.
 
-**Tagline**, wherever the product describes itself: *Spec-driven development for agentic detection engineering.* Retired: "DetectionOps", "DetectionOps engine", the `detection-ops` skill pack name (installed packs keep working through an alias), "MDR" in user-facing text, "CoreTIDE". Not renamed: the Elastic managed-rule tag `OpenTide` (a deployed identifier) and the deprecated `OpenTide` class alias.
+**Tagline**, wherever the product describes itself: *Spec-driven development for agentic detection engineering.* Retired: "DetectionOps", "DetectionOps engine", the `detection-ops` skill pack name (installed packs keep working through an alias), "MDR" in user-facing text, "CoreTIDE". The Elastic managed-rule tag is `opentide`, in lower case like every other platform's marker; `opentide generate extract elastic` still recognises the `OpenTide` that 0.28.1 and earlier deployed.
 
 ## Surfaces
 

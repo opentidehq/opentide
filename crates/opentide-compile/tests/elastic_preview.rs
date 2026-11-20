@@ -90,6 +90,9 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
     let payload = shown.get("payload").unwrap();
     let tags = payload.get("tags").unwrap().to_compact();
     assert!(tags.contains("\"soc\""), "{tags}");
+    // opentide's marker leads the tags, in lower case (it was `OpenTide`).
+    assert!(tags.starts_with("[\"opentide\","), "{tags}");
+    assert!(!tags.contains("OpenTide"), "{tags}");
     assert_eq!(
         payload.get("index").unwrap().to_compact(),
         "[\"winlogbeat-*\"]"
