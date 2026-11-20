@@ -973,8 +973,7 @@ impl Held {
                 let is_warnings = path == "warnings" || path.ends_with(".warnings");
                 for item in items {
                     if let (true, Value::String(text)) = (is_warnings, item) {
-                        self.warnings
-                            .push((format!("{path}[]"), text.clone()));
+                        self.warnings.push((format!("{path}[]"), text.clone()));
                     }
                     self.walk(item, &format!("{path}[]"));
                 }
@@ -1407,4 +1406,76 @@ pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
         walk(&replay::repo().join("src/opentide"), &mut out);
         out
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SARIF: &str = r#"{"runs":[{"tool":{"driver":{"rules":[
+        {"id":"a_code","name":"ACode","helpUri":"u#a","defaultConfiguration":{"level":"error"}},
+        {"id":"b_code","name":"BCode","helpUri":"u#b","defaultConfiguration":{"level":"warning"}}]}},
+        "results":[{"ruleId":"b_code","ruleIndex":RULE_INDEX,"level":"warning"}]}]}"#;
+
+    #[test]
+    fn a_written_sarif_report_has_its_rule_index_checked_in_the_diagnostics_view() {
+        let held = file_record(
+            "opentide-reports/lint.sarif",
+            SARIF.replace("RULE_INDEX", "1").as_bytes(),
+        );
+        assert!(held.contains("b_code | warning"), "{held}");
+        assert!(
+            held.contains("runs[].tool.driver.rules[]: 1 items"),
+            "{held}"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ruleIndex 0 does not point at its rule b_code")]
+    fn a_written_sarif_report_with_a_wrong_rule_index_fails_the_diagnostics_view() {
+        file_record(
+            "opentide-reports/lint.sarif",
+            SARIF.replace("RULE_INDEX", "0").as_bytes(),
+        );
+    }
+
+    #[test]
+    fn stderr_json_lines_are_held_as_event_level_and_file_without_the_message() {
+        let mut text = String::new();
+        diagnostics_section(
+            &mut text,
+            "stderr",
+            concat!(
+                r#"{"event":"malformed_object_yaml","level":"error","path":"objects/a.yaml","error":"secret words"}"#,
+                "\n",
+                r#"{"event":"missing_identifier","level":"warning"}"#,
+                "\n"
+            ),
+        );
+        assert!(text.contains("json lines: 2"), "{text}");
+        assert!(text.contains("malformed_object_yaml | error | objects/a.yaml"));
+        assert!(text.contains("missing_identifier | warning | -"));
+        assert!(!text.contains("secret words"), "{text}");
+        let mut text = String::new();
+        diagnostics_section(&mut text, "stderr", "plain words\n");
+        assert!(text.contains("text, not held"), "{text}");
+    }
+
+    #[test]
+    fn the_warnings_strings_are_held_and_other_strings_are_not() {
+        let mut text = String::new();
+        diagnostics_section(
+            &mut text,
+            "stdout",
+            r#"{"warnings":["2 object files could not be read: a, b; opentide validate shows where"],"message":"not held"}"#,
+        );
+        assert!(
+            text.contains(
+                "warnings[]: 2 object files could not be read: a, b; opentide validate shows where"
+            ),
+            "{text}"
+        );
+        assert!(!text.contains("not held\n  "), "{text}");
+        assert!(!text.contains("message"), "{text}");
+    }
 }
