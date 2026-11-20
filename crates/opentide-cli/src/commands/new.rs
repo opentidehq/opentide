@@ -35,7 +35,7 @@ use serde_json::Value;
 
 use self::scaffold::{FieldPath, Fill, Model, Scalar, collect_fields, fill_template};
 use super::setup::wizard::{Prompter, Stop};
-use super::{COMMAND_FAILED, Report, open, placement};
+use super::{COMMAND_FAILED, Report, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, USAGE_EXIT_CODE, code};
 use crate::json::Json;
@@ -575,9 +575,9 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             None => return needs_input(&command, family, "--name"),
         },
     };
-    let workspace = match open(options) {
+    let workspace = match super::open_for(&command, options) {
         Ok(workspace) => workspace,
-        Err(message) => return Report::error(&command, message),
+        Err(report) => return *report,
     };
     let config = workspace.configuration().resolved.tree.clone();
     let enabled: Vec<String> = enabled_platforms(&config)
@@ -626,7 +626,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     let generated = missing(&paths);
     let mut steps = Vec::new();
     if !generated.is_empty() {
-        let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version);
+        let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version, false);
         steps = run.steps;
         if let Some((phase, detail)) = run.failed {
             return super::generate::phase_failed(&command, &phase, &detail, Vec::new(), steps);

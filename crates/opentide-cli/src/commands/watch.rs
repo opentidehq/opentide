@@ -144,9 +144,11 @@ pub fn run(
 ) -> std::io::Result<i32> {
     let terminal = cx.terminal;
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    let workspace = match super::open_for("validate", options) {
         Ok(workspace) => workspace,
-        Err(message) => {
+        Err(report) => {
+            // `path:line:column: problem` for a TOML file that does not parse.
+            let message = report.outcome.message;
             err.write_all(
                 terminal
                     .stderr
