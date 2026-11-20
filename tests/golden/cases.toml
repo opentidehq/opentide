@@ -2809,7 +2809,10 @@ fixtures = ["none"]
 env = { DEBUG = "*" }
 same_as = "default"
 
-# OPENTIDE_JSON_INDENT=2: indented although stdout is a pipe.
+# OPENTIDE_JSON_INDENT=2: the variable does not change the document (`same_as`
+# compares parsed JSON, so this case does not check the layout; the
+# indentation is `mode::json_indent`'s unit test in `src/mode.rs` and
+# `framework_json_indentation_and_one_trailing_newline` in `src/app.rs`).
 [[case]]
 command = "commands"
 variant = "indent-2"
@@ -2818,7 +2821,8 @@ fixtures = ["none"]
 env = { OPENTIDE_JSON_INDENT = "2" }
 same_as = "default"
 
-# OPENTIDE_JSON_INDENT=0: one line although stdout is a terminal.
+# OPENTIDE_JSON_INDENT=0: as above, the document is the same (the one-line
+# layout on a terminal is held by the same two unit tests, not by this case).
 [[case]]
 command = "commands"
 variant = "indent-0"
@@ -3356,7 +3360,7 @@ args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
 fixtures = ["vscode-long-query"]
 
 # ---------------------------------------------------------------------------
-# The text modes (#1743). Every case above runs in json mode alone (the
+# The text modes (#1723). Every case above runs in json mode alone (the
 # default): the `--json` contract, the files a command writes and its exit
 # code are what a script or a pipeline reads. The cases below run a case again
 # in a text mode, each for a reason: a small rendering set, which holds what

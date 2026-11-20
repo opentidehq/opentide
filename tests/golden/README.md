@@ -22,7 +22,7 @@ requests and is not part of this slimming.
 Until #1139 and #1142 this folder also held the recordings of the frozen Python CLI (the oracle:
 `cases/`, `blobs/`, `mcp/`, `APPROVED_DIFFS.toml`) and `cargo xtask golden`, `compare` and `mcp`
 compared the Rust engine with them. Once the snapshots and the crates' own tests held the same
-behaviour, the recordings and that tooling were deleted; git history keeps them. Until #1743 every
+behaviour, the recordings and that tooling were deleted; git history keeps them. Until #1723 every
 case was also recorded in the `human`, `plain` and `agent` modes, which repeated the json case's
 behaviour in another layout (1,906 files, most of them rewritten by any help-text, message or
 explain-page edit).
@@ -54,9 +54,11 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   its parsed value, without the rules' short and full descriptions and their help (generated from
   the explain pages) and without the catalogue's order: `tool.driver.rules` is cut to the rules
   the results name, each as one line, `id | level | name | helpUri`, and each result's `ruleIndex`
-  is checked against its `ruleId` (a mismatch fails the case) and dropped. An explain-page edit, or a
+  is checked against its `ruleId` (a mismatch fails the case) and dropped. The same cut holds the
+  renderers' SARIF snapshots (`tests/render/snapshots/render__*_sarif.snap`). An explain-page edit, or a
   new diagnostic code, rewrites none of them. The pages are held once, by the `explain` cases; a
-  rule's shape by `render::report`'s unit tests and `tests/render.rs`. The results, with their
+  rule's full shape (its descriptions, help text and Markdown) is asserted for the whole catalogue by
+  `tests/render.rs` before the cut, and `render::report`'s unit tests. The results, with their
   levels and locations, and the document's structure stay.
 - **Normalised, and only because it differs between two runs or two hosts** (the snapshots'
   normaliser, `crates/opentide-cli/tests/common/normalise.rs`, the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of
@@ -166,7 +168,7 @@ overridden by a case:
 |------|-------|----------|
 | `full` (default) | the exit code, stdout, stderr (JSON as a parsed value) and every file written, with its text | the cases on the committed fixtures |
 | `streams` | the same, and the paths written with what happened to each, but not the files' text | a text-mode run of a command whose generated files its json case holds (`generate`) |
-| `diagnostics` | the exit code and, for every JSON stream and written report, each finding as `code \| severity \| file \| line \| column`, the integer fields and array lengths by path, and the `status` and `ok` values; the paths written; never a message, a frame, help text or a file's text | the generated corpora (`fault`, `fault-lint`, `heavy-small`) |
+| `diagnostics` | the exit code and, for every JSON stream and written report, each finding as `code \| severity \| file \| line \| column`, the integer fields and array lengths by path, and the `status` and `ok` values; the text of every `warnings[]` string (a warning has no code); stderr's log events (JSON lines) as `event \| level \| file`; the paths written; never any other message, a frame, help text or a file's text | the generated corpora (`fault`, `fault-lint`, `heavy-small`) |
 
 A case with `same_as = "<variant>"` holds no snapshot: it must do exactly what that variant does in
 json mode on the same fixture (exit code, streams, files; a JSON stream's layout aside). It keeps a

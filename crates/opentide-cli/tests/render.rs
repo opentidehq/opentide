@@ -32,6 +32,9 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+#[path = "common/sarif.rs"]
+mod sarif;
+
 /// Where `<WS>` lives while rendering: absolute, so links are built as for a real file.
 const ROOT: &str = "/ws-root";
 
@@ -109,6 +112,51 @@ fn catalogue() -> RuleCatalogue {
     }
 }
 
+/// A SARIF report as the snapshot holds it: every rule of the catalogue
+/// carries its full shape (its names, `helpUri`, and for a code with a page
+/// its summary as the short and full description, the page's Markdown and its
+/// plain text as the help), which is asserted here against the page; the
+/// snapshot then holds the report without that help text, as the CLI
+/// snapshots do ([`sarif::stable_sarif`]: the rules the results name, each as
+/// one line, and each result's `ruleIndex` checked against its `ruleId`). The
+/// catalogue's help is about 1 MB a report, and the pages are held by the
+/// `explain` cases.
+fn held_sarif(text: &str) -> String {
+    let mut value: Value = serde_json::from_str(text).expect("a SARIF document");
+    let pages = catalogue().rules;
+    let rules = value
+        .pointer("/runs/0/tool/driver/rules")
+        .and_then(Value::as_array)
+        .expect("the report's rules");
+    assert_eq!(rules.len(), pages.len(), "one rule for each page");
+    for (rule, page) in rules.iter().zip(&pages) {
+        let at = |pointer: &str| rule.pointer(pointer).and_then(Value::as_str);
+        assert_eq!(at("/id"), Some(page.code.as_str()));
+        assert!(at("/name").is_some_and(|name| !name.is_empty()), "{page:?}");
+        assert!(
+            at("/helpUri").is_some_and(|uri| uri.ends_with(&format!("#{}", page.code))),
+            "{}",
+            page.code
+        );
+        if let (Some(summary), Some(markdown)) = (&page.summary, &page.markdown) {
+            assert_eq!(at("/shortDescription/text"), Some(summary.as_str()));
+            assert_eq!(at("/fullDescription/text"), Some(summary.as_str()));
+            assert_eq!(at("/help/markdown"), Some(markdown.as_str()));
+            assert_eq!(
+                at("/help/text"),
+                Some(opentide_cli::render::report::plain_text(markdown).as_str())
+            );
+        }
+        let retired = rule
+            .pointer("/properties/tags")
+            .and_then(Value::as_array)
+            .is_some_and(|tags| tags.iter().any(|tag| tag == "retired"));
+        assert_eq!(retired, page.retired, "{}", page.code);
+    }
+    sarif::stable_sarif(&mut value);
+    serde_json::to_string_pretty(&value).expect("a document")
+}
+
 fn fault(command: &str) {
     let data = input(&format!("{command}-fault.input.json"));
     let items = diagnostics(&data["diagnostics"]);
@@ -126,7 +174,7 @@ fn fault(command: &str) {
     let sarif = sarif_report(&items, command, version, &catalogue(), &path_for);
     check(
         &format!("{command}_fault_sarif"),
-        document_text(&sarif, true).trim_end_matches('\n'),
+        &held_sarif(&document_text(&sarif, false)),
     );
     let quality = codequality_report(&items, &path_for);
     check(

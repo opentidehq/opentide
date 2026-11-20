@@ -12,7 +12,7 @@
 //! prints or writes is a snapshot diff, reviewed with `cargo insta review`
 //! (tests/golden/README.md, "Snapshots").
 //!
-//! What is held, and in how much detail, is the manifest's decision (#1743):
+//! What is held, and in how much detail, is the manifest's decision (#1723):
 //! a case runs in `json` mode unless it lists others (the `--json` contract
 //! and the files a command writes are the product; the text modes' wording
 //! and layout are held by the renderers' and commands' own tests, and by a
@@ -28,6 +28,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use crate::normalise::{Normaliser, Rule, Volatile};
+use crate::sarif::stable_sarif;
 use opentide_cli::env::Env;
 use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
@@ -565,7 +566,7 @@ fn streams(text: &mut String, view: View, stdout: &str, stderr: &str) {
     if view == View::Diagnostics {
         writeln!(
             text,
-            "view: diagnostics (code, severity, file, line, column and counts; no message text)"
+            "view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)"
         )
         .unwrap();
         diagnostics_section(text, "stdout", stdout);
@@ -832,91 +833,6 @@ fn file_body(
     digest_line(text.as_bytes())
 }
 
-/// A SARIF report's rule catalogue lists every diagnostic code with its short
-/// and full description and its help (text and Markdown), generated from the
-/// explain pages, and the results point into it by `ruleIndex`: an edit of a
-/// page, or a new code, would rewrite every snapshot that holds a report, and
-/// the catalogue is most of the file. The report is held without the help
-/// text and without the catalogue's position: each result's `ruleIndex` is
-/// checked against its `ruleId` (a mismatch fails the case) and dropped, and
-/// the catalogue is cut to the rules the results name, each as one line,
-/// `id | level | name | helpUri` (`| retired` for a retired code). The explain
-/// pages are held once, by the explain cases, and a rule's full shape by
-/// `render::report`'s unit tests and `tests/render.rs`. The results, with
-/// their locations, and the rest of the document stay as they are.
-fn stable_sarif(value: &mut serde_json::Value) {
-    use serde_json::Value;
-    let Some(runs) = value.get_mut("runs").and_then(Value::as_array_mut) else {
-        return;
-    };
-    for run in runs {
-        let Some(rules) = run
-            .pointer("/tool/driver/rules")
-            .and_then(Value::as_array)
-            .cloned()
-        else {
-            continue;
-        };
-        let mut named = std::collections::BTreeSet::new();
-        if let Some(results) = run.get_mut("results").and_then(Value::as_array_mut) {
-            for result in results {
-                let Some(id) = result
-                    .get("ruleId")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-                else {
-                    continue;
-                };
-                if let Some(index) = result.get("ruleIndex").and_then(Value::as_u64) {
-                    let listed = usize::try_from(index)
-                        .ok()
-                        .and_then(|index| rules.get(index))
-                        .and_then(|rule| rule.get("id"))
-                        .and_then(Value::as_str);
-                    assert_eq!(
-                        listed,
-                        Some(id.as_str()),
-                        "a SARIF result's ruleIndex {index} does not point at its rule {id}"
-                    );
-                    result
-                        .as_object_mut()
-                        .map(|result| result.remove("ruleIndex"));
-                }
-                named.insert(id);
-            }
-        }
-        let lines: Vec<Value> = rules
-            .iter()
-            .filter_map(|rule| {
-                let id = rule.get("id").and_then(Value::as_str)?;
-                if !named.contains(id) {
-                    return None;
-                }
-                let text = |pointer: &str| {
-                    rule.pointer(pointer)
-                        .and_then(Value::as_str)
-                        .unwrap_or("-")
-                        .to_owned()
-                };
-                let retired = rule
-                    .pointer("/properties/tags")
-                    .and_then(Value::as_array)
-                    .is_some_and(|tags| tags.iter().any(|tag| tag == "retired"));
-                Some(Value::String(format!(
-                    "{id} | {} | {} | {}{}",
-                    text("/defaultConfiguration/level"),
-                    text("/name"),
-                    text("/helpUri"),
-                    if retired { " | retired" } else { "" }
-                )))
-            })
-            .collect();
-        if let Some(slot) = run.pointer_mut("/tool/driver/rules") {
-            *slot = Value::Array(lines);
-        }
-    }
-}
-
 /// A written `.sarif` file as its parsed value with the rules' help text
 /// replaced ([`stable_sarif`]); `None` when it is not JSON.
 fn sarif_body(normaliser: &mut Normaliser, text: &str) -> Option<String> {
@@ -1004,6 +920,11 @@ struct Held {
     lengths: BTreeMap<String, usize>,
     /// `status` and `ok` values and how many times each occurs.
     states: BTreeMap<String, BTreeMap<String, usize>>,
+    /// The strings of every `warnings` array of strings, by path: a warning
+    /// without a code (the deploy plan's "N object files could not be read: ...;
+    /// opentide validate shows where") is held by its text, since no other
+    /// field names it.
+    warnings: Vec<(String, String)>,
 }
 
 impl Held {
@@ -1049,7 +970,12 @@ impl Held {
             }
             Value::Array(items) => {
                 *self.lengths.entry(format!("{path}[]")).or_default() += items.len();
+                let is_warnings = path == "warnings" || path.ends_with(".warnings");
                 for item in items {
+                    if let (true, Value::String(text)) = (is_warnings, item) {
+                        self.warnings
+                            .push((format!("{path}[]"), text.clone()));
+                    }
                     self.walk(item, &format!("{path}[]"));
                 }
             }
@@ -1069,6 +995,9 @@ impl Held {
         for (path, length) in &self.lengths {
             writeln!(out, "{path}: {length} items").unwrap();
         }
+        for (path, text) in &self.warnings {
+            writeln!(out, "{path}: {text}").unwrap();
+        }
         for (path, states) in &self.states {
             let states: Vec<String> = states
                 .iter()
@@ -1081,7 +1010,8 @@ impl Held {
 }
 
 /// One stream in the `diagnostics` view: a JSON document as its findings
-/// and counts; any other text is not held (its wording and layout are the
+/// and counts, JSON lines (the log events on stderr) as each event's name,
+/// level and file; any other text is not held (its wording and layout are the
 /// renderers' tests', and the generated corpora would rewrite with every
 /// message).
 fn diagnostics_section(text: &mut String, name: &str, body: &str) {
@@ -1096,13 +1026,48 @@ fn diagnostics_section(text: &mut String, name: &str, body: &str) {
     match document {
         Some(mut value) => {
             host_dependent(&mut value);
+            stable_sarif(&mut value);
             let mut held = Held::default();
             held.walk(&value, "");
             writeln!(text, "\n━━━ {name} · json").unwrap();
             text.push_str(&held.render());
         }
-        None => writeln!(text, "\n━━━ {name} · text, not held").unwrap(),
+        None => match json_lines(body) {
+            Some(events) => {
+                writeln!(text, "\n━━━ {name} · json lines: {}", events.len()).unwrap();
+                for event in events {
+                    writeln!(text, "  {event}").unwrap();
+                }
+            }
+            None => writeln!(text, "\n━━━ {name} · text, not held").unwrap(),
+        },
     }
+}
+
+/// `body` as JSON lines (every non-blank line an object): each as
+/// `event | level | file`, in the order logged, with no message or error
+/// text. `None` when any line is not a JSON object.
+fn json_lines(body: &str) -> Option<Vec<String>> {
+    use serde_json::Value;
+    let mut events = Vec::new();
+    for line in body.lines().filter(|line| !line.trim().is_empty()) {
+        let Value::Object(fields) = serde_json::from_str::<Value>(line).ok()? else {
+            return None;
+        };
+        let text = |keys: &[&str]| {
+            keys.iter()
+                .find_map(|key| fields.get(*key).and_then(Value::as_str))
+                .unwrap_or("-")
+                .to_owned()
+        };
+        events.push(format!(
+            "{} | {} | {}",
+            text(&["event", "code", "name"]),
+            text(&["level", "severity"]),
+            text(&["file", "path", "file_path"])
+        ));
+    }
+    (!events.is_empty()).then_some(events)
 }
 
 /// A written file in the `diagnostics` view: a report (a SARIF or a
@@ -1118,7 +1083,10 @@ fn file_record(path: &str, bytes: &[u8]) -> String {
         .then(|| serde_json::from_slice::<serde_json::Value>(bytes).ok())
         .flatten();
     match value {
-        Some(value) => {
+        Some(mut value) => {
+            // A SARIF report's ruleIndex is checked against its ruleId
+            // here too, and the catalogue cut to the rules the results name.
+            stable_sarif(&mut value);
             let mut held = Held::default();
             held.walk(&value, "");
             held.render()

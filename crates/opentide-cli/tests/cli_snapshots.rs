@@ -14,6 +14,8 @@
 mod normalise;
 #[path = "common/replay.rs"]
 mod replay;
+#[path = "common/sarif.rs"]
+mod sarif;
 #[path = "common/snapshot.rs"]
 mod snapshot;
 

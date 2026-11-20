@@ -9,7 +9,7 @@ The unified core ([#790](https://github.com/opentidehq/opentide/issues/790)) mov
 Python to Rust. Through the port, the frozen Python CLI was the **oracle**: `cargo xtask golden`
 recorded what it did, and the Rust engine was compared with those recordings through an
 approved-diffs ledger. Once the Rust-owned snapshots held the same behaviour, the replays (#1139)
-and then the recordings, the ledger and their tooling (#1142) were deleted. Since #1743 the
+and then the recordings, the ledger and their tooling (#1142) were deleted. Since #1723 the
 snapshots no longer try to hold every behaviour byte for byte: **behaviour is held by unit and
 end-to-end tests; the snapshots hold the `--json` contract, the files a command writes, the exit
 codes and a small rendering set.** A wording, help or explain-page change is a unit test's diff,
@@ -26,7 +26,7 @@ in-process and holds what it did (exit code, stdout, stderr, every file written,
 deleted) to an insta snapshot under `crates/opentide-cli/tests/cli_snapshots/<command>/`. A case
 runs in json mode unless it lists `modes`; a fixture's or a case's `view` says how much of the run
 is held (`full`, `streams`, or `diagnostics` for the generated corpora: findings as code, severity,
-file, line and column, and counts, never message text); `same_as = "<variant>"` holds no snapshot, only that the case does what that json variant does. A change that alters the `--json`
+file, line and column, and counts, the `warnings[]` strings and the log events' names, never other message text); `same_as = "<variant>"` holds no snapshot, only that the case does what that json variant does. A change that alters the `--json`
 document, a written file, an exit code or the rendering set updates its snapshots in the same pull
 request:
 
