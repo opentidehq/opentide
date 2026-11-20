@@ -309,21 +309,27 @@ impl SavedSearch {
     /// an update would write them (#1711): an update only writes the
     /// settings it sends, so the others are not compared. Splunk answers a
     /// boolean as `1` or `0`; a list (sent as one value per item) is never
-    /// taken as held, nor is a setting the tenant does not answer.
+    /// taken as held. A setting the tenant does not answer is held only
+    /// when the value sent is empty (the setting is then cleared, as unset).
+    ///
+    /// This is the one place the comparison is decided, over *every* key of
+    /// the body an update writes: a setting added to the body (a marker in
+    /// `description`, an emptied `alert.managedBy`) is compared without
+    /// another change here.
     pub fn holds(&self, settings: &Object) -> bool {
         settings.iter().all(|(key, value)| {
+            let sent = match value {
+                Json::Array(_) => return false,
+                Json::Null => String::new(),
+                other => json_text(other),
+            };
             let Some(held) = self
                 .content
                 .iter()
                 .find(|(name, _)| name == key)
                 .map(|(_, held)| held.as_str())
             else {
-                return false;
-            };
-            let sent = match value {
-                Json::Array(_) => return false,
-                Json::Null => String::new(),
-                other => json_text(other),
+                return sent.is_empty();
             };
             sent == held
                 || matches!((flag(&sent), flag(held)), (Some(sent), Some(held)) if sent == held)
@@ -1111,6 +1117,18 @@ mod tests {
         let mut unknown = sent.clone();
         unknown.insert("action.email".into(), Json::Str("1".into()));
         assert!(!saved.holds(&unknown));
+        // A setting sent empty (cleared) is held by a tenant that does not
+        // answer it, and by one that answers it empty; not by a value.
+        let mut cleared = sent.clone();
+        cleared.insert("alert.managedBy".into(), Json::Str(String::new()));
+        assert!(saved.holds(&cleared));
+        let mut answered = saved.clone();
+        answered
+            .content
+            .push(("alert.managedBy".into(), String::new()));
+        assert!(answered.holds(&cleared));
+        answered.content[6].1 = "mdr".into();
+        assert!(!answered.holds(&cleared));
         let mut listed = sent;
         listed.insert("alert.severity".into(), Json::Array(vec![Json::Int(5)]));
         assert!(!saved.holds(&listed));
