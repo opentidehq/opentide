@@ -137,6 +137,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **The vulnerability lookup's `User-Agent` names the project only** ([#1722](https://github.com/opentidehq/opentide/pull/1722)). A CVE lookup on Vulnerability-Lookup (`vulnerability.circl.lu`) sent one team's contact address from every installation; it now sends `opentide/<version> (+https://github.com/opentidehq/opentide)`.
 - **The `alert_severity` vocabulary is named "Alert Severity"** ([opentidehq/specifications#96](https://github.com/opentidehq/specifications/pull/96)). Hover, `opentide info vocab` and generated documentation showed "MDR Alert Severity". Its values are unchanged.
 - **`validate query --live` logs name the rule with `rule_name`** ([#1718](https://github.com/opentidehq/opentide/pull/1718)). The `validating_query` and `valid_query` events carried it as `mdr_name`.
 - **MCP `validation_report` refuses an `object_type` that is no object family** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). `object_type: "bogus"` answered a report that matched nothing; it is now refused (`isError`, `usage_invalid_choice: Unknown object type(s): bogus. Choose rule, threat, or objective.`), as `opentide validate --type bogus` is.
