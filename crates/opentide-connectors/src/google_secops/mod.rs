@@ -385,7 +385,7 @@ impl Prober for GoogleSecops {
     /// but unusable still fails as `authentication_failed`.
     fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
         Box::pin(async move {
-            let metadata_only = cx.tenant.setup.get("credentials").is_none()
+            let metadata_only = !cx.tenant.setup.contains_key("credentials")
                 && !auth::has_local_default_credentials(&self.env);
             match self.read_rules(cx).await {
                 Err(ConnectorError::Authentication { message, .. })
