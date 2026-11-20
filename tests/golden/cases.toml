@@ -6,9 +6,26 @@
 # `fixtures` (the defaults below unless it sets its own). `args` follow
 # `opentide`; `{name}` is a variable of the fixture, and a fixture without it
 # is left out of that case. json mode puts --json right after `opentide`.
+#
+# `modes` defaults to json alone: the `--json` contract, the files a command
+# writes and its exit code are what scripts and pipelines read, and what the
+# snapshots hold. The text modes' wording is held by the renderers' and the
+# commands' own tests; the cases at the end of this file run a few cases in a
+# text mode (a rendering set, and behaviours only a text mode has).
+#
+# A fixture's or a case's `view` is `full` (the default: the streams and every
+# file written, as they are), `streams` (the streams, and the paths written
+# without their text: a text-mode run of a command whose generated files its
+# json-mode case holds) or `diagnostics` (the generated corpora: the exit code,
+# the diagnostics as code, severity, file, line and column, counts and the paths
+# written; no message text, frame or file body).
+#
+# `same_as = "<variant>"` holds no snapshot: the case must do exactly what that
+# variant does in json mode on the same fixture (a flag or a variable that
+# changes nothing, as `commands`' 390 KB document under `DEBUG=*`).
 
 [defaults]
-modes = ["human", "plain", "json", "agent"]
+modes = ["json"]
 fixtures = ["tide-corpus", "vscode", "heavy-small", "empty", "none"]
 timeout_secs = 180
 
@@ -55,6 +72,12 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus with one typo `validate --fix` repairs in place (`severity: high`)"
 vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
+
+[fixtures.tide-corpus-bad-values]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with values the models do not take: CrowdStrike `trigger: sometimes`, SentinelOne `treat_as_threat: maybe`"
+edits = [{ path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      trigger: verbose\n", replace = "      trigger: sometimes\n" }, { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "      treat_as_threat: Malicious\n", replace = "      treat_as_threat: maybe\n" }]
 
 [fixtures.tide-corpus-splunk-advanced]
 kind = "tide-corpus"
@@ -148,16 +171,19 @@ vars = { objective = "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f", rule = "ff8bf67e-64
 
 [fixtures.heavy-small]
 kind = "generated"
+view = "diagnostics"
 argv = ["cargo", "xtask", "corpus", "generate", "--seed", "1", "--threats", "30", "--objectives", "30", "--rules", "50", "--out", "{out}"]
 about = "UC-0.6's heavy workspace generator, seed 1: 30 threats, 30 objectives, 50 rules; generated at record and check time, never committed"
 
 [fixtures.fault]
 kind = "generated"
+view = "diagnostics"
 argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
 about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
 
 [fixtures.fault-lint]
 kind = "generated"
+view = "diagnostics"
 argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
 about = "`fault` with lint's recommended check off (`.opentide/configurations/lint.toml`). opentide 0.28.1's recommended check (#1028) builds the editor schemas from the workspace's configuration and crashes on the fault workspace's invalid configuration files (#1081); with it off, every other lint check runs on the fault workspace and compares. `lint/json/fault/recommended-crash` records the crash"
 edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[recommended]\nenabled = false\n" }]
@@ -282,6 +308,7 @@ about = "no workspace at all: an empty directory"
 command = ""
 variant = "bare"
 args = []
+modes = ["json", "plain", "agent"]
 fixtures = ["none", "tide-corpus"]
 
 [[case]]
@@ -862,6 +889,7 @@ fixtures = ["tide-corpus", "vscode"]
 command = "validate"
 variant = "codequality"
 args = ["validate", "--format", "codequality"]
+modes = ["json", "plain"]
 fixtures = ["tide-corpus"]
 
 # "--json after the subcommand": accepted.
@@ -901,7 +929,6 @@ fixtures = ["vscode-config-parse"]
 command = "validate"
 variant = "watch-json"
 args = ["validate", "--watch"]
-modes = ["json"]
 fixtures = ["tide-corpus"]
 timeout_secs = 60
 
@@ -910,7 +937,7 @@ timeout_secs = 60
 command = "validate"
 variant = "ci-github"
 args = ["validate"]
-modes = ["plain", "agent"]
+modes = ["plain"]
 fixtures = ["vscode"]
 env = { GITHUB_ACTIONS = "true" }
 
@@ -939,7 +966,7 @@ fixtures = ["tide-corpus"]
 command = "validate"
 variant = "ci-sink-github"
 args = ["validate"]
-modes = ["plain", "agent", "json"]
+modes = ["plain", "json"]
 fixtures = ["fault"]
 env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
 
@@ -947,7 +974,7 @@ env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY 
 command = "validate"
 variant = "ci-sink-gitlab"
 args = ["validate"]
-modes = ["plain", "agent", "json"]
+modes = ["plain", "json"]
 fixtures = ["fault"]
 env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
 
@@ -955,7 +982,7 @@ env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
 command = "validate"
 variant = "ci-sink-azure"
 args = ["validate"]
-modes = ["plain", "agent", "json"]
+modes = ["plain", "json"]
 fixtures = ["fault"]
 env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
 
@@ -978,7 +1005,6 @@ env = { OPENTIDE_PROGRESS = "json" }
 command = "validate"
 variant = "compile-check"
 args = ["validate"]
-modes = ["plain", "json"]
 fixtures = ["tide-corpus-compile-missing-field", "tide-corpus-compile-invalid-value", "tide-corpus-compile-empty-block", "tide-corpus-compile-invalid-rule", "tide-corpus-compile-elastic-severity", "tide-corpus-compile-hidden"]
 
 # ---- validate query ----
@@ -1057,7 +1083,6 @@ command = "validate query"
 variant = "live-splunk-parsed"
 args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
 fixtures = ["live-tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-splunk-parsed"
 
@@ -1066,7 +1091,6 @@ command = "validate query"
 variant = "live-splunk-progress-json"
 args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
 fixtures = ["live-tenants"]
-modes = ["json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", OPENTIDE_PROGRESS = "json" }
 cassette = "golden/validate-live-splunk-parsed"
 
@@ -1075,7 +1099,6 @@ command = "validate query"
 variant = "live-splunk"
 args = ["validate", "query", "--live", "--platform", "splunk"]
 fixtures = ["live-tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-splunk"
 
@@ -1084,7 +1107,6 @@ command = "validate query"
 variant = "live-carbon-black-valid"
 args = ["validate", "query", "--live", "--platform", "carbon_black_cloud", "--uuid", "00000000-0000-4000-8046-000000000004"]
 fixtures = ["live-tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-carbon-black-valid"
 
@@ -1093,7 +1115,6 @@ command = "validate query"
 variant = "live-carbon-black"
 args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
 fixtures = ["live-tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-carbon-black"
 
@@ -1102,7 +1123,6 @@ command = "validate query"
 variant = "live-elastic-rejected"
 args = ["validate", "query", "--live", "--platform", "elastic"]
 fixtures = ["live-tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/validate-live-elastic"
 
@@ -1111,63 +1131,54 @@ command = "validate query"
 variant = "live-unset-defender-for-endpoint"
 args = ["validate", "query", "--live", "--platform", "defender_for_endpoint"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-unset-sentinel-one"
 args = ["validate", "query", "--live", "--platform", "sentinel_one", "--check-timeout", "30"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-unset-carbon-black-cloud"
 args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-no-tenant-reached"
 args = ["validate", "query", "--live", "--platform", "sentinel"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-strategy-release"
 args = ["validate", "query", "--live", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-uuid-unmatched"
 args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000099"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-changed-and-file"
 args = ["validate", "query", "--live", "--platform", "splunk", "--changed", "--uuid", "00000000-0000-4000-8046-000000000001"]
 fixtures = ["live-tenants"]
-modes = ["json"]
 
 [[case]]
 command = "validate query"
 variant = "live-strategy-typo"
 args = ["validate", "query", "--live", "--platform", "elastic", "--strategy", "STAGING"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "validate query"
 variant = "live-wide-unset-elastic"
 args = ["validate", "query", "--live", "--platform", "elastic", "--wide"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 # UC-4.2 (#832), UC-4.4 (#834): a requests-based platform's tenant whose
 # credential is set but which cannot be reached: no cassette, so the request
@@ -1210,7 +1221,6 @@ fixtures = ["none", "tide-corpus"]
 command = "query"
 variant = "progress-json"
 args = ["query", "--platform", "sentinel", "SecurityEvent | take 10"]
-modes = ["json"]
 fixtures = ["tide-corpus"]
 env = { OPENTIDE_PROGRESS = "json" }
 
@@ -1316,28 +1326,24 @@ command = "query"
 variant = "unset-defender-for-endpoint"
 args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
 variant = "unset-sentinel-one"
 args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
 variant = "unset-crowdstrike"
 args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
 variant = "unset-harfanglab"
 args = ["query", "--platform", "harfanglab", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "processes process_name=cmd.exe"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 # UC-4.3 (#833): the SDK platforms. Sentinel's sign-in and queries carry random
 # request ids, so its success path is proven by its connector's cassettes
@@ -1393,14 +1399,12 @@ command = "query"
 variant = "rule-unknown"
 args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-0000000000O1"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
 variant = "rule-no-block"
 args = ["query", "--platform", "crowdstrike", "--rule", "00000000-0000-4000-8046-000000000001"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
@@ -1415,21 +1419,18 @@ command = "query"
 variant = "unset-splunk"
 args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "index=main"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
 variant = "unset-carbon-black-cloud"
 args = ["query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "process_name:cmd.exe"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "query"
 variant = "unset-sentinel"
 args = ["query", "--platform", "sentinel", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "SecurityEvent | take 1"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 # UC-4.2 (#832), UC-4.4 (#834): each requests-based platform's tenant with its
 # credential set, unreachable: no cassette, so the request goes to the
@@ -1501,7 +1502,7 @@ fixtures = ["fault-lint"]
 command = "lint"
 variant = "ci-sink-github"
 args = ["lint"]
-modes = ["plain", "agent"]
+modes = ["plain"]
 fixtures = ["fault-lint"]
 env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
 
@@ -1538,7 +1539,6 @@ fixtures = ["tide-corpus"]
 command = "lint"
 variant = "recommended-crash"
 args = ["lint", "--check", "recommended"]
-modes = ["json"]
 fixtures = ["fault"]
 env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
@@ -1582,6 +1582,7 @@ fixtures = ["tide-corpus", "vscode"]
 command = "lint"
 variant = "sarif"
 args = ["lint", "--format", "sarif"]
+modes = ["json", "plain"]
 fixtures = ["tide-corpus"]
 
 # --changed outside a git repository.
@@ -1668,7 +1669,6 @@ normalise = ["fresh-uuids"]
 command = "new threat"
 variant = "prompt"
 args = ["new", "threat"]
-modes = ["plain", "json", "agent"]
 fixtures = ["tide-corpus"]
 normalise = ["fresh-uuids"]
 
@@ -1695,7 +1695,6 @@ normalise = ["fresh-uuids"]
 command = "new rule"
 variant = "no-platform"
 args = ["new", "rule", "--name", "LSASS Access", "--objective", "{objective}"]
-modes = ["plain", "json", "agent"]
 fixtures = ["tide-corpus"]
 normalise = ["fresh-uuids"]
 
@@ -1717,6 +1716,7 @@ modes = ["json", "plain"]
 fixtures = ["tide-corpus"]
 env = { OPENTIDE_PROGRESS = "json" }
 normalise = ["fresh-uuids"]
+view = "streams"
 
 [[case]]
 command = "generate explorer"
@@ -1969,7 +1969,6 @@ variant = "send-defender"
 args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-defender-continues"
 
@@ -1979,7 +1978,6 @@ variant = "send-sentinel-one"
 args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { S1_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sentinel-one"
 
@@ -1989,7 +1987,6 @@ variant = "send-crowdstrike"
 args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-crowdstrike"
 
@@ -1999,7 +1996,6 @@ variant = "send-sysdig"
 args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sysdig"
 
@@ -2009,7 +2005,6 @@ variant = "send-elastic"
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/deploy-elastic"
 
@@ -2021,7 +2016,6 @@ variant = "send-elastic-unchanged"
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/deploy-elastic-unchanged"
 
@@ -2031,7 +2025,6 @@ variant = "send-splunk"
 args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-splunk"
 
@@ -2041,7 +2034,6 @@ variant = "send-carbon-black"
 args = ["deploy", "--platform", "carbon_black_cloud", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
-modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-carbon-black"
 
@@ -2050,7 +2042,6 @@ command = "deploy"
 variant = "send-splunk-progress-json"
 args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", OPENTIDE_PROGRESS = "json" }
 cassette = "golden/deploy-splunk"
 
@@ -2086,7 +2077,6 @@ command = "deploy"
 variant = "send-enabled-platforms"
 args = ["deploy", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants-sysdig"]
-modes = ["plain", "json", "agent"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sysdig"
 
@@ -2139,7 +2129,6 @@ command = "deploy"
 variant = "send-sentinel-no-rule"
 args = ["deploy", "--platform", "sentinel", "--strategy", "PREVIEW", "--uuid", "00000000-0000-4000-8047-000000000072"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json"]
 
 # UC-4.6c (#979): a RELEASE deploy on a push in CI promotes the rules the push
 # changed (`status promotion`) before it plans: the rule file rewritten in
@@ -2154,7 +2143,6 @@ command = "deploy"
 variant = "promote-push"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
-modes = ["plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # UC-6.2e: a promotion target that is not a status name (a number), a
@@ -2166,7 +2154,6 @@ command = "deploy"
 variant = "promote-fails"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push-no-target", "deploy-push-key", "deploy-push-unreadable"]
-modes = ["plain", "json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -2174,7 +2161,6 @@ command = "deploy"
 variant = "promote-skip"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE", "--skip-promotion"]
 fixtures = ["deploy-push"]
-modes = ["plain", "json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # Git without the network (ADR 0007's amendment): a git checkout read with
@@ -2187,7 +2173,6 @@ command = "deploy"
 variant = "dry-run-push"
 args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
 fixtures = ["deploy-push"]
-modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # #1662: a repository's first commit has no parent, so every rule file it
@@ -2198,14 +2183,12 @@ command = "deploy"
 variant = "dry-run-first-commit"
 args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
 fixtures = ["deploy-first-commit"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "deploy"
 variant = "dry-run-first-push"
 args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
 fixtures = ["deploy-first-commit"]
-modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # A push whose commits changed no rule file reads none, and says so rather
@@ -2215,7 +2198,6 @@ command = "deploy"
 variant = "dry-run-no-rule-changed"
 args = ["deploy", "--dry-run", "--strategy", "PREVIEW"]
 fixtures = ["share-misp-push-config"]
-modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -2223,14 +2205,12 @@ command = "generate docs"
 variant = "changed-push"
 args = ["generate", "docs", "--changed"]
 fixtures = ["deploy-push"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "deploy"
 variant = "promote-gitlab-progress-json"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push"]
-modes = ["json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
 
 [[case]]
@@ -2307,7 +2287,6 @@ normalise = ["fresh-uuids"]
 command = "setup"
 variant = "prompt"
 args = ["setup"]
-modes = ["plain", "json", "agent"]
 fixtures = ["none"]
 
 [[case]]
@@ -2772,7 +2751,6 @@ fixtures = ["vscode-ambiguous"]
 command = "tui"
 variant = "default"
 args = ["tui"]
-modes = ["plain", "json", "agent"]
 fixtures = ["none", "tide-corpus"]
 
 [[case]]
@@ -2800,14 +2778,12 @@ fixtures = ["none"]
 command = "explain"
 variant = "yara-warning"
 args = ["explain", "yara_module_unconfirmed"]
-modes = ["plain", "json", "agent"]
 fixtures = ["none"]
 
 [[case]]
 command = "explain"
 variant = "yara-error"
 args = ["explain", "yara_unknown_module"]
-modes = ["plain", "json", "agent"]
 fixtures = ["none"]
 
 [[case]]
@@ -2823,8 +2799,9 @@ fixtures = ["none"]
 command = "commands"
 variant = "json-after"
 args = ["commands", "--json"]
-modes = ["plain", "agent"]
+modes = ["plain"]
 fixtures = ["none"]
+same_as = "default"
 
 # The other hoisted flags after the command.
 [[case]]
@@ -2832,6 +2809,7 @@ command = "commands"
 variant = "hoist-flags"
 args = ["commands", "--quiet", "--no-color"]
 fixtures = ["none"]
+same_as = "default"
 
 # DEBUG='*' (Node tooling) is not a boolean: ignored, not an error.
 [[case]]
@@ -2840,17 +2818,22 @@ variant = "debug-star"
 args = ["commands"]
 fixtures = ["none"]
 env = { DEBUG = "*" }
+same_as = "default"
 
-# OPENTIDE_JSON_INDENT=2: indented although stdout is a pipe.
+# OPENTIDE_JSON_INDENT=2: the variable does not change the document (`same_as`
+# compares parsed JSON, so this case does not check the layout; the
+# indentation is `mode::json_indent`'s unit test in `src/mode.rs` and
+# `framework_json_indentation_and_one_trailing_newline` in `src/app.rs`).
 [[case]]
 command = "commands"
 variant = "indent-2"
 args = ["commands"]
-modes = ["json"]
 fixtures = ["none"]
 env = { OPENTIDE_JSON_INDENT = "2" }
+same_as = "default"
 
-# OPENTIDE_JSON_INDENT=0: one line although stdout is a terminal.
+# OPENTIDE_JSON_INDENT=0: as above, the document is the same (the one-line
+# layout on a terminal is held by the same two unit tests, not by this case).
 [[case]]
 command = "commands"
 variant = "indent-0"
@@ -2858,6 +2841,7 @@ args = ["--json", "commands"]
 modes = ["human"]
 fixtures = ["none"]
 env = { OPENTIDE_JSON_INDENT = "0" }
+same_as = "default"
 
 # A typo in an option of the command, and an extra argument.
 [[case]]
@@ -2905,6 +2889,15 @@ variant = "typo"
 args = ["validate"]
 fixtures = ["tide-corpus-typo"]
 
+# A value the model does not take: the help writes what the field takes, in
+# YAML's spelling (`false`, not Python's `False`), and `--json` carries it as
+# `context.expected` (#1663 B2: CrowdStrike's `trigger`, deploy's values).
+[[case]]
+command = "validate"
+variant = "bad-values"
+args = ["validate"]
+fixtures = ["tide-corpus-bad-values"]
+
 # 0.24.0: a Splunk block's `advanced` table validates and deploys again
 # (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on
 # it: XDG_STATE_HOME names a folder no one can create, so it reports the crash
@@ -2918,14 +2911,12 @@ fixtures = ["tide-corpus-typo"]
 command = "validate"
 variant = "splunk-advanced"
 args = ["validate"]
-modes = ["plain", "json"]
 fixtures = ["tide-corpus-splunk-advanced"]
 
 [[case]]
 command = "deploy"
 variant = "splunk-advanced"
 args = ["deploy", "--platform", "splunk", "--dry-run", "--strategy", "PREVIEW", "--all"]
-modes = ["json"]
 fixtures = ["tide-corpus-splunk-advanced"]
 env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
@@ -2936,7 +2927,6 @@ env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 command = "validate"
 variant = "legacy-text-id"
 args = ["validate"]
-modes = ["json"]
 fixtures = ["tide-corpus-legacy-text-id"]
 env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
@@ -2961,6 +2951,7 @@ variant = "no-color"
 args = ["--no-color", "generate"]
 normalise = ["fresh-uuids"]
 fixtures = ["tide-corpus"]
+view = "streams"
 
 # `generate schemas` is newer than 0.23.0: recorded as the unknown command it is there.
 [[case]]
@@ -3106,7 +3097,6 @@ fixtures = ["tide-corpus"]
 command = "share retract"
 variant = "no-uuid"
 args = ["share", "retract"]
-modes = ["plain", "json", "agent"]
 fixtures = ["tide-corpus"]
 
 # ---- UC-4.4b (#834): share on the MISP stand-in ----
@@ -3137,7 +3127,6 @@ command = "share status"
 variant = "misp-type"
 args = ["share", "status", "--type", "rule", "--target", "misp-locked"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share targets"
@@ -3150,63 +3139,54 @@ command = "share targets"
 variant = "misp-broken"
 args = ["share", "targets"]
 fixtures = ["share-misp-broken"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share push"
 variant = "misp-key-unset"
 args = ["share", "push"]
 fixtures = ["share-misp"]
-modes = ["plain", "json", "agent"]
 
 [[case]]
 command = "share push"
 variant = "misp-disabled"
 args = ["share", "push", "--target", "misp-lab"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share push"
 variant = "misp-typo"
 args = ["share", "push", "--target", "misp-prd"]
 fixtures = ["share-misp"]
-modes = ["plain", "json", "agent"]
 
 [[case]]
 command = "share push"
 variant = "misp-unknown-type"
 args = ["share", "push", "--type", "rules"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share push"
 variant = "misp-workers"
 args = ["share", "push", "--workers", "0"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share push"
 variant = "misp-since-alone"
 args = ["share", "push", "--since", "HEAD~1"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share status"
 variant = "misp-group-option"
 args = ["share", "--dry-run", "status"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share retract"
 variant = "misp-unconfirmed"
 args = ["share", "retract", "--target", "misp-prod", "--delete"]
 fixtures = ["share-misp"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 
 # UC-4.4 (#834): MISP instances that cannot be reached, the key set: no
@@ -3231,7 +3211,6 @@ command = "share push"
 variant = "misp"
 args = ["share", "push"]
 fixtures = ["share-misp"]
-modes = ["human", "plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/share-push"
 
@@ -3240,7 +3219,6 @@ command = "share retract"
 variant = "misp"
 args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012", "--uuid", "00000000-0000-4000-8048-000000000020"]
 fixtures = ["share-misp"]
-modes = ["human", "plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/share-retract"
 
@@ -3253,7 +3231,6 @@ command = "generate extract defender"
 variant = "tenant"
 args = ["generate", "extract", "defender"]
 fixtures = ["tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/extract-defender"
 
@@ -3262,7 +3239,6 @@ command = "generate extract elastic"
 variant = "tenant"
 args = ["generate", "extract", "elastic", "--space", "soc"]
 fixtures = ["tenants"]
-modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/extract-elastic"
 
@@ -3271,7 +3247,6 @@ command = "generate extract elastic"
 variant = "no-space"
 args = ["generate", "extract", "elastic", "--space", "default"]
 fixtures = ["tenants"]
-modes = ["plain", "json"]
 
 # UC-4.4 (#834): the import from a tenant whose credential is set but which
 # cannot be reached: no cassette, the refusing proxy on 127.0.0.1:9.
@@ -3301,7 +3276,6 @@ command = "share push"
 variant = "changed-github-push"
 args = ["share", "push", "--changed"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 cassette = "golden/share-push-changed"
 
@@ -3311,7 +3285,6 @@ command = "share push"
 variant = "changed-first-push"
 args = ["share", "push", "--changed", "--dry-run"]
 fixtures = ["share-misp-first-commit"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -3319,7 +3292,6 @@ command = "share push"
 variant = "changed-key-unset"
 args = ["share", "push", "--changed"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -3327,7 +3299,6 @@ command = "share push"
 variant = "changed-no-object"
 args = ["share", "push", "--changed"]
 fixtures = ["share-misp-push-config"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -3335,7 +3306,6 @@ command = "share push"
 variant = "changed-other-type"
 args = ["share", "push", "--changed", "--type", "threat"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0000000000000000000000000000000000000000", CI_PROJECT_DIR = "<WS>" }
 
 [[case]]
@@ -3343,7 +3313,6 @@ command = "share push"
 variant = "changed-no-trigger"
 args = ["share", "push", "--changed"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_PROJECT_DIR = "<WS>" }
 
 [[case]]
@@ -3351,7 +3320,6 @@ command = "share push"
 variant = "changed-unknown-before"
 args = ["share", "push", "--changed"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0123456789abcdef0123456789abcdef01234567", CI_PROJECT_DIR = "<WS>" }
 
 [[case]]
@@ -3359,7 +3327,6 @@ command = "share push"
 variant = "changed-since-head"
 args = ["share", "push", "--changed", "--since", "HEAD"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 
 [[case]]
@@ -3367,7 +3334,6 @@ command = "share push"
 variant = "changed-since-revision"
 args = ["share", "push", "--changed", "--since", "HEAD~1"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 
 [[case]]
@@ -3375,14 +3341,12 @@ command = "share push"
 variant = "changed-since-branch"
 args = ["share", "push", "--changed", "--since", "main", "--dry-run"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 
 [[case]]
 command = "share push"
 variant = "changed-file-unchanged"
 args = ["share", "push", "--changed", "--file", "objects/rules/rule-a-create.yaml"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -3390,7 +3354,6 @@ command = "share push"
 variant = "changed-file-key-unset"
 args = ["share", "push", "--changed", "--file", "objects/rules/rule-b-update.yaml"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
@@ -3398,7 +3361,6 @@ command = "share push"
 variant = "changed-uuid"
 args = ["share", "push", "--changed", "--uuid", "00000000-0000-4000-8048-000000000011", "--uuid", "00000000-0000-4000-8048-000000000012"]
 fixtures = ["share-misp-push"]
-modes = ["plain", "json"]
 env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY = "<WS>" }
 
 # B22: a finding on a line longer than a frame shows.
@@ -3407,3 +3369,174 @@ command = "validate query"
 variant = "long-line"
 args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
 fixtures = ["vscode-long-query"]
+
+# ---------------------------------------------------------------------------
+# The text modes (#1723). Every case above runs in json mode alone (the
+# default): the `--json` contract, the files a command writes and its exit
+# code are what a script or a pipeline reads. The cases below run a case again
+# in a text mode, each for a reason: a small rendering set, which holds what
+# a person or an agent sees (colours, wrapping, code frames, the tally, the
+# checklist), and the behaviours that only a text mode has (a flag or a
+# variable that changes the text, a file only a text mode writes). The
+# wording of the rest is held by the renderers (`tests/render.rs`) and the
+# commands' own tests. A new case runs in json mode; add one here only for
+# a behaviour no other test holds.
+# ---------------------------------------------------------------------------
+
+# Rendering set: a report with code frames, colours and the tally, in each of
+# the three text modes.
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+modes = ["human", "plain", "agent"]
+fixtures = ["vscode"]
+
+# Rendering set: a long query line wraps inside its code frame (human).
+[[case]]
+command = "validate query"
+variant = "long-line"
+args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
+modes = ["human"]
+fixtures = ["vscode-long-query"]
+
+# Rendering set: lint's findings and tally in a terminal.
+[[case]]
+command = "lint"
+variant = "default"
+args = ["lint"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+
+# Rendering set: the checklist `setup --plan` prints, in each text mode.
+[[case]]
+command = "setup"
+variant = "plan"
+args = ["setup", "--plan", "--platform", "sentinel", "--ci", "github", "--mcp", "vscode", "--hooks", "--env"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+modes = ["human", "plain", "agent"]
+fixtures = ["empty"]
+
+# Rendering set: the deploy plan's tally in a terminal.
+[[case]]
+command = "deploy"
+variant = "dry-run"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+
+# Rendering set: an explain page as a person reads it (the JSON document holds the same text).
+[[case]]
+command = "explain"
+variant = "example"
+args = ["explain", "vocab_unknown"]
+modes = ["plain"]
+fixtures = ["none"]
+
+# Rendering set: the home screen of a bare `opentide` at a terminal (the brand
+# marks in colour).
+[[case]]
+command = ""
+variant = "bare"
+args = []
+modes = ["human"]
+fixtures = ["none"]
+
+# Only a text mode has this refusal: `--json` answers `usage_needs_input` in
+# its own words, and a script's `opentide setup` without a terminal prints this.
+[[case]]
+command = "setup"
+variant = "prompt"
+args = ["setup"]
+modes = ["plain"]
+fixtures = ["none"]
+
+# What a flag or a variable changes in the text: debug logging on stderr, the
+# foreign `DEBUG=*` and `DEBUG=1` that never start it or crash startup, --quiet
+# beside --verbose, --no-color in a terminal, and --verbose's extra lines.
+[[case]]
+command = ""
+variant = "debug-flag"
+args = ["--debug", "info"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "debug-star"
+args = ["validate"]
+env = { DEBUG = "*" }
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "debug-true"
+args = ["validate"]
+env = { DEBUG = "1" }
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "quiet-verbose"
+args = ["--quiet", "lint", "--verbose"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "commands"
+variant = "hoist-flags"
+args = ["commands", "--quiet", "--no-color"]
+modes = ["human"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate"
+variant = "no-color"
+args = ["--no-color", "generate"]
+normalise = ["fresh-uuids"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+view = "streams"
+
+[[case]]
+command = "validate"
+variant = "verbose"
+args = ["validate", "--verbose"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "verbose"
+args = ["lint", "--verbose"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+# The CI summaries are Markdown a pipeline publishes: the step summary, the GitLab
+# report and the Azure attachment each hold the report as a small workspace writes
+# it (the fault workspace's run above holds which files are written).
+[[case]]
+command = "validate"
+variant = "ci-sink-github"
+args = ["validate"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+modes = ["plain"]
+fixtures = ["vscode"]
+
+[[case]]
+command = "validate"
+variant = "ci-sink-gitlab"
+args = ["validate"]
+env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
+modes = ["plain"]
+fixtures = ["vscode"]
+
+[[case]]
+command = "validate"
+variant = "ci-sink-azure"
+args = ["validate"]
+env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
+modes = ["plain"]
+fixtures = ["vscode"]
