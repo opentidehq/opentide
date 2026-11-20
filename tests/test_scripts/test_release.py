@@ -258,3 +258,13 @@ def test_the_cli_prints_an_internal_candidates_notes(
     assert capsys.readouterr().out.startswith("Internal release candidate 1 of 1.3.0")
     assert script.main(["notes", "--internal", "v1.2.0"]) == 1
     assert "not a release candidate tag" in capsys.readouterr().err
+
+
+def test_a_pre_release_pin_in_the_readme_is_not_a_release_pin() -> None:
+    """The README may name a candidate beside the release's pin (`--pre`, `==1.0.0rc1`)."""
+    release = _script()
+    pins = release._PIN.findall(
+        "pip install opentide==1.2.0\npip install opentide==1.3.0rc1 opentide==1.3.0-rc.2\n"
+        "opentide==1.3.0.dev4 opentide==1.2.0.\n"
+    )
+    assert set(pins) == {"1.2.0"}

@@ -194,7 +194,7 @@ npx opentide --version
 
 npm resolves the native package from the local tarball; it may print a warning for the other platforms' native packages, which are optional and not on npm at that version. With a Rust toolchain (1.95 or later), any commit also installs from source, with no artifact at all: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"` (a branch, tag or commit).
 
-**Lockstep version.** The facade, the internal crates, the wheel and the npm packages carry one version, the product's. `scripts/engine/release.py bump X.Y.Z` sets the workspace version and every internal pin in the release's pull request; `release.py lockstep X.Y.Z` (in the guard) refuses a release whose crates are at another version; the workflow writes the version into every npm package (`release.py npm-version`, the tree keeps a placeholder) and checks them (`lockstep --npm`); the wheels build at the workspace's version, which maturin reads from `bindings/python/` (`version.workspace = true`), and a candidate's (`X.Y.ZrcN`) or a CI build's (`X.Y.Z.devN`) is written there in the workflow's checkout (`release.py pypi-version`). The binaries report the release's version (`OPENTIDE_VERSION`), a candidate's included.
+**Lockstep version.** The facade, the internal crates, the wheel and the npm packages carry one version, the product's. `scripts/engine/release.py bump X.Y.Z` sets the workspace version and every internal pin in the release's pull request; `release.py lockstep X.Y.Z` (in the guard) refuses a release whose crates are at another version; the workflow writes the version into every npm package (`release.py npm-version`, the tree keeps a placeholder) and checks them (`lockstep --npm`); the wheels build at the workspace's version, which maturin reads from `bindings/python/` (`version.workspace = true`), and a candidate's (`X.Y.ZrcN`) or a CI build's (`X.Y.Z.devN`) is written there in the workflow's checkout (`release.py pypi-version`). The binaries report the release's version (`OPENTIDE_BUILD_VERSION`), a candidate's included, and so do the engine and the language server (`opentide_core::VERSION`, which reads that build-only variable: never `OPENTIDE_VERSION`, the pip pin of the generated pipelines). The binaries' job sets it in its environment; the wheel and the sdist get it through `scripts/build/report_version.py`, which writes it into the checkout's `.cargo/config.toml` (the sdist carries that file) for a release or a candidate, never for a `.devN` build, whose changing value would miss the compiler cache. Without it, the wheel's and the binaries' `opentide-lsp --version` say the workspace's `X.Y.Z` while the crates on crates.io say `X.Y.Z-rc.N`.
 
 **Decisions** recorded here:
 
@@ -228,7 +228,7 @@ It runs in `release-build.yml`'s `smoke` (which `publish.yml` and ci.yml's `rele
 cd bindings/node && npm ci && cd ../..
 version="$(python3 scripts/engine/release.py version)"
 python3 scripts/engine/release.py npm-version "$version"     # rewrites the npm manifests: revert them afterwards
-(cd bindings/node && OPENTIDE_VERSION="$version" node build.mjs --profile develop)
+(cd bindings/node && OPENTIDE_BUILD_VERSION="$version" node build.mjs --profile develop)
 node scripts/engine/npm-local-registry/test.mjs --version "$version" --pack "$(mktemp -d)"
 git checkout -- bindings/node packages/lsp-client/package.json packages/lsp-worker/package.json packages/wasi-host/package.json
 ```

@@ -69,7 +69,7 @@ That installs all of opentide: the `opentide` CLI, validation, generation, deplo
 
 ### Release candidates
 
-The 1.0 release, opentide on one Rust core, is out as a release candidate before it is final. A candidate is a pre-release on every channel, so none of them installs it unless you ask. One candidate has one version in two spellings, which name the same release: Python's `1.0.0rc1` (PyPI, `opentide --version` from pip) and SemVer's `1.0.0-rc.1` (crates.io, the GitHub Release, the binaries). `opentide --version`, `opentide-lsp --version` and `opentide doctor` report the candidate on every channel, and `doctor` treats the two spellings as one version.
+The 1.0 release, opentide on one Rust core, is out as a release candidate before it is final. A candidate is a pre-release on every channel, so none of them installs it unless you ask. One candidate has one version in two spellings, which name the same release: Python's `1.0.0rc1` (PyPI, `opentide --version` from pip) and SemVer's `1.0.0-rc.1` (crates.io, the GitHub Release, the binaries). From the candidate after 1.0.0-rc.1, `opentide --version`, `opentide-lsp --version` and `opentide doctor` report the candidate on every channel, and `doctor` treats the two spellings as one version. 1.0.0-rc.1 itself was built before that: its `opentide-lsp` reports `1.0.0`, and `doctor` can warn that a catalog is "from opentide 1.0.0rc1, not 1.0.0-rc.1", when a pip install and a binary share a workspace (it is only a warning).
 
 **PyPI**
 
@@ -99,7 +99,7 @@ curl --proto '=https' --tlsv1.2 -sSfLO \
   https://github.com/opentidehq/opentide/releases/download/v1.0.0-rc.1/opentide-installer.sh
 sh opentide-installer.sh                 # into ~/.local/bin; OPENTIDE_INSTALL_DIR changes it
 opentide --version                       # opentide 1.0.0-rc.1
-opentide-lsp --version                   # opentide-lsp 1.0.0-rc.1
+opentide-lsp --version                   # opentide-lsp <the candidate's version>
 ```
 
 On Windows, `opentide-installer.ps1` from the same release does the same. The installer checks each binary against the release's `SHA256SUMS` before it installs it. To check what you downloaded yourself, and where it was built:
@@ -112,7 +112,7 @@ sha256sum --check --ignore-missing SHA256SUMS
 gh attestation verify opentide-v1.0.0-rc.1-x86_64-unknown-linux-gnu -R opentidehq/opentide
 ```
 
-`sha256sum --check` names each file that matches. `gh attestation verify` checks the file's build provenance, an attestation signed by the release workflow (`publish.yml` of opentidehq/opentide); it exits 0 when the file is genuine and prints nothing on a non-terminal, so check the exit status (add `--format json` to see the workflow). There are no musl binaries: on Alpine, install from the sdist or `cargo install`, as [above](#the-analysis-engine-and-the-language-server) describes. The npm packages ship with 1.0.0, not with a candidate.
+`sha256sum --check` names each file that matches. `gh attestation verify` checks the file's build provenance, an attestation signed by the release workflow (`publish.yml` of opentidehq/opentide); it exits 0 when the file is genuine and prints nothing on a non-terminal, so check the exit status (add `--format json` to see the workflow). There are no musl binaries: on Alpine, install from the sdist or `cargo install`, as [below](#the-analysis-engine-and-the-language-server) describes. The npm packages ship with 1.0.0, not with a candidate.
 
 ### MCP server
 

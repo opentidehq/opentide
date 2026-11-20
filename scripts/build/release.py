@@ -46,7 +46,9 @@ REPOSITORY = "https://github.com/opentidehq/opentide"
 _RELEASE_HEADING = re.compile(r"^##\s+\[(\d+\.\d+\.\d+)\]\s+[-—]\s+\d{4}-\d{2}-\d{2}\s*$")
 _TAG = re.compile(r"v(\d+\.\d+\.\d+)")
 _CANDIDATE = re.compile(r"v(\d+\.\d+\.\d+)-rc\.([1-9]\d*)")
-_PIN = re.compile(r"opentide==(\d+\.\d+\.\d+)")
+#: A release's pin. A pre-release pin (`opentide==1.0.0rc1`, `1.0.0-rc.1`, `1.0.0.dev3`)
+#: names a candidate, not the release, so it is not one.
+_PIN = re.compile(r"opentide==(\d+\.\d+\.\d+)(?![0-9A-Za-z]|[.-][0-9A-Za-z])")
 #: ``## 0.19.0 — 29 October 2026`` in ``docs/usage/releases.md``.
 _RELEASES_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+)\b")
 
