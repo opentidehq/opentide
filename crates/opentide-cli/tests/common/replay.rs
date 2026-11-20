@@ -278,6 +278,7 @@ pub fn fixture(name: &str, ws: &Path) {
         // #1139: the vscode workspace with the edits cases.toml declares.
         "vscode-unscoped"
         | "vscode-ambiguous"
+        | "vscode-folded-comment"
         | "vscode-config-parse"
         | "vscode-own-pipeline"
         | "vscode-long-query" => {
