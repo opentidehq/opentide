@@ -61,9 +61,16 @@ impl Wire {
         self
     }
 
-    /// Every request the run sent, as `METHOD host/path`.
+    /// Every request the run sent to a tenant or its sign-in, as `METHOD
+    /// host/path`: `doctor`'s own `opentide_latest` ask of PyPI is left out.
     fn seen(&self) -> Vec<String> {
-        self.seen.lock().unwrap().clone()
+        self.seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|line| !line.contains(" pypi.org/"))
+            .cloned()
+            .collect()
     }
 }
 
@@ -296,10 +303,8 @@ fn a_tenant_that_refuses_the_credentials_fails_the_run() {
         assert_eq!(ran.status("connectivity", subject), "fail", "{subject}");
         let message = ran.message("connectivity", subject);
         assert!(message.contains("authentication_failed"), "{message}");
-        assert!(
-            message.contains("'lab'") || message.contains("'soc'"),
-            "{message}"
-        );
+        // The message names the tenant: its subject, then the error.
+        assert!(message.starts_with(subject), "{message}");
     }
     // Credentials were set, so the env check is not what failed.
     assert_eq!(ran.status("credentials", "sentinel/lab"), "pass");
@@ -382,4 +387,10 @@ fn live_and_offline_contradict_each_other() {
     let env = Env::from_pairs([("HOME".to_owned(), ws.display().to_string())]);
     let (mut out, mut err) = (Vec::new(), stderr);
     assert_eq!(run(&argv, &env, &host, &mut out, &mut err), 2);
+    // The usage error names the conflict, not an unknown flag.
+    let shown = String::from_utf8(out).unwrap();
+    assert!(
+        shown.contains("--live") && shown.contains("--offline") && !shown.contains("unexpected"),
+        "{shown}"
+    );
 }
