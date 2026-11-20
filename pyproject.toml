@@ -176,6 +176,8 @@ include = [
     { path = "highlights/generated/**/*", format = "sdist" },
     # The crates the workspace patches in ([patch.crates-io], vendor/README.md).
     { path = "vendor/**/*", format = "sdist" },
+    # The version a build reports (OPENTIDE_VERSION, scripts/build/report_version.py).
+    { path = ".cargo/config.toml", format = "sdist" },
 ]
 
 [tool.pytest.ini_options]

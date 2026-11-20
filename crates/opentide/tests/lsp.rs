@@ -41,3 +41,11 @@ fn serve_answers_frames_and_reports_a_clean_exit() {
     assert!(!abrupt, "exit before shutdown is not a clean end");
     assert!(!opentide::lsp::VERSION.is_empty());
 }
+
+/// The language server and the analysis engine name one version, which a
+/// candidate's build sets (`OPENTIDE_VERSION`) for the whole workspace.
+#[cfg(feature = "analysis")]
+#[test]
+fn the_server_and_the_engine_report_one_version() {
+    assert_eq!(opentide::lsp::VERSION, opentide::analysis::VERSION);
+}

@@ -13,6 +13,31 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
 
+/// The version a build of opentide reports, in SemVer (`1.0.0`, `1.0.0-rc.1`):
+/// `OPENTIDE_VERSION` when the build sets it, otherwise the crate's own.
+///
+/// A release candidate's crates on crates.io carry its version, but the
+/// binaries and the wheel are built from the branch, whose workspace keeps the
+/// release's `X.Y.Z`; the release train sets `OPENTIDE_VERSION` for them (the
+/// binaries' environment, the wheel's `.cargo/config.toml`), so that every
+/// channel names the candidate. The analysis engine, the language
+/// server and their `--version` report this value.
+pub const VERSION: &str =
+    reported_version(option_env!("OPENTIDE_VERSION"), env!("CARGO_PKG_VERSION"));
+
+/// `from_build` when the build set a version, else `package`; an empty value
+/// counts as not set.
+#[must_use]
+pub const fn reported_version(
+    from_build: Option<&'static str>,
+    package: &'static str,
+) -> &'static str {
+    match from_build {
+        Some(version) if !version.is_empty() => version,
+        _ => package,
+    }
+}
+
 /// Language identifier advertised to editors and WASM hosts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -2126,6 +2151,25 @@ pub enum EngineError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_build_that_sets_the_version_reports_it_and_any_other_the_crates() {
+        // The candidate's binaries and wheel are built from a workspace at
+        // `1.0.0` with `OPENTIDE_VERSION=1.0.0-rc.1`: they report the candidate.
+        assert_eq!(reported_version(Some("1.0.0-rc.1"), "1.0.0"), "1.0.0-rc.1");
+        assert_eq!(reported_version(None, "1.0.0"), "1.0.0");
+        assert_eq!(reported_version(Some(""), "1.0.0"), "1.0.0");
+    }
+
+    #[test]
+    fn the_reported_version_is_the_builds_or_the_crates() {
+        assert_eq!(
+            VERSION,
+            option_env!("OPENTIDE_VERSION")
+                .filter(|version| !version.is_empty())
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+        );
+    }
+
     use super::word_start;
 
     /// #182: the character before the word may be wider than a byte.

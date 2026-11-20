@@ -26,5 +26,7 @@ pub use server::{
     serve_with_status, set_host_info, use_host_catalogs,
 };
 
-/// The server's version: the crate version every `opentide-*` crate shares.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The server's version: the one every `opentide-*` build reports
+/// ([`opentide_core::VERSION`]): the crate version, or the release
+/// candidate's when the build sets `OPENTIDE_VERSION`.
+pub const VERSION: &str = opentide_core::VERSION;

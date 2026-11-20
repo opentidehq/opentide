@@ -47,8 +47,10 @@ pub struct ReadmeDoctests;
 
 mod ecs;
 
-/// This engine's version: the crate version every `opentide-*` crate shares.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// This engine's version: the one every `opentide-*` build reports
+/// ([`opentide_core::VERSION`]): the crate version, or the release
+/// candidate's when the build sets `OPENTIDE_VERSION`.
+pub const VERSION: &str = opentide_core::VERSION;
 
 /// Host-supplied workspace snapshot. The analysis crate never calls `std::fs`.
 pub trait WorkspaceHost {

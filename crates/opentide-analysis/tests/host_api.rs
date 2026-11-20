@@ -174,11 +174,11 @@ fn a_single_query_takes_the_platform_profile() {
 }
 
 #[test]
-fn every_code_has_a_description_and_the_version_is_the_crate_version() {
+fn every_code_has_a_description_and_the_version_is_the_one_every_build_reports() {
     for code in codes::ALL {
         assert!(codes::describe(code).is_some(), "{code}");
     }
-    assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
+    assert_eq!(VERSION, opentide_core::VERSION);
 }
 
 /// UC-2.6 (#821): the analysis of a Tide object reads no other object of
