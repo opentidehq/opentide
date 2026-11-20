@@ -10,12 +10,14 @@ Check the installation, the workspace and its integrations in one run. Each chec
 ```bash
 opentide doctor
 opentide doctor --offline
+opentide doctor --live
 opentide --json doctor
 ```
 
 | Option | Purpose |
 |--------|---------|
 | `--offline` | Skip the network checks (`opentide_latest`, and `proxy` reachability) |
+| `--live` | Reach each tenant whose credentials are set: the `connectivity` check. Refused with `--offline` (exit `2`) |
 
 The [global options](./global-options.md) apply: `--repo` picks the workspace to check, and `--proxy` is the proxy the network checks use.
 
@@ -39,16 +41,19 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `platform_sdk` | Each enabled platform's SDK imports | It does not | | |
 | `analysis_engine` | The analysis engine compiled into opentide loads, and the language-server version it was built from: what `validate`, `validate query`, `lint` and `opentide lsp` run | It does not | | |
 | `credentials` | Per configured tenant of an enabled platform, whether every `$VARIABLE` its setup names is set | | A variable is unset or empty | The platform has no tenant |
+| `connectivity` | With `--live`, each tenant whose credential variables are all set can be reached with them ([Connectivity](#connectivity)) | A tenant with its credentials set refuses them or does not answer | | A tenant without its credentials, a platform with no read-only request, or no `--live` |
 | `proxy` | The proxy opentide's requests go through accepts a connection: the one an `https://` request uses, chosen as every command chooses it ([proxy precedence](../usage/configuration.md#proxy)), else the `http://` one | It does not | | No proxy is set, or `--offline` |
 | `vscode_settings` | `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), and `.vscode/settings.json` maps no object files to opentide's schemas in `yaml.schemas` | | `settings.json` maps objects to opentide's schemas (a YAML extension would report them a second time), `extensions.json` does not recommend the extension, or either is not valid JSON | No `.vscode/extensions.json`, or it lists the extension under `unwantedRecommendations` |
 | `vscode_snippets` | The snippet file `opentide generate snippets` writes exists | | | It does not |
 | `mcp_config` | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`, with the command on `PATH`; or `.vscode/extensions.json` recommends the opentide extension, which provides the server to VS Code (with both, the message says so) | | No file has such a server, or the command is not on `PATH` | No configuration, and the extension is not recommended |
 
+`credentials` only reports: a variable that is unset is a `warn`, never a `fail`, because most people hold no tenant secret locally (the CI runner does). Its message names the tenant and the variables.
+
 `skip` marks an optional integration that is not set up, or a check that did not run. It never changes the exit code.
 
 `doctor` runs neither `python_version` nor `platform_sdk`, which opentide 0.28.1 listed: the command line does not run on Python, and its platforms are its own connectors, which import no Python SDK. Their rows are left out of the checklist, `checks` and the summary counts.
 
-When `configuration` fails, the checks that read the configuration (`templates_fresh`, `schemas_fresh`, `platforms_enabled`, `platform_sdk`, `credentials`, `vscode_settings`, `vscode_snippets`) are skipped with `Not checked: the configuration does not load`, so one broken file is reported once, where it is.
+When `configuration` fails, the checks that read the configuration (`templates_fresh`, `schemas_fresh`, `platforms_enabled`, `platform_sdk`, `credentials`, `connectivity`, `vscode_settings`, `vscode_snippets`) are skipped with `Not checked: the configuration does not load`, so one broken file is reported once, where it is.
 
 `mcp_config` passes when at least one host runs opentide. A file that lists only other servers, such as a Claude Code `.mcp.json`, is named in the message but is not a warning.
 
@@ -62,6 +67,34 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 The extension runs the WASI build of opentide, which cannot start another program. There the `git` check passes when git is on `PATH` and says `git found; version not checked (no subprocesses under WASI)`, and `git_repository` reads the repository itself (its top level, origin's default branch, the current branch), so it reports what it reports elsewhere. The network checks fail with "this command needs the network" unless `--offline` skips them.
 
+### Connectivity
+
+`credentials` says whether a tenant's variables are set, not whether the tenant answers with them. `opentide doctor --live` adds that, as the `connectivity` check, one line per tenant (`subject` `sentinel/prod`). It reads the same list `credentials` does, so it only reaches a tenant `credentials` found ready.
+
+For each tenant whose credential variables are all set, `doctor --live` opens the tenant the way [`deploy`](./deploy.md) does: the credentials resolved from the environment, then the platform's sign-in where it has one (Microsoft Entra ID for Sentinel and Defender for Endpoint, OAuth2 for CrowdStrike, Exabeam and Google SecOps). It then makes **one read-only request** that needs the credentials. It writes nothing to the tenant.
+
+| Outcome | `status` | Message |
+|---------|----------|---------|
+| The sign-in and the request succeed | `pass` | `sentinel/prod: reached with its credentials` |
+| A variable the tenant's setup names is unset | `skip` | `sentinel/prod: not reached, credentials not set: AZURE_CLIENT_SECRET`. The tenant is not contacted |
+| The tenant refuses the credentials (HTTP 401 or 403, or a refused sign-in) | `fail` | `sentinel/prod: could not be reached (authentication_failed): …` |
+| The tenant does not answer, or the connection fails | `fail` | The error's code (`tenant_unreachable`, `tenant_timeout`, `tenant_gateway`) and message, naming the tenant and its address (`scheme://host:port`, never a path or a credential) |
+| The tenant answers anything else that is not a success | `fail` | `tenant_refused`, with the HTTP status |
+| The platform has no read-only request opentide can make | `skip` | `…: not reached, <platform> has no read-only check to make` |
+| No `--live` | `skip` | `Not checked: --live not set` |
+
+A failing tenant fails the check, and `doctor` exits `1`. A tenant that is skipped never changes the exit code. A platform with no tenant, or none enabled, is one `skip` line.
+
+The requests go through the tenant's own HTTP client, as a deploy's do: its `ssl` setting, CA bundle, the run's `--proxy` and `no_proxy`, and the platform's timeout and retries (Sentinel's ARM session 60 s, Elastic 30 s, 120 s otherwise). A tenant that never answers is therefore reported after its timeout, not after the 3 seconds the `opentide_latest` and `proxy` checks wait.
+
+The sign-in and the request for each platform:
+
+| Platform | Sign-in | Read-only request |
+|----------|---------|-------------------|
+PLATFORM_TABLE
+
+`--live` and `--offline` contradict each other: together they exit `2` (`usage_error`).
+
 ### Network
 
 `opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both use the proxy every command would use, and honour `no_proxy` (else `NO_PROXY`); when it sends PyPI direct the `proxy` check says `pypi.org bypasses it (NO_PROXY)`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.
@@ -73,7 +106,8 @@ A failed check says what went wrong: for `opentide_latest`, the HTTP client's er
 | Exit | When |
 |-----:|------|
 | `0` | No check failed. Warnings and skips do not change it |
-| `1` | At least one check failed; `failure.code` is `doctor_checks_failed` |
+| `1` | At least one check failed, a tenant `--live` could not reach included; `failure.code` is `doctor_checks_failed` |
+| `2` | A usage error, such as `--live` with `--offline` |
 
 ## Output
 

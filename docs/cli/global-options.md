@@ -67,7 +67,7 @@ A `--repo` typed on the command line must name an existing directory: anything e
 
 ## Proxy
 
-`--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings for the `opentide` process only, overriding any value it inherited. Platform clients and the CVE lookup then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.
+`--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings for the `opentide` process only, overriding any value it inherited. Platform clients, the CVE lookup and [`doctor --live`](./doctor.md#connectivity)'s tenant requests then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.
 
 Hosts listed in `NO_PROXY` (or `no_proxy`) are reached directly, with or without `--proxy`. That is how one command reaches a cloud tenant through the proxy and an internal tenant without it:
 

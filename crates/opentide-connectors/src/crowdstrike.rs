@@ -29,8 +29,8 @@ use tokio_util::sync::CancellationToken;
 use crate::Secret;
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
-    QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
+    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, Prober, QueryOutcome,
+    QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten, probe_verdict,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -46,6 +46,10 @@ pub const DEFAULT_REPOSITORY: &str = "search-all";
 
 /// The correlation rules endpoint, after the cloud's API.
 const RULES: &str = "/correlation-rules/entities/rules/v1";
+
+/// The correlation rule ids endpoint, after the cloud's API (what a probe
+/// lists, one id).
+const RULE_IDS: &str = "/correlation-rules/queries/rules/v1";
 
 /// The first wait between two polls of a search, doubled up to
 /// [`MAX_POLL_DELAY`].
@@ -547,6 +551,14 @@ impl Crowdstrike {
             .map(|_| ())
     }
 
+    /// The tenant's cloud and client id and secret, resolved: what a deploy's
+    /// open and a connectivity probe both start with.
+    fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        base_api(cx)?;
+        cx.tenant.secret("client_id")?;
+        cx.tenant.secret("client_secret").map(|_| ())
+    }
+
     /// The tenant's session on the platform's tokens; it signs in on its
     /// first call when no token is kept.
     fn session<'a>(&self, cx: TenantContext<'a>) -> Result<Session<'a>, ConnectorError> {
@@ -558,6 +570,43 @@ impl Crowdstrike {
     }
 }
 
+impl Prober for Crowdstrike {
+    /// Resolves the cloud and the client id and secret as a deploy does, signs
+    /// in as a deploy does (`POST <api>/oauth2/token`, the token kept for
+    /// later calls), then lists one correlation rule id
+    /// (`GET <api>/correlation-rules/queries/rules/v1?limit=1`), a read the
+    /// deploy's own scope covers. A token endpoint that refuses the client is
+    /// [`ConnectorError::Authentication`] here: no call can follow it.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            Self::resolve(cx)?;
+            self.sign_in(cx).await.map_err(|error| match error {
+                ConnectorError::Refused {
+                    platform,
+                    tenant,
+                    message,
+                    ..
+                } => ConnectorError::authentication(&platform, &tenant, message),
+                other => other,
+            })?;
+            let session = self.session(cx)?;
+            let url = format!("{}{RULE_IDS}?limit=1", session.base);
+            let answer = session
+                .call(crate::transport::Method::GET, &url, None, cx.cancel)
+                .await?;
+            probe_verdict(
+                PLATFORM,
+                &cx.tenant.label.tenant,
+                "listing the correlation rules",
+                answer.status,
+            )
+        })
+    }
+}
+
 impl Deployer for Crowdstrike {
     /// The tenant's cloud and client id and secret: nothing is sent; the
     /// first rule signs in.
@@ -565,11 +614,7 @@ impl Deployer for Crowdstrike {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            base_api(cx)?;
-            cx.tenant.secret("client_id")?;
-            cx.tenant.secret("client_secret").map(|_| ())
-        })
+        crate::connector::opening(async move { Self::resolve(cx) })
     }
 
     /// Creates (`POST`), updates or disables (`PATCH` of the compiled
@@ -640,6 +685,10 @@ impl Platform for Crowdstrike {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

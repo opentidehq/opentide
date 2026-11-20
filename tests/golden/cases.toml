@@ -2732,6 +2732,15 @@ args = ["doctor", "--offline"]
 normalise = ["host-git"]
 fixtures = ["tide-corpus", "vscode"]
 
+# `--live` on tenants whose credential variables are unset: each is reported
+# (`credentials`), none is reached (`connectivity` skips it), nothing is sent.
+[[case]]
+command = "doctor"
+variant = "live-no-credentials"
+args = ["doctor", "--live"]
+normalise = ["host-git"]
+fixtures = ["tenants"]
+
 [[case]]
 command = "migrate vocab-scope"
 variant = "default"

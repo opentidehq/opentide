@@ -29,7 +29,7 @@ use opentide_schema::objects::platform::google_secops::yaral::SECTION_KEYS;
 
 use crate::connector::{
     BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
-    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryOutcome,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, Prober, QueryOutcome,
     QueryRequest, QueryRunner, TenantContext,
 };
 use crate::error::ConnectorError;
@@ -318,6 +318,66 @@ impl QueryRunner for GoogleSecops {
     }
 }
 
+impl GoogleSecops {
+    /// The instance and the credentials, loaded, then the sign-in, once (the
+    /// requests that follow reuse the token): what [`Deployer::open`] and
+    /// [`Prober::probe`] both do first.
+    async fn signed_in(
+        &self,
+        cx: TenantContext<'_>,
+    ) -> Result<(Instance, Arc<Authorizer>), ConnectorError> {
+        let instance = Instance::of(cx.tenant)?;
+        let authorizer = self.authorizer(cx.tenant)?;
+        authorizer.token(cx).await?;
+        Ok((instance, authorizer))
+    }
+}
+
+impl Prober for GoogleSecops {
+    /// The sign-in a deploy makes, then one `GET rules?pageSize=1` on the
+    /// instance, which lists a rule and changes nothing. A 401 or 403 is
+    /// `authentication_failed`; any other non-2xx `tenant_refused`.
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        crate::connector::probing(async move {
+            let (instance, authorizer) = self.signed_in(cx).await?;
+            let client = Client::new(cx, &authorizer, &instance.endpoint, &instance.resource);
+            let request = opentide_compile::google_secops::Request {
+                method: "GET",
+                path: format!("/v1/{}/rules", instance.resource),
+                query: vec![("pageSize", "1".to_owned())],
+                body: None,
+            };
+            let tenant = &cx.tenant.label.tenant;
+            // A 503 is not waited out: the probe says the tenant is not
+            // answering rather than holding doctor for a minute and a half.
+            match client.request(&request, false).await {
+                Ok(_) => Ok(()),
+                Err(Failure::Tenant(error)) => Err(error),
+                // A 2xx the client could not read (a gateway's page) is not
+                // the API's answer.
+                Err(Failure::Api(error)) if error.http_status < 300 => {
+                    Err(ConnectorError::refused(
+                        PLATFORM,
+                        tenant,
+                        format!(
+                            "{PLATFORM} tenant '{tenant}' answered HTTP {} with something other \
+                             than the API's JSON (listing the rules)",
+                            error.http_status
+                        ),
+                        None,
+                    ))
+                }
+                Err(Failure::Api(error)) => crate::connector::probe_verdict(
+                    PLATFORM,
+                    tenant,
+                    "listing the rules",
+                    error.http_status,
+                ),
+            }
+        })
+    }
+}
+
 impl Deployer for GoogleSecops {
     /// The instance and the credentials, loaded, then the sign-in, once:
     /// the first rule's requests reuse the token.
@@ -325,11 +385,7 @@ impl Deployer for GoogleSecops {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            Instance::of(cx.tenant)?;
-            // Signed in once: the first rule's requests reuse the token.
-            self.authorizer(cx.tenant)?.token(cx).await.map(|_| ())
-        })
+        crate::connector::opening(async move { self.signed_in(cx).await.map(|_| ()) })
     }
 
     /// One rule from its plan payload: the `rules.create` body's `text`,
@@ -556,6 +612,10 @@ impl Platform for GoogleSecops {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

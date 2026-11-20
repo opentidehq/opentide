@@ -22,7 +22,7 @@ use opentide_compile::json::Object;
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
-    DeployWarning, Deployer, Operation, Platform, TenantContext,
+    DeployWarning, Deployer, Operation, Platform, Prober, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -640,16 +640,41 @@ async fn rename_in_policies(
 #[derive(Debug, Default)]
 pub struct Sysdig;
 
+/// The tenant's `url` and `api_token`: what [`Deployer::open`] and
+/// [`Prober::probe`] resolve before they send anything.
+fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+    cx.tenant.secret("url")?;
+    cx.tenant.secret("api_token").map(|_| ())
+}
+
+impl Prober for Sysdig {
+    /// The credentials resolved as a deploy resolves them (Sysdig has no
+    /// sign-in), then one `GET /api/v2/policies`, the read a deploy makes
+    /// to add a rule to its policies: it lists and changes nothing. A 401 or
+    /// 403 is `tenant_refused` (the client's own refusal of the token).
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        crate::connector::probing(async move {
+            resolve(cx)?;
+            let answer = Client::new(cx)
+                .send(crate::transport::Method::GET, POLICIES, None)
+                .await?;
+            crate::connector::probe_verdict(
+                PLATFORM,
+                &cx.tenant.label.tenant,
+                "reading the runtime policies",
+                answer.status,
+            )
+        })
+    }
+}
+
 impl Deployer for Sysdig {
     /// The tenant's `url` and `api_token`: nothing is sent.
     fn open<'a>(
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            cx.tenant.secret("url")?;
-            cx.tenant.secret("api_token").map(|_| ())
-        })
+        crate::connector::opening(async move { resolve(cx) })
     }
 
     /// One rule, from the compiled body alone: its name and whether it is a
@@ -804,6 +829,10 @@ impl Platform for Sysdig {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 }

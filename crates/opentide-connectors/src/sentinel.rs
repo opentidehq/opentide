@@ -18,8 +18,8 @@ use percent_encoding::utf8_percent_encode;
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
-    kql_with_limit,
+    Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    kql_with_limit, probe_verdict,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
@@ -592,6 +592,42 @@ pub fn serialize_iso(at: jiff::Timestamp) -> String {
     )
 }
 
+impl Sentinel {
+    /// What a deploy does before its first rule: the workspace's address and
+    /// the ARM token ([`Deployer::open`], and [`Prober::probe`]'s first step).
+    async fn open_tenant(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        Self::rules_url(cx, None)?;
+        self.token(cx, ARM_SCOPE).await.map(|_| ())
+    }
+}
+
+impl Prober for Sentinel {
+    /// Opens the tenant as a deploy does (the Entra ID sign-in), then reads
+    /// the first page of the workspace's analytics rules: `GET
+    /// .../alertRules`, which writes nothing and needs the token.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            self.open_tenant(cx).await?;
+            let url = Self::rules_url(cx, None)?;
+            match self
+                .arm(cx, crate::transport::Method::GET, &url, None)
+                .await?
+            {
+                Ok(_) => Ok(()),
+                Err(error) => probe_verdict(
+                    PLATFORM,
+                    &cx.tenant.label.tenant,
+                    "reading the analytics rules",
+                    error.status,
+                ),
+            }
+        })
+    }
+}
+
 impl Deployer for Sentinel {
     /// The workspace's address and the ARM token, signed in once: the
     /// first rule's request reuses it.
@@ -599,10 +635,7 @@ impl Deployer for Sentinel {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            Self::rules_url(cx, None)?;
-            self.token(cx, ARM_SCOPE).await.map(|_| ())
-        })
+        crate::connector::opening(self.open_tenant(cx))
     }
 
     /// The analytics rule `rule_id` (the rule's UUID): `PUT` with the
@@ -673,6 +706,10 @@ impl Platform for Sentinel {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

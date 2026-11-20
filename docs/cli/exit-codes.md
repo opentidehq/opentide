@@ -23,6 +23,8 @@ With `--json`, `failure.code` tells the cases of one exit code apart: `usage_unk
 
 Usage errors the command itself detects (an unknown `info` section, `info coverage` without `--technique`, an unknown `generate` phase, `generate docs --changed` with a scope, an invalid `--type`, an unknown `share --target`, a `setup` prompt with no terminal, `validate query` without `--live`, a `rules unreviewed --older-than` that is not a window) exited `1` before this release. They exit `2` now, like the usage errors Click detects.
 
+[`opentide doctor`](./doctor.md#exit-codes) exits `1` when a check fails. With `--live`, that includes a tenant whose credentials are set but which refuses them or does not answer (`connectivity`); a tenant whose credentials are not set is skipped and never fails the run. `--live` with `--offline` exits `2`.
+
 There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) is reported without failing.
 
 `validate query --live` also exits `2` (`failure.code` `no_tenant_reached`) when it reports `skipped` because the plan's rules reached no configured tenant, so no query was sent. That is a check that did not run, not a pass. See [Which tenants are checked](./validate.md#which-tenants-are-checked).

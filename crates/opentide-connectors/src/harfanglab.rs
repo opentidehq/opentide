@@ -24,8 +24,8 @@ use opentide_compile::Json;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
-    QueryRequest, QueryRunner, Row, TenantContext, TimeWindow, columns_of, flatten,
+    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, Prober, QueryOutcome,
+    QueryRequest, QueryRunner, Row, TenantContext, TimeWindow, columns_of, flatten, probe_verdict,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -100,6 +100,13 @@ fn setup(cx: TenantContext<'_>, message: String) -> ConnectorError {
         tenant: cx.tenant.label.tenant.clone(),
         message,
     }
+}
+
+/// The console's `url` and `api_token`, resolved: what a deploy's open and a
+/// connectivity probe both start with.
+async fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+    Client::new(cx).base()?;
+    cx.tenant.secret("api_token").map(|_| ())
 }
 
 /// One tenant's client (`HarfangLabService`).
@@ -244,6 +251,21 @@ impl<'a> Client<'a> {
             return Ok(());
         }
         Err(self.http_error(&answer, &format!("Could not delete rule {rule_id}")))
+    }
+
+    /// One read of the Sigma rules, a page of one (`opentide doctor --live`):
+    /// the token's credentials are what the tenant checks, nothing is written.
+    pub async fn probe(&self) -> Result<(), ConnectorError> {
+        let url = format!("{}?limit=1", self.endpoint(Kind::Sigma)?);
+        let answer = self
+            .send(self.request(crate::transport::Method::GET, &url)?)
+            .await?;
+        probe_verdict(
+            PLATFORM,
+            &self.cx.tenant.label.tenant,
+            "reading the Sigma rules",
+            answer.status,
+        )
     }
 
     /// A telemetry search (`HarfangLabQueryRunner.run` once the query is
@@ -395,16 +417,28 @@ pub fn sources_detail() -> String {
 #[derive(Debug, Default)]
 pub struct HarfangLab;
 
+impl Prober for HarfangLab {
+    /// Resolves the console's `url` and `api_token` as a deploy does, then
+    /// reads one Sigma rule (`GET <url>/api/data/threat_intelligence/SigmaRule/?limit=1`).
+    /// HarfangLab has no sign-in of its own: the token is the credential.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            resolve(cx).await?;
+            Client::new(cx).probe().await
+        })
+    }
+}
+
 impl Deployer for HarfangLab {
     /// The console's `url` and `api_token`: nothing is sent.
     fn open<'a>(
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            Client::new(cx).base()?;
-            cx.tenant.secret("api_token").map(|_| ())
-        })
+        crate::connector::opening(resolve(cx))
     }
 
     /// Puts a Sigma rule (creating it on a 404) or posts a YARA file, by
@@ -497,6 +531,10 @@ impl Platform for HarfangLab {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

@@ -518,6 +518,12 @@ pub struct DoctorArgs {
         help = "Skip the network checks (PyPI release, proxy reachability)"
     )]
     pub offline: bool,
+    #[arg(
+        long = "live",
+        conflicts_with = "offline",
+        help = "Reach each tenant whose credentials are set: sign in, then one read-only request"
+    )]
+    pub live: bool,
 }
 
 /// `opentide setup`.
@@ -1775,8 +1781,8 @@ pub enum RootCommand {
     #[command(
         name = "doctor",
         about = "Check the installation, the workspace and its integrations",
-        long_about = "Check the installation, the workspace and its integrations\n\nEach check prints a status, what it found and, when something needs doing,\nthe command that fixes it. Credentials are reported as set or unset, never\nprinted. Exits 1 when any check fails; warnings alone exit 0.",
-        after_help = "Examples:\n  $ opentide doctor\n  $ opentide doctor --offline\n  $ opentide --json doctor"
+        long_about = "Check the installation, the workspace and its integrations\n\nEach check prints a status, what it found and, when something needs doing,\nthe command that fixes it. Credentials are reported as set or unset, never\nprinted. With --live, each tenant whose credentials are set is also reached:\nthe sign-in a deploy makes, then one read-only request, nothing written.\nExits 1 when any check fails; warnings alone exit 0.",
+        after_help = "Examples:\n  $ opentide doctor\n  $ opentide doctor --offline\n  $ opentide doctor --live\n  $ opentide --json doctor"
     )]
     Doctor(DoctorArgs),
     #[command(

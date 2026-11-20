@@ -16,8 +16,8 @@ use opentide_compile::json::{Json, Object};
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployError, DeployFailure, DeployOutcome, DeployRequest, Deployer, LiveCheck,
-    LiveValidator, Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row,
-    TenantContext, TimeWindow, kql_code, utc_z,
+    LiveValidator, Operation, Platform, Prober, QueryColumn, QueryOutcome, QueryRequest,
+    QueryRunner, Row, TenantContext, TimeWindow, kql_code, probe_verdict, utc_z,
 };
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
@@ -197,6 +197,30 @@ impl SentinelOne {
             builder = builder.body(body);
         }
         crate::answer::exchange(cx, builder).await
+    }
+
+    /// One read of the STAR rules of the tenant's account (and site), a page
+    /// of one (`opentide doctor --live`): the API token is what the console
+    /// checks, nothing is written.
+    pub async fn probe(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        let setup = setup(cx)?;
+        let url = {
+            let mut query = url::form_urlencoded::Serializer::new(String::new());
+            query
+                .append_pair("limit", "1")
+                .append_pair("accountIds", &setup.account_id);
+            if let Some(site) = &setup.site_id {
+                query.append_pair("siteIds", site);
+            }
+            format!("{}{RULES_PATH}?{}", setup.url, query.finish())
+        };
+        let answer = Self::call(cx, &setup, crate::transport::Method::GET, &url, None).await?;
+        probe_verdict(
+            PLATFORM,
+            &cx.tenant.label.tenant,
+            "reading the STAR rules",
+            answer.status,
+        )
     }
 
     /// Creates the STAR rule *body*, or replaces rule *rule_id* with it
@@ -629,6 +653,18 @@ pub fn rule_id(text: &str) -> Result<i64, SentinelOneError> {
         .map_err(|_| SentinelOneError::BadId(text.to_owned()))
 }
 
+impl Prober for SentinelOne {
+    /// Resolves the console's `url`, `api_token` and `account_id` as a deploy
+    /// does, then reads one STAR rule (`GET <url>/web/api/v2.1/cloud-detection/rules?limit=1`).
+    /// SentinelOne has no sign-in of its own: the API token is the credential.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move { self.probe(cx).await })
+    }
+}
+
 impl Deployer for SentinelOne {
     /// The console's `url`, `api_token` and `account_id`: nothing is sent.
     fn open<'a>(
@@ -723,6 +759,10 @@ impl Platform for SentinelOne {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

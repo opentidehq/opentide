@@ -739,6 +739,7 @@ impl Run<'_> {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
                     args.offline,
+                    args.live,
                     &crate::commands::doctor::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
