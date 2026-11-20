@@ -17,8 +17,8 @@ use serde_json::{Map, Value};
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
-    Operation, Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
-    flatten, utc_z,
+    Operation, Platform, Prober, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    columns_of, flatten, utc_z,
 };
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
@@ -714,6 +714,23 @@ fn value_str(value: &Value) -> String {
     }
 }
 
+impl Prober for CarbonBlack {
+    /// Opens the tenant as a deploy does (`url`, `org_key` and `token`
+    /// resolved), then reads the organisation's watchlists: the `GET` a
+    /// deploy makes first, which writes nothing and needs the token. The
+    /// SDK's refusal of the token is [`ConnectorError::Authentication`].
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            let org = Org::of(cx)?;
+            let path = format!("/threathunter/watchlistmgr/v3/orgs/{}/watchlists", org.key);
+            Self::get(cx, &org, &path).await.map(|_| ())
+        })
+    }
+}
+
 impl Deployer for CarbonBlack {
     /// The organisation's `url`, `org_key` and `token`: nothing is sent.
     fn open<'a>(
@@ -823,6 +840,10 @@ impl Platform for CarbonBlack {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

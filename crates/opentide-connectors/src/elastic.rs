@@ -20,7 +20,10 @@ use opentide_compile::json::{Json, Object};
 use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
-use crate::connector::{BoxFuture, LiveCheck, LiveValidator, Platform, QueryRunner, TenantContext};
+use crate::connector::{
+    BoxFuture, LiveCheck, LiveValidator, Platform, Prober, QueryRunner, TenantContext,
+    probe_verdict,
+};
 use crate::connector::{
     DeployError, DeployEvent, DeployFailure, DeployOutcome as ConnectorOutcome, DeployRequest,
     DeployWarning, Deployer, Operation,
@@ -1454,6 +1457,31 @@ fn deploy_body(body: &[u8], rule_id: &str) -> Result<(Json, Option<Json>), Strin
     }
 }
 
+impl Prober for Elastic {
+    /// Opens the tenant as a deploy does (its addresses, space and key
+    /// resolved), then reads one page of one rule from Kibana: `GET
+    /// .../api/detection_engine/rules/_find?page=1&per_page=1`, which writes
+    /// nothing and needs the API key.
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        crate::connector::probing(async move {
+            let client = client(cx)?;
+            let url = format!(
+                "{}/api/detection_engine/rules/_find?page=1&per_page=1",
+                client.kibana_base
+            );
+            let answer = client
+                .call(cx, crate::transport::Method::GET, &url, None, false)
+                .await?;
+            probe_verdict(
+                PLATFORM,
+                &cx.tenant.label.tenant,
+                "reading the detection rules",
+                answer.status,
+            )
+        })
+    }
+}
+
 impl Deployer for Elastic {
     /// The tenant's addresses, space and key: nothing is sent.
     fn open<'a>(
@@ -1627,6 +1655,10 @@ impl Platform for Elastic {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

@@ -28,9 +28,9 @@ use opentide_schema::objects::platform::google_secops::assemble::{AssembledRule,
 use opentide_schema::objects::platform::google_secops::yaral::SECTION_KEYS;
 
 use crate::connector::{
-    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
-    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryOutcome,
-    QueryRequest, QueryRunner, TenantContext,
+    BoxFuture, CREDENTIALS_UNAVAILABLE, DeployError, DeployEvent, DeployFailure, DeployOutcome,
+    DeployRequest, DeployScope, DeployWarning, Deployer, LiveCheck, LiveValidator, Operation,
+    Platform, Prober, QueryOutcome, QueryRequest, QueryRunner, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -318,6 +318,99 @@ impl QueryRunner for GoogleSecops {
     }
 }
 
+impl GoogleSecops {
+    /// The instance and the credentials, loaded, then the sign-in, once (the
+    /// requests that follow reuse the token): what [`Deployer::open`] and
+    /// [`Prober::probe`] both do first.
+    async fn signed_in(
+        &self,
+        cx: TenantContext<'_>,
+    ) -> Result<(Instance, Arc<Authorizer>), ConnectorError> {
+        let instance = Instance::of(cx.tenant)?;
+        let authorizer = self.authorizer(cx.tenant)?;
+        authorizer.token(cx).await?;
+        Ok((instance, authorizer))
+    }
+}
+
+impl GoogleSecops {
+    /// The sign-in a deploy makes, then one `GET rules?pageSize=1`.
+    async fn read_rules(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        let (instance, authorizer) = self.signed_in(cx).await?;
+        let client = Client::new(cx, &authorizer, &instance.endpoint, &instance.resource);
+        let request = opentide_compile::google_secops::Request {
+            method: "GET",
+            path: format!("/v1/{}/rules", instance.resource),
+            query: vec![("pageSize", "1".to_owned())],
+            body: None,
+        };
+        let tenant = &cx.tenant.label.tenant;
+        // A 503 is not waited out: the probe says the tenant is not
+        // answering rather than holding doctor for a minute and a half.
+        match client.request(&request, false).await {
+            Ok(_) => Ok(()),
+            Err(Failure::Tenant(error)) => Err(error),
+            // A 2xx the client could not read (a gateway's page) is not
+            // the API's answer.
+            Err(Failure::Api(error)) if error.http_status < 300 => Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
+                format!(
+                    "{PLATFORM} tenant '{tenant}' answered HTTP {} with something other \
+                     than the API's JSON (listing the rules)",
+                    error.http_status
+                ),
+                None,
+            )),
+            Err(Failure::Api(error)) => crate::connector::probe_verdict(
+                PLATFORM,
+                tenant,
+                "listing the rules",
+                error.http_status,
+            ),
+        }
+    }
+}
+
+impl Prober for GoogleSecops {
+    /// The sign-in a deploy makes, then one `GET rules?pageSize=1` on the
+    /// instance, which lists a rule and changes nothing. A 401 or 403 is
+    /// `authentication_failed`; any other non-2xx `tenant_refused`.
+    ///
+    /// A tenant that names no `credentials`, on a machine with no
+    /// Application Default Credentials file and no variable naming one,
+    /// whose metadata server does not answer, has no credentials anywhere:
+    /// [`CREDENTIALS_UNAVAILABLE`], which `doctor --live` skips. A
+    /// `credentials` value or `GOOGLE_APPLICATION_CREDENTIALS` that is set
+    /// but unusable still fails as `authentication_failed`.
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        Box::pin(async move {
+            let metadata_only = !cx.tenant.setup.contains_key("credentials")
+                && !auth::has_local_default_credentials(&self.env);
+            match self.read_rules(cx).await {
+                Err(ConnectorError::Authentication { message, .. })
+                    if metadata_only && message.starts_with(auth::CREDENTIALS_MISSING) =>
+                {
+                    Err(DeployError::tenant(DeployFailure::new(
+                        CREDENTIALS_UNAVAILABLE,
+                        format!(
+                            "{PLATFORM} tenant '{}' names no credentials and none are set up \
+                             (no GOOGLE_APPLICATION_CREDENTIALS, no gcloud credentials file, \
+                             and the metadata server did not answer)",
+                            cx.tenant.label.tenant
+                        ),
+                    )))
+                }
+                other => other.map_err(|error| {
+                    let mut failed = DeployError::from(error);
+                    failed.scope = DeployScope::Tenant;
+                    failed
+                }),
+            }
+        })
+    }
+}
+
 impl Deployer for GoogleSecops {
     /// The instance and the credentials, loaded, then the sign-in, once:
     /// the first rule's requests reuse the token.
@@ -325,11 +418,7 @@ impl Deployer for GoogleSecops {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            Instance::of(cx.tenant)?;
-            // Signed in once: the first rule's requests reuse the token.
-            self.authorizer(cx.tenant)?.token(cx).await.map(|_| ())
-        })
+        crate::connector::opening(async move { self.signed_in(cx).await.map(|_| ()) })
     }
 
     /// One rule from its plan payload: the `rules.create` body's `text`,
@@ -556,6 +645,10 @@ impl Platform for GoogleSecops {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

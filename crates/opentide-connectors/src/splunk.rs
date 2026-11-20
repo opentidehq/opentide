@@ -19,8 +19,9 @@ use opentide_compile::json::{Json, Object};
 use crate::answer::{Answer, describe_answer, gateway_answer, page_title};
 use crate::connector::{
     BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
-    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryColumn,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, Prober, QueryColumn,
     QueryOutcome, QueryRequest, QueryRunner, RULE_UNCHANGED, Row, TenantContext, columns_of,
+    probe_verdict,
 };
 use crate::error::ConnectorError;
 use crate::text::json_text;
@@ -447,6 +448,33 @@ impl Splunk {
             message: format!("port must be a number, got {port:?}"),
         })?;
         Ok(format!("https://{host}:{port}"))
+    }
+
+    /// The tenant's address, app and token, resolved: what a deploy's open
+    /// and a connectivity probe both start with.
+    fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        Self::authority(cx)?;
+        Self::namespace(cx)?;
+        cx.tenant.secret("token").map(|_| ())
+    }
+
+    /// One read of `/services/server/info` (`opentide doctor --live`): the
+    /// token is what the instance checks, nothing is written. An HTML page in
+    /// place of the API is the gateway's or proxy's error, as for any call.
+    async fn probe_info(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        let reply = Self::send(
+            cx,
+            crate::transport::Method::GET,
+            "/services/server/info",
+            None,
+        )
+        .await?;
+        probe_verdict(
+            PLATFORM,
+            &cx.tenant.label.tenant,
+            "reading server/info",
+            reply.answer.status,
+        )
     }
 
     /// The tenant's app (`search` when it names none).
@@ -1254,17 +1282,28 @@ impl Done<'_> {
     }
 }
 
+impl Prober for Splunk {
+    /// Resolves the tenant's address, app and token as a deploy does, then
+    /// reads `GET https://<url>:<port>/services/server/info`. Splunk has no
+    /// sign-in of its own: the token is the credential.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            Self::resolve(cx)?;
+            Self::probe_info(cx).await
+        })
+    }
+}
+
 impl Deployer for Splunk {
     /// The tenant's address, app and token: nothing is sent.
     fn open<'a>(
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            Self::authority(cx)?;
-            Self::namespace(cx)?;
-            cx.tenant.secret("token").map(|_| ())
-        })
+        crate::connector::opening(async move { Self::resolve(cx) })
     }
 
     /// The saved search `rule_id` with the compiled settings in `body` (a
@@ -1321,6 +1360,10 @@ impl Platform for Splunk {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

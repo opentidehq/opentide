@@ -917,6 +917,72 @@ pub fn opening<'a>(
     })
 }
 
+/// Reaches a tenant and writes nothing (`opentide doctor --live`, #1658).
+///
+/// The check opens the tenant as a deploy does ([`Deployer::open`]: the
+/// credentials resolved, the sign-in made where the platform has one), then
+/// sends **one** cheap read-only request that needs the credentials, and
+/// fails when the tenant refuses it or does not answer. A platform with no
+/// such request has no `Prober` ([`Platform::prober`]), never a faked pass.
+pub trait Prober: Send + Sync {
+    /// Opens the tenant, then makes the platform's one read-only request.
+    ///
+    /// # Errors
+    ///
+    /// A [`DeployError`] whose `failure.code` says why: `credential_unset`,
+    /// `tenant_setup_invalid`, `tenant_unreachable`, `tenant_timeout`,
+    /// `authentication_failed` (the sign-in or the read refused the
+    /// credentials), `tenant_refused` (any other non-2xx answer),
+    /// `tenant_gateway`.
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>>;
+}
+
+/// The `failure.code` of a probe that found the tenant has **no credentials
+/// anywhere** (Google SecOps with no `credentials` key and no Application
+/// Default Credentials source): the user holds none, so `doctor --live`
+/// skips the tenant instead of failing it. Never a deploy's code.
+pub const CREDENTIALS_UNAVAILABLE: &str = "credentials_unavailable";
+
+/// [`Prober::probe`]'s future from one whose failures are connector errors,
+/// each the tenant's ([`DeployScope::Tenant`]).
+pub fn probing<'a>(
+    future: impl Future<Output = Result<(), ConnectorError>> + Send + 'a,
+) -> BoxFuture<'a, Result<(), DeployError>> {
+    opening(future)
+}
+
+/// The verdict of a probe's read-only request on the answer's *status*: a
+/// 2xx is the tenant reached; 401 and 403 are the credentials refused
+/// ([`ConnectorError::Authentication`]); any other status is a refusal
+/// ([`ConnectorError::Refused`]) naming it. *what* says the request in words
+/// (`reading the policies`); neither it nor the message holds a credential
+/// or the answer's body.
+///
+/// # Errors
+///
+/// As above.
+pub fn probe_verdict(
+    platform: &str,
+    tenant: &str,
+    what: &str,
+    status: u16,
+) -> Result<(), ConnectorError> {
+    match status {
+        200..=299 => Ok(()),
+        401 | 403 => Err(ConnectorError::authentication(
+            platform,
+            tenant,
+            format!("{platform} tenant '{tenant}' refused the credentials ({what}): HTTP {status}"),
+        )),
+        _ => Err(ConnectorError::refused(
+            platform,
+            tenant,
+            format!("{platform} tenant '{tenant}' answered HTTP {status} ({what})"),
+            None,
+        )),
+    }
+}
+
 /// Checks queries on the tenant (`validate query --live`).
 pub trait LiveValidator: Send + Sync {
     /// Checks *request* (`QueryRunner.check`, then the validator's
@@ -988,6 +1054,11 @@ pub trait Platform: Send + Sync {
     fn id(&self) -> &str;
     /// Its deployer.
     fn deployer(&self) -> Option<&dyn Deployer> {
+        None
+    }
+    /// Its connectivity check (`opentide doctor --live`); `None` where no
+    /// read-only request can show the credentials work.
+    fn prober(&self) -> Option<&dyn Prober> {
         None
     }
     /// Its live validator; `None` where the API cannot check a query

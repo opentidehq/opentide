@@ -411,18 +411,6 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
         .mount(&server)
         .await;
-    Mock::given(method("GET"))
-        .and(path(
-            "/computeMetadata/v1/instance/service-accounts/default/token",
-        ))
-        .and(header("Metadata-Flavor", "Google"))
-        .and(query_param("scopes", SCOPE))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"access_token": "ya29.gce", "expires_in": 100})),
-        )
-        .mount(&server)
-        .await;
     let (tenant, http) = tenant();
     let cancel = CancellationToken::new();
     let cx = TenantContext {
@@ -473,6 +461,33 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
             .starts_with("Cannot reach google_secops tenant 'secops-eu' at http://127.0.0.1:9"),
         "{error}"
     );
+}
+
+/// The metadata server supplies the default credentials when it answers as
+/// one (`Metadata-Flavor: Google`), and none are found when nothing answers.
+#[tokio::test]
+async fn the_metadata_server_supplies_default_credentials() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/computeMetadata/v1/instance/service-accounts/default/token",
+        ))
+        .and(header("Metadata-Flavor", "Google"))
+        .and(query_param("scopes", SCOPE))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("Metadata-Flavor", "Google")
+                .set_body_json(serde_json::json!({"access_token": "ya29.gce", "expires_in": 100})),
+        )
+        .mount(&server)
+        .await;
+    let (tenant, http) = tenant();
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
     // The metadata server.
     let host = server.uri().trim_start_matches("http://").to_owned();
     let metadata = Credentials::Metadata {
@@ -500,6 +515,47 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
             "google_secops_credentials_missing: no credentials: the tenant names none"
         ),
         "{error}"
+    );
+}
+
+/// Any answer without `Metadata-Flavor: Google` is no metadata server,
+/// whatever its status or body: a proxy's or a gateway's page, a resolver's
+/// (#1726).
+#[tokio::test]
+async fn an_answer_without_the_metadata_flavor_is_no_metadata_server() {
+    let impostor = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({"access_token": "not-a-token", "expires_in": 100}),
+            ),
+        )
+        .mount(&impostor)
+        .await;
+    let (tenant, http) = tenant();
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let host = impostor.uri().trim_start_matches("http://").to_owned();
+    let error = Authorizer::new(
+        Credentials::Metadata {
+            host,
+            quota_project: None,
+        },
+        fixed(NOW),
+    )
+    .token(cx)
+    .await
+    .unwrap_err();
+    let shown = error.to_string();
+    assert!(
+        shown.starts_with(
+            "google_secops_credentials_missing: no credentials: the tenant names none"
+        ) && shown.contains("without Metadata-Flavor: Google"),
+        "{shown}"
     );
 }
 

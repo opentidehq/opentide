@@ -2732,6 +2732,20 @@ args = ["doctor", "--offline"]
 normalise = ["host-git"]
 fixtures = ["tide-corpus", "vscode"]
 
+# `--live` on tenants whose credential variables are unset: each is reported
+# (`credentials`), none is reached (`connectivity` skips it), nothing is sent.
+# The exit code 1 is the harness's: every case runs with a dead proxy
+# (127.0.0.1:9), so the `proxy` check fails here as in the other doctor cases.
+# That missing credentials leave the exit code alone is asserted by
+# `missing_credentials_are_reported_and_not_a_failure` in
+# `crates/opentide-cli/tests/doctor_live.rs`.
+[[case]]
+command = "doctor"
+variant = "live-no-credentials"
+args = ["doctor", "--live"]
+normalise = ["host-git"]
+fixtures = ["tenants"]
+
 [[case]]
 command = "migrate vocab-scope"
 variant = "default"

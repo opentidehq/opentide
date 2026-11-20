@@ -32,7 +32,7 @@ use regex::Regex;
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
-    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryColumn,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, Prober, QueryColumn,
     QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
 };
 use crate::error::ConnectorError;
@@ -1081,6 +1081,35 @@ pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
 /// A body that carries fields the tenant's version does not take.
 pub const FIELD_UNSUPPORTED: &str = "graylog_field_unsupported_version";
 
+/// The tenant's `url` and `token`: what [`Deployer::open`] and
+/// [`Prober::probe`] resolve before they send anything.
+fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+    cx.tenant.secret("url")?;
+    cx.tenant.secret("token").map(|_| ())
+}
+
+impl Prober for Graylog {
+    /// The credentials resolved as a deploy resolves them (Graylog has no
+    /// sign-in), then the one `GET /api/system` a deploy reads the version
+    /// from. Only the answer's status is judged: a version opentide cannot
+    /// deploy to is a deploy's failure, not an unreachable tenant. A 401 is
+    /// `authentication_failed`, a 403 too; any other non-2xx `tenant_refused`.
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        crate::connector::probing(async move {
+            resolve(cx)?;
+            let tenant = &cx.tenant.label.tenant;
+            let status = match Client::new(cx)
+                .send(crate::transport::Method::GET, SYSTEM_PATH, None, None)
+                .await?
+            {
+                Ok(answer) => answer.status,
+                Err(error) => error.status,
+            };
+            crate::connector::probe_verdict(PLATFORM, tenant, "reading the server", status)
+        })
+    }
+}
+
 impl Deployer for Graylog {
     /// The tenant's `url` and `token`: nothing is sent. `opentide deploy`
     /// then reads the version, once, before any write.
@@ -1088,10 +1117,7 @@ impl Deployer for Graylog {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            cx.tenant.secret("url")?;
-            cx.tenant.secret("token").map(|_| ())
-        })
+        crate::connector::opening(async move { resolve(cx) })
     }
 
     /// One rule, from the compiled create body alone (a delete needs none):
@@ -1448,6 +1474,10 @@ impl Platform for Graylog {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

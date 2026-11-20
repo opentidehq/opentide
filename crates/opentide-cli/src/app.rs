@@ -737,8 +737,11 @@ impl Run<'_> {
             }
             Some(RootCommand::Doctor(args)) => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
+                let interrupt = self.host.interrupt.clone();
+                let interrupted = || interrupt.requested();
                 let report = crate::commands::doctor::run(
                     args.offline,
+                    args.live,
                     &crate::commands::doctor::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
@@ -746,6 +749,7 @@ impl Run<'_> {
                         version: &self.host.version,
                         text: self.mode != Mode::Json && !self.globals.quiet,
                         proxy: self.globals.proxy.as_deref(),
+                        interrupted: &interrupted,
                     },
                 );
                 return self.emit_report(&report, out, err);

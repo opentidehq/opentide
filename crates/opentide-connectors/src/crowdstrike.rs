@@ -29,8 +29,8 @@ use tokio_util::sync::CancellationToken;
 use crate::Secret;
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
-    QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
+    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, Prober, QueryOutcome,
+    QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten, probe_verdict,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -46,6 +46,10 @@ pub const DEFAULT_REPOSITORY: &str = "search-all";
 
 /// The correlation rules endpoint, after the cloud's API.
 const RULES: &str = "/correlation-rules/entities/rules/v1";
+
+/// The correlation rule ids endpoint, after the cloud's API (what a probe
+/// lists, one id).
+const RULE_IDS: &str = "/correlation-rules/queries/rules/v1";
 
 /// The first wait between two polls of a search, doubled up to
 /// [`MAX_POLL_DELAY`].
@@ -99,6 +103,50 @@ fn build(
 /// `client_secret`: a form `POST` to `/oauth2/token`, answered 201 with an
 /// `access_token` and its `expires_in`.
 async fn sign_in(cx: TenantContext<'_>, base: &str) -> Result<Issued, ConnectorError> {
+    sign_in_as(cx, base, false).await
+}
+
+/// The refusal of the token endpoint's answer *status* as a connectivity
+/// probe tells it (`opentide doctor --live`): 400, 401 and 403 refuse the
+/// credentials ([`ConnectorError::Authentication`]); a gateway's 502, 503 or
+/// 504 is [`ConnectorError::Gateway`]; any other status (a 429, a 500) is the
+/// tenant's own refusal. A rate-limited or failing token endpoint is never
+/// reported as bad credentials.
+fn token_refusal(cx: TenantContext<'_>, status: u16) -> ConnectorError {
+    let tenant = &cx.tenant.label.tenant;
+    match status {
+        400 | 401 | 403 => ConnectorError::authentication(
+            PLATFORM,
+            tenant,
+            format!("Cannot authenticate against {tenant} (HTTP {status})"),
+        ),
+        // Said as what it is, never as bad credentials.
+        502..=504 => ConnectorError::Gateway {
+            platform: PLATFORM.to_owned(),
+            tenant: tenant.clone(),
+            message: format!(
+                "A gateway answered HTTP {status} for the token endpoint of {tenant}: it is not \
+                 answering, which says nothing about the credentials"
+            ),
+            status,
+        },
+        _ => refused(
+            cx,
+            format!(
+                "The token endpoint of {tenant} answered HTTP {status} and issued no token: the \
+                 tenant refused the request, which says nothing about the credentials"
+            ),
+            None,
+        ),
+    }
+}
+
+/// [`sign_in`], with the refusal told by [`token_refusal`] when *probing*.
+async fn sign_in_as(
+    cx: TenantContext<'_>,
+    base: &str,
+    probing: bool,
+) -> Result<Issued, ConnectorError> {
     let client_id = cx.tenant.secret("client_id")?;
     let client_secret = cx.tenant.secret("client_secret")?;
     let form = url::form_urlencoded::Serializer::new(String::new())
@@ -120,6 +168,9 @@ async fn sign_in(cx: TenantContext<'_>, base: &str) -> Result<Issued, ConnectorE
     let answer = Answer::fetch(cx.http, request, cx.cancel).await?;
     let tenant = &cx.tenant.label.tenant;
     if answer.status != 201 {
+        if probing {
+            return Err(token_refusal(cx, answer.status));
+        }
         return Err(refused(
             cx,
             format!(
@@ -538,13 +589,31 @@ impl Crowdstrike {
     ///
     /// The tenant's refusal of the credentials, or why it could not be asked.
     pub async fn sign_in(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        self.sign_in_for(cx, false).await
+    }
+
+    /// [`Self::sign_in`], its refusal told as a probe tells it when *probing*
+    /// ([`token_refusal`]).
+    async fn sign_in_for(
+        &self,
+        cx: TenantContext<'_>,
+        probing: bool,
+    ) -> Result<(), ConnectorError> {
         let session = self.session(cx)?;
         let base = session.base;
         session
             .tokens
-            .token(&cx.tenant.label, base, || sign_in(cx, base))
+            .token(&cx.tenant.label, base, || sign_in_as(cx, base, probing))
             .await
             .map(|_| ())
+    }
+
+    /// The tenant's cloud and client id and secret, resolved: what a deploy's
+    /// open and a connectivity probe both start with.
+    fn resolve(cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        base_api(cx)?;
+        cx.tenant.secret("client_id")?;
+        cx.tenant.secret("client_secret").map(|_| ())
     }
 
     /// The tenant's session on the platform's tokens; it signs in on its
@@ -558,6 +627,37 @@ impl Crowdstrike {
     }
 }
 
+impl Prober for Crowdstrike {
+    /// Resolves the cloud and the client id and secret as a deploy does, signs
+    /// in as a deploy does (`POST <api>/oauth2/token`, the token kept for
+    /// later calls), then lists one correlation rule id
+    /// (`GET <api>/correlation-rules/queries/rules/v1?limit=1`), a read the
+    /// deploy's own scope covers. A token endpoint that answers 400, 401 or 403 is
+    /// [`ConnectorError::Authentication`]; a 502, 503 or 504 is
+    /// `tenant_gateway`, and any other non-201 (429, 500) `tenant_refused`: no
+    /// call can follow, but the credentials are not blamed.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            Self::resolve(cx)?;
+            self.sign_in_for(cx, true).await?;
+            let session = self.session(cx)?;
+            let url = format!("{}{RULE_IDS}?limit=1", session.base);
+            let answer = session
+                .call(crate::transport::Method::GET, &url, None, cx.cancel)
+                .await?;
+            probe_verdict(
+                PLATFORM,
+                &cx.tenant.label.tenant,
+                "listing the correlation rules",
+                answer.status,
+            )
+        })
+    }
+}
+
 impl Deployer for Crowdstrike {
     /// The tenant's cloud and client id and secret: nothing is sent; the
     /// first rule signs in.
@@ -565,11 +665,7 @@ impl Deployer for Crowdstrike {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            base_api(cx)?;
-            cx.tenant.secret("client_id")?;
-            cx.tenant.secret("client_secret").map(|_| ())
-        })
+        crate::connector::opening(async move { Self::resolve(cx) })
     }
 
     /// Creates (`POST`), updates or disables (`PATCH` of the compiled
@@ -640,6 +736,10 @@ impl Platform for Crowdstrike {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

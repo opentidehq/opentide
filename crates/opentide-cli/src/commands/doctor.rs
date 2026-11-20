@@ -22,6 +22,10 @@
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
+use opentide_compile::Json as CJson;
+use opentide_connectors::connector::{CREDENTIALS_UNAVAILABLE, DeployError, TenantContext};
+use opentide_connectors::credentials::Mode as Resolve;
+use opentide_connectors::{ConnectorError, HttpClient, Tenant};
 use opentide_schema::configuration::lint::parse_lint_config;
 use opentide_schema::generate::router::{schema_artifact_name, template_artifact_name};
 use opentide_schema::generate::template::Options;
@@ -33,8 +37,10 @@ use opentide_workspace::info::env_reference;
 use opentide_workspace::root::{self, RootOptions};
 use opentide_workspace::{OsFs, config};
 use serde_json::Value as JsonValue;
+use tokio_util::sync::CancellationToken;
 
 use super::doctor_network as network;
+use super::interrupt::watched;
 use super::{Block, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
@@ -125,6 +131,8 @@ pub struct Context<'a> {
     pub text: bool,
     /// `--proxy`, from the command line or `OPENTIDE_PROXY`.
     pub proxy: Option<&'a str>,
+    /// Whether Ctrl-C was pressed: `--live`'s requests stop at once.
+    pub interrupted: &'a (dyn Fn() -> bool + Sync),
 }
 
 /// What the checks share: the workspace and its configuration.
@@ -141,8 +149,33 @@ struct Doctor<'a> {
     config: Option<Node>,
 }
 
+/// One configured tenant: the environment variables its setup names.
+struct TenantEnv {
+    /// `platform/name`.
+    subject: String,
+    /// The tenant's name (`tenant 2` when the table has none).
+    name: String,
+    /// Every variable the setup refers to, once each.
+    variables: Vec<String>,
+    /// The ones that are unset or empty.
+    unset: Vec<String>,
+    /// A Google SecOps tenant that names no `credentials` on a machine with
+    /// no Application Default Credentials file and no variable naming one:
+    /// it holds no credentials locally (only a Google Cloud host's metadata
+    /// server could supply them).
+    adc_missing: bool,
+    /// The tenant's table, for its setup.
+    node: Node,
+}
+
+/// An enabled platform and its configured tenants.
+struct PlatformTenants {
+    platform: &'static str,
+    tenants: Vec<TenantEnv>,
+}
+
 /// Runs `opentide doctor`.
-pub fn run(offline: bool, cx: &Context<'_>) -> Report {
+pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
     let (shown, options) = placement(cx.repo, cx.env, cx.cwd);
     let cwd = resolve(cx.cwd);
     let workspace = resolve(&cx.cwd.join(&shown));
@@ -203,8 +236,11 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     ));
     if configuration_failed {
         checks.push(skipped("credentials"));
+        checks.push(skipped("connectivity"));
     } else {
-        checks.extend(doctor.credentials());
+        let tenants = doctor.tenants();
+        checks.extend(doctor.credentials(&tenants));
+        checks.extend(doctor.connectivity(live, &tenants));
     }
     checks.push(doctor.proxy(offline));
     if configuration_failed {
@@ -820,8 +856,12 @@ impl Doctor<'_> {
         )
     }
 
-    fn credentials(&self) -> Vec<Check> {
-        let mut checks = Vec::new();
+    /// Each enabled platform's configured tenants, with the environment
+    /// variables their `setup` names and which of them are unset: what
+    /// `credentials` reports and `connectivity` reads, so the second runs on
+    /// exactly the tenants the first found ready.
+    fn tenants(&self) -> Vec<PlatformTenants> {
+        let mut found = Vec::new();
         for platform in self.enabled_platforms() {
             let tenants: Vec<&Node> = match self
                 .node(&["systems", platform, "tenants"])
@@ -834,6 +874,69 @@ impl Doctor<'_> {
                     .collect(),
                 _ => Vec::new(),
             };
+            let mut listed = Vec::new();
+            for (index, tenant) in tenants.iter().enumerate() {
+                let name = match tenant.get("name").map(|node| &node.value) {
+                    Some(Value::Str(name)) if !name.is_empty() => name.to_string(),
+                    Some(Value::Null | Value::Bool(false)) | None => {
+                        format!("tenant {}", index + 1)
+                    }
+                    Some(Value::Str(_)) => format!("tenant {}", index + 1),
+                    Some(other) => other.to_string(),
+                };
+                let mut variables: Vec<String> = Vec::new();
+                if let Some(Value::Map(entries)) = tenant.get("setup").map(|node| &node.value) {
+                    for entry in entries {
+                        if let Some(name) = entry.value.value.as_str().and_then(env_reference)
+                            && !variables.iter().any(|known| known == name)
+                        {
+                            variables.push(name.to_owned());
+                        }
+                    }
+                }
+                let unset = variables
+                    .iter()
+                    .filter(|variable| {
+                        self.cx
+                            .env
+                            .get(variable)
+                            .is_none_or(|value| value.is_empty())
+                    })
+                    .cloned()
+                    .collect();
+                let names_credentials = tenant
+                    .get("setup")
+                    .and_then(|setup| setup.get("credentials"))
+                    .is_some_and(|node| !matches!(node.value, Value::Null));
+                let adc_missing = platform == "google_secops"
+                    && !names_credentials
+                    && !opentide_connectors::google_secops::auth::has_local_default_credentials(
+                        &opentide_connectors::Environment::from_pairs(self.cx.env.iter()),
+                    );
+                listed.push(TenantEnv {
+                    subject: format!("{platform}/{name}"),
+                    name,
+                    variables,
+                    unset,
+                    adc_missing,
+                    node: (*tenant).clone(),
+                });
+            }
+            found.push(PlatformTenants {
+                platform,
+                tenants: listed,
+            });
+        }
+        found
+    }
+
+    /// `credentials`: per configured tenant of an enabled platform, whether
+    /// every variable its setup names is set. A variable that is not is
+    /// reported, never a failure: most users hold no tenant secret locally
+    /// (the CI runner does), so `doctor` does not fail on it.
+    fn credentials(&self, platforms: &[PlatformTenants]) -> Vec<Check> {
+        let mut checks = Vec::new();
+        for PlatformTenants { platform, tenants } in platforms {
             if tenants.is_empty() {
                 checks.push(
                     Check::new(
@@ -845,41 +948,34 @@ impl Doctor<'_> {
                         "add a [[tenants]] entry in \
                          {OPENTIDE_DIR}/configurations/platforms/{platform}.toml"
                     ))
-                    .subject(platform),
+                    .subject(*platform),
                 );
                 continue;
             }
-            for (index, tenant) in tenants.iter().enumerate() {
-                let name = match tenant.get("name").map(|node| &node.value) {
-                    Some(Value::Str(name)) if !name.is_empty() => name.to_string(),
-                    Some(Value::Null | Value::Bool(false)) | None => {
-                        format!("tenant {}", index + 1)
-                    }
-                    Some(Value::Str(_)) => format!("tenant {}", index + 1),
-                    Some(other) => other.to_string(),
-                };
-                let subject = format!("{platform}/{name}");
-                let mut variables: Vec<&str> = Vec::new();
-                if let Some(Value::Map(entries)) = tenant.get("setup").map(|node| &node.value) {
-                    for entry in entries {
-                        if let Some(name) = entry.value.value.as_str().and_then(env_reference)
-                            && !variables.contains(&name)
-                        {
-                            variables.push(name);
-                        }
-                    }
-                }
-                let unset: Vec<&str> = variables
-                    .iter()
-                    .copied()
-                    .filter(|variable| {
-                        self.cx
-                            .env
-                            .get(variable)
-                            .is_none_or(|value| value.is_empty())
-                    })
-                    .collect();
-                let check = if !unset.is_empty() {
+            for tenant in tenants {
+                let TenantEnv {
+                    subject,
+                    variables,
+                    unset,
+                    adc_missing,
+                    ..
+                } = tenant;
+                let check = if *adc_missing && unset.is_empty() {
+                    Check::new(
+                        "credentials",
+                        "warn",
+                        format!(
+                            "{subject}: no credentials: the tenant names none, \
+                             GOOGLE_APPLICATION_CREDENTIALS is unset and there is no gcloud \
+                             credentials file (a Google Cloud host's metadata server may still \
+                             supply them)"
+                        ),
+                    )
+                    .fix(
+                        "set `credentials` in the tenant's setup, or run \
+                         gcloud auth application-default login",
+                    )
+                } else if !unset.is_empty() {
                     Check::new(
                         "credentials",
                         "warn",
@@ -907,10 +1003,218 @@ impl Doctor<'_> {
                         format!("{subject}: all {} variables set", variables.len()),
                     )
                 };
-                checks.push(check.subject(subject));
+                checks.push(check.subject(subject.clone()));
             }
         }
         checks
+    }
+
+    /// `connectivity` (`doctor --live`, #1658): for each tenant whose
+    /// credentials are all set, opens it as `opentide deploy` does (its
+    /// credentials resolved, its sign-in made) and makes the platform's one
+    /// read-only request. A tenant without its credentials is skipped, not
+    /// failed; one with them that cannot be reached, or whose credentials
+    /// the tenant refuses, fails, naming the error's code. Nothing is
+    /// written to a tenant.
+    fn connectivity(&self, live: bool, platforms: &[PlatformTenants]) -> Vec<Check> {
+        if !live {
+            return vec![
+                Check::new("connectivity", "skip", "Not checked: --live not set")
+                    .fix("opentide doctor --live reaches each tenant whose credentials are set"),
+            ];
+        }
+        if platforms.is_empty() {
+            return vec![Check::new(
+                "connectivity",
+                "skip",
+                "No platform is enabled: no tenant to reach",
+            )];
+        }
+        let environment = opentide_connectors::Environment::from_pairs(self.cx.env.iter());
+        let registry = opentide_connectors::builtin_with(&environment);
+        let mut checks = Vec::new();
+        for PlatformTenants { platform, tenants } in platforms {
+            if tenants.is_empty() {
+                checks.push(
+                    Check::new(
+                        "connectivity",
+                        "skip",
+                        format!("{platform}: no tenant configured"),
+                    )
+                    .subject(*platform),
+                );
+                continue;
+            }
+            for tenant in tenants {
+                // After Ctrl-C no further tenant is contacted.
+                let check = if (self.cx.interrupted)() {
+                    Check::new(
+                        "connectivity",
+                        "skip",
+                        format!("{}: not reached, interrupted", tenant.subject),
+                    )
+                } else {
+                    self.reach(platform, tenant, &registry, &environment)
+                };
+                checks.push(check.subject(tenant.subject.clone()));
+            }
+        }
+        checks
+    }
+
+    /// Opens `tenant` as a deploy does and runs its platform's read-only
+    /// request, through the tenant's own client (its `ssl`, CA bundle,
+    /// timeouts and the run's `--proxy`).
+    fn probe(
+        &self,
+        platform: &str,
+        tenant: &TenantEnv,
+        prober: &dyn opentide_connectors::connector::Prober,
+        environment: &opentide_connectors::Environment,
+    ) -> Result<(), DeployError> {
+        let setup: toml::Table = CJson::from_node(&tenant.node)
+            .get("setup")
+            .and_then(CJson::as_object)
+            .map(|setup| {
+                setup
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        opentide_connectors::tenant::toml_value(value)
+                            .map(|value| (key.clone(), value))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let settings = opentide_connectors::deploy_http_settings(platform);
+        Tenant::from_setup(
+            platform,
+            &tenant.name,
+            &setup,
+            environment,
+            Resolve::Required,
+            &settings,
+        )
+        .and_then(|connected| {
+            HttpClient::new(
+                &connected.label,
+                &connected.http,
+                environment,
+                self.cx.proxy,
+            )
+            .map(|http| (connected, http))
+        })
+        .map_err(DeployError::from)
+        .and_then(|(connected, http)| {
+            let cancel = CancellationToken::new();
+            let context = TenantContext {
+                tenant: &connected,
+                http: &http,
+                cancel: &cancel,
+            };
+            opentide_connectors::runtime::sync_call(|| {
+                opentide_connectors::runtime::block_on(watched(
+                    async { Ok(prober.probe(context).await) },
+                    &cancel,
+                    self.cx.interrupted,
+                ))
+                .map(|watched| watched.map_err(DeployError::from).and_then(|probed| probed))
+            })
+            .unwrap_or_else(|_| Err("the check stopped unexpectedly".to_owned()))
+            .unwrap_or_else(|message| {
+                Err(DeployError::from(ConnectorError::Crashed {
+                    platform: platform.to_owned(),
+                    tenant: tenant.name.clone(),
+                    message,
+                }))
+            })
+        })
+    }
+
+    /// One tenant's `connectivity` check.
+    fn reach(
+        &self,
+        platform: &str,
+        tenant: &TenantEnv,
+        registry: &opentide_connectors::Registry,
+        environment: &opentide_connectors::Environment,
+    ) -> Check {
+        let subject = &tenant.subject;
+        // What the platform can check comes first: a tenant of a platform
+        // with no read-only request is never told to set variables, since
+        // setting them would not make `--live` check it.
+        let prober = opentide_schema::platforms::get(platform)
+            .filter(|row| row.deploys)
+            .and_then(|_| registry.get(platform))
+            .and_then(|connector| connector.prober());
+        let Some(prober) = prober else {
+            return Check::new(
+                "connectivity",
+                "skip",
+                format!(
+                    "{subject}: not supported by doctor --live: {platform} has no read-only request to make"
+                ),
+            );
+        };
+        if !tenant.unset.is_empty() {
+            return Check::new(
+                "connectivity",
+                "skip",
+                format!(
+                    "{subject}: not reached, credentials not set: {}",
+                    tenant.unset.join(", ")
+                ),
+            )
+            .fix(format!(
+                "set {} in the environment, then run opentide doctor --live",
+                tenant.unset.join(", ")
+            ));
+        }
+        let outcome = self.probe(platform, tenant, prober, environment);
+        match outcome {
+            Ok(()) => Check::new(
+                "connectivity",
+                "pass",
+                format!("{subject}: reached with its credentials"),
+            ),
+            // A setup key the tenant lacks is a credential that is not there
+            // (a literal value was never written, or the key is absent):
+            // skipped, as an unset variable is.
+            Err(failed)
+                if matches!(
+                    failed.failure.code,
+                    "credential_unset" | CREDENTIALS_UNAVAILABLE
+                ) =>
+            {
+                Check::new(
+                    "connectivity",
+                    "skip",
+                    format!("{subject}: not reached, {}", failed.failure.message),
+                )
+            }
+            // Ctrl-C: the run ends interrupted, whatever this line says.
+            Err(failed) if failed.failure.code == "interrupted" => Check::new(
+                "connectivity",
+                "skip",
+                format!("{subject}: not reached, interrupted"),
+            ),
+            Err(failed) if failed.failure.code == "network_unavailable" => Check::new(
+                "connectivity",
+                "skip",
+                format!("{subject}: not reached, this build of opentide has no network"),
+            ),
+            Err(failed) => Check::new(
+                "connectivity",
+                "fail",
+                format!(
+                    "{subject}: could not be reached ({}): {}",
+                    failed.failure.code, failed.failure.message
+                ),
+            )
+            .fix(format!(
+                "check the tenant's address, the credentials of {} and the network or --proxy",
+                tenant.name
+            )),
+        }
     }
 
     /// `check_proxy`: whether the proxy the connectors' requests go through
@@ -1541,6 +1845,7 @@ mod tests {
             version: "9.9.9",
             text: false,
             proxy: None,
+            interrupted: &|| false,
         }
     }
 
@@ -1595,7 +1900,7 @@ mod tests {
         drop(listener);
         let env = Env::from_pairs([("HTTPS_PROXY".to_owned(), proxy.clone())]);
         let dir = tempfile::tempdir().unwrap();
-        let report = run(false, &context(&env, dir.path()));
+        let report = run(false, false, &context(&env, dir.path()));
         let found = checks(&report);
         let latest = found
             .iter()
@@ -1717,7 +2022,7 @@ mod tests {
     fn an_empty_folder_fails_the_workspace_check() {
         let env = Env::from_pairs(Vec::<(String, String)>::new());
         let dir = tempfile::tempdir().unwrap();
-        let report = run(true, &context(&env, dir.path()));
+        let report = run(true, false, &context(&env, dir.path()));
         let found = checks(&report);
         let workspace = found.iter().find(|(code, ..)| code == "workspace").unwrap();
         assert_eq!(workspace.1, "fail");
@@ -1750,7 +2055,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let report = run(true, &context(&env, dir.path()));
+        let report = run(true, false, &context(&env, dir.path()));
         let found = checks(&report);
         let get = |code: &str| {
             found
@@ -1795,7 +2100,7 @@ mod tests {
             std::fs::write(templates.join(template_artifact_name(&id)), text).unwrap();
         }
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, &context(&env, dir.path())));
+        let found = checks(&run(true, false, &context(&env, dir.path())));
         let fresh = found
             .iter()
             .find(|(code, ..)| code == "templates_fresh")
@@ -1807,7 +2112,7 @@ mod tests {
         let mut text = std::fs::read_to_string(&path).unwrap();
         text.push('\n');
         std::fs::write(&path, text).unwrap();
-        let found = checks(&run(true, &context(&env, dir.path())));
+        let found = checks(&run(true, false, &context(&env, dir.path())));
         let stale = found
             .iter()
             .find(|(code, ..)| code == "templates_fresh")
@@ -1823,7 +2128,7 @@ mod tests {
         std::fs::create_dir_all(&config).unwrap();
         std::fs::write(config.join("lint.toml"), "[metadata]\nrequired = [\n").unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, &context(&env, dir.path())));
+        let found = checks(&run(true, false, &context(&env, dir.path())));
         let configuration = found
             .iter()
             .find(|(code, ..)| code == "configuration")
@@ -1979,7 +2284,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs([("PATH", "/nonexistent")]);
-        let found = checks(&run(true, &context(&env, dir.path())));
+        let found = checks(&run(true, false, &context(&env, dir.path())));
         let settings = found.iter().find(|(c, ..)| c == "vscode_settings").unwrap();
         assert_eq!(settings.1, "pass");
         let mcp = found.iter().find(|(c, ..)| c == "mcp_config").unwrap();
@@ -2001,7 +2306,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, &context(&env, dir.path())));
+        let found = checks(&run(true, false, &context(&env, dir.path())));
         let settings = found.iter().find(|(c, ..)| c == "vscode_settings").unwrap();
         assert_eq!(settings.1, "warn");
         assert!(

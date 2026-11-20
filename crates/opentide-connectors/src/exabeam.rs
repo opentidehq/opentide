@@ -39,7 +39,7 @@ use tokio::sync::Mutex;
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
-    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryOutcome,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, Prober, QueryOutcome,
     QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
 };
 use crate::error::ConnectorError;
@@ -1449,6 +1449,66 @@ impl Exabeam {
     pub fn session<'a>(&self, cx: TenantContext<'a>) -> Result<Session<'a>, ConnectorError> {
         Session::new(cx, Arc::clone(&self.pacer))
     }
+
+    /// A session for `cx` that holds its token: the client id and secret and
+    /// the API's address read, the sign-in made once, and the token kept for
+    /// the first rule's session (no second sign-in). What
+    /// [`Deployer::open`] and [`Prober::probe`] both do first.
+    async fn signed_in<'a>(&self, cx: TenantContext<'a>) -> Result<Session<'a>, TenantFailure> {
+        let session = self
+            .session(cx)
+            .map_err(|error| TenantFailure::of(Failure::NoAnswer(error)))?;
+        let token = session.token(false).await.map_err(TenantFailure::of)?;
+        self.tokens
+            .lock()
+            .await
+            .insert(cx.tenant.label.clone(), token);
+        Ok(session)
+    }
+}
+
+/// A tenant failure as the probe reports it: a refused API key is
+/// [`ConnectorError::Authentication`] (`authentication_failed`), anything
+/// else as a deploy reports it.
+fn probe_error(failure: TenantFailure, tenant: &str) -> ConnectorError {
+    if failure.code == UNAUTHORIZED {
+        ConnectorError::authentication(PLATFORM, tenant, failure.message)
+    } else {
+        failure.into_error(tenant)
+    }
+}
+
+impl Prober for Exabeam {
+    /// The sign-in a deploy makes (`POST /auth/v1/token`), then one
+    /// `GET /correlation-rules/v2/rules?nameContains=…`, a read that lists
+    /// the rules whose name holds a word and changes nothing. A refused key
+    /// is `authentication_failed`; a tenant without the feature (HTTP 409)
+    /// or any other non-2xx answer is `tenant_refused`.
+    fn probe<'a>(&'a self, cx: TenantContext<'a>) -> BoxFuture<'a, Result<(), DeployError>> {
+        crate::connector::probing(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
+            let session = self
+                .signed_in(cx)
+                .await
+                .map_err(|failure| probe_error(failure, tenant))?;
+            let reply = session
+                .request(
+                    &crate::transport::Method::GET,
+                    RULES_PATH,
+                    &[("nameContains", "opentide")],
+                    None,
+                    None,
+                )
+                .await
+                .map_err(|failure| probe_error(TenantFailure::of(failure), tenant))?;
+            crate::connector::probe_verdict(
+                PLATFORM,
+                tenant,
+                "listing the correlation rules",
+                reply.answer.status,
+            )
+        })
+    }
 }
 
 impl Deployer for Exabeam {
@@ -1459,18 +1519,11 @@ impl Deployer for Exabeam {
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
         crate::connector::opening(async move {
-            let session = self.session(cx)?;
             let tenant = cx.tenant.label.tenant.as_str();
-            let token = session
-                .token(false)
+            self.signed_in(cx)
                 .await
-                .map_err(|failure| TenantFailure::of(failure).into_error(tenant))?;
-            // The first rule's session takes this token: no second sign-in.
-            self.tokens
-                .lock()
-                .await
-                .insert(cx.tenant.label.clone(), token);
-            Ok(())
+                .map(|_| ())
+                .map_err(|failure| failure.into_error(tenant))
         })
     }
 
@@ -1616,6 +1669,10 @@ impl Platform for Exabeam {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 

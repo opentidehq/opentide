@@ -1584,3 +1584,28 @@ fn framework_counts_the_requests_sent_and_the_writes_the_tenant_may_have_taken()
     );
     assert_eq!((client.requests_sent(), client.writes_taken()), (9, 5));
 }
+
+#[test]
+fn a_direct_client_uses_no_proxy_whatever_the_environment_or_the_run_names() {
+    // Google's metadata server is asked direct, as google-auth asks it: a
+    // proxy would answer for a host it cannot reach (#1726).
+    let env = Environment::from_pairs([
+        ("http_proxy", "http://proxy.stand-in.invalid:3128"),
+        ("all_proxy", "http://proxy.stand-in.invalid:3128"),
+    ]);
+    let url = url::Url::parse("http://metadata.google.internal/computeMetadata/v1/").unwrap();
+    let settings = HttpSettings::default();
+    let proxied = HttpClient::new(
+        &label("t"),
+        &settings,
+        &env,
+        Some("http://run.stand-in.invalid:80"),
+    )
+    .unwrap();
+    assert!(
+        proxied.route(&url).is_some(),
+        "the control client is proxied"
+    );
+    let direct = HttpClient::direct(&label("t"), &settings, &env).unwrap();
+    assert_eq!(direct.route(&url), None);
+}

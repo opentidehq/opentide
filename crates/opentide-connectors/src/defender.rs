@@ -19,8 +19,8 @@ use opentide_compile::json::{Json, Object};
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
-    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
-    kql_code, kql_with_limit, utc_z,
+    Operation, Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row,
+    TenantContext, kql_code, kql_with_limit, probe_verdict, utc_z,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
@@ -762,18 +762,56 @@ pub fn missing_required_column_groups(query: &str, returned: &[&str]) -> Vec<Str
         .collect()
 }
 
+impl Defender {
+    /// What a deploy does before its first rule: the Entra ID sign-in
+    /// ([`Deployer::open`], and [`Prober::probe`]'s first step).
+    async fn open_tenant(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        self.token(cx)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.into_connector(&cx.tenant.label.tenant))
+    }
+}
+
+impl Prober for Defender {
+    /// Opens the tenant as a deploy does (the Entra ID sign-in), then reads
+    /// the first page of custom detection rules: `GET .../detectionRules`, the
+    /// collection URL a listing starts from (the recorded listing's), which
+    /// writes nothing and needs the token. No `$top`: no recording shows Graph
+    /// accepting it on this beta collection, and a 400 would fail every tenant.
+    fn probe<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+    ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
+        crate::connector::probing(async move {
+            let tenant = &cx.tenant.label.tenant;
+            self.open_tenant(cx).await?;
+            let answer = self
+                .graph(
+                    cx,
+                    crate::transport::Method::GET,
+                    DETECTION_RULES_ENDPOINT,
+                    None,
+                )
+                .await
+                .map_err(|error| error.into_connector(tenant))?;
+            probe_verdict(
+                PLATFORM,
+                tenant,
+                "reading the detection rules",
+                answer.status,
+            )
+        })
+    }
+}
+
 impl Deployer for Defender {
     /// The Entra ID sign-in, once: the first rule's request reuses its token.
     fn open<'a>(
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move {
-            self.token(cx)
-                .await
-                .map(|_| ())
-                .map_err(|error| error.into_connector(&cx.tenant.label.tenant))
-        })
+        crate::connector::opening(self.open_tenant(cx))
     }
 
     fn deploy<'a>(
@@ -867,6 +905,10 @@ impl Platform for Defender {
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+
+    fn prober(&self) -> Option<&dyn Prober> {
         Some(self)
     }
 
