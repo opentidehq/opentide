@@ -77,11 +77,15 @@ For each tenant whose credential variables are all set, `doctor --live` opens th
 |---------|----------|---------|
 | The sign-in and the request succeed | `pass` | `sentinel/prod: reached with its credentials` |
 | A variable the tenant's setup names is unset | `skip` | `sentinel/prod: not reached, credentials not set: AZURE_CLIENT_SECRET`. The tenant is not contacted |
-| The tenant refuses the credentials (HTTP 401 or 403, or a refused sign-in) | `fail` | `sentinel/prod: could not be reached (authentication_failed): …` |
+| The tenant refuses the credentials (HTTP 401 or 403, or a sign-in the platform's token endpoint refuses with 400, 401 or 403) | `fail` | `sentinel/prod: could not be reached (authentication_failed): …`. No answer body is quoted |
+| A token endpoint answers 429 or 500, or a gateway's 502, 503 or 504 | `fail` | `tenant_refused` or `tenant_gateway`, not `authentication_failed`: the credentials are not blamed for a rate limit or an outage (CrowdStrike) |
 | The tenant does not answer, or the connection fails | `fail` | The error's code (`tenant_unreachable`, `tenant_timeout`, `tenant_gateway`) and message, naming the tenant and its address (`scheme://host:port`, never a path or a credential) |
 | The tenant answers anything else that is not a success | `fail` | `tenant_refused`, with the HTTP status |
-| The platform has no read-only request opentide can make | `skip` | `…: not reached, <platform> has no read-only check to make` |
+| The platform has no read-only request opentide can make (Bitdefender) | `skip` | `…: not supported by doctor --live: <platform> has no read-only request to make`. Checked before the variables, so it is never told to set one |
+| Google SecOps names no `credentials`, `GOOGLE_APPLICATION_CREDENTIALS` is unset, there is no gcloud credentials file and the metadata server does not answer | `skip` | `…: not reached, … names no credentials and none are set up`. `credentials` reports it as a `warn`. A `credentials` value or `GOOGLE_APPLICATION_CREDENTIALS` that is set but unusable still fails |
 | No `--live` | `skip` | `Not checked: --live not set` |
+
+Ctrl-C stops a request in flight at once, as it does for `deploy`; the tenants not yet reached are `skip`, and the run ends interrupted (exit `130`).
 
 A failing tenant fails the check, and `doctor` exits `1`. A tenant that is skipped never changes the exit code. A platform with no tenant, or none enabled, is one `skip` line.
 
