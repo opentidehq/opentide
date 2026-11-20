@@ -4,244 +4,51 @@ description: doctor/json/fault/default
 ---
 args: opentide --json doctor
 exit: 1
+view: diagnostics (code, severity, file, line, column and counts; no message text)
 
-━━━ stdout · json, 1 lines
-{
-  "checks": [
-    {
-      "code": "opentide_version",
-      "fix": null,
-      "message": "opentide 0.28.1",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "opentide_latest",
-      "fix": "check the network or --proxy, or pass --offline to skip network checks",
-      "message": "Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>))",
-      "status": "warn",
-      "subject": null
-    },
-    {
-      "code": "workspace",
-      "fix": null,
-      "message": "Workspace ./ has .opentide/ (found from the current directory)",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "git",
-      "fix": null,
-      "message": "git <GIT_VERSION>",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "git_repository",
-      "fix": "git init ./",
-      "message": "./ is not in a git repository",
-      "status": "warn",
-      "subject": null
-    },
-    {
-      "code": "configuration",
-      "fix": null,
-      "message": "17 configuration files load",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "templates_fresh",
-      "fix": "opentide generate templates schemas snippets",
-      "message": "4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml",
-      "status": "warn",
-      "subject": null
-    },
-    {
-      "code": "schemas_fresh",
-      "fix": "opentide generate schemas",
-      "message": "6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, opentide.schema.json, visibility.1.0.schema.json",
-      "status": "warn",
-      "subject": null
-    },
-    {
-      "code": "lsp_catalog",
-      "fix": null,
-      "message": "Language-server catalog compiled into opentide 0.28.1",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "platforms_enabled",
-      "fix": null,
-      "message": "Enabled: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "analysis_engine",
-      "fix": null,
-      "message": "The analysis engine (language server 0.12.0) loads",
-      "status": "pass",
-      "subject": null
-    },
-    {
-      "code": "credentials",
-      "fix": "set SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID in the environment (or a .env file you load)",
-      "message": "sentinel/sentinel-staging: 5 of 5 variables unset: SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID",
-      "status": "warn",
-      "subject": "sentinel/sentinel-staging"
-    },
-    {
-      "code": "credentials",
-      "fix": "set SENTINEL_PRODUCTION_CLIENT_ID, SENTINEL_PRODUCTION_CLIENT_SECRET, SENTINEL_PRODUCTION_SUBSCRIPTION_ID, SENTINEL_PRODUCTION_TENANT_ID, SENTINEL_PRODUCTION_WORKSPACE_ID in the environment (or a .env file you load)",
-      "message": "sentinel/sentinel-production: 5 of 5 variables unset: SENTINEL_PRODUCTION_CLIENT_ID, SENTINEL_PRODUCTION_CLIENT_SECRET, SENTINEL_PRODUCTION_SUBSCRIPTION_ID, SENTINEL_PRODUCTION_TENANT_ID, SENTINEL_PRODUCTION_WORKSPACE_ID",
-      "status": "warn",
-      "subject": "sentinel/sentinel-production"
-    },
-    {
-      "code": "credentials",
-      "fix": "set MDE_PRODUCTION_CLIENT_ID, MDE_PRODUCTION_CLIENT_SECRET, MDE_PRODUCTION_TENANT_ID in the environment (or a .env file you load)",
-      "message": "defender_for_endpoint/tenant 1: 3 of 3 variables unset: MDE_PRODUCTION_CLIENT_ID, MDE_PRODUCTION_CLIENT_SECRET, MDE_PRODUCTION_TENANT_ID",
-      "status": "warn",
-      "subject": "defender_for_endpoint/tenant 1"
-    },
-    {
-      "code": "credentials",
-      "fix": "set SPLUNK_ES_TOKEN in the environment (or a .env file you load)",
-      "message": "splunk/splunk-es: 1 of 1 variables unset: SPLUNK_ES_TOKEN",
-      "status": "warn",
-      "subject": "splunk/splunk-es"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml",
-      "message": "sentinel_one: no tenant configured",
-      "status": "skip",
-      "subject": "sentinel_one"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml",
-      "message": "crowdstrike: no tenant configured",
-      "status": "skip",
-      "subject": "crowdstrike"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml",
-      "message": "harfanglab: no tenant configured",
-      "status": "skip",
-      "subject": "harfanglab"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml",
-      "message": "carbon_black_cloud: no tenant configured",
-      "status": "skip",
-      "subject": "carbon_black_cloud"
-    },
-    {
-      "code": "credentials",
-      "fix": "set ELASTIC_STAGING_API_KEY in the environment (or a .env file you load)",
-      "message": "elastic/elastic-staging: 1 of 1 variables unset: ELASTIC_STAGING_API_KEY",
-      "status": "warn",
-      "subject": "elastic/elastic-staging"
-    },
-    {
-      "code": "credentials",
-      "fix": "set ELASTIC_PRODUCTION_API_KEY in the environment (or a .env file you load)",
-      "message": "elastic/elastic-production: 1 of 1 variables unset: ELASTIC_PRODUCTION_API_KEY",
-      "status": "warn",
-      "subject": "elastic/elastic-production"
-    },
-    {
-      "code": "credentials",
-      "fix": "set SYSDIG_PRODUCTION_API_TOKEN in the environment (or a .env file you load)",
-      "message": "sysdig/sysdig-production: 1 of 1 variables unset: SYSDIG_PRODUCTION_API_TOKEN",
-      "status": "warn",
-      "subject": "sysdig/sysdig-production"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/bitdefender.toml",
-      "message": "bitdefender: no tenant configured",
-      "status": "skip",
-      "subject": "bitdefender"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/graylog.toml",
-      "message": "graylog: no tenant configured",
-      "status": "skip",
-      "subject": "graylog"
-    },
-    {
-      "code": "credentials",
-      "fix": "set EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET in the environment (or a .env file you load)",
-      "message": "exabeam/exabeam-production: 2 of 2 variables unset: EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET",
-      "status": "warn",
-      "subject": "exabeam/exabeam-production"
-    },
-    {
-      "code": "credentials",
-      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/google_secops.toml",
-      "message": "google_secops: no tenant configured",
-      "status": "skip",
-      "subject": "google_secops"
-    },
-    {
-      "code": "proxy",
-      "fix": "check --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up",
-      "message": "Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>))",
-      "status": "fail",
-      "subject": null
-    },
-    {
-      "code": "vscode_settings",
-      "fix": "opentide setup vscode",
-      "message": "No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide",
-      "status": "skip",
-      "subject": null
-    },
-    {
-      "code": "vscode_snippets",
-      "fix": "opentide generate snippets",
-      "message": "No snippets at .vscode/model-templates.code-snippets",
-      "status": "skip",
-      "subject": null
-    },
-    {
-      "code": "mcp_config",
-      "fix": "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)",
-      "message": "No MCP configuration: agents in editors cannot call opentide tools",
-      "status": "skip",
-      "subject": null
-    }
-  ],
-  "command": "doctor",
-  "duration_ms": 0,
-  "error": "1 check failed · 7 passed, 12 warnings, 10 skipped",
-  "exit_code": 1,
-  "failure": {
-    "argument": null,
-    "code": "doctor_checks_failed",
-    "crash_log": null,
-    "message": "1 check failed · 7 passed, 12 warnings, 10 skipped",
-    "suggestion": null
-  },
-  "message": "1 check failed · 7 passed, 12 warnings, 10 skipped",
-  "next_actions": [],
-  "ok": false,
-  "schema_version": 1,
-  "status": "failed",
-  "summary": {
-    "checks": 30,
-    "failed": 1,
-    "passed": 7,
-    "skipped": 10,
-    "warnings": 12
-  }
-}
+━━━ stdout · json
+findings: 31
+  opentide_version | pass | - | - | -
+  opentide_latest | warn | - | - | -
+  workspace | pass | - | - | -
+  git | pass | - | - | -
+  git_repository | warn | - | - | -
+  configuration | pass | - | - | -
+  templates_fresh | warn | - | - | -
+  schemas_fresh | warn | - | - | -
+  lsp_catalog | pass | - | - | -
+  platforms_enabled | pass | - | - | -
+  analysis_engine | pass | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | warn | - | - | -
+  credentials | skip | - | - | -
+  proxy | fail | - | - | -
+  vscode_settings | skip | - | - | -
+  vscode_snippets | skip | - | - | -
+  mcp_config | skip | - | - | -
+  doctor_checks_failed | - | - | - | -
+exit_code: 1
+schema_version: 1
+summary.checks: 30
+summary.failed: 1
+summary.passed: 7
+summary.skipped: 10
+summary.warnings: 12
+checks[]: 30 items
+next_actions[]: 0 items
+ok: false x1
+status: failed x1
 
 ━━━ stderr · empty

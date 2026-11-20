@@ -719,7 +719,7 @@ jobs:
       # `heavy-small`, UC-0.6): xtask writes them, which the crate's tests
       # cannot; the tests fail without them when the variable is set.
       # A Linux gate by design: the nightly `engine-test-os` (macOS, Windows)
-      # runs `cli_snapshots` without these workspaces, so the 101 generated
+      # runs `cli_snapshots` without these workspaces, so the 34 generated
       # cases print "skipped" there. Writing them costs minutes
       # of debug-build CPU per OS for output the snapshots (Linux's) already
       # hold.

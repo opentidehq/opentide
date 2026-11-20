@@ -4,33 +4,24 @@ description: lint/json/fault/recommended-crash
 ---
 args: opentide --json lint --check recommended
 exit: 0
+view: diagnostics (code, severity, file, line, column and counts; no message text)
 
-━━━ stdout · json, 1 lines
-{
-  "checks": [
-    "recommended"
-  ],
-  "command": "lint",
-  "count": 0,
-  "duration_ms": 0,
-  "exit_code": 0,
-  "failure": null,
-  "findings": [],
-  "fixed": 0,
-  "message": "Catalogue lint passed",
-  "next_actions": [],
-  "ok": true,
-  "path": "<WS>",
-  "schema_version": 1,
-  "status": "completed",
-  "summary": {
-    "errors": 0,
-    "files": 879,
-    "findings": 0,
-    "fixed": 0,
-    "notes": 0,
-    "warnings": 0
-  }
-}
+━━━ stdout · json
+findings: 0
+count: 0
+exit_code: 0
+fixed: 0
+schema_version: 1
+summary.errors: 0
+summary.files: 879
+summary.findings: 0
+summary.fixed: 0
+summary.notes: 0
+summary.warnings: 0
+checks[]: 1 items
+findings[]: 0 items
+next_actions[]: 0 items
+ok: true x1
+status: completed x1
 
 ━━━ stderr · empty

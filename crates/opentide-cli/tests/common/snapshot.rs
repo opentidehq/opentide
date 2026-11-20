@@ -11,6 +11,14 @@
 //! fields are checked and its spacing is not. A change in what a command
 //! prints or writes is a snapshot diff, reviewed with `cargo insta review`
 //! (tests/golden/README.md, "Snapshots").
+//!
+//! What is held, and in how much detail, is the manifest's decision (#1743):
+//! a case runs in `json` mode unless it lists others (the `--json` contract
+//! and the files a command writes are the product; the text modes' wording
+//! and layout are held by the renderers' and commands' own tests, and by a
+//! small rendering set the manifest names), and a fixture whose `view` is
+//! `diagnostics` (the generated corpora) is held as its diagnostics (code,
+//! severity, file, line, column), counts and exit code, never message text.
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
 
@@ -73,6 +81,29 @@ pub struct Case {
     pub cwd: Option<String>,
     pub cassette: Option<String>,
     pub normalise: Vec<Rule>,
+    /// How much of the run the snapshot holds (the case's `view`, else its
+    /// fixture's).
+    pub view: View,
+    /// `same_as = "<variant>"`: the case holds no snapshot of its own; its
+    /// outcome must be that variant's, in json mode, on the same fixture.
+    pub same_as: Option<String>,
+}
+
+/// How much of a run a snapshot holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum View {
+    /// Streams and written files as they are (the default).
+    #[default]
+    Full,
+    /// The streams as they are, and the paths a run wrote with what happened
+    /// to each, but not the files' text: for a text-mode run of a command that
+    /// writes large generated files, which its json-mode case holds.
+    Streams,
+    /// The generated corpora's: the exit code, the diagnostics of every JSON
+    /// stream and file as (code, severity, file, line, column), counts, and
+    /// the paths written; never a message, a frame or a file's text, so a
+    /// reworded message or help text rewrites no snapshot.
+    Diagnostics,
 }
 
 /// The snapshot files (`<command dir>/<name>.snap`) of the cases that feed
@@ -153,9 +184,19 @@ pub fn cases() -> Vec<Case> {
                     cwd: case.cwd.clone(),
                     cassette: case.cassette.clone(),
                     normalise: case.normalise.clone(),
+                    view: case.view.unwrap_or(spec.fixtures[fixture].view),
+                    same_as: case.same_as.clone(),
                 });
             }
         }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for case in &out {
+        assert!(
+            seen.insert(case.id.as_str()),
+            "two cases are {}: a variant is run once per command, mode and fixture",
+            case.id
+        );
     }
     out
 }
@@ -171,6 +212,7 @@ struct Spec {
 
 #[derive(serde::Deserialize)]
 struct Defaults {
+    /// The modes a case runs in unless it lists its own: `json` alone.
     modes: Vec<String>,
     fixtures: Vec<String>,
 }
@@ -179,6 +221,27 @@ struct Defaults {
 struct FixtureSpec {
     #[serde(default)]
     vars: BTreeMap<String, String>,
+    /// `view = "diagnostics"` for a generated corpus; `full` otherwise.
+    #[serde(default, deserialize_with = "view_from_toml")]
+    view: View,
+}
+
+fn view_from_toml<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<View, D::Error> {
+    use serde::de::Error as _;
+    match <String as serde::Deserialize>::deserialize(deserializer)?.as_str() {
+        "full" => Ok(View::Full),
+        "streams" => Ok(View::Streams),
+        "diagnostics" => Ok(View::Diagnostics),
+        other => Err(D::Error::custom(format!(
+            "view {other:?}: expected \"full\", \"streams\" or \"diagnostics\""
+        ))),
+    }
+}
+
+fn optional_view<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<View>, D::Error> {
+    view_from_toml(deserializer).map(Some)
 }
 
 #[derive(serde::Deserialize)]
@@ -196,6 +259,11 @@ struct CaseSpec {
     #[serde(default)]
     normalise: Vec<Rule>,
     cassette: Option<String>,
+    /// Overrides the fixture's `view` for this case.
+    #[serde(default, deserialize_with = "optional_view")]
+    view: Option<View>,
+    /// The variant whose outcome this case must equal (see [`Case::same_as`]).
+    same_as: Option<String>,
 }
 
 /// Replaces `{name}` in each argument; `None` when a variable is missing.
@@ -449,11 +517,30 @@ pub fn run_case(case: &Case) -> String {
             case.id
         );
     }
-    section(&mut text, "stdout", &stdout);
-    section(&mut text, "stderr", &stderr);
-    // Every path the run touched, in path order (the order fresh UUIDs are
-    // numbered in).
-    for ((prefix, root), before) in roots.iter().zip(&before) {
+    streams(&mut text, case.view, &stdout, &stderr);
+    written(
+        &mut text,
+        case.view,
+        &roots,
+        &before,
+        &mut normaliser,
+        &literals,
+    );
+    text
+}
+
+/// Every path the run touched under the case's roots, in path order (the
+/// order fresh UUIDs are numbered in), with what happened to it and, as much
+/// as `view` holds, the file's text.
+fn written(
+    text: &mut String,
+    view: View,
+    roots: &[(&str, std::path::PathBuf)],
+    before: &[BTreeMap<String, Entry>],
+    normaliser: &mut Normaliser,
+    literals: &[(String, &str)],
+) {
+    for ((prefix, root), before) in roots.iter().zip(before) {
         let after = entries(root);
         let paths: std::collections::BTreeSet<&String> =
             before.keys().chain(after.keys()).collect();
@@ -463,11 +550,30 @@ pub fn run_case(case: &Case) -> String {
             };
             writeln!(text, "\n━━━ {prefix}/{path} · {what}").unwrap();
             if let Some(bytes) = bytes {
-                text.push_str(&file_body(&mut normaliser, &literals, path, bytes));
+                match view {
+                    View::Diagnostics => text.push_str(&file_record(path, bytes)),
+                    View::Streams => {}
+                    View::Full => text.push_str(&file_body(normaliser, literals, path, bytes)),
+                }
             }
         }
     }
-    text
+}
+
+/// The two streams of a run, as much of them as `view` holds.
+fn streams(text: &mut String, view: View, stdout: &str, stderr: &str) {
+    if view == View::Diagnostics {
+        writeln!(
+            text,
+            "view: diagnostics (code, severity, file, line, column and counts; no message text)"
+        )
+        .unwrap();
+        diagnostics_section(text, "stdout", stdout);
+        diagnostics_section(text, "stderr", stderr);
+    } else {
+        section(text, "stdout", stdout);
+        section(text, "stderr", stderr);
+    }
 }
 
 /// The goldens' normaliser for `case`: its root's paths, the clock (the
@@ -653,6 +759,7 @@ fn as_json(text: &str) -> Option<String> {
     }
     let mut value: serde_json::Value = serde_json::from_str(text).ok()?;
     host_dependent(&mut value);
+    stable_sarif(&mut value);
     let mut pretty = serde_json::to_string_pretty(&value).ok()?;
     pretty.push('\n');
     Some(pretty)
@@ -698,6 +805,13 @@ fn file_body(
     let Ok(text) = std::str::from_utf8(bytes) else {
         return digest_line(bytes);
     };
+    if Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("sarif"))
+        && let Some(body) = sarif_body(normaliser, text)
+    {
+        return body;
+    }
     if text.len() <= INLINE_LIMIT {
         // As written, not reparsed: a file's layout (key order, indentation,
         // final newline) is what a user's editor and tools see.
@@ -716,6 +830,301 @@ fn file_body(
         return large_json(&text).unwrap_or_else(|| digest_line(text.as_bytes()));
     }
     digest_line(text.as_bytes())
+}
+
+/// A SARIF report's rule catalogue lists every diagnostic code with its short
+/// and full description and its help (text and Markdown), generated from the
+/// explain pages, and the results point into it by `ruleIndex`: an edit of a
+/// page, or a new code, would rewrite every snapshot that holds a report, and
+/// the catalogue is most of the file. The report is held without the help
+/// text and without the catalogue's position: each result's `ruleIndex` is
+/// checked against its `ruleId` (a mismatch fails the case) and dropped, and
+/// the catalogue is cut to the rules the results name, each as one line,
+/// `id | level | name | helpUri` (`| retired` for a retired code). The explain
+/// pages are held once, by the explain cases, and a rule's full shape by
+/// `render::report`'s unit tests and `tests/render.rs`. The results, with
+/// their locations, and the rest of the document stay as they are.
+fn stable_sarif(value: &mut serde_json::Value) {
+    use serde_json::Value;
+    let Some(runs) = value.get_mut("runs").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for run in runs {
+        let Some(rules) = run
+            .pointer("/tool/driver/rules")
+            .and_then(Value::as_array)
+            .cloned()
+        else {
+            continue;
+        };
+        let mut named = std::collections::BTreeSet::new();
+        if let Some(results) = run.get_mut("results").and_then(Value::as_array_mut) {
+            for result in results {
+                let Some(id) = result
+                    .get("ruleId")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                else {
+                    continue;
+                };
+                if let Some(index) = result.get("ruleIndex").and_then(Value::as_u64) {
+                    let listed = usize::try_from(index)
+                        .ok()
+                        .and_then(|index| rules.get(index))
+                        .and_then(|rule| rule.get("id"))
+                        .and_then(Value::as_str);
+                    assert_eq!(
+                        listed,
+                        Some(id.as_str()),
+                        "a SARIF result's ruleIndex {index} does not point at its rule {id}"
+                    );
+                    result
+                        .as_object_mut()
+                        .map(|result| result.remove("ruleIndex"));
+                }
+                named.insert(id);
+            }
+        }
+        let lines: Vec<Value> = rules
+            .iter()
+            .filter_map(|rule| {
+                let id = rule.get("id").and_then(Value::as_str)?;
+                if !named.contains(id) {
+                    return None;
+                }
+                let text = |pointer: &str| {
+                    rule.pointer(pointer)
+                        .and_then(Value::as_str)
+                        .unwrap_or("-")
+                        .to_owned()
+                };
+                let retired = rule
+                    .pointer("/properties/tags")
+                    .and_then(Value::as_array)
+                    .is_some_and(|tags| tags.iter().any(|tag| tag == "retired"));
+                Some(Value::String(format!(
+                    "{id} | {} | {} | {}{}",
+                    text("/defaultConfiguration/level"),
+                    text("/name"),
+                    text("/helpUri"),
+                    if retired { " | retired" } else { "" }
+                )))
+            })
+            .collect();
+        if let Some(slot) = run.pointer_mut("/tool/driver/rules") {
+            *slot = Value::Array(lines);
+        }
+    }
+}
+
+/// A written `.sarif` file as its parsed value with the rules' help text
+/// replaced ([`stable_sarif`]); `None` when it is not JSON.
+fn sarif_body(normaliser: &mut Normaliser, text: &str) -> Option<String> {
+    let mut value: serde_json::Value = serde_json::from_str(text).ok()?;
+    stable_sarif(&mut value);
+    let mut pretty = serde_json::to_string_pretty(&value).ok()?;
+    pretty.push('\n');
+    // The case's paths in a result's location; only `<WS>`-like roots differ
+    // between two runs, which the normaliser masks in the text.
+    let pretty = normaliser.text(&pretty);
+    Some(format!(
+        "(SARIF as a parsed value; the rules the results name, each as `id | level | name | helpUri`; a result's ruleIndex is checked, then dropped; descriptions and help are the explain pages)\n{}",
+        visible(&pretty)
+    ))
+}
+
+/// What a finding of a JSON document is held as (`diagnostics` view): its
+/// code, severity (or level, or status), file, line and column, from a
+/// validate or lint issue, a SARIF result, a code-quality entry or a doctor
+/// check. `None` for an object that has no code.
+fn finding(value: &serde_json::Value) -> Option<String> {
+    use serde_json::Value;
+    let object = value.as_object()?;
+    let text = |keys: &[&str]| -> Option<String> {
+        keys.iter()
+            .find_map(|key| object.get(*key).and_then(Value::as_str))
+            .map(str::to_owned)
+    };
+    let code = text(&["code", "ruleId", "check_name"])?;
+    let severity = text(&["severity", "level", "status"]);
+    let pointer = |path: &str| value.pointer(path).cloned().unwrap_or(Value::Null);
+    let file = text(&["file_path", "path", "file"])
+        .or_else(|| pointer("/context/file").as_str().map(str::to_owned))
+        .or_else(|| pointer("/location/path").as_str().map(str::to_owned))
+        .or_else(|| {
+            pointer("/locations/0/physicalLocation/artifactLocation/uri")
+                .as_str()
+                .map(str::to_owned)
+        });
+    let number = |keys: &[&str], pointers: &[&str]| -> Option<u64> {
+        keys.iter()
+            .find_map(|key| object.get(*key).and_then(Value::as_u64))
+            .or_else(|| pointers.iter().find_map(|path| pointer(path).as_u64()))
+    };
+    let line = number(
+        &["line"],
+        &[
+            "/location/lines/begin",
+            "/locations/0/physicalLocation/region/startLine",
+        ],
+    );
+    let column = number(
+        &["column"],
+        &["/locations/0/physicalLocation/region/startColumn"],
+    );
+    let show = |value: Option<String>| value.unwrap_or_else(|| "-".to_owned());
+    Some(format!(
+        "{code} | {} | {} | {} | {}",
+        show(severity),
+        show(file),
+        show(line.map(|n| n.to_string())),
+        show(column.map(|n| n.to_string()))
+    ))
+}
+
+/// A JSON document's keys whose values are the clock or a position, not a
+/// count.
+const NOT_COUNTS: &[&str] = &[
+    "line",
+    "column",
+    "end_line",
+    "end_column",
+    "yaml_line",
+    "duration_ms",
+    "wall_ms",
+];
+
+/// What a `diagnostics` view keeps of one JSON document.
+#[derive(Default)]
+struct Held {
+    findings: Vec<String>,
+    /// Integer fields, summed by their path (`summary.errors`).
+    numbers: BTreeMap<String, i64>,
+    /// Array lengths, summed by their path (`report.issues[]`).
+    lengths: BTreeMap<String, usize>,
+    /// `status` and `ok` values and how many times each occurs.
+    states: BTreeMap<String, BTreeMap<String, usize>>,
+}
+
+impl Held {
+    fn walk(&mut self, value: &serde_json::Value, path: &str) {
+        use serde_json::Value;
+        match value {
+            Value::Object(fields) => {
+                if let Some(found) = finding(value) {
+                    self.findings.push(found);
+                    return;
+                }
+                for (key, field) in fields {
+                    let child = if path.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    match field {
+                        Value::Number(number) if !NOT_COUNTS.contains(&key.as_str()) => {
+                            if let Some(number) = number.as_i64() {
+                                *self.numbers.entry(child).or_default() += number;
+                            }
+                        }
+                        Value::String(state) if key == "status" => {
+                            *self
+                                .states
+                                .entry(child)
+                                .or_default()
+                                .entry(state.clone())
+                                .or_default() += 1;
+                        }
+                        Value::Bool(state) if key == "ok" => {
+                            *self
+                                .states
+                                .entry(child)
+                                .or_default()
+                                .entry(state.to_string())
+                                .or_default() += 1;
+                        }
+                        _ => self.walk(field, &child),
+                    }
+                }
+            }
+            Value::Array(items) => {
+                *self.lengths.entry(format!("{path}[]")).or_default() += items.len();
+                for item in items {
+                    self.walk(item, &format!("{path}[]"));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn render(&self) -> String {
+        let mut out = String::new();
+        writeln!(out, "findings: {}", self.findings.len()).unwrap();
+        for found in &self.findings {
+            writeln!(out, "  {found}").unwrap();
+        }
+        for (path, number) in &self.numbers {
+            writeln!(out, "{path}: {number}").unwrap();
+        }
+        for (path, length) in &self.lengths {
+            writeln!(out, "{path}: {length} items").unwrap();
+        }
+        for (path, states) in &self.states {
+            let states: Vec<String> = states
+                .iter()
+                .map(|(state, count)| format!("{state} x{count}"))
+                .collect();
+            writeln!(out, "{path}: {}", states.join(", ")).unwrap();
+        }
+        out
+    }
+}
+
+/// One stream in the `diagnostics` view: a JSON document as its findings
+/// and counts; any other text is not held (its wording and layout are the
+/// renderers' tests', and the generated corpora would rewrite with every
+/// message).
+fn diagnostics_section(text: &mut String, name: &str, body: &str) {
+    if body.is_empty() {
+        writeln!(text, "\n━━━ {name} · empty").unwrap();
+        return;
+    }
+    let trimmed = body.trim_start();
+    let document = (trimmed.starts_with('{') || trimmed.starts_with('['))
+        .then(|| serde_json::from_str::<serde_json::Value>(body).ok())
+        .flatten();
+    match document {
+        Some(mut value) => {
+            host_dependent(&mut value);
+            let mut held = Held::default();
+            held.walk(&value, "");
+            writeln!(text, "\n━━━ {name} · json").unwrap();
+            text.push_str(&held.render());
+        }
+        None => writeln!(text, "\n━━━ {name} · text, not held").unwrap(),
+    }
+}
+
+/// A written file in the `diagnostics` view: a report (a SARIF or a
+/// code-quality file, under `opentide-reports/`) as its findings and counts;
+/// any other file, the generated catalogues and schemas among them, as its
+/// path alone (the header the caller wrote).
+fn file_record(path: &str, bytes: &[u8]) -> String {
+    let report = path.contains("opentide-reports/")
+        && Path::new(path).extension().is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("json") || ext.eq_ignore_ascii_case("sarif")
+        });
+    let value = report
+        .then(|| serde_json::from_slice::<serde_json::Value>(bytes).ok())
+        .flatten();
+    match value {
+        Some(value) => {
+            let mut held = Held::default();
+            held.walk(&value, "");
+            held.render()
+        }
+        None => String::new(),
+    }
 }
 
 /// A large JSON document (`text`, its paths replaced) in at most 16 KiB:
@@ -874,6 +1283,9 @@ fn run_selected(selected: &[Case], expected: usize, whole: bool) {
             eprintln!("{}: the case panicked", case.id);
             return true;
         };
+        if let Some(variant) = &case.same_as {
+            return !same_outcome(case, variant, &text);
+        }
         let mut settings = insta::Settings::clone_current();
         settings.set_snapshot_path(
             Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -896,6 +1308,52 @@ fn run_selected(selected: &[Case], expected: usize, whole: bool) {
         failed.len(),
         failed.join("\n")
     );
+}
+
+/// Whether `case` (a `same_as` case, run as `text`) did what its `variant`
+/// does in json mode on the same fixture: the exit code, both streams and the
+/// files written, everything after the arguments (a JSON stream's layout
+/// aside). A difference is reported as the case's failure.
+fn same_outcome(case: &Case, variant: &str, text: &str) -> bool {
+    let target = cases()
+        .into_iter()
+        .find(|other| {
+            other.command_dir == case.command_dir
+                && other.fixture == case.fixture
+                && other.variant == variant
+                && other.mode == "json"
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "{}: same_as {variant:?} is no json case of the command",
+                case.id
+            )
+        });
+    // The layout a JSON stream came in (its line count, final newline) is
+    // not compared: `OPENTIDE_JSON_INDENT` changes it and nothing else
+    // (`mode.rs` holds the variable).
+    let outcome = |text: &str| {
+        text.split_once('\n').map(|(_, rest)| {
+            rest.lines()
+                .map(|line| match line.split_once(" · json, ") {
+                    Some((head, _)) if head.starts_with("━━━ ") => format!("{head} · json"),
+                    _ => line.to_owned(),
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+    };
+    let same = outcome(text) == outcome(&run_case(&target));
+    if !same {
+        eprintln!("{}: not what {} does", case.id, target.id);
+    }
+    same
+}
+
+/// Whether `case` is held to a snapshot of its own (a `same_as` case is held
+/// to another case's outcome).
+pub fn has_snapshot(case: &Case) -> bool {
+    case.same_as.is_none()
 }
 
 /// A case's snapshot file name (without `.snap`).
