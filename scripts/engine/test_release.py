@@ -221,13 +221,26 @@ class BumpTest(unittest.TestCase):
             'opentide-compare = { path = "crates/opentide-compare" }\n',
             encoding="utf-8",
         )
+        fuzz = root / "fuzz"
+        fuzz.mkdir()
+        (fuzz / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
+        (fuzz / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
         done = subprocess.CompletedProcess([], 0)
         with (
             mock.patch.object(release, "WORKSPACE", workspace),
+            mock.patch.object(release, "ROOT", root),
             mock.patch.object(release.subprocess, "run", return_value=done) as run,
         ):
             release.bump(version)
-        self.assertEqual(run.call_args.args[0], ["cargo", "update", "--workspace"])
+        # The workspace's lock, then fuzz/'s, which pins the same crates
+        # (a stale one fails `cargo deny`, which runs --locked).
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["cargo", "update", "--workspace"],
+                ["cargo", "update", "--workspace", "--manifest-path", str(fuzz / "Cargo.toml")],
+            ],
+        )
         return workspace.read_text(encoding="utf-8")
 
     def test_a_release_version(self) -> None:
