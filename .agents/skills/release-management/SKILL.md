@@ -99,7 +99,7 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 - Promote it: edit the draft, **Publish release** (still a pre-release, still on no registry).
 - Delete it: `gh release delete v1.0.0-rc.N --cleanup-tag --yes` (the draft and its tag), then rerun N or cut N+1.
 
-**Public release candidate: disabled while the internal channel exists.** The guard refuses `release_candidate` unless `dry_run` is set (a rehearsal), and refuses to resume a `vX.Y.Z-rc.N` tag with `checkout_ref`; its code paths stay in `publish.yml`, re-enabled by `public_candidates=true` in the guard. When enabled, `release_candidate: N` publishes `v1.0.0-rc.N` as pre-releases:
+**Public release candidate: enabled for 1.0.0-rc.N** (`public_candidates=true` in the guard; `false` refuses it again, a `dry_run` aside, and refuses to resume a `-rc` tag). `release_candidate: N` publishes `v1.0.0-rc.N` as pre-releases:
 
 | Where | What |
 |-------|------|
@@ -108,7 +108,7 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 | crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
 | npm | **Nothing.** Test the npm packages from ci.yml's `release` artifacts (`npm-packages`) |
 
-Its notes quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates").
+Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates").
 
 **Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
 

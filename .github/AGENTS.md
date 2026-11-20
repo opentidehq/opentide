@@ -307,8 +307,8 @@ pushes the tag `vX.Y.Z-rc.N` and creates a **draft** GitHub pre-release with eve
 sdist, crate and npm tarball (SHA256SUMS, PACKAGES-SHA256SUMS, the SBOMs); it publishes nothing to
 PyPI, crates.io or npm and mints no OIDC token, so the maintainer tests a candidate before
 anything reaches a package manager (`v1.0.0-rc.N` until the final 1.0.0). The public
-`release_candidate` path is refused while the internal channel exists (a `dry_run` rehearsal
-aside), and resuming an `-rc` tag is refused. `dry_run` publishes nothing;
+`release_candidate` path (pre-releases on PyPI and crates.io) is enabled for 1.0.0-rc.N
+(`public_candidates=true` in the guard), and `checkout_ref` resumes an `-rc` tag. `dry_run` publishes nothing;
 `checkout_ref: vX.Y.Z` resumes a release. Steps:
 [release-management](../.agents/skills/release-management/SKILL.md); the registries' settings and
 the decisions (no musl, the free-threaded sdist): [`docs/internal/publishing.md`](../docs/internal/publishing.md#the-release-train).

@@ -1034,8 +1034,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
         self.assertEqual(guard[refuse_internal:].splitlines()[1].strip(), "exit 1")
         self.assertLess(refuse_internal, guard.index("check-candidate", refuse_internal))
-        # A public candidate is refused while the internal channel exists.
-        self.assertIn("public_candidates=false", guard)
+        # Public candidates are on (1.0.0-rc.N); the refusal stays behind the
+        # switch, so turning them off again needs no other change.
+        self.assertIn("public_candidates=true", guard)
         self.assertLess(guard.index("public release candidates are disabled", candidate), refuse_rc)
         # A release or a candidate never reuses a tag; resuming one needs its Release.
         self.assertIn('git rev-parse -q --verify "refs/tags/${tag}"', guard)
