@@ -522,8 +522,7 @@ fn readme(target: &Path, options: &RepoOptions) -> String {
 }
 
 /// Where `setup repo --org` keeps the organisation, relative to the
-/// repository: `opentide new` reads it when no object in the catalogue names
-/// one (`commands/new.rs`).
+/// repository: the organisation `opentide new` writes (`commands/new.rs`).
 pub const ORGANISATION_FILE: &str = ".opentide/configurations/organisation.toml";
 
 /// What [`organisation`] did to `organisation.toml`.
@@ -569,18 +568,32 @@ fn organisation(stage: &mut Stage, target: &Path, org: &str) -> Result<Organisat
             )));
         }
     };
-    let uuid = document
-        .get("uuid")
-        .and_then(toml_edit::Item::as_str)
-        .filter(|uuid| crate::commands::new::is_uuid(uuid))
-        .map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
+    // A uuid the user wrote stays, as `new` reads it (trimmed). One that is
+    // there and is not a UUID is not replaced: the identity is theirs.
+    let uuid = match document.get("uuid") {
+        None => Some(uuid::Uuid::new_v4().to_string()),
+        Some(item)
+            if item
+                .as_str()
+                .is_some_and(|uuid| crate::commands::new::is_uuid(uuid.trim())) =>
+        {
+            None
+        }
+        Some(_) => {
+            return Ok(Organisation::Kept(
+                "its uuid is not a UUID (setup keeps the value you wrote)".to_owned(),
+            ));
+        }
+    };
     if !existed {
         document.decor_mut().set_prefix(
-            "# The organisation `opentide new` writes into metadata.organisation when no\n\
-             # object in the catalogue names one. Replace the uuid with your organisation's.\n",
+            "# The organisation `opentide new` writes into metadata.organisation.\n\
+             # Replace the uuid with your organisation's.\n",
         );
     }
-    document["uuid"] = toml_edit::value(uuid);
+    if let Some(uuid) = uuid {
+        document["uuid"] = toml_edit::value(uuid);
+    }
     document["name"] = toml_edit::value(org);
     let written = document.to_string();
     // A key toml_edit adds ends in `\n`: a CRLF file keeps CRLF throughout.
@@ -1127,6 +1140,39 @@ mod tests {
         };
         assert!(reason.contains("not valid TOML"), "{reason}");
         assert_eq!(written(stage, &file), "name = = 1\n");
+
+        // `new` trims a uuid before it checks it, so setup keeps a padded one
+        // as it was written, and only renames.
+        std::fs::write(
+            &file,
+            "uuid = \" 11111111-2222-4333-8444-555555555555 \"\nname = \"Old\"\n",
+        )
+        .unwrap();
+        let mut stage = Stage::new();
+        assert!(matches!(
+            organisation(&mut stage, root, "New").unwrap(),
+            Organisation::Written
+        ));
+        assert_eq!(
+            written(stage, &file),
+            "uuid = \" 11111111-2222-4333-8444-555555555555 \"\nname = \"New\"\n"
+        );
+
+        // A uuid that is there and is not one (a placeholder, a braced GUID,
+        // a number) is never replaced: kept as it is, with the reason.
+        for mine in [
+            "uuid = \"{uuid}\"\nname = \"Old\"\n",
+            "uuid = \"{11111111-2222-4333-8444-555555555555}\"\n",
+            "uuid = 7\n",
+        ] {
+            std::fs::write(&file, mine).unwrap();
+            let mut stage = Stage::new();
+            let Organisation::Kept(reason) = organisation(&mut stage, root, "New").unwrap() else {
+                panic!("{mine:?}: a uuid the user wrote is kept");
+            };
+            assert!(reason.contains("not a UUID"), "{reason}");
+            assert_eq!(written(stage, &file), mine);
+        }
     }
 
     #[test]

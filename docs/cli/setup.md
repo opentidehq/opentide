@@ -47,7 +47,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 |------|---------|
 | `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
 | `--name`, `--description` | README metadata |
-| `--org` | The organisation, in the README and in `.opentide/configurations/organisation.toml` (a fresh `uuid` and the `name`), which [`opentide new`](./new.md#what-the-new-file-holds) writes as `metadata.organisation` when no object in the catalogue names one. A rerun with the same `--org` changes nothing, with another one renames the organisation and keeps its `uuid`, and a rerun without `--org` leaves the file as it is. An existing README is still left as it is; `--org` reaches `organisation.toml` all the same |
+| `--org` | The organisation, in the README and in `.opentide/configurations/organisation.toml` (a fresh `uuid` and the `name`), which [`opentide new`](./new.md#what-the-new-file-holds) writes as `metadata.organisation`: the only place it comes from. A rerun with the same `--org` changes nothing, with another one renames the organisation and keeps its `uuid`, and a rerun without `--org` leaves the file as it is. Edit the `uuid` in the file to your organisation's own. A `uuid` you wrote that is not a UUID is kept, with a warning. An existing README is still left as it is; `--org` reaches `organisation.toml` all the same |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |

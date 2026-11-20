@@ -74,84 +74,105 @@ fn a_path_names_the_file_or_its_folder() {
     );
 }
 
-#[test]
-fn the_most_common_organisation_wins_and_ties_go_to_the_first_in_path_order() {
-    let dir = tempfile::tempdir().unwrap();
-    let org = |uuid: &str, name: &str| {
-        format!("metadata:\n  uuid: x\n  organisation:\n    uuid: {uuid}\n    name: {name}\n")
-    };
-    std::fs::create_dir(dir.path().join("b")).unwrap();
-    std::fs::write(dir.path().join("a.yaml"), org("u2", "Two")).unwrap();
-    std::fs::write(dir.path().join("b/c.yaml"), org("u1", "One")).unwrap();
-    assert_eq!(
-        catalogue_organisation(dir.path()),
-        Some(("u2".to_owned(), "Two".to_owned()))
-    );
-    std::fs::write(dir.path().join("b/d.yml"), org("u1", " One ")).unwrap();
-    assert_eq!(
-        catalogue_organisation(dir.path()),
-        Some(("u1".to_owned(), "One".to_owned()))
-    );
-    std::fs::write(dir.path().join("e.yaml"), "metadata: [1]\n").unwrap();
-    assert_eq!(catalogue_uuids(dir.path()), HashSet::from(["x".to_owned()]));
-}
-
 fn configuration(text: &str) -> std::sync::Arc<Node> {
     let root = opentide_schema::configuration::toml::parse(text).unwrap();
     std::sync::Arc::new(root)
 }
 
-/// `setup --org` keeps `{uuid, name}` in `organisation.toml`; `new` reads it
-/// when no catalogue object names an organisation (#1670, smoke B17).
+const CONFIGURED_UUID: &str = "11111111-2222-4333-8444-555555555555";
+
+/// `organisation.toml` as the resolved configuration holds it.
+fn organisation_file(body: &str) -> std::sync::Arc<Node> {
+    configuration(&format!("[organisation]\n{body}\n"))
+}
+
 #[test]
-fn the_configured_organisation_is_used_when_the_catalogue_names_none() {
-    let uuid = "11111111-2222-4333-8444-555555555555";
-    let tree = |organisation: &str| configuration(&format!("[organisation]\n{organisation}\n"));
-    let valid = tree(&format!("uuid = \"{uuid}\"\nname = \" Example Corp \""));
+fn the_uuids_of_a_catalogue_are_read_from_its_object_files() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.yaml"), "metadata:\n  uuid: X\n").unwrap();
+    std::fs::write(dir.path().join("e.yaml"), "metadata: [1]\n").unwrap();
+    assert_eq!(catalogue_uuids(dir.path()), HashSet::from(["x".to_owned()]));
+}
+
+/// `setup --org` keeps `{uuid, name}` in `organisation.toml`; `new` reads it
+/// (#1670, smoke B17).
+#[test]
+fn the_configured_organisation_is_read_trimmed_and_checked() {
+    let valid = organisation_file(&format!(
+        "uuid = \" {CONFIGURED_UUID} \"\nname = \" Example Corp \""
+    ));
     assert_eq!(
         configured_organisation(&valid),
-        Some((uuid.to_owned(), "Example Corp".to_owned()))
-    );
-    // Nothing `new` can write: no file, a name without a uuid, a uuid
-    // that is not one, an empty name.
-    assert_eq!(configured_organisation(&configuration("x = 1\n")), None);
-    assert_eq!(configured_organisation(&tree("name = \"A\"")), None);
-    assert_eq!(
-        configured_organisation(&tree(&format!("uuid = \"{uuid}\""))),
-        None
+        Configured::Usable(CONFIGURED_UUID.to_owned(), "Example Corp".to_owned())
     );
     assert_eq!(
-        configured_organisation(&tree("uuid = \"u1\"\nname = \"A\"")),
-        None
+        configured_organisation(&configuration("x = 1\n")),
+        Configured::Absent
     );
+    // A file `new` cannot write, and what is wrong with it.
+    for (body, problems) in [
+        ("name = \"A\"".to_owned(), "it has no uuid"),
+        (format!("uuid = \"{CONFIGURED_UUID}\""), "it has no name"),
+        (
+            "uuid = \"u1\"\nname = \"A\"".to_owned(),
+            "its uuid is not a UUID",
+        ),
+        (
+            format!("uuid = \"{CONFIGURED_UUID}\"\nname = \"  \""),
+            "it has no name",
+        ),
+        (
+            format!("uuid = \"{CONFIGURED_UUID}\"\nnmae = \"A\""),
+            "it has no name",
+        ),
+        (
+            "uuid = \"u1\"".to_owned(),
+            "its uuid is not a UUID, it has no name",
+        ),
+    ] {
+        assert_eq!(
+            configured_organisation(&organisation_file(&body)),
+            Configured::Unusable(problems.to_owned()),
+            "{body}"
+        );
+    }
+}
+
+/// The organisation comes from `organisation.toml` and nothing else: with no
+/// usable file there is none, and the reason says which (#1670, smoke B17).
+#[test]
+fn the_organisation_is_the_configured_one_and_nothing_else() {
+    let configured = organisation_file(&format!(
+        "uuid = \"{CONFIGURED_UUID}\"\nname = \"Example Corp\""
+    ));
+    let choice = organisation_for(&configured);
     assert_eq!(
-        configured_organisation(&tree(&format!("uuid = \"{uuid}\"\nname = \"  \""))),
-        None
+        choice.organisation,
+        Some((CONFIGURED_UUID.to_owned(), "Example Corp".to_owned()))
+    );
+    assert_eq!(choice.left_out, "");
+
+    let choice = organisation_for(&configuration("x = 1\n"));
+    assert_eq!(choice.organisation, None);
+    assert_eq!(
+        choice.left_out,
+        "no organisation is configured; run 'opentide setup --org \"<name>\"'"
     );
 
-    let dir = tempfile::tempdir().unwrap();
-    let configured = configuration(&format!(
-        "[organisation]\nuuid = \"{uuid}\"\nname = \"Example Corp\"\n"
-    ));
-    // An empty catalogue falls back to the configuration, and with neither
-    // there is no organisation.
+    let choice = organisation_for(&organisation_file("name = \"A\""));
+    assert_eq!(choice.organisation, None);
     assert_eq!(
-        organisation_for(dir.path(), &configured),
-        Some((uuid.to_owned(), "Example Corp".to_owned()))
+        choice.left_out,
+        format!(
+            "{ORGANISATION_FILE} is not usable: it has no uuid; fix it or run 'opentide setup \
+             --org \"<name>\"'"
+        )
     );
-    assert_eq!(
-        organisation_for(dir.path(), &configuration("x = 1\n")),
-        None
-    );
-    // An object that names one wins: the catalogue is the explicit value.
-    std::fs::write(
-        dir.path().join("a.yaml"),
-        "metadata:\n  uuid: x\n  organisation:\n    uuid: u2\n    name: Two\n",
-    )
-    .unwrap();
-    assert_eq!(
-        organisation_for(dir.path(), &configured),
-        Some(("u2".to_owned(), "Two".to_owned()))
+    // The catalogue is never mentioned.
+    assert!(
+        !choice.left_out.contains("catalogue"),
+        "{}",
+        choice.left_out
     );
 }
 
