@@ -1124,3 +1124,33 @@ fn the_commit_hook_validates_a_root_and_a_nested_workspace() {
     );
     assert!(!stderr.contains("opentide-hook."), "{stderr}");
 }
+
+/// `docs/cli/new.md`: "The new file validates as soon as it is written", for
+/// every platform. CrowdStrike's `details.trigger` and `details.outcome` take
+/// a closed set the schema cannot list, and `new` wrote `...` (#1728, E2E-1).
+#[test]
+fn a_new_rule_validates_and_generates_on_every_platform() {
+    for platform in opentide_schema::platforms::PLATFORMS {
+        let id = platform.id;
+        let (_guard, root) = scratch();
+        let workspace = root.join("w");
+        let path = workspace.to_str().unwrap();
+        let setup = ["setup", "--yes", "--name", "W", "--platform", id];
+        opentide(&root, &[&setup[..], &["--path", path]].concat(), &[]).ok();
+
+        let created = in_workspace(
+            &workspace,
+            &["new", "rule", "--name", "R", "--platform", id],
+        );
+        assert_eq!(created.code, Some(0), "{id}: {created:?}");
+        if id == "crowdstrike" {
+            let text = std::fs::read_to_string(workspace.join("objects/rules/r.yaml")).unwrap();
+            assert!(text.contains("trigger: verbose"), "{text}");
+            assert!(text.contains("outcome: detection"), "{text}");
+        }
+        let validated = in_workspace(&workspace, &["validate"]);
+        assert_eq!(validated.code, Some(0), "{id}: validate: {validated:?}");
+        let generated = in_workspace(&workspace, &["generate"]);
+        assert_eq!(generated.code, Some(0), "{id}: generate: {generated:?}");
+    }
+}
