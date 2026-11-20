@@ -14,7 +14,7 @@ locally, byte for byte what the Python CLI (the oracle, opentide 0.23.0) sends.
 | `harfanglab.rs` | The Sigma rule (YAML by serde-saphyr) or YARA file, by the rule's own kind (`Kind`, `request_body`), or the delete | `platforms/harfanglab/deployer.py`, `client.py` |
 | `carbon_black.rs` | The watchlist report a deploy creates when the org holds none of its title (what else it does depends on the org) | `platforms/carbon_black/deployer.py`, the Carbon Black SDK's `Report` |
 | `deploy.rs` | What those six share: `Write` (method, URL, body), `Action`, tenant settings | `deployment/external_ids.py` |
-| `preview.rs` | A dry run's payload entries; `compile_offline`; `compile_tenant` (any platform, one tenant); `config_dump`, the block serialised from opentide-schema's model where the oracle prints `model_dump` | `deployment/preview.py` |
+| `preview.rs` | A dry run's payload entries (the writes a tenant receives, with `<send-time:…>`, `<tenant-read:…>` and `<tenant:…>` placeholders, for the platforms whose body is built from the tenant); `compile_offline`; `compile_tenant` (any platform, one tenant); `config_dump`, the block serialised from opentide-schema's model where the oracle prints `model_dump` | `deployment/preview.py` |
 | `plan.rs` | Rule selection by strategy (`make_deploy_plan`; with `log`, its warnings as it logs them), tenants (`tenants_resolver`), create or update from deployment state, the tally, unset variables; `git.rs` also answers whether git ignores the deployment state (`state_ignore`, `deployment_state_ignore`) | `deployment/utils.py`, `planning.py`, `platforms/enabled.py`, `cli/services/deploy_plan.py` |
 | `modifiers.rs` | A platform's `[[modifiers]]` applied to a rule's block for one tenant: conditions, `prefix::`/`suffix::`, dotted keys, the model's top-level keys only (`validate query --live` checks the block as modified) | `deployment/planning.py` `modifiers_resolver` |
 | `dry_run.rs` | `deploy --dry-run`'s result payload, in the oracle's key order; `--uuid`/`--file` selection (#753) | `cli/services/deploy.py` |
@@ -51,14 +51,17 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
   never a panic.
 - `tests/oracle.rs` holds every body of the compile corpus (`tests/golden/payloads/`) to what the
   oracle compiled (`oracle.json`); a difference is a bug or an entry of
-  `tests/golden/payloads/APPROVED.toml`: one difference (`[[diff]]`), or a class of the model-dump
-  previews (`[[dump]]`: `nulls`, `order`), which serde writes and Pydantic's `model_dump` did not.
+  `tests/golden/payloads/APPROVED.toml`: one difference (`[[diff]]`), a class of the previews
+  (`[[dump]]`: `nulls`, `order` and `wrapped` for Elastic, `request` for the platforms whose dry run
+  shows the tenant's writes, #1712), or a class of the tenants' writes the oracle's probe recorded
+  otherwise (`[[writes]]`: Splunk's `search`, Carbon Black's `watchlist`).
   The recorder, `cargo xtask payloads`, was retired with the oracle (#1142).
 - A request body is the oracle's byte for byte as JSON. A text inside it that another format
   serialises (Splunk's risk JSON, HarfangLab's Sigma YAML) is the crate's natural output
   (serde_json, serde-saphyr), never a port of `json.dumps` or PyYAML; its difference is approved.
 - What a deploy reads that is not the rule (a Splunk schedule's random or current minute, Carbon
-  Black's report timestamp, the id the deployment state records) is an input, never read here.
+  Black's report timestamp, the id the deployment state records) is an input, never read here. A
+  dry run passes none for the first two, and the writes show `<send-time:NAME>` in their place.
 
 ## Test
 

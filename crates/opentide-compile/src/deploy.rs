@@ -63,6 +63,31 @@ pub fn writes_json(writes: &[Write]) -> Json {
     Json::Array(writes.iter().map(Write::to_json).collect())
 }
 
+/// What a dry run shows for a value a deploy learns only as it sends the
+/// request: `<send-time:NAME>` (`minute`, `hour`, `timestamp`).
+pub fn send_time(name: &str) -> String {
+    format!("<send-time:{name}>")
+}
+
+/// What a dry run shows for a value a deploy reads from the tenant as it
+/// sends (a Carbon Black watchlist and its id): `<tenant-read:NAME>`.
+pub fn tenant_read(name: &str) -> String {
+    format!("<tenant-read:{name}>")
+}
+
+/// What a dry run that reaches no tenant shows for a value the tenant's
+/// `setup` gives: `<tenant:KEY>`.
+pub fn tenant_value(key: &str) -> String {
+    format!("<tenant:{key}>")
+}
+
+/// Whether `text` is a whole [`tenant_value`] placeholder.
+pub fn is_tenant_value(text: &str) -> bool {
+    text.strip_prefix("<tenant:")
+        .and_then(|rest| rest.strip_suffix('>'))
+        .is_some_and(|key| !key.is_empty() && !key.contains(['<', '>']))
+}
+
 /// What a deployer does for a rule on a tenant that records ids
 /// (`ExternalIdAction`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -232,6 +257,18 @@ mod tests {
         assert_eq!(text(&Json::Bool(true)), "true");
         assert_eq!(text(&Json::Float(1.5)), "1.5");
         assert_eq!(text(&Json::Null), "null");
+    }
+
+    #[test]
+    fn placeholders_name_what_they_stand_for() {
+        assert_eq!(send_time("minute"), "<send-time:minute>");
+        assert_eq!(tenant_value("url"), "<tenant:url>");
+        assert_eq!(tenant_read("watchlist"), "<tenant-read:watchlist>");
+        assert!(is_tenant_value("<tenant:api>"));
+        assert!(!is_tenant_value("<tenant:>"));
+        assert!(!is_tenant_value("EU-1"));
+        assert!(!is_tenant_value("<send-time:minute>"));
+        assert!(!is_tenant_value("<tenant-read:watchlist>"));
     }
 
     #[test]

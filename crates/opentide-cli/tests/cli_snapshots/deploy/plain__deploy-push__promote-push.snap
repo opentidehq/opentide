@@ -16,4 +16,5 @@ Deploying to splunk / lab · 1 rule
   [1/1] ✗ failed    Splunk create rule  Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 error: Tenant deployment failed · platform: splunk · tenant: *** · error: Cannot reach splunk tenant '***' at https://***:8089: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 ✗ splunk · 0 deployed, 1 failed, 0 not attempted · <SECONDS>
+warning: This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file
 ✗ Deployment failed · 1 failed, 0 not attempted · <SECONDS>
