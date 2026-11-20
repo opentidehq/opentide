@@ -149,6 +149,13 @@ exit: 1
       "subject": "sysdig/staging"
     },
     {
+      "code": "connectivity",
+      "fix": "opentide doctor --live reaches each tenant whose credentials are set",
+      "message": "Not checked: --live not set",
+      "status": "skip",
+      "subject": null
+    },
+    {
       "code": "proxy",
       "fix": "check --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up",
       "message": "Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>))",
@@ -179,25 +186,25 @@ exit: 1
   ],
   "command": "doctor",
   "duration_ms": 0,
-  "error": "1 check failed · 7 passed, 6 warnings, 10 skipped",
+  "error": "1 check failed · 7 passed, 6 warnings, 11 skipped",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "doctor_checks_failed",
     "crash_log": null,
-    "message": "1 check failed · 7 passed, 6 warnings, 10 skipped",
+    "message": "1 check failed · 7 passed, 6 warnings, 11 skipped",
     "suggestion": null
   },
-  "message": "1 check failed · 7 passed, 6 warnings, 10 skipped",
+  "message": "1 check failed · 7 passed, 6 warnings, 11 skipped",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,
   "status": "failed",
   "summary": {
-    "checks": 24,
+    "checks": 25,
     "failed": 1,
     "passed": 7,
-    "skipped": 10,
+    "skipped": 11,
     "warnings": 6
   }
 }

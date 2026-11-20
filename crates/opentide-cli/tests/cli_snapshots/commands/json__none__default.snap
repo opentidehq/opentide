@@ -14975,7 +14975,7 @@ exit: 0
       "deprecated": false,
       "example": "opentide doctor",
       "group": false,
-      "help": "Check the installation, the workspace and its integrations\n\nEach check prints a status, what it found and, when something needs doing,\nthe command that fixes it. Credentials are reported as set or unset, never\nprinted. Exits 1 when any check fails; warnings alone exit 0.",
+      "help": "Check the installation, the workspace and its integrations\n\nEach check prints a status, what it found and, when something needs doing,\nthe command that fixes it. Credentials are reported as set or unset, never\nprinted. With --live, each tenant whose credentials are set is also reached:\nthe sign-in a deploy makes, then one read-only request, nothing written.\nExits 1 when any check fails; warnings alone exit 0.",
       "name": "doctor",
       "options": [
         {
@@ -14989,6 +14989,21 @@ exit: 0
           "is_flag": true,
           "multiple": false,
           "name": "offline",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--live"
+          ],
+          "help": "Reach each tenant whose credentials are set: sign in, then one read-only request",
+          "is_flag": true,
+          "multiple": false,
+          "name": "live",
           "required": false,
           "secondary_flags": [],
           "type": "boolean"

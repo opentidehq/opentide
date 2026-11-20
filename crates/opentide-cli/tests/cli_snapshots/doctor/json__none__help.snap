@@ -10,7 +10,9 @@ Check the installation, the workspace and its integrations
 
 Each check prints a status, what it found and, when something needs doing,
 the command that fixes it. Credentials are reported as set or unset, never
-printed. Exits 1 when any check fails; warnings alone exit 0.
+printed. With --live, each tenant whose credentials are set is also reached:
+the sign-in a deploy makes, then one read-only request, nothing written.
+Exits 1 when any check fails; warnings alone exit 0.
 
 Usage: opentide doctor [OPTIONS]
 
@@ -18,12 +20,16 @@ Options:
       --offline
           Skip the network checks (PyPI release, proxy reachability)
 
+      --live
+          Reach each tenant whose credentials are set: sign in, then one read-only request
+
       --help
           Print help
 
 Examples:
   $ opentide doctor
   $ opentide doctor --offline
+  $ opentide doctor --live
   $ opentide --json doctor
 
 ━━━ stderr · empty

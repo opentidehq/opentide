@@ -7,7 +7,7 @@ exit: 1
 view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
-findings: 31
+findings: 32
   opentide_version | pass | - | - | -
   opentide_latest | warn | - | - | -
   workspace | pass | - | - | -
@@ -34,6 +34,7 @@ findings: 31
   credentials | skip | - | - | -
   credentials | warn | - | - | -
   credentials | skip | - | - | -
+  connectivity | skip | - | - | -
   proxy | fail | - | - | -
   vscode_settings | skip | - | - | -
   vscode_snippets | skip | - | - | -
@@ -41,12 +42,12 @@ findings: 31
   doctor_checks_failed | - | - | - | -
 exit_code: 1
 schema_version: 1
-summary.checks: 30
+summary.checks: 31
 summary.failed: 1
 summary.passed: 7
-summary.skipped: 10
+summary.skipped: 11
 summary.warnings: 12
-checks[]: 30 items
+checks[]: 31 items
 next_actions[]: 0 items
 ok: false x1
 status: failed x1
