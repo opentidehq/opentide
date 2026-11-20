@@ -32,7 +32,10 @@ exit: 0
   "status": "skipped",
   "summary": {
     "skipped": 1
-  }
+  },
+  "warnings": [
+    "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file"
+  ]
 }
 
 ━━━ stderr · json, 1 lines

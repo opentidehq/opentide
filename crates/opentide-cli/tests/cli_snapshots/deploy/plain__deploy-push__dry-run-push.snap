@@ -16,4 +16,5 @@ Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
 dry run, nothing sent
 
 ━━━ stderr
+warning: This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file
 warning: a real deploy would need $SPLUNK_TOKEN, which is unset
