@@ -108,7 +108,7 @@ fn settings(block: &str) -> Object {
         random: (7, 7),
         now: (4, 3),
     };
-    let writes = splunk::compile(&cx, &rule, tenant, clock).unwrap();
+    let writes = splunk::compile(&cx, &rule, tenant, Some(clock)).unwrap();
     assert_eq!(writes.len(), 3, "create, settings, then the late settings");
     let Json::Object(body) = writes[1].body.clone() else {
         panic!("a settings update is an object")

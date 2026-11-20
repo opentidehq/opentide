@@ -3935,6 +3935,604 @@ fn a_drawn_splunk_schedule_is_the_same_on_every_deploy() {
     }
 }
 
+// #1712: a dry run's `api_request` is the requests a deploy sends. For each
+// platform whose writes are built from the tenant, the dry run of a
+// workspace is held to what the tenant's stand-in receives when the same
+// workspace deploys: the recorded cassettes of the `send-*` golden cases (or
+// the connector's own), or a wiremock tenant.
+
+/// A copy of the golden fixture `name` (`tests/golden/fixtures/<name>`).
+fn fixture(name: &str) -> tempfile::TempDir {
+    fn copy(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    copy(&repo().join("tests/golden/fixtures").join(name), dir.path());
+    dir
+}
+
+/// Every write `deploy --dry-run --json` shows for `platform` in `ws`, rule
+/// after rule, each `{"method", "url", "body"}`, members in their order; each
+/// entry names the tenant `lab`.
+fn planned_writes(ws: &Path, platform: &str) -> Vec<Json> {
+    let (code, stdout, stderr) = cli(
+        ws,
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let mut writes = Vec::new();
+    for entry in result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .unwrap()
+    {
+        let Some(requests) = entry.get("api_request").and_then(Json::as_array) else {
+            panic!("api_request is not the requests: {}", entry.to_compact())
+        };
+        assert_eq!(
+            entry.get("tenant").and_then(Json::as_str),
+            Some("lab"),
+            "{}",
+            entry.to_compact()
+        );
+        writes.extend(requests.iter().cloned());
+    }
+    writes
+}
+
+/// `url` cut in two: its scheme and authority (`https://host:port`, empty
+/// for a relative URL), and the rest, as written.
+fn url_parts(url: &str) -> (&str, &str) {
+    let Some(scheme) = url.find("://") else {
+        return ("", url);
+    };
+    let after = &url[scheme + 3..];
+    let at = scheme + 3 + after.find('/').unwrap_or(after.len());
+    (&url[..at], &url[at..])
+}
+
+/// Whether `shown`, a write's `url`, is `url`, a request's, character for
+/// character: the scheme and authority (any, for a request a local stand-in
+/// received), then the path, its trailing slash and percent-encoding, and
+/// the query, a `<tenant-read:NAME>` placeholder standing for one path
+/// segment.
+fn same_url(shown: &str, url: &str) -> bool {
+    let (shown_authority, shown) = url_parts(shown);
+    let (authority, url) = url_parts(url);
+    let stand_in = ["://localhost", "://127.0.0.1"]
+        .iter()
+        .any(|local| authority.contains(local));
+    if shown_authority.is_empty() || (shown_authority != authority && !stand_in) {
+        return false;
+    }
+    let Some(at) = shown.find("<tenant-read:") else {
+        return shown == url;
+    };
+    let (head, tail) = (&shown[..at], &shown[at..]);
+    let tail = tail.find('>').map_or("", |end| &tail[end + 1..]);
+    let Some(rest) = url.strip_prefix(head) else {
+        return false;
+    };
+    let segment = rest.find('/').unwrap_or(rest.len());
+    segment > 0 && &rest[segment..] == tail
+}
+
+#[test]
+fn a_shown_url_is_the_whole_url_sent() {
+    let sent = "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/A%20b";
+    assert!(same_url(sent, sent));
+    // Not the path's end, nor the name as written, nor without its slash.
+    assert!(!same_url("saved/searches/A b", sent));
+    assert!(!same_url(
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/A b",
+        sent
+    ));
+    assert!(!same_url(
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches",
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(!same_url(
+        "https://other.invalid:8089/servicesNS/nobody/search/saved/searches/A%20b",
+        sent
+    ));
+    let org = "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/K";
+    assert!(same_url(
+        &format!("{org}/watchlists/<tenant-read:watchlist_id>"),
+        &format!("{org}/watchlists/w-1")
+    ));
+    assert!(!same_url(
+        "/threathunter/watchlistmgr/v3/orgs/K/watchlists/<tenant-read:watchlist_id>",
+        &format!("{org}/watchlists/w-1")
+    ));
+}
+
+/// A value as a Splunk form sends it (`json_text`).
+fn form_text(value: &Json) -> String {
+    match value {
+        Json::Str(text) => text.clone(),
+        other => other.to_compact(),
+    }
+}
+
+/// Whether `shown`, a write's body, is `body`, a request's: the same JSON,
+/// `<send-time:timestamp>` read as `now` and a `<tenant-read:NAME>` body
+/// standing for any; or, for a form (Splunk), the same pairs in order.
+fn same_body(shown: &Json, body: &[u8], now: i64) -> bool {
+    if shown
+        .as_str()
+        .is_some_and(|text| text.starts_with("<tenant-read:"))
+    {
+        return !body.is_empty();
+    }
+    if shown.is_null() {
+        return body.is_empty();
+    }
+    if let Ok(sent) = Json::parse(&String::from_utf8_lossy(body)) {
+        let mut shown = shown.clone();
+        if let Some(stamp) = shown.get_mut("timestamp")
+            && stamp.as_str() == Some("<send-time:timestamp>")
+        {
+            *stamp = Json::Int(now);
+        }
+        return shown == sent;
+    }
+    let Some(fields) = shown.as_object() else {
+        return false;
+    };
+    let pairs: Vec<(String, String)> = url::form_urlencoded::parse(body)
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    let expected: Vec<(String, String)> = fields
+        .iter()
+        .map(|(key, value)| (key.clone(), form_text(value)))
+        .collect();
+    pairs == expected
+}
+
+/// A request a tenant received: method, URL and body.
+type Received = (String, String, Vec<u8>);
+
+/// The writes a tenant received (every request but reads and sign-ins), as
+/// `(method, url, body)`.
+fn received_writes(requests: Vec<Received>) -> Vec<Received> {
+    requests
+        .into_iter()
+        .filter(|(method, url, _)| method != "GET" && !url.contains("/oauth2/"))
+        .collect()
+}
+
+/// The dry run's writes are the writes the tenant received, in order.
+fn assert_sent_as_planned(planned: &[Json], received: &[Received], now: i64) {
+    let shown: Vec<String> = planned.iter().map(Json::to_compact).collect();
+    let sent: Vec<String> = received
+        .iter()
+        .map(|(method, url, body)| format!("{method} {url} {}", String::from_utf8_lossy(body)))
+        .collect();
+    assert_eq!(
+        planned.len(),
+        received.len(),
+        "planned:\n{}\nreceived:\n{}",
+        shown.join("\n"),
+        sent.join("\n")
+    );
+    for (write, (method, url, body)) in planned.iter().zip(received) {
+        let shown = write.to_compact();
+        let text = |key: &str| write.get(key).and_then(Json::as_str).unwrap_or_default();
+        assert_eq!(text("method"), method.as_str(), "{shown}\n{url}");
+        assert!(same_url(text("url"), url), "{shown}\n{url}");
+        assert!(
+            same_body(write.get("body").unwrap_or(&Json::Null), body, now),
+            "{shown}\nreceived: {}",
+            String::from_utf8_lossy(body)
+        );
+    }
+}
+
+/// The requests a replaying proxy received.
+fn replayed(proxy: &Proxy) -> Vec<Received> {
+    proxy
+        .requests()
+        .into_iter()
+        .map(|request| (request.method, request.url, request.body.bytes()))
+        .collect()
+}
+
+/// Runs the `send-<platform>` golden case's deploy of `deploy-tenants`
+/// against its cassette, after its dry run: what each showed and the tenant
+/// received.
+fn golden_send(platform: &str, scenario: &str, variable: &str) -> (Vec<Json>, Vec<Received>) {
+    let ws = fixture("deploy-tenants");
+    let planned = planned_writes(ws.path(), platform);
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
+    let all: Vec<usize> = (0..Cassette::parse(&text).unwrap().interactions.len()).collect();
+    let (proxy, env, _ca) = replay(scenario, &all, variable);
+    let (sent, _) = deploy(
+        ws.path(),
+        platform,
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    (planned, received_writes(replayed(&proxy)))
+}
+
+#[test]
+fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send(
+        "defender_for_endpoint",
+        "golden/deploy-defender-continues",
+        "DEFENDER_CLIENT_SECRET",
+    );
+    // A create, an update of the recorded id, a delete of the other.
+    let at = |write: &Json, key: &str| write.get(key).cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        planned
+            .iter()
+            .map(|write| at(write, "method"))
+            .collect::<Vec<_>>(),
+        ["POST", "PATCH", "DELETE"].map(Json::str)
+    );
+    assert_eq!(at(&at(&planned[0], "body"), "isEnabled"), Json::Bool(true));
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_sentinel_one_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) =
+        golden_send("sentinel_one", "golden/deploy-sentinel-one", "S1_API_TOKEN");
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_crowdstrike_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send(
+        "crowdstrike",
+        "golden/deploy-crowdstrike",
+        "CROWDSTRIKE_CLIENT_SECRET",
+    );
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_splunk_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send("splunk", "golden/deploy-splunk", "SPLUNK_TOKEN");
+    // The saved search created, then its settings, each update with the
+    // search first, as Splunk receives them.
+    assert_eq!(planned.len(), 3);
+    let first = |write: &Json| {
+        write
+            .get("body")
+            .and_then(Json::as_object)
+            .and_then(|body| body.first().map(|(key, _)| key.clone()))
+    };
+    assert_eq!(first(&planned[1]).as_deref(), Some("search"));
+    assert_eq!(first(&planned[2]).as_deref(), Some("search"));
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_carbon_black_dry_run_shows_the_requests_the_tenant_receives() {
+    let ws = cbc_workspace();
+    let planned = planned_writes(ws.path(), "carbon_black_cloud");
+    // The report, stamped at send time, then the watchlist the deploy reads.
+    let body = |write: &Json| write.get("body").cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        body(&planned[0]).get("timestamp"),
+        Some(&Json::str("<send-time:timestamp>"))
+    );
+    assert_eq!(body(&planned[1]), Json::str("<tenant-read:watchlist>"));
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    let (sent, _) = deploy(
+        ws.path(),
+        "carbon_black_cloud",
+        &env,
+        &opentide_connectors::builtin(),
+        CBC_NOW,
+    );
+    assert_eq!(proxy.verify(), Vec::new());
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
+    assert_sent_as_planned(&planned, &received_writes(replayed(&proxy)), CBC_NOW);
+}
+
+#[test]
+fn a_harfanglab_dry_run_shows_the_requests_the_tenant_receives() {
+    use wiremock::matchers::any;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(any())
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server),
+    );
+    let sigma = |status: &str| {
+        format!(
+            "  harfanglab:\n    status: {status}\n    sigma:\n      logsource:\n        \
+             category: process_creation\n        product: windows\n      selections:\n        \
+             - name: selection\n          field: Image\n          value: cmd.exe\n      \
+             condition: selection\n"
+        )
+    };
+    let yara = "  harfanglab:\n    status: STAGING\n    yara:\n      meta:\n        os: \
+                Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n";
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
+            server.uri()
+        ),
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "Sigma rule",
+                    "00000000-0000-4000-8003-0000000000b1",
+                    "A.",
+                    &sigma("STAGING"),
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "YARA file",
+                    "00000000-0000-4000-8003-0000000000b2",
+                    "B.",
+                    yara,
+                ),
+            ),
+            (
+                "c.yaml",
+                rule(
+                    "Gone Sigma",
+                    "00000000-0000-4000-8003-0000000000b3",
+                    "C.",
+                    &sigma("REMOVED"),
+                ),
+            ),
+        ],
+    );
+    let planned = planned_writes(ws.path(), "harfanglab");
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 3]);
+    let received = rt
+        .block_on(server.received_requests())
+        .unwrap()
+        .into_iter()
+        .map(|request| {
+            (
+                request.method.as_str().to_owned(),
+                request.url.to_string(),
+                request.body,
+            )
+        })
+        .collect();
+    assert_sent_as_planned(&planned, &received_writes(received), 0);
+}
+
+/// The dry run, with no variable set, of the `deploy-tenants` fixture rule
+/// `file` (or `text`) on `platform` with one tenant, `lab`, of `setup`: its
+/// exit code and the rule's payload entry.
+fn dry_run_entry(platform: &str, setup: &str, file: &str, text: Option<String>) -> (i32, Json) {
+    let text = text.unwrap_or_else(|| {
+        std::fs::read_to_string(
+            repo()
+                .join("tests/golden/fixtures/deploy-tenants/objects/rules")
+                .join(file),
+        )
+        .unwrap()
+    });
+    let ws = workspace(platform, "lab", setup, &[(file, text)]);
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        &[],
+    );
+    let document = Json::parse(&stdout).unwrap_or_else(|_| panic!("{stdout}\n{stderr}"));
+    let result = document.get("result").unwrap_or(&document);
+    let entry = result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .and_then(|entries| entries.first())
+        .cloned()
+        .unwrap_or_else(|| panic!("{stdout}"));
+    (code, entry)
+}
+
+/// The `n`th write of a payload entry, its `key`.
+fn write_at(entry: &Json, n: usize, key: &str) -> Json {
+    entry
+        .get("api_request")
+        .and_then(Json::as_array)
+        .and_then(|writes| writes.get(n))
+        .and_then(|write| write.get(key))
+        .cloned()
+        .unwrap_or_else(|| panic!("{}", entry.to_compact()))
+}
+
+/// The `setup` keys the entry's `unresolved` lists.
+fn unresolved_setup(entry: &Json) -> Vec<Json> {
+    entry
+        .get("unresolved")
+        .and_then(|unresolved| unresolved.get("setup"))
+        .and_then(Json::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+// A setup value that names a variable is a placeholder in a dry run, which
+// resolves none and needs no credential: a CrowdStrike tenant's `api =
+// "$CS_API"` once failed the dry run with "Invalid API Domain" (#1719).
+#[test]
+fn a_dry_run_shows_a_crowdstrike_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "crowdstrike",
+        "api = \"$CS_API\"\ncustomer_id = \"${CS_CUSTOMER}\"\nclient_id = \"id\"\n\
+         client_secret = \"$CS_SECRET\"\n",
+        "crowdstrike-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(entry.get("tenant"), Some(&Json::str("lab")));
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:api>/correlation-rules/entities/rules/v1")
+    );
+    assert_eq!(
+        write_at(&entry, 0, "body").get("customer_id"),
+        Some(&Json::str("<tenant:customer_id>"))
+    );
+    assert_eq!(
+        unresolved_setup(&entry),
+        ["api", "customer_id"].map(Json::str)
+    );
+}
+
+#[test]
+fn a_dry_run_shows_a_sentinel_one_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "sentinel_one",
+        "url = \"$S1_URL\"\naccount_id = \"$S1_ACCOUNT\"\napi_token = \"$S1_API_TOKEN\"\n",
+        "sentinel-one-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:url>/web/api/v2.1/cloud-detection/rules")
+    );
+    assert_eq!(
+        write_at(&entry, 0, "body")
+            .get("filter")
+            .and_then(|filter| filter.get("accountIds"))
+            .cloned(),
+        Some(Json::Array(vec![Json::str("<tenant:account_id>")]))
+    );
+    assert_eq!(
+        unresolved_setup(&entry),
+        ["url", "account_id"].map(Json::str)
+    );
+}
+
+#[test]
+fn a_dry_run_shows_carbon_black_and_harfanglab_setup_variables_as_placeholders() {
+    let (code, entry) = dry_run_entry(
+        "carbon_black_cloud",
+        "url = \"$CBC_URL\"\norg_key = \"$CBC_ORG_KEY\"\ntoken = \"$CBC_TOKEN\"\n\
+         watchlist = \"Detections\"\n",
+        "lucene.yaml",
+        Some(rule(
+            "Carbon Black Lucene Rule",
+            "00000000-0000-4000-8003-000000000005",
+            "A rule.",
+            "  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n",
+        )),
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:url>/threathunter/watchlistmgr/v3/orgs/<tenant:org_key>/reports")
+    );
+    assert_eq!(unresolved_setup(&entry), ["url", "org_key"].map(Json::str));
+    let (code, entry) = dry_run_entry(
+        "harfanglab",
+        "url = \"$HL_URL\"\napi_token = \"$HL_TOKEN\"\nsource_id = \"src-0001\"\n",
+        "harfanglab-a-sigma.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    let url = write_at(&entry, 0, "url");
+    assert!(
+        url.as_str()
+            .is_some_and(|url| url.starts_with("<tenant:url>/api/data/threat_intelligence/")),
+        "{}",
+        entry.to_compact()
+    );
+    assert_eq!(unresolved_setup(&entry), [Json::str("url")]);
+}
+
+// Splunk's writes go to the whole URL a deploy sends to (#1719): a variable
+// is a placeholder in it, and the port and app default as the deploy's do.
+// A setting the deploy reads as written still refuses a variable, with the
+// deploy's own error.
+#[test]
+fn a_splunk_dry_run_shows_the_url_with_a_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "splunk",
+        "url = \"$SPLUNK_HOST\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        "splunk-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    let searches = "https://<tenant:url>:8089/servicesNS/nobody/search/saved/searches/";
+    assert_eq!(write_at(&entry, 0, "url"), Json::str(searches));
+    assert_eq!(
+        write_at(&entry, 1, "url"),
+        Json::str(format!("{searches}Splunk%20create%20rule"))
+    );
+    assert_eq!(unresolved_setup(&entry), [Json::str("url")]);
+    let (code, entry) = dry_run_entry(
+        "splunk",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\nenterprise_security = \"$ES\"\n",
+        "splunk-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 1, "{}", entry.to_compact());
+    assert!(
+        entry
+            .get("error")
+            .and_then(Json::as_str)
+            .is_some_and(|error| error.contains("enterprise_security is the placeholder \"$ES\"")),
+        "{}",
+        entry.to_compact()
+    );
+}
+
 /// The summary's `skipped` counts the rows the run skipped (a rule no
 /// tenant takes) besides the rules a status left out of the plan, which
 /// once replaced them (#1653).
