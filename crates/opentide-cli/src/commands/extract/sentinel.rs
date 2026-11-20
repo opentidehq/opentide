@@ -47,7 +47,7 @@ const SCHEDULING: &str =
 const NRT_SCHEDULING: &str = "  scheduling:\n    nrt: true";
 const CUSTOM_DETAILS_TEMPLATE: &str = "      #- key: \n        #column: ";
 const CUSTOM_DETAILS: &str = "      - key: {key} \n        column: {column}";
-const MDR: &str = "\nname: {rule_name}\n\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {rule_uuid}\n  schema: rule::1.0\n  version: \n  created: {rule_creation}\n  modified: {rule_modified}\n  tlp: amber\n  author: {rule_author} \n  #contributors:\n    #-\n\ndescription: {rule_description_style}\n  {rule_description}\n#detection_model: \n\nresponse:\n  alert_severity: {rule_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n    #analysis: |\n      #...\n    #searches:\n      #- purpose: |\n          #...\n        #system: \n        #query: |\n          #...\n    #containment: |\n      #...\n\nconfigurations:\n  sentinel: \n{sentinel}\n";
+const RULE_TEMPLATE: &str = "\nname: {rule_name}\n\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {rule_uuid}\n  schema: rule::1.0\n  version: \n  created: {rule_creation}\n  modified: {rule_modified}\n  tlp: amber\n  author: {rule_author} \n  #contributors:\n    #-\n\ndescription: {rule_description_style}\n  {rule_description}\n#detection_model: \n\nresponse:\n  alert_severity: {rule_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n    #analysis: |\n      #...\n    #searches:\n      #- purpose: |\n          #...\n        #system: \n        #query: |\n          #...\n    #containment: |\n      #...\n\nconfigurations:\n  sentinel: \n{sentinel}\n";
 const BLOCK: &str = "\n  schema: platform::sentinel::1.0\n  status: {status}\n  tenants:\n    - {tenant_name}\n  #contributors:\n    #-\n \n{trigger}\n  \n{scheduling}\n  \n  alert:\n    create_incident: {create_incident}\n    suppression: {alert_suppression}\n    {alert_title_commented}title: {alert_title_override} \n    {alert_description_commented}description: {alert_description_style}\n      {alert_description_override}\n    {custom_details_commented}custom_details:\n{custom_details}\n    {dynamic_properties_commented}dynamic_properties:\n{dynamic_properties}\n    {tactics}\n    {techniques}\n\n  grouping:\n    event: {event_aggregation}\n  \n    alert:\n      enabled: {alert_grouping_enabled}\n      {reopen_closed_incidents_commented}reopen_closed_incidents: {reopen_closed_incidents}\n{grouping_configuration}\n\n  {entities_commented}entities:\n{entities}\n  \n  query: {query_style}\n    {query}\n";
 
 // ------------------------------------------------- the listed rule's data
@@ -632,7 +632,7 @@ pub(crate) fn render(
         .unwrap_or_default()
         .to_owned();
     let text = fill(
-        MDR,
+        RULE_TEMPLATE,
         &[
             (
                 "rule_name",

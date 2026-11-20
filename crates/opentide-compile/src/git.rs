@@ -146,6 +146,9 @@ fn failed(message: impl Into<String>) -> GitError {
 struct Repo {
     refs: gix_ref::file::Store,
     odb: gix_odb::Handle,
+    /// Whether the clone is shallow (git's `shallow` file): it then names
+    /// parents it does not hold.
+    shallow: bool,
 }
 
 /// Opens the checkout at or above `start`.
@@ -176,7 +179,8 @@ fn open(start: &Path) -> Result<Repo, GitError> {
             top.display()
         ))
     })?;
-    Ok(Repo { refs, odb })
+    let shallow = common.join("shallow").is_file();
+    Ok(Repo { refs, odb, shallow })
 }
 
 /// A commit's tree and parents.
@@ -387,9 +391,23 @@ fn production_base(repo: &Repo, head: ObjectId) -> Result<Option<ObjectId>, GitE
         return Ok(None);
     };
     if repo.commit(parent).is_none() {
-        return Err(failed(format!("Could not find git commit {parent}")));
+        return Err(missing_parent(repo, parent));
     }
     Ok(Some(parent))
+}
+
+/// The failure of a parent the checkout names but does not hold: in a
+/// shallow clone, what to fetch.
+fn missing_parent(repo: &Repo, parent: ObjectId) -> GitError {
+    if repo.shallow {
+        failed(format!(
+            "Could not find git commit {parent}: the checkout is shallow, so it does not hold \
+             the commits the diff needs. Check out the full history (`fetch-depth: 0` in GitHub \
+             Actions, `GIT_DEPTH: \"0\"` on GitLab, `fetchDepth: 0` on Azure Pipelines)"
+        ))
+    } else {
+        failed(format!("Could not find git commit {parent}"))
+    }
 }
 
 /// The first parent of the merge commit a request run builds, when `merge`
@@ -413,13 +431,74 @@ fn event(env: Env<'_>) -> Option<serde_json::Value> {
     serde_json::from_str(&text).ok()
 }
 
-/// The branch tip before a GitHub push (`_github_push_before`).
-fn github_push_before(repo: &Repo, env: Env<'_>) -> Option<String> {
-    let before = event(env)?.get("before")?.as_str()?.to_owned();
-    if before.trim_matches('0').is_empty() || !has_commit(repo, &before) {
-        return None;
+/// Where a push's diff starts, from what the CI platform says the branch
+/// held before the push (#1683).
+enum PushBefore {
+    /// The branch's tip before the push, a commit the checkout holds.
+    Commit(String),
+    /// All zeros: the push created the branch, so every file it holds is new.
+    Created,
+    /// Nothing usable: the run reads its last commit, and says why.
+    Unknown(String),
+}
+
+/// Whether a commit id is all zeros, as a push that created its branch
+/// names the commit before it.
+fn all_zeros(sha: &str) -> bool {
+    sha.trim_matches('0').is_empty()
+}
+
+/// The branch tip before a GitHub push (`_github_push_before`): the push
+/// event's `before`.
+fn github_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
+    let Some(before) = event(env).and_then(|event| {
+        event
+            .get("before")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    }) else {
+        return PushBefore::Unknown("the run names no push event with a `before` commit".into());
+    };
+    if all_zeros(&before) {
+        PushBefore::Created
+    } else if has_commit(repo, &before) {
+        PushBefore::Commit(before)
+    } else {
+        PushBefore::Unknown(format!(
+            "the push event's `before` commit {before} is not in this checkout"
+        ))
     }
-    Some(before)
+}
+
+/// The branch tip before a GitLab push: `CI_COMMIT_BEFORE_SHA`. GitLab
+/// sets it to all zeros on a branch's first push, and also on a pipeline no
+/// push started (`CI_PIPELINE_SOURCE` `web`, `schedule`, `api`, ...), which
+/// is not a new branch. A commit the checkout does not hold (a force push
+/// replaced it) is no base either.
+fn gitlab_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
+    match set(env, "CI_COMMIT_BEFORE_SHA") {
+        Some(before) if all_zeros(&before) => match set(env, "CI_PIPELINE_SOURCE") {
+            None => PushBefore::Created,
+            Some(source) if source == "push" => PushBefore::Created,
+            Some(source) => PushBefore::Unknown(format!(
+                "a `{source}` pipeline names no commit before it (CI_COMMIT_BEFORE_SHA is all zeros)"
+            )),
+        },
+        Some(before) if commit_id(repo, &before).is_some() => PushBefore::Commit(before),
+        Some(before) => PushBefore::Unknown(format!(
+            "CI_COMMIT_BEFORE_SHA {before} is not in this checkout"
+        )),
+        None => PushBefore::Unknown("CI_COMMIT_BEFORE_SHA is not set".into()),
+    }
+}
+
+/// What a push run that read only its last commit says: the commits before
+/// it in the same push are not in the diff.
+fn last_commit_only(why: &str) -> String {
+    format!(
+        "This push's diff starts at its last commit's parent: {why}. Rules that earlier \
+         commits of the same push changed are not in it; pass --all to deploy every rule file"
+    )
 }
 
 /// A pull request's base and head commits from the event (`_github_event_request_shas`).
@@ -524,24 +603,43 @@ fn head_commit(repo: &Repo) -> Option<ObjectId> {
 /// The files the run's commits changed (`diff_calculation`), from the git
 /// top level. `workspace` is the detection workspace; `cwd` the working
 /// directory a CI run without its checkout variable searches from.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn changed_paths(
     workspace: &Path,
     cwd: &Path,
     env: Env<'_>,
     source: DiffSource,
 ) -> Result<Vec<String>, GitError> {
+    changed_paths_noted(workspace, cwd, env, source).map(|(paths, _)| paths)
+}
+
+/// [`changed_paths`], with what the run should say when a push's diff could
+/// start only at its last commit's parent (#1683): the platform named no
+/// commit the branch held before the push (Azure Pipelines never does), or
+/// the checkout does not hold it, so earlier commits of the same push are
+/// not in the diff. A push that created its branch (an all-zero `before`)
+/// reads every file of the run's commit.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+pub fn changed_paths_noted(
+    workspace: &Path,
+    cwd: &Path,
+    env: Env<'_>,
+    source: DiffSource,
+) -> Result<(Vec<String>, Option<String>), GitError> {
     let platform = ci(env);
+    let mut note = None;
     if source == DiffSource::LastCommit || platform == Ci::Local {
         if source == DiffSource::ChangeRequest {
             return Err(failed("A pull or merge request diff needs a CI run"));
         }
         let repo = open(workspace)?;
         let Some(head) = head_commit(&repo) else {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), None));
         };
         // A root commit (no parent) added every file it holds.
-        return changed_between(&repo, production_base(&repo, head)?, head);
+        return Ok((
+            changed_between(&repo, production_base(&repo, head)?, head)?,
+            None,
+        ));
     }
     let variable = match platform {
         Ci::GitHub => "GITHUB_WORKSPACE",
@@ -568,10 +666,16 @@ pub fn changed_paths(
     let base: Option<String> = match (platform, source) {
         (_, DiffSource::LastCommit) | (Ci::Local, _) => None,
         (Ci::GitHub, DiffSource::Push) => match github_push_before(&repo, env) {
-            Some(before) => Some(before),
-            None => match first_parent()? {
-                Some(base) => Some(base.to_string()),
-                None => return root_changes(&repo, latest.as_deref(), tip_name),
+            PushBefore::Commit(before) => Some(before),
+            PushBefore::Created => {
+                return Ok((whole_tree(&repo, latest.as_deref(), tip_name)?, None));
+            }
+            PushBefore::Unknown(why) => match first_parent()? {
+                Some(base) => {
+                    note = Some(last_commit_only(&why));
+                    Some(base.to_string())
+                }
+                None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
             },
         },
         (Ci::GitHub, DiffSource::ChangeRequest) => {
@@ -612,15 +716,19 @@ pub fn changed_paths(
                 Some(base.to_string())
             }
         }
-        (Ci::GitLab, DiffSource::Push) => {
-            match set(env, "CI_COMMIT_BEFORE_SHA").filter(|sha| !sha.trim_matches('0').is_empty()) {
-                Some(before) => Some(before),
-                None => match first_parent()? {
-                    Some(base) => Some(base.to_string()),
-                    None => return root_changes(&repo, latest.as_deref(), tip_name),
-                },
+        (Ci::GitLab, DiffSource::Push) => match gitlab_push_before(&repo, env) {
+            PushBefore::Commit(before) => Some(before),
+            PushBefore::Created => {
+                return Ok((whole_tree(&repo, latest.as_deref(), tip_name)?, None));
             }
-        }
+            PushBefore::Unknown(why) => match first_parent()? {
+                Some(base) => {
+                    note = Some(last_commit_only(&why));
+                    Some(base.to_string())
+                }
+                None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
+            },
+        },
         (Ci::GitLab, DiffSource::ChangeRequest) => {
             let mut base = set(env, "CI_MERGE_REQUEST_DIFF_BASE_SHA");
             if matches!(
@@ -638,9 +746,15 @@ pub fn changed_paths(
             }
             base
         }
+        // Azure Pipelines names no commit the branch held before the push.
         (Ci::Azure, DiffSource::Push) => match first_parent()? {
-            Some(base) => Some(base.to_string()),
-            None => return root_changes(&repo, latest.as_deref(), tip_name),
+            Some(base) => {
+                note = Some(last_commit_only(
+                    "Azure Pipelines does not name the commit the branch held before the push",
+                ));
+                Some(base.to_string())
+            }
+            None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
         },
         (Ci::Azure, DiffSource::ChangeRequest) => {
             let (Some(source_branch), Some(target_branch)) = (
@@ -674,7 +788,20 @@ pub fn changed_paths(
     })?;
     let latest = commit_id(&repo, &latest)
         .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
-    changed_between(&repo, Some(source_commit), latest)
+    Ok((changed_between(&repo, Some(source_commit), latest)?, note))
+}
+
+/// A push that created its branch (an all-zero `before`): every file
+/// `latest`, the run's commit named by `tip_name`, holds.
+fn whole_tree(repo: &Repo, latest: Option<&str>, tip_name: &str) -> Result<Vec<String>, GitError> {
+    let latest = latest.ok_or_else(|| {
+        failed(format!(
+            "{tip_name} is required to compute the changed rules"
+        ))
+    })?;
+    let commit = commit_id(repo, latest)
+        .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
+    changed_between(repo, None, commit)
 }
 
 /// A push whose HEAD has no parent: the files `latest`, the run's commit

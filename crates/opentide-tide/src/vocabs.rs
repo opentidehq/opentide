@@ -125,10 +125,6 @@ const VOCAB_SOPHISTICATION: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/src/opentide/data/vocabulary/sophistication.vocab.toml"
 ));
-const VOCAB_STAKEHOLDERS: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/src/opentide/data/vocabulary/stakeholders.vocab.toml"
-));
 const VOCAB_SURFACE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/src/opentide/data/vocabulary/surface.vocab.toml"
@@ -180,7 +176,6 @@ const ALL_VOCABS: &[&str] = &[
     VOCAB_SEVERITY,
     VOCAB_SIGNAL_ENTITIES,
     VOCAB_SOPHISTICATION,
-    VOCAB_STAKEHOLDERS,
     VOCAB_SURFACE,
     VOCAB_TIER,
     VOCAB_TLP,
@@ -328,7 +323,8 @@ mod tests {
     #[test]
     fn loads_all_vocab_files() {
         let v = bundled_vocabs();
-        assert!(v.len() >= 35, "expected 36 vocabs, got {}", v.len());
+        assert_eq!(v.len(), 34, "expected 34 vocabs, got {}", v.len());
+        assert!(!v.contains_key("stakeholders"));
         assert!(v.contains_key("tlp"));
         assert!(v.contains_key("att&ck"));
         assert!(v.contains_key("actors"));
