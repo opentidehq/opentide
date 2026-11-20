@@ -17,7 +17,7 @@ next_actions[]: 1 items
 placeholders[]: 9 items
 platforms[]: 0 items
 warnings[]: 1 items
-warnings[]: metadata.author left out: no git user.name is set
+warnings[]: metadata.author and metadata.organisation left out: no git user.name is set; no organisation is configured; run 'opentide setup --org "<name>"'
 ok: true x1
 status: completed x1
 

@@ -244,7 +244,7 @@ FATAL: lint.toml [filenames.hunts]: unknown object kind(s) 'hunts'. Known kinds:
     name:
 ```
 
-Fill those keys, or delete the block if you set `required` to leave it out: `organisation` left empty fails `validate`, which needs its `uuid` and `name`. Regenerate templates after changing `required`. [`opentide new`](./new.md) fills `author` and `organisation` from git and the catalogue, and comments out a key it has no value for, so the object it writes still validates.
+Fill those keys, or delete the block if you set `required` to leave it out: `organisation` left empty fails `validate`, which needs its `uuid` and `name`. Regenerate templates after changing `required`. [`opentide new`](./new.md) fills `author` from git and `organisation` from `organisation.toml` (written by `setup --org`), and comments out a key it has no value for, so the object it writes still validates.
 
 ### Placeholders
 
