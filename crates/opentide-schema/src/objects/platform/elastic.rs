@@ -1055,3 +1055,41 @@ pub fn duration_detail(raw: &Node, named: bool) -> String {
         .collect::<Vec<_>>()
         .join("; ")
 }
+
+/// What the `language` code's message adds: the rule's `type` takes no
+/// `language`, which applies only to `type: query` (E2E-3: it was the bare
+/// code).
+pub fn language_detail(raw: &Node) -> String {
+    let rule_type = get(Some(raw), "type")
+        .and_then(|node| node.value.as_str())
+        .unwrap_or("query");
+    format!(
+        "language applies only to `type: query`, not `type: {rule_type}`; remove `language` \
+         from the block"
+    )
+}
+
+/// What the `esql_source` code's message adds: the source fields the rule
+/// sets, and where a rule of its type reads its events from (E2E-3: it was
+/// the bare code).
+pub fn esql_source_detail(raw: &Node) -> String {
+    let set: Vec<String> = ["index", "data_view_id", "filters"]
+        .into_iter()
+        .filter(|key| filled(get(Some(raw), key)))
+        .map(|key| format!("`{key}`"))
+        .collect();
+    let (rule_type, source) =
+        if get(Some(raw), "type").is_some_and(|node| node.value.as_str() == Some("esql")) {
+            ("esql", "the query's `FROM` command names the sources")
+        } else {
+            (
+                "machine_learning",
+                "the rule reads the anomaly job's results, not an index",
+            )
+        };
+    format!(
+        "{} set on `type: {rule_type}`, where {source}: remove {}",
+        set.join(", "),
+        if set.len() == 1 { "it" } else { "them" }
+    )
+}

@@ -26,7 +26,7 @@ fn names<T: ValueEnum>(values: &[T]) -> Vec<String> {
 impl From<&SetupRepoFields> for RepoOptions {
     fn from(fields: &SetupRepoFields) -> Self {
         RepoOptions {
-            name: fields.name.clone(),
+            name: fields.name.as_deref().map(|name| name.trim().to_owned()),
             org: fields.org.clone(),
             description: fields.description.clone(),
             // Not deduplicated: the wizard and the scaffold see them as typed.

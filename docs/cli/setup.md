@@ -46,7 +46,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
-| `--name`, `--org`, `--description` | README metadata. `opentide new` does not read them: it copies `metadata.organisation` from the objects already in the catalogue, so fill it in the first object by hand ([new](./new.md#what-the-new-file-holds)) |
+| `--name`, `--org`, `--description` | README metadata. `--name` is kept without its surrounding spaces, and an empty or all-space name exits `2` (`usage_invalid_value`); leave it out for the folder name. `opentide new` does not read them: it copies `metadata.organisation` from the objects already in the catalogue, so fill it in the first object by hand ([new](./new.md#what-the-new-file-holds)) |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |

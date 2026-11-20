@@ -530,15 +530,32 @@ pub(crate) fn before(model: &'static str, node: &Node, cx: &mut Context) -> bool
         return true;
     }
     let mut message = codes_message(model, &codes);
-    // Elastic's durations: the message names each value and the form it
-    // takes, and a block whose only fault is one duration is placed at it
-    // (B3: "code(s): duration" at the block, with no hint of `14d`).
-    if model == "ElasticConfig" && codes.contains("duration") {
-        let bad = elastic::bad_durations(node);
-        let lone = bad.len() == 1 && codes.len() == 1;
-        // Placed at its value, the finding's path names the field already.
-        message = format!("{message} ({})", elastic::duration_detail(node, !lone));
-        if lone && let [(path, value)] = bad.as_slice() {
+    // Elastic's codes that name a field: the message says which values are
+    // at fault and what to do (B3: "code(s): duration" with no hint of
+    // `14d`; E2E-3: "code(s): language" with no reason). A block whose only
+    // fault is one duration is placed at it.
+    if model == "ElasticConfig" {
+        let mut details = Vec::new();
+        let mut placed = None;
+        if codes.contains("duration") {
+            let bad = elastic::bad_durations(node);
+            let lone = bad.len() == 1 && codes.len() == 1;
+            // Placed at its value, the finding's path names the field already.
+            details.push(elastic::duration_detail(node, !lone));
+            if lone && let [(path, value)] = bad.as_slice() {
+                placed = Some((*path, *value));
+            }
+        }
+        if codes.contains("language") {
+            details.push(elastic::language_detail(node));
+        }
+        if codes.contains("esql_source") {
+            details.push(elastic::esql_source_detail(node));
+        }
+        if !details.is_empty() {
+            message = format!("{message} ({})", details.join("; "));
+        }
+        if let Some((path, value)) = placed {
             let keys: Vec<&str> = path.split('.').collect();
             report_at(&keys, &Violation::value_error(message), value, cx);
             return false;

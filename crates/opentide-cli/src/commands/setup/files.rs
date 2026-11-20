@@ -477,12 +477,18 @@ pub fn folder_name(target: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn readme(target: &Path, options: &RepoOptions) -> String {
-    let name = options
+/// The repository's name: `--name` without its surrounding spaces, else the folder's.
+fn repo_name(options: &RepoOptions, target: &Path) -> String {
+    options
         .name
-        .clone()
+        .as_deref()
+        .map(str::trim)
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| folder_name(target));
+        .map_or_else(|| folder_name(target), str::to_owned)
+}
+
+fn readme(target: &Path, options: &RepoOptions) -> String {
+    let name = repo_name(options, target);
     let platforms = if options.platforms.is_empty() {
         readme_no_platform()
     } else {
@@ -586,11 +592,7 @@ pub fn repo(stage: &mut Stage, target: &Path, options: &RepoOptions) -> Result<S
     } else {
         files.push(GITIGNORE_PATH.to_owned());
     }
-    let name = options
-        .name
-        .clone()
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| folder_name(target));
+    let name = repo_name(options, target);
     let mut result = StepResult::new([
         ("message", Json::str("Repository scaffold created")),
         ("path", Json::str(shown(target))),

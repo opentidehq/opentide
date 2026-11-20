@@ -235,10 +235,67 @@ fn elastic_invalid_rfc_block_reports_all_three_codes() {
                 "type": "esql", "language": "kuery", "query": "FROM logs-* | LIMIT 10",
                 "index": ["logs-*"], "suppression": {"duration": "1h"}}),
     );
-    assert_eq!(
-        found,
-        ": ElasticConfig validation failed with code(s): esql_source, language, \
-         suppression_shape"
+    assert!(
+        found.starts_with(
+            ": ElasticConfig validation failed with code(s): esql_source, language, \
+                          suppression_shape ("
+        ),
+        "{found}"
+    );
+    assert!(
+        found.contains("language applies only to `type: query`"),
+        "{found}"
+    );
+    assert!(found.contains("`index` set on `type: esql`"), "{found}");
+}
+
+#[test]
+fn elastic_language_on_another_type_says_why_and_what_to_do() {
+    // E2E-3 (#1729): `language: eql` on a `type: eql` rule was "code(s):
+    // language" with no reason.
+    for (rule_type, extra) in [
+        ("eql", json!({"eql": {"query": "any where true"}})),
+        ("esql", json!({"query": "FROM logs-* | LIMIT 10"})),
+        (
+            "machine_learning",
+            json!({"machine_learning": {"job_id": ["j"], "anomaly_threshold": 50}}),
+        ),
+    ] {
+        let block = merged(
+            &elastic_base(),
+            &merged(&json!({"type": rule_type, "language": rule_type}), &extra),
+        );
+        let found = errors("elastic", &block);
+        assert!(
+            found.contains(
+                "ElasticConfig validation failed with code(s): language (language applies only \
+                 to `type: query`"
+            ),
+            "{rule_type}: {found}"
+        );
+        assert!(
+            found.contains(&format!(
+                "not `type: {rule_type}`; remove `language` from the block)"
+            )),
+            "{rule_type}: {found}"
+        );
+    }
+}
+
+#[test]
+fn elastic_sources_on_an_esql_rule_say_which_and_where_the_events_come_from() {
+    let block = merged(
+        &elastic_base(),
+        &json!({"type": "esql", "query": "FROM logs-* | LIMIT 10",
+                "index": ["logs-*"], "data_view_id": "dv"}),
+    );
+    let found = errors("elastic", &block);
+    assert!(
+        found.contains(
+            "`index`, `data_view_id` set on `type: esql`, where the query's `FROM` command \
+             names the sources: remove them"
+        ),
+        "{found}"
     );
 }
 

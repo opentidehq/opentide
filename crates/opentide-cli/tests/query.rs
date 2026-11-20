@@ -361,6 +361,28 @@ fn a_language_the_platform_does_not_take_is_refused_with_the_closest() {
     );
 }
 
+/// Outside a workspace there are no tenants to choose from (#1729, E2E-7):
+/// `workspace_not_found`, exit 1, as `new` and `doctor` give, not a `--tenant`
+/// that names no tenants.
+#[test]
+fn outside_a_workspace_query_is_workspace_not_found() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("empty");
+    std::fs::create_dir_all(&ws).unwrap();
+    let ran = run_at(&ws, &elastic(&["FROM x"]), &[]);
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    let document = ran.document();
+    assert_eq!(document["command"], "query");
+    assert_eq!(document["failure"]["code"], "workspace_not_found");
+    let message = document["failure"]["message"].as_str().unwrap();
+    assert!(message.starts_with("No workspace at "), "{message}");
+    // A workspace without a tenant is still the tenant's refusal.
+    let (_scratch, ws) = workspace("");
+    let ran = run_at(&ws, &elastic(&["FROM x"]), &[]);
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert_eq!(ran.document()["failure"]["argument"], "--tenant");
+}
+
 #[test]
 fn tenants_are_chosen_among_those_configured() {
     // No tenant: the configuration file to add one to.

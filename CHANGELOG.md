@@ -528,6 +528,11 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **MCP refuses an unknown `stack` in `validate_query` and an unknown `type` in `search`** ([#1667](https://github.com/opentidehq/opentide/issues/1667)). `stack: "bogus"` was checked as no stack and passed; it now fails with `valid: null`, naming `MAJOR.MINOR` and `serverless`. `type: "bogus"` returned no match; it is now refused, naming `rule`, `threat` and `objective`.
 - **MCP live `validate_query` answers the documented fields only** ([#1667](https://github.com/opentidehq/opentide/issues/1667)). A failed live check added `_exit_code: 1`; `status: "failed"` says it.
 - **`dir(opentide)` lists only the package's names** ([#1669](https://github.com/opentidehq/opentide/issues/1669)). It listed `TYPE_CHECKING` and `annotations`, which are not opentide's.
+- **`setup --name` trims the name and refuses an empty one** ([#1729](https://github.com/opentidehq/opentide/issues/1729)). `--name "   "` wrote a README headed `#    ` and `--name ""` quietly used the folder name. Both are now a usage error (exit 2, `usage_invalid_value`), as for `new`. Leaving `--name` out still uses the folder name.
+- **An Elastic `language` on an `eql`, `esql` or `machine_learning` rule says why it is refused** ([#1729](https://github.com/opentidehq/opentide/issues/1729)). `validate` failed with only `code(s): language`. The message now says `language` applies only to `type: query`, and the `esql_source` code names the fields to remove.
+- **A repeated `--platform` is a usage error** ([#1729](https://github.com/opentidehq/opentide/issues/1729)). `deploy --platform elastic --platform splunk` planned only `splunk`. `deploy`, `query`, `info` and `validate query` now refuse the second `--platform` and name it. Other single-value options still keep the last value.
+- **`opentide query` outside a workspace says there is no workspace** ([#1729](https://github.com/opentidehq/opentide/issues/1729)). It failed with `elastic has no tenants configured` and exit 2. It now gives `workspace_not_found` and exit 1, as `new` and `doctor` do.
+- **`opentide lsp --help` and the docs list every language the server checks** ([#1729](https://github.com/opentidehq/opentide/issues/1729)). They named six query languages and left out CQL, YARA, Exabeam and YARA-L.
 
 ### Security
 

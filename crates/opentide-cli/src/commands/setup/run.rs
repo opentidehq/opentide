@@ -195,6 +195,16 @@ fn usage(command: &str, failure_code: &str, message: &str) -> Report {
     )
 }
 
+/// A `--name` with nothing in it (empty, or only spaces) is a usage error, as
+/// `new --name ""` gives; leaving `--name` out keeps the folder name.
+fn empty_name(command: &str, name: Option<&str>) -> Option<Report> {
+    name.is_some_and(|name| name.trim().is_empty()).then(|| {
+        let mut failure = Failure::new(code::USAGE_INVALID_VALUE, "--name cannot be empty");
+        failure.argument = Some("--name".to_owned());
+        Report::failed(command, USAGE_EXIT_CODE, failure)
+    })
+}
+
 /// The reason a prompt cannot be shown here, if one cannot
 /// (`require_interactive`).
 pub(crate) fn cannot_prompt(cx: &Context<'_>) -> Option<String> {
@@ -412,6 +422,11 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
         Ok(shown) => shown,
         Err(report) => return *report,
     };
+    if let Step::Repo(options) = step
+        && let Some(report) = empty_name(&command, options.name.as_deref())
+    {
+        return report;
+    }
     match step {
         Step::Platforms(chosen) if chosen.is_empty() => {
             return *retitled(
@@ -938,6 +953,7 @@ fn outcome(
         .find(|step| step.get("scaffolded") == Some(&Json::Bool(true)))
     {
         let title = name
+            .map(str::trim)
             .filter(|name| !name.is_empty())
             .map(str::to_owned)
             .or_else(|| {
@@ -1239,6 +1255,9 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         Ok(shown) => shown,
         Err(report) => return *report,
     };
+    if let Some(report) = empty_name(COMMAND, args.repo.name.as_deref()) {
+        return report;
+    }
     if !scripted {
         return wizard(COMMAND, cx, "--platform, --ci", Wizard::Setup, &shown);
     }
