@@ -1027,9 +1027,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
             needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.MULTILINE)
             self.assertIsNotNone(needs, job)
             self.assertIn("verify-assets", needs.group(1).split(", "), job)
-            # The implicit success(): every job it needs succeeded.
-            self.assertNotIn("always()", jobs[job], job)
-            self.assertNotIn("!cancelled()", jobs[job], job)
+            # The implicit success(): every job it needs succeeded. The job's own
+            # condition only (a step may run after a failed step of its job).
+            header = jobs[job].split("\n    steps:\n", 1)[0]
+            self.assertNotIn("always()", header, job)
+            self.assertNotIn("!cancelled()", header, job)
         # The release job does not check: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
 
@@ -1110,8 +1112,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIsNotNone(condition, trust)
         self.assertEqual(
             condition.group(1),
-            "steps.trusted.outcome != 'success' "
-            "|| steps.publish.outputs.created_with_token == 'true'",
+            "${{ !cancelled() && (steps.trusted.outcome != 'success' "
+            "|| steps.publish.outputs.created_with_token == 'true') }}",
         )
         # A failure is a warning, not an error: the step's command cannot fail the step.
         self.assertIn("if ! python3 scripts/engine/release.py trust publish.yml; then", trust)
