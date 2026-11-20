@@ -2,7 +2,7 @@
   "format": 1,
   "scenario": "golden/validate-live-splunk-parsed",
   "recorded_from": [
-    "{oracle}/opentide",
+    "opentide",
     "--repo",
     "tests/golden/fixtures/live-tenants",
     "--json",
@@ -14,7 +14,7 @@
     "--uuid",
     "00000000-0000-4000-8046-000000000001"
   ],
-  "digest": "sha256:43b89514cc0d7cb2863bfa7829b1ac71f64de94478e97ebaed327447b9163316",
+  "digest": "sha256:85bdd72713e469f62c7d575ff21a703c6aa47e7472f5eb6f1ca26bf96fe9c913",
   "interactions": [
     {
       "request": {
@@ -84,7 +84,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "q=%7C+search+index%3Dmain+EventCode%3D4688+%7C+stats+count+by+host%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8046-000000000001%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&enable_lookups=True&output_mode=json&reload_macros=True"
+        "body": "q=%7C+search+index%3Dmain+EventCode%3D4688+%7C+stats+count+by+host&enable_lookups=True&output_mode=json&reload_macros=True"
       },
       "response": {
         "status": 200,
@@ -98,7 +98,7 @@
             "application/json; charset=UTF-8"
           ]
         ],
-        "body": "{\"commands\": [{\"command\": \"search\", \"rawargs\": \"| search index=main EventCode=4688 | stats count by host\\n| eval MDR_UUID=\\\"00000000-0000-4000-8046-000000000001\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}]}"
+        "body": "{\"commands\": [{\"command\": \"search\", \"rawargs\": \"| search index=main EventCode=4688 | stats count by host\"}]}"
       }
     }
   ]

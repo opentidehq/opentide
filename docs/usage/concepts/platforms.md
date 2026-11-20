@@ -204,6 +204,12 @@ configurations:
 
 `opentide deploy` sends each key as written: a `null` value as the empty value, a boolean as `1` or `0`, any other value as text. A list or table is refused, as `savedsearches.conf` cannot hold one, and so is a blank key. A key the block also sets (`alert_threshold`, `cron_schedule`) takes the `advanced` value; the `[[modifiers]]` of `platforms/splunk.toml` still apply after it. An action whose parameters are set here is triggered when it is in the tenant's `[tenants.setup] actions_enabled`. The table is left out of the generated templates and of editor completion.
 
+### Splunk's saved search
+
+The saved search's `search` is the block's `query` as you wrote it, trimmed, with nothing appended: `opentide query --rule` and `validate query --live` send the same text. Its `description` is the rule's, followed by a last line, `opentide rule <uuid>`, that names the rule, so a deploy can find and delete the saved search an earlier name of the rule left ([Splunk's renamed rules](../../cli/deploy.md#splunks-renamed-rules)). opentide writes `alert.managedBy` empty, Splunk's default; set it, or any other `savedsearches.conf` key, in the `advanced` table.
+
+Through 0.28.1 every search ended with `| eval MDR_UUID="<uuid>", MDR_status="<status>"` and a call to the `soc_macro_auto_mdr_mapping(MDR_UUID)` macro, and `alert.managedBy` held the rule's `response.responders` (else `[deployment] default_responders`). A saved search deployed again loses all three: its `search` is replaced and its `alert.managedBy` emptied. A dashboard, lookup or alert that reads `MDR_UUID` or `MDR_status` from its results needs another source, such as an `eval` in the rule's own `query`.
+
 ### Upgrading to 0.4.0
 
 This is a **breaking change** for objects that previously passed validation:

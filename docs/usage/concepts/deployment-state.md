@@ -32,10 +32,13 @@ file's `object_uuid` is exactly that string. A rule that has never been
 deployed to one of the eight platforms that keep ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
 platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black Cloud and
 Elastic address rules by `metadata.uuid` or by title and never get one. Splunk
-names a saved search after the rule's `name`: renaming a deployed rule creates
-a second saved search and leaves the old one enabled and scheduled, and
-retiring the rule deletes only the one with its current name. Delete the old
-search in Splunk when you rename a rule.
+names a saved search after the rule's `name` and keeps no state for it: the
+last line of the saved search's description, `opentide rule <uuid>`, names the
+rule. After writing or retiring a rule, a deploy deletes the other saved
+searches of the tenant's app that end with that line, which an earlier name of
+the rule left ([Splunk's renamed rules](../../cli/deploy.md#splunks-renamed-rules)).
+A saved search deployed by 0.28.1 or earlier has no such line until it is
+deployed again: delete it in Splunk if the rule was renamed before then.
 
 ```json
 {

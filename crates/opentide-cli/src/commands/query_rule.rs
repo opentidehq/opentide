@@ -221,9 +221,7 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
         )]),
         "splunk" => {
             required(block.get("query"), rule, platform)?;
-            Ok(vec![plain(opentide_compile::splunk::create_query(
-                rule, block,
-            ))])
+            Ok(vec![plain(opentide_compile::splunk::create_query(block))])
         }
         "sentinel_one" => sentinel_one(block, rule),
         "elastic" => elastic(block, rule).map(|query| vec![query]),
@@ -506,15 +504,18 @@ mod tests {
     }
 
     #[test]
-    fn carbon_black_joins_lines_and_splunk_sends_the_saved_search() {
+    fn carbon_black_joins_lines_and_splunk_sends_its_query_as_written() {
         let both = rule(&format!(
             "{HEAD}configurations:\n  carbon_black_cloud:\n    query: |\n      a:1\n      \
              AND b:2\n  splunk:\n    status: STAGING\n    query: index=main\n"
         ));
         assert_eq!(texts(&both, "carbon_black_cloud"), ["a:1 AND b:2"]);
         let splunk = texts(&both, "splunk");
-        assert!(splunk[0].starts_with("index=main\n| eval MDR_UUID="));
-        assert!(splunk[0].contains("00000000-0000-4000-8000-0000000000aa"));
+        assert_eq!(
+            splunk,
+            ["index=main"],
+            "the query as written, nothing appended"
+        );
     }
 
     #[test]

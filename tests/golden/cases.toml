@@ -2028,6 +2028,15 @@ normalise = ["live-frames"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-splunk"
 
+# #1657: retiring a Splunk rule also deletes the saved searches an earlier
+# name of it left, which only the tenant knows: a dry run that plans only a
+# retirement says so.
+[[case]]
+command = "deploy"
+variant = "dry-run-splunk-retire"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--uuid", "00000000-0000-4000-8047-000000000042", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+
 [[case]]
 command = "deploy"
 variant = "send-carbon-black"

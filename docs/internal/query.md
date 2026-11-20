@@ -67,8 +67,8 @@ Nothing goes through environment flags.
 - **Defender** — Graph `runHuntingQuery` with an ISO-8601 interval `Timespan`;
   windows over 30 days are refused before sending.
 - **Splunk** — `jobs.oneshot(..., count=N+1, output_mode="json")`: no saved
-  search. `--rule` sends `create_query(rule)`, the deploy query with its MDR
-  mapping macro.
+  search. `--rule` sends `create_query(block)`, the deploy query: the
+  block's `query` as written.
 - **SentinelOne** — PowerQuery `POST dv/events/pq`, then `GET dv/events/pq-ping`
   with exponential back-off until `FINISHED`, bounded by `--timeout`.
 - **Carbon Black** — `select(Process).where(q).set_time_range().set_rows(N+1)`

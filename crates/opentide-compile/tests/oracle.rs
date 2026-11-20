@@ -443,6 +443,64 @@ fn request_problem(
         .then(|| format!("not the writes to {name}: {}", sent.to_compact()))
 }
 
+/// The rewrites of `tests/golden/payloads/APPROVED.toml` (`[[rewrite]]`):
+/// rule and platforms.
+fn rewrites() -> Vec<(String, Vec<String>)> {
+    let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
+    let file: toml::Table = toml::from_str(&text).unwrap();
+    file.get("rewrite")
+        .and_then(toml::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|entry| {
+            (
+                entry["rule"].as_str().unwrap().to_owned(),
+                entry["platforms"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|platform| platform.as_str().unwrap().to_owned())
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+/// The oracle's Splunk writes (compact JSON) as opentide writes them since
+/// #1657 (`splunk_as_written`): each `search` the rule's query alone, without
+/// the `| eval MDR_UUID=…, MDR_status=…` line and the mapping macro after it;
+/// `alert.managedBy` empty (the oracle's responders); and the `description` ending with the line that
+/// names the rule *uuid*. `None` for a text that is not a list of writes.
+fn splunk_as_written(oracle: &str, uuid: &str) -> Option<String> {
+    let Json::Array(writes) = serde_json::from_str::<Json>(oracle).ok()? else {
+        return None;
+    };
+    let writes = writes
+        .into_iter()
+        .map(|write| {
+            let Json::Object(mut write) = write else {
+                return write;
+            };
+            if let Some(Json::Object(body)) = write.get_mut("body") {
+                if let Some(Json::Str(search)) = body.get_mut("search")
+                    && let Some(at) = search.find("\n| eval MDR_UUID=")
+                {
+                    search.truncate(at);
+                }
+                if let Some(managed) = body.get_mut("alert.managedBy") {
+                    *managed = Json::Str(String::new());
+                }
+                if let Some(Json::Str(description)) = body.get_mut("description") {
+                    *description = splunk::described(description, uuid);
+                }
+            }
+            Json::Object(write)
+        })
+        .collect();
+    Some(Json::Array(writes).to_compact())
+}
+
 /// The approved differences of the compile corpus (`[[diff]]` entries of
 /// `tests/golden/payloads/APPROVED.toml` for the corpus `payloads`): uuid,
 /// platform, what, oracle and candidate.
@@ -515,6 +573,12 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let ws = corpus.to_string_lossy().into_owned();
     let approved = approved();
     let classes = dump_classes();
+    let rewritten = rewrites();
+    let rewrites_here = |class: &str, platform: &str| {
+        rewritten.iter().any(|(rule, platforms)| {
+            rule == class && platforms.iter().any(|known| known == platform)
+        })
+    };
     let faults = fault_approvals();
     let mut faulted = 0;
     let writes_classes = classes_of("writes");
@@ -542,8 +606,17 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         let mut check = |what: String, oracle: String, mine: String| {
             compared += 1;
             let mine = in_workspace(&mine, &ws);
+            // The writes as opentide sends them since #1657, when approved;
+            // an approved difference's oracle is read the same way.
+            let rewrite = |text: &str| match what.strip_prefix("tenant:") {
+                Some(_) if rewrites_here("splunk_as_written", platform) => {
+                    splunk_as_written(text, uuid).unwrap_or_else(|| text.to_owned())
+                }
+                _ => text.to_owned(),
+            };
+            let oracle = rewrite(&oracle);
             if let Some(at) = approved.iter().position(|[u, p, w, o, c]| {
-                u == uuid && p == platform && *w == what && *o == oracle && *c == mine
+                u == uuid && p == platform && *w == what && rewrite(o) == oracle && *c == mine
             }) {
                 used[at] = true;
             } else if oracle != mine
