@@ -2,7 +2,7 @@
   "format": 1,
   "scenario": "golden/query-splunk-rule",
   "recorded_from": [
-    "{oracle}/opentide",
+    "opentide",
     "--repo",
     "tests/golden/fixtures/live-tenants",
     "--json",
@@ -18,7 +18,7 @@
     "--limit",
     "2"
   ],
-  "digest": "sha256:8dd2080e063cb66483c2d2442c00c88c9379c066be0740a55ecd5bfa4fe04baa",
+  "digest": "sha256:4c4bdb6dcc10520f09f57fb84fab9897903508d54a6a73b6b74f6b99aaa4ae09",
   "interactions": [
     {
       "request": {
@@ -88,7 +88,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "search=search+index%3Dmain+EventCode%3D4688+%7C+stats+count+by+host%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8046-000000000001%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&exec_mode=oneshot&earliest_time=4070908800.000&latest_time=4070912400.000&count=3&output_mode=json&segmentation=none"
+        "body": "search=search+index%3Dmain+EventCode%3D4688+%7C+stats+count+by+host&exec_mode=oneshot&earliest_time=4070908800.000&latest_time=4070912400.000&count=3&output_mode=json&segmentation=none"
       },
       "response": {
         "status": 200,

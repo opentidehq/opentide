@@ -10,11 +10,21 @@ for the Rust connector's tests (``crates/opentide-connectors/tests/splunk.rs``),
 which must send what this sent, byte for byte. Each step's outcome is printed, one
 JSON line each, for those tests' expectations.
 
+Since #1657 opentide no longer sends what this client sends for a deploy (no
+``MDR_UUID`` ``eval`` and no mapping macro in the search, an empty
+``alert.managedBy``, a description that names the rule, and a listing after each
+write): the ``splunk/deploy`` scenario is recorded from the Rust connector
+(``cargo run -p opentide-connectors --example splunk_client -- deploy``), and the
+fixture's ``deploy`` steps are written by ``... --example splunk_client --
+fixture``, which keeps the ``query`` and ``validate`` inputs this client wrote.
+Do not record ``deploy`` with this client, nor write the fixture with it.
+
 Scenarios:
 
-- ``deploy``: the tide corpus's Splunk rule through ``SplunkDeploy.deploy_mdr``:
-  created (looked up, 404; created; its settings in two updates), deployed again
-  (found; updated), retired (``REMOVED``: found, deleted), retired again (absent).
+- ``deploy`` (retired, see above): the tide corpus's Splunk rule through
+  ``SplunkDeploy.deploy_mdr``: created (looked up, 404; created; its settings in
+  two updates), deployed again (found; updated), retired (``REMOVED``: found,
+  deleted), retired again (absent).
 - ``query``: ``opentide query``'s runner: one-shot searches over a fixed window:
   rows past the limit, a query that starts with a command, Splunk's warnings, an
   ``ERROR`` message, a refusal (400), rows without a field list, a gateway's page.

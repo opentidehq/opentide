@@ -2,7 +2,7 @@
   "format": 1,
   "scenario": "golden/validate-live-splunk",
   "recorded_from": [
-    "{oracle}/opentide",
+    "opentide",
     "--repo",
     "tests/golden/fixtures/live-tenants",
     "--json",
@@ -12,7 +12,7 @@
     "--platform",
     "splunk"
   ],
-  "digest": "sha256:d9787766d4d89b42bd74fa7c387eef712b2f872f11da6c0dcd944bb0f8164d53",
+  "digest": "sha256:aac4ed58ac88f0d2c24fe90fd1881b20733501be1c59ebab79e3477157e01eaa",
   "interactions": [
     {
       "request": {
@@ -82,7 +82,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "q=%7C+search+index%3Dmain+%7Cunreachable%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8046-000000000003%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&enable_lookups=True&output_mode=json&reload_macros=True"
+        "body": "q=%7C+search+index%3Dmain+%7Cunreachable&enable_lookups=True&output_mode=json&reload_macros=True"
       },
       "response": {
         "status": 307,
@@ -113,7 +113,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "q=%7C+search+index%3Dmain+EventCode%3D4688+%7C+stats+count+by+host%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8046-000000000001%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&enable_lookups=True&output_mode=json&reload_macros=True"
+        "body": "q=%7C+search+index%3Dmain+EventCode%3D4688+%7C+stats+count+by+host&enable_lookups=True&output_mode=json&reload_macros=True"
       },
       "response": {
         "status": 200,
@@ -127,7 +127,7 @@
             "application/json; charset=UTF-8"
           ]
         ],
-        "body": "{\"commands\": [{\"command\": \"search\", \"rawargs\": \"| search index=main EventCode=4688 | stats count by host\\n| eval MDR_UUID=\\\"00000000-0000-4000-8046-000000000001\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}]}"
+        "body": "{\"commands\": [{\"command\": \"search\", \"rawargs\": \"| search index=main EventCode=4688 | stats count by host\"}]}"
       }
     },
     {
@@ -144,7 +144,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "q=%7C+search+index%3Dmain+%7Cbadcommand%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8046-000000000002%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&enable_lookups=True&output_mode=json&reload_macros=True"
+        "body": "q=%7C+search+index%3Dmain+%7Cbadcommand&enable_lookups=True&output_mode=json&reload_macros=True"
       },
       "response": {
         "status": 400,

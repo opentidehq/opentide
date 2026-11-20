@@ -1283,3 +1283,73 @@ fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
         "a check writes nothing"
     );
 }
+
+/// A Splunk live validator that keeps the search of each check it gets.
+struct Searches(std::sync::Mutex<Vec<String>>);
+
+impl LiveValidator for Searches {
+    fn validate<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
+        self.0.lock().unwrap().push(request.text.clone());
+        Box::pin(async {
+            Ok(LiveCheck {
+                result: None,
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            })
+        })
+    }
+}
+
+/// Registers a [`Searches`] as `splunk`.
+struct SearchesPlatform(&'static Searches);
+
+impl Platform for SearchesPlatform {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn live_validator(&self) -> Option<&dyn LiveValidator> {
+        Some(self.0)
+    }
+}
+
+/// `validate query --live` checks the Splunk search as deploy writes it:
+/// the block's `query`, trimmed, with nothing appended (#1657).
+#[test]
+fn a_splunk_check_sends_the_query_as_written() {
+    let ws = splunk_rules(1);
+    let searches: &'static Searches =
+        Box::leak(Box::new(Searches(std::sync::Mutex::new(Vec::new()))));
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(SearchesPlatform(searches)))
+        .unwrap();
+    let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
+    let args = Args {
+        platform: Some("splunk".to_owned()),
+        live: true,
+        check_timeout: Some("5".to_owned()),
+        ..Args::default()
+    };
+    let never = || false;
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &registry,
+            debug: false,
+        },
+    );
+    assert_eq!(value(&live, "status"), &Json::str("passed"));
+    let searches = searches.0.lock().unwrap();
+    assert_eq!(searches[..], ["index=main n=1"], "{searches:?}");
+}
