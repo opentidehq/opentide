@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.28.1** (13 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.28.1** (13 November 2026), which `pip install opentide` installs: pip leaves out pre-releases. The next one is 1.0.0, now a release candidate, **1.0.0rc1**, on PyPI as a pre-release ([release candidates](#release-candidates)). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -66,6 +66,53 @@ uv pip install 'opentide==0.28.1'    # pin the current release
 </Tabs>
 
 That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms. `pip install opentide` is the only install: the package has no Python dependencies, and its one extra, `plugins` (pydantic), is for writing a [platform plugin](../sdk/platforms.md). You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+
+### Release candidates
+
+The 1.0 release, opentide on one Rust core, is out as a release candidate before it is final. A candidate is a pre-release on every channel, so none of them installs it unless you ask. One candidate has one version in two spellings, which name the same release: Python's `1.0.0rc1` (PyPI, `opentide --version` from pip) and SemVer's `1.0.0-rc.1` (crates.io, the GitHub Release, the binaries). `opentide --version`, `opentide-lsp --version` and `opentide doctor` report the candidate on every channel, and `doctor` treats the two spellings as one version.
+
+**PyPI**
+
+```bash
+pip install --pre opentide              # the newest pre-release
+pip install 'opentide==1.0.0rc1'        # or pin the candidate
+uv pip install --prerelease=allow opentide
+```
+
+`pipx install --pip-args=--pre opentide` and `uv tool install 'opentide==1.0.0rc1'` install it as a tool. A candidate has the same wheels as a release (and the same sdist for musl and free-threaded Python), and `pip install opentide` without `--pre` stays on 0.28.1.
+
+**crates.io**
+
+```bash
+cargo install opentide --version 1.0.0-rc.1 --features cli --locked      # the opentide binary
+cargo install opentide-lsp --version 1.0.0-rc.1 --locked                 # the language server alone
+```
+
+Cargo needs the version spelled out for a pre-release. The same crate is the [Rust SDK](../sdk/rust.md): `cargo add opentide@=1.0.0-rc.1`.
+
+**GitHub Release binaries**
+
+The `v1.0.0-rc.1` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0-rc.1) is marked a pre-release. It carries the `opentide` and `opentide-lsp` binaries for glibc Linux, macOS and Windows, and an installer that installs both:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSfLO \
+  https://github.com/opentidehq/opentide/releases/download/v1.0.0-rc.1/opentide-installer.sh
+sh opentide-installer.sh                 # into ~/.local/bin; OPENTIDE_INSTALL_DIR changes it
+opentide --version                       # opentide 1.0.0-rc.1
+opentide-lsp --version                   # opentide-lsp 1.0.0-rc.1
+```
+
+On Windows, `opentide-installer.ps1` from the same release does the same. The installer checks each binary against the release's `SHA256SUMS` before it installs it. To check what you downloaded yourself, and where it was built:
+
+```bash
+BASE=https://github.com/opentidehq/opentide/releases/download/v1.0.0-rc.1
+curl -sSfLO "$BASE/SHA256SUMS"
+curl -sSfLO "$BASE/opentide-v1.0.0-rc.1-x86_64-unknown-linux-gnu"
+sha256sum --check --ignore-missing SHA256SUMS
+gh attestation verify opentide-v1.0.0-rc.1-x86_64-unknown-linux-gnu -R opentidehq/opentide
+```
+
+`sha256sum --check` names each file that matches. `gh attestation verify` checks the file's build provenance, an attestation signed by the release workflow (`publish.yml` of opentidehq/opentide); it exits 0 when the file is genuine and prints nothing on a non-terminal, so check the exit status (add `--format json` to see the workflow). There are no musl binaries: on Alpine, install from the sdist or `cargo install`, as [above](#the-analysis-engine-and-the-language-server) describes. The npm packages ship with 1.0.0, not with a candidate.
 
 ### MCP server
 

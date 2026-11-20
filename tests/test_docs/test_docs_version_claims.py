@@ -29,7 +29,9 @@ _RELEASE_HEADING = re.compile(r"^##\s+\[(\d+\.\d+\.\d+)\]\s+[-\u2014]\s+(\d{4}-\
 #: ``The latest release is **0.14.0**`` and its linked ``**[0.14.0](...)**`` form.
 _LATEST_CLAIM = re.compile(r"latest release is \*\*\[?(\d+\.\d+\.\d+)")
 #: Any pinned install, in prose or a fenced block: ``pip install 'opentide==0.14.0'``.
-_PINNED_INSTALL = re.compile(r"opentide==(\d+\.\d+\.\d+)")
+#: A pre-release pin (``opentide==1.0.0rc1``, ``1.0.0-rc.1``, ``1.0.0.dev3``) names a
+#: candidate, which the installation page documents beside the release: it is not one.
+_PINNED_INSTALL = re.compile(r"opentide==(\d+\.\d+\.\d+)(?![0-9A-Za-z]|[.-][0-9A-Za-z])")
 #: ``[0.14.0 on PyPI](https://pypi.org/project/opentide/0.14.0/)``
 _PYPI_LINK = re.compile(r"pypi\.org/project/opentide/(\d+\.\d+\.\d+)")
 
@@ -131,3 +133,33 @@ def test_the_release_log_leads_with_the_current_release() -> None:
     assert day.zfill(2) == date[8:10], (
         f"{page.relative_to(ROOT)} dates {version} to {day} {month}, changelog says {date}"
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "pins"),
+    [
+        ("pip install 'opentide==0.28.1'", ["0.28.1"]),
+        ("opentide==0.28.1.", ["0.28.1"]),
+        ("pip install opentide==1.0.0rc1", []),
+        ("pip install 'opentide==1.0.0-rc.1'", []),
+        ("opentide==1.0.0.dev3 and opentide==1.0.0a2", []),
+        ("opentide==1.0.0b4", []),
+    ],
+)
+def test_a_pre_release_pin_is_not_a_release_pin(text: str, pins: list[str]) -> None:
+    """The installation page documents the candidate's pins beside the release's."""
+    assert _PINNED_INSTALL.findall(text) == pins
+
+
+def test_the_installation_page_documents_the_release_candidate() -> None:
+    """RC1-4: PyPI's ``--pre``, the crates, the installer and how to verify it."""
+    page = (DOCS / "usage" / "installation.md").read_text(encoding="utf-8")
+    for text in (
+        "pip install --pre opentide",
+        "opentide==1.0.0rc1",
+        "cargo install opentide --version 1.0.0-rc.1 --features cli",
+        "opentide-installer.sh",
+        "SHA256SUMS",
+        "gh attestation verify",
+    ):
+        assert text in page, text

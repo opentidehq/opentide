@@ -9,20 +9,28 @@ The `opentide` crate is opentide's Rust API, and the only opentide crate with a 
 
 ## Install
 
-The crate builds from this repository while the engine crates it wraps are not yet on crates.io:
+The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is the 1.0 release candidate, `1.0.0-rc.1`. Cargo does not pick a pre-release for a requirement such as `opentide = "1"`, so name the version:
+
+```bash
+cargo add opentide@=1.0.0-rc.1
+```
 
 ```toml
 [dependencies]
-opentide = { git = "https://github.com/opentidehq/opentide" }
+opentide = "=1.0.0-rc.1"
 ```
 
-It needs the Rust release `rust-toolchain.toml` names, and builds the query engines' grammars with a C compiler. Once it is published, `cargo add opentide` will do.
+It needs the Rust release `rust-toolchain.toml` names (1.95 or later), and a C compiler for the TLS library the `connectors` and `cli` features build. Once 1.0.0 is released, `cargo add opentide` will do. The version is the one `pip install --pre opentide` installs, which PyPI spells `1.0.0rc1`: see [release candidates](../usage/installation.md#release-candidates).
+
+The default features open a workspace, validate and lint its objects, and plan a deploy. They do not carry the offline query engines: add `features = ["queries"]` for a program that validates queries (the [feature table](#features) says what each adds, and [Validate a workspace](#validate-a-workspace) what the default build reports).
 
 The command line, with its `--json commands` tree identical to the PyPI package's:
 
 ```bash
-cargo install --git https://github.com/opentidehq/opentide opentide --features cli
+cargo install opentide --version 1.0.0-rc.1 --features cli --locked
 ```
+
+The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.1 --locked`, or the binaries and installers of the [GitHub Release](../usage/installation.md#release-candidates).
 
 ## Features
 
@@ -40,7 +48,7 @@ cargo install --git https://github.com/opentidehq/opentide opentide --features c
 | `python` | no | `opentide::python`: the Tide models as Python classes, for the Python package's binding; brings PyO3 |
 | `stubs` | no | PyO3's introspection data behind `python`, for `cargo xtask stubs` |
 
-Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. Turn the check off (`QueriesMode::Off`) to validate without it.
+Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. `queries` is not a default feature, so a program that depends on `opentide` with its default features and validates with the default `ValidateOptions` fails every workspace with it. The error's message names the fix: add the feature (`cargo add opentide --features queries`), or turn the check off (`QueriesMode::Off`) to validate without it.
 
 ## Open a workspace
 
@@ -102,6 +110,13 @@ fn main() -> Result<(), opentide::Error> {
 ```
 
 `lint` runs `opentide lint` the same way (`LintOptions`, `LintReport`), without `--fix`.
+
+The example turns the queries check off with `QueriesMode::Off`, which a build without the `queries` feature needs. The default `ValidateOptions` run the check, so on the default features they report `engine_unavailable` (the message names the feature) and `validation.failed` is `true` for every workspace. Depend on `opentide = { version = "=1.0.0-rc.1", features = ["queries"] }` to check the queries of the workspace's rules offline, as `opentide validate` does:
+
+```toml
+[dependencies]
+opentide = { version = "=1.0.0-rc.1", features = ["queries"] }
+```
 
 ## Print the catalogue
 
