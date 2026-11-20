@@ -4,7 +4,7 @@ description: validate/plain/fault/ci-sink-gitlab
 ---
 args: opentide validate
 exit: 1
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · text, not held
 

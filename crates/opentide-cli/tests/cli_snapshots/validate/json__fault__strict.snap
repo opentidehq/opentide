@@ -4,7 +4,7 @@ description: validate/json/fault/strict
 ---
 args: opentide --json validate --strict
 exit: 1
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
 findings: 106
@@ -129,6 +129,7 @@ next_actions[]: 2 items
 report.issues[]: 99 items
 report.warnings[]: 6 items
 warnings[]: 1 items
+warnings[]: Validation reported warnings
 checks.configuration.status: failed x1
 checks.id-uniqueness.status: failed x1
 checks.queries.status: failed x1

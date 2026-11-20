@@ -4,7 +4,7 @@ description: info/json/heavy-small/default
 ---
 args: opentide --json info
 exit: 0
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
 findings: 0

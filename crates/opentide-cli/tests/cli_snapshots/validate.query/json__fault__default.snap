@@ -4,7 +4,7 @@ description: validate.query/json/fault/default
 ---
 args: opentide --json validate query
 exit: 1
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
 findings: 45
@@ -72,4 +72,9 @@ queries[].field_path[]: 3814 items
 ok: false x1
 status: failed x1
 
-━━━ stderr · text, not held
+━━━ stderr · json lines: 5
+  malformed_object_yaml | error | objects/threats/encoded-exfiltration-threat-0030.yaml
+  malformed_object_yaml | error | objects/rules/encoded-beacon-rule-0034.yaml
+  missing_identifier_from_model | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml
+  malformed_object_yaml | error | objects/rules/hidden-loader-rule-0024.yaml
+  malformed_object_yaml | error | objects/rules/staged-exfiltration-rule-0021.yaml

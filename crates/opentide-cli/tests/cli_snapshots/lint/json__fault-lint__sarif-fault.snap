@@ -4,7 +4,7 @@ description: lint/json/fault-lint/sarif-fault
 ---
 args: opentide --json lint --format sarif --output opentide-reports/lint.sarif
 exit: 0
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
 findings: 85
@@ -202,5 +202,4 @@ findings: 85
   nested_object_file | warning | objects/rules/nested/encoded-spray-rule-0017.yaml | - | -
 runs[]: 1 items
 runs[].results[]: 85 items
-runs[].tool.driver.rules[]: 467 items
-runs[].tool.driver.rules[].properties.tags[]: 5 items
+runs[].tool.driver.rules[]: 73 items

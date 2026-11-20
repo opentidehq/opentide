@@ -4,7 +4,7 @@ description: new.threat/json/heavy-small/example
 ---
 args: opentide --json new threat --name 'Credential Dumping'
 exit: 0
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
 findings: 0
@@ -17,6 +17,7 @@ next_actions[]: 1 items
 placeholders[]: 9 items
 platforms[]: 0 items
 warnings[]: 1 items
+warnings[]: metadata.author left out: no git user.name is set
 ok: true x1
 status: completed x1
 

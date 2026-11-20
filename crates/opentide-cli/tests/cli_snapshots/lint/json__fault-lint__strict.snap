@@ -4,7 +4,7 @@ description: lint/json/fault-lint/strict
 ---
 args: opentide --json lint --strict
 exit: 1
-view: diagnostics (code, severity, file, line, column and counts; no message text)
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
 findings: 86
