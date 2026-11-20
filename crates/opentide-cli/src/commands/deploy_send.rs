@@ -2234,9 +2234,24 @@ struct Connection {
     opened_taken: std::cell::Cell<usize>,
     /// The requests sent to the tenant when its current rule began.
     rule_sent: std::cell::Cell<usize>,
+    /// Whether a request may have left for the tenant outside `http`,
+    /// which counts none of them: a platform plugin sends its own, from
+    /// Python. Once one may have, the tenant may have taken a rule.
+    sent_elsewhere: std::cell::Cell<bool>,
 }
 
 impl Connection {
+    fn new(tenant: Tenant, http: HttpClient) -> Self {
+        Self {
+            tenant,
+            http,
+            opened_sent: std::cell::Cell::new(0),
+            opened_taken: std::cell::Cell::new(0),
+            rule_sent: std::cell::Cell::new(0),
+            sent_elsewhere: std::cell::Cell::new(false),
+        }
+    }
+
     /// The tenant is open: what it accepts from now on is a rule's.
     fn mark_opened(&self) {
         self.opened_sent.set(self.http.requests_sent());
@@ -2247,6 +2262,12 @@ impl Connection {
     /// A rule of the tenant begins: what was sent before is earlier rules'.
     fn rule_begins(&self) {
         self.rule_sent.set(self.http.requests_sent());
+    }
+
+    /// A request may leave for the tenant without `http` counting it (a
+    /// plugin's call): from now on, the tenant may have taken a write.
+    fn sends_elsewhere(&self) {
+        self.sent_elsewhere.set(true);
     }
 }
 
@@ -2317,13 +2338,7 @@ impl Sender<'_, '_> {
             self.cx.proxy,
         )
         .map_err(|error| Raised::new(error.to_string()))?;
-        Ok(Connection {
-            tenant,
-            http,
-            opened_sent: std::cell::Cell::new(0),
-            opened_taken: std::cell::Cell::new(0),
-            rule_sent: std::cell::Cell::new(0),
-        })
+        Ok(Connection::new(tenant, http))
     }
 
     /// The tenants' batches of *uuids* (`TideDeployment`).
@@ -2449,7 +2464,9 @@ impl Sender<'_, '_> {
     /// failed: the platforms with no sign-in of their own reach the tenant
     /// first with a rule's own request. A write that left and may have
     /// landed (no answer, a dropped connection, a 5xx) keeps the rule
-    /// `failed`.
+    /// `failed`. A platform plugin's requests are not counted, so once the
+    /// plugin was called for a rule its tenant may have taken it: only its
+    /// `open` can fail before any rule.
     fn before_any_rule(
         &self,
         connection: &Connection,
@@ -2458,6 +2475,7 @@ impl Sender<'_, '_> {
         log: &DeployLog<'_>,
     ) -> bool {
         !self.interrupted()
+            && !connection.sent_elsewhere.get()
             && connection.http.writes_taken() == connection.opened_taken.get()
             && connection.rule_sent.get() == connection.opened_sent.get()
             && !log.deployed_on(platform, tenant)
@@ -3312,13 +3330,7 @@ impl Sender<'_, '_> {
             self.cx.proxy,
         )
         .map_err(|error| Raised::new(error.to_string()))?;
-        Ok(Connection {
-            tenant,
-            http,
-            opened_sent: std::cell::Cell::new(0),
-            opened_taken: std::cell::Cell::new(0),
-            rule_sent: std::cell::Cell::new(0),
-        })
+        Ok(Connection::new(tenant, http))
     }
 
     /// One rule on a plugin's tenant: the request the plugin receives (its
@@ -3349,6 +3361,10 @@ impl Sender<'_, '_> {
                 .into_bytes(),
         );
         let context = self.context(connection);
+        // The plugin sends from Python, outside the tenant's client: what it
+        // sent and what the tenant took cannot be counted, so from its first
+        // call the tenant may have taken a rule.
+        connection.sends_elsewhere();
         let done = self
             .block(async { Ok(deployer.deploy(context, &request).await) })
             .map_err(|error| plugin_raised(&error))?

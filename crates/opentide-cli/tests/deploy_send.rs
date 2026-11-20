@@ -4425,6 +4425,66 @@ fn a_first_write_whose_connection_dropped_stays_failed() {
     assert_eq!(statuses[0], "failed", "{text}");
 }
 
+/// Bitdefender's first rule is an update whose call got no answer (the
+/// connection closed once the request was read): the connector reports the
+/// tenant unreachable, but the update may have landed, so the rule stays
+/// `failed` and only the rules after it are `not attempted` (#1701). The
+/// connector's test `an_update_with_no_answer_counts_as_a_write_the_tenant_may_have_taken`
+/// holds the same for a timeout.
+#[test]
+fn a_bitdefender_first_update_with_no_answer_stays_failed() {
+    use std::io::Read as _;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut buffer = vec![0_u8; 65536];
+            let _ = stream.read(&mut buffer);
+        }
+    });
+    let setup = format!(
+        "ssl = false\nurl = \"http://{address}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n"
+    );
+    let ws = stated(
+        "bitdefender",
+        &setup,
+        &[
+            (
+                "a.yaml",
+                "00000000-0000-4000-8099-000000000971",
+                bitdefender_block(false),
+                "aaaaaaaaaaaaaaaaaaaaaaaa",
+            ),
+            (
+                "b.yaml",
+                "00000000-0000-4000-8099-000000000972",
+                bitdefender_block(false),
+                "bbbbbbbbbbbbbbbbbbbbbbbb",
+            ),
+        ],
+    );
+    let env = Env::from_pairs([("GRAVITYZONE_API_KEY".to_owned(), "key".to_owned())]);
+    let (sent, text) = deploy(
+        ws.path(),
+        "bitdefender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    assert_eq!(statuses, ["failed", "not_attempted"], "{text}");
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert_eq!(
+        failures[0].get("id"),
+        Some(&Json::str("00000000-0000-4000-8099-000000000971")),
+        "{failures:?}"
+    );
+}
+
 /// A tenant failure on a later rule, after an earlier rule was sent and
 /// refused on its own, is a failure on a rule: that rule is `failed` and
 /// the rest `not attempted` (#1701).
