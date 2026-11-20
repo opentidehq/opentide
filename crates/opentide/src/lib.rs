@@ -41,7 +41,7 @@
 //! | `analysis` | no | [`analysis`]: check one query on its own, highlight a text, without a workspace (the bindings' `analyze_query`, `highlight`) |
 //! | `workspace` | yes | [`Workspace`]: open, [`Workspace::validate`], [`Workspace::lint`], [`Workspace::info`], [`Workspace::rules`], [`Workspace::objectives`], [`Workspace::threats`], [`Workspace::catalog`], [`Workspace::coverage`] |
 //! | `compile` | yes | [`Workspace::deploy_plan`] and [`deploy`] |
-//! | `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
+//! | `queries` | yes | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 //! | `cli` | no | `cli::main(argv)`, `cli::run_json(argv)` and the `opentide` binary (`cargo install opentide --features cli`); implies `compile` and `queries` |
 //! | `lsp` | no | `lsp`: the language server, on stdio or one message at a time |
 //! | `connectors` | no | [`connectors`]: the tenants a workspace configures ([`Workspace::tenants`]), and on each a query run, a live query check and a rule deploy (async, on tokio); implies `compile` |
@@ -49,17 +49,16 @@
 //! | `python` | no | [`python`]: the Tide models as Python classes ([`python::register`]); brings PyO3 |
 //! | `stubs` | no | PyO3 introspection behind `python`, for `cargo xtask stubs` |
 //!
-//! Without `queries`, a queries check is never skipped: validate reports one
-//! `engine_unavailable` error and lint fails with that code, as the Python
-//! package does when its engine does not load ([`queries`]). Turn the check
-//! off ([`validate::QueriesMode::Off`]) to validate without it.
-//!
-//! `queries` is not a default feature, and [`ValidateOptions::default`] asks
-//! for the queries check: a program that depends on `opentide` with its
-//! default features and validates with the default options gets that one
-//! `engine_unavailable` error, whose message names the feature. Add the
-//! feature (`cargo add opentide --features queries`), or pass
-//! `QueriesMode::Off` as the example above does:
+//! `queries` is a default feature: [`ValidateOptions::default`] asks for the
+//! queries check, so a program that validates with the default options needs the
+//! engines. Without `queries` (`default-features = false` and no `queries`,
+//! `cli` or `queries`-implying feature), a queries check is never skipped:
+//! validate reports one `engine_unavailable` error, whose message names the
+//! feature, and lint fails with that code, as the Python package does when its
+//! engine does not load ([`queries`]). Add the feature (`features =
+//! ["queries"]`), or turn the check off ([`validate::QueriesMode::Off`]) to
+//! validate without it, as the example above does. The default build checks
+//! queries:
 //!
 //! ```
 //! let ws = opentide::Workspace::from_files(
@@ -69,21 +68,14 @@
 //!         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
 //!     )],
 //! )?;
-//! // The default options, on a build that may or may not carry the engines.
+//! // The default options, on the default features.
 //! let validation = ws.validate(&opentide::ValidateOptions::default());
-//! let missing = validation
+//! assert!(opentide::queries::AVAILABLE, "the default features carry the engines");
+//! assert!(validation
 //!     .report
 //!     .issues
 //!     .iter()
-//!     .find(|d| d.code == opentide::queries::ENGINE_UNAVAILABLE);
-//! if opentide::queries::AVAILABLE {
-//!     assert!(missing.is_none());
-//! } else {
-//!     // Without `queries`: one error, which says what to enable.
-//!     let error = missing.expect("a build without the engines reports it");
-//!     assert!(validation.failed);
-//!     assert!(error.message.contains("features = [\"queries\"]"), "{}", error.message);
-//! }
+//!     .all(|d| d.code != opentide::queries::ENGINE_UNAVAILABLE));
 //! # Ok::<(), opentide::Error>(())
 //! ```
 //!

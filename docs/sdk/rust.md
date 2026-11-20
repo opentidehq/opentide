@@ -12,17 +12,19 @@ The `opentide` crate is opentide's Rust API, and the only opentide crate with a 
 The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is the 1.0 release candidate, `1.0.0-rc.1`. Cargo does not pick a pre-release for a requirement such as `opentide = "1"`, so name the version:
 
 ```bash
-cargo add opentide@=1.0.0-rc.1
+cargo add opentide@=1.0.0-rc.1 --features queries
 ```
 
 ```toml
 [dependencies]
-opentide = "=1.0.0-rc.1"
+opentide = { version = "=1.0.0-rc.1", features = ["queries"] }
 ```
+
+`queries` (the offline query engines) is a default feature of the candidates after 1.0.0-rc.1, so `features = ["queries"]` is redundant there and harmless. 1.0.0-rc.1 itself has it off by default: a program that validates with the default `ValidateOptions` needs the feature, or it fails every workspace with `engine_unavailable`.
 
 It needs the Rust release `rust-toolchain.toml` names (1.95 or later), and a C compiler for the TLS library the `connectors` and `cli` features build. Once 1.0.0 is released, `cargo add opentide` will do. The version is the one `pip install --pre opentide` installs, which PyPI spells `1.0.0rc1`: see [release candidates](../usage/installation.md#release-candidates).
 
-The default features open a workspace, validate and lint its objects, and plan a deploy. They do not carry the offline query engines: add `features = ["queries"]` for a program that validates queries (the [feature table](#features) says what each adds, and [Validate a workspace](#validate-a-workspace) what the default build reports).
+The default features open a workspace, validate and lint its objects (the offline query engines included, `queries`, from the candidate after 1.0.0-rc.1), and plan a deploy. They are the ones `opentide validate` runs on; a build that wants fewer dependencies sets `default-features = false` and names what it needs (the [feature table](#features) says what each adds).
 
 The command line, with its `--json commands` tree identical to the PyPI package's:
 
@@ -40,7 +42,7 @@ The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.1
 | `analysis` | no | `opentide::analysis`: check one query on its own and highlight a text, without a workspace |
 | `workspace` | yes | `Workspace`: open, `validate`, `lint`, `info`, `catalog`, `coverage` |
 | `compile` | yes | `Workspace::deploy_plan` and `opentide::deploy`, and validate's compile check (a rule a deploy would compile must compile); without it `validate` compiles nothing |
-| `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
+| `queries` | yes | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::main_with_version(argv, version)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
 | `lsp` | no | `opentide::lsp`: the language server, on stdio or one message at a time |
 | `connectors` | no | `opentide::connectors`: the tenants a workspace configures (`Workspace::tenants`), and on each a query run, a live query check and a rule deploy; async, on tokio; implies `compile` |
@@ -48,7 +50,7 @@ The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.1
 | `python` | no | `opentide::python`: the Tide models as Python classes, for the Python package's binding; brings PyO3 |
 | `stubs` | no | PyO3's introspection data behind `python`, for `cargo xtask stubs` |
 
-Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. `queries` is not a default feature, so a program that depends on `opentide` with its default features and validates with the default `ValidateOptions` fails every workspace with it. The error's message names the fix: add the feature (`cargo add opentide --features queries`), or turn the check off (`QueriesMode::Off`) to validate without it.
+`queries` is a default feature (from the candidate after 1.0.0-rc.1; in 1.0.0-rc.1 it is off by default and its error message does not name it), because the default `ValidateOptions` run the queries check. Without it (`default-features = false` and no feature that implies it, such as `cli`), a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. The error's message names the fix: add `features = ["queries"]` to the dependency, or turn the check off (`QueriesMode::Off`) to validate without it.
 
 ## Open a workspace
 
@@ -111,12 +113,7 @@ fn main() -> Result<(), opentide::Error> {
 
 `lint` runs `opentide lint` the same way (`LintOptions`, `LintReport`), without `--fix`.
 
-The example turns the queries check off with `QueriesMode::Off`, which a build without the `queries` feature needs. The default `ValidateOptions` run the check, so on the default features they report `engine_unavailable` (the message names the feature) and `validation.failed` is `true` for every workspace. Depend on `opentide = { version = "=1.0.0-rc.1", features = ["queries"] }` to check the queries of the workspace's rules offline, as `opentide validate` does:
-
-```toml
-[dependencies]
-opentide = { version = "=1.0.0-rc.1", features = ["queries"] }
-```
+The example turns the queries check off with `QueriesMode::Off`, which a build without the `queries` feature needs and a default build does not: the default `ValidateOptions` check the queries of the workspace's rules offline, as `opentide validate` does. On a build with `default-features = false`, they report `engine_unavailable` (the message names the feature) and `validation.failed` is `true` for every workspace, until you add `features = ["queries"]`.
 
 ## Print the catalogue
 

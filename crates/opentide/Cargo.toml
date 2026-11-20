@@ -66,7 +66,11 @@ required-features = ["connectors"]
 # job: `cargo test -p opentide --all-features`).
 
 [features]
-default = ["schema", "workspace", "compile"]
+# `queries` is a default feature: validate's and lint's queries checks are on by
+# default (`ValidateOptions::default()`), so a build without the engines fails
+# every workspace with `engine_unavailable`. A build that wants fewer
+# dependencies turns the defaults off (`default-features = false`).
+default = ["schema", "workspace", "compile", "queries"]
 # The Tide models: threat vectors, detection objectives, detection rules, each
 # revision, the schema identifiers (`opentide::models`).
 schema = ["dep:opentide-schema"]
