@@ -45,7 +45,12 @@
 #     its GitHub Release (consumers pinned those digests), checks the
 #     published assets, and publishes only what each registry lacks.
 #     repository_dispatch (event `publish`, client_payload.checkout_ref) is
-#     the same, for GitHub App tokens without actions: write.
+#     the same, for GitHub App tokens without actions: write, but GitHub runs
+#     it from the default branch's copy of this file: until
+#     integration/unified-core merges, development holds a stub without that
+#     trigger, so resume with Run workflow on integration/unified-core
+#     (`gh workflow run publish.yml --ref integration/unified-core -f
+#     checkout_ref=vX.Y.Z-rc.N`, or the API's `actions_run_trigger`).
 #
 # Jobs: the guard; `build` (release-build.yml: every crate built from its
 # package with the licence scan, the Release's assets, the wheels and npm
@@ -665,12 +670,16 @@ jobs:
                   sys.exit(0)
               if time.monotonic() >= deadline:
                   print(f"::error::The index is missing {missing} for {project} {version} ({status}).")
+                  # The ref this run is on: the one whose publish.yml resumes it.
+                  # While integration/unified-core has not merged, development's
+                  # publish.yml is a stub that has no repository_dispatch, so
+                  # only a Run workflow on the integration branch resumes.
+                  ref = os.environ["GITHUB_REF_NAME"]
                   print(
                       "Resume without retagging; skip-existing uploads only the missing files:\n"
-                      "  gh api repos/opentidehq/opentide/dispatches \\\n"
-                      "    -f event_type=publish \\\n"
-                      f"    -f client_payload[checkout_ref]=v{version}\n"
-                      f"or Actions > Publish > Run workflow with checkout_ref=v{version}"
+                      f"  gh workflow run publish.yml --repo opentidehq/opentide --ref {ref} \\\n"
+                      f"    -f checkout_ref=v{version}\n"
+                      f"or Actions > Publish > Run workflow on {ref} with checkout_ref=v{version}"
                       " (a candidate's tag is vX.Y.Z-rc.N)"
                   )
                   sys.exit(1)
@@ -745,7 +754,10 @@ jobs:
   # as each crate's trusted publisher (with CARGO_REGISTRY_TOKEN, which needs
   # the trusted-publishing scope), and later releases log in with the
   # workflow's OIDC identity. The token then only publishes a crate that does
-  # not exist yet (NEW_CRATE_TOKEN), which crates.io requires.
+  # not exist yet (NEW_CRATE_TOKEN), which crates.io requires. Once every
+  # crate trusts this workflow the maintainer deletes the secret; the trust
+  # step runs only when the trusted login failed or a crate was created with
+  # the stored token, and a failure there is a warning.
   crates:
     name: Publish to crates.io
     needs: [guard, verify-assets]
@@ -780,7 +792,10 @@ jobs:
         continue-on-error: true
         uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
       - name: publish to crates.io
+        id: publish
         env:
+          # Log lines in the order they happen (the rate-limit waits print as they start).
+          PYTHONUNBUFFERED: "1"
           TRUSTED_TOKEN: ${{ steps.trusted.outputs.token }}
           STORED_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           # Trusted publishing cannot create a crate: release.py publishes a crate
@@ -799,10 +814,24 @@ jobs:
             exit 1
           fi
           python3 scripts/engine/release.py publish
+      # Only when the trusted login failed (a crate does not trust this
+      # workflow yet), or this run created a crate with the stored token
+      # (release.py publish says so in `created_with_token`). Every crate trusts
+      # publish.yml and the token is deleted after the first publish, so a
+      # later run skips this step, and a secret that is gone or revoked cannot
+      # fail it: a failure here is a warning, never an error. `!cancelled()`:
+      # it runs even when the publish step failed after creating a crate with
+      # the token, or that crate would never trust publish.yml (a resume finds
+      # it on crates.io and does not create it again).
       - name: register trusted publishing
+        if: ${{ !cancelled() && (steps.trusted.outcome != 'success' || steps.publish.outputs.created_with_token == 'true') }}
         env:
+          PYTHONUNBUFFERED: "1"
           CRATES_IO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: python3 scripts/engine/release.py trust publish.yml
+        run: |
+          if ! python3 scripts/engine/release.py trust publish.yml; then
+            echo "::warning::Trusted publishing was not registered for every crate (CARGO_REGISTRY_TOKEN deleted, revoked or without the trusted-publishing scope?). The crates are published; register publish.yml on the crates' settings pages (docs/internal/publishing.md, step 10)."
+          fi
 
   # npm, with trusted publishing (the workflow's OIDC identity, no token) and
   # provenance: the tarballs build-packages.yml packed and release-build.yml's smoke installed, in

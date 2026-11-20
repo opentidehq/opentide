@@ -15,7 +15,9 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
 
-Release notes: [CHANGELOG.md](CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
+The Rust core is released as **1.0.0 release candidates** first (`1.0.0rcN`, a PyPI pre-release): pip and uv skip them unless asked, `pip install --pre opentide` or `uv pip install --prerelease=allow opentide`. The pin above is the newest stable release, and `pip install opentide` installs it.
+
+Release notes: [CHANGELOG.md](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
 
 ## Documentation
 
@@ -28,9 +30,9 @@ Published docs: [opentide.org/docs/usage/](https://opentide.org/docs/usage/).
 | [MCP](https://opentide.org/docs/mcp/) | Agent server |
 | [SDK](https://opentide.org/docs/sdk/) | Python API |
 
-Source for those pages lives in [`docs/`](docs/) (Fumadocs). This repo validates content only: `scripts/validate-docs.sh`. The site is [opentidehq/website](https://github.com/opentidehq/website).
+Source for those pages lives in [`docs/`](https://github.com/opentidehq/opentide/tree/development/docs) (Fumadocs). This repo validates content only: `scripts/validate-docs.sh`. The site is [opentidehq/website](https://github.com/opentidehq/website).
 
-Contributors: see [`AGENTS.md`](AGENTS.md) and [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md).
+Contributors: see [`AGENTS.md`](https://github.com/opentidehq/opentide/blob/development/AGENTS.md) and [`.agents/skills/docs-maintenance/SKILL.md`](https://github.com/opentidehq/opentide/blob/development/.agents/skills/docs-maintenance/SKILL.md).
 
 ## Repository
 
