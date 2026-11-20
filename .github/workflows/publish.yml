@@ -34,10 +34,10 @@
 #     verify-assets, registry or smoke-registries job runs. It cannot be
 #     combined with release_candidate, dry_run or checkout_ref.
 #   - release_candidate: N, a PUBLIC release candidate (pre-releases on GitHub,
-#     PyPI as X.Y.ZrcN and crates.io as X.Y.Z-rc.N, nothing on npm). Disabled
-#     while the internal channel exists: the guard refuses it (and refuses to
-#     resume a vX.Y.Z-rc.N tag) unless it is a dry run. Its code paths stay;
-#     `public_candidates=true` in the guard re-enables it.
+#     PyPI as X.Y.ZrcN and crates.io as X.Y.Z-rc.N, nothing on npm). Enabled
+#     for 1.0.0-rc.N (`public_candidates=true` in the guard); set it to false
+#     to refuse public candidates again (a dry run aside) and keep only the
+#     internal channel.
 #   - dry_run: build and smoke-test everything, publish nothing: no tag, no
 #     release, no attestation, no upload. Any branch.
 #   - checkout_ref: vX.Y.Z (or vX.Y.Z-rc.N, while public candidates are on): resume an existing release whose
@@ -78,7 +78,7 @@ on:
         default: ""
         type: string
       release_candidate:
-        description: "Public release candidate number N: disabled while the internal channel exists (use internal_candidate); allowed only with dry_run, as a rehearsal. Empty: a release."
+        description: "Public release candidate number N: vX.Y.Z-rc.N as pre-releases on PyPI and crates.io (from integration/unified-core or development). Empty: a release."
         required: false
         default: ""
         type: string
@@ -146,9 +146,9 @@ jobs:
           set -euo pipefail
           create_release=true
           # Public release candidates (PyPI and crates.io pre-releases) are
-          # disabled while the internal channel exists. Their code paths below
-          # stay intact: setting this to true re-enables them.
-          public_candidates=false
+          # enabled for 1.0.0-rc.N. Setting this to false refuses them again
+          # (a dry run aside), leaving only the internal channel.
+          public_candidates=true
           if [[ -n "${RELEASE_CANDIDATE}" && ! "${RELEASE_CANDIDATE}" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::release_candidate is a number from 1, not ${RELEASE_CANDIDATE}." >&2
             exit 1
@@ -437,7 +437,8 @@ jobs:
 
   # The tag and the GitHub Release, on the commit this run built, with every asset, before anything reaches a registry. A
   # release's notes are the file the notes PR wrote
-  # (.github/release-notes/vX.Y.Z.md); a candidate's, CHANGELOG.md's
+  # (.github/release-notes/vX.Y.Z.md); a candidate's, its own short file
+  # (.github/release-notes/vX.Y.Z-rc.N.md) when it has one, else CHANGELOG.md's
   # [Unreleased] (scripts/build/release.py notes). A candidate is a
   # pre-release, never Latest; a release is Latest (no --latest flag).
   release:

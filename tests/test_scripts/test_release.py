@@ -198,6 +198,31 @@ def test_a_candidates_notes_quote_unreleased(repo: Path) -> None:
     assert "Minor." not in notes
 
 
+def test_a_candidates_own_notes_file_replaces_the_unreleased_quote(repo: Path) -> None:
+    """A public candidate with .github/release-notes/vX.Y.Z-rc.N.md gets that
+    short summary as its body, not the whole [Unreleased] section; an internal
+    one (on no registry) still quotes [Unreleased], so it never shows the
+    file's install commands."""
+    fixed = "## [Unreleased]\n\n### Fixed\n\n- **A granular fix.**\n"
+    _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", fixed)
+    own = repo / ".github" / "release-notes" / "v1.3.0-rc.1.md"
+    own.write_text("## Highlights\n\n- One short line.\n", encoding="utf-8")
+    script = _script()
+    notes = script.notes(repo, "v1.3.0-rc.1")
+    assert "## Highlights\n\n- One short line." in notes
+    assert "- **A granular fix.**" not in notes
+    assert "What it holds so far" not in notes
+    internal = script.notes(repo, "v1.3.0-rc.1", internal=True)
+    assert "## Highlights" not in internal
+    assert "- **A granular fix.**" in internal
+    assert script.notes(repo, "v1.3.0-rc.1").startswith("Release candidate 1 of 1.3.0")
+    # Another candidate, without its own file, still quotes [Unreleased].
+    assert "- **A granular fix.**" in script.notes(repo, "v1.3.0-rc.2")
+    # An empty file counts as none.
+    own.write_text("\n", encoding="utf-8")
+    assert "- **A granular fix.**" in script.notes(repo, "v1.3.0-rc.1")
+
+
 def test_the_cli_prints_a_candidates_notes(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     script = _script()
     script.ROOT = repo

@@ -116,6 +116,8 @@ WORKSPACE = ROOT / "Cargo.toml"
 #: The crate maturin compiles into the Python package, whose version the wheel takes.
 PYTHON_BINDING = ROOT / "bindings" / "python" / "Cargo.toml"
 LOCK = ROOT / "Cargo.lock"
+# Cargo workspaces of their own, under ROOT, whose locks pin the workspace crates.
+NESTED_WORKSPACES = ("fuzz",)
 ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
@@ -347,6 +349,16 @@ def bump(version: str) -> None:
     )
     WORKSPACE.write_text(text)
     subprocess.run(["cargo", "update", "--workspace"], cwd=ROOT, check=True)
+    # Workspaces of their own that depend on the crates by path keep their own
+    # lock (fuzz/): refresh their pins too, or `cargo deny` (--locked) fails.
+    for nested in NESTED_WORKSPACES:
+        manifest = ROOT / nested / "Cargo.toml"
+        if manifest.is_file() and (ROOT / nested / "Cargo.lock").is_file():
+            subprocess.run(
+                ["cargo", "update", "--workspace", "--manifest-path", str(manifest)],
+                cwd=ROOT,
+                check=True,
+            )
 
 
 def cargo_version(pypi_version: str) -> str:

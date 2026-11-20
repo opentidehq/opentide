@@ -221,13 +221,26 @@ class BumpTest(unittest.TestCase):
             'opentide-compare = { path = "crates/opentide-compare" }\n',
             encoding="utf-8",
         )
+        fuzz = root / "fuzz"
+        fuzz.mkdir()
+        (fuzz / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
+        (fuzz / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
         done = subprocess.CompletedProcess([], 0)
         with (
             mock.patch.object(release, "WORKSPACE", workspace),
+            mock.patch.object(release, "ROOT", root),
             mock.patch.object(release.subprocess, "run", return_value=done) as run,
         ):
             release.bump(version)
-        self.assertEqual(run.call_args.args[0], ["cargo", "update", "--workspace"])
+        # The workspace's lock, then fuzz/'s, which pins the same crates
+        # (a stale one fails `cargo deny`, which runs --locked).
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["cargo", "update", "--workspace"],
+                ["cargo", "update", "--workspace", "--manifest-path", str(fuzz / "Cargo.toml")],
+            ],
+        )
         return workspace.read_text(encoding="utf-8")
 
     def test_a_release_version(self) -> None:
@@ -1034,8 +1047,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
         self.assertEqual(guard[refuse_internal:].splitlines()[1].strip(), "exit 1")
         self.assertLess(refuse_internal, guard.index("check-candidate", refuse_internal))
-        # A public candidate is refused while the internal channel exists.
-        self.assertIn("public_candidates=false", guard)
+        # Public candidates are on (1.0.0-rc.N); the refusal stays behind the
+        # switch, so turning them off again needs no other change.
+        self.assertIn("public_candidates=true", guard)
         self.assertLess(guard.index("public release candidates are disabled", candidate), refuse_rc)
         # A release or a candidate never reuses a tag; resuming one needs its Release.
         self.assertIn('git rev-parse -q --verify "refs/tags/${tag}"', guard)

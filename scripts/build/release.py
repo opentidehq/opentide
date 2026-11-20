@@ -150,8 +150,11 @@ def candidate_problems(root: Path, tag: str) -> list[str]:
 
 def notes(root: Path, tag: str, *, internal: bool = False) -> str:
     """The GitHub Release body of ``tag``: a release's is the file its notes PR
-    wrote; a candidate's says what it is, then quotes ``## [Unreleased]``. An
-    internal candidate's (``internal``) says that no registry has it."""
+    wrote; a public candidate's says what it is, then gives its own short notes
+    file (``.github/release-notes/vX.Y.Z-rc.N.md``, which carries install
+    commands) when there is one, else quotes ``## [Unreleased]``. An internal
+    candidate's (``internal``) says that no registry has it and always quotes
+    ``## [Unreleased]``."""
     match = _CANDIDATE.fullmatch(tag)
     if internal and match is None:
         raise ReleaseError(f"{tag!r} is not a release candidate tag (vX.Y.Z-rc.N)")
@@ -172,6 +175,10 @@ def notes(root: Path, tag: str, *, internal: bool = False) -> str:
                 "a pre-release on PyPI (`pip install --pre opentide`) and on crates.io, "
                 "not on npm. "
             )
+        own = root / ".github" / "release-notes" / f"{tag}.md"
+        if not internal and own.is_file() and own.read_text(encoding="utf-8").strip():
+            # The candidate's summary; the full list stays in CHANGELOG.md.
+            return f"{where.rstrip()}\n\n{own.read_text(encoding='utf-8').strip()}\n"
         return f"{where}What it holds so far, from CHANGELOG.md's [Unreleased]:\n\n{unreleased}\n"
     if _TAG.fullmatch(tag) is None:
         raise ReleaseError(f"{tag!r} is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)")

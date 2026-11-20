@@ -2652,7 +2652,7 @@ checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 
 [[package]]
 name = "opentide-analysis"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "indexmap",
  "opentide-core",
@@ -2680,7 +2680,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-cli"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -2739,7 +2739,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-compile"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "caseless",
  "dunce",
@@ -2784,7 +2784,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-connectors"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "base64 0.23.1",
  "http",
@@ -2815,7 +2815,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-core"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "compact_str",
  "indexmap",
@@ -2832,7 +2832,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-cql"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
@@ -2844,7 +2844,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-ecs"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "opentide-core",
  "serde",
@@ -2854,7 +2854,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-eql"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
@@ -2868,7 +2868,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-esql"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
@@ -2882,7 +2882,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-exabeam"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
@@ -2896,7 +2896,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-falco"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
@@ -2923,7 +2923,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-highlight"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "opentide-core",
  "regex",
@@ -2935,7 +2935,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kql"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "foldhash",
  "hashbrown 0.17.1",
@@ -2951,7 +2951,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kuery"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
@@ -2964,7 +2964,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lsp"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2986,7 +2986,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lucene"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -3000,7 +3000,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-parse"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "rowan",
@@ -3008,7 +3008,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-schema"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "fancy-regex 0.20.2",
  "garde",
@@ -3030,7 +3030,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-schema-derive"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3039,7 +3039,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-spl"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "foldhash",
  "logos",
@@ -3053,7 +3053,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-tide"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "opentide-core",
  "opentide-cql",
@@ -3080,7 +3080,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-workspace"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "dunce",
  "indexmap",
@@ -3103,7 +3103,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-yara"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "foldhash",
  "opentide-core",
@@ -3115,7 +3115,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-yaral"
-version = "0.12.0"
+version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
