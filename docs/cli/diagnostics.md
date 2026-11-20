@@ -361,6 +361,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
+| [`query_folded_comment`](#query_folded_comment) | A `//` comment in a query that YAML folds into one line comments out the lines after it. |
 | [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; `opentide validate` accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
@@ -6462,6 +6463,38 @@ A live check of 403 Splunk rules where one parse took longer than 120 seconds, t
 ### How to fix
 
 Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOUT`, or make the query cheaper. When a gateway answered (HTTP 504), its own timeout may be shorter than the check's: raise the gateway's timeout too.
+
+## query_folded_comment
+
+A `//` comment in a query that YAML folds into one line comments out the lines after it.
+
+Severity: error. Reported by the analysis engine on a rule or hunt query written as a `>` block, or as a plain or quoted value on several lines: YAML joins those lines with spaces, so the query the platform runs is one line, and a `//` comment on one of them runs to its end. The lines after the comment are then part of it: the filter you read is not the one deployed, and the rule can match every event. `opentide validate` (its `queries` check) and `opentide validate query` fail on it, and an editor running `opentide lsp start` shows it. It applies to the query languages opentide checks offline whose comments are `//`: KQL (Sentinel, Defender), ES|QL and EQL (Elastic), CQL (CrowdStrike), YARA (HarfangLab, Bitdefender, the HarfangLab rule assembled from its fields included) and YARA-L (Google SecOps). SentinelOne's PowerQuery has no offline engine, so its queries are not checked. A comment followed only by blank or comment lines loses nothing and is not reported, nor is a line that is more indented than the comment, which YAML keeps on a line of its own.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: >-
+      SecurityEvent
+      // only failed handles
+      | where EventID == 4656
+```
+
+The query that deploys is `SecurityEvent // only failed handles | where EventID == 4656`: every `SecurityEvent` matches.
+
+### How to fix
+
+Write the query as a literal block (`|` or `|-`), which keeps each line a line, so the comment ends where its line does:
+
+```yaml
+    query: |-
+      SecurityEvent
+      // only failed handles
+      | where EventID == 4656
+```
+
+Or remove the comment.
 
 ## recommended_field_missing
 
