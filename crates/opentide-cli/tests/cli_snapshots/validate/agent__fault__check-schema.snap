@@ -86,6 +86,7 @@ error[config_enum_unknown]: "Night Shift" is not a configured responder
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 83, column 1
   ╭─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ├─ note: the `[` opened at line 82, column 9 is not closed
   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
 
 error[vocab_unknown]: "ambr" is not a TLP value
@@ -134,14 +135,14 @@ error[schema_validation]: missing required field "description"
   │
   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18
-   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:44:18
+error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1
+   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:45:1
    │
-43 │       group_by: source
 44 │       condition: count() >= 3
-   │                  ━
+45 │    indent: tab
+   │ ━━━
    │
-   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+   ╰─ help: indent with spaces: YAML does not allow a tab in indentation
 
 error[schema_validation]: missing required field "description"
   ╭─▶ objects/rules/lateral-dropper-rule-0026.yaml:1:1
@@ -279,6 +280,7 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
   ╭─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ├─ note: the `[` opened at line 71, column 9 is not closed
   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
 
 error[schema_validation]: metadata.reviewed: Extra inputs are not permitted

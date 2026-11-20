@@ -15,7 +15,7 @@ exit: 1
   "exit_code": 1,
   "failed_files": {
     "objects/rules/encoded-beacon-rule-0034.yaml": "unreadable: while parsing a flow sequence, expected ',' or ']' (line 83, column 1)",
-    "objects/rules/hidden-loader-rule-0024.yaml": "unreadable: while scanning a plain scalar, found a tab (line 44, column 18)",
+    "objects/rules/hidden-loader-rule-0024.yaml": "unreadable: while scanning a plain scalar, found a tab (line 45, column 1)",
     "objects/rules/staged-exfiltration-rule-0021.yaml": "unreadable: while parsing a flow sequence, expected ',' or ']' (line 72, column 1)"
   },
   "failure": {
@@ -61,7 +61,7 @@ exit: 1
   "warnings": [
     "entities: \"Host::Gizmo\" is not a known vocabulary value",
     "objects/rules/encoded-beacon-rule-0034.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 83, column 1)",
-    "objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar, found a tab (line 44, column 18)",
+    "objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar, found a tab (line 45, column 1)",
     "objects/rules/staged-exfiltration-rule-0021.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 72, column 1)"
   ]
 }

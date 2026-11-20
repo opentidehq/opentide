@@ -126,7 +126,8 @@ warning[kql_deprecated_function]: 'any' is deprecated; use take_any()
    ╰─ help: did you mean "take_any"?
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 83, column 1
-  ╰─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ╭─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ╰─ note: the `[` opened at line 82, column 9 is not closed
 
 note[lucene_bare_term]: `bob` has no field, so Elasticsearch searches it in every field; to search `user.name` for both, write `user.name:(alice bob)`
    ╭─▶ objects/rules/encoded-beacon-rule-0145.yaml:73:23
@@ -254,12 +255,12 @@ warning[kuery_lucene_syntax]: `[a TO b]` is a Lucene range; KQL searches it as t
    │
    ╰─ help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
 
-error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18
-   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:44:18
+error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1
+   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:45:1
    │
-43 │       group_by: source
 44 │       condition: count() >= 3
-   │                  ━
+45 │    indent: tab
+   │ ━━━
 
 note[eql_maxspan_missing]: sequence has no `with maxspan=`: its events can be any distance apart within the search window. A maxspan bounds matches and the partial sequences Elasticsearch keeps
    ╭─▶ objects/rules/hidden-relay-rule-0476.yaml:60:7
@@ -710,7 +711,8 @@ warning[spl_leading_not]: leading `NOT` used as the search filter scans events b
    ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
-  ╰─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ╭─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ╰─ note: the `[` opened at line 71, column 9 is not closed
 
 warning[kql_unscoped_search]: unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)
    ╭─▶ objects/rules/staged-pivot-rule-0131.yaml:36:7

@@ -29,7 +29,7 @@ configurations:
       | ImageFileName=/\\whoami\.exe$/i
       | groupBy([aid, ComputerName], function=count())
     details:
-      trigger: event
+      trigger: verbose
       outcome: detection
     schedule:
       frequency: 1h

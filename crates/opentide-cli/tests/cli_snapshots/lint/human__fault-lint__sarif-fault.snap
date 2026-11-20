@@ -111,7 +111,8 @@ exit: 0
 
 ␛[1m␛[31merror[yaml_parse]␛[0m␛[1m: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']'␛[0m
   ␛[1mat line 83, column 1␛[0m
-  ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/objects/rules/encoded-beacon-rule-0034.yaml␛\objects/rules/encoded-beacon-rule-0034.yaml:83:1␛]8;;␛\
+  ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/encoded-beacon-rule-0034.yaml␛\objects/rules/encoded-beacon-rule-0034.yaml:83:1␛]8;;␛\
+  ␛[34m╰─␛[0m ␛[1m␛[34mnote:␛[0m the `[` opened at line 82, column 9 is not closed
 
 ␛[1m␛[33mwarning[falco_field_as_value]␛[0m␛[1m: 'proc.pname' may be a valid field misused as a const string value:␛[0m
   ␛[1mcompare with val(proc.pname)␛[0m
@@ -238,12 +239,12 @@ exit: 0
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
 
 ␛[1m␛[31merror[yaml_parse]␛[0m␛[1m: Could not parse object YAML: while scanning a plain scalar, found a tab at line␛[0m
-  ␛[1m44, column 18␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml␛\objects/rules/hidden-loader-rule-0024.yaml:44:18␛]8;;␛\
+  ␛[1m45, column 1␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml␛\objects/rules/hidden-loader-rule-0024.yaml:45:1␛]8;;␛\
 ␛[34m   │␛[0m
-␛[34m43 │␛[0m       group_by: source
 ␛[34m44 │␛[0m       condition: count() >= 3
-␛[34m   │␛[0m                  ␛[1m␛[31m━␛[0m
+␛[34m45 │␛[0m    indent: tab
+␛[34m   │␛[0m ␛[1m␛[31m━━━␛[0m
 
 ␛[1m␛[33mwarning[risk_band]␛[0m␛[1m: risk score 90 is outside Kibana's low band (0–21) for alert severity low␛[0m
    ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/hidden-tunnel-rule-0528.yaml␛\objects/rules/hidden-tunnel-rule-0528.yaml:67:5␛]8;;␛\
@@ -698,7 +699,8 @@ exit: 0
 
 ␛[1m␛[31merror[yaml_parse]␛[0m␛[1m: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']'␛[0m
   ␛[1mat line 72, column 1␛[0m
-  ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/objects/rules/staged-exfiltration-rule-0021.yaml␛\objects/rules/staged-exfiltration-rule-0021.yaml:72:1␛]8;;␛\
+  ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/staged-exfiltration-rule-0021.yaml␛\objects/rules/staged-exfiltration-rule-0021.yaml:72:1␛]8;;␛\
+  ␛[34m╰─␛[0m ␛[1m␛[34mnote:␛[0m the `[` opened at line 71, column 9 is not closed
 
 ␛[1m␛[33mwarning[kql_unscoped_search]␛[0m␛[1m: unscoped `search` reads every table; scope it with `in (Table, ...)`␛[0m
   ␛[1mor start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)␛[0m
@@ -729,7 +731,7 @@ exit: 0
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/lint.sarif · created 0644
-(1088133 bytes; long strings and the largest parts elided)
+(1088130 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -738,7 +740,7 @@ exit: 0
         "id": "opentide/lint/"
       },
       "columnKind": "unicodeCodePoints",
-      "results": "<elided 49931 bytes, sha256 4e1df891b939ddb155ce6ee740273e98074d79085c2df23a3bc29dbd5c02a8c7>",
+      "results": "<elided 49928 bytes, sha256 d1c078f8163e25c11c914666b01ca5e3b77d8baa95acc64607aacb41f4982ade>",
       "tool": {
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",

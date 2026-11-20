@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/plain/tide-corpus-bad-values/bad-values
+---
+args: opentide validate
+exit: 1
+
+━━━ stdout
+error[schema_validation]: configurations.sentinel_one.response.treat_as_threat: Input should be False, 'Malicious' or 'Suspicious'
+   ╭─▶ Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml:37:24
+   │
+36 │     response:
+37 │       treat_as_threat: maybe
+   │                        ━━━━━
+   │
+   ╰─ help: write false, "Malicious" or "Suspicious"
+
+error[schema_validation]: configurations.crowdstrike.details.trigger: deploy takes verbose or summary (any case), not "sometimes"
+   ╭─▶ Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml:29:16
+   │
+28 │     details:
+29 │       trigger: sometimes
+   │                ━━━━━━━━━
+   │
+   ╰─ help: write verbose or summary
+
+
+━━━ stderr
+✗ 2 errors in 2 files · 12 objects checked · 8 queries · <SECONDS>
+→ opentide explain schema_validation · how to fix it
+→ opentide validate · check again

@@ -109,13 +109,36 @@ fn status_is_required_on_every_block() {
 }
 
 #[test]
+fn crowdstrike_trigger_and_outcome_take_what_deploy_takes() {
+    // B2 (smoke test): `trigger: sometimes` and `outcome: banana` passed
+    // `validate` and the dry run, and failed the deploy.
+    let block = |trigger: &str, outcome: &str| {
+        json!({"status": "S", "query": "x",
+               "details": {"trigger": trigger, "outcome": outcome},
+               "schedule": {"frequency": "1h", "lookback": "1h"}})
+    };
+    assert_eq!(
+        errors("crowdstrike", &block("sometimes", "banana")),
+        "details.trigger: deploy takes verbose or summary (any case), not \"sometimes\"\n\
+         details.outcome: deploy takes detection or incident (any case), not \"banana\""
+    );
+    for (trigger, outcome) in [("verbose", "detection"), ("Summary", "INCIDENT")] {
+        assert_eq!(
+            errors("crowdstrike", &block(trigger, outcome)),
+            "",
+            "{trigger}"
+        );
+    }
+}
+
+#[test]
 fn every_query_text_refuses_a_blank_query() {
     for (platform, block) in [
         ("splunk", json!({"status": "S"})),
         ("carbon_black_cloud", json!({"status": "S"})),
         (
             "crowdstrike",
-            json!({"status": "S", "details": {"trigger": "t", "outcome": "o"},
+            json!({"status": "S", "details": {"trigger": "verbose", "outcome": "detection"},
                    "schedule": {"frequency": "1h", "lookback": "1h"}}),
         ),
         (
@@ -466,6 +489,39 @@ fn elastic_empty_duration_reports_duration() {
         let block = merged(&elastic_base(), &overrides);
         assert!(errors("elastic", &block).contains("duration"), "{block}");
     }
+}
+
+#[test]
+fn elastic_bad_duration_names_its_field_value_and_form() {
+    // B3 (smoke test): `history_window_start: now-14d` was "ElasticConfig
+    // validation failed with code(s): duration" at the block, with no hint
+    // of the form (`14d`; deploy adds `now-`).
+    let block = merged(
+        &elastic_base(),
+        &json!({"type": "new_terms",
+                "new_terms": {"fields": ["user.name"], "history_window_start": "now-14d"}}),
+    );
+    assert_eq!(
+        errors("elastic", &block),
+        "new_terms.history_window_start: ElasticConfig validation failed with code(s): duration \
+         (\"now-14d\" is not a duration: a number and a unit, s, m, h or d, such as `14d`; \
+         deploy adds `now-`)"
+    );
+    // Two at once, or with another code: named, and placed at the block.
+    let block = merged(
+        &elastic_base(),
+        &json!({"scheduling": {"interval": "5 minutes", "lookback": "soon"}}),
+    );
+    let found = errors("elastic", &block);
+    assert!(
+        found.starts_with(": ElasticConfig validation failed with code(s): duration ("),
+        "{found}"
+    );
+    assert!(found.contains("scheduling.lookback \"soon\""), "{found}");
+    assert!(
+        found.contains("scheduling.interval \"5 minutes\""),
+        "{found}"
+    );
 }
 
 #[test]

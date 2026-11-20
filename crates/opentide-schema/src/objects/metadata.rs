@@ -89,11 +89,13 @@ revisions! {
             pub version: Version,
             /// Creation date.
             #[schemars(extend("format" = "date"))]
-            #[garde(skip)]
+            #[from_node(with = "checks::created")]
+            #[garde(custom(checks::garde_created))]
             pub created: String,
             /// Last modification date.
             #[schemars(extend("format" = "date"))]
-            #[garde(skip)]
+            #[from_node(with = "checks::modified")]
+            #[garde(custom(checks::garde_modified))]
             pub modified: String,
             /// Traffic Light Protocol classification.
             #[schemars(extend("tide.vocab" = true))]

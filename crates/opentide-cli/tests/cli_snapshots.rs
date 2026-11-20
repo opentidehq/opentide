@@ -38,7 +38,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
         84,
     ),
     ("explain", &["explain"], 22),
-    ("validate", &["validate"], 207),
+    ("validate", &["validate"], 211),
     // The read-only reports, and the protocol commands' help and refusals.
     (
         "reports_and_protocols",

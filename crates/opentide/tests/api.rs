@@ -389,19 +389,9 @@ fn a_deploy_plan_compiles_every_rule_and_sends_nothing() {
         "{text}"
     );
     // Seven enabled platforms have no tenant: the plan warns that a real run
-    // would stop there. The corpus's CrowdStrike rule sets `trigger: event`,
-    // which CrowdStrike's deploy refuses: the plan compiles its request and
-    // reports it, as a deploy would fail it (#1712).
-    assert!(!plan.ok());
-    assert_eq!(
-        document["diagnostics"].as_array().map(|found| found
-            .iter()
-            .map(|d| d["platform"].clone())
-            .collect::<Vec<_>>()),
-        Some(vec![serde_json::json!("crowdstrike")]),
-        "{}",
-        plan.document()
-    );
+    // would stop there. Every rule compiles (#1712 compiles each one; the
+    // corpus's CrowdStrike rule writes a trigger deploy takes, #1663).
+    assert!(plan.ok(), "{}", plan.document());
     assert_eq!(
         document["missing_tenants"].as_object().map(|m| m.len()),
         Some(7)

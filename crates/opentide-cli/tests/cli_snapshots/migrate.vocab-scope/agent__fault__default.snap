@@ -11,5 +11,5 @@ exit: 1
 ━━━ stderr
 warning: entities: "Host::Gizmo" is not a known vocabulary value
 warning: objects/rules/encoded-beacon-rule-0034.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 83, column 1)
-warning: objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar, found a tab (line 44, column 18)
+warning: objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar, found a tab (line 45, column 1)
 warning: objects/rules/staged-exfiltration-rule-0021.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 72, column 1)

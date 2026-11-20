@@ -374,6 +374,63 @@ fn rule_1_1_without_reviewed() {
 }
 
 #[test]
+fn created_and_modified_must_be_dates() {
+    // B1 (smoke test): `created: yesterday` and `modified: 2026-02-30`
+    // passed `validate`, though the JSON Schema says `format: date`.
+    let with = |field: &str, value: &str| {
+        let line = RULE
+            .lines()
+            .find(|line| line.trim_start().starts_with(&format!("{field}:")))
+            .unwrap()
+            .to_owned();
+        RULE.replace(&line, &format!("  {field}: {value}"))
+    };
+    for (field, value, message) in [
+        (
+            "created",
+            "yesterday",
+            "metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        ),
+        (
+            "created",
+            "26-1-1",
+            "metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        ),
+        (
+            "modified",
+            "2026-02-30",
+            "metadata.modified is not a valid date or time: parameter 'day' for `2026-02` is \
+             invalid, must be in range `1..=28`",
+        ),
+    ] {
+        let errors = read::<RuleV1_1>(&with(field, value)).unwrap_err();
+        assert_eq!(
+            messages(&errors),
+            [(
+                format!("metadata.{field}"),
+                Some("value_error"),
+                message.to_owned()
+            )],
+            "{field}: {value}"
+        );
+    }
+    for value in [
+        "2026-01-01",
+        "'2026-01-01'",
+        "2026-01-01T10:00:00Z",
+        // Without an offset, as 0.28.1 took it.
+        "2026-01-01 10:00:00",
+    ] {
+        let rule: RuleV1_1 = read(&with("created", value)).unwrap();
+        assert!(rule.metadata.created.starts_with("2026-01-01"), "{value}");
+    }
+    let built = read::<RuleV1_1>(RULE).unwrap();
+    let mut changed = built.clone();
+    changed.metadata.modified = "2026-13-45".to_owned();
+    assert!(garde::Validate::validate_with(&changed, &crate::Pins::default()).is_err());
+}
+
+#[test]
 fn rule_1_1_rejects_a_bad_review_date() {
     let errors = read::<RuleV1_1>(&with_reviewed("yesterday")).unwrap_err();
     assert_eq!(

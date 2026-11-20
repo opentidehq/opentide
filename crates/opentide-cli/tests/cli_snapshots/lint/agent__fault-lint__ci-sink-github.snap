@@ -101,7 +101,8 @@ warning[kql_deprecated_function]: 'any' is deprecated; use take_any()
    ╰─ help: did you mean "take_any"?
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 83, column 1
-  ╰─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ╭─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ╰─ note: the `[` opened at line 82, column 9 is not closed
 
 warning[falco_field_as_value]: 'proc.pname' may be a valid field misused as a const string value: compare with val(proc.pname)
    ╭─▶ objects/rules/encoded-downgrade-rule-0181.yaml:83:39
@@ -211,12 +212,12 @@ warning[kuery_lucene_syntax]: `[a TO b]` is a Lucene range; KQL searches it as t
    │
    ╰─ help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
 
-error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18
-   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:44:18
+error[yaml_parse]: Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1
+   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:45:1
    │
-43 │       group_by: source
 44 │       condition: count() >= 3
-   │                  ━
+45 │    indent: tab
+   │ ━━━
 
 warning[risk_band]: risk score 90 is outside Kibana's low band (0–21) for alert severity low
    ╭─▶ objects/rules/hidden-tunnel-rule-0528.yaml:67:5
@@ -622,7 +623,8 @@ warning[spl_leading_not]: leading `NOT` used as the search filter scans events b
    ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
 error[yaml_parse]: Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
-  ╰─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ╭─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ╰─ note: the `[` opened at line 71, column 9 is not closed
 
 warning[kql_unscoped_search]: unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)
    ╭─▶ objects/rules/staged-pivot-rule-0131.yaml:36:7
@@ -643,7 +645,7 @@ warning[filename_mismatch]: Filename "hidden-downgrade-threat-0005-v2.yaml" does
 ::error file=objects/threats/encoded-exfiltration-threat-0030.yaml,title=yaml_parse::Could not parse object YAML: expected a mapping at the top of the file, found an empty file
 ::error file=objects/rules/covert-injection-rule-0032.yaml,title=name_missing::Object has no name; cannot check filename slug%0Ahelp: add a name: the file name is derived from it
 ::error file=objects/rules/encoded-beacon-rule-0034.yaml,line=83,endLine=83,col=1,endColumn=1,title=yaml_parse::Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 83, column 1
-::error file=objects/rules/hidden-loader-rule-0024.yaml,line=44,endLine=44,col=18,endColumn=18,title=yaml_parse::Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18
+::error file=objects/rules/hidden-loader-rule-0024.yaml,line=45,endLine=45,col=1,endColumn=1,title=yaml_parse::Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1
 ::error file=objects/rules/staged-exfiltration-rule-0021.yaml,line=72,endLine=72,col=1,endColumn=1,title=yaml_parse::Could not parse object YAML: while parsing a flow sequence, expected ',' or ']' at line 72, column 1
 ::warning file=objects/rules/silent-exfiltration-rule-0033.yaml,line=10,endLine=10,col=11,endColumn=26,title=placeholder::author holds a placeholder value written by opentide new%0Ahelp: replace the value, then delete the '# opentide:placeholder' comment
 ::warning file=objects/rules/covert-downgrade-rule-0237.yaml,line=100,endLine=100,col=9,endColumn=12,title=falco_exception::Multiple definitions of exception 'e' in the same rule%0Ahelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
@@ -707,7 +709,7 @@ warning[filename_mismatch]: Filename "hidden-downgrade-threat-0005-v2.yaml" does
 | warning | [`threshold_lookback`](https://opentide.org/docs/cli/diagnostics#threshold_lookback) | `objects/rules/hidden-harvest-rule-0060.yaml:62:7` | threshold rule's lookback exceeds its interval \(5m\): threshold counts are not de-duplicated across overlapping runs — help: opentide explain threshold\_lookback describes it |
 | warning | [`falco_regex_simple`](https://opentide.org/docs/cli/diagnostics#falco_regex_simple) | `objects/rules/hidden-harvest-rule-0217.yaml:57:43` | regex check with 'bash' may be optimized with simpler operators such as '=', 'contains', 'startswith', 'endswith' — help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/ |
 | warning | [`kuery_lucene_syntax`](https://opentide.org/docs/cli/diagnostics#kuery_lucene_syntax) | `objects/rules/hidden-injection-rule-0268.yaml:57:13` | \`\[a TO b\]\` is a Lucene range; KQL searches it as text. Use \`field &gt;= a and field &lt;= b\` — help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql |
-| error | [`yaml_parse`](https://opentide.org/docs/cli/diagnostics#yaml_parse) | `objects/rules/hidden-loader-rule-0024.yaml:44:18` | Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18 |
+| error | [`yaml_parse`](https://opentide.org/docs/cli/diagnostics#yaml_parse) | `objects/rules/hidden-loader-rule-0024.yaml:45:1` | Could not parse object YAML: while scanning a plain scalar, found a tab at line 45, column 1 |
 | note | [`eql_maxspan_missing`](https://opentide.org/docs/cli/diagnostics#eql_maxspan_missing) | `objects/rules/hidden-relay-rule-0476.yaml:60:7` | sequence has no \`with maxspan=\`: its events can be any distance apart within the search window. A maxspan bounds matches and the partial sequences Elasticsearch keeps — help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql |
 | warning | [`risk_band`](https://opentide.org/docs/cli/diagnostics#risk_band) | `objects/rules/hidden-tunnel-rule-0528.yaml:67:5` | risk score 90 is outside Kibana's low band \(0–21\) for alert severity low — help: opentide explain risk\_band describes it |
 | warning | [`lucene_mixed_operators`](https://opentide.org/docs/cli/diagnostics#lucene_mixed_operators) | `objects/rules/lateral-downgrade-rule-0340.yaml:79:22` | Lucene has no AND/OR precedence \(\`a OR b AND c\` means \`a +b +c\`\); add parentheses — help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query |
