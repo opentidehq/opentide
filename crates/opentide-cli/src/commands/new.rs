@@ -4,7 +4,8 @@
 //!
 //! The template (`.opentide/templates/<family>.<M>.<m>.template.yaml`) is the
 //! starting text, filled line by line ([`scaffold`]): the name, a fresh
-//! UUID v4, today's date, the git author, the catalogue's organisation, and
+//! UUID v4, today's date, the git author, the configured organisation
+//! (`.opentide/configurations/organisation.toml`, written by `setup --org`), and
 //! for every other required value the first value the generated JSON schema
 //! allows, or `...` for free text. Those stand-ins are the result's
 //! `placeholders`. When the template or the schema is missing, the
@@ -34,6 +35,7 @@ use opentide_workspace::lint::stems::{expected_stem, object_stem, slugify, split
 use serde_json::Value;
 
 use self::scaffold::{FieldPath, Fill, Model, Scalar, collect_fields, fill_template};
+use super::setup::files::ORGANISATION_FILE;
 use super::setup::wizard::{Prompter, Stop};
 use super::{COMMAND_FAILED, Report, placement};
 use crate::env::Env;
@@ -102,7 +104,17 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 3] = [
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 4] = [
+    (
+        "crowdstrike",
+        // The model holds both to a closed set in any case, which the JSON
+        // Schema cannot say (it would flag `Verbose`), so the schema offers
+        // no value: the first allowed one, as a placeholder to confirm.
+        &[
+            (&["details", "trigger"], "verbose", true),
+            (&["details", "outcome"], "detection", true),
+        ],
+    ),
     (
         "google_secops",
         // A rule without $risk_score earns google_secops_risk_score_missing.
@@ -307,35 +319,125 @@ fn text_of<'n>(node: &'n Node, key: &str) -> Option<&'n str> {
     node.get(key).and_then(|value| value.value.as_str())
 }
 
-/// The organisation most objects in the catalogue carry
-/// (`catalogue_organisation`); ties go to the first seen in path order.
-fn catalogue_organisation(objects_root: &Path) -> Option<(String, String)> {
-    let mut seen: Vec<((String, String), usize)> = Vec::new();
-    for path in object_files(objects_root) {
-        let Some(metadata) = metadata_of(&path) else {
-            continue;
-        };
-        let Some(organisation) = metadata.get("organisation") else {
-            continue;
-        };
-        let (Some(uuid), Some(name)) =
-            (text_of(organisation, "uuid"), text_of(organisation, "name"))
-        else {
-            continue;
-        };
-        if uuid.is_empty() || name.is_empty() {
-            continue;
-        }
-        let key = (uuid.trim().to_owned(), name.trim().to_owned());
-        match seen.iter_mut().find(|(known, _)| *known == key) {
-            Some((_, count)) => *count += 1,
-            None => seen.push((key, 1)),
-        }
+/// What the resolved configuration says of `organisation.toml`.
+#[derive(Debug, PartialEq, Eq)]
+enum Configured {
+    /// No `organisation.toml`.
+    Absent,
+    /// The file is there but holds no UUID and name `new` can write.
+    Unusable {
+        /// What is wrong with it.
+        problems: String,
+        /// What fixes it: `setup --org` writes a missing uuid or name, but
+        /// keeps a uuid that is there, so a bad one is replaced by hand.
+        advice: String,
+    },
+    /// Its `{uuid, name}`.
+    Usable(String, String),
+}
+
+/// How a key of `organisation.toml` reads.
+enum Key<'n> {
+    Missing,
+    NotText,
+    Text(&'n str),
+}
+
+fn key_of<'n>(node: &'n Node, key: &str) -> Key<'n> {
+    match node.get(key) {
+        None => Key::Missing,
+        Some(value) => value.value.as_str().map_or(Key::NotText, Key::Text),
     }
-    let most = seen.iter().map(|(_, count)| *count).max()?;
-    seen.into_iter()
-        .find(|(_, count)| *count == most)
-        .map(|(key, _)| key)
+}
+
+/// The organisation `setup --org` kept in `organisation.toml`, as the
+/// resolved configuration holds it. The reasons are `setup`'s words for the
+/// same file.
+fn configured_organisation(config: &Node) -> Configured {
+    let Some(organisation) = config.get("organisation") else {
+        return Configured::Absent;
+    };
+    let mut problems: Vec<&str> = Vec::new();
+    let mut uuid_to_replace = false;
+    let uuid = match key_of(organisation, "uuid") {
+        Key::Missing => {
+            problems.push("it has no uuid");
+            None
+        }
+        Key::NotText => {
+            problems.push("its uuid is not text");
+            uuid_to_replace = true;
+            None
+        }
+        Key::Text(uuid) if !is_uuid(uuid.trim()) => {
+            problems.push("its uuid is not a UUID");
+            uuid_to_replace = true;
+            None
+        }
+        Key::Text(uuid) => Some(uuid.trim()),
+    };
+    let name = match key_of(organisation, "name") {
+        Key::Missing => {
+            problems.push("it has no name");
+            None
+        }
+        Key::NotText => {
+            problems.push("its name is not text");
+            None
+        }
+        Key::Text(name) if name.trim().is_empty() => {
+            problems.push("its name is empty");
+            None
+        }
+        Key::Text(name) => Some(name.trim()),
+    };
+    if let (Some(uuid), Some(name)) = (uuid, name) {
+        return Configured::Usable(uuid.to_owned(), name.to_owned());
+    }
+    let setup = "run 'opentide setup --org \"<name>\"'";
+    let advice = if uuid_to_replace && name.is_none() {
+        format!("replace its uuid with your organisation's UUID, then {setup}")
+    } else if uuid_to_replace {
+        "replace its uuid with your organisation's UUID".to_owned()
+    } else {
+        format!("fix it or {setup}")
+    };
+    Configured::Unusable {
+        problems: problems.join(", "),
+        advice,
+    }
+}
+
+/// The organisation a new object carries, and why it has none.
+#[derive(Debug, PartialEq, Eq)]
+struct OrganisationChoice {
+    /// `{uuid, name}`, or `None` when no usable `organisation.toml` names one.
+    organisation: Option<(String, String)>,
+    /// Why `metadata.organisation` is left out when `organisation` is `None`.
+    left_out: String,
+}
+
+/// The organisation a new object carries: the one `setup --org` kept in
+/// `organisation.toml`, and nothing else. It is configured once per
+/// repository; `new` never derives it from objects already written, so
+/// editing the file, or running `setup --org` again, reaches every later
+/// object.
+fn organisation_for(config: &Node) -> OrganisationChoice {
+    match configured_organisation(config) {
+        Configured::Usable(uuid, name) => OrganisationChoice {
+            organisation: Some((uuid, name)),
+            left_out: String::new(),
+        },
+        Configured::Unusable { problems, advice } => OrganisationChoice {
+            organisation: None,
+            left_out: format!("{ORGANISATION_FILE} is not usable: {problems}; {advice}"),
+        },
+        Configured::Absent => OrganisationChoice {
+            organisation: None,
+            left_out: "no organisation is configured; run 'opentide setup --org \"<name>\"'"
+                .to_owned(),
+        },
+    }
 }
 
 /// `metadata.uuid` of every object under `folder`, lower-cased.
@@ -368,7 +470,7 @@ fn inert_status(config: &Node) -> Option<String> {
 }
 
 /// Whether `value` is a UUID in its canonical 8-4-4-4-12 hex form.
-fn is_uuid(value: &str) -> bool {
+pub(crate) fn is_uuid(value: &str) -> bool {
     let parts: Vec<&str> = value.split('-').collect();
     parts.len() == 5
         && parts
@@ -776,11 +878,10 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
 
     let author = super::super::git_baseline::stdout(cx.env, &root, &["config", "user.name"])
         .filter(|name| !name.is_empty());
-    let objects_root = paths
-        .objects
-        .parent()
-        .map_or_else(|| paths.objects.clone(), Path::to_path_buf);
-    let organisation = catalogue_organisation(&objects_root);
+    let OrganisationChoice {
+        organisation,
+        left_out: organisation_left_out,
+    } = organisation_for(&config);
 
     let today = today(cx.env);
     let mut values: HashMap<FieldPath, Scalar> = HashMap::from([
@@ -1018,7 +1119,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         ),
         (
             "metadata.organisation",
-            "no catalogue object names one",
+            organisation_left_out.as_str(),
             organisation.is_none(),
         ),
     ]
