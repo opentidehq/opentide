@@ -35,10 +35,10 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "new",
             "rules",
         ],
-        80,
+        84,
     ),
     ("explain", &["explain"], 22),
-    ("validate", &["validate"], 207),
+    ("validate", &["validate"], 211),
     // The read-only reports, and the protocol commands' help and refusals.
     (
         "reports_and_protocols",
@@ -52,7 +52,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "lsp.start",
             "mcp.start",
         ],
-        222,
+        226,
     ),
     (
         "generate",
@@ -74,7 +74,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "generate.inflight",
             "generate.inflight.prune",
         ],
-        274,
+        286,
     ),
     // The commands that write objects.
     (
@@ -86,7 +86,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "migrate.vocab-scope",
             "rules.unreviewed",
         ],
-        114,
+        118,
     ),
     // `setup` and its subcommands, the skills catalogue served from its
     // cassettes.
@@ -105,7 +105,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "setup.skills.show",
             "setup.vscode",
         ],
-        303,
+        315,
     ),
     // Dry runs, and sends to tenants served from cassettes.
     ("deploy", &["deploy", "deploy.migrate-state"], 163),

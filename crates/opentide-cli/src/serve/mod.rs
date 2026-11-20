@@ -175,6 +175,16 @@ mod stdio {
     }
 }
 
+/// Set once `serve` handles SIGTERM and SIGHUP itself: a run it hosts
+/// leaves them alone.
+static HANDLES_TERMINATION: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Whether `serve` handles termination signals now.
+pub(crate) fn handles_termination() -> bool {
+    HANDLES_TERMINATION.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 mod signals {
     //! SIGTERM and SIGHUP as the end of input while the server serves.
     //!
@@ -202,6 +212,7 @@ mod signals {
             use signal_hook::consts::{SIGHUP, SIGTERM};
             use std::sync::atomic::AtomicBool;
             use std::sync::{Arc, Mutex};
+            super::HANDLES_TERMINATION.store(true, std::sync::atomic::Ordering::SeqCst);
             let seen = Arc::new(AtomicBool::new(false));
             let mut ids = Vec::new();
             let mut arrived = Vec::new();

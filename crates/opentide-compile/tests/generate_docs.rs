@@ -390,7 +390,7 @@ fn the_flavour_comes_from_ci_then_origin_then_the_configuration() {
     .unwrap();
     assert_eq!(
         unknown.detail,
-        "unknown docs flavor `wiki` (expected generic, github, gitlab or azure-devops)"
+        "unknown docs flavor `wiki` (expected generic, github, gitlab or azure_devops)"
     );
     // Without documentation.toml the default is CommonMark.
     let (_dir, plain) = open("tide-corpus");

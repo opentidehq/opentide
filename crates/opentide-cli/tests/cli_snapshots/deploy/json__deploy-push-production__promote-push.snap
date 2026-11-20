@@ -20,7 +20,10 @@ exit: 0
   "platform": "splunk",
   "schema_version": 1,
   "status": "skipped",
-  "summary": {}
+  "summary": {},
+  "warnings": [
+    "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file"
+  ]
 }
 
 ━━━ stderr · empty

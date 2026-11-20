@@ -94,6 +94,9 @@ pub fn run(args: &Args, repo: Option<&str>, env: &Env, cwd: &Path) -> Report {
             }
         }
     }
+    if let Some(refused) = super::no_workspace(COMMAND, repo, env, cwd) {
+        return refused;
+    }
     let (shown, _) = placement(repo, env, cwd);
     let root = cwd.join(&shown);
     match migrate(&root, &fields, args.apply) {
@@ -419,6 +422,7 @@ mod tests {
 
     fn workspace(files: &[(&str, &str)]) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("objects")).unwrap();
         for (path, text) in files {
             let path = dir.path().join(path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -678,6 +682,24 @@ objective:
             on_disk,
             text.replace("[Process]", "[Host::Process]")
                 .replace("[host::Hostname]", "[Host::Hostname]")
+        );
+    }
+
+    #[test]
+    fn a_folder_that_is_no_workspace_is_refused() {
+        // B18 (smoke test): outside a workspace the run said "Would rewrite
+        // 0 files · 0 scanned" and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let report = run_in(dir.path(), &Args::default());
+        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(
+            report.outcome.failure.as_ref().map(|f| f.code.as_str()),
+            Some("workspace_not_found")
+        );
+        assert!(
+            report.outcome.message.starts_with("No workspace at "),
+            "{}",
+            report.outcome.message
         );
     }
 

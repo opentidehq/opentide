@@ -130,15 +130,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             if section == Some("catalog") {
                 scope.spawn(catalogue::warm);
             }
-            super::open(options)
+            super::open_for(COMMAND, options)
         })
     } else {
         // Without threads (WASI) the catalogue warms after the load.
-        super::open(options)
+        super::open_for(COMMAND, options)
     };
     let workspace = match opened {
         Ok(workspace) => workspace,
-        Err(message) => return Report::error(COMMAND, message),
+        Err(report) => return *report,
     };
     let index = workspace.index();
     let vocabularies = Vocabularies::bundled();

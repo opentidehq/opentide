@@ -8,5 +8,5 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Environment variable missing · detail: Unset configuration variables: $AZURE_CLIENT_SECRET · advice: Set those environment variables before a live check.
-error: 1 of 1 queries failed on 1 sentinel tenant: lab: Azure credentials are unset ($AZURE_CLIENT_SECRET). Set those environment variables before a live check.
+error: Environment variable missing · detail: Unset configuration variables: $AZURE_CLIENT_SECRET · advice: Set those environment variables before a query.
+error: 1 of 1 queries failed on 1 sentinel tenant: lab: Azure credentials are unset ($AZURE_CLIENT_SECRET). Set those environment variables, then run the command again.

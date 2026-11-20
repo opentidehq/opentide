@@ -114,7 +114,19 @@ impl State {
             cwd: self.cwd.as_deref(),
             repo: self.repo.as_deref(),
             version: &self.version,
-            workspace_problem: self.workspace_problem.clone(),
+            workspace_problem: self.workspace_problem.clone().or_else(|| {
+                let cwd = self
+                    .cwd
+                    .clone()
+                    .or_else(|| std::env::current_dir().ok())
+                    .unwrap_or_default();
+                super::plugin::missing_workspace(
+                    &opentide_workspace::OsFs,
+                    &self.env,
+                    &cwd,
+                    self.repo.as_deref(),
+                )
+            }),
             interrupt,
         }
     }
@@ -465,6 +477,148 @@ mod tests {
         assert_eq!(data.message, "Unknown resource: x");
         assert_eq!(data.data, Some(json!({"uri": "x"})));
         assert_eq!(error_data(&json!({})).code, ErrorCode::INTERNAL_ERROR);
+    }
+
+    #[test]
+    fn a_catalogue_tool_refuses_where_there_is_no_workspace() {
+        // C1 (smoke test): started in an empty folder, or with
+        // OPENTIDE_REPO_ROOT naming none, the server answered an empty
+        // catalogue and `validation_report` said `ok: true`.
+        let scratch = tempfile::tempdir().unwrap();
+        let empty = scratch.path().join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let missing = scratch.path().join("missing");
+        let text = |server: &Server, tool: &str, arguments: Value| -> (Value, String) {
+            let arguments = serde_json::from_value(arguments).unwrap();
+            let Answer::Result(result) = server.call(tool, &arguments) else {
+                panic!("not a result");
+            };
+            let text = result["content"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned();
+            (result, text)
+        };
+        let in_empty = Server::new(
+            Env::from_pairs::<&str, &str>([]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        let (result, said) = text(&in_empty, "validation_report", json!({}));
+        assert_eq!(result["isError"], true, "{said}");
+        assert!(
+            said.contains("workspace_not_found: no detection workspace at"),
+            "{said}"
+        );
+        let (result, said) = text(&in_empty, "search", json!({"query": "x"}));
+        assert_eq!(result["isError"], true, "{said}");
+        // `explain` needs no workspace.
+        let (result, said) = text(&in_empty, "explain", json!({"code": "yaml_parse"}));
+        assert_ne!(result["isError"], true, "{said}");
+        // A workspace made while the server runs is served.
+        std::fs::create_dir_all(empty.join(".opentide")).unwrap();
+        let (_, said) = text(&in_empty, "validation_report", json!({}));
+        assert!(!said.contains("workspace_not_found"), "{said}");
+
+        let shown = missing.to_string_lossy().into_owned();
+        let named = Server::new(
+            Env::from_pairs([("OPENTIDE_REPO_ROOT", shown.as_str())]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        let (result, said) = text(&named, "validation_report", json!({}));
+        assert_eq!(result["isError"], true, "{said}");
+        assert!(
+            said.contains(&format!(
+                "workspace_not_found: OPENTIDE_REPO_ROOT names {shown}, which is not a folder"
+            )),
+            "{said}"
+        );
+
+        // A repository root with no markers and its detections in
+        // OPENTIDE_TIDE_WORKSPACE is a workspace, as the command line
+        // serves it (`commands::unplaced_root`).
+        let mono = scratch.path().join("mono");
+        std::fs::create_dir_all(mono.join("detections/.opentide")).unwrap();
+        let root = mono.to_string_lossy().into_owned();
+        let detections = mono.join("detections").to_string_lossy().into_owned();
+        let split = Server::new(
+            Env::from_pairs([
+                ("OPENTIDE_REPO_ROOT", root.as_str()),
+                ("OPENTIDE_TIDE_WORKSPACE", detections.as_str()),
+            ]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        for (tool, arguments) in [
+            ("validation_report", json!({})),
+            ("search", json!({"query": "x"})),
+        ] {
+            let (result, said) = text(&split, tool, arguments);
+            assert!(!said.contains("workspace_not_found"), "{tool}: {said}");
+            assert_ne!(result["isError"], true, "{tool}: {said}");
+        }
+        // Every variable set must name a folder, the second one too.
+        let gone = mono.join("gone").to_string_lossy().into_owned();
+        let typo = Server::new(
+            Env::from_pairs([
+                ("OPENTIDE_REPO_ROOT", root.as_str()),
+                ("OPENTIDE_TIDE_WORKSPACE", gone.as_str()),
+            ]),
+            Some(empty.clone()),
+            None,
+            "1",
+            None,
+        );
+        let (result, said) = text(&typo, "search", json!({"query": "x"}));
+        assert_eq!(result["isError"], true, "{said}");
+        assert!(
+            said.contains(&format!("OPENTIDE_TIDE_WORKSPACE names {gone}")),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn a_configuration_file_that_does_not_parse_is_config_parse() {
+        // D9, B10 (smoke test): MCP answered `command_failed` with an
+        // absolute path and no position, where the command line says
+        // `config_parse` and `path:line:column`.
+        let dir = tempfile::tempdir().unwrap();
+        let platforms = dir.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
+        let server = Server::new(
+            Env::from_pairs::<&str, &str>([]),
+            Some(dir.path().to_path_buf()),
+            None,
+            "1",
+            None,
+        );
+        for (tool, arguments) in [
+            ("validation_report", json!({})),
+            ("search", json!({"query": "x"})),
+        ] {
+            let arguments = serde_json::from_value(arguments).unwrap();
+            let Answer::Result(result) = server.call(tool, &arguments) else {
+                panic!("not a result");
+            };
+            let said = result["content"][0]["text"].as_str().unwrap_or("");
+            assert_eq!(result["isError"], true, "{tool}: {said}");
+            assert!(
+                said.contains("config_parse: .opentide/configurations/platforms/sentinel.toml:2:"),
+                "{tool}: {said}"
+            );
+        }
     }
 
     #[test]

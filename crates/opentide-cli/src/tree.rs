@@ -304,7 +304,11 @@ pub enum CiPlatform {
 pub struct Cli {
     #[arg(long = "repo", env = "OPENTIDE_REPO_ROOT", help = "Repository root")]
     pub repo: Option<String>,
-    #[arg(long = "data", env = "OPENTIDE_DATA_ROOT", help = "Bundled data root")]
+    #[arg(
+        long = "data",
+        env = "OPENTIDE_DATA_ROOT",
+        help = "Data root; only --technique completion reads it"
+    )]
     pub data: Option<String>,
     #[arg(
         long = "debug",

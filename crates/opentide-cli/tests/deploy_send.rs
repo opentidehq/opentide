@@ -1822,6 +1822,11 @@ fn a_failed_deploy_lists_its_failures_in_the_job_summary() {
 
 /// `ws` as a git checkout of two commits, the second changing `file`.
 fn pushed(ws: &Path, file: &str) {
+    pushed_files(ws, &[file]);
+}
+
+/// `ws` as a repository whose last commit changed each of `files`.
+fn pushed_files(ws: &Path, files: &[&str]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .args([
@@ -1847,13 +1852,15 @@ fn pushed(ws: &Path, file: &str) {
     git(&["init", "-q"]);
     git(&["add", "-A"]);
     git(&["commit", "-q", "-m", "base"]);
-    let path = ws.join(file);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(
-        &path,
-        text.replace("description: ", "description: Changed. "),
-    )
-    .unwrap();
+    for file in files {
+        let path = ws.join(file);
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            text.replace("description: ", "description: Changed. "),
+        )
+        .unwrap();
+    }
     git(&["commit", "-q", "-a", "-m", "push"]);
 }
 
@@ -1911,13 +1918,14 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
 
     std::fs::remove_file(&config).unwrap();
     let (code, out, err) = cli(ws.path(), &argv, &push());
-    let text = std::fs::read_to_string(&rule).unwrap();
-    assert!(text.contains("    status: PRODUCTION\n"), "{text}");
     // The promoted rule goes to the tenant, which does not resolve here:
-    // the failure is that tenant's own.
+    // the failure is that tenant's own, and since no tenant received the
+    // rule its promotion is put back (#1653).
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("\"tenant\":\"lab\""), "{out}");
     assert!(out.contains("\"failures\":[{"), "{out}");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    assert!(text.contains("    status: STAGING\n"), "{text}");
 }
 
 /// The rule a RELEASE push promotes is deployed to the tenants that take
@@ -1984,10 +1992,11 @@ fn a_push_deploys_the_rule_it_promotes_to_its_release_tenants() {
 /// (`s.yaml`) was promoted too (whole-folder promotion).
 fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
     let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let disabled = "  splunk:\n    status: DISABLED\n    query: index=main\n";
     let ws = workspace(
         "splunk",
         "lab",
-        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
         &[
             (
                 "r.yaml",
@@ -2007,48 +2016,57 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
                     block,
                 ),
             ),
+            (
+                "t.yaml",
+                rule(
+                    "Disabled",
+                    "00000000-0000-4000-8047-000000000905",
+                    "A disabled rule.",
+                    disabled,
+                ),
+            ),
         ],
     );
     pushed(ws.path(), "objects/rules/r.yaml");
-    let env = vec![
-        ("GITHUB_ACTIONS", "true".to_owned()),
-        ("GITHUB_EVENT_NAME", "push".to_owned()),
-        ("GITHUB_SHA", "HEAD".to_owned()),
-        ("GITHUB_WORKSPACE", ws.path().display().to_string()),
-    ];
-    let mut env = env;
-    env.extend(
+    let mut pairs: Vec<(String, String)> = github_push(ws.path())
+        .into_iter()
+        .map(|(name, value)| (name.to_owned(), value))
+        .collect();
+    pairs.extend(
         extra
             .iter()
-            .map(|(name, value)| (*name, (*value).to_owned())),
+            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned())),
     );
-    let argv = [
-        "--json",
-        "deploy",
-        "--platform",
-        "splunk",
-        "--strategy",
-        "RELEASE",
-    ];
-    let (code, out, err) = cli(ws.path(), &argv, &env);
-    // The promoted rule is routed to the tenant, which has no token here:
-    // the tenant's own refusal fails the run.
-    assert_eq!(code, 1, "{out}{err}");
+    let env = Env::from_pairs(pairs);
+    let (registry, deployer) = scripted("splunk", Vec::new());
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(ws.path(), &args, &env, &registry, 0);
     assert!(
-        out.contains("\"tenant\":\"lab\"") && out.contains("SPLUNK_TOKEN"),
-        "{out}{err}"
-    );
-    // Whole-folder promotion rewrites s.yaml too, but only the files the
-    // push changed are deployed (#1653 tracks that gap).
-    assert!(
-        !out.contains("00000000-0000-4000-8047-000000000903"),
-        "{out}"
+        rows(&sent).iter().all(|(status, _)| status == "deployed"),
+        "{text}"
     );
     let read = |name: &str| std::fs::read_to_string(ws.path().join("objects/rules").join(name));
     let changed = read("r.yaml").unwrap();
     assert!(changed.contains("    status: PRODUCTION\n"), "{changed}");
     let other = read("s.yaml").unwrap();
-    other.contains("    status: PRODUCTION\n")
+    let promoted = other.contains("    status: PRODUCTION\n");
+    // Whole-folder promotion deploys what it promoted, s.yaml too, and
+    // nothing else of the folder: never the disabled rule (#1653).
+    let seen: Vec<String> = deployer
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    assert_eq!(seen.contains(&"Untouched".to_owned()), promoted, "{seen:?}");
+    assert!(!seen.contains(&"Disabled".to_owned()), "{seen:?}");
+    assert!(seen.contains(&"Promoted".to_owned()), "{seen:?}");
+    promoted
 }
 
 /// VS Code's integrated terminal (`TERM_PROGRAM=vscode`) does not turn on
@@ -3018,6 +3036,608 @@ fn exabeam_stops_a_tenant_refusing_the_token_on_a_rule() {
     assert_tenant_stopped(&sent, "lab");
 }
 
+/// A push's environment in GitHub Actions for `ws`.
+fn github_push(ws: &Path) -> Vec<(&'static str, String)> {
+    vec![
+        ("GITHUB_ACTIONS", "true".to_owned()),
+        ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_SHA", "HEAD".to_owned()),
+        ("GITHUB_WORKSPACE", ws.display().to_string()),
+    ]
+}
+
+/// A rule a RELEASE push promotes but no tenant takes (the tenant accepts
+/// PREVIEW only) is not sent: it is reported skipped, with why, never
+/// `deployed`, and its file keeps the status it had, so the write-back
+/// commits no status that was never deployed (#1653).
+#[test]
+fn a_promoted_rule_no_tenant_takes_is_skipped_and_keeps_its_status() {
+    let uuid = "00000000-0000-4000-8047-000000000911";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Unrouted", uuid, "A rule.", block))],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace(
+            "strategies = [\"PREVIEW\", \"RELEASE\"]",
+            "strategies = [\"PREVIEW\"]",
+        ),
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}{err}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let results = document["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1, "{out}");
+    assert_eq!(results[0]["status"], "skipped", "{out}");
+    assert_eq!(results[0]["tenant"], serde_json::Value::Null, "{out}");
+    assert!(
+        results[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("no splunk tenant takes its status PRODUCTION"),
+        "{out}"
+    );
+    assert_eq!(
+        std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+        before,
+        "the promotion was put back"
+    );
+}
+
+/// A RELEASE push skipped for want of tenants (`--skip-unconfigured`) sends
+/// nothing, so the rules it promoted keep the status they had: the
+/// write-back commits no PRODUCTION status for a rule never deployed
+/// (#1653, smoke A4).
+#[test]
+fn a_skipped_push_keeps_the_status_it_would_have_promoted() {
+    let ws = tempfile::tempdir().unwrap();
+    let platforms = ws.path().join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("splunk.toml"),
+        "[platform]\nenabled = true\nname = \"Stand-in\"\n",
+    )
+    .unwrap();
+    let rules = ws.path().join("objects/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    std::fs::write(
+        rules.join("r.yaml"),
+        rule(
+            "Unconfigured",
+            "00000000-0000-4000-8047-000000000912",
+            "A rule.",
+            block,
+        ),
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(rules.join("r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--strategy",
+        "RELEASE",
+        "--skip-unconfigured",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("\"status\":\"skipped\""), "{out}");
+    assert_eq!(
+        std::fs::read(rules.join("r.yaml")).unwrap(),
+        before,
+        "{err}"
+    );
+}
+
+/// The dry run of a RELEASE push previews the status promotion the push's
+/// deploy makes first (#1653, smoke E13): the changed STAGING rule is
+/// planned as promoted, for the tenant that takes RELEASE, with a warning
+/// saying so, and nothing is written. It used to say no rule would deploy.
+#[test]
+fn a_release_pushs_dry_run_plans_the_rules_it_will_promote() {
+    let uuid = "00000000-0000-4000-8047-000000000913";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Previewed", uuid, "A rule.", block))],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replace(
+            "strategies = [\"PREVIEW\", \"RELEASE\"]",
+            "strategies = [\"RELEASE\"]",
+        ),
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}{err}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(
+        document["plan"],
+        serde_json::json!({"splunk": [uuid]}),
+        "{out}"
+    );
+    assert!(
+        document["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning
+                .as_str()
+                .unwrap()
+                .contains("promotes 1 rule to PRODUCTION first")),
+        "{out}"
+    );
+    // The plan reads the promoted file: its change carries the new status.
+    assert_eq!(document["changes"][0]["status"], "PRODUCTION", "{out}");
+    assert_eq!(document["changes"][0]["tenant"], "lab", "{out}");
+    assert_eq!(
+        std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+        before,
+        "a dry run writes nothing"
+    );
+    // --skip-promotion previews none: nothing in STAGING goes to RELEASE.
+    let mut skipped = argv.to_vec();
+    skipped.push("--skip-promotion");
+    let (code, out, _) = cli(ws.path(), &skipped, &github_push(ws.path()));
+    assert_eq!(code, 0, "{out}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(document["plan"].get("splunk").is_none(), "{out}");
+}
+
+/// A promoted rule whose tenant the run cannot use (its credential is
+/// unset) was sent nowhere: its file is put back, so the write-back commits
+/// no status that was never deployed (#1653).
+#[test]
+fn a_promoted_rule_whose_tenant_fails_keeps_its_status() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Unsent",
+                "00000000-0000-4000-8047-000000000914",
+                "A rule.",
+                block,
+            ),
+        )],
+    );
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("SPLUNK_TOKEN"), "{out}");
+    assert_eq!(
+        std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+        before,
+        "the promotion was put back"
+    );
+}
+
+/// A run that ends before it plans anything puts back what it promoted:
+/// `--platform` naming a platform the promoted rule has no block for, and
+/// a promoted rule whose only platform is not enabled (#1653).
+#[test]
+fn a_push_that_plans_nothing_keeps_the_status_it_promoted() {
+    for (argv, rule_block) in [
+        (
+            vec![
+                "--json",
+                "deploy",
+                "--platform",
+                "sentinel",
+                "--strategy",
+                "RELEASE",
+            ],
+            "  splunk:\n    status: STAGING\n    query: index=main\n",
+        ),
+        (
+            vec!["--json", "deploy", "--strategy", "RELEASE"],
+            "  graylog:\n    status: STAGING\n    query: 'EventID:1'\n",
+        ),
+    ] {
+        let ws = workspace(
+            "splunk",
+            "lab",
+            "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+            &[(
+                "r.yaml",
+                rule(
+                    "Unplanned",
+                    "00000000-0000-4000-8047-000000000915",
+                    "A rule.",
+                    rule_block,
+                ),
+            )],
+        );
+        pushed(ws.path(), "objects/rules/r.yaml");
+        let before = std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap();
+        let (code, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+        assert_eq!(code, 0, "{argv:?}: {out}{err}");
+        assert_eq!(
+            std::fs::read(ws.path().join("objects/rules/r.yaml")).unwrap(),
+            before,
+            "{argv:?}: the promotion was put back"
+        );
+    }
+}
+
+/// A dry run whose push's promotion would stop the run (a promotion target
+/// that names no status) says so, rather than preview nothing (#1653).
+#[test]
+fn a_release_pushs_dry_run_warns_of_a_promotion_that_would_stop() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Stopping",
+                "00000000-0000-4000-8047-000000000916",
+                "A rule.",
+                block,
+            ),
+        )],
+    );
+    std::fs::write(
+        ws.path().join(".opentide/configurations/deployment.toml"),
+        "[promotion]\nenabled = true\npromotion_target = \"NOWHERE\"\n",
+    )
+    .unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let argv = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (_, out, err) = cli(ws.path(), &argv, &github_push(ws.path()));
+    assert!(
+        out.contains("would stop at its status promotion: Invalid promotion target"),
+        "{out}{err}"
+    );
+}
+
+/// The dry run reports a rule no tenant takes as the deploy skips it, with
+/// the reason, and previews no promotion for it (#1653).
+#[test]
+fn a_dry_run_reports_a_rule_no_tenant_takes() {
+    let uuid = "00000000-0000-4000-8047-000000000917";
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n    tenants: [other]\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("r.yaml", rule("Listed elsewhere", uuid, "A rule.", block))],
+    );
+    let argv = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--all",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "PREVIEW",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let document: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(document["changes"], serde_json::json!([]), "{out}");
+    assert_eq!(document["unrouted"][0]["uuid"], uuid, "{out}");
+    assert!(
+        document["unrouted"][0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("its tenants list names no splunk tenant"),
+        "{out}"
+    );
+}
+
+/// A Splunk stand-in that runs `during` on its first request, then answers
+/// each request in turn with `answers`, then `Ok`.
+struct HookedSplunk {
+    during: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    answers: Mutex<std::collections::VecDeque<Result<(), ConnectorError>>>,
+}
+
+impl Deployer for HookedSplunk {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let during = self.during.lock().unwrap().take();
+        if let Some(during) = during {
+            during();
+        }
+        let next = self.answers.lock().unwrap().pop_front().unwrap_or(Ok(()));
+        deploying(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// Registers a [`HookedSplunk`] as `splunk`.
+struct Hooked(&'static HookedSplunk);
+
+impl Platform for Hooked {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A RELEASE push in `ws` deployed to Splunk by a [`HookedSplunk`].
+fn hooked_push(
+    ws: &Path,
+    during: Box<dyn FnOnce() + Send>,
+    answers: Vec<Result<(), ConnectorError>>,
+) -> (Sent, String) {
+    let splunk: &'static HookedSplunk = Box::leak(Box::new(HookedSplunk {
+        during: Mutex::new(Some(during)),
+        answers: Mutex::new(answers.into()),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Hooked(splunk))).unwrap();
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let env = Env::from_pairs(
+        github_push(ws)
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value)),
+    );
+    deploy_with(ws, &args, &env, &registry, 0)
+}
+
+/// Two promoted rules: `a.yaml`, which the tenant receives, and `b.yaml`,
+/// which no tenant takes (it lists another tenant), so its file is put back.
+fn sent_and_unsent() -> tempfile::TempDir {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let elsewhere = format!("{block}    tenants: [other]\n");
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "Sent",
+                    "00000000-0000-4000-8047-000000000920",
+                    "A rule.",
+                    block,
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Unsent",
+                    "00000000-0000-4000-8047-000000000921",
+                    "A rule.",
+                    &elsewhere,
+                ),
+            ),
+        ],
+    );
+    pushed_files(ws.path(), &["objects/rules/a.yaml", "objects/rules/b.yaml"]);
+    ws
+}
+
+fn text_of(json: &Json) -> String {
+    match json {
+        Json::Str(text) => text.clone(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// A promoted file the run cannot put back fails the run (exit 1), naming
+/// the file: its commit would carry a status no tenant received (#1653).
+/// The rules folder is made read-only while the rule is sent; a privileged
+/// user writes there all the same, and the test then has nothing to show.
+#[test]
+fn a_promotion_the_run_cannot_undo_fails_the_run() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let ws = sent_and_unsent();
+    let rules = ws.path().join("objects/rules");
+    let mode = |bits| std::fs::set_permissions(&rules, std::fs::Permissions::from_mode(bits));
+    mode(0o555).unwrap();
+    let privileged = std::fs::write(rules.join("probe"), "").is_ok();
+    mode(0o755).unwrap();
+    if privileged {
+        eprintln!("skipped: this user writes a read-only folder");
+        return;
+    }
+    let shut = rules.clone();
+    let (sent, text) = hooked_push(
+        ws.path(),
+        Box::new(move || {
+            std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
+        }),
+        Vec::new(),
+    );
+    mode(0o755).unwrap();
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+    assert_eq!(value(&sent, "status"), &Json::str("failed"), "{text}");
+    let message = text_of(value(&sent, "message"));
+    assert!(
+        message.contains("Could not undo the status promotion of") && message.contains("b.yaml"),
+        "{message}"
+    );
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("{:?}", sent.result)
+    };
+    assert!(
+        failures.iter().any(|failure| failure
+            .get("path")
+            .and_then(Json::as_str)
+            .is_some_and(|path| path.ends_with("b.yaml"))),
+        "{failures:?}"
+    );
+    for file in ["a.yaml", "b.yaml"] {
+        let now = std::fs::read_to_string(rules.join(file)).unwrap();
+        assert!(now.contains("status: PRODUCTION"), "{file}: {now}");
+    }
+}
+
+/// A promoted file edited or deleted while the run sends is left as it is:
+/// the run never overwrites an edit, nor makes a deleted file again
+/// (#1653). An edited file fails the run (exit 1), since the write-back
+/// would commit a status no tenant received; a deleted one is a warning.
+#[test]
+fn a_promoted_file_changed_during_the_run_is_left_as_it_is() {
+    for deleted in [false, true] {
+        let ws = sent_and_unsent();
+        let unsent = ws.path().join("objects/rules/b.yaml");
+        let touched = unsent.clone();
+        let (sent, text) = hooked_push(
+            ws.path(),
+            Box::new(move || {
+                if deleted {
+                    std::fs::remove_file(&touched).unwrap();
+                } else {
+                    let mut file = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&touched)
+                        .unwrap();
+                    file.write_all(b"# edited\n").unwrap();
+                }
+            }),
+            Vec::new(),
+        );
+        if deleted {
+            assert_eq!(value(&sent, "_exit_code"), &Json::Int(0), "{text}");
+            let Json::Array(warnings) = value(&sent, "warnings") else {
+                panic!("{:?}", sent.result)
+            };
+            assert!(
+                warnings.iter().any(|warning| {
+                    let warning = text_of(warning);
+                    warning.contains("was deleted during the deploy") && warning.contains("b.yaml")
+                }),
+                "{warnings:?}"
+            );
+            assert!(!unsent.exists(), "the deleted file was made again");
+        } else {
+            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+            let message = text_of(value(&sent, "message"));
+            assert!(
+                message.contains("b.yaml") && message.contains("changed during the deploy"),
+                "{message}"
+            );
+            let now = std::fs::read_to_string(&unsent).unwrap();
+            assert!(now.ends_with("# edited\n"), "{now}");
+        }
+    }
+}
+
+/// A rule that reached one tenant and failed on another was deployed: its
+/// file stays promoted, and `deploy --uuid` sends it again (#1653).
+#[test]
+fn a_promoted_rule_that_reached_one_tenant_of_two_stays_promoted() {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Partial",
+                "00000000-0000-4000-8047-000000000922",
+                "A rule.",
+                block,
+            ),
+        )],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[[tenants]]\nname = \"backup\"\nstrategies = [\"PREVIEW\", \"RELEASE\"]\n\
+         [tenants.setup]\nurl = \"backup.invalid\"\ntoken = \"token\"\n",
+    );
+    std::fs::write(&config, text).unwrap();
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let (sent, text) = hooked_push(
+        ws.path(),
+        Box::new(|| {}),
+        vec![
+            Ok(()),
+            Err(ConnectorError::refused(
+                "splunk",
+                "backup",
+                "POST https://x failed with HTTP 400 Bad Request: no",
+                None,
+            )),
+        ],
+    );
+    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+    let mut statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
+    statuses.sort();
+    assert_eq!(statuses, ["deployed", "failed"], "{text}");
+    let now = std::fs::read_to_string(ws.path().join("objects/rules/r.yaml")).unwrap();
+    assert!(now.contains("status: PRODUCTION"), "{now}");
+}
+
 /// A `--platform` run (not a dry run) with no rule of its strategies counts
 /// only its own platform's left-out rules, and names its strategies in its
 /// advice, never "this run" (#1662, D11): the result names the platform,
@@ -3087,4 +3707,705 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
     };
     assert_eq!(skipped.len(), 1, "{skipped:?}");
     assert_eq!(skipped[0].get("platform"), Some(&Json::str("splunk")));
+}
+
+// #1712: a dry run's `api_request` is the requests a deploy sends. For each
+// platform whose writes are built from the tenant, the dry run of a
+// workspace is held to what the tenant's stand-in receives when the same
+// workspace deploys: the recorded cassettes of the `send-*` golden cases (or
+// the connector's own), or a wiremock tenant.
+
+/// A copy of the golden fixture `name` (`tests/golden/fixtures/<name>`).
+fn fixture(name: &str) -> tempfile::TempDir {
+    fn copy(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    copy(&repo().join("tests/golden/fixtures").join(name), dir.path());
+    dir
+}
+
+/// Every write `deploy --dry-run --json` shows for `platform` in `ws`, rule
+/// after rule, each `{"method", "url", "body"}`, members in their order; each
+/// entry names the tenant `lab`.
+fn planned_writes(ws: &Path, platform: &str) -> Vec<Json> {
+    let (code, stdout, stderr) = cli(
+        ws,
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let mut writes = Vec::new();
+    for entry in result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .unwrap()
+    {
+        let Some(requests) = entry.get("api_request").and_then(Json::as_array) else {
+            panic!("api_request is not the requests: {}", entry.to_compact())
+        };
+        assert_eq!(
+            entry.get("tenant").and_then(Json::as_str),
+            Some("lab"),
+            "{}",
+            entry.to_compact()
+        );
+        writes.extend(requests.iter().cloned());
+    }
+    writes
+}
+
+/// `url` cut in two: its scheme and authority (`https://host:port`, empty
+/// for a relative URL), and the rest, as written.
+fn url_parts(url: &str) -> (&str, &str) {
+    let Some(scheme) = url.find("://") else {
+        return ("", url);
+    };
+    let after = &url[scheme + 3..];
+    let at = scheme + 3 + after.find('/').unwrap_or(after.len());
+    (&url[..at], &url[at..])
+}
+
+/// Whether `shown`, a write's `url`, is `url`, a request's, character for
+/// character: the scheme and authority (any, for a request a local stand-in
+/// received), then the path, its trailing slash and percent-encoding, and
+/// the query, a `<tenant-read:NAME>` placeholder standing for one path
+/// segment.
+fn same_url(shown: &str, url: &str) -> bool {
+    let (shown_authority, shown) = url_parts(shown);
+    let (authority, url) = url_parts(url);
+    let stand_in = ["://localhost", "://127.0.0.1"]
+        .iter()
+        .any(|local| authority.contains(local));
+    if shown_authority.is_empty() || (shown_authority != authority && !stand_in) {
+        return false;
+    }
+    let Some(at) = shown.find("<tenant-read:") else {
+        return shown == url;
+    };
+    let (head, tail) = (&shown[..at], &shown[at..]);
+    let tail = tail.find('>').map_or("", |end| &tail[end + 1..]);
+    let Some(rest) = url.strip_prefix(head) else {
+        return false;
+    };
+    let segment = rest.find('/').unwrap_or(rest.len());
+    segment > 0 && &rest[segment..] == tail
+}
+
+#[test]
+fn a_shown_url_is_the_whole_url_sent() {
+    let sent = "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/A%20b";
+    assert!(same_url(sent, sent));
+    // Not the path's end, nor the name as written, nor without its slash.
+    assert!(!same_url("saved/searches/A b", sent));
+    assert!(!same_url(
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/A b",
+        sent
+    ));
+    assert!(!same_url(
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches",
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(!same_url(
+        "https://other.invalid:8089/servicesNS/nobody/search/saved/searches/A%20b",
+        sent
+    ));
+    let org = "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/K";
+    assert!(same_url(
+        &format!("{org}/watchlists/<tenant-read:watchlist_id>"),
+        &format!("{org}/watchlists/w-1")
+    ));
+    assert!(!same_url(
+        "/threathunter/watchlistmgr/v3/orgs/K/watchlists/<tenant-read:watchlist_id>",
+        &format!("{org}/watchlists/w-1")
+    ));
+}
+
+/// A value as a Splunk form sends it (`json_text`).
+fn form_text(value: &Json) -> String {
+    match value {
+        Json::Str(text) => text.clone(),
+        other => other.to_compact(),
+    }
+}
+
+/// Whether `shown`, a write's body, is `body`, a request's: the same JSON,
+/// `<send-time:timestamp>` read as `now` and a `<tenant-read:NAME>` body
+/// standing for any; or, for a form (Splunk), the same pairs in order.
+fn same_body(shown: &Json, body: &[u8], now: i64) -> bool {
+    if shown
+        .as_str()
+        .is_some_and(|text| text.starts_with("<tenant-read:"))
+    {
+        return !body.is_empty();
+    }
+    if shown.is_null() {
+        return body.is_empty();
+    }
+    if let Ok(sent) = Json::parse(&String::from_utf8_lossy(body)) {
+        let mut shown = shown.clone();
+        if let Some(stamp) = shown.get_mut("timestamp")
+            && stamp.as_str() == Some("<send-time:timestamp>")
+        {
+            *stamp = Json::Int(now);
+        }
+        return shown == sent;
+    }
+    let Some(fields) = shown.as_object() else {
+        return false;
+    };
+    let pairs: Vec<(String, String)> = url::form_urlencoded::parse(body)
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    let expected: Vec<(String, String)> = fields
+        .iter()
+        .map(|(key, value)| (key.clone(), form_text(value)))
+        .collect();
+    pairs == expected
+}
+
+/// A request a tenant received: method, URL and body.
+type Received = (String, String, Vec<u8>);
+
+/// The writes a tenant received (every request but reads and sign-ins), as
+/// `(method, url, body)`.
+fn received_writes(requests: Vec<Received>) -> Vec<Received> {
+    requests
+        .into_iter()
+        .filter(|(method, url, _)| method != "GET" && !url.contains("/oauth2/"))
+        .collect()
+}
+
+/// The dry run's writes are the writes the tenant received, in order.
+fn assert_sent_as_planned(planned: &[Json], received: &[Received], now: i64) {
+    let shown: Vec<String> = planned.iter().map(Json::to_compact).collect();
+    let sent: Vec<String> = received
+        .iter()
+        .map(|(method, url, body)| format!("{method} {url} {}", String::from_utf8_lossy(body)))
+        .collect();
+    assert_eq!(
+        planned.len(),
+        received.len(),
+        "planned:\n{}\nreceived:\n{}",
+        shown.join("\n"),
+        sent.join("\n")
+    );
+    for (write, (method, url, body)) in planned.iter().zip(received) {
+        let shown = write.to_compact();
+        let text = |key: &str| write.get(key).and_then(Json::as_str).unwrap_or_default();
+        assert_eq!(text("method"), method.as_str(), "{shown}\n{url}");
+        assert!(same_url(text("url"), url), "{shown}\n{url}");
+        assert!(
+            same_body(write.get("body").unwrap_or(&Json::Null), body, now),
+            "{shown}\nreceived: {}",
+            String::from_utf8_lossy(body)
+        );
+    }
+}
+
+/// The requests a replaying proxy received.
+fn replayed(proxy: &Proxy) -> Vec<Received> {
+    proxy
+        .requests()
+        .into_iter()
+        .map(|request| (request.method, request.url, request.body.bytes()))
+        .collect()
+}
+
+/// Runs the `send-<platform>` golden case's deploy of `deploy-tenants`
+/// against its cassette, after its dry run: what each showed and the tenant
+/// received.
+fn golden_send(platform: &str, scenario: &str, variable: &str) -> (Vec<Json>, Vec<Received>) {
+    let ws = fixture("deploy-tenants");
+    let planned = planned_writes(ws.path(), platform);
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
+    let all: Vec<usize> = (0..Cassette::parse(&text).unwrap().interactions.len()).collect();
+    let (proxy, env, _ca) = replay(scenario, &all, variable);
+    let (sent, _) = deploy(
+        ws.path(),
+        platform,
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    (planned, received_writes(replayed(&proxy)))
+}
+
+#[test]
+fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send(
+        "defender_for_endpoint",
+        "golden/deploy-defender-continues",
+        "DEFENDER_CLIENT_SECRET",
+    );
+    // A create, an update of the recorded id, a delete of the other.
+    let at = |write: &Json, key: &str| write.get(key).cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        planned
+            .iter()
+            .map(|write| at(write, "method"))
+            .collect::<Vec<_>>(),
+        ["POST", "PATCH", "DELETE"].map(Json::str)
+    );
+    assert_eq!(at(&at(&planned[0], "body"), "isEnabled"), Json::Bool(true));
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_sentinel_one_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) =
+        golden_send("sentinel_one", "golden/deploy-sentinel-one", "S1_API_TOKEN");
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_crowdstrike_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send(
+        "crowdstrike",
+        "golden/deploy-crowdstrike",
+        "CROWDSTRIKE_CLIENT_SECRET",
+    );
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_splunk_dry_run_shows_the_requests_the_tenant_receives() {
+    let (planned, received) = golden_send("splunk", "golden/deploy-splunk", "SPLUNK_TOKEN");
+    // The saved search created, then its settings, each update with the
+    // search first, as Splunk receives them.
+    assert_eq!(planned.len(), 3);
+    let first = |write: &Json| {
+        write
+            .get("body")
+            .and_then(Json::as_object)
+            .and_then(|body| body.first().map(|(key, _)| key.clone()))
+    };
+    assert_eq!(first(&planned[1]).as_deref(), Some("search"));
+    assert_eq!(first(&planned[2]).as_deref(), Some("search"));
+    assert_sent_as_planned(&planned, &received, 0);
+}
+
+#[test]
+fn a_carbon_black_dry_run_shows_the_requests_the_tenant_receives() {
+    let ws = cbc_workspace();
+    let planned = planned_writes(ws.path(), "carbon_black_cloud");
+    // The report, stamped at send time, then the watchlist the deploy reads.
+    let body = |write: &Json| write.get("body").cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        body(&planned[0]).get("timestamp"),
+        Some(&Json::str("<send-time:timestamp>"))
+    );
+    assert_eq!(body(&planned[1]), Json::str("<tenant-read:watchlist>"));
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    let (sent, _) = deploy(
+        ws.path(),
+        "carbon_black_cloud",
+        &env,
+        &opentide_connectors::builtin(),
+        CBC_NOW,
+    );
+    assert_eq!(proxy.verify(), Vec::new());
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
+    assert_sent_as_planned(&planned, &received_writes(replayed(&proxy)), CBC_NOW);
+}
+
+#[test]
+fn a_harfanglab_dry_run_shows_the_requests_the_tenant_receives() {
+    use wiremock::matchers::any;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(any())
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server),
+    );
+    let sigma = |status: &str| {
+        format!(
+            "  harfanglab:\n    status: {status}\n    sigma:\n      logsource:\n        \
+             category: process_creation\n        product: windows\n      selections:\n        \
+             - name: selection\n          field: Image\n          value: cmd.exe\n      \
+             condition: selection\n"
+        )
+    };
+    let yara = "  harfanglab:\n    status: STAGING\n    yara:\n      meta:\n        os: \
+                Windows\n      strings: '$a = \"loader\"'\n      condition: $a\n";
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\nsource_id = \"src-0001\"\n",
+            server.uri()
+        ),
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "Sigma rule",
+                    "00000000-0000-4000-8003-0000000000b1",
+                    "A.",
+                    &sigma("STAGING"),
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "YARA file",
+                    "00000000-0000-4000-8003-0000000000b2",
+                    "B.",
+                    yara,
+                ),
+            ),
+            (
+                "c.yaml",
+                rule(
+                    "Gone Sigma",
+                    "00000000-0000-4000-8003-0000000000b3",
+                    "C.",
+                    &sigma("REMOVED"),
+                ),
+            ),
+        ],
+    );
+    let planned = planned_writes(ws.path(), "harfanglab");
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 3]);
+    let received = rt
+        .block_on(server.received_requests())
+        .unwrap()
+        .into_iter()
+        .map(|request| {
+            (
+                request.method.as_str().to_owned(),
+                request.url.to_string(),
+                request.body,
+            )
+        })
+        .collect();
+    assert_sent_as_planned(&planned, &received_writes(received), 0);
+}
+
+/// The dry run, with no variable set, of the `deploy-tenants` fixture rule
+/// `file` (or `text`) on `platform` with one tenant, `lab`, of `setup`: its
+/// exit code and the rule's payload entry.
+fn dry_run_entry(platform: &str, setup: &str, file: &str, text: Option<String>) -> (i32, Json) {
+    let text = text.unwrap_or_else(|| {
+        std::fs::read_to_string(
+            repo()
+                .join("tests/golden/fixtures/deploy-tenants/objects/rules")
+                .join(file),
+        )
+        .unwrap()
+    });
+    let ws = workspace(platform, "lab", setup, &[(file, text)]);
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        &[],
+    );
+    let document = Json::parse(&stdout).unwrap_or_else(|_| panic!("{stdout}\n{stderr}"));
+    let result = document.get("result").unwrap_or(&document);
+    let entry = result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .and_then(|entries| entries.first())
+        .cloned()
+        .unwrap_or_else(|| panic!("{stdout}"));
+    (code, entry)
+}
+
+/// The `n`th write of a payload entry, its `key`.
+fn write_at(entry: &Json, n: usize, key: &str) -> Json {
+    entry
+        .get("api_request")
+        .and_then(Json::as_array)
+        .and_then(|writes| writes.get(n))
+        .and_then(|write| write.get(key))
+        .cloned()
+        .unwrap_or_else(|| panic!("{}", entry.to_compact()))
+}
+
+/// The `setup` keys the entry's `unresolved` lists.
+fn unresolved_setup(entry: &Json) -> Vec<Json> {
+    entry
+        .get("unresolved")
+        .and_then(|unresolved| unresolved.get("setup"))
+        .and_then(Json::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+// A setup value that names a variable is a placeholder in a dry run, which
+// resolves none and needs no credential: a CrowdStrike tenant's `api =
+// "$CS_API"` once failed the dry run with "Invalid API Domain" (#1719).
+#[test]
+fn a_dry_run_shows_a_crowdstrike_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "crowdstrike",
+        "api = \"$CS_API\"\ncustomer_id = \"${CS_CUSTOMER}\"\nclient_id = \"id\"\n\
+         client_secret = \"$CS_SECRET\"\n",
+        "crowdstrike-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(entry.get("tenant"), Some(&Json::str("lab")));
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:api>/correlation-rules/entities/rules/v1")
+    );
+    assert_eq!(
+        write_at(&entry, 0, "body").get("customer_id"),
+        Some(&Json::str("<tenant:customer_id>"))
+    );
+    assert_eq!(
+        unresolved_setup(&entry),
+        ["api", "customer_id"].map(Json::str)
+    );
+}
+
+#[test]
+fn a_dry_run_shows_a_sentinel_one_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "sentinel_one",
+        "url = \"$S1_URL\"\naccount_id = \"$S1_ACCOUNT\"\napi_token = \"$S1_API_TOKEN\"\n",
+        "sentinel-one-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:url>/web/api/v2.1/cloud-detection/rules")
+    );
+    assert_eq!(
+        write_at(&entry, 0, "body")
+            .get("filter")
+            .and_then(|filter| filter.get("accountIds"))
+            .cloned(),
+        Some(Json::Array(vec![Json::str("<tenant:account_id>")]))
+    );
+    assert_eq!(
+        unresolved_setup(&entry),
+        ["url", "account_id"].map(Json::str)
+    );
+}
+
+#[test]
+fn a_dry_run_shows_carbon_black_and_harfanglab_setup_variables_as_placeholders() {
+    let (code, entry) = dry_run_entry(
+        "carbon_black_cloud",
+        "url = \"$CBC_URL\"\norg_key = \"$CBC_ORG_KEY\"\ntoken = \"$CBC_TOKEN\"\n\
+         watchlist = \"Detections\"\n",
+        "lucene.yaml",
+        Some(rule(
+            "Carbon Black Lucene Rule",
+            "00000000-0000-4000-8003-000000000005",
+            "A rule.",
+            "  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n",
+        )),
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:url>/threathunter/watchlistmgr/v3/orgs/<tenant:org_key>/reports")
+    );
+    assert_eq!(unresolved_setup(&entry), ["url", "org_key"].map(Json::str));
+    let (code, entry) = dry_run_entry(
+        "harfanglab",
+        "url = \"$HL_URL\"\napi_token = \"$HL_TOKEN\"\nsource_id = \"src-0001\"\n",
+        "harfanglab-a-sigma.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    let url = write_at(&entry, 0, "url");
+    assert!(
+        url.as_str()
+            .is_some_and(|url| url.starts_with("<tenant:url>/api/data/threat_intelligence/")),
+        "{}",
+        entry.to_compact()
+    );
+    assert_eq!(unresolved_setup(&entry), [Json::str("url")]);
+}
+
+// Splunk's writes go to the whole URL a deploy sends to (#1719): a variable
+// is a placeholder in it, and the port and app default as the deploy's do.
+// A setting the deploy reads as written still refuses a variable, with the
+// deploy's own error.
+#[test]
+fn a_splunk_dry_run_shows_the_url_with_a_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "splunk",
+        "url = \"$SPLUNK_HOST\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        "splunk-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    let searches = "https://<tenant:url>:8089/servicesNS/nobody/search/saved/searches/";
+    assert_eq!(write_at(&entry, 0, "url"), Json::str(searches));
+    assert_eq!(
+        write_at(&entry, 1, "url"),
+        Json::str(format!("{searches}Splunk%20create%20rule"))
+    );
+    assert_eq!(unresolved_setup(&entry), [Json::str("url")]);
+    let (code, entry) = dry_run_entry(
+        "splunk",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\nenterprise_security = \"$ES\"\n",
+        "splunk-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 1, "{}", entry.to_compact());
+    assert!(
+        entry
+            .get("error")
+            .and_then(Json::as_str)
+            .is_some_and(|error| error.contains("enterprise_security is the placeholder \"$ES\"")),
+        "{}",
+        entry.to_compact()
+    );
+}
+
+/// The summary's `skipped` counts the rows the run skipped (a rule no
+/// tenant takes) besides the rules a status left out of the plan, which
+/// once replaced them (#1653).
+#[test]
+fn the_summary_counts_skipped_rows_and_rules_left_out() {
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "Elsewhere",
+                    "00000000-0000-4000-8047-000000000923",
+                    "A rule.",
+                    "  splunk:\n    status: STAGING\n    query: index=main\n    tenants: [other]\n",
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Released",
+                    "00000000-0000-4000-8047-000000000924",
+                    "A rule.",
+                    "  splunk:\n    status: PRODUCTION\n    query: index=main\n",
+                ),
+            ),
+        ],
+    );
+    let (registry, _) = scripted("splunk", Vec::new());
+    let args = Args {
+        strategies: vec!["PREVIEW".into()],
+        all: true,
+        platform: Some("splunk".into()),
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs(Vec::<(String, String)>::new()),
+        &registry,
+        0,
+    );
+    assert_eq!(rows(&sent), [("skipped".to_owned(), None)], "{text}");
+    assert_eq!(
+        value(&sent, "_summary").get("skipped"),
+        Some(&Json::Int(2)),
+        "{:?}",
+        sent.result
+    );
+}
+
+/// A rule that has a skipped row (its Splunk block, which no tenant takes)
+/// and a block a status left out (its Sentinel block) counts once in the
+/// summary's `skipped`.
+#[test]
+fn the_summary_counts_a_skipped_rule_once() {
+    let uuid = "00000000-0000-4000-8047-000000000925";
+    let block = format!(
+        "  splunk:\n    status: STAGING\n    query: index=main\n    tenants: [other]\n{}",
+        SENTINEL_STAGING.replace("status: STAGING", "status: PRODUCTION")
+    );
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"token\"\n",
+        &[("a.yaml", rule("Both", uuid, "A rule.", &block))],
+    );
+    std::fs::write(
+        ws.path()
+            .join(".opentide/configurations/platforms/sentinel.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Stand-in\"\n\n[[tenants]]\nname = \"soc\"\n\
+             strategies = [\"PREVIEW\", \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}"
+        ),
+    )
+    .unwrap();
+    let (registry, _) = scripted("splunk", Vec::new());
+    let args = Args {
+        strategies: vec!["PREVIEW".into()],
+        all: true,
+        ..Args::default()
+    };
+    let (sent, text) = deploy_with(
+        ws.path(),
+        &args,
+        &Env::from_pairs(Vec::<(String, String)>::new()),
+        &registry,
+        0,
+    );
+    let Json::Array(left) = value(&sent, "skipped") else {
+        panic!("{:?}", sent.result)
+    };
+    assert_eq!(left.len(), 1, "the Sentinel block is left out: {left:?}");
+    assert_eq!(
+        value(&sent, "_summary").get("skipped"),
+        Some(&Json::Int(1)),
+        "{text}\n{:?}",
+        sent.result
+    );
 }
