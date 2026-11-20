@@ -41,6 +41,11 @@ reason = "A `metadata.reviewed` of the right shape whose date, time or offset ca
 changelog = "**An impossible `reviewed` date is explained by the date library**"
 
 [[difference]]
+id = "date-fields-are-dates"
+reason = "`metadata.created` and `metadata.modified` must be a date (`2026-01-01`) or a datetime, with or without an offset (`2026-01-01 10:00:00`), as the editor schema's `format: date` says; any other text (`'1 January 2026'`, `yesterday`) is a `value_error` at the value (`metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime`), where the oracle accepted any string (smoke test B1, #1663)."
+changelog = "**`validate` rejects a `created` or `modified` that is not a date**"
+
+[[difference]]
 id = "public-reference-keys"
 reason = "A key of `references.public` is a reference number: an integer, or a string of ASCII decimal digits with an optional sign (`\"2\"`, `\"-1\"`, `\"+3\"`), within a 64-bit signed integer. The oracle ran Python's `int()` on every key before validating: it crashed on a word (`ValueError`, no finding) and accepted, and rewrote, keys that are not reference numbers as written: a padded string (`' 12 '`), `_` separators (`'1_000'`), other digits than ASCII's (`'١٢'`), a float, which it truncated (`1.5` became `1`), a boolean (`true` became `1`) and an integer wider than 64 bits. The Rust model reports each of these at the key (`references.public.<key>.[key]`), as Pydantic reports a dictionary key: a string (`'9223372036854775808'` too) is `int_parsing`, a float or a boolean `int_type`; an integer wider than 64 bits written as a number refuses the file (`yaml_parse`, crates/opentide-schema/YAML.md `integer-range`)."
 changelog = "**A public reference number must be written as an integer**"
@@ -502,6 +507,7 @@ description: d
 [[case]]
 id = "rule-created-quoted"
 family = "rule"
+difference = ["date-fields-are-dates"]
 yaml = '''
 name: Rule
 metadata:

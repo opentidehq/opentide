@@ -4,26 +4,15 @@ description: rules.unreviewed/json/fault/example
 ---
 args: opentide --json rules unreviewed --older-than 90d
 exit: 1
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
-━━━ stdout · json, 1 lines
-{
-  "command": "rules unreviewed",
-  "duration_ms": 0,
-  "error": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
-  "exit_code": 1,
-  "failure": {
-    "argument": null,
-    "code": "command_failed",
-    "crash_log": null,
-    "message": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
-    "suggestion": null
-  },
-  "message": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
-  "next_actions": [],
-  "ok": false,
-  "schema_version": 1,
-  "status": "failed",
-  "summary": {}
-}
+━━━ stdout · json
+findings: 1
+  command_failed | - | - | - | -
+exit_code: 1
+schema_version: 1
+next_actions[]: 0 items
+ok: false x1
+status: failed x1
 
 ━━━ stderr · empty

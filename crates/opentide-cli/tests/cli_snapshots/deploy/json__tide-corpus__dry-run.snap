@@ -3,7 +3,7 @@ source: crates/opentide-cli/tests/common/snapshot.rs
 description: deploy/json/tide-corpus/dry-run
 ---
 args: opentide --json deploy --strategy PREVIEW --all --dry-run
-exit: 1
+exit: 0
 
 ━━━ stdout · json, 1 lines
 {
@@ -59,7 +59,6 @@ exit: 1
     },
     {
       "action": "create",
-      "fails": true,
       "name": "CrowdStrike Deploy Rule",
       "platform": "crowdstrike",
       "status": "STAGING",
@@ -96,32 +95,11 @@ exit: 1
     "elastic",
     "sysdig"
   ],
-  "detail": "splunk: once a rule's saved search is written or deleted, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted",
-  "diagnostics": [
-    {
-      "code": "compile_failed",
-      "file_path": "<WS>/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
-      "help": null,
-      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
-      "name": "CrowdStrike Deploy Rule",
-      "path": "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
-      "platform": "crowdstrike",
-      "severity": "error",
-      "uuid": "00000000-0000-4000-8003-000000000006"
-    }
-  ],
   "dry_run": true,
   "duration_ms": 0,
-  "error": "1 rule would fail to deploy",
-  "exit_code": 1,
-  "failure": {
-    "argument": null,
-    "code": "command_failed",
-    "crash_log": null,
-    "message": "1 rule would fail to deploy",
-    "suggestion": null
-  },
-  "message": "Plan: 3 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete, 1 would fail",
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete",
   "missing_tenants": {
     "carbon_black_cloud": ".opentide/configurations/platforms/carbon_black_cloud.toml",
     "crowdstrike": ".opentide/configurations/platforms/crowdstrike.toml",
@@ -132,7 +110,7 @@ exit: 1
     "splunk": ".opentide/configurations/platforms/splunk.toml"
   },
   "next_actions": [],
-  "ok": false,
+  "ok": true,
   "payloads": {
     "carbon_black_cloud": [
       {
@@ -180,13 +158,39 @@ exit: 1
     ],
     "crowdstrike": [
       {
-        "api_request": null,
-        "code": "compile_failed",
-        "error": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
-        "file": "<WS>/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
-        "help": null,
+        "api_request": [
+          {
+            "body": {
+              "comment": "Updated by opentide Crowdstrike Deployer - Author(s) : ",
+              "customer_id": "<tenant:customer_id>",
+              "description": "Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\n",
+              "name": "CrowdStrike Deploy Rule",
+              "operation": {
+                "schedule": {
+                  "definition": "@every 1h"
+                }
+              },
+              "search": {
+                "filter": "index=main",
+                "lookback": "2h",
+                "outcome": "detection",
+                "trigger_mode": "verbose"
+              },
+              "severity": 70,
+              "status": "active"
+            },
+            "method": "POST",
+            "url": "<tenant:api>/correlation-rules/entities/rules/v1"
+          }
+        ],
         "name": "CrowdStrike Deploy Rule",
-        "status": "failed",
+        "unresolved": {
+          "reason": "this run deploys the rule to no crowdstrike tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "api",
+            "customer_id"
+          ]
+        },
         "uuid": "00000000-0000-4000-8003-000000000006"
       }
     ],
@@ -268,7 +272,7 @@ exit: 1
             "rule_id": "00000000-0000-4000-8003-000000000009",
             "severity": "high",
             "tags": [
-              "OpenTide"
+              "opentide"
             ],
             "threat": [
               {
@@ -464,7 +468,7 @@ exit: 1
           {
             "body": {
               "name": "Splunk SPL Rule",
-              "search": "index=main | head 1"
+              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
             },
             "method": "POST",
             "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/"
@@ -474,8 +478,8 @@ exit: 1
               "alert.managedBy": "",
               "alert.severity": 5,
               "cron_schedule": "0 * * * *",
-              "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003",
-              "search": "index=main | head 1"
+              "description": "Simulated Splunk rule for CLI E2E corpus.\n",
+              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
             },
             "method": "POST",
             "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
@@ -483,7 +487,7 @@ exit: 1
           {
             "body": {
               "is_scheduled": 1,
-              "search": "index=main | head 1"
+              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
             },
             "method": "POST",
             "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
@@ -562,15 +566,14 @@ exit: 1
     ]
   },
   "schema_version": 1,
-  "status": "failed",
+  "status": "completed",
   "strategies": [
     "PREVIEW"
   ],
   "summary": {
-    "create": 3,
+    "create": 4,
     "delete": 0,
     "disable": 0,
-    "fail": 1,
     "platforms": 9,
     "tenants": 2,
     "update": 0,

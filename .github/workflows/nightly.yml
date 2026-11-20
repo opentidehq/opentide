@@ -48,7 +48,7 @@ env:
 jobs:
 
   # The workspace's tests on macOS and Windows, built there (no archive
-  # crosses an OS), without a compiler cache. The 101 generated-workspace
+  # crosses an OS), without a compiler cache. The 34 generated-workspace
   # cases of `cli_snapshots` print "skipped" here by design: they are a
   # Linux-gate check (see "Generated workspaces for the CLI snapshots").
   engine-test-os:

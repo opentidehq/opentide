@@ -182,6 +182,14 @@ rg -n 'opentide==0\.[0-9]+\.[0-9]+' --glob '!CHANGELOG.md' --glob '!.github/rele
 
 Leave older historical sections in `CHANGELOG.md` / `docs/usage/releases.md` / old `.github/release-notes/` files alone.
 
+The explorer pin is the other pin a release checks: `EXPLORER_RELEASE` and `EXPLORER_COMMIT` in
+`crates/opentide-compile/src/ci/mod.rs` name the opentidehq/explorer release (tag and its commit)
+that `setup ci --explorer-pages` builds the site from (#1693). When this release changes the bundle
+`generate explorer` writes, or an explorer release reads a new one, bump both together, with
+`docs/cli/setup.md`'s `--explorer-pages` row, and re-render the recorded pipelines
+(`OPENTIDE_CI_RENDERED`, `crates/opentide-compile/tests/setup_ci.rs`) and the `setup ci`
+snapshots.
+
 #### 5. The version is the workspace's
 
 The wheel's version is the Cargo workspace's (`bindings/python/` takes it; maturin writes it into

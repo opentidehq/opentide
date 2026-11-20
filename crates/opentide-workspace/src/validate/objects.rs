@@ -655,8 +655,58 @@ fn schema_issue(error: &SchemaError, subject: &Subject<'_>, graph: &Graph<'_>) -
     {
         diagnostic = diagnostic.with("value", value);
     }
+    // What a field takes, when its check names it (an enum's or a literal's
+    // values, a union's shapes, CrowdStrike's `details.trigger`): annotate's
+    // help writes it, spelt as YAML.
+    if let Some(expected) = error.context.get("expected") {
+        diagnostic = diagnostic.with("expected", yaml_spelling(expected));
+    }
     diagnostic.yaml_line = error.yaml_line;
     diagnostic
+}
+
+/// `expected` as a person writes it in YAML: the models' messages keep
+/// Pydantic's Python spelling (`False, 'Malicious' or 'Suspicious'`), which
+/// reads `false, "Malicious" or "Suspicious"` here. A double-quoted value
+/// is kept as it is.
+fn yaml_spelling(expected: &str) -> String {
+    let mut out = String::with_capacity(expected.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        out.push_str(match word.as_str() {
+            "False" => "false",
+            "True" => "true",
+            "None" => "null",
+            other => other,
+        });
+        word.clear();
+    };
+    let mut characters = expected.chars();
+    while let Some(character) = characters.next() {
+        match character {
+            '\'' | '"' => {
+                flush(&mut word, &mut out);
+                out.push('"');
+                for inner in characters.by_ref() {
+                    if inner == character {
+                        break;
+                    }
+                    if inner == '"' || (inner == '\\' && character == '\'') {
+                        out.push('\\');
+                    }
+                    out.push(inner);
+                }
+                out.push('"');
+            }
+            character if character.is_alphanumeric() || character == '_' => word.push(character),
+            other => {
+                flush(&mut word, &mut out);
+                out.push(other);
+            }
+        }
+    }
+    flush(&mut word, &mut out);
+    out
 }
 
 /// A schema node with its local `$ref` followed (`_deref_schema_node`).
@@ -1107,8 +1157,105 @@ fn chain_links(root: &Node) -> Vec<(usize, &Node)> {
         .collect()
 }
 
+/// The keys of a `threat.chaining` link opentide reads.
+const CHAIN_KEYS: [&str; 2] = ["vector", "relation"];
+
+/// A link's other key 0.28.x reads (the TUI's chains view shows it).
+const CHAIN_DESCRIPTION: &str = "description";
+
+/// What a `threat.chaining` link holds besides its relation's name (B15),
+/// at the key or the link, `schema_validation`:
+/// - an error for a key within two edits of `vector` or `relation`
+///   (`vectr`, which the model's open mapping took), and for a `vector`
+///   that is the threat itself;
+/// - a warning for any other key opentide does not read (`description` is
+///   read), and for a link missing `vector` or `relation`.
+fn chain_shapes(subject: &Subject<'_>, root: &Node) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let finding = |error: bool, message: String, path: Vec<String>| {
+        let diagnostic = if error {
+            Diagnostic::error("schema_validation", message)
+        } else {
+            Diagnostic::warning("schema_validation", message)
+        };
+        diagnostic
+            .object(subject.uuid, "threat")
+            .file(subject.path)
+            .at(path)
+    };
+    for (index, link) in chain_links(root) {
+        let Value::Map(entries) = &link.value else {
+            continue;
+        };
+        let at = |key: Option<&str>| {
+            let mut path = vec![
+                "threat".to_owned(),
+                "chaining".to_owned(),
+                index.to_string(),
+            ];
+            path.extend(key.map(str::to_owned));
+            path
+        };
+        let mut misspelt = false;
+        for entry in entries {
+            let key = entry.key.value.to_string();
+            if CHAIN_KEYS.contains(&key.as_str()) || key == CHAIN_DESCRIPTION {
+                continue;
+            }
+            let close = opentide_core::suggest::closest_within(&key, CHAIN_KEYS, 2);
+            misspelt |= close.is_some();
+            let message = match close {
+                Some(meant) => format!(
+                    "unknown key {}; did you mean `{meant}`? A link has `vector` and `relation`",
+                    quote(&key)
+                ),
+                None => format!(
+                    "opentide does not read the key {}; a link has `vector`, `relation` and an \
+                     optional `description`",
+                    quote(&key)
+                ),
+            };
+            out.push(
+                finding(close.is_some(), message, at(Some(&key))).suggest(close.map(str::to_owned)),
+            );
+        }
+        let missing: Vec<&str> = CHAIN_KEYS
+            .iter()
+            .copied()
+            .filter(|key| link.get(key).is_none())
+            .collect();
+        if !missing.is_empty() && !misspelt {
+            out.push(finding(
+                false,
+                format!(
+                    "a link needs `vector` and `relation`; `{}` is missing",
+                    missing.join("` and `")
+                ),
+                at(None),
+            ));
+        }
+        if let Some(vector) = link.get("vector").filter(|vector| holds_name(vector))
+            && vector.value.to_string().eq_ignore_ascii_case(subject.uuid)
+        {
+            out.push(finding(
+                true,
+                "the threat chains to itself; `vector` names another threat".to_owned(),
+                at(Some("vector")),
+            ));
+        }
+    }
+    out
+}
+
 /// `check_chaining_for_object`.
 fn chaining(subject: &Subject<'_>, root: &Node, graph: &Graph<'_>) -> Vec<Diagnostic> {
+    let mut shapes = chain_shapes(subject, root);
+    shapes.extend(relations(subject, root, graph));
+    shapes
+}
+
+/// The chaining relations no vocabulary holds (`chaining_relation_unknown`).
+fn relations(subject: &Subject<'_>, root: &Node, graph: &Graph<'_>) -> Vec<Diagnostic> {
     let Ok(vocab) = "chaining_relations".parse::<VocabRef>() else {
         return Vec::new();
     };
@@ -1196,6 +1343,25 @@ mod tests {
 
     use super::*;
     use crate::diagnostic::Severity;
+
+    #[test]
+    fn expected_values_are_spelt_as_yaml() {
+        assert_eq!(
+            yaml_spelling("False, 'Malicious' or 'Suspicious'"),
+            "false, \"Malicious\" or \"Suspicious\""
+        );
+        assert_eq!(yaml_spelling("True or None"), "true or null");
+        assert_eq!(
+            yaml_spelling("\"NRT\", \"1H\" or \"24H\""),
+            "\"NRT\", \"1H\" or \"24H\""
+        );
+        // Words inside a value and other words are kept.
+        assert_eq!(
+            yaml_spelling("'False' or a string, \"say \" or Falsey"),
+            "\"False\" or a string, \"say \" or Falsey"
+        );
+        assert_eq!(yaml_spelling("'it\"s'"), "\"it\\\"s\"");
+    }
 
     #[test]
     fn a_deprecated_field_is_a_warning_on_the_object_at_its_field() {

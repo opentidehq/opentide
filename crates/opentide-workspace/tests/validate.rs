@@ -12,6 +12,7 @@ mod validate {
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
+    use opentide_workspace::diagnostic::ContextValue;
     use opentide_workspace::validate::objects::merge_reference_findings;
     use opentide_workspace::validate::{
         Check, Options, QueriesMode, QueryCheck, QueryFindings, QueryObject, Selection, Validation,
@@ -620,6 +621,154 @@ mod validate {
     }
 
     #[test]
+    fn a_value_written_before_stages_suggests_its_scoped_form_and_the_migration() {
+        // B18 (smoke test): a pre-0.14 `surface: [Windows]` was only
+        // "not a surface value", with no route to `migrate vocab-scope`.
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!("name: T\nmetadata:\n  uuid: {U1}\n  schema: threat::1.0\nthreat:\n  surface:\n    - Windows\n"),
+        );
+        let validation = run(&fs, &Options::default());
+        let unknown = with_code(&validation, "vocab_unknown");
+        let finding = unknown
+            .iter()
+            .find(|d| d.value() == Some("Windows"))
+            .unwrap_or_else(|| panic!("{:?}", validation.report.issues));
+        assert_eq!(finding.suggestion.as_deref(), Some("OS::Windows"));
+        assert_eq!(
+            finding.help.as_deref(),
+            Some("did you mean \"OS::Windows\"?")
+        );
+        assert!(
+            finding.notes.iter().any(|(label, text)| label == "note"
+                && text.contains("opentide migrate vocab-scope --apply")),
+            "{:?}",
+            finding.notes
+        );
+        assert!(finding.fix.is_some(), "validate --fix offers it");
+    }
+
+    #[test]
+    fn a_chaining_link_holds_vector_and_relation_and_never_itself() {
+        // B15 (smoke test): a link with `vectr:`/`relaton:` and a link to
+        // the threat itself passed `validate`. A `description`, which
+        // 0.28.x reads, still passes; another key is a warning.
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/threats/b.yaml",
+            format!("name: B\nmetadata:\n  uuid: {U2}\n  schema: threat::1.0\nthreat:\n  cve: [CVE-2024-3400]\n"),
+        );
+        fs.write(
+            "/ws/objects/threats/a.yaml",
+            format!(
+                "name: A\nmetadata:\n  uuid: {U1}\n  schema: threat::1.0\nthreat:\n  chaining:\n    \
+                 - vector: {U1}\n      relation: sequence::preceeds\n    \
+                 - vectr: {U2}\n      relaton: sequence::preceeds\n    \
+                 - vector: {U2}\n    \
+                 - vector: {U2}\n      relation: sequence::preceeds\n      description: then this\n    \
+                 - vector: {U2}\n      relation: sequence::preceeds\n      weight: high\n"
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<(String, Severity, String)> = with_code(&validation, "schema_validation")
+            .into_iter()
+            .filter(|d| d.field_path.get(1).map(String::as_str) == Some("chaining"))
+            .map(|d| (d.field_path.join("."), d.severity, d.message.clone()))
+            .collect();
+        let row = |path: &str, severity: Severity, message: &str| {
+            (path.to_owned(), severity, message.to_owned())
+        };
+        assert_eq!(
+            found,
+            [
+                row(
+                    "threat.chaining.0.vector",
+                    Severity::Error,
+                    "the threat chains to itself; `vector` names another threat"
+                ),
+                row(
+                    "threat.chaining.1.vectr",
+                    Severity::Error,
+                    "unknown key \"vectr\"; did you mean `vector`? A link has \
+                     `vector` and `relation`"
+                ),
+                row(
+                    "threat.chaining.1.relaton",
+                    Severity::Error,
+                    "unknown key \"relaton\"; did you mean `relation`? A link \
+                     has `vector` and `relation`"
+                ),
+                row(
+                    "threat.chaining.2",
+                    Severity::Warning,
+                    "a link needs `vector` and `relation`; `relation` is missing"
+                ),
+                row(
+                    "threat.chaining.4.weight",
+                    Severity::Warning,
+                    "opentide does not read the key \"weight\"; a link has \
+                     `vector`, `relation` and an optional `description`"
+                ),
+            ],
+            "{:?}",
+            validation.report.issues
+        );
+    }
+
+    #[test]
+    fn a_value_the_model_does_not_take_names_what_to_write() {
+        // An enum, a literal or a union error and CrowdStrike's `trigger`
+        // say what the field takes, in the help and in `--json`'s
+        // `context.expected`, spelt as YAML (`false`, not Python's `False`).
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  defender_for_endpoint:\n    status: X\n    scheduling: weekly\n  \
+                 crowdstrike:\n    status: X\n    details:\n      trigger: sometimes\n  \
+                 sentinel_one:\n    status: X\n    response:\n      treat_as_threat: maybe\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let at = |path: &str| -> (Option<String>, Option<String>) {
+            let finding = with_code(&validation, "schema_validation")
+                .into_iter()
+                .find(|d| d.field_path.join(".") == path)
+                .unwrap_or_else(|| panic!("{path}: {:?}", validation.report.issues));
+            (
+                finding.help.clone(),
+                finding
+                    .context
+                    .get("expected")
+                    .and_then(ContextValue::as_str)
+                    .map(str::to_owned),
+            )
+        };
+        let expect =
+            |help: &str, expected: &str| (Some(help.to_owned()), Some(expected.to_owned()));
+        assert_eq!(
+            at("configurations.defender_for_endpoint.scheduling"),
+            expect(
+                "write \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
+                "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
+            )
+        );
+        assert_eq!(
+            at("configurations.crowdstrike.details.trigger"),
+            expect("write verbose or summary", "verbose or summary")
+        );
+        assert_eq!(
+            at("configurations.sentinel_one.response.treat_as_threat"),
+            expect(
+                "write false, \"Malicious\" or \"Suspicious\"",
+                "false, \"Malicious\" or \"Suspicious\""
+            )
+        );
+    }
+
+    #[test]
     fn an_unknown_reference_names_the_listing_and_a_dangling_detection_model_too() {
         let fs = workspace();
         fs.write(
@@ -725,6 +874,32 @@ mod validate {
                 .as_deref()
                 .is_some_and(|h| h.starts_with("look at the indentation"))
         );
+    }
+
+    #[test]
+    fn a_tab_indenting_a_line_is_helped_to_spaces() {
+        // B9: saphyr's "while scanning a plain scalar, found a tab" is a tab
+        // in the indentation columns; CRLF files the same.
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", "name: A\n\tindent: tab\n");
+        fs.write("/ws/objects/rules/b.yaml", "name: B\r\n\tindent: tab\r\n");
+        let validation = run(&fs, &Options::default());
+        let parse = with_code(&validation, "yaml_parse");
+        assert_eq!(parse.len(), 2, "{parse:?}");
+        for finding in parse {
+            assert!(
+                finding
+                    .message
+                    .contains("while scanning a plain scalar, found a tab"),
+                "{finding:?}"
+            );
+            assert_eq!((finding.line, finding.column), (Some(2), Some(1)));
+            assert_eq!(
+                finding.help.as_deref(),
+                Some("indent with spaces: YAML does not allow a tab in indentation"),
+                "{finding:?}"
+            );
+        }
     }
 
     fn narrowed(fs: &Arc<MemoryFs>, check: Option<Check>, selection: &Selection) -> Validation {

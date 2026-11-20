@@ -257,7 +257,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "crowdstrike": {
           "details": {
             "outcome": "detection",
-            "trigger": "event"
+            "trigger": "verbose"
           },
           "enabled": true,
           "name": "CrowdStrike Deploy Rule",
@@ -1693,20 +1693,27 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "rule-created-quoted": {
-    "value": {
-      "description": "d",
-      "metadata": {
-        "created": "1 January 2026",
-        "modified": "2026-01-02",
-        "schema": "rule::1.1",
-        "tlp": "clear",
-        "uuid": "00000000-0000-4000-8000-000000000001",
-        "version": 1
-      },
-      "name": "Rule",
-      "platforms": {},
-      "techniques": []
-    }
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": "1 January 2026",
+        "msg": "metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          6,
+          13,
+          27,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 5
+      }
+    ]
   },
   "rule-created-spaced-timestamp": {
     "value": {
