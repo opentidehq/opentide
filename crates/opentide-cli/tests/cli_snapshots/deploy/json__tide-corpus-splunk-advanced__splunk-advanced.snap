@@ -33,24 +33,48 @@ exit: 0
   "payloads": {
     "splunk": [
       {
-        "api_request": {
-          "advanced": {
-            "action.misp_alert_create_event.param.distribution": 0,
-            "action.misp_alert_create_event.param.publish_on_creation": false,
-            "action.misp_alert_create_event.param.tags": null,
-            "action.misp_alert_create_event.param.title": "Canary token triggered"
+        "api_request": [
+          {
+            "body": {
+              "name": "Splunk SPL Rule",
+              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+            },
+            "method": "POST",
+            "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/"
           },
-          "enabled": true,
-          "name": "Splunk SPL Rule",
-          "query": "index=main | head 1",
-          "scheduling": {
-            "schedule": {
-              "cron": "0 * * * *"
-            }
+          {
+            "body": {
+              "action.misp_alert_create_event.param.distribution": "0",
+              "action.misp_alert_create_event.param.publish_on_creation": "0",
+              "action.misp_alert_create_event.param.tags": "",
+              "action.misp_alert_create_event.param.title": "Canary token triggered",
+              "alert.managedBy": "",
+              "alert.severity": 5,
+              "cron_schedule": "0 * * * *",
+              "description": "Simulated Splunk rule for CLI E2E corpus.\n",
+              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+            },
+            "method": "POST",
+            "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
           },
-          "status": "STAGING"
-        },
+          {
+            "body": {
+              "is_scheduled": 1,
+              "search": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
+            },
+            "method": "POST",
+            "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
+          }
+        ],
         "name": "Splunk SPL Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no splunk tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "url",
+            "port",
+            "app"
+          ]
+        },
         "uuid": "00000000-0000-4000-8003-000000000003"
       }
     ]
