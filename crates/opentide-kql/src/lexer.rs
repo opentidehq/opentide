@@ -45,7 +45,7 @@ enum Token {
     #[regex(r"hint\.[A-Za-z_][A-Za-z0-9_]*")]
     HintName,
     /// A decimal, or a hexadecimal integer (`0x1F`, `0X1f`: an `int` or a
-    /// `long`, as Kusto reads it). Kusto.Language also takes a bare `0x`.
+    /// `long`, as Kusto reads it). Kusto also takes a bare `0x`.
     #[regex(r"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?")]
     #[regex(r"0[xX][0-9A-Fa-f]*")]
     Number,

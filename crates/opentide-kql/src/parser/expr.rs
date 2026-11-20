@@ -96,7 +96,7 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     }
     // A search term stands where a string operator does: after one, only an
     // equality or ordering, a set or a range test (`a : "x" == true`, `a :
-    // "x" in (…)`); `a : "x" has "y"` is an error, as in Kusto.Language.
+    // "x" in (…)`); `a : "x" has "y"` is an error, as in Kusto.
     let (kind, shape) = match next {
         K::CMP_OP if !term || equality_or_ordering(p.nth_text(0)) => {
             (K::COMPARISON_EXPR, Shape::Operand)
@@ -125,7 +125,7 @@ fn comparison(p: &mut P<'_>) -> Option<CompletedMarker> {
     Some(p.done(m, kind))
 }
 
-/// `Column : "value"`, a search term, from its `:`: Kusto.Language reads `:`
+/// `Column : "value"`, a search term, from its `:`: Kusto reads `:`
 /// anywhere an expression goes, binding tighter than `==` (`a : "x" == true`,
 /// `a == "x" : true`) and once (`a : b : c` is an error). The callers test the
 /// token with `current`, not `at`: a missing operator's message names no `:`.
