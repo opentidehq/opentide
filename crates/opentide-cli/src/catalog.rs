@@ -128,7 +128,7 @@ pub const HELP_FLAG_HELP: &str = "Print help";
 /// - an option or flag given twice keeps the last value (`--json commands
 ///   --json`, `--repo a --repo b`), as it always has; a repeatable option
 ///   (`--strategy`) still collects every value. The exception is
-///   [`REPEAT_IS_AN_ERROR`]: `--platform` given twice is a usage error naming
+///   `REPEAT_IS_AN_ERROR`: `--platform` given twice is a usage error naming
 ///   it;
 /// - a negative number is a value (`--limit -1` is a number out of range);
 ///   any other word that starts with `-` is an option, so `--query --json`
