@@ -123,11 +123,26 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
         r#"["a real deploy would need $DEFENDER_TENANT, which is unset"]"#
     );
     assert_eq!(outcome.outcome_kind, Some("plan"));
-    // Defender's preview is the block's model dump; a block its model
-    // refuses (no query, alert, ...) is shown as written.
+    // Defender's preview is the request a deploy sends to the first tenant
+    // (#1712): a create for the rule the deployment state does not record,
+    // an update of the id it records (`42`) for the other; it was the block.
+    let body = |uuid: &str| {
+        format!(
+            r#"{{"displayName":"Rule {uuid}","queryCondition":{{"queryText":""}},"schedule":{{"period":""}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"informational","category":"","mitreTechniques":[],"impactedAssets":[],"recommendedActions":null}},"responseActions":[],"organizationalScope":null}},"isEnabled":true}}"#
+        )
+    };
+    let (a, b) = (
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+    );
+    let endpoint = "https://graph.microsoft.com/beta/security/rules/detectionRules";
     assert_eq!(
         text(&outcome, "payloads"),
-        r#"{"defender_for_endpoint":[{"uuid":"00000000-0000-4000-8000-00000000000a","name":"Rule 00000000-0000-4000-8000-00000000000a","api_request":{"status":"STAGING"}},{"uuid":"00000000-0000-4000-8000-00000000000b","name":"Rule 00000000-0000-4000-8000-00000000000b","api_request":{"status":"STAGING"}}]}"#
+        format!(
+            r#"{{"defender_for_endpoint":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"POST","url":"{endpoint}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/42","body":{}}}],"tenant":"one"}}]}}"#,
+            body(a),
+            body(b)
+        )
     );
 }
 

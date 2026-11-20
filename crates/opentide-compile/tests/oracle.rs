@@ -98,9 +98,15 @@ fn a_windows_path_reads_as_the_record_writes_it() {
 /// The `[[dump]]` classes of `tests/golden/payloads/APPROVED.toml`: rule and
 /// platforms.
 fn dump_classes() -> Vec<(String, Vec<String>)> {
+    classes_of("dump")
+}
+
+/// The classes of `tests/golden/payloads/APPROVED.toml`'s `[[table]]`: rule
+/// and platforms.
+fn classes_of(table: &str) -> Vec<(String, Vec<String>)> {
     let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
     let file: toml::Table = toml::from_str(&text).unwrap();
-    file.get("dump")
+    file.get(table)
         .and_then(toml::Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default()
@@ -136,10 +142,10 @@ fn without_nulls(value: Json) -> Json {
 /// The class a model-dump preview that differs falls in: `nulls` (the
 /// oracle's `null` members left out, it is the candidate), `order` (the
 /// same value, keys in another order) or `wrapped` (the oracle's request
-/// as the candidate's `payload`, beside the block the candidate adds) or
-/// `unset` (the oracle's `enabled` and `name` left out where the rule's
-/// block does not write them); `None` for any other difference.
-fn dump_class(oracle: &str, mine: &str, writes: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+/// as the candidate's `payload`, beside the block the candidate adds);
+/// `None` for any other difference. The platforms whose dry run shows the
+/// writes are the `request` class ([`request_problem`]).
+fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
     let oracle: Json = serde_json::from_str(oracle).ok()?;
     if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
         return None;
@@ -171,20 +177,270 @@ fn dump_class(oracle: &str, mine: &str, writes: &dyn Fn(&str) -> bool) -> Option
         return Some("nulls");
     }
     let value = |text: &str| serde_json::from_str::<Value>(text).ok();
-    let (mut trimmed, mine) = (value(&trimmed)?, value(mine)?);
-    if trimmed == mine {
-        return Some("order");
+    (value(&trimmed)? == value(mine)?).then_some("order")
+}
+
+/// The `[[writes]] search` class: Splunk's writes as the oracle's probe
+/// recorded them, without the `search` each update of the saved search
+/// carries first, which must be the create's: the first update without it,
+/// the last with it at its end. `None` when an update does not start with
+/// it.
+fn without_update_search(writes: &Json) -> Option<Json> {
+    let Json::Array(writes) = writes else {
+        return Some(writes.clone());
+    };
+    if writes.is_empty() {
+        return Some(Json::Array(Vec::new()));
     }
-    // `unset`: the oracle's entry without `api_request`'s `enabled` and
-    // `name`, each only where the rule's block does not write it (the
-    // model's defaults no deployer reads), every other member the same.
-    let request = trimmed.get_mut("api_request")?.as_object_mut()?;
-    for key in ["enabled", "name"] {
-        if !writes(key) {
-            request.remove(key);
+    let search = writes.first()?.get("body")?.get("search")?.clone();
+    let mut out = Vec::new();
+    for (at, write) in writes.iter().enumerate() {
+        let Json::Object(write) = write else {
+            return None;
+        };
+        let mut write = write.clone();
+        if at > 0 {
+            let Some(Json::Object(body)) = write.get_mut("body") else {
+                return None;
+            };
+            if body.first().map(|(key, value)| (key.as_str(), value)) != Some(("search", &search)) {
+                return None;
+            }
+            body.shift_remove("search");
+            // The probe's last update took the search at its end.
+            if at + 1 == writes.len() {
+                body.insert("search".into(), search.clone());
+            }
         }
+        out.push(Json::Object(write));
     }
-    (trimmed == mine).then_some("unset")
+    Some(Json::Array(out))
+}
+
+/// Whether `url`, a write's, names its host and every segment of its path:
+/// it starts with `https://` or a `<tenant:KEY>` placeholder, then no
+/// segment is empty (a trailing slash aside) and no host is.
+fn whole_url(url: &str) -> bool {
+    let rest = if let Some(rest) = url.strip_prefix("https://") {
+        rest
+    } else if url.starts_with("<tenant:") {
+        url
+    } else {
+        return false;
+    };
+    let path = rest.split('?').next().unwrap_or_default();
+    let path = path.strip_suffix('/').unwrap_or(path);
+    !path.starts_with([':', '/']) && path.split('/').all(|segment| !segment.is_empty())
+}
+
+#[test]
+fn a_whole_url_has_its_host_and_every_segment() {
+    assert!(whole_url(
+        "https://h:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(whole_url("<tenant:url>/web/api/v2.1/cloud-detection/rules"));
+    assert!(whole_url(
+        "<tenant:api>/correlation-rules/entities/rules/v1?ids=1"
+    ));
+    assert!(!whole_url(
+        "https://:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(!whole_url("/threathunter/watchlistmgr/v3/orgs/K/reports"));
+    assert!(!whole_url(
+        "<tenant:url>/threathunter/watchlistmgr/v3/orgs//reports"
+    ));
+    assert!(!whole_url(
+        "https://h:8089/servicesNS/nobody//saved/searches/"
+    ));
+}
+
+/// A rule's file name in the corpus, which names the rule in a message.
+fn corpus_file(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The `[[writes]] url` class: Splunk's and Carbon Black's writes with each
+/// `url` as the oracle's probe recorded it, the path under the tenant's app
+/// namespace (`saved/searches`, `saved/searches/<name>`, decoded) or under
+/// its `url` (`/threathunter/...`). The candidate's is the whole URL a
+/// deploy sends to, which must start with the tenant's: `None` when one
+/// does not.
+fn recorded_urls(writes: &Json, platform: &str, tenant: &Json) -> Option<Json> {
+    let Json::Array(writes) = writes else {
+        return Some(writes.clone());
+    };
+    let mut out = Vec::new();
+    for write in writes {
+        let mut write = write.clone();
+        let url = write.get("url").and_then(Json::as_str)?.to_owned();
+        let recorded = if platform == "splunk" {
+            let searches = splunk::saved_searches(tenant);
+            let name = url.strip_prefix(&searches)?;
+            let name = percent_encoding::percent_decode_str(name)
+                .decode_utf8()
+                .ok()?;
+            if name.is_empty() {
+                "saved/searches".to_owned()
+            } else {
+                format!("saved/searches/{name}")
+            }
+        } else {
+            let server = opentide_compile::deploy::setup_text(tenant, "url");
+            url.strip_prefix(server.trim_end_matches('/'))?.to_owned()
+        };
+        *write.get_mut("url")? = recorded.into();
+        out.push(write);
+    }
+    Some(Json::Array(out))
+}
+
+/// The `[[writes]] watchlist` class: Carbon Black's writes without the
+/// watchlist update that follows a new report, which the deploy reads from
+/// the tenant (`PUT .../watchlists/<tenant-read:watchlist_id>`, its body
+/// `<tenant-read:watchlist>`). `None` when a new report is not followed by
+/// exactly that write.
+fn without_watchlist_write(writes: &Json) -> Option<Json> {
+    let Json::Array(writes) = writes else {
+        return Some(writes.clone());
+    };
+    match writes.as_slice() {
+        [] => Some(Json::Array(Vec::new())),
+        [report, watchlist] => {
+            let text = |write: &Json, key: &str| {
+                write
+                    .get(key)
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            };
+            let reports = text(report, "url");
+            let org = reports.strip_suffix("/reports")?;
+            (text(report, "method") == "POST"
+                && text(watchlist, "method") == "PUT"
+                && text(watchlist, "url") == format!("{org}/watchlists/<tenant-read:watchlist_id>")
+                && text(watchlist, "body") == "<tenant-read:watchlist>")
+                .then(|| Json::Array(vec![report.clone()]))
+        }
+        _ => None,
+    }
+}
+
+/// Whether `text`, where a `<send-time:NAME>` placeholder stands for a
+/// number, reads as `actual`: each placeholder one or more ASCII digits,
+/// every other character the same.
+fn matches_send_time(text: &str, actual: &str) -> bool {
+    let Some(at) = text.find("<send-time:") else {
+        return text == actual;
+    };
+    let Some(end) = text[at..].find('>').map(|end| at + end + 1) else {
+        return text == actual;
+    };
+    let Some(rest) = actual.strip_prefix(&text[..at]) else {
+        return false;
+    };
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    // The placeholder takes as many digits as leaves the rest matching.
+    (1..=digits).any(|taken| matches_send_time(&text[end..], &rest[taken..]))
+}
+
+/// Whether the dry run's `shown` is `sent`, the request a deploy compiled
+/// with a clock and a timestamp, but for `<send-time:NAME>` placeholders
+/// where a number was sent: keys in the same order, every other value the
+/// same. `placeholders` counts the placeholders met.
+fn same_but_send_time(shown: &Json, sent: &Json, placeholders: &mut usize) -> bool {
+    match (shown, sent) {
+        (Json::Str(text), Json::Int(_)) if text.starts_with("<send-time:") => {
+            *placeholders += 1;
+            text == "<send-time:timestamp>"
+        }
+        (Json::Str(text), Json::Str(actual)) if text.contains("<send-time:") => {
+            *placeholders += text.matches("<send-time:").count();
+            matches_send_time(text, actual)
+        }
+        (Json::Array(shown), Json::Array(sent)) => {
+            shown.len() == sent.len()
+                && shown
+                    .iter()
+                    .zip(sent)
+                    .all(|(shown, sent)| same_but_send_time(shown, sent, placeholders))
+        }
+        (Json::Object(shown), Json::Object(sent)) => {
+            shown.len() == sent.len()
+                && shown.iter().zip(sent).all(|((key, shown), (name, sent))| {
+                    key == name && same_but_send_time(shown, sent, placeholders)
+                })
+        }
+        _ => shown == sent,
+    }
+}
+
+#[test]
+fn a_send_time_placeholder_stands_for_a_number_only() {
+    assert!(matches_send_time(
+        "<send-time:minute> */2 * * *",
+        "04 */2 * * *"
+    ));
+    assert!(matches_send_time(
+        "<send-time:minute> <send-time:hour> */1 * *",
+        "7 7 */1 * *"
+    ));
+    assert!(!matches_send_time(
+        "<send-time:minute> */2 * * *",
+        "x */2 * * *"
+    ));
+    assert!(!matches_send_time(
+        "<send-time:minute> */2 * * *",
+        "04 */3 * * *"
+    ));
+    let mut count = 0;
+    let shown: Json = serde_json::from_str(r#"{"a":"<send-time:timestamp>","b":1}"#).unwrap();
+    let sent: Json = serde_json::from_str(r#"{"a":1767225600,"b":1}"#).unwrap();
+    assert!(same_but_send_time(&shown, &sent, &mut count));
+    let reordered: Json = serde_json::from_str(r#"{"b":1,"a":1767225600}"#).unwrap();
+    assert!(!same_but_send_time(&shown, &reordered, &mut count));
+}
+
+/// The `request` class (#1712): the dry run's entry for a rule on one of the
+/// platforms whose deploy writes are built from the tenant
+/// (`preview::deployers()`), checked against those writes as
+/// [`preview::compile_tenant`] compiles them with the probe's clock and
+/// timestamp, which `tenant:<name>` holds to the oracle. The entry is the
+/// first tenant's writes, named by `tenant`, with `<send-time:NAME>` where a
+/// number was sent; or, when a tenant cannot take the rule, the failure of
+/// the first such tenant, naming it. `None` when it is; else the problem.
+fn request_problem(
+    shown: &Json,
+    rule: &Rule,
+    tenants: &[(String, Result<Json, CompileError>)],
+    placeholders: &mut usize,
+) -> Option<String> {
+    let text = |key: &str| shown.get(key).and_then(Json::as_str).unwrap_or_default();
+    if let Some((name, Err(error))) = tenants.iter().find(|(_, compiled)| compiled.is_err()) {
+        let reason = format!("{} (tenant '{name}')", error.reason);
+        return (text("status") != "failed"
+            || text("code") != error.code
+            || text("error") != reason)
+            .then(|| format!("not the failure on tenant {name}: {reason}"));
+    }
+    let Some((name, Ok(sent))) = tenants.first() else {
+        return Some("no tenant".into());
+    };
+    let keys: Vec<&str> = match shown {
+        Json::Object(entry) => entry.keys().map(String::as_str).collect(),
+        _ => Vec::new(),
+    };
+    if keys != ["uuid", "name", "api_request", "tenant"]
+        || text("uuid") != rule.uuid
+        || text("name") != rule.name
+        || text("tenant") != name
+    {
+        return Some(format!("not the entry of tenant {name}"));
+    }
+    let request = shown.get("api_request").unwrap_or(&Json::Null);
+    (!same_but_send_time(request, sent, placeholders))
+        .then(|| format!("not the writes to {name}: {}", sent.to_compact()))
 }
 
 /// The approved differences of the compile corpus (`[[diff]]` entries of
@@ -261,6 +517,9 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let classes = dump_classes();
     let faults = fault_approvals();
     let mut faulted = 0;
+    let writes_classes = classes_of("writes");
+    let writes_preview = preview::deployers();
+    let mut send_time = 0;
     let mut used = vec![false; approved.len()];
     let mut compared = 0;
     let mut differences = Vec::new();
@@ -274,6 +533,8 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         let uuid = entry["uuid"].as_str().unwrap();
         let platform = entry["platform"].as_str().unwrap();
         let object = index.get("rule", uuid).unwrap();
+        // A message names the rule by its file in the corpus.
+        let file = corpus_file(&object.path);
         let rule = Rule::new(
             object.root().unwrap(),
             Some(object.path.to_string_lossy().into_owned()),
@@ -287,11 +548,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 used[at] = true;
             } else if oracle != mine
                 && !(what == "preview"
-                    && dump_class(&oracle, &mine, &|key| {
-                        rule.block(platform)
-                            .is_some_and(|block| block.get(key).is_some())
-                    })
-                    .is_some_and(|class| {
+                    && dump_class(&oracle, &mine).is_some_and(|class| {
                         classes.iter().any(|(rule, platforms)| {
                             rule == class && platforms.iter().any(|known| known == platform)
                         })
@@ -309,6 +566,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 candidate(compiled),
             );
         }
+        let mut sent: Vec<(String, Result<Json, CompileError>)> = Vec::new();
         for tenant in entry["tenants"].as_array().unwrap() {
             let name = tenant["tenant"].as_str().unwrap();
             // The oracle's own client failed and the probe worked around it:
@@ -324,12 +582,60 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
             }
             let inputs = Inputs {
                 known: opentide_compile::plan::state_id(&OsFs, &corpus, uuid, platform, name),
-                clock: PROBE_CLOCK,
-                timestamp: PROBE_TIMESTAMP,
+                clock: Some(PROBE_CLOCK),
+                timestamp: Some(PROBE_TIMESTAMP),
             };
-            let mine =
-                candidate(preview::compile_tenant(&cx, platform, &rule, name, &inputs).unwrap());
+            let compiled = preview::compile_tenant(&cx, platform, &rule, name, &inputs).unwrap();
+            let mut mine = candidate(compiled.clone());
+            // The `[[writes]]` classes: the writes as the oracle's probe
+            // recorded them.
+            if let Ok(writes) = &compiled {
+                let class = |rule: &str| {
+                    writes_classes.iter().any(|(class, platforms)| {
+                        class == rule && platforms.iter().any(|known| known == platform)
+                    })
+                };
+                let mut recorded = writes.clone();
+                if class("url") {
+                    let table = opentide_compile::deploy::tenant(&cx, platform, name).unwrap();
+                    recorded = recorded_urls(&recorded, platform, table)
+                        .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
+                }
+                if class("search") {
+                    recorded = without_update_search(&recorded)
+                        .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
+                }
+                if class("watchlist") {
+                    recorded = without_watchlist_write(&recorded)
+                        .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
+                }
+                mine = recorded.to_compact();
+            }
             check(format!("tenant:{name}"), describe(tenant), mine);
+            sent.push((name.to_owned(), compiled));
+        }
+        if writes_preview.contains(&platform) {
+            // The oracle showed the block; the dry run shows the writes the
+            // first tenant receives (#1712), held to them here, and they to
+            // the oracle's above.
+            compared += 1;
+            assert!(
+                classes.iter().any(|(class, platforms)| class == "request"
+                    && platforms.iter().any(|known| known == platform)),
+                "{platform}: no [[dump]] request approval"
+            );
+            let names: Vec<String> = sent.iter().map(|(name, _)| name.clone()).collect();
+            let known = |tenant: &str| {
+                opentide_compile::plan::state_id(&OsFs, &corpus, uuid, platform, tenant)
+            };
+            let shown = preview::preview_planned(&cx, platform, &rule, &names, &known);
+            if let Some(problem) = request_problem(&shown, &rule, &sent, &mut send_time) {
+                differences.push(format!(
+                    "{uuid} {platform} preview: {problem}\n  candidate: {}",
+                    shown.to_compact()
+                ));
+            }
+            continue;
         }
         check(
             "preview".into(),
@@ -338,6 +644,8 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         );
     }
     assert!(differences.is_empty(), "{}", differences.join("\n"));
+    // Splunk's schedule minute and Carbon Black's timestamp are met.
+    assert!(send_time >= 2, "{send_time} send-time placeholders");
     assert!(
         used.iter().all(|used| *used),
         "an approval of the compile corpus matches nothing (stale)"
@@ -348,39 +656,93 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     assert!(faulted >= 5, "{faulted} oracle faults");
 }
 
-/// The JSON pointers of every `null` in `value`, except the values of a
-/// Splunk block's `advanced` table: there `null` is a value the rule writes
-/// (the empty `savedsearches.conf` value), not a field it leaves unset.
-fn nulls(value: &Json, at: &str, out: &mut Vec<String>) {
+/// Every `<tenant:KEY>` placeholder in `value`, by key.
+fn tenant_placeholders(value: &Json, out: &mut Vec<String>) {
     match value {
-        Json::Null => out.push(at.to_owned()),
-        Json::Object(object) => {
-            for (key, member) in object {
-                if at.is_empty() && key == "advanced" {
-                    continue;
+        Json::Str(text) => {
+            let mut rest = text.as_str();
+            while let Some(at) = rest.find("<tenant:") {
+                let Some(end) = rest[at..].find('>') else {
+                    break;
+                };
+                let key = rest[at + "<tenant:".len()..at + end].to_owned();
+                if !out.contains(&key) {
+                    out.push(key);
                 }
-                nulls(member, &format!("{at}/{key}"), out);
+                rest = &rest[at + end..];
             }
         }
-        Json::Array(items) => {
-            for (index, item) in items.iter().enumerate() {
-                nulls(item, &format!("{at}/{index}"), out);
-            }
-        }
+        Json::Object(object) => object
+            .values()
+            .for_each(|member| tenant_placeholders(member, out)),
+        Json::Array(items) => items.iter().for_each(|item| tenant_placeholders(item, out)),
         _ => {}
     }
 }
 
-/// One rule across platforms for a dry run's preview of a block it builds
-/// no request body for (`deployers()`: Defender, Splunk, SentinelOne,
-/// CrowdStrike, HarfangLab, Carbon Black Cloud): the block's model dump
-/// leaves an unset field out, where the oracle printed it `null`
-/// (`[[dump]]` `nulls`, #895). What the tenant receives is not the dump:
-/// [`the_compile_corpus_compiles_as_the_oracle_compiles_it`] holds each
-/// tenant's requests to the oracle's, `null`s included where the oracle
-/// sent one (Defender's `organizationalScope`, for one).
+/// The `setup` keys the dry run's entry `shown` of a rule on `platform`
+/// that reaches no tenant shows as `<tenant:KEY>`: the requests, each
+/// `{"method", "url", "body"}`, hold exactly the placeholders
+/// `unresolved.setup` lists, and its `reason` names the platform.
+fn unreached_setup(file: &str, platform: &str, shown: &Json) -> Vec<String> {
+    let Some(Json::Array(writes)) = shown.get("api_request") else {
+        panic!("{file} {platform}: {}", shown.to_compact())
+    };
+    for write in writes {
+        let Json::Object(write) = write else {
+            panic!("{file} {platform}: {}", shown.to_compact())
+        };
+        assert_eq!(
+            write.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["method", "url", "body"],
+            "{file} {platform}"
+        );
+        // A setup key the requests carry that `tenant_keys` leaves out
+        // would be empty here: no host, no segment.
+        let url = write["url"].as_str().unwrap_or_default();
+        assert!(whole_url(url), "{file} {platform}: {url}");
+    }
+    assert!(
+        !shown.to_compact().contains("corpus-tenant"),
+        "{file} {platform}: {}",
+        shown.to_compact()
+    );
+    let mut found = Vec::new();
+    tenant_placeholders(shown.get("api_request").unwrap(), &mut found);
+    let unresolved = shown.get("unresolved").unwrap();
+    let listed: Vec<String> = unresolved
+        .get("setup")
+        .and_then(Json::as_array)
+        .map(|keys| {
+            keys.iter()
+                .filter_map(Json::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort();
+    let mut sorted = listed.clone();
+    sorted.sort();
+    assert_eq!(found, sorted, "{file} {platform}: {}", shown.to_compact());
+    assert!(
+        unresolved
+            .get("reason")
+            .and_then(Json::as_str)
+            .is_some_and(|reason| reason.contains(&format!("no {platform} tenant"))),
+        "{file} {platform}"
+    );
+    listed
+}
+
+/// A dry run that reaches no tenant of a platform whose deploy writes are
+/// built from the tenant (`deployers()`: Defender, Splunk, SentinelOne,
+/// CrowdStrike, HarfangLab, Carbon Black Cloud) shows the writes compiled
+/// for a tenant whose setup sets nothing (#1712), not the block: each
+/// `{"method", "url", "body"}`, every value a tenant's setup gives written
+/// `<tenant:KEY>` and named under `unresolved.setup`, and every send-time
+/// value a `<send-time:NAME>` placeholder.
 #[test]
-fn a_model_dump_preview_leaves_unset_fields_out_on_every_dump_platform() {
+fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(
         &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
@@ -403,40 +765,158 @@ fn a_model_dump_preview_leaves_unset_fields_out_on_every_dump_platform() {
     );
     let index = workspace.index().clone();
     let cx = owned.context(&index);
-    let dumped = preview::deployers();
+    let deployers = preview::deployers();
     let mut seen: Vec<&str> = Vec::new();
-    let mut found = Vec::new();
+    let mut shown_keys: Vec<String> = Vec::new();
     for entry in record["rules"].as_array().unwrap() {
         let platform = entry["platform"].as_str().unwrap();
-        let Some(platform) = dumped.iter().copied().find(|known| *known == platform) else {
+        let Some(platform) = deployers.iter().copied().find(|known| *known == platform) else {
             continue;
         };
-        let uuid = entry["uuid"].as_str().unwrap();
-        let object = index.get("rule", uuid).unwrap();
+        let object = index.get("rule", entry["uuid"].as_str().unwrap()).unwrap();
         let rule = Rule::new(object.root().unwrap(), None);
         let shown = preview::preview(&cx, platform, &rule);
-        let request = shown.get("api_request").unwrap();
-        assert!(
-            request.as_object().is_some(),
-            "{uuid} {platform}: {shown:?}"
-        );
-        let mut at = Vec::new();
-        nulls(request, "", &mut at);
-        found.extend(at.into_iter().map(|at| format!("{uuid} {platform} {at}")));
+        if shown.get("status").and_then(Json::as_str) == Some("failed") {
+            continue;
+        }
+        let listed = unreached_setup(&corpus_file(&object.path), platform, &shown);
+        shown_keys.extend(listed.into_iter().map(|key| format!("{platform}:{key}")));
         if !seen.contains(&platform) {
             seen.push(platform);
         }
     }
-    assert!(
-        found.is_empty(),
-        "unset fields printed null:\n{}",
-        found.join("\n")
-    );
     seen.sort_unstable();
-    let mut expected = dumped.clone();
+    let mut expected = deployers.clone();
     expected.sort_unstable();
-    assert_eq!(
-        seen, expected,
-        "the corpus previews every model-dump platform"
+    assert_eq!(seen, expected, "the corpus previews every such platform");
+    for key in [
+        "sentinel_one:url",
+        "sentinel_one:site_id",
+        "crowdstrike:api",
+        "crowdstrike:customer_id",
+        "harfanglab:url",
+        "harfanglab:source_id",
+        "splunk:url",
+        "splunk:port",
+        "splunk:app",
+        "carbon_black_cloud:url",
+        "carbon_black_cloud:org_key",
+    ] {
+        assert!(
+            shown_keys.iter().any(|shown| shown == key),
+            "{key} is never a placeholder: {shown_keys:?}"
+        );
+    }
+}
+
+/// Every placeholder in `value`'s strings, whole (`<KIND:NAME>`), each
+/// `NAME` held to the documented grammar (lowercase letters, digits, `_`).
+fn placeholders_in(value: &Json, out: &mut std::collections::BTreeSet<String>) {
+    match value {
+        Json::Str(text) => {
+            for kind in ["<send-time:", "<tenant-read:", "<tenant:"] {
+                for (at, _) in text.match_indices(kind) {
+                    let rest = &text[at + kind.len()..];
+                    let name = rest.split('>').next().unwrap_or_default();
+                    assert!(
+                        !name.is_empty()
+                            && rest.len() > name.len()
+                            && name.bytes().all(|byte| byte.is_ascii_lowercase()
+                                || byte.is_ascii_digit()
+                                || byte == b'_'),
+                        "not a placeholder: {text}"
+                    );
+                    out.insert(format!("{kind}{name}>"));
+                }
+            }
+        }
+        Json::Object(object) => object
+            .values()
+            .for_each(|member| placeholders_in(member, out)),
+        Json::Array(items) => items.iter().for_each(|item| placeholders_in(item, out)),
+        _ => {}
+    }
+}
+
+/// The placeholders `docs/cli/json-output.md`'s Placeholders table names, in
+/// its first column, but for the row of `<tenant:KEY>`, any key whose value
+/// names a variable, which it must hold.
+fn documented_placeholders() -> std::collections::BTreeSet<String> {
+    let text = std::fs::read_to_string(repo().join("docs/cli/json-output.md")).unwrap();
+    let section = text.split("## Placeholders").nth(1).unwrap();
+    let section = section.split("\n## ").next().unwrap();
+    let mut out = std::collections::BTreeSet::new();
+    let mut any_key = false;
+    for row in section.lines().filter(|line| line.starts_with("| `<")) {
+        let cell = row.split('|').nth(1).unwrap_or_default();
+        if cell.contains("`<tenant:KEY>`") {
+            any_key = true;
+            continue;
+        }
+        placeholders_in(&Json::Str(cell.replace('`', "")), &mut out);
+    }
+    assert!(
+        any_key,
+        "the table has no row for a setup variable, <tenant:KEY>"
     );
+    out
+}
+
+/// The placeholders a dry run writes are the ones `docs/cli/json-output.md`
+/// lists, no more and no fewer (#1719): over the compile corpus, each
+/// deployer's rule with no tenant (every `<tenant:KEY>` it can show:
+/// `tenant_keys`), and with the tenants the oracle compiled for.
+#[test]
+fn the_documented_placeholders_are_those_a_dry_run_writes() {
+    let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
+    let record: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
+    )
+    .unwrap();
+    let workspace = Workspace::open(
+        Arc::new(OsFs) as Arc<dyn FileSystem>,
+        Options {
+            roots: RootOptions {
+                repo: Some(corpus.clone()),
+                cwd: corpus,
+                ..RootOptions::default()
+            },
+        },
+    )
+    .unwrap();
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let deployers = preview::deployers();
+    let mut written = std::collections::BTreeSet::new();
+    for entry in record["rules"].as_array().unwrap() {
+        let platform = entry["platform"].as_str().unwrap();
+        if !deployers.contains(&platform) {
+            continue;
+        }
+        let object = index.get("rule", entry["uuid"].as_str().unwrap()).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let tenants: Vec<String> = entry["tenants"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tenant| tenant["tenant"].as_str().unwrap().to_owned())
+            .collect();
+        for shown in [
+            preview::preview(&cx, platform, &rule),
+            preview::preview_on(&cx, platform, &rule, &tenants),
+        ] {
+            placeholders_in(
+                shown.get("api_request").unwrap_or(&Json::Null),
+                &mut written,
+            );
+        }
+    }
+    // A daily Splunk schedule, which the corpus does not hold, shows the hour.
+    let daily = splunk::cron_to_timeframe("1d", "random", None, None).unwrap();
+    placeholders_in(&Json::Str(daily), &mut written);
+    assert_eq!(written, documented_placeholders());
 }

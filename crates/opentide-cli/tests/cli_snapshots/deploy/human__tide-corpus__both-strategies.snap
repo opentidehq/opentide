@@ -3,7 +3,7 @@ source: crates/opentide-cli/tests/common/snapshot.rs
 description: deploy/human/tide-corpus/both-strategies
 ---
 args: opentide deploy --strategy PREVIEW --strategy RELEASE --all --dry-run
-exit: 0
+exit: 1
 
 ━━━ stdout
 ␛[1mDeploy plan␛[0m␛[1m␛[2m · strategy ␛[0m␛[1mPREVIEW RELEASE␛[0m␛[1m␛[2m · 9 platforms, 2 tenants · dry run, nothing is sent␛[0m
@@ -25,7 +25,7 @@ exit: 0
   ␛[1m␛[32m+ create or update␛[0m  ␛[1mCarbon Black Lucene Rule␛[0m  ␛[2m…000000000005␛[0m  ␛[2mstatus STAGING␛[0m
 
 ␛[1mcrowdstrike␛[0m␛[2m · 0 tenants␛[0m
-  ␛[1m␛[32m+ create␛[0m  ␛[1mCrowdStrike Deploy Rule␛[0m  ␛[2m…000000000006␛[0m  ␛[2mstatus STAGING␛[0m
+  ␛[1m␛[31m✗ would fail␛[0m  ␛[1mCrowdStrike Deploy Rule␛[0m  ␛[2m…000000000006␛[0m  ␛[2mstatus STAGING␛[0m
 
 ␛[1mharfanglab␛[0m␛[2m · 0 tenants␛[0m
   ␛[1m␛[32m+ create or update␛[0m  ␛[1mHarfangLab Deploy Rule␛[0m  ␛[2m…000000000007␛[0m  ␛[2mstatus STAGING␛[0m
@@ -38,7 +38,7 @@ exit: 0
   ␛[1mstaging␛[0m
     ␛[1m␛[32m+ create␛[0m  ␛[1mSysdig Falco Rule␛[0m  ␛[2m…0000005d1a90␛[0m  ␛[2mstatus STAGING␛[0m
 
-␛[1mPlan:␛[0m 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete
+␛[1mPlan:␛[0m 3 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete, 1 would fail
   ␛[1m␛[36mhelp:␛[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml;
         add (or uncomment) a [[tenants]] entry in
         .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a
@@ -51,6 +51,9 @@ exit: 0
 ␛[2mdry run, nothing sent␛[0m
 
 ━━━ stderr
+␛[1m␛[31merror[compile_failed]␛[0m␛[1m: CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value␛[0m
+  ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/Objects/Detection%20Rules/rule-0006-crowdstrike-deploy-only.yaml␛\Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml␛]8;;␛\
+
 ␛[1m␛[33mwarning:␛[0m a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset
 ␛[1m␛[33mwarning:␛[0m sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so
          a real deploy would stop

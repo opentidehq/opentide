@@ -385,7 +385,7 @@ class Workspace:
         environment: Mapping[str, str] | None = None,
     ) -> DeployPlan:
         """``opentide deploy --dry-run``: the rules the strategies select, the
-        tenants each reaches and the request bodies a real run would send.
+        tenants each reaches and the requests a real run would send.
         Nothing is sent and nothing is written. Without *uuids* or *files* it
         plans every rule file (``--all``). *environment* is where the tenants'
         ``$NAME`` credentials are looked up, to say which are unset, as
