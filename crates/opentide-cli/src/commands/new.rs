@@ -102,7 +102,17 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 3] = [
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 4] = [
+    (
+        "crowdstrike",
+        // The model holds both to a closed set in any case, which the JSON
+        // Schema cannot say (it would flag `Verbose`), so the schema offers
+        // no value: the first allowed one, as a placeholder to confirm.
+        &[
+            (&["details", "trigger"], "verbose", true),
+            (&["details", "outcome"], "detection", true),
+        ],
+    ),
     (
         "google_secops",
         // A rule without $risk_score earns google_secops_risk_score_missing.
