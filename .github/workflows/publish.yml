@@ -1,0 +1,50 @@
+# A stub of the release train, so GitHub can dispatch it.
+#
+# GitHub runs a workflow_dispatch workflow only once a file of that name is on
+# the default branch (development). A run uses the workflow file of the ref it
+# is dispatched on, so Run workflow on integration/unified-core runs that
+# branch's real publish.yml (a release candidate, before the integration
+# merges); on development, this stub runs, and it only fails: it has no
+# permissions, no secrets and no steps that build or publish. development
+# still releases through publish-pypi.yml until the integration merge replaces
+# this file with the real one (docs/internal/publishing.md on
+# integration/unified-core, "Release candidates").
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      internal_candidate:
+        description: "Internal candidate number N (runs on integration/unified-core only, where the real workflow is)."
+        required: false
+        default: ""
+        type: string
+      release_candidate:
+        description: "Public release candidate number N (runs on integration/unified-core only, where the real workflow is)."
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Build and smoke-test everything; publish nothing (integration/unified-core only)."
+        required: false
+        default: false
+        type: boolean
+      checkout_ref:
+        description: "An existing release tag to resume (integration/unified-core only)."
+        required: false
+        default: ""
+        type: string
+
+permissions: {}
+
+jobs:
+  stub:
+    name: Not on development yet
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 2
+    steps:
+      - name: Refuse
+        run: |
+          echo "::error::publish.yml on development is a stub until integration/unified-core merges: run Publish on integration/unified-core." >&2
+          exit 1
