@@ -194,11 +194,15 @@ pub fn compile(
     let Some(action) = deploy::action(cx, DISPLAY, status, known)? else {
         return Ok(Vec::new());
     };
-    // The client, which names the cloud, is built before the body.
-    let endpoint = format!(
-        "{}/correlation-rules/entities/rules/v1",
-        base_api(&deploy::setup_text(tenant, "api"))?
-    );
+    // The client, which names the cloud, is built before the body. A dry
+    // run that reaches no tenant shows the cloud's placeholder.
+    let api = deploy::setup_text(tenant, "api");
+    let base = if deploy::is_tenant_value(&api) {
+        api.as_str()
+    } else {
+        base_api(&api)?
+    };
+    let endpoint = format!("{base}/correlation-rules/entities/rules/v1");
     let body = body(cx, rule, tenant)?;
     Ok(vec![match action {
         Action::Create => Write::new("POST", endpoint, body),
