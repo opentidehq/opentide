@@ -40,7 +40,7 @@ Values are found by their path through the document, never by key name, so a Sen
 | Code | When |
 |------|------|
 | `0` | Nothing left to do, or `--force` |
-| `1` | A file could not be rewritten safely and was left unchanged, or `--field` names no scoped field |
+| `1` | A file could not be rewritten safely and was left unchanged, `--field` names no scoped field, or there is no workspace: neither `.opentide/` nor `objects/` is in the folder or above it (`failure.code` `workspace_not_found`) |
 | `2` | Values are defined under several stages and need a person to choose (`failure.code` `needs_human_decision`) |
 
 ## Source
