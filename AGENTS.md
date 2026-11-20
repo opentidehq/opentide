@@ -12,7 +12,7 @@
 |------|------------|------------|
 | `src/opentide/` | The PyPI package: the console script, the SDK, the models, the plugin API, bundled data (`src/opentide/data/`) around the Rust core | [`src/AGENTS.md`](src/AGENTS.md) |
 | `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E, MCP and LSP stdio, docs and CI contracts | the testing skills below |
-| `tests/golden/` | The command line's snapshot cases (`cases.toml`) and their fixtures, which `crates/opentide-cli/tests/cli_snapshots.rs` runs | [`tests/golden/README.md`](tests/golden/README.md) |
+| `tests/golden/` | The command line's snapshot cases (`cases.toml`) and their fixtures, which `crates/opentide-cli/tests/cli_snapshots.rs` runs: the `--json` contract, written files, exit codes and a small rendering set | [`tests/golden/README.md`](tests/golden/README.md) |
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide/` | The `opentide` crate: the Rust SDK (the facade), the only crate with a stability promise | [`crates/opentide/AGENTS.md`](crates/opentide/AGENTS.md) |
 | `crates/opentide-*/` | The engine and language server crates, one guide each | `crates/<crate>/AGENTS.md` |
@@ -219,7 +219,10 @@ fails when this table, its counts or those pages disagree with the registry.
 ## Definition of done
 
 1. Each fix has a regression test that fails without it; each feature has tests at the
-   level it is used (unit, CLI E2E, MCP).
+   level it is used (unit, CLI E2E, MCP). **Behaviour is held by unit and end-to-end tests;
+   snapshots hold the `--json` contract, the files a command writes, exit codes and a small
+   rendering set** ([`tests/golden/README.md`](tests/golden/README.md)). A new snapshot case runs
+   in json mode; it is not a place to pin wording.
 2. `scripts/ci-local.sh --full` passes.
 3. User-visible change → `## [Unreleased]` in `CHANGELOG.md`, written to
    [release-notes](.agents/skills/release-notes/SKILL.md); CLI/MCP/SDK surface change →

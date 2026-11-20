@@ -1,6 +1,6 @@
 ---
 name: review-checklist
-description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; behaviour changes without a reviewed snapshot and the other snapshot rules) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching the connectors (crates/opentide-connectors), the command line (crates/opentide-cli), the Python package (src/opentide) or anything else in the Rust workspace.
+description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; snapshot rules (what a snapshot may hold, reviewed diffs, no loosened net)) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching the connectors (crates/opentide-connectors), the command line (crates/opentide-cli), the Python package (src/opentide) or anything else in the Rust workspace.
 ---
 
 # Review checklist — opentide
@@ -141,12 +141,18 @@ and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../c
 
 ## Snapshots (the command line's behaviour)
 
-What a command prints and writes is held by the Rust-owned snapshots; the rules:
+Behaviour is held by unit and end-to-end tests. The Rust-owned snapshots hold the `--json`
+contract, the files a command writes, exit codes and a small rendering set; the rules:
 [`golden`](../golden/SKILL.md).
 
-- [ ] **A behaviour change is deliberate and in `CHANGELOG.md`**, and its snapshot diff
-      (`crates/opentide-cli/tests/cli_snapshots/`) is in the same pull request, each changed line
-      following from the change.
+- [ ] **A behaviour change is deliberate and in `CHANGELOG.md`**, with a test at the level it is
+      used. A change to the `--json` document, a written file, an exit code or the rendering set
+      also has its snapshot diff (`crates/opentide-cli/tests/cli_snapshots/`) in the same pull
+      request, each changed line following from the change.
+- [ ] **No wording is pinned by a snapshot.** A new case runs in json mode; a text mode is added
+      only for a behaviour no other test holds, with the reason. A message, help or explain-page
+      edit that rewrites a lint, validate or generated-corpus snapshot is a defect of the case's
+      view.
 - [ ] **Snapshots are reviewed, never hand-edited**: `cargo insta review`, no `.snap.new`
       committed. A changed snapshot has a cause in the same pull request: a code change, a new or
       changed case in `cases.toml`, a fixture change, or a normalisation rule with its unit test.
