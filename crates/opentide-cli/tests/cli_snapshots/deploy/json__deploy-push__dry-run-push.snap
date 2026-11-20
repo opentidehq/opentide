@@ -38,7 +38,7 @@ exit: 0
               "search": "index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
             },
             "method": "POST",
-            "url": "saved/searches"
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
           },
           {
             "body": {
@@ -49,7 +49,7 @@ exit: 0
               "search": "index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
             },
             "method": "POST",
-            "url": "saved/searches/Splunk create rule"
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
           },
           {
             "body": {
@@ -57,7 +57,7 @@ exit: 0
               "search": "index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"
             },
             "method": "POST",
-            "url": "saved/searches/Splunk create rule"
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
           }
         ],
         "name": "Splunk create rule",

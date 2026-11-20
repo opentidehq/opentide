@@ -233,7 +233,22 @@ The schemas allow keys they do not name, because new keys are added without noti
 
 ## Placeholders
 
-A value a command cannot know when it prints is a string in angle brackets in its place. `deploy --dry-run` shows the requests a deploy would send ([Payloads](./deploy.md#payloads)) with `<send-time:NAME>` for a value a deploy learns as it sends the request (Splunk's schedule minute, Carbon Black's report timestamp), `<tenant-read:NAME>` for one it reads from the tenant (a Carbon Black watchlist), and `<tenant:KEY>` for a tenant's `setup` value when the run reaches no tenant of the platform. A placeholder can stand where the value is a number or an object, so read a string that starts with `<` and ends with `>` as a placeholder before you read the value's type.
+A value a command cannot know when it prints is a placeholder in its place. `deploy --dry-run` writes them in the requests a deploy would send ([Payloads](./deploy.md#payloads)).
+
+A placeholder is `<KIND:NAME>`, where `KIND` is `send-time`, `tenant-read` or `tenant` and `NAME` is lowercase letters, digits and underscores. It can sit anywhere inside a string, alone or among other text, as in `"<send-time:minute> */2 * * *"` or `"<tenant:url>/web/api/v2.1/cloud-detection/rules"`. Find placeholders with the pattern `<(send-time|tenant-read|tenant):[a-z0-9_]+>`, anywhere in every string. Do not test whether a whole string starts with `<` and ends with `>`: that misses the placeholders inside longer strings, and it takes a real value written as markup (a description such as `<b>`) for one.
+
+Only a placeholder that is the whole string can stand for a value of another type: `<send-time:timestamp>` stands for a number and `<tenant-read:watchlist>` for an object. Every other placeholder stands for text.
+
+| Placeholder | What a deploy sends in its place |
+|---|---|
+| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule, drawn at random or read from the clock as the request is sent |
+| `<send-time:timestamp>` | Carbon Black Cloud: the report's `timestamp`, the time it is sent, a number |
+| `<tenant-read:watchlist_id>` | Carbon Black Cloud: the id of the watchlist the new report joins, read from the tenant |
+| `<tenant-read:watchlist>` | Carbon Black Cloud: that watchlist as the tenant holds it, an object, with the report's id added to `report_ids` |
+| `<tenant:url>`, `<tenant:port>`, `<tenant:app>`, `<tenant:api>`, `<tenant:customer_id>`, `<tenant:site_id>`, `<tenant:source_id>`, `<tenant:org_key>` | The tenant's `setup` value of that key, when the run reaches no tenant of the platform |
+| `<tenant:KEY>`, any `setup` key | The tenant's `setup.KEY` when it names an environment variable (`$NAME` or `${NAME}`): a dry run resolves no variable, set or not |
+
+The entry that holds a `<tenant:KEY>` placeholder lists its keys in `unresolved.setup`, with the reason in `unresolved.reason`.
 
 ## Related
 

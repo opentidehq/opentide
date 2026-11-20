@@ -217,6 +217,85 @@ fn without_update_search(writes: &Json) -> Option<Json> {
     Some(Json::Array(out))
 }
 
+/// Whether `url`, a write's, names its host and every segment of its path:
+/// it starts with `https://` or a `<tenant:KEY>` placeholder, then no
+/// segment is empty (a trailing slash aside) and no host is.
+fn whole_url(url: &str) -> bool {
+    let rest = if let Some(rest) = url.strip_prefix("https://") {
+        rest
+    } else if url.starts_with("<tenant:") {
+        url
+    } else {
+        return false;
+    };
+    let path = rest.split('?').next().unwrap_or_default();
+    let path = path.strip_suffix('/').unwrap_or(path);
+    !path.starts_with([':', '/']) && path.split('/').all(|segment| !segment.is_empty())
+}
+
+#[test]
+fn a_whole_url_has_its_host_and_every_segment() {
+    assert!(whole_url(
+        "https://h:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(whole_url("<tenant:url>/web/api/v2.1/cloud-detection/rules"));
+    assert!(whole_url(
+        "<tenant:api>/correlation-rules/entities/rules/v1?ids=1"
+    ));
+    assert!(!whole_url(
+        "https://:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(!whole_url("/threathunter/watchlistmgr/v3/orgs/K/reports"));
+    assert!(!whole_url(
+        "<tenant:url>/threathunter/watchlistmgr/v3/orgs//reports"
+    ));
+    assert!(!whole_url(
+        "https://h:8089/servicesNS/nobody//saved/searches/"
+    ));
+}
+
+/// A rule's file name in the corpus, which names the rule in a message.
+fn corpus_file(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The `[[writes]] url` class: Splunk's and Carbon Black's writes with each
+/// `url` as the oracle's probe recorded it, the path under the tenant's app
+/// namespace (`saved/searches`, `saved/searches/<name>`, decoded) or under
+/// its `url` (`/threathunter/...`). The candidate's is the whole URL a
+/// deploy sends to, which must start with the tenant's: `None` when one
+/// does not.
+fn recorded_urls(writes: &Json, platform: &str, tenant: &Json) -> Option<Json> {
+    let Json::Array(writes) = writes else {
+        return Some(writes.clone());
+    };
+    let mut out = Vec::new();
+    for write in writes {
+        let mut write = write.clone();
+        let url = write.get("url").and_then(Json::as_str)?.to_owned();
+        let recorded = if platform == "splunk" {
+            let searches = splunk::saved_searches(tenant);
+            let name = url.strip_prefix(&searches)?;
+            let name = percent_encoding::percent_decode_str(name)
+                .decode_utf8()
+                .ok()?;
+            if name.is_empty() {
+                "saved/searches".to_owned()
+            } else {
+                format!("saved/searches/{name}")
+            }
+        } else {
+            let server = opentide_compile::deploy::setup_text(tenant, "url");
+            url.strip_prefix(server.trim_end_matches('/'))?.to_owned()
+        };
+        *write.get_mut("url")? = recorded.into();
+        out.push(write);
+    }
+    Some(Json::Array(out))
+}
+
 /// The `[[writes]] watchlist` class: Carbon Black's writes without the
 /// watchlist update that follows a new report, which the deploy reads from
 /// the tenant (`PUT .../watchlists/<tenant-read:watchlist_id>`, its body
@@ -454,6 +533,8 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         let uuid = entry["uuid"].as_str().unwrap();
         let platform = entry["platform"].as_str().unwrap();
         let object = index.get("rule", uuid).unwrap();
+        // A message names the rule by its file in the corpus.
+        let file = corpus_file(&object.path);
         let rule = Rule::new(
             object.root().unwrap(),
             Some(object.path.to_string_lossy().into_owned()),
@@ -515,13 +596,18 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                     })
                 };
                 let mut recorded = writes.clone();
+                if class("url") {
+                    let table = opentide_compile::deploy::tenant(&cx, platform, name).unwrap();
+                    recorded = recorded_urls(&recorded, platform, table)
+                        .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
+                }
                 if class("search") {
                     recorded = without_update_search(&recorded)
-                        .unwrap_or_else(|| panic!("{uuid} {platform} {name}: {mine}"));
+                        .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
                 }
                 if class("watchlist") {
                     recorded = without_watchlist_write(&recorded)
-                        .unwrap_or_else(|| panic!("{uuid} {platform} {name}: {mine}"));
+                        .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
                 }
                 mine = recorded.to_compact();
             }
@@ -598,23 +684,27 @@ fn tenant_placeholders(value: &Json, out: &mut Vec<String>) {
 /// that reaches no tenant shows as `<tenant:KEY>`: the requests, each
 /// `{"method", "url", "body"}`, hold exactly the placeholders
 /// `unresolved.setup` lists, and its `reason` names the platform.
-fn unreached_setup(uuid: &str, platform: &str, shown: &Json) -> Vec<String> {
+fn unreached_setup(file: &str, platform: &str, shown: &Json) -> Vec<String> {
     let Some(Json::Array(writes)) = shown.get("api_request") else {
-        panic!("{uuid} {platform}: {}", shown.to_compact())
+        panic!("{file} {platform}: {}", shown.to_compact())
     };
     for write in writes {
         let Json::Object(write) = write else {
-            panic!("{uuid} {platform}: {}", shown.to_compact())
+            panic!("{file} {platform}: {}", shown.to_compact())
         };
         assert_eq!(
             write.keys().map(String::as_str).collect::<Vec<_>>(),
             ["method", "url", "body"],
-            "{uuid} {platform}"
+            "{file} {platform}"
         );
+        // A setup key the requests carry that `tenant_keys` leaves out
+        // would be empty here: no host, no segment.
+        let url = write["url"].as_str().unwrap_or_default();
+        assert!(whole_url(url), "{file} {platform}: {url}");
     }
     assert!(
         !shown.to_compact().contains("corpus-tenant"),
-        "{uuid} {platform}: {}",
+        "{file} {platform}: {}",
         shown.to_compact()
     );
     let mut found = Vec::new();
@@ -633,13 +723,13 @@ fn unreached_setup(uuid: &str, platform: &str, shown: &Json) -> Vec<String> {
     found.sort();
     let mut sorted = listed.clone();
     sorted.sort();
-    assert_eq!(found, sorted, "{uuid} {platform}: {}", shown.to_compact());
+    assert_eq!(found, sorted, "{file} {platform}: {}", shown.to_compact());
     assert!(
         unresolved
             .get("reason")
             .and_then(Json::as_str)
             .is_some_and(|reason| reason.contains(&format!("no {platform} tenant"))),
-        "{uuid} {platform}"
+        "{file} {platform}"
     );
     listed
 }
@@ -683,14 +773,13 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
         let Some(platform) = deployers.iter().copied().find(|known| *known == platform) else {
             continue;
         };
-        let uuid = entry["uuid"].as_str().unwrap();
-        let object = index.get("rule", uuid).unwrap();
+        let object = index.get("rule", entry["uuid"].as_str().unwrap()).unwrap();
         let rule = Rule::new(object.root().unwrap(), None);
         let shown = preview::preview(&cx, platform, &rule);
         if shown.get("status").and_then(Json::as_str) == Some("failed") {
             continue;
         }
-        let listed = unreached_setup(uuid, platform, &shown);
+        let listed = unreached_setup(&corpus_file(&object.path), platform, &shown);
         shown_keys.extend(listed.into_iter().map(|key| format!("{platform}:{key}")));
         if !seen.contains(&platform) {
             seen.push(platform);
@@ -707,6 +796,10 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
         "crowdstrike:customer_id",
         "harfanglab:url",
         "harfanglab:source_id",
+        "splunk:url",
+        "splunk:port",
+        "splunk:app",
+        "carbon_black_cloud:url",
         "carbon_black_cloud:org_key",
     ] {
         assert!(
@@ -714,4 +807,116 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
             "{key} is never a placeholder: {shown_keys:?}"
         );
     }
+}
+
+/// Every placeholder in `value`'s strings, whole (`<KIND:NAME>`), each
+/// `NAME` held to the documented grammar (lowercase letters, digits, `_`).
+fn placeholders_in(value: &Json, out: &mut std::collections::BTreeSet<String>) {
+    match value {
+        Json::Str(text) => {
+            for kind in ["<send-time:", "<tenant-read:", "<tenant:"] {
+                for (at, _) in text.match_indices(kind) {
+                    let rest = &text[at + kind.len()..];
+                    let name = rest.split('>').next().unwrap_or_default();
+                    assert!(
+                        !name.is_empty()
+                            && rest.len() > name.len()
+                            && name.bytes().all(|byte| byte.is_ascii_lowercase()
+                                || byte.is_ascii_digit()
+                                || byte == b'_'),
+                        "not a placeholder: {text}"
+                    );
+                    out.insert(format!("{kind}{name}>"));
+                }
+            }
+        }
+        Json::Object(object) => object
+            .values()
+            .for_each(|member| placeholders_in(member, out)),
+        Json::Array(items) => items.iter().for_each(|item| placeholders_in(item, out)),
+        _ => {}
+    }
+}
+
+/// The placeholders `docs/cli/json-output.md`'s Placeholders table names, in
+/// its first column, but for the row of `<tenant:KEY>`, any key whose value
+/// names a variable, which it must hold.
+fn documented_placeholders() -> std::collections::BTreeSet<String> {
+    let text = std::fs::read_to_string(repo().join("docs/cli/json-output.md")).unwrap();
+    let section = text.split("## Placeholders").nth(1).unwrap();
+    let section = section.split("\n## ").next().unwrap();
+    let mut out = std::collections::BTreeSet::new();
+    let mut any_key = false;
+    for row in section.lines().filter(|line| line.starts_with("| `<")) {
+        let cell = row.split('|').nth(1).unwrap_or_default();
+        if cell.contains("`<tenant:KEY>`") {
+            any_key = true;
+            continue;
+        }
+        placeholders_in(&Json::Str(cell.replace('`', "")), &mut out);
+    }
+    assert!(
+        any_key,
+        "the table has no row for a setup variable, <tenant:KEY>"
+    );
+    out
+}
+
+/// The placeholders a dry run writes are the ones `docs/cli/json-output.md`
+/// lists, no more and no fewer (#1719): over the compile corpus, each
+/// deployer's rule with no tenant (every `<tenant:KEY>` it can show:
+/// `tenant_keys`), and with the tenants the oracle compiled for.
+#[test]
+fn the_documented_placeholders_are_those_a_dry_run_writes() {
+    let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
+    let record: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
+    )
+    .unwrap();
+    let workspace = Workspace::open(
+        Arc::new(OsFs) as Arc<dyn FileSystem>,
+        Options {
+            roots: RootOptions {
+                repo: Some(corpus.clone()),
+                cwd: corpus,
+                ..RootOptions::default()
+            },
+        },
+    )
+    .unwrap();
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let deployers = preview::deployers();
+    let mut written = std::collections::BTreeSet::new();
+    for entry in record["rules"].as_array().unwrap() {
+        let platform = entry["platform"].as_str().unwrap();
+        if !deployers.contains(&platform) {
+            continue;
+        }
+        let object = index.get("rule", entry["uuid"].as_str().unwrap()).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let tenants: Vec<String> = entry["tenants"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tenant| tenant["tenant"].as_str().unwrap().to_owned())
+            .collect();
+        for shown in [
+            preview::preview(&cx, platform, &rule),
+            preview::preview_on(&cx, platform, &rule, &tenants),
+        ] {
+            placeholders_in(
+                shown.get("api_request").unwrap_or(&Json::Null),
+                &mut written,
+            );
+        }
+    }
+    // A daily Splunk schedule, which the corpus does not hold, shows the hour.
+    let daily = splunk::cron_to_timeframe("1d", "random", None, None).unwrap();
+    placeholders_in(&Json::Str(daily), &mut written);
+    assert_eq!(written, documented_placeholders());
 }

@@ -3779,32 +3779,70 @@ fn planned_writes(ws: &Path, platform: &str) -> Vec<Json> {
     writes
 }
 
-/// Whether `shown`, a write's `url`, is `url`, a request's: the same URL, or
-/// the same path (a stand-in on another address), or (Splunk's under the
-/// app's namespace, Carbon Black's under the tenant's URL) the end of its
-/// percent-decoded path, a `<tenant-read:NAME>` placeholder standing for one
+/// `url` cut in two: its scheme and authority (`https://host:port`, empty
+/// for a relative URL), and the rest, as written.
+fn url_parts(url: &str) -> (&str, &str) {
+    let Some(scheme) = url.find("://") else {
+        return ("", url);
+    };
+    let after = &url[scheme + 3..];
+    let at = scheme + 3 + after.find('/').unwrap_or(after.len());
+    (&url[..at], &url[at..])
+}
+
+/// Whether `shown`, a write's `url`, is `url`, a request's, character for
+/// character: the scheme and authority (any, for a request a local stand-in
+/// received), then the path, its trailing slash and percent-encoding, and
+/// the query, a `<tenant-read:NAME>` placeholder standing for one path
 /// segment.
 fn same_url(shown: &str, url: &str) -> bool {
-    if shown == url {
-        return true;
+    let (shown_authority, shown) = url_parts(shown);
+    let (authority, url) = url_parts(url);
+    let stand_in = ["://localhost", "://127.0.0.1"]
+        .iter()
+        .any(|local| authority.contains(local));
+    if shown_authority.is_empty() || (shown_authority != authority && !stand_in) {
+        return false;
     }
-    if let (Ok(shown), Ok(url)) = (url::Url::parse(shown), url::Url::parse(url)) {
-        return shown.path() == url.path() && shown.query() == url.query();
-    }
-    let decoded = percent_encoding::percent_decode_str(url).decode_utf8_lossy();
-    let decoded = decoded.trim_end_matches('/');
-    let shown = shown.trim_matches('/');
     let Some(at) = shown.find("<tenant-read:") else {
-        return decoded.ends_with(&format!("/{shown}"));
+        return shown == url;
     };
     let (head, tail) = (&shown[..at], &shown[at..]);
     let tail = tail.find('>').map_or("", |end| &tail[end + 1..]);
-    let Some(start) = decoded.find(head) else {
+    let Some(rest) = url.strip_prefix(head) else {
         return false;
     };
-    let rest = &decoded[start + head.len()..];
     let segment = rest.find('/').unwrap_or(rest.len());
     segment > 0 && &rest[segment..] == tail
+}
+
+#[test]
+fn a_shown_url_is_the_whole_url_sent() {
+    let sent = "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/A%20b";
+    assert!(same_url(sent, sent));
+    // Not the path's end, nor the name as written, nor without its slash.
+    assert!(!same_url("saved/searches/A b", sent));
+    assert!(!same_url(
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/A b",
+        sent
+    ));
+    assert!(!same_url(
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches",
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
+    ));
+    assert!(!same_url(
+        "https://other.invalid:8089/servicesNS/nobody/search/saved/searches/A%20b",
+        sent
+    ));
+    let org = "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/K";
+    assert!(same_url(
+        &format!("{org}/watchlists/<tenant-read:watchlist_id>"),
+        &format!("{org}/watchlists/w-1")
+    ));
+    assert!(!same_url(
+        "/threathunter/watchlistmgr/v3/orgs/K/watchlists/<tenant-read:watchlist_id>",
+        &format!("{org}/watchlists/w-1")
+    ));
 }
 
 /// A value as a Splunk form sends it (`json_text`).
@@ -4077,6 +4115,196 @@ fn a_harfanglab_dry_run_shows_the_requests_the_tenant_receives() {
         })
         .collect();
     assert_sent_as_planned(&planned, &received_writes(received), 0);
+}
+
+/// The dry run, with no variable set, of the `deploy-tenants` fixture rule
+/// `file` (or `text`) on `platform` with one tenant, `lab`, of `setup`: its
+/// exit code and the rule's payload entry.
+fn dry_run_entry(platform: &str, setup: &str, file: &str, text: Option<String>) -> (i32, Json) {
+    let text = text.unwrap_or_else(|| {
+        std::fs::read_to_string(
+            repo()
+                .join("tests/golden/fixtures/deploy-tenants/objects/rules")
+                .join(file),
+        )
+        .unwrap()
+    });
+    let ws = workspace(platform, "lab", setup, &[(file, text)]);
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        &[],
+    );
+    let document = Json::parse(&stdout).unwrap_or_else(|_| panic!("{stdout}\n{stderr}"));
+    let result = document.get("result").unwrap_or(&document);
+    let entry = result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .and_then(|entries| entries.first())
+        .cloned()
+        .unwrap_or_else(|| panic!("{stdout}"));
+    (code, entry)
+}
+
+/// The `n`th write of a payload entry, its `key`.
+fn write_at(entry: &Json, n: usize, key: &str) -> Json {
+    entry
+        .get("api_request")
+        .and_then(Json::as_array)
+        .and_then(|writes| writes.get(n))
+        .and_then(|write| write.get(key))
+        .cloned()
+        .unwrap_or_else(|| panic!("{}", entry.to_compact()))
+}
+
+/// The `setup` keys the entry's `unresolved` lists.
+fn unresolved_setup(entry: &Json) -> Vec<Json> {
+    entry
+        .get("unresolved")
+        .and_then(|unresolved| unresolved.get("setup"))
+        .and_then(Json::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+// A setup value that names a variable is a placeholder in a dry run, which
+// resolves none and needs no credential: a CrowdStrike tenant's `api =
+// "$CS_API"` once failed the dry run with "Invalid API Domain" (#1719).
+#[test]
+fn a_dry_run_shows_a_crowdstrike_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "crowdstrike",
+        "api = \"$CS_API\"\ncustomer_id = \"${CS_CUSTOMER}\"\nclient_id = \"id\"\n\
+         client_secret = \"$CS_SECRET\"\n",
+        "crowdstrike-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(entry.get("tenant"), Some(&Json::str("lab")));
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:api>/correlation-rules/entities/rules/v1")
+    );
+    assert_eq!(
+        write_at(&entry, 0, "body").get("customer_id"),
+        Some(&Json::str("<tenant:customer_id>"))
+    );
+    assert_eq!(
+        unresolved_setup(&entry),
+        ["api", "customer_id"].map(Json::str)
+    );
+}
+
+#[test]
+fn a_dry_run_shows_a_sentinel_one_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "sentinel_one",
+        "url = \"$S1_URL\"\naccount_id = \"$S1_ACCOUNT\"\napi_token = \"$S1_API_TOKEN\"\n",
+        "sentinel-one-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:url>/web/api/v2.1/cloud-detection/rules")
+    );
+    assert_eq!(
+        write_at(&entry, 0, "body")
+            .get("filter")
+            .and_then(|filter| filter.get("accountIds"))
+            .cloned(),
+        Some(Json::Array(vec![Json::str("<tenant:account_id>")]))
+    );
+    assert_eq!(
+        unresolved_setup(&entry),
+        ["url", "account_id"].map(Json::str)
+    );
+}
+
+#[test]
+fn a_dry_run_shows_carbon_black_and_harfanglab_setup_variables_as_placeholders() {
+    let (code, entry) = dry_run_entry(
+        "carbon_black_cloud",
+        "url = \"$CBC_URL\"\norg_key = \"$CBC_ORG_KEY\"\ntoken = \"$CBC_TOKEN\"\n\
+         watchlist = \"Detections\"\n",
+        "lucene.yaml",
+        Some(rule(
+            "Carbon Black Lucene Rule",
+            "00000000-0000-4000-8003-000000000005",
+            "A rule.",
+            "  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n",
+        )),
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    assert_eq!(
+        write_at(&entry, 0, "url"),
+        Json::str("<tenant:url>/threathunter/watchlistmgr/v3/orgs/<tenant:org_key>/reports")
+    );
+    assert_eq!(unresolved_setup(&entry), ["url", "org_key"].map(Json::str));
+    let (code, entry) = dry_run_entry(
+        "harfanglab",
+        "url = \"$HL_URL\"\napi_token = \"$HL_TOKEN\"\nsource_id = \"src-0001\"\n",
+        "harfanglab-a-sigma.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    let url = write_at(&entry, 0, "url");
+    assert!(
+        url.as_str()
+            .is_some_and(|url| url.starts_with("<tenant:url>/api/data/threat_intelligence/")),
+        "{}",
+        entry.to_compact()
+    );
+    assert_eq!(unresolved_setup(&entry), [Json::str("url")]);
+}
+
+// Splunk's writes go to the whole URL a deploy sends to (#1719): a variable
+// is a placeholder in it, and the port and app default as the deploy's do.
+// A setting the deploy reads as written still refuses a variable, with the
+// deploy's own error.
+#[test]
+fn a_splunk_dry_run_shows_the_url_with_a_setup_variable_as_a_placeholder() {
+    let (code, entry) = dry_run_entry(
+        "splunk",
+        "url = \"$SPLUNK_HOST\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        "splunk-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 0, "{}", entry.to_compact());
+    let searches = "https://<tenant:url>:8089/servicesNS/nobody/search/saved/searches/";
+    assert_eq!(write_at(&entry, 0, "url"), Json::str(searches));
+    assert_eq!(
+        write_at(&entry, 1, "url"),
+        Json::str(format!("{searches}Splunk%20create%20rule"))
+    );
+    assert_eq!(unresolved_setup(&entry), [Json::str("url")]);
+    let (code, entry) = dry_run_entry(
+        "splunk",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\nenterprise_security = \"$ES\"\n",
+        "splunk-a-create.yaml",
+        None,
+    );
+    assert_eq!(code, 1, "{}", entry.to_compact());
+    assert!(
+        entry
+            .get("error")
+            .and_then(Json::as_str)
+            .is_some_and(|error| error.contains("enterprise_security is the placeholder \"$ES\"")),
+        "{}",
+        entry.to_compact()
+    );
 }
 
 /// The summary's `skipped` counts the rows the run skipped (a rule no

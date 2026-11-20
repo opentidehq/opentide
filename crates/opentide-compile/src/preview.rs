@@ -13,7 +13,7 @@ use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
     Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, exabeam,
-    google_secops, graylog, harfanglab, sentinel, sentinel_one, splunk, sysdig,
+    google_secops, graylog, harfanglab, plan, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -184,7 +184,8 @@ fn tenant_keys(platform: &str) -> &'static [&'static str] {
         "sentinel_one" => &["url", "site_id"],
         "crowdstrike" => &["api", "customer_id"],
         "harfanglab" => &["url", "source_id"],
-        "carbon_black_cloud" => &["org_key", "watchlist"],
+        "splunk" => &["url", "port", "app"],
+        "carbon_black_cloud" => &["url", "org_key", "watchlist"],
         _ => &[],
     }
 }
@@ -219,7 +220,9 @@ fn shows(value: &Json, placeholder: &str) -> bool {
 /// compiles them, so one that cannot take the rule fails the dry run and is
 /// named. `known` gives the id the deployment state records for the rule on
 /// a tenant. What a deploy learns only as it sends is a `<send-time:NAME>`
-/// placeholder. With no tenant, the writes are compiled for a tenant whose
+/// placeholder. A `setup` value that names a variable (`$NAME`) is shown as
+/// `<tenant:KEY>` and named under `unresolved`: a dry run resolves none
+/// (#1719). With no tenant, the writes are compiled for a tenant whose
 /// `setup` sets nothing, the values a tenant gives shown as `<tenant:KEY>`
 /// and named under `unresolved`.
 fn requests_preview(
@@ -249,11 +252,7 @@ fn requests_preview(
             Ok(writes) => writes,
             Err(error) => return failure(rule, &error),
         };
-        let shown: Vec<Json> = tenant_keys(platform)
-            .iter()
-            .filter(|key| shows(&writes, &deploy::tenant_value(key)))
-            .map(|key| Json::Str((*key).to_owned()))
-            .collect();
+        let shown = shown_keys(&writes, tenant_keys(platform).iter().copied());
         entry.insert("api_request".into(), writes);
         let mut unresolved = Object::new();
         unresolved.insert(
@@ -273,16 +272,21 @@ fn requests_preview(
     }
     let mut first = None;
     for (name, table) in reached {
-        match tenant_writes(
-            cx,
-            platform,
-            rule,
-            name,
-            table,
-            &Inputs::dry_run(known(name)),
-        ) {
+        let inputs = Inputs::dry_run(known(name));
+        let (shown, variables) = with_placeholders(table);
+        let compiled = tenant_writes(cx, platform, rule, name, &shown, &inputs).or_else(|error| {
+            // A setting the deploy reads as it is in the table (Splunk's
+            // `enterprise_security`) refuses a variable: the deploy's own
+            // error says so.
+            if variables.is_empty() {
+                Err(error)
+            } else {
+                tenant_writes(cx, platform, rule, name, table, &inputs).and(Err(error))
+            }
+        });
+        match compiled {
             Ok(writes) => {
-                first.get_or_insert((name, writes));
+                first.get_or_insert((name, writes, variables));
             }
             Err(mut error) => {
                 error.reason = format!("{} (tenant '{name}')", error.reason);
@@ -290,12 +294,57 @@ fn requests_preview(
             }
         }
     }
-    let Some((name, writes)) = first else {
+    let Some((name, writes, variables)) = first else {
         return dump_entry(platform, rule);
     };
+    let shown = shown_keys(&writes, variables.iter().map(String::as_str));
     entry.insert("api_request".into(), writes);
     entry.insert("tenant".into(), name.into());
+    if !shown.is_empty() {
+        let mut unresolved = Object::new();
+        unresolved.insert(
+            "reason".into(),
+            format!(
+                "the {platform} tenant '{name}' names variables in its setup, which a dry run \
+                 does not resolve: each value is shown as <tenant:KEY>"
+            )
+            .into(),
+        );
+        unresolved.insert("setup".into(), Json::Array(shown));
+        entry.insert("unresolved".into(), Json::Object(unresolved));
+    }
     Json::Object(entry)
+}
+
+/// `table`, a tenant's, as a dry run compiles for it, and the `setup` keys
+/// it changed: each `setup` string that names a variable (`$NAME`,
+/// `${NAME}`) is the placeholder `<tenant:KEY>`. A dry run resolves no
+/// variable, set or not: it needs no credential, and prints no secret.
+fn with_placeholders(table: &Json) -> (Json, Vec<String>) {
+    let mut shown = table.clone();
+    let mut keys = Vec::new();
+    if let Some(setup) = shown.get_mut("setup").and_then(Json::as_object_mut) {
+        for (key, value) in setup.iter_mut() {
+            // A placeholder's NAME is lowercase letters, digits and `_`
+            // (docs/cli/json-output.md), as every setup key is.
+            let named = !key.is_empty()
+                && key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_');
+            if named && value.as_str().and_then(plan::env_reference).is_some() {
+                *value = deploy::tenant_value(key).into();
+                keys.push(key.clone());
+            }
+        }
+    }
+    (shown, keys)
+}
+
+/// The `keys` whose `<tenant:KEY>` placeholder `writes` show, in order.
+fn shown_keys<'k>(writes: &Json, keys: impl Iterator<Item = &'k str>) -> Vec<Json> {
+    keys.filter(|key| shows(writes, &deploy::tenant_value(key)))
+        .map(|key| Json::Str(key.to_owned()))
+        .collect()
 }
 
 /// The request a deploy sends for `rule` on the GravityZone `tenant`, under

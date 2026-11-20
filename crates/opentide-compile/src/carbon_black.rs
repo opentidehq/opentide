@@ -211,8 +211,10 @@ pub fn compile(
         ),
     );
     body.insert("iocs_v2".into(), Json::Array(vec![Json::Object(ioc)]));
+    // The tenant's `url`, as the deploy reaches it, then the org's path.
     let org = format!(
-        "/threathunter/watchlistmgr/v3/orgs/{}",
+        "{}/threathunter/watchlistmgr/v3/orgs/{}",
+        deploy::setup_text(tenant, "url").trim_end_matches('/'),
         deploy::setup_text(tenant, "org_key")
     );
     // The new report joins the watchlist, which the deploy reads from the

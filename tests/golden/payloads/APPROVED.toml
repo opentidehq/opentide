@@ -29,6 +29,13 @@ issue = "https://github.com/opentidehq/opentide/issues/1712"
 changelog = "**A dry run's `api_request` is the request a deploy sends, on every platform**"
 
 [[writes]]
+rule = "url"
+platforms = ["splunk", "carbon_black_cloud"]
+reason = "A write's url is the whole URL a deploy sends to: Splunk's https://<url>:<port>/servicesNS/nobody/<app>/saved/searches/, with the trailing slash, for the create, and the saved search's percent-encoded name after it for an update; Carbon Black's the tenant's url followed by the org's path. The oracle's probe recorded the path its SDK was given, under the app's namespace (saved/searches/<name>, the name as written) or under the tenant's url. The writes compared to the oracle's are the candidate's with each url cut back to that path, which must start with the tenant's own URL."
+issue = "https://github.com/opentidehq/opentide/issues/1712"
+changelog = "**A dry run's `api_request` is the request a deploy sends, on every platform**"
+
+[[writes]]
 rule = "search"
 platforms = ["splunk"]
 reason = "Each update of a Splunk saved search sends its `search` first: Splunk's REST API takes it with every update (`SavedSearch.update` adds it), so the tenant receives it, and on a new saved search it is the one just created. The oracle's probe recorded the settings the deployer passed to the SDK, without it. The writes compared to the oracle's are the candidate's with that leading `search`, which must equal the create's, taken out of the first update and moved to the end of the last, where the probe recorded it."
