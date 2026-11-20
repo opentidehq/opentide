@@ -1405,6 +1405,10 @@ exit: 0
       "meaning": "`validate query --live` failed because a tenant did not answer a query's check within the check timeout."
     },
     {
+      "code": "query_folded_comment",
+      "meaning": "A `//` comment in a query that YAML folds into one line comments out the lines after it."
+    },
+    {
       "code": "recommended_field_missing",
       "meaning": "A field the templates ask for is missing; `opentide validate` accepts the object without it."
     },
@@ -1881,13 +1885,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "467 diagnostic codes",
+  "message": "468 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 467
+    "codes": 468
   }
 }
 

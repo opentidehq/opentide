@@ -496,6 +496,64 @@ objective:
     }
 
     #[test]
+    fn a_comment_that_folding_carries_over_the_next_lines_is_an_error() {
+        // Smoke test B16: `>-` folds the lines into one, so the `//` line
+        // comments out every filter after it, and the deployed rule matches
+        // every event.
+        let body =
+            "      SecurityEvent\n      // only failed handles\n      | where EventID == 4656\n";
+        for header in [">-", ">"] {
+            let source = format!("{HEAD}configurations:\n  sentinel:\n    query: {header}\n{body}");
+            let found: Vec<_> = diagnostics(&source)
+                .into_iter()
+                .filter(|d| d.code == codes::QUERY_FOLDED_COMMENT)
+                .collect();
+            assert_eq!(found.len(), 1, "{header}: {found:?}");
+            let d = &found[0];
+            assert_eq!(d.severity, opentide_core::Severity::Error);
+            assert_eq!((d.range.start.line, d.range.start.character), (8, 6));
+            assert_eq!((d.range.end.line, d.range.end.character), (8, 28));
+            assert!(text_at(&source, d).starts_with("// only failed handles"));
+            assert!(
+                d.message.contains("`| where EventID == 4656`"),
+                "{}",
+                d.message
+            );
+            assert_eq!(
+                d.field_path.as_deref(),
+                Some(&["configurations".into(), "sentinel".into(), "query".into()][..])
+            );
+        }
+        // A plain scalar on several lines folds too.
+        let source = format!(
+            "{HEAD}configurations:\n  sentinel:\n    query: SecurityEvent\n      // note\n      | take 1\n"
+        );
+        assert!(
+            diagnostics(&source)
+                .iter()
+                .any(|d| d.code == codes::QUERY_FOLDED_COMMENT)
+        );
+        // Kept lines (`|`), a comment that ends the query, one followed only
+        // by comments or a blank line, and `//` inside a string lose nothing.
+        for query in [
+            format!("|-\n{body}"),
+            "|\n      SecurityEvent\n      // note\n      | take 1\n".to_owned(),
+            ">-\n      SecurityEvent | take 1\n      // note\n".to_owned(),
+            ">-\n      SecurityEvent\n      // note\n      // more\n".to_owned(),
+            ">-\n      SecurityEvent\n      // note\n\n      | take 1\n".to_owned(),
+            ">-\n      SecurityEvent\n      | where Url == \"http://x\"\n      | take 1\n"
+                .to_owned(),
+        ] {
+            let source = format!("{HEAD}configurations:\n  sentinel:\n    query: {query}");
+            let found = diagnostics(&source);
+            assert!(
+                !found.iter().any(|d| d.code == codes::QUERY_FOLDED_COMMENT),
+                "{query}: {found:?}"
+            );
+        }
+    }
+
+    #[test]
     fn a_quoted_query_is_its_value() {
         // #105: what `yaml.safe_dump` writes for a multi-line string.
         let source = format!(
