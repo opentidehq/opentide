@@ -314,35 +314,87 @@ fn text_of<'n>(node: &'n Node, key: &str) -> Option<&'n str> {
 enum Configured {
     /// No `organisation.toml`.
     Absent,
-    /// The file is there but holds no UUID and name `new` can write; what
-    /// is wrong with it.
-    Unusable(String),
+    /// The file is there but holds no UUID and name `new` can write.
+    Unusable {
+        /// What is wrong with it.
+        problems: String,
+        /// What fixes it: `setup --org` writes a missing uuid or name, but
+        /// keeps a uuid that is there, so a bad one is replaced by hand.
+        advice: String,
+    },
     /// Its `{uuid, name}`.
     Usable(String, String),
 }
 
+/// How a key of `organisation.toml` reads.
+enum Key<'n> {
+    Missing,
+    NotText,
+    Text(&'n str),
+}
+
+fn key_of<'n>(node: &'n Node, key: &str) -> Key<'n> {
+    match node.get(key) {
+        None => Key::Missing,
+        Some(value) => value.value.as_str().map_or(Key::NotText, Key::Text),
+    }
+}
+
 /// The organisation `setup --org` kept in `organisation.toml`, as the
-/// resolved configuration holds it.
+/// resolved configuration holds it. The reasons are `setup`'s words for the
+/// same file.
 fn configured_organisation(config: &Node) -> Configured {
     let Some(organisation) = config.get("organisation") else {
         return Configured::Absent;
     };
-    let uuid = text_of(organisation, "uuid").map(str::trim);
-    let name = text_of(organisation, "name").map(str::trim);
     let mut problems: Vec<&str> = Vec::new();
-    match uuid {
-        None => problems.push("it has no uuid"),
-        Some(uuid) if !is_uuid(uuid) => problems.push("its uuid is not a UUID"),
-        Some(_) => {}
-    }
-    if name.is_none_or(str::is_empty) {
-        problems.push("it has no name");
-    }
-    match (uuid, name) {
-        (Some(uuid), Some(name)) if problems.is_empty() => {
-            Configured::Usable(uuid.to_owned(), name.to_owned())
+    let mut uuid_to_replace = false;
+    let uuid = match key_of(organisation, "uuid") {
+        Key::Missing => {
+            problems.push("it has no uuid");
+            None
         }
-        _ => Configured::Unusable(problems.join(", ")),
+        Key::NotText => {
+            problems.push("its uuid is not text");
+            uuid_to_replace = true;
+            None
+        }
+        Key::Text(uuid) if !is_uuid(uuid.trim()) => {
+            problems.push("its uuid is not a UUID");
+            uuid_to_replace = true;
+            None
+        }
+        Key::Text(uuid) => Some(uuid.trim()),
+    };
+    let name = match key_of(organisation, "name") {
+        Key::Missing => {
+            problems.push("it has no name");
+            None
+        }
+        Key::NotText => {
+            problems.push("its name is not text");
+            None
+        }
+        Key::Text(name) if name.trim().is_empty() => {
+            problems.push("its name is empty");
+            None
+        }
+        Key::Text(name) => Some(name.trim()),
+    };
+    if let (Some(uuid), Some(name)) = (uuid, name) {
+        return Configured::Usable(uuid.to_owned(), name.to_owned());
+    }
+    let setup = "run 'opentide setup --org \"<name>\"'";
+    let advice = if uuid_to_replace && name.is_none() {
+        format!("replace its uuid with your organisation's UUID, then {setup}")
+    } else if uuid_to_replace {
+        "replace its uuid with your organisation's UUID".to_owned()
+    } else {
+        format!("fix it or {setup}")
+    };
+    Configured::Unusable {
+        problems: problems.join(", "),
+        advice,
     }
 }
 
@@ -366,12 +418,9 @@ fn organisation_for(config: &Node) -> OrganisationChoice {
             organisation: Some((uuid, name)),
             left_out: String::new(),
         },
-        Configured::Unusable(problems) => OrganisationChoice {
+        Configured::Unusable { problems, advice } => OrganisationChoice {
             organisation: None,
-            left_out: format!(
-                "{ORGANISATION_FILE} is not usable: {problems}; fix it or run 'opentide setup \
-                 --org \"<name>\"'"
-            ),
+            left_out: format!("{ORGANISATION_FILE} is not usable: {problems}; {advice}"),
         },
         Configured::Absent => OrganisationChoice {
             organisation: None,

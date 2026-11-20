@@ -109,30 +109,48 @@ fn the_configured_organisation_is_read_trimmed_and_checked() {
         configured_organisation(&configuration("x = 1\n")),
         Configured::Absent
     );
-    // A file `new` cannot write, and what is wrong with it.
-    for (body, problems) in [
-        ("name = \"A\"".to_owned(), "it has no uuid"),
-        (format!("uuid = \"{CONFIGURED_UUID}\""), "it has no name"),
+    // A file `new` cannot write: what is wrong with it, in `setup`'s words
+    // for the same file, and what fixes it.
+    let setup = "run 'opentide setup --org \"<name>\"'";
+    let replace = "replace its uuid with your organisation's UUID";
+    let ok = format!("uuid = \"{CONFIGURED_UUID}\"");
+    let fix = format!("fix it or {setup}");
+    for (body, problems, advice) in [
+        ("name = \"A\"".to_owned(), "it has no uuid", fix.clone()),
+        (ok.clone(), "it has no name", fix.clone()),
+        (
+            format!("{ok}\nname = \"  \""),
+            "its name is empty",
+            fix.clone(),
+        ),
+        (
+            format!("{ok}\nname = 7"),
+            "its name is not text",
+            fix.clone(),
+        ),
+        (format!("{ok}\nnmae = \"A\""), "it has no name", fix.clone()),
         (
             "uuid = \"u1\"\nname = \"A\"".to_owned(),
             "its uuid is not a UUID",
+            replace.to_owned(),
         ),
         (
-            format!("uuid = \"{CONFIGURED_UUID}\"\nname = \"  \""),
-            "it has no name",
-        ),
-        (
-            format!("uuid = \"{CONFIGURED_UUID}\"\nnmae = \"A\""),
-            "it has no name",
+            "uuid = 7\nname = \"A\"".to_owned(),
+            "its uuid is not text",
+            replace.to_owned(),
         ),
         (
             "uuid = \"u1\"".to_owned(),
             "its uuid is not a UUID, it has no name",
+            format!("{replace}, then {setup}"),
         ),
     ] {
         assert_eq!(
             configured_organisation(&organisation_file(&body)),
-            Configured::Unusable(problems.to_owned()),
+            Configured::Unusable {
+                problems: problems.to_owned(),
+                advice,
+            },
             "{body}"
         );
     }
@@ -168,12 +186,30 @@ fn the_organisation_is_the_configured_one_and_nothing_else() {
              --org \"<name>\"'"
         )
     );
-    // The catalogue is never mentioned.
     assert!(
         !choice.left_out.contains("catalogue"),
         "{}",
         choice.left_out
     );
+    // A uuid that is there is kept by `setup --org`, so the advice is to
+    // replace it by hand, not to run `setup`.
+    for body in ["uuid = \"u1\"\nname = \"A\"", "uuid = 7\nname = \"A\""] {
+        let choice = organisation_for(&organisation_file(body));
+        assert_eq!(choice.organisation, None);
+        assert!(
+            choice
+                .left_out
+                .ends_with("replace its uuid with your organisation's UUID"),
+            "{}",
+            choice.left_out
+        );
+        assert!(!choice.left_out.contains("setup"), "{}", choice.left_out);
+        assert!(
+            !choice.left_out.contains("catalogue"),
+            "{}",
+            choice.left_out
+        );
+    }
 }
 
 #[test]

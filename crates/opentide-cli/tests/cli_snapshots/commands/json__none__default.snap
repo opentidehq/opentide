@@ -4303,7 +4303,7 @@ exit: 0
               "type": "null"
             }
           ],
-          "description": "The organisation most catalogue objects carry; null when none does"
+          "description": "The organisation in .opentide/configurations/organisation.toml; null when none is usable"
         },
         "path": {
           "description": "The new file, relative to the workspace",

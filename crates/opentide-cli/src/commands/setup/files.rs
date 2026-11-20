@@ -579,10 +579,15 @@ fn organisation(stage: &mut Stage, target: &Path, org: &str) -> Result<Organisat
         {
             None
         }
-        Some(_) => {
-            return Ok(Organisation::Kept(
-                "its uuid is not a UUID (setup keeps the value you wrote)".to_owned(),
-            ));
+        Some(item) => {
+            let what = if item.as_str().is_some() {
+                "its uuid is not a UUID"
+            } else {
+                "its uuid is not text"
+            };
+            return Ok(Organisation::Kept(format!(
+                "{what} (setup keeps the value you wrote)"
+            )));
         }
     };
     if !existed {
@@ -1170,7 +1175,12 @@ mod tests {
             let Organisation::Kept(reason) = organisation(&mut stage, root, "New").unwrap() else {
                 panic!("{mine:?}: a uuid the user wrote is kept");
             };
-            assert!(reason.contains("not a UUID"), "{reason}");
+            let expected = if mine == "uuid = 7\n" {
+                "its uuid is not text"
+            } else {
+                "its uuid is not a UUID"
+            };
+            assert!(reason.starts_with(expected), "{mine:?}: {reason}");
             assert_eq!(written(stage, &file), mine);
         }
     }
