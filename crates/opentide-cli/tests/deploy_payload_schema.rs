@@ -5,7 +5,10 @@
 //!
 //! The documents are the dry runs of the `tide-corpus` fixture, the one the
 //! snapshot cases `deploy dry-run` and `deploy platform` run, one run per
-//! platform of the registry.
+//! platform of the registry. The fixture has rules for nine platforms; the
+//! other four (Bitdefender, Graylog, Exabeam, Google SecOps) get a rule from
+//! `opentide new rule` in the test's copy, so every platform's `payloads` hold
+//! a rule.
 
 #![cfg(unix)]
 #![expect(
@@ -32,6 +35,10 @@ const LISTS: [&str; 6] = [
     "carbon_black_cloud",
 ];
 
+/// The platforms the fixture has no rule for: `new rule` writes one, and its
+/// status is moved to `STAGING`, a `PREVIEW` status.
+const SCAFFOLDED: [&str; 4] = ["bitdefender", "graylog", "exabeam", "google_secops"];
+
 /// `opentide --json <args>` in `cwd`, its document, whatever the exit code.
 fn document(cwd: &Path, args: &[&str]) -> Value {
     let mut command = Command::new(env!("CARGO_BIN_EXE_opentide-cli"));
@@ -54,6 +61,34 @@ fn document(cwd: &Path, args: &[&str]) -> Value {
     })
 }
 
+/// A rule for each of [`SCAFFOLDED`] in `ws`, its platform enabled.
+fn scaffold_the_missing_platforms(ws: &Path) {
+    for id in SCAFFOLDED {
+        let platforms = ws.join(".opentide/configurations/platforms");
+        std::fs::write(
+            platforms.join(format!("{id}.toml")),
+            "[platform]\nenabled = true\n",
+        )
+        .unwrap();
+        let name = format!("Rule {id}");
+        let created = document(ws, &["new", "rule", "--name", &name, "--platform", id]);
+        assert_eq!(created["ok"], true, "{id}: {created}");
+        let file = ws.join(created["path"].as_str().expect("a created file"));
+        let text = std::fs::read_to_string(&file).unwrap();
+        let moved: Vec<String> = text
+            .lines()
+            .map(|line| {
+                if line.starts_with("    status: ") {
+                    "    status: STAGING".to_owned()
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect();
+        std::fs::write(&file, moved.join("\n") + "\n").unwrap();
+    }
+}
+
 /// The `deploy` command's `output_schema` as `opentide --json commands`
 /// publishes it, with the document's `$defs` beside it.
 fn published_schema(cwd: &Path) -> Value {
@@ -74,6 +109,7 @@ fn the_published_deploy_schema_accepts_every_dry_run_document() {
     let root = replay::case_root();
     let ws = root.path();
     replay::fixture("tide-corpus", ws);
+    scaffold_the_missing_platforms(ws);
     let validator = jsonschema::validator_for(&published_schema(ws)).expect("a valid schema");
 
     let mut lists = Vec::new();
@@ -97,7 +133,19 @@ fn the_published_deploy_schema_accepts_every_dry_run_document() {
             .map(|error| format!("{}: {error}", error.instance_path()))
             .collect();
         assert!(errors.is_empty(), "{id}: {errors:#?}");
-        if doc["payloads"][id][0]["api_request"].is_array() {
+        // Every platform has a rule in the run, compiled: a document with no
+        // payload would pass the schema without testing it.
+        let payloads = doc["payloads"][id].as_array().unwrap_or_else(|| {
+            panic!("{id}: no payloads: {doc}");
+        });
+        assert!(!payloads.is_empty(), "{id}: {doc}");
+        assert!(
+            payloads
+                .iter()
+                .all(|payload| !payload["api_request"].is_null()),
+            "{id}: a rule that did not compile: {doc}"
+        );
+        if payloads[0]["api_request"].is_array() {
             lists.push(id);
         }
     }
