@@ -819,9 +819,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         }
     }
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
-    let ws = match super::open(root_options) {
+    let ws = match super::open_for(COMMAND, root_options) {
         Ok(ws) => ws,
-        Err(message) => return Report::error(COMMAND, message),
+        Err(report) => return *report,
     };
     let root = ws.root().to_path_buf();
     let fs = ws.fs().as_ref();

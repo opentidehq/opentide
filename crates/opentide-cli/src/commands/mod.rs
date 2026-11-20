@@ -384,6 +384,170 @@ pub fn placement(repo: Option<&str>, env: &Env, cwd: &Path) -> (String, RootOpti
     (shown, options)
 }
 
+/// The repository root `repo`, `env` and `cwd` place, absolute, when
+/// neither it nor the `OPENTIDE_TIDE_WORKSPACE` it reads is a workspace
+/// root (no `.opentide/` or `objects/`); `None` when one of them is. The one
+/// test the commands that write ([`no_workspace`]) and the MCP server's
+/// catalogue tools (`mcp::plugin::missing_workspace`) apply, so a layout
+/// one serves the other serves too: a repository root with no markers and
+/// its detections in `OPENTIDE_TIDE_WORKSPACE` is a workspace.
+pub fn unplaced_root(repo: Option<&str>, env: &Env, cwd: &Path) -> Option<PathBuf> {
+    let (shown, options) = placement(repo, env, cwd);
+    let absolute = |path: &Path| {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            cwd.join(path)
+        }
+    };
+    let root = absolute(Path::new(&shown));
+    let found = std::iter::once(root.clone())
+        .chain(options.tide_workspace_env.as_deref().map(absolute))
+        .any(|path| root::is_workspace_root(&OsFs, &path));
+    (!found).then_some(root)
+}
+
+/// The refusal of a command that writes into the workspace when `repo`,
+/// `env` and `cwd` place none ([`unplaced_root`]): writing there would make
+/// that folder a workspace every folder below it discovers (D17, B18:
+/// `generate` wrote 20 files into a stray folder and `migrate` reported 0
+/// files scanned, both exiting 0). `workspace_not_found`, exit 1, as
+/// `opentide new` refuses.
+pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) -> Option<Report> {
+    let root = unplaced_root(repo, env, cwd)?;
+    let mut report = Report::failed(
+        command,
+        1,
+        Failure::new(
+            new::WORKSPACE_NOT_FOUND,
+            format!(
+                "No workspace at {}: no .opentide/ or objects/ there or above it",
+                root.display()
+            ),
+        ),
+    );
+    report.next("opentide setup", "create a workspace first");
+    Some(report)
+}
+
+/// Opens the workspace `options` place for `command`, or the report of why
+/// it does not open. A configuration TOML file that does not parse is
+/// `config_parse` (D9, B10: it was `command_failed` with no position), its
+/// message `path:line:column: problem`, and `diagnostics` holds the file,
+/// line and column, as `docs/cli/json-output.md` documents. A file that
+/// cannot be read (permissions, not UTF-8) keeps that code, the only one
+/// for a configuration file that stops the run, with its own message and
+/// help: it has no syntax to fix. Any other problem is `command_failed`, as
+/// before.
+pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Report>> {
+    use opentide_schema::configuration::resolve::ResolveError;
+    use opentide_workspace::ConfigError;
+    let root = options
+        .repo
+        .as_deref()
+        .map(|repo| options.absolute(repo))
+        .unwrap_or_default();
+    let error = match Workspace::open(
+        Arc::new(OsFs),
+        opentide_workspace::Options { roots: options },
+    ) {
+        Ok(workspace) => return Ok(workspace),
+        Err(error) => error,
+    };
+    let (path, problem, line, column, unreadable) = match &error {
+        ConfigError::Resolve(ResolveError::Parse {
+            path,
+            message,
+            line,
+            column,
+        }) => (path.clone(), message.clone(), *line, *column, false),
+        ConfigError::Unreadable { path, message } => {
+            (path.clone(), message.clone(), None, None, true)
+        }
+        _ => return Err(Box::new(Report::error(command, error.to_string()))),
+    };
+    // Shown from the workspace root, as 0.28.1 showed it; through a symbolic
+    // link (macOS's `/tmp`, a linked checkout) on both resolved.
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let shown = Path::new(&path)
+        .strip_prefix(&root)
+        .map(Path::to_path_buf)
+        .or_else(|_| {
+            canonical(Path::new(&path))
+                .strip_prefix(canonical(&root))
+                .map(Path::to_path_buf)
+        })
+        .map_or_else(
+            |_| path.clone(),
+            |relative| relative.to_string_lossy().replace('\\', "/"),
+        );
+    let place = match (line, column) {
+        (Some(line), Some(column)) => format!("{shown}:{line}:{column}"),
+        (Some(line), None) => format!("{shown}:{line}"),
+        _ => shown.clone(),
+    };
+    let number = |value: Option<usize>| value.map_or(Json::Null, Json::from);
+    let diagnostic = Json::object([
+        ("code", Json::str(CONFIG_PARSE)),
+        ("severity", Json::str("error")),
+        (
+            "message",
+            Json::Str(if unreadable {
+                format!("Could not read the configuration file: {problem}")
+            } else {
+                format!("Could not parse configuration TOML: {problem}")
+            }),
+        ),
+        ("path", Json::str(&shown)),
+        ("file_path", Json::str(&path)),
+        ("line", number(line)),
+        ("column", number(column)),
+        ("end_line", number(line)),
+        ("end_column", number(column.map(|column| column + 1))),
+        (
+            "help",
+            Json::str(if unreadable {
+                "make the file readable UTF-8 text (its permissions, its encoding), then run \
+                 the command again"
+            } else {
+                "fix the TOML syntax at this position, then run the command again"
+            }),
+        ),
+        ("explain", Json::str("opentide explain config_parse")),
+    ]);
+    let message = if unreadable {
+        format!("{place}: cannot be read: {problem}")
+    } else {
+        format!("{place}: {problem}")
+    };
+    let mut report = Report::failed(command, 1, Failure::new(CONFIG_PARSE, message));
+    report
+        .outcome
+        .data
+        .push(("diagnostics".to_owned(), Json::Array(vec![diagnostic])));
+    Err(Box::new(report))
+}
+
+/// An [`open_for`] refusal as the parts a command that builds its own
+/// envelope carries: the failure code, the message and the `diagnostics`.
+pub fn refusal_parts(report: &Report) -> (String, String, Option<Json>) {
+    let (code, message) = report.outcome.failure.as_ref().map_or_else(
+        || (COMMAND_FAILED.to_owned(), report.outcome.message.clone()),
+        |failure| (failure.code.clone(), failure.message.clone()),
+    );
+    let diagnostics = report
+        .outcome
+        .data
+        .iter()
+        .find(|(key, _)| key == "diagnostics")
+        .map(|(_, value)| value.clone());
+    (code, message, diagnostics)
+}
+
+/// `failure.code` of a configuration TOML file that does not parse.
+pub const CONFIG_PARSE: &str = "config_parse";
+
 /// Opens the workspace `options` place, on disk.
 ///
 /// # Errors
@@ -414,6 +578,95 @@ mod tests {
     fn counts() {
         assert_eq!(counted(1, "rule"), "1 rule");
         assert_eq!(counted(0, "rule"), "0 rules");
+    }
+
+    #[test]
+    fn a_configuration_file_that_does_not_parse_is_config_parse_with_its_place() {
+        // D9, B10 (smoke test): `[platform` in a platform TOML failed every
+        // command with `command_failed`, an absolute path and no position.
+        let dir = tempfile::tempdir().unwrap();
+        let platforms = dir.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::create_dir_all(dir.path().join("objects")).unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
+        let (_, options) = placement(None, &Env::default(), dir.path());
+        let Err(report) = open_for("validate", options) else {
+            panic!("the workspace opened");
+        };
+        let failure = report.outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, "config_parse");
+        assert_eq!(report.outcome.exit_code, 1);
+        assert!(
+            report.outcome.message.contains("sentinel.toml:2:"),
+            "{}",
+            report.outcome.message
+        );
+        let Some((_, Json::Array(diagnostics))) = report
+            .outcome
+            .data
+            .iter()
+            .find(|(key, _)| key == "diagnostics")
+        else {
+            panic!("no diagnostics: {:?}", report.outcome.data);
+        };
+        let Json::Object(first) = &diagnostics[0] else {
+            panic!("not an object");
+        };
+        assert_eq!(first.get("code"), Some(&Json::str("config_parse")));
+        assert_eq!(first.get("line"), Some(&Json::from(2usize)));
+        assert!(
+            matches!(first.get("column"), Some(Json::Int(_))),
+            "{first:?}"
+        );
+        // Placed through a symbolic link, the file is still shown from the
+        // workspace root, not as an absolute path.
+        #[cfg(unix)]
+        {
+            let links = tempfile::tempdir().unwrap();
+            let link = links.path().join("linked");
+            std::os::unix::fs::symlink(dir.path(), &link).unwrap();
+            let linked = link.to_string_lossy().into_owned();
+            let real = dir.path().to_string_lossy().into_owned();
+            let env = Env::default();
+            for (repo, cwd) in [
+                (None, link.as_path()),
+                (Some(linked.as_str()), dir.path()),
+                (Some(real.as_str()), link.as_path()),
+                (Some(linked.as_str()), links.path()),
+            ] {
+                let (_, options) = placement(repo, &env, cwd);
+                let Err(report) = open_for("validate", options) else {
+                    panic!("the workspace opened");
+                };
+                assert!(
+                    report
+                        .outcome
+                        .message
+                        .starts_with(".opentide/configurations/platforms/sentinel.toml:2:"),
+                    "{repo:?} from {}: {}",
+                    cwd.display(),
+                    report.outcome.message
+                );
+            }
+        }
+        // generate keeps the code too, on its failed phase.
+        let env = Env::default();
+        let cx = generate::Context {
+            repo: None,
+            env: &env,
+            cwd: dir.path(),
+            proxy: None,
+            version: "0.0.0",
+        };
+        let generated = generate::docs(&generate::DocsArgs::default(), &cx);
+        assert_eq!(
+            generated.outcome.failure.as_ref().map(|f| f.code.as_str()),
+            Some("config_parse")
+        );
     }
 
     #[test]
