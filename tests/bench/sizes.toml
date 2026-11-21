@@ -1,0 +1,41 @@
+# The release artifacts' size budgets: the most bytes each may have (`scripts/av/sizes.py`,
+# the AV gate's `markers` job, #1743). The embedded datasets are compressed at build time
+# (opentide-dataset), which took 9 to 10 MB off each binary; a dataset stored loose again, or a
+# decoder that grew, fails here. Move a budget in a change that says why.
+#
+# `glob` matches a file name (fnmatch) in the release assets or a wheel directory; a budget no file
+# of the run matches is reported and passes (the assets and the wheels are separate downloads).
+#
+# Linux and WebAssembly: what `cargo build --release` made on the change (51.8 MB, 29.4 MB, 24.6 MB,
+# 24.7 MB before), +3%. Windows, macOS and the wheels: not measured on the change yet, so held to
+# what v1.0.0-rc.2 shipped (docs/internal/av-false-positives-2026-11-21.md, section 3.1), which the
+# compression must not exceed; the first release-tier run prints their sizes, and the budgets
+# are moved to them then, in a pull request of their own.
+
+[[artifact]]
+glob = "opentide-v*-x86_64-unknown-linux-gnu"
+max_bytes = 43_920_000
+
+[[artifact]]
+glob = "opentide-lsp-v*-x86_64-unknown-linux-gnu"
+max_bytes = 20_710_000
+
+[[artifact]]
+glob = "opentide-lsp-wasm32-wasip1.wasm"
+max_bytes = 15_900_000
+
+[[artifact]]
+glob = "opentide-v*-x86_64-pc-windows-msvc.exe"
+max_bytes = 62_000_000
+
+[[artifact]]
+glob = "opentide-lsp-v*-x86_64-pc-windows-msvc.exe"
+max_bytes = 34_100_000
+
+[[artifact]]
+glob = "opentide-wasm-web-v*.zip"
+max_bytes = 5_800_000
+
+[[artifact]]
+glob = "opentide-*-cp310-abi3-win_amd64.whl"
+max_bytes = 23_200_000

@@ -58,3 +58,9 @@ harness = false
 [[bench]]
 name = "throughput"
 harness = false
+
+# The first use of each embedded dataset (#1743): `cargo xtask throughput` counts it.
+[[bench]]
+name = "datasets"
+harness = false
+required-features = ["queries"]
