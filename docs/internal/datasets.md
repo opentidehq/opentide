@@ -52,24 +52,24 @@ One machine (4 vCPU Intel Xeon @ 2.10 GHz, 15 GiB, Linux 6.18), release builds w
 
 | Artifact (Linux, release) | Before | After | Change |
 |---|---:|---:|---:|
-| `opentide` | 51,816,976 | 42,661,408 | -9,155,568 (-18%) |
-| `opentide-lsp` | 29,413,552 | 20,126,336 | -9,287,216 (-32%) |
-| `_native` (the Python extension module) | 56,659,664 | 46,255,608 | -10,404,056 (-18%) |
-| `opentide_wasm.wasm` (browser) | 24,627,305 | 14,770,325 | -9,856,980 (-40%) |
-| `opentide-lsp.wasm` (WASI) | 24,714,988 | 15,449,051 | -9,265,937 (-37%) |
+| `opentide` | 51,816,976 | 41,222,368 | -10,594,608 (-20%) |
+| `opentide-lsp` | 29,413,552 | 18,695,136 | -10,718,416 (-36%) |
+| `_native` (the Python extension module) | 56,659,664 | 44,818,808 | -11,840,856 (-21%) |
+| `opentide_wasm.wasm` (browser) | 24,627,305 | 13,809,876 | -10,817,429 (-44%) |
+| `opentide-lsp.wasm` (WASI) | 24,714,988 | 14,551,975 | -10,163,013 (-41%) |
 
 Section entropy (bits per byte, `scripts/av/entropy.py`): code is not compressed, and no code section is near 7.0. The read-only data section now holds the compressed blobs beside the tables and strings:
 
 | Binary | whole file | code (`.text`, `code`) | read-only data (`.rodata`, wasm `data`) |
 |---|---:|---:|---|
 | `opentide`, before | 6.52 | 6.24 | 5.51 (14.0 MB) |
-| `opentide`, after | 6.44 | 6.24 | 7.41 (4.6 MB) |
+| `opentide`, after | 6.45 | 6.24 | 7.41 (4.6 MB) |
 | `opentide-lsp`, before | 6.47 | 6.24 | 5.26 (12.2 MB) |
-| `opentide-lsp`, after | 6.54 | 6.24 | 7.64 (2.9 MB) |
+| `opentide-lsp`, after | 6.57 | 6.26 | 7.64 (2.9 MB) |
 | `_native`, before | 6.50 | 6.23 | 5.51 (14.0 MB) |
-| `_native`, after | 6.40 | 6.23 | 7.41 (4.6 MB) |
+| `_native`, after | 6.41 | 6.24 | 7.41 (4.6 MB) |
 | `opentide-lsp.wasm`, before | 5.99 | 5.45 | 5.24 (12.2 MB) |
-| `opentide-lsp.wasm`, after | 6.11 | 5.44 | 7.55 (2.9 MB) |
+| `opentide-lsp.wasm`, after | 6.15 | 5.45 | 7.56 (2.9 MB) |
 
 The code sections and every whole file stay below 7.0 (the gate fails above it). The data sections do not: more than half of what is left in `.rodata` is the compressed datasets, which are incompressible by construction, so its average is above 7.0. (The investigation's in-place experiment kept the PE layout by zero-padding the compressed regions, which lowers a section's entropy; its `.rdata` read 6.55.) If an antivirus verdict turns out to depend on a data section's entropy, the blobs can be stored base64-encoded (entropy 6.0, a third larger, a few hundred microseconds to decode): the container's `kind` byte leaves room for it. The release gate's ClamAV, YARA and Defender results say whether that is needed; it was not done on a guess.
 
@@ -77,10 +77,10 @@ The code sections and every whole file stay below 7.0 (the gate fails above it).
 
 | Command | Before | After | Change |
 |---|---:|---:|---:|
-| `opentide --version` | 2.22 ms | 2.03 ms | -9% (noise) |
-| `opentide --version`, page cache dropped before each run (12 runs) | 5.2 ms | 5.8 ms | +0.6 ms (noise) |
-| `opentide validate`, `tests/fixtures/tide_corpus` | 165 ms, 56 MiB | 78 ms, 50 MiB | -53%, -11% RSS |
-| `opentide validate`, a 1,000-object workspace (`cargo xtask corpus generate`) | 352 ms, 84 MiB | 228 ms, 77 MiB | -35%, -8% RSS |
+| `opentide --version` | 2.22 ms | 2.06 ms | -7% (noise) |
+| `opentide --version`, page cache dropped before each run (9 runs each, alternating) | 9.4 ms | 9.0 ms | -0.4 ms (noise) |
+| `opentide validate`, `tests/fixtures/tide_corpus` | 165 ms, 56 MiB | 78 ms, 48 MiB | -53%, -14% RSS |
+| `opentide validate`, a 1,000-object workspace (`cargo xtask corpus generate`) | 352 ms, 84 MiB | 230 ms, 74 MiB | -35%, -12% RSS |
 
 ### First use of each dataset
 
@@ -112,12 +112,12 @@ Each case is measured by interleaving the two builds, one after the other, 15 ro
 
 | Language server | Start to first diagnostics, p50 | Completion on an ATT&CK technique, cold / warm p50 | Peak RSS |
 |---|---:|---:|---:|
-| native, Tide corpus | 156 ms to 63 ms (-59%) | 6.0 / 5.8 ms to 5.6 / 5.6 ms | 121 to 118 MiB |
-| native, 1,000 objects | 215 ms to 131 ms (-39%) | 8.6 / 6.6 ms to 7.4 / 6.2 ms | 156 to 153 MiB |
-| WASI under wasmtime, Tide corpus | 349 ms to 208 ms (-40%) | 5.6 / 6.0 ms to 5.1 / 5.3 ms | 121 to 101 MiB |
-| WASI under wasmtime, 1,000 objects | 500 ms to 345 ms (-31%) | 9.2 / 7.1 ms to 8.6 / 7.4 ms | 123 to 112 MiB |
+| native, Tide corpus | 156 ms to 62 ms (-60%) | 6.0 / 5.8 ms to 6.1 / 5.7 ms | 121 to 114 MiB |
+| native, 1,000 objects | 215 ms to 127 ms (-41%) | 8.6 / 6.6 ms to 8.0 / 6.2 ms | 156 to 149 MiB |
+| WASI under wasmtime, Tide corpus | 349 ms to 192 ms (-45%) | 5.6 / 6.0 ms to 5.1 / 5.0 ms | 114 to 98 MiB |
+| WASI under wasmtime, 1,000 objects | 500 ms to 350 ms (-30%) | 9.2 / 7.1 ms to 8.4 / 6.9 ms | 123 to 107 MiB |
 
-The WASI module's own start under wasmtime (`opentide-lsp.wasm help`): 153 ms, 121 MiB before, 132 ms, 95 MiB after (a smaller module compiles and maps faster). Hover and completion that do not read a dataset first are within noise of each other in every row of the raw data (`hover:kql-column`, `hover:yaml-key`, `completion:kql-after-where`, ...).
+The WASI module's own start under wasmtime (`opentide-lsp.wasm help`): 153 ms, 121 MiB before, 132 ms, 90 MiB after (a smaller module compiles and maps faster). Hover and completion that do not read a dataset first are within noise of each other in every row of the raw data (`hover:kql-column`, `hover:yaml-key`, `completion:kql-after-where`, ...).
 
 ### The decoder
 
