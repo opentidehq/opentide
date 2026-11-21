@@ -2,7 +2,7 @@ name: Engine release build
 
 # Builds every asset of opentide's GitHub Release into one artifact,
 # `release-assets`: the `opentide` and `opentide-lsp` binaries per target, their
-# installers (publishing/installers/), the WASI module, the browser build
+# installer (publishing/installers/), the WASI module, the browser build
 # (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE, the
 # CycloneDX SBOMs (scripts/engine/sbom.py), and SHA256SUMS last. It publishes,
 # attests and uploads to no release: the caller does. Two callers:
@@ -12,10 +12,15 @@ name: Engine release build
 # - ci.yml in its full set, with no tag (dry-run): the workspace version's tag,
 #   so the asset set a release would publish is proven before one does
 #   (`release.py check-assets`: language-server's last release's names with the
-#   version substituted, the `opentide` binaries, installers and SBOMs added).
+#   version substituted, the `opentide` binaries, installer and SBOMs added,
+#   the Windows binaries left out).
 #
 # No musl target: the maintainer decided against musl builds (docs/internal/
-# publishing.md, "The release train"); scripts/engine/release.py TARGETS.
+# publishing.md, "The release train"). No Windows target either: a downloaded
+# Windows executable would need Authenticode signing, so Windows installs
+# opentide from PyPI or npm (`opentide lsp start` is its language server);
+# scripts/engine/release.py BINARY_TARGETS. The wheels and npm packages for
+# Windows are build-packages.yml's.
 #
 # Only the dry run restores a Rust cache: a release builds from nothing. The
 # dry run's is sccache, one family per runner for the binaries and one for the
@@ -95,8 +100,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # scripts/engine/release.py TARGETS lists the same targets
-        # (scripts/engine/test_release.py). No musl (the header).
+        # scripts/engine/release.py BINARY_TARGETS lists the same targets
+        # (scripts/engine/test_release.py). No musl, no Windows (the header).
         # `saves`: the one cell per runner that saves its compiler cache.
         include:
           - os: ubuntu-latest
@@ -112,12 +117,6 @@ jobs:
           - os: macos-latest
             target: x86_64-apple-darwin
             saves: false
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            saves: true
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
-            saves: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,20 +124,6 @@ jobs:
           persist-credentials: false
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
       # (`rustup toolchain install` with no name), and the target the job builds.
-      # windows-11-arm's image may lack rustup (build-packages.yml installs it there
-      # too). The other images carry rustup; this one may not.
-      - name: Rust on Windows on Arm
-        if: matrix.os == 'windows-11-arm'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
-            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
-            & $installer -y --profile minimal --default-toolchain none
-            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          }
       # Installing the file's toolchain (no name) ignores `--target`: add it after.
       - name: Set up Rust
         shell: bash
@@ -147,7 +132,7 @@ jobs:
           rustup target add ${{ matrix.target }}
       # The dry run only (a release builds from nothing): sccache, by content,
       # one family per Linux runner, which the cell marked `saves` saves on
-      # development and by the nightly. macOS and Windows keep none: their
+      # development and by the nightly. macOS keeps none: its
       # families crowded the ones pull requests restore out of the 10 GB
       # GitHub keeps (#841, tests/test_ci/test_workflows.py).
       - name: Install sccache
@@ -189,7 +174,7 @@ jobs:
       # opentide-lsp: 40 MiB. language-server's 30 MiB held until the 0.16
       # import (E1) added YARA (yara-x-parser), YARA-L and the Exabeam Query
       # Language with their catalogs to a server that also validates objects
-      # here: 29.8 MB on x86_64 Linux and 33.8 MB on x86_64 Windows then.
+      # here: 29.8 MB on x86_64 Linux then.
       # opentide, which also carries the connectors' HTTP and TLS stack, gets
       # 80 MiB.
       - name: size budget
@@ -198,9 +183,7 @@ jobs:
           set -euo pipefail
           for budget in opentide-lsp:41943040 opentide:83886080; do
             name="${budget%%:*}"
-            ext=""
-            case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac
-            bin="target/${{ matrix.target }}/release/${name}${ext}"
+            bin="target/${{ matrix.target }}/release/${name}"
             test -f "$bin"
             size=$(wc -c < "$bin")
             echo "$bin is $size bytes"
@@ -212,11 +195,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ext=""
-          case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac
           mkdir -p dist product
-          cp "target/${{ matrix.target }}/release/opentide-lsp${ext}" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}${ext}"
-          cp "target/${{ matrix.target }}/release/opentide${ext}" "product/opentide-${VERSION}-${{ matrix.target }}${ext}"
+          cp "target/${{ matrix.target }}/release/opentide-lsp" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}"
+          cp "target/${{ matrix.target }}/release/opentide" "product/opentide-${VERSION}-${{ matrix.target }}"
       - name: Save the compiler cache
         if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && runner.os == 'Linux' && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -442,7 +423,7 @@ jobs:
           path: product/*
           if-no-files-found: error
 
-  # Every asset, the licence scan over all of them, the installers with the
+  # Every asset, the licence scan over all of them, the installer with the
   # tag written in, and SHA256SUMS last.
   assets:
     name: Release assets
@@ -475,15 +456,14 @@ jobs:
           set -euo pipefail
           bash scripts/engine/license-scan.sh dist
           bash scripts/engine/license-scan.sh --product product
-      # The repository's installers name no release: each published copy
-      # installs its own tag by default.
-      - name: installers
+      # The repository's installer names no release: each published copy
+      # installs its own tag by default. Linux and macOS only: no Windows
+      # binary ships (the header).
+      - name: installer
         run: |
           set -euo pipefail
-          for installer in opentide-installer.sh opentide-installer.ps1; do
-            sed "s/__OPENTIDE_TAG__/${TAG}/" "publishing/installers/${installer}" > "product/${installer}"
-            grep -qF "${TAG}" "product/${installer}"
-          done
+          sed "s/__OPENTIDE_TAG__/${TAG}/" publishing/installers/opentide-installer.sh > product/opentide-installer.sh
+          grep -qF "${TAG}" product/opentide-installer.sh
           mv product/* dist/
       - name: every asset is there
         run: |

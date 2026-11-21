@@ -107,14 +107,15 @@ checked before the next pull request builds on it.
 each build and smoke test exists once): `packages` ([`build-packages.yml`](workflows/build-packages.yml):
 every wheel, built by maturin (PyO3/maturin-action), each installed and run on its own platform
 (`wheel-smoke`), and every npm tarball, one `npm-packages` artifact), `engine-assets`
-([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary, installer,
-WebAssembly build, SBOM and SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
+([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary (Linux and macOS:
+no standalone Windows executable ships), the installer, every WebAssembly build, SBOM and
+SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
 `crate-packages` (every crate packaged and built as crates.io builds it, and the licence scan),
 at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
 ([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
 then one `smoke` matrix running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
-the installer and `npm install` from a throwaway local registry on each of the six platforms
-(Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64), a build from the sdist with the
+the binary installer on Linux and macOS, and `npm install` from a throwaway local registry on
+each of the six platforms (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64), a build from the sdist with the
 runner's stable Rust after the PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist),
 and `cargo install opentide --features cli` from the crate packages. In a release pull request or
 `scope: release` run (not the nightly), the **antivirus gate** ([`av-gate.yml`](workflows/av-gate.yml),
