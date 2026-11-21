@@ -55,7 +55,7 @@ Branch `investigate/av-false-positives`, no PR.
 | Item | Value |
 |---|---|
 | ClamAV | 1.5.4; `main.cvd` v63, `daily.cvd` v28190, `bytecode.cvd` v339 (3 628 232 signatures) fetched with `freshclam` on 2026-11-21 |
-| YARA | 4.5.0 with [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) @ `78d979e` (754 rule files, externals defined) and [elastic/protections-artifacts](https://github.com/elastic/protections-artifacts) @ `418cfd9` (1057 files) |
+| YARA | 4.5.0 with [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) @ `78d979eef87786a613659ee82e55abdd45572a78` (754 rule files, externals defined) and [elastic/protections-artifacts](https://github.com/elastic/protections-artifacts) @ `418cfd9aaa89ffc4b6a55e3d01c384facf4fd548` (1057 files) |
 | Scans | `clamscan -r --scan-archive=yes` on the raw artifacts, then on every extracted tree; `yara -C --scan-list` on every file |
 | PE analysis | `pefile` (imports, sections, entropy, certificate directory) |
 | Dataset matching | every tracked file under `data/`, `src/opentide/data/`, `highlights/`, `editors/`, `packages/` located by exact bytes (LF and CRLF) inside each binary |

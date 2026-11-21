@@ -9,8 +9,8 @@
 # request that says why.
 set -euo pipefail
 dest="${1:?usage: fetch-rules.sh DEST}"
-SIGNATURE_BASE_COMMIT="78d979e"
-ELASTIC_COMMIT="418cfd9"
+SIGNATURE_BASE_COMMIT="78d979eef87786a613659ee82e55abdd45572a78"
+ELASTIC_COMMIT="418cfd9aaa89ffc4b6a55e3d01c384facf4fd548"
 
 checkout() { # name url commit
   local name="$1" url="$2" commit="$3"

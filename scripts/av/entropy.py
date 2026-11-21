@@ -147,7 +147,7 @@ def main(argv: list[str]) -> int:
                 flag = "  <-- CODE AT OR ABOVE THE LIMIT"
                 over += 1
             elif value >= limit:
-                flag = "  (data above the limit: compressed datasets)"
+                flag = "  (data section above the limit: compressed datasets, or unwind tables)"
             print(f"  {name:<24} {len(data):>12} bytes  {value:.2f}{flag}")
     if read == 0:
         print("entropy: no ELF, PE or WebAssembly file found", file=sys.stderr)
