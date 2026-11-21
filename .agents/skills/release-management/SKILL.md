@@ -158,12 +158,12 @@ GitHub Release body, in the order of the release-notes skill:
 
 #### 4. User-facing install pins
 
-Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of the release pins: `README.md` (the PyPI page) keeps the newest stable pin and names `pip install --pre opentide` for candidates (an exact `opentide==1.0.0rcN` is a pre-release pin, which `scripts/build/release.py`'s `_PIN` and `tests/test_docs/test_docs_version_claims.py` do not read as a release pin); the pins move at the final release's notes PR. A candidate does update the candidate's own text: the **Release candidates** section of `docs/usage/installation.md` (the `1.0.0rcN` and `1.0.0-rc.N` pins, the tag in the GitHub Release URLs, the installer and `SHA256SUMS` commands) and the `=1.0.0-rc.N` pins in `docs/sdk/rust.md`'s Install section; the final release removes both, with the section's pointers from the PyPI install paragraph and the Rust page. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
+Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of the release pins: `README.md` (the PyPI page) keeps the newest stable pin in the prose below its install block, and while a candidate is current its first install command is `pip install --pre opentide` (no exact candidate pin: `tests/test_docs/test_readme_on_pypi.py` refuses one, and `--pre` needs no edit per candidate; an exact `opentide==1.0.0rcN` is a pre-release pin, which `scripts/build/release.py`'s `_PIN` and `tests/test_docs/test_docs_version_claims.py` do not read as a release pin); the pins move at the final release's notes PR, which also puts the stable pin back first in the README's install block. The pages that document the 1.0 API (`docs/index.md`, `docs/cli/index.md`, `docs/mcp/index.md`, `docs/mcp/installation.md`, `docs/sdk/installation.md`) do not pin the stable release while 1.0 is a candidate: 0.28.1 has no `opentide.Workspace`, so each shows `pip install --pre opentide` and the candidate's `opentide==1.0.0rcN`, linking `docs/usage/installation.md#release-candidates`. Each candidate moves their `rcN` with the installation page's (`tests/test_docs/test_docs_version_claims.py` checks that every `opentide==1.0.0rcN` in `docs/` agrees); the final release gives them the release pin. A candidate does update the candidate's own text: the **Release candidates** section of `docs/usage/installation.md` (the `1.0.0rcN` and `1.0.0-rc.N` pins, the tag in the GitHub Release URLs, the installer and `SHA256SUMS` commands) and the `=1.0.0-rc.N` pins in `docs/sdk/rust.md`'s Install section; the final release removes both, with the section's pointers from the PyPI install paragraph and the Rust page. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
 
 | File | Notes |
 |------|--------|
-| `README.md` | |
-| `docs/index.md` | |
+| `README.md` | The newest stable pin stays (the release check reads it); a candidate adds `pip install --pre opentide` as the first install command, the final release puts the stable pin first again |
+| `docs/index.md` | A candidate: `--pre` in the Quick start, beside the "latest release" claim, which stays the newest release |
 | `docs/usage/index.md` | Card copy too |
 | `docs/usage/installation.md` | pip and uv pins; the **Release candidates** section: updated by each candidate, removed by the final release |
 | `docs/usage/quickstart.md` | |
@@ -171,11 +171,11 @@ Search the repo for the old pin (`opentide==0.1.3` or whatever the previous vers
 | `docs/usage/troubleshooting.md` | Pins **and** mention the new patch in the relevant bug sections |
 | `docs/usage/workflows/agentic-setup.md` | |
 | `docs/usage/workflows/ci-cd.md` | Hand-written pipeline examples and the callout above them |
-| `docs/cli/index.md` | |
-| `docs/mcp/index.md` | |
-| `docs/mcp/installation.md` | |
+| `docs/cli/index.md` | A candidate: `--pre` and the candidate's pin, linking the installation page's Release candidates; the final release: the release pin |
+| `docs/mcp/index.md` | As `docs/cli/index.md` |
+| `docs/mcp/installation.md` | As `docs/cli/index.md` |
 | `docs/sdk/rust.md` | Install: the `=1.0.0-rc.N` pins of a candidate; the final release installs `opentide = "1"` and drops the candidate text |
-| `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well |
+| `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well; a candidate: the candidate's pin in both blocks, as `docs/cli/index.md` |
 
 ```bash
 rg -n 'opentide==0\.[0-9]+\.[0-9]+' --glob '!CHANGELOG.md' --glob '!.github/release-notes/**'
