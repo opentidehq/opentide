@@ -44,6 +44,7 @@ The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.2
 | `compile` | yes | `Workspace::deploy_plan` and `opentide::deploy`, and validate's compile check (a rule a deploy would compile must compile); without it `validate` compiles nothing |
 | `queries` | yes | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::main_with_version(argv, version)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
+| `cli-core` | no | The same `opentide::cli` functions without the terminal UI and the `setup` wizard's prompts (`opentide tui` and the questions refuse, as under WASI); implies `compile` and `queries`. The Python package is built with it |
 | `lsp` | no | `opentide::lsp`: the language server, on stdio or one message at a time |
 | `connectors` | no | `opentide::connectors`: the tenants a workspace configures (`Workspace::tenants`), and on each a query run, a live query check and a rule deploy; async, on tokio; implies `compile` |
 | `plugins` | no | `opentide::plugins`: the platform plugin host a binding embeds to add platforms (the connectors' traits, `plugins::set_host`); implies `connectors` |

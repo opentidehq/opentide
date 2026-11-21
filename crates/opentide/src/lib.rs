@@ -43,6 +43,7 @@
 //! | `compile` | yes | [`Workspace::deploy_plan`] and [`deploy`] |
 //! | `queries` | yes | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 //! | `cli` | no | `cli::main(argv)`, `cli::run_json(argv)` and the `opentide` binary (`cargo install opentide --features cli`); implies `compile` and `queries` |
+//! | `cli-core` | no | `cli::main(argv)` and `cli::run_json(argv)` without the terminal UI and the `setup` wizard's prompts (`opentide tui` and the questions refuse, as under WASI); implies `compile` and `queries`. The Python package is built with it; `cli` adds the terminal |
 //! | `lsp` | no | `lsp`: the language server, on stdio or one message at a time |
 //! | `connectors` | no | [`connectors`]: the tenants a workspace configures ([`Workspace::tenants`]), and on each a query run, a live query check and a rule deploy (async, on tokio); implies `compile` |
 //! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`. Heavy |
@@ -162,7 +163,7 @@ mod workspace;
 #[cfg(feature = "compile")]
 pub mod deploy;
 
-#[cfg(feature = "cli")]
+#[cfg(feature = "cli-core")]
 pub mod cli;
 
 #[cfg(feature = "lsp")]
