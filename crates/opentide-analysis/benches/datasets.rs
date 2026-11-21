@@ -77,6 +77,22 @@ const CASES: &[Case] = &[
         },
     },
     Case {
+        // The editor's first hover on an ATT&CK technique in a rule: what it reads of the Tide
+        // vocabularies and field catalog (cold LSP hover, #1743).
+        name: "hover-attack-technique",
+        run: || {
+            let text = "metadata:\n  schema: rule::1.0\ntechniques:\n  - T1059\n";
+            let offset = text.find("T1059").map_or(0, |at| at + 2);
+            let host = MemoryWorkspace::default();
+            std::hint::black_box(opentide_analysis::hover(
+                &host,
+                LanguageId::TideYaml,
+                text,
+                offset,
+            ));
+        },
+    },
+    Case {
         name: "kql-sentinel",
         run: || query(LanguageId::Kql, Some("sentinel"), "SecurityEvent | take 1"),
     },
