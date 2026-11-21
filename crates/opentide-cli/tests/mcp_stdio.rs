@@ -160,6 +160,18 @@ impl Client {
         result
     }
 
+    /// A tool call that failed: `isError` true (MCP's tool-level error), with
+    /// the same JSON as an answer.
+    fn failed_call(&mut self, name: &str, arguments: Value) -> Value {
+        let response = self.request("tools/call", json!({"name": name, "arguments": arguments}));
+        let result = &response["result"];
+        assert_eq!(result["isError"], true, "{name}: {result}");
+        match blocks(result) {
+            Value::Array(mut one) if one.len() == 1 => one.remove(0),
+            many => many,
+        }
+    }
+
     /// A tool's answer: its structured content, a list unwrapped, or else
     /// its text blocks parsed.
     fn call(&mut self, name: &str, arguments: Value) -> Value {
@@ -362,11 +374,14 @@ fn tools_and_resources_answer_with_nothing_but_json_rpc_on_stdout() {
     );
 
     let query = json!({"query": "SecurityEvent", "platform": "sentinel", "live": true});
-    let checked = client.call("validate_query", query);
+    // No tenant to check on: a failed live check, a tool error whose JSON is the
+    // command's document.
+    let checked = client.failed_call("validate_query", query);
     assert!(
         checked.is_object() && checked.get("_failure_code").is_none(),
         "{checked}"
     );
+    assert_eq!(checked["status"], "failed", "{checked}");
     client.call("validation_report", json!({}));
 
     let platforms = client.read("opentide://platforms");
@@ -557,5 +572,227 @@ fn a_plugin_launch_without_a_workspace_says_how_to_name_one() {
     // A tool that needs no catalogue still works.
     let explained = client.call("explain", json!({"code": "workspace_not_found"}));
     assert!(explained.is_object(), "{explained}");
+    client.close();
+}
+
+/// `OPENTIDE_FETCH=stdio` is the WASI build's (tenant requests made by the
+/// client, `docs/mcp/index.md`): a native server ignores it. It makes the tenant
+/// request itself, as without the variable, and writes no `opentide/fetch`.
+#[test]
+fn a_native_server_ignores_opentide_fetch() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = corpus(dir.path());
+    // Nothing listens here: the connection is refused.
+    let closed = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        format!("http://{}", listener.local_addr().unwrap())
+    };
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+             [[tenants]]\nname = \"closed\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+             url = \"{closed}\"\nelasticsearch_url = \"{closed}\"\napi_key = \"key\"\n"
+        ),
+    )
+    .unwrap();
+    let env = [
+        ("OPENTIDE_REPO_ROOT", &*ws),
+        ("OPENTIDE_TIDE_WORKSPACE", &*ws),
+        ("OPENTIDE_FETCH", Path::new("stdio")),
+        // The tenant is on the loopback: no proxy in between.
+        ("NO_PROXY", Path::new("127.0.0.1")),
+    ];
+    let mut client = start(&ws, &[], &env);
+    client.handshake();
+    client.send(
+        &json!({"jsonrpc": "2.0", "id": 100, "method": "tools/call", "params": {
+        "name": "run_query",
+        "arguments": {"query": "FROM x", "platform": "elastic", "live": true}}}),
+    );
+    let answer = loop {
+        let line = client.lines.recv_timeout(PATIENCE).ok().flatten();
+        let line = line.unwrap_or_else(|| panic!("no answer: {}", client.stderr()));
+        let line = client.text(line);
+        let frame = frame(&line);
+        assert_ne!(
+            frame["method"], "opentide/fetch",
+            "a native server makes its own requests: {line}"
+        );
+        if frame["id"] == 100 {
+            break frame;
+        }
+    };
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("Cannot reach elastic tenant 'closed'"),
+        "{text}"
+    );
+    assert!(!text.contains("network_unavailable"), "{text}");
+    client.close();
+}
+
+/// Which protocol versions the server speaks, as rmcp 3.9 gives it (UC-3.7):
+/// `initialize` negotiates every version before 2026-07-28 and answers the
+/// newest of them (`2025-11-25`) to a client that asks for more; the
+/// 2026-07-28 revision's stateless requests, which carry their version and
+/// capabilities in `_meta` instead, and `server/discover` are answered too.
+#[test]
+fn the_server_negotiates_the_protocol_versions_and_answers_server_discover() {
+    let (_dir, _ws, mut client) = on_the_corpus();
+    for (asked, answered) in [
+        ("2024-11-05", "2024-11-05"),
+        ("2025-06-18", "2025-06-18"),
+        ("2025-11-25", "2025-11-25"),
+        // `initialize` cannot name 2026-07-28: the newest it can is answered.
+        ("2026-07-28", "2025-11-25"),
+        ("2099-01-01", "2025-11-25"),
+    ] {
+        let response = client.request(
+            "initialize",
+            json!({"protocolVersion": asked, "capabilities": {},
+                   "clientInfo": {"name": "opentide-e2e", "version": "1"}}),
+        );
+        assert_eq!(response["result"]["protocolVersion"], answered, "{asked}");
+    }
+    client.notify("notifications/initialized");
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let discovered = client.request("server/discover", json!({"_meta": meta}));
+    let result = &discovered["result"];
+    assert_eq!(
+        result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"], "opentide",
+        "{discovered}"
+    );
+    let versions: Vec<&str> = result["supportedVersions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|version| version.as_str().unwrap())
+        .collect();
+    assert!(versions.contains(&"2026-07-28"), "{versions:?}");
+    assert!(versions.contains(&"2025-11-25"), "{versions:?}");
+    // A stateless request: no `initialize`, its version and capabilities in `_meta`.
+    let listed = client.request("tools/list", json!({"_meta": meta}));
+    assert!(
+        listed["result"]["tools"]
+            .as_array()
+            .is_some_and(|tools| !tools.is_empty()),
+        "{listed}"
+    );
+    client.close();
+}
+
+/// Revision 2026-07-28 requires `resultType` on every result, and Kiro closes
+/// the connection on a `tools/list` without it. A request that carries its
+/// version in `_meta` (no `initialize`) gets `resultType: "complete"` on every
+/// result the server sends; a session that began with `initialize` keeps the
+/// shape it always had, with no `resultType` (rmcp takes it off for a peer on an
+/// older revision).
+#[test]
+fn every_result_of_the_2026_revision_has_result_type_and_a_legacy_session_has_none() {
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let calls = |meta: Option<&Value>| -> Vec<(&'static str, Value)> {
+        let with = |mut params: Value| {
+            if let Some(meta) = meta {
+                params["_meta"] = meta.clone();
+            }
+            params
+        };
+        vec![
+            ("tools/list", with(json!({}))),
+            (
+                "tools/call",
+                with(json!({"name": "explain", "arguments": {"code": "yaml_parse"}})),
+            ),
+            // A call that failed (isError true) is a complete result too.
+            (
+                "tools/call",
+                with(json!({"name": "validate_query",
+                            "arguments": {"query": "x", "platform": "splunk", "live": true}})),
+            ),
+            ("resources/list", with(json!({}))),
+            ("resources/templates/list", with(json!({}))),
+            (
+                "resources/read",
+                with(json!({"uri": "opentide://vocabularies"})),
+            ),
+            ("prompts/list", with(json!({}))),
+            (
+                "completion/complete",
+                with(json!({
+                    "ref": {"type": "ref/resource", "uri": "opentide://rules/{uuid}"},
+                    "argument": {"name": "uuid", "value": ""}
+                })),
+            ),
+        ]
+    };
+    // No handshake: every result says it is complete.
+    let (_dir, _ws, mut stateless) = on_the_corpus();
+    for (method, params) in calls(Some(&meta)) {
+        let response = stateless.request(method, params);
+        let result = &response["result"];
+        assert_eq!(result["resultType"], "complete", "{method}: {response}");
+    }
+    let discovered = stateless.request("server/discover", json!({"_meta": meta}));
+    assert_eq!(
+        discovered["result"]["resultType"], "complete",
+        "{discovered}"
+    );
+    stateless.close();
+    // After `initialize`: the legacy shapes, no `resultType`, whichever version.
+    for version in ["2024-11-05", "2025-06-18", "2025-11-25"] {
+        let (_dir, _ws, mut legacy) = on_the_corpus();
+        let initialized = legacy.request(
+            "initialize",
+            json!({"protocolVersion": version, "capabilities": {},
+                   "clientInfo": {"name": "opentide-e2e", "version": "1"}}),
+        );
+        assert_eq!(initialized["result"]["protocolVersion"], version);
+        legacy.notify("notifications/initialized");
+        for (method, params) in calls(None) {
+            let response = legacy.request(method, params);
+            let result = response["result"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{response}"));
+            assert!(
+                !result.contains_key("resultType"),
+                "{version} {method}: {response}"
+            );
+        }
+        legacy.close();
+    }
+}
+
+/// The server has no JSON-RPC batches (MCP dropped them in 2025-06-18, and
+/// rmcp has none): a line holding an array is JSON that is not a message, and
+/// is answered `-32600` with no id, whatever it holds. A bridge in front of it
+/// (`McpFetchBridge`) drops a batch that holds a forged answer to a tenant
+/// request and passes the others on to be refused so.
+#[test]
+fn a_batch_is_refused_as_a_message_that_is_not_one() {
+    let (_dir, _ws, mut client) = on_the_corpus();
+    client.handshake();
+    client.send(&json!([
+        {"jsonrpc": "2.0", "id": 5, "method": "ping"},
+        {"jsonrpc": "2.0", "id": 6, "method": "ping"}
+    ]));
+    // Refused as JSON that is not a message: `-32600`, no id, and no ping answered.
+    let line = client.lines.recv_timeout(PATIENCE).ok().flatten();
+    let line = client.text(line.unwrap_or_else(|| panic!("no answer: {}", client.stderr())));
+    let refused = frame(&line);
+    assert_eq!(refused["error"]["code"], -32600, "{line}");
+    assert!(refused.get("id").is_none_or(Value::is_null), "{line}");
+    assert!(refused.get("result").is_none(), "{line}");
+    // The next request is still answered: the server went on.
+    let answered = client.request("tools/list", json!({}));
+    assert!(answered["result"]["tools"].is_array(), "{answered}");
     client.close();
 }

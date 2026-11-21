@@ -50,6 +50,42 @@ pub const METHOD: &str = "opentide/fetch";
 /// The prefix of the server's request ids.
 pub const ID_PREFIX: &str = "h";
 
+/// How a [`Fetcher`] words its requests to the client: the dialect of the
+/// protocol it speaks. `opentide serve` and `opentide mcp start` (WASI,
+/// `OPENTIDE_FETCH=stdio`) send the same `opentide/fetch`, params and answers;
+/// they differ in the ids of the requests and in how a request is withdrawn.
+#[derive(Debug, Clone, Copy)]
+pub struct Wire {
+    /// The prefix of the request ids (`"h"`: `"h1"`).
+    pub prefix: &'static str,
+    /// Whether each fetcher puts a random per-process token after the prefix
+    /// (`opentide-fetch-<token>-1`), so a peer that can write to the server's
+    /// input cannot guess the id of a request and answer it.
+    pub token: bool,
+    /// The notification that withdraws request *id*.
+    pub withdraw: fn(&str) -> Json,
+    /// Why a request fails when the client has gone.
+    pub gone: &'static str,
+}
+
+impl Wire {
+    /// `opentide serve`: ids `h1`, `h2`…, withdrawn with `$/cancelRequest`.
+    pub const SERVE: Wire = Wire {
+        prefix: ID_PREFIX,
+        token: false,
+        withdraw: serve_withdrawal,
+        gone: "the client that made the tenant's requests has gone",
+    };
+}
+
+fn serve_withdrawal(id: &str) -> Json {
+    Json::object([
+        ("jsonrpc", Json::str("2.0")),
+        ("method", Json::str("$/cancelRequest")),
+        ("params", Json::object([("id", Json::str(id))])),
+    ])
+}
+
 /// How long past a tenant's own limits the server waits for the client's
 /// answer before it reads the request as timed out.
 const GRACE: Duration = Duration::from_secs(5);
@@ -59,6 +95,9 @@ type Reply = Result<Json, Json>;
 
 /// The requests in flight to the client, and how to write one.
 pub struct Fetcher {
+    wire: Wire,
+    /// What every request id starts with: the wire's prefix, and its token.
+    prefix: String,
     send: Box<dyn Fn(&str) + Send + Sync>,
     /// The id of the run in progress, named in each request.
     run: Box<dyn Fn() -> Option<String> + Send + Sync>,
@@ -97,7 +136,25 @@ impl Fetcher {
         pump: impl Fn() -> bool + Send + Sync + 'static,
         cancelled: impl Fn() -> bool + Send + Sync + 'static,
     ) -> Arc<Self> {
+        Self::with_wire(Wire::SERVE, send, run, pump, cancelled)
+    }
+
+    /// As [`Fetcher::with_input`], in the dialect *wire* speaks.
+    pub fn with_wire(
+        wire: Wire,
+        send: impl Fn(&str) + Send + Sync + 'static,
+        run: impl Fn() -> Option<String> + Send + Sync + 'static,
+        pump: impl Fn() -> bool + Send + Sync + 'static,
+        cancelled: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        let prefix = if wire.token {
+            format!("{}{}-", wire.prefix, uuid::Uuid::new_v4().simple())
+        } else {
+            wire.prefix.to_owned()
+        };
         Arc::new(Self {
+            wire,
+            prefix,
             send: Box::new(send),
             run: Box::new(run),
             pending: Mutex::new(HashMap::new()),
@@ -131,8 +188,20 @@ impl Fetcher {
             .clear();
     }
 
-    fn ask(&self, params: Json) -> (String, oneshot::Receiver<Reply>) {
-        let id = format!("{ID_PREFIX}{}", self.next.fetch_add(1, Ordering::SeqCst));
+    /// What every request id starts with.
+    #[cfg(test)]
+    pub(crate) fn id_prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// Sends one `opentide/fetch` with *params*: its id, and the receiver of
+    /// the client's answer.
+    pub(crate) fn ask(&self, params: Json) -> (String, oneshot::Receiver<Reply>) {
+        let id = format!(
+            "{}{}",
+            self.prefix,
+            self.next.fetch_add(1, Ordering::SeqCst)
+        );
         let (sender, receiver) = oneshot::channel();
         self.pending
             .lock()
@@ -148,19 +217,14 @@ impl Fetcher {
         (id, receiver)
     }
 
-    fn cancel(&self, id: &str) {
+    pub(crate) fn cancel(&self, id: &str) {
         let waiting = self
             .pending
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(id);
         if waiting.is_some() {
-            let message = Json::object([
-                ("jsonrpc", Json::str("2.0")),
-                ("method", Json::str("$/cancelRequest")),
-                ("params", Json::object([("id", Json::str(id))])),
-            ]);
-            (self.send)(&compact(&message));
+            (self.send)(&compact(&(self.wire.withdraw)(id)));
         }
     }
 }
@@ -368,9 +432,14 @@ impl Transport for ClientTransport {
         Box::pin(async move {
             let Some(fetcher) = self.fetcher.upgrade() else {
                 return Err(TransportFailure::Unreachable {
-                    reason: "the client that made the tenant's requests has gone".to_owned(),
+                    reason: Wire::SERVE.gone.to_owned(),
                 });
             };
+            // A call that was cancelled sends nothing more: the request
+            // carries the tenant's credentials, and would only be withdrawn.
+            if cancel.is_cancelled() || (fetcher.cancelled)() {
+                return Err(TransportFailure::Cancelled);
+            }
             let started = std::time::Instant::now();
             let url = request.url().clone();
             let read = request.timeout().unwrap_or(self.timeout);
@@ -400,8 +469,7 @@ impl Transport for ClientTransport {
                     Err(oneshot::error::TryRecvError::Closed) => {
                         drop(pending);
                         return Err(TransportFailure::Unreachable {
-                            reason: "the client that made the tenant's requests has gone"
-                                .to_owned(),
+                            reason: fetcher.wire.gone.to_owned(),
                         });
                     }
                     Err(oneshot::error::TryRecvError::Empty) => {}
@@ -424,11 +492,81 @@ impl Transport for ClientTransport {
             match outcome {
                 Err(_) => Err(TransportFailure::Timeout),
                 Ok(Err(_)) => Err(TransportFailure::Unreachable {
-                    reason: "the client that made the tenant's requests has gone".to_owned(),
+                    reason: fetcher.wire.gone.to_owned(),
                 }),
                 Ok(Ok(Err(error))) => Err(failure(&error)),
                 Ok(Ok(Ok(result))) => response(&result, &url, started.elapsed()),
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+
+    use super::*;
+
+    fn transport(fetcher: &Arc<Fetcher>) -> ClientTransport {
+        ClientTransport {
+            fetcher: Arc::downgrade(fetcher),
+            platform: "elastic".to_owned(),
+            tenant: "lab".to_owned(),
+            verify: true,
+            bundles: Vec::new(),
+            proxies: opentide_connectors::proxy::ProxySettings::default(),
+            timeout: Duration::from_secs(1),
+        }
+    }
+
+    fn request() -> Request {
+        let url = url::Url::parse("https://lab.invalid/_query").unwrap();
+        Request::new(opentide_connectors::transport::Method::GET, url)
+    }
+
+    /// A call that was cancelled sends nothing more: a request carries the
+    /// tenant's credentials, and would only be withdrawn.
+    #[test]
+    fn a_cancelled_call_writes_no_further_request() {
+        let written = Arc::new(Mutex::new(Vec::<String>::new()));
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let fetcher = Fetcher::with_input(
+            {
+                let written = Arc::clone(&written);
+                move |message: &str| written.lock().unwrap().push(message.to_owned())
+            },
+            || None,
+            || false,
+            {
+                let cancelled = Arc::clone(&cancelled);
+                move || cancelled.load(Ordering::SeqCst)
+            },
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let transport = transport(&fetcher);
+        // The run was cancelled (the client's cancellation, noted by the reader).
+        let outcome = runtime.block_on(transport.execute(request(), &CancellationToken::new()));
+        assert!(
+            matches!(outcome, Err(TransportFailure::Cancelled)),
+            "{outcome:?}"
+        );
+        assert!(
+            written.lock().unwrap().is_empty(),
+            "{:?}",
+            written.lock().unwrap()
+        );
+        // So is a request whose token fired.
+        cancelled.store(false, Ordering::SeqCst);
+        let token = CancellationToken::new();
+        token.cancel();
+        let outcome = runtime.block_on(transport.execute(request(), &token));
+        assert!(
+            matches!(outcome, Err(TransportFailure::Cancelled)),
+            "{outcome:?}"
+        );
+        assert!(written.lock().unwrap().is_empty());
     }
 }

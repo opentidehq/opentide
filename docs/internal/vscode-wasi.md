@@ -17,6 +17,7 @@ does not do. The decision is [ADR 0007's amendment](./adr/0007-vscode-extension-
 |------|------|-------|
 | W1 ([#1097](https://github.com/opentidehq/opentide/pull/1097)) | The `opentide` CLI on `wasm32-wasip1`, held to the goldens under wasmtime; git read with gix (no `git` program) | `scripts/engine/build-wasm.sh cli`, ci.yml `wasm` |
 | W2 ([#1103](https://github.com/opentidehq/opentide/pull/1103)) | Tenant requests made by the client: `opentide/fetch`, and its extension-host half | `docs/cli/serve.md`, `packages/wasi-host` |
+| W3 | The same for `opentide mcp start`: with `OPENTIDE_FETCH=stdio` its tenant requests are `opentide/fetch` lines on its stdio, and `McpFetchBridge` is the extension-host half | `docs/cli/mcp.md`, `packages/wasi-host` |
 
 ## The module
 
@@ -74,7 +75,7 @@ Three long-lived processes, one per protocol, each started from the same compile
 |---------|----------|-------|
 | `opentide serve` | JSON-RPC, one message per line ([serve](../cli/serve.md)) | One server for every folder of the window (`cwd` per run). Ask for `opentide/fetch` at `initialize` and answer it with `@opentide/wasi-host`'s `FetchHost`, below |
 | `opentide lsp start` | LSP over stdio, `Content-Length` framing | Start it with `@vscode/wasm-wasi-lsp`; the custom `opentide/*` requests are as native |
-| `opentide mcp start` | MCP over stdio | Only if the extension serves MCP to an agent |
+| `opentide mcp start` | MCP over stdio | Only if the extension serves MCP to an agent. Start it with `OPENTIDE_FETCH=stdio` and bridge its stdio with `@opentide/wasi-host`'s `McpFetchBridge`, below: every tool then works, tenant tools included |
 
 - **Tenant requests.** WASI gives the module no sockets, so `serve` asks the client to make each
   tenant request (`opentide/fetch`). `FetchHost` makes it with Node's HTTP stack in the extension
@@ -88,8 +89,56 @@ Three long-lived processes, one per protocol, each started from the same compile
   serveIn.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: FETCH_CAPABILITY })}\n`);
   ```
 
-  Outside `serve` (the language server, MCP, a command run another way) a tenant operation fails
-  with `network_unavailable`, naming the native CLI.
+  Outside `serve` and a bridged `mcp start` (the language server, MCP without `OPENTIDE_FETCH`, a
+  command run another way) a tenant operation fails with `network_unavailable`, naming the native
+  CLI.
+- **Tenant requests from `mcp start`.** With `OPENTIDE_FETCH=stdio` in its environment (the WASI
+  build only; the native build ignores it), `mcp start` writes each tenant request as an
+  `opentide/fetch` JSON-RPC request line on stdout, among its MCP messages, with the same params as
+  `serve`'s and ids `opentide-fetch-<token>-1`, `-2`, …, and reads the answer, a response line with the same
+  id, on stdin, among the client's messages ([`opentide mcp`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch)).
+  `McpFetchBridge` sits between the module and the MCP client, splits the two kinds of line and
+  answers the requests with `FetchHost`:
+
+  ```ts illustrative
+  import { MCP_FETCH_ENVIRONMENT, McpFetchBridge } from "@opentide/wasi-host";
+
+  // env: { ...settings, ...MCP_FETCH_ENVIRONMENT } when the process is created
+  const bridge = new McpFetchBridge({
+    toServer: (line) => mcpIn.write(line),    // the client's messages and the host's answers, whole lines
+    toClient: (line) => agentOut.write(line), // the module's MCP messages, its tenant requests taken out
+  });
+  mcpOut.onData((chunk) => bridge.fromServer(chunk));   // the module's stdout
+  agentIn.onData((chunk) => bridge.fromClient(chunk));  // the agent's messages
+  // on exit: bridge.endServer(); bridge.dispose();
+  ```
+
+  - **The client's messages wait for a running call.** WASI has no thread to read stdin with, so a
+    tool call that waits for a tenant answer reads stdin itself and keeps the client's other
+    messages, in order, until the call returns: a `ping` sent meanwhile is answered after the call,
+    not during it. Cancelling the call (`notifications/cancelled` for its request id) stops it at
+    once and withdraws its request; the server then answers, or not, and the client ignores it as MCP
+    says.
+  - **Not an MCP stream.** MCP's 2026-07-28 revision forbids a server writing requests to stdout,
+    and `opentide/fetch` lines are requests: with `OPENTIDE_FETCH=stdio` the module's stdout is a
+    private transport between the module and `McpFetchBridge`, which strips those lines before the
+    editor or agent sees anything. Never hand that stdout to an MCP client directly. Without the
+    variable the stdout is MCP alone.
+  - **The lines carry tenant credentials** (`Authorization`, API-key headers, the body, CA bundles).
+    `McpFetchBridge` never forwards a line that mentions `opentide/fetch` and cannot be read as the
+    host's own, and drops a client line that is a response to an `opentide-fetch-` id, so an agent
+    behind it cannot answer a request itself. The ids are `opentide-fetch-<token>-N` with a random
+    per-process token, so a client that writes to the module's stdin directly cannot guess one
+    either. The bridge also drops the module's response to a request the client cancelled.
+  - **Withdrawals** are MCP's `notifications/cancelled {requestId: "opentide-fetch-N"}` from the
+    module; `FetchHost` aborts the request, and `McpFetchBridge` does not pass it on. Without the
+    bridge, a client that gets these lines must handle `notifications/cancelled` itself.
+  - **End of input.** Closing the module's stdin with a request unanswered fails the call with `the
+    client closed its input before answering an opentide/fetch request`. The module never times a
+    wait out (no clock, one thread): the host's own limits (`connect_timeout_ms`,
+    `read_timeout_ms`) end a request that gets no answer.
+  - **Write whole lines.** Both directions are one message per line: `fromClient` forwards only
+    whole lines, so the host's answers never land inside a client message.
 - **Cancel.** With no threads, `serve` reads its input between runs and while a run waits for an
   `opentide/fetch` answer. A `$/cancelRequest` therefore stops a run that is waiting on a tenant,
   and reaches a run that only computes when it ends; a queued run is answered `130` unrun, as native.

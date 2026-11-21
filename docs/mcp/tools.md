@@ -26,6 +26,21 @@ The server's `instructions`, sent with the `initialize` response, open with the 
 
 `tool` and `arguments` are the MCP call. `command` is the same step as an `opentide` command line, for an agent with a shell (the CLI's own `next_actions` are `{command, reason}`). The list is empty when there is nothing to do. Every other key of these payloads is unchanged.
 
+### Failures and `isError`
+
+A tool that ran and could not do what it was asked answers with MCP's tool-level error: `isError: true`, and the same JSON an answer has, so a client that reads the payload sees what it always did (`status`, `message`, `error`). A tool that answers with what it found does not:
+
+| Tool | `isError: true` when | Still an answer (`isError: false`) |
+|------|----------------------|------------------------------------|
+| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check could not run (no tenant configured, the tenant refused the credential or could not be reached; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | a verdict, whichever it is: the query is invalid (`valid: false`, with its diagnostics) or valid; and a live check every tenant answered, which adds `valid` to the command's document (`valid: false` when a tenant rejected a query, `status: "failed"`). A check that got no answer is not a rejection: a read timeout, a gateway's 502, 503 or 504, or a search still running at the deadline is listed in `timed_out`, the document has no `valid`, and the call failed |
+| `run_query` | the call did not run (not `live`, an unknown tenant, no query, an unknown platform) or `status` is `failed`: every tenant failed, or some did (the rows of the others are in the payload) | `status: "completed"` |
+| `deploy_rule` | `action` is `error`: the rule is missing, has no block for the platform, or could not be deployed (a tenant that refused the credential or could not be reached, a refused rule, `network_unavailable`) | a dry-run preview, a deploy that went through |
+| `validation_report` | `queries` is not one of the three (`{"ok": false, "error": ...}`) | the report, whatever it finds |
+| `validate_rule` | the rule is not in the catalogue (missing input, as `deploy_rule` has it: `valid: false`, `errors` naming the UUID, no `issues`) | the rule's findings, whatever they are |
+| every other tool | the call is malformed: a missing or mistyped argument, an unknown tool, no workspace | a lookup that finds nothing (`get_chaining`, `deployment_status`: `found: false`) |
+
+Before the release candidates changed it, a failed live check, query or deploy answered `isError: false` with `status: "failed"` in the payload, as the Python server did.
+
 ## search
 
 Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when you do not know a UUID.
@@ -201,7 +216,7 @@ Structured validation report for agents. Full registry by default; narrow with f
 | `file` | string | `""` | Single file: a repo-relative or absolute path matches that file only; a bare file name matches every object file with that name (as [`validate --file`](../cli/validate.md#selecting-a-file)) |
 | `uuid` | string | `""` | Single UUID |
 | `object_type` | string | `""` | `rule`, `threat`, or `objective`. Any other value is refused (`isError`, `usage_invalid_choice`), as `validate --type` refuses it |
-| `queries` | string | `"error"` | How a query the platform would reject is reported, as [`validate --queries`](../cli/validate.md#queries): `error` (an issue), `warn` (a warning: `ok` stays `true`) or `off` (queries are not checked). Another value returns `ok: false` and an `error` naming the three |
+| `queries` | string | `"error"` | How a query the platform would reject is reported, as [`validate --queries`](../cli/validate.md#queries): `error` (an issue), `warn` (a warning: `ok` stays `true`) or `off` (queries are not checked). Another value is an invalid argument (`isError`): `ok: false` and an `error` naming the three |
 
 Every rule query is checked offline with the analysis engine, as `opentide validate` checks it; its style (the engine's warnings and notes) is `opentide lint`'s. Returns the validation report (`ok`, `issues`, `warnings`, `stats`) plus `next_actions`; `stats.queries_checked` counts the queries. A rule with `tlp: clearr`:
 
@@ -387,7 +402,7 @@ Offline, the result has `valid` (`false` when the engine found an error), `statu
 }
 ```
 
-SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed. A missing plan or a tenant it cannot reach is a failed live check.
+SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed, and `valid` (added by this tool) says whether the queries passed when every tenant answered every check; a tenant that could not be reached, refused the credential or gave no answer within the check timeout leaves `valid` out and fails the call (`isError`, [above](#failures-and-iserror)). A missing plan or a tenant it cannot reach is a failed live check.
 
 **Unsupported platforms** return:
 
@@ -507,12 +522,18 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
       "external_ids": { "contoso": "12345" },
       "tenants": []
     },
-    "sentinel": { "deployed": true, "rule_id": null, "external_ids": {}, "tenants": ["contoso"] }
+    "sentinel": {
+      "deployed": true,
+      "rule_id": null,
+      "external_ids": {},
+      "tenants": ["contoso"],
+      "note": "opentide records no deployment state for sentinel: it addresses its rules without a vendor id, so a deploy leaves nothing here and deployed only says the rule's block names tenants. Ask the tenant: validate_query or run_query with live true; deploy_rule with dry_run true previews what a deploy sends."
+    }
   }
 }
 ```
 
-`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (Defender for Endpoint, SentinelOne, CrowdStrike only). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code.
+`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
 
 ## Agent workflows
 
