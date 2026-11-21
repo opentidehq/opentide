@@ -24,14 +24,16 @@ LAYOUT = {
     "objects/objectives": "Objects/Detection Objectives",
     "objects/rules": "Objects/Detection Rules",
 }
-UUID_LINE = re.compile(r"^(  uuid: )[0-9a-f-]{36}$", re.M)
-NAME_LINE = re.compile(r"^name: (.*)$", re.M)
+UUID_LINE = re.compile(r"^(  uuid: )[0-9a-f-]{36}$", re.MULTILINE)
+NAME_LINE = re.compile(r"^name: (.*)$", re.MULTILINE)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("dest", type=Path)
-    parser.add_argument("--objects", type=int, default=0, help="total object files (0 = the corpus as is)")
+    parser.add_argument(
+        "--objects", type=int, default=0, help="total object files (0 = the corpus as is)"
+    )
     args = parser.parse_args()
     dest: Path = args.dest
     if dest.exists():
@@ -49,10 +51,11 @@ def main() -> None:
                 break
             n += 1
             text = rule.read_text(encoding="utf-8")
-            new_uuid = uuid.UUID(int=(0x0000_0000_0000_4000_8000_0000_0000_0000 | (n + 1000)))
-            text = UUID_LINE.sub(lambda m: m.group(1) + str(new_uuid), text, count=1)
-            text = NAME_LINE.sub(lambda m: f"name: {m.group(1)} copy {n}", text, count=1)
-            (dest / "objects/rules" / f"copy-{n:05d}-{rule.name}").write_text(text, encoding="utf-8")
+            new_uuid = uuid.UUID(int=0x0000_0000_0000_4000_8000_0000_0000_0000 | (n + 1000))
+            text = UUID_LINE.sub(rf"\g<1>{new_uuid}", text, count=1)
+            text = NAME_LINE.sub(rf"name: \g<1> copy {n}", text, count=1)
+            copy = dest / "objects/rules" / f"copy-{n:05d}-{rule.name}"
+            copy.write_text(text, encoding="utf-8")
             have += 1
     print(f"{dest}: {have} object files")
 
