@@ -1896,10 +1896,12 @@ fn hits(body: &Json) -> Json {
     }
 }
 
-/// Whether `answer` is Elasticsearch's 404 for an index that does not exist
-/// (`index_not_found_exception`, at the error or in its root cause). A 404 for
-/// any other reason, and every other status, is not.
-fn is_index_not_found(answer: &Answer) -> bool {
+/// Whether `answer` is Elasticsearch's 404 for `index`, an index that does not
+/// exist (`index_not_found_exception`, at the error or in its root cause). When
+/// the error names the index (`index`, or `resource.id`), it must be `index`: a
+/// missing index the request did not name is a refusal. A 404 for any other
+/// reason, and every other status, is not.
+fn is_index_not_found(answer: &Answer, index: &str) -> bool {
     if answer.status != 404 {
         return false;
     }
@@ -1909,7 +1911,21 @@ fn is_index_not_found(answer: &Answer) -> bool {
     let Some(error) = body.get("error") else {
         return false;
     };
-    let is_missing = |value: &Json| matches!(value.get("type"), Some(Json::Str(kind)) if kind == "index_not_found_exception");
+    let is_missing = |value: &Json| {
+        let missing = matches!(
+            value.get("type"),
+            Some(Json::Str(kind)) if kind == "index_not_found_exception"
+        );
+        let names = |key: &str| match value.get(key) {
+            Some(Json::Str(name)) => Some(name.clone()),
+            _ => None,
+        };
+        missing
+            && names("index")
+                .into_iter()
+                .chain(names("resource.id"))
+                .all(|name| name == index)
+    };
     is_missing(error) || list(error.get("root_cause")).iter().any(is_missing)
 }
 
@@ -2237,7 +2253,11 @@ async fn kuery_preview(
     // The preview alerts index is created by the first alert a preview raises:
     // a preview that raised none, on a Kibana that never raised one, has no
     // index to read, which is no alerts. Any other refusal stays an error.
-    let body = if is_index_not_found(&found) {
+    // Kibana writes the alerts to its own cluster, so an `elasticsearch_url`
+    // that points at another cluster never holds the index: it reads as 0 rows
+    // too.
+    let alerts_index = format!(".preview.alerts-security.alerts-{}", client.space);
+    let body = if is_index_not_found(&found, &alerts_index) {
         Json::Object(Object::new())
     } else {
         body(&found, tenant, "preview alerts")?
@@ -2736,7 +2756,7 @@ mod tests {
         ));
     }
 
-    /// RC2-3: only Elasticsearch's own 404 for a missing index is no data.
+    /// RC2-3: only Elasticsearch's own 404 for the index read is no data.
     #[test]
     fn only_a_missing_index_answer_is_index_not_found() {
         let answer = |status: u16, body: &str| crate::answer::Answer {
@@ -2746,27 +2766,38 @@ mod tests {
             elapsed: std::time::Duration::ZERO,
             credentials: crate::answer::Credentials::default(),
         };
-        let missing = r#"{"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [i]"}],"type":"index_not_found_exception"},"status":404}"#;
-        assert!(is_index_not_found(&answer(404, missing)));
-        // The type only in the root cause, as a wrapped error has it.
+        let found = |status: u16, body: &str| is_index_not_found(&answer(status, body), "idx");
+        let missing = r#"{"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [idx]","resource.id":"idx","index":"idx"}],"type":"index_not_found_exception","index":"idx","resource.id":"idx"},"status":404}"#;
+        assert!(found(404, missing));
+        // The type only in the root cause, as a wrapped error has it, and an
+        // error that names no index.
         let wrapped = r#"{"error":{"root_cause":[{"type":"index_not_found_exception"}],"type":"search_phase_execution_exception"}}"#;
-        assert!(is_index_not_found(&answer(404, wrapped)));
+        assert!(found(404, wrapped));
+        assert!(found(
+            404,
+            r#"{"error":{"type":"index_not_found_exception","reason":"no such index [idx]"}}"#
+        ));
         // The same body under another status, another 404, and no JSON.
-        assert!(!is_index_not_found(&answer(200, missing)));
-        assert!(!is_index_not_found(&answer(400, missing)));
-        assert!(!is_index_not_found(&answer(
+        assert!(!found(200, missing));
+        assert!(!found(400, missing));
+        assert!(!found(
             404,
             r#"{"error":{"type":"resource_not_found_exception"}}"#
-        )));
-        assert!(!is_index_not_found(&answer(
+        ));
+        assert!(!found(404, r#"{"message":"Not Found"}"#));
+        assert!(!found(404, "<html>404</html>"));
+        assert!(!found(404, r#"{"error":"index_not_found_exception"}"#));
+        // A missing index the request did not name, by `index` or `resource.id`.
+        let other = r#"{"error":{"type":"index_not_found_exception","index":"other","resource.id":"other"}}"#;
+        assert!(!found(404, other));
+        assert!(!found(
             404,
-            r#"{"message":"Not Found"}"#
-        )));
-        assert!(!is_index_not_found(&answer(404, "<html>404</html>")));
-        assert!(!is_index_not_found(&answer(
+            r#"{"error":{"type":"index_not_found_exception","resource.id":"other"}}"#
+        ));
+        assert!(!found(
             404,
-            r#"{"error":"index_not_found_exception"}"#
-        )));
+            r#"{"error":{"root_cause":[{"type":"index_not_found_exception","index":"other"}],"type":"x"}}"#
+        ));
     }
 
     #[test]

@@ -352,6 +352,8 @@ fn elastic_kuery_keeps_every_other_preview_alerts_refusal() {
     for body in [
         r#"{"error":{"root_cause":[{"type":"resource_not_found_exception","reason":"no such thing"}],"type":"resource_not_found_exception","reason":"no such thing"},"status":404}"#,
         r#"{"message":"Not Found","statusCode":404}"#,
+        // A missing index the read did not name.
+        r#"{"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [logs-gone]","resource.id":"logs-gone","index":"logs-gone"}],"type":"index_not_found_exception","index":"logs-gone"},"status":404}"#,
         "<html>not found</html>",
     ] {
         let tenant = kuery_with_preview_read_answered(404, body);
