@@ -102,6 +102,14 @@ fn names(text: &str) -> Vec<String> {
 /// result: its document without the envelope's keys (the `error` the
 /// envelope adds to a failed run's message included), and its exit code.
 fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32), String> {
+    command_document(argv, context).map(|(document, code, _)| (document, code))
+}
+
+/// [`command_result`], and the envelope's `summary` too (what a run counted).
+fn command_document(
+    argv: &[String],
+    context: &Context<'_>,
+) -> Result<(Json, i32, Option<Json>), String> {
     let mut full = vec!["--json".to_owned()];
     if let Some(repo) = context.repo {
         full.push("--repo".to_owned());
@@ -123,6 +131,7 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
     match Json::parse(text.trim()) {
         Ok(Json::Object(members)) => {
             let message = members.get("message").cloned();
+            let summary = members.get("summary").cloned();
             let added_error = |key: &str, value: &Json| {
                 key == "error" && run.exit_code != 0 && Some(value) == message.as_ref()
             };
@@ -136,6 +145,7 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
                         .collect(),
                 ),
                 run.exit_code,
+                summary,
             ))
         }
         _ => Err(format!(
@@ -183,7 +193,7 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
     if check.live {
         // The command's document without its envelope: `status` says
         // whether the check failed, so no exit code is added (smoke C7).
-        let (result, _) = command_result(
+        let (result, _, summary) = command_document(
             &[
                 "validate".to_owned(),
                 "query".to_owned(),
@@ -193,9 +203,41 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
             ],
             context,
         )?;
-        return Ok(result);
+        return Ok(with_verdict(result, summary.as_ref()));
     }
     Ok(offline(check, context))
+}
+
+/// A live check's document with its verdict: when every tenant answered (the
+/// run counted its queries, so its envelope's `summary` has `queries`) and every
+/// check got an answer, `valid` says whether the queries passed, as the offline
+/// check's does. A rejected query is the answer, not a failure of the call; the
+/// tenants that could not be reached or refused the credential, a check that got
+/// no answer, and the other ways a check stops, have no `valid`, and the call
+/// failed (`tools::is_failure`).
+fn with_verdict(mut result: Json, summary: Option<&Json>) -> Json {
+    let checked = summary.is_some_and(|summary| summary.get("queries").is_some());
+    // A check that got no answer is listed in `timed_out` (a read timeout, a gateway's
+    // 502, 503 or 504, a search still running at the deadline), and counts as a
+    // rejection in `status`: the tenant did not say a query is invalid, so there is
+    // no verdict, and the call failed.
+    let no_answer = result
+        .get("timed_out")
+        .and_then(Json::as_array)
+        .is_some_and(|timed_out| !timed_out.is_empty());
+    let passed = match result.get("status").and_then(Json::as_str) {
+        Some("passed") => Some(true),
+        Some("failed") => Some(false),
+        _ => None,
+    };
+    if checked
+        && !no_answer
+        && let Some(passed) = passed
+        && let Some(members) = result.as_object_mut()
+    {
+        members.insert("valid".to_owned(), Json::Bool(passed));
+    }
+    result
 }
 
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
@@ -493,7 +535,54 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+
+    /// A live check every tenant answered has a verdict, as the offline check
+    /// has: a rejected query is `valid: false`, not a failed call. The other
+    /// ways a live check stops have none, and neither has one in which a check
+    /// got no answer (a read timeout, a gateway's 502, 503 or 504, a search still
+    /// running at the deadline): the tenant did not say the query is invalid.
+    #[test]
+    fn a_live_check_every_tenant_answered_has_a_verdict() {
+        let doc = |status: &str| Json::object([("status", Json::str(status))]);
+        let counted = Json::object([("queries", Json::Int(2)), ("tenants", Json::Int(1))]);
+        let verdict = |status: &str, summary: Option<&Json>| {
+            with_verdict(doc(status), summary).get("valid").cloned()
+        };
+        assert_eq!(verdict("passed", Some(&counted)), Some(Json::Bool(true)));
+        assert_eq!(verdict("failed", Some(&counted)), Some(Json::Bool(false)));
+        // An unreachable or refusing tenant, a crash: nothing counted, no verdict.
+        assert_eq!(verdict("failed", None), None);
+        assert_eq!(verdict("failed", Some(&Json::object::<&str>([]))), None);
+        // Nothing sent: no verdict either.
+        assert_eq!(verdict("skipped", Some(&counted)), None);
+        // Counted, rejected, but a check got no answer (`timed_out` lists them): no verdict.
+        let with_timeout = |rejected: bool| {
+            let mut document = doc(if rejected { "failed" } else { "passed" });
+            document.as_object_mut().unwrap().insert(
+                "timed_out".to_owned(),
+                Json::Array(vec![Json::object([(
+                    "code",
+                    Json::str("query_check_timeout"),
+                )])]),
+            );
+            with_verdict(document, Some(&counted)).get("valid").cloned()
+        };
+        assert_eq!(with_timeout(true), None);
+        assert_eq!(with_timeout(false), None);
+        // An empty `timed_out` is not one.
+        let mut empty = doc("failed");
+        empty
+            .as_object_mut()
+            .unwrap()
+            .insert("timed_out".to_owned(), Json::Array(Vec::new()));
+        assert_eq!(
+            with_verdict(empty, Some(&counted)).get("valid"),
+            Some(&Json::Bool(false))
+        );
+    }
+
     use crate::env::Env;
 
     fn context(env: &Env) -> Context<'_> {

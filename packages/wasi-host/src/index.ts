@@ -15,6 +15,13 @@
 //
 // The native `opentide serve` speaks the same protocol, so one client drives
 // both builds.
+//
+// `opentide mcp start` in the WASI build asks the same way when it is started
+// with OPENTIDE_FETCH=stdio: its `opentide/fetch` requests (ids
+// "opentide-fetch-1", ...) are lines on its stdout among its MCP messages, and
+// the answers go in on its stdin among the client's. `McpFetchBridge` splits
+// the two on that stdio pair, so an extension that serves MCP to an agent
+// bridges the module's stdio with it.
 
 import * as http from "node:http";
 import * as https from "node:https";
@@ -102,7 +109,8 @@ export class FetchHost {
 
   /**
    * Takes *message* when it is the server's `opentide/fetch` or its
-   * withdrawal; whether it did.
+   * withdrawal (`$/cancelRequest` from `opentide serve`, MCP's
+   * `notifications/cancelled` from `opentide mcp start`); whether it did.
    */
   handle(message: unknown): boolean {
     if (!isObject(message)) {
@@ -112,8 +120,11 @@ export class FetchHost {
       this.start(message.id, message.params);
       return true;
     }
-    if (message.method === "$/cancelRequest" && isObject(message.params)) {
-      const id = message.params.id;
+    if (
+      (message.method === "$/cancelRequest" || message.method === "notifications/cancelled") &&
+      isObject(message.params)
+    ) {
+      const id = message.method === "$/cancelRequest" ? message.params.id : message.params.requestId;
       if (typeof id === "string" && this.inFlight.has(id)) {
         this.inFlight.get(id)?.abort();
         this.inFlight.delete(id);
@@ -493,4 +504,328 @@ export async function performRequest(params: FetchParams, signal: AbortSignal): 
     }
     url = next;
   }
+}
+
+// ---- opentide mcp start, its tenant requests among its MCP messages ----
+
+/** The variable that makes the WASI build's `opentide mcp start` ask its client for each tenant request. */
+export const MCP_FETCH_VARIABLE = "OPENTIDE_FETCH";
+
+/**
+ * The environment to start the WASI module's `opentide mcp start` with, added
+ * to whatever else it is given (the native build ignores it).
+ */
+export const MCP_FETCH_ENVIRONMENT = { [MCP_FETCH_VARIABLE]: "stdio" } as const;
+
+/** The prefix of the ids of `opentide mcp start`'s requests: no MCP client's id starts so by accident. */
+export const MCP_FETCH_ID_PREFIX = "opentide-fetch-";
+
+/** Where a `McpFetchBridge` writes: whole lines, each with its newline, ready for a pipe. */
+export interface McpFetchSink {
+  /** To the module's stdin: the client's MCP messages and the answers to its tenant requests. */
+  toServer: (line: string) => void;
+  /** To the MCP client: the module's MCP messages, its tenant requests taken out. */
+  toClient: (line: string) => void;
+}
+
+/** Splits a stream of chunks into lines, holding back a partial one. */
+class LineSplitter {
+  private readonly decoder = new TextDecoder();
+  private partial = "";
+
+  push(chunk: string | Uint8Array): string[] {
+    this.partial += typeof chunk === "string" ? chunk : this.decoder.decode(chunk, { stream: true });
+    const lines: string[] = [];
+    for (let end = this.partial.indexOf("\n"); end >= 0; end = this.partial.indexOf("\n")) {
+      lines.push(this.partial.slice(0, end + 1));
+      this.partial = this.partial.slice(end + 1);
+    }
+    return lines;
+  }
+
+  /** What is left when the stream ends: a last line without its newline. */
+  end(): string | undefined {
+    const rest = this.partial + this.decoder.decode();
+    this.partial = "";
+    return rest === "" ? undefined : `${rest}\n`;
+  }
+}
+
+/**
+ * Splits `opentide mcp start`'s tenant requests from its MCP messages on its
+ * stdio pair. Started with `MCP_FETCH_ENVIRONMENT`, the WASI module writes
+ * each tenant request as an `opentide/fetch` line on stdout among its MCP
+ * messages, and reads the answer on stdin among the client's. The bridge sits
+ * between the module and the MCP client:
+ *
+ * - `fromServer(chunk)`: the module's stdout. An `opentide/fetch` line (and
+ *   the `notifications/cancelled` that withdraws one) is the host's, which
+ *   answers it with `FetchHost`; every other line goes to `toClient`.
+ * - `fromClient(chunk)`: the client's messages, to `toServer` a whole line at
+ *   a time, so an answer the host writes never lands inside one.
+ *
+ * Neither direction reorders anything: the MCP messages reach each side in the
+ * order they were written. `toServer` is called for answers asynchronously, as
+ * each request finishes.
+ *
+ * What the bridge keeps from the client, and from the agent behind it:
+ *
+ * - **A tenant request never reaches the client.** It carries the tenant's
+ *   credentials (the `Authorization` and API-key headers, the CA bundles). A
+ *   line that mentions `opentide/fetch` and cannot be read as a message of the
+ *   host's is dropped, not forwarded: nothing that might hold a credential
+ *   goes to `toClient` on a failure to understand it.
+ * - **The client cannot answer a tenant request.** A client line that is a
+ *   response (it has no `method`) to an id with the `MCP_FETCH_ID_PREFIX`, or
+ *   that mentions the prefix and cannot be read, is dropped: the module trusts
+ *   an answer on its stdin for the request it asked, and an agent could
+ *   otherwise forge the result of a deploy or a query.
+ * - **A response to a request the client cancelled is dropped.** The module may
+ *   still finish a call it was told to cancel, and MCP has the receiver send
+ *   no response for it.
+ * - **After `dispose()` no new tenant request is started.**
+ */
+export class McpFetchBridge {
+  private readonly sink: McpFetchSink;
+  private readonly host: FetchHost;
+  private readonly fromModule = new LineSplitter();
+  private readonly fromAgent = new LineSplitter();
+  /** Request ids the client cancelled (as their JSON text): their responses are dropped. */
+  private readonly cancelled = new Set<string>();
+  private disposed = false;
+
+  /** Told of an error a line raised (the line is dropped); none by default. */
+  private readonly onError: (error: unknown) => void;
+
+  constructor(sink: McpFetchSink, options: { perform?: Perform; onError?: (error: unknown) => void } = {}) {
+    this.sink = sink;
+    this.onError = options.onError ?? (() => {});
+    this.host = new FetchHost(
+      (message) => {
+        // After the module has gone there is nobody to answer.
+        if (!this.disposed) {
+          this.sink.toServer(`${JSON.stringify(message)}\n`);
+        }
+      },
+      options,
+    );
+  }
+
+  /** The number of tenant requests in flight. */
+  get pending(): number {
+    return this.host.pending;
+  }
+
+  /** A chunk of the module's stdout. */
+  fromServer(chunk: string | Uint8Array): void {
+    for (const line of this.fromModule.push(chunk)) {
+      this.isolated(() => this.serverLine(line));
+    }
+  }
+
+  /** A chunk of the client's messages for the module. */
+  fromClient(chunk: string | Uint8Array): void {
+    for (const line of this.fromAgent.push(chunk)) {
+      this.isolated(() => this.clientLine(line));
+    }
+  }
+
+  /** The module's stdout ended: a last line without its newline is delivered. */
+  endServer(): void {
+    const rest = this.fromModule.end();
+    if (rest !== undefined) {
+      this.isolated(() => this.serverLine(rest));
+    }
+  }
+
+  /** The client's input ended: a last line without its newline is delivered. */
+  endClient(): void {
+    const rest = this.fromAgent.end();
+    if (rest !== undefined) {
+      this.isolated(() => this.clientLine(rest));
+    }
+  }
+
+  /** Aborts every request in flight, unanswered: the module has gone. */
+  dispose(): void {
+    this.disposed = true;
+    this.host.dispose();
+  }
+
+  /**
+   * Runs the handling of one line so that nothing it raises (a line that overflows the stack,
+   * a sink that throws) escapes into the host's data handler or costs the lines after it:
+   * the line is dropped, and `onError` is told.
+   */
+  private isolated(handle: () => void): void {
+    try {
+      handle();
+    } catch (error) {
+      try {
+        this.onError(error);
+      } catch {
+        // A reporter that throws is no reason to lose the lines that follow.
+      }
+    }
+  }
+
+  private clientLine(line: string): void {
+    // Decided on the parsed value, never on the text: JSON lets any character of
+    // an id or a key be written as a `\uXXXX` escape, which the module's parser
+    // decodes, so `"opentide-fetch-..."` can be written with no substring of it.
+    // Every line that could be a message is parsed (a client's lines are small).
+    let message: unknown;
+    try {
+      // The module's transport skips a byte-order mark; so does the bridge, to judge the same value.
+      message = JSON.parse(line.replace(/^\uFEFF/, ""));
+    } catch {
+      // Fail closed: a line that looks like JSON (an object or a batch) and cannot be
+      // read is not passed on; the module would skip it as not JSON, and nothing it
+      // might hide is let through. Anything else (a blank line, a `Content-Length`
+      // header) is not a message and goes on.
+      if (/^\s*[{[]/.test(line)) {
+        return;
+      }
+      this.sink.toServer(line);
+      return;
+    }
+    if (forgesAnAnswer(message)) {
+      return;
+    }
+    const id = cancelledRequest(message);
+    if (id !== undefined) {
+      this.cancelled.add(id);
+      // Bounded: the oldest are forgotten (a cancelled request that was already answered).
+      while (this.cancelled.size > MAX_CANCELLED) {
+        const oldest = this.cancelled.values().next().value;
+        if (oldest === undefined) break;
+        this.cancelled.delete(oldest);
+      }
+    }
+    this.sink.toServer(line);
+  }
+
+  private serverLine(line: string): void {
+    // The module's own lines are the one place a substring test is sound: it writes
+    // compact `serde_json`, which escapes nothing in the ASCII text `"opentide/fetch"` or
+    // `notifications/cancelled` (the characters `/`, letters and digits are written
+    // as they are), and what the module writes is not the agent's to shape. (The client's
+    // lines are different: an agent can escape any character, see `clientLine`.) A line
+    // that mentions either is parsed and judged on its value; any other is passed on unread.
+    if (line.includes("opentide/fetch")) {
+      let message: unknown;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        // Fail closed: a line that mentions the method and cannot be read may
+        // hold a tenant's credentials, and is never forwarded.
+        return;
+      }
+      if (!isObject(message) || message.method === "opentide/fetch") {
+        // A tenant request (or something shaped so it cannot be told from
+        // one): the host's alone, started only while the bridge is live.
+        if (!this.disposed && isObject(message)) {
+          this.host.handle(message);
+        }
+        return;
+      }
+      // Valid JSON that is not a request: an MCP message that mentions the
+      // method in its text (a tool's result), passed on below.
+    }
+    if (line.includes("notifications/cancelled")) {
+      const message = parseObject(line);
+      if (message !== undefined && this.takesWithdrawal(message)) {
+        return;
+      }
+    }
+    if (this.cancelled.size > 0 && this.dropsCancelledResponse(line)) {
+      return;
+    }
+    this.sink.toClient(line);
+  }
+
+  /** Whether *message* withdraws one of the module's tenant requests: the host's, handled. */
+  private takesWithdrawal(message: Record<string, unknown>): boolean {
+    if (message.method !== "notifications/cancelled") {
+      return false;
+    }
+    const params = message.params;
+    if (!isObject(params) || typeof params.requestId !== "string" || !params.requestId.startsWith(MCP_FETCH_ID_PREFIX)) {
+      return false;
+    }
+    // A withdrawal of a request already answered has nothing to abort, and is not the client's either.
+    this.host.handle(message);
+    return true;
+  }
+
+  /** Whether *line* is the response to a request the client cancelled; the id is then forgotten. */
+  private dropsCancelledResponse(line: string): boolean {
+    for (const id of this.cancelled) {
+      if (!line.includes(`"id":${id}`)) {
+        continue;
+      }
+      const message = parseObject(line);
+      if (message !== undefined && message.method === undefined && JSON.stringify(message.id) === id) {
+        this.cancelled.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+/** How many cancelled request ids the bridge remembers. */
+const MAX_CANCELLED = 256;
+
+/** *line* as an object, or undefined. */
+function parseObject(line: string): Record<string, unknown> | undefined {
+  try {
+    const message: unknown = JSON.parse(line);
+    return isObject(message) ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The id (as JSON text) of the request the parsed *message* cancels, if it is a `notifications/cancelled`. */
+function cancelledRequest(message: unknown): string | undefined {
+  if (!isObject(message) || message.method !== "notifications/cancelled" || !isObject(message.params)) {
+    return undefined;
+  }
+  const id = message.params.requestId;
+  return typeof id === "string" || typeof id === "number" ? JSON.stringify(id) : undefined;
+}
+
+/** How deep a batch may nest: `serde_json`'s recursion limit, past which the module refuses the line. */
+const MAX_BATCH_DEPTH = 128;
+
+/**
+ * Whether the client message *message* answers (or is shaped to look like an
+ * answer to) a request of the module's: a response, with no string `method`, to
+ * an id that starts with `MCP_FETCH_ID_PREFIX`. A batch holding one is one, to any
+ * depth up to the module's own limit; a batch nested deeper than that is dropped
+ * too (the module would refuse it, and walking it must not overflow the stack,
+ * so the walk is iterative).
+ */
+function forgesAnAnswer(message: unknown): boolean {
+  const pending: [unknown, number][] = [[message, 0]];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const [item, depth] = next;
+    if (Array.isArray(item)) {
+      if (depth >= MAX_BATCH_DEPTH) {
+        return true;
+      }
+      for (const element of item) {
+        pending.push([element, depth + 1]);
+      }
+    } else if (
+      isObject(item) &&
+      typeof item.id === "string" &&
+      item.id.startsWith(MCP_FETCH_ID_PREFIX) &&
+      typeof item.method !== "string"
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

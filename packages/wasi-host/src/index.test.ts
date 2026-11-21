@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -13,6 +13,8 @@ import {
   type FetchParams,
   type FetchResult,
   FetchHost,
+  McpFetchBridge,
+  MCP_FETCH_ENVIRONMENT,
   fetchParams,
   followsRedirect,
   performRequest,
@@ -738,8 +740,118 @@ for (const server of SERVERS) {
         const tools = await call(2, "tools/list", {});
         const listed = (tools.result as { tools: { name: string }[] }).tools.map((tool) => tool.name);
         assert.ok(listed.length > 0, JSON.stringify(tools));
+        // A session that began with `initialize` keeps the legacy shapes: no `resultType` (2026-07-28 requires it).
+        assert.equal("resultType" in (tools.result as object), false, JSON.stringify(Object.keys(tools.result as object)));
         const again = await call(3, "tools/list", {});
         assert.deepEqual(again.result, tools.result);
+      } finally {
+        child.stdin.end();
+        if (child.exitCode === null) await new Promise((resolve) => child.once("exit", resolve));
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
+// The protocol versions `opentide mcp start` speaks: the VS Code bridge serves
+// the WASI module to editors on MCP 2026-07-28, which has no `initialize`. The
+// legacy handshake negotiates the versions before it, `server/discover`
+// answers the revisions it supports, and a request that carries its version
+// and capabilities in `_meta` is answered with no handshake at all.
+for (const server of SERVERS) {
+  const name = typeof server === "string" ? server.split(":")[0] : server.name;
+  test(
+    `mcp (${name}): initialize negotiates the legacy versions, server/discover and stateless requests answer 2026-07-28`,
+    { skip: typeof server === "string" ? server : false, timeout: 180_000 },
+    async () => {
+      const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-")));
+      const ws = join(scratch, "ws");
+      cpSync(join(root, "tests/golden/fixtures/tenants"), ws, { recursive: true });
+      const { command, args } = server as Server;
+      const child = spawn(command, [...args, "mcp", "start"], {
+        cwd: ws,
+        env: { PATH: process.env.PATH ?? "", HOME: ws, PWD: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" },
+      });
+      let buffer = "";
+      const answers = new Map<number, (message: Record<string, unknown>) => void>();
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        buffer += chunk;
+        for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+          const message = JSON.parse(buffer.slice(0, end)) as Record<string, unknown>;
+          buffer = buffer.slice(end + 1);
+          answers.get(message.id as number)?.(message);
+        }
+      });
+      let next = 0;
+      const call = (method: string, params: object): Promise<Record<string, unknown>> => {
+        next += 1;
+        const id = next;
+        const answered = new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error(`no answer to ${method}`)), 60_000);
+          answers.set(id, (message) => {
+            clearTimeout(timer);
+            resolve(message);
+          });
+        });
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+        return answered;
+      };
+      const meta = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+      };
+      try {
+        // Without `initialize` and without them, a request is refused, naming what it lacks.
+        const refused = await call("tools/list", {});
+        assert.equal((refused.error as { code: number }).code, -32602, JSON.stringify(refused));
+        assert.match((refused.error as { message: string }).message, /io\.modelcontextprotocol\/protocolVersion/);
+        // `server/discover` (no handshake before it) lists what the server supports.
+        const discovered = (await call("server/discover", { _meta: meta })).result as {
+          supportedVersions: string[];
+          capabilities: Record<string, unknown>;
+          _meta: Record<string, { name: string }>;
+        };
+        assert.deepEqual(discovered.supportedVersions, ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]);
+        assert.ok("tools" in discovered.capabilities, JSON.stringify(discovered));
+        assert.equal(discovered._meta["io.modelcontextprotocol/serverInfo"].name, "opentide");
+        // A stateless request: its version and capabilities in `_meta`. Revision 2026-07-28 requires
+        // `resultType` on every result (Kiro closes the connection on a tools/list without it).
+        for (const [method, params] of [
+          ["tools/list", {}],
+          ["tools/call", { name: "explain", arguments: { code: "yaml_parse" } }],
+          ["resources/list", {}],
+          ["resources/templates/list", {}],
+          ["resources/read", { uri: "opentide://vocabularies" }],
+          ["prompts/list", {}],
+          [
+            "completion/complete",
+            { ref: { type: "ref/resource", uri: "opentide://rules/{uuid}" }, argument: { name: "uuid", value: "" } },
+          ],
+          ["server/discover", {}],
+        ] as const) {
+          const answered = (await call(method, { ...params, _meta: meta })).result as { resultType?: string };
+          assert.equal(answered.resultType, "complete", method);
+        }
+        const listed = (await call("tools/list", { _meta: meta })).result as { tools: { name: string }[] };
+        assert.ok(listed.tools.length > 0 && listed.tools.some((tool) => tool.name === "search"), JSON.stringify(listed));
+        // Legacy `initialize`: the version asked for when it is known, else the newest that has `initialize`.
+        for (const [asked, answered] of [
+          ["2024-11-05", "2024-11-05"],
+          ["2025-06-18", "2025-06-18"],
+          ["2025-11-25", "2025-11-25"],
+          ["2026-07-28", "2025-11-25"],
+        ]) {
+          const initialized = await call("initialize", {
+            protocolVersion: asked,
+            capabilities: {},
+            clientInfo: { name: "wasi-host-test", version: "0" },
+          });
+          assert.equal((initialized.result as { protocolVersion: string }).protocolVersion, answered, asked);
+        }
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+        // Still serving after the handshake.
+        assert.ok(Array.isArray(((await call("tools/list", { _meta: meta })).result as { tools: unknown[] }).tools));
       } finally {
         child.stdin.end();
         if (child.exitCode === null) await new Promise((resolve) => child.once("exit", resolve));
@@ -784,6 +896,8 @@ test(
     );
     let buffer = "";
     let stderr = "";
+    // Everything the module wrote on stdout.
+    const written: Record<string, unknown>[] = [];
     const waiting = new Map<number, { resolve: (message: Record<string, unknown>) => void; reject: (error: Error) => void }>();
     server.stderr.setEncoding("utf8");
     server.stderr.on("data", (chunk: string) => {
@@ -806,6 +920,7 @@ test(
         buffer = buffer.slice(end + 1);
         if (line === "") continue;
         const message = JSON.parse(line) as Record<string, unknown>;
+        written.push(message);
         if (typeof message.id === "number") {
           waiting.get(message.id)?.resolve(message);
           waiting.delete(message.id);
@@ -834,18 +949,46 @@ test(
         name: "deploy_rule",
         arguments: { uuid: "00000000-0000-4000-8047-000000000021", platform: "crowdstrike", dry_run: false },
       });
+      const queried = request("tools/call", {
+        name: "run_query",
+        arguments: { query: "#event_simpleName=ProcessRollup2", platform: "crowdstrike", live: true },
+      });
+      const validated = request("tools/call", {
+        name: "validate_query",
+        arguments: { query: "#event_simpleName=ProcessRollup2", platform: "crowdstrike", live: true },
+      });
       const listed = request("tools/list", {});
       // Awaited below; a crash rejects them all at once.
-      for (const pending of [deployed, listed]) pending.catch(() => {});
+      for (const pending of [deployed, queried, validated, listed]) pending.catch(() => {});
       server.stdin.end();
       await initialized;
-      const result = (await deployed).result as { content: { text: string }[] };
+      const result = (await deployed).result as { isError?: boolean; content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
       assert.match(text, /"status": ?"failed"/, text);
       assert.match(text, /needs the network, which the WASI build of opentide does not have/, text);
       assert.doesNotMatch(text, /stopped unexpectedly/, text);
+      // A failure is a tool error (MCP's isError), with the same JSON as an answer.
+      assert.equal((result as { isError?: boolean }).isError, true, text);
+      for (const [name, call] of [["run_query", queried], ["validate_query", validated]] as const) {
+        const failed = (await call).result as { isError?: boolean; content: { text: string }[] };
+        const said = failed.content.map((part) => part.text).join("\n");
+        assert.equal(failed.isError, true, `${name}: ${said}`);
+        // run_query's payload says `status: failed`; validate_query's, on a platform with no tenant check, `supported: false`.
+        assert.match(said, name === "run_query" ? /"status": ?"failed"/ : /"supported": ?false/, `${name}: ${said}`);
+      }
       // The server still serves after the deploy.
       assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
+      // Without OPENTIDE_FETCH the stream is MCP alone: no request of the
+      // server's own (a tenant request is `opentide/fetch`, and only a bridge
+      // may consume a stream that has any).
+      assert.ok(written.length >= 3, JSON.stringify(written));
+      for (const message of written) {
+        assert.equal(message.jsonrpc, "2.0", JSON.stringify(message));
+        assert.notEqual(message.method, "opentide/fetch", JSON.stringify(message));
+        assert.ok(!String(message.id).startsWith("opentide-fetch-"), JSON.stringify(message));
+        // The server writes answers; the only message of its own MCP allows here is a notification.
+        assert.ok(message.method === undefined || String(message.method).startsWith("notifications/"), JSON.stringify(message));
+      }
     } finally {
       server.stdin.end();
       await exited;
@@ -853,3 +996,704 @@ test(
     }
   },
 );
+
+// ---- opentide mcp start, its tenant requests among its MCP messages (OPENTIDE_FETCH=stdio) ----
+
+/** A message as a line, the way MCP's stdio frames it. */
+const line = (message: object): string => `${JSON.stringify(message)}\n`;
+
+/** A `McpFetchBridge` with its two sinks collected, and a `perform` that records what it is asked. */
+function bridged(perform?: (params: FetchParams, signal: AbortSignal) => Promise<FetchResult>) {
+  const toServer: Record<string, unknown>[] = [];
+  const toClient: Record<string, unknown>[] = [];
+  const raw = { toServer: [] as string[], toClient: [] as string[] };
+  const bridge = new McpFetchBridge(
+    {
+      toServer: (text) => {
+        raw.toServer.push(text);
+        try {
+          toServer.push(JSON.parse(text) as Record<string, unknown>);
+        } catch {
+          // Not JSON (a header, a blank line): kept in `raw` only.
+        }
+      },
+      toClient: (text) => {
+        raw.toClient.push(text);
+        try {
+          toClient.push(JSON.parse(text) as Record<string, unknown>);
+        } catch {
+          // Not JSON: kept in `raw` only.
+        }
+      },
+    },
+    { perform },
+  );
+  return { bridge, toServer, toClient, raw };
+}
+
+const fetchRequest = (id: string, url = "https://t.invalid/x"): object => ({
+  jsonrpc: "2.0",
+  id,
+  method: "opentide/fetch",
+  params: { method: "GET", url, headers: [] },
+});
+
+test("the mcp bridge answers the module's tenant requests and passes its MCP messages through in order", async () => {
+  const { bridge, toServer, toClient } = bridged(async (request) => ({
+    status: 200,
+    headers: [],
+    url: request.url,
+    body: "",
+    elapsed_ms: 1,
+  }));
+  const before = { jsonrpc: "2.0", method: "notifications/progress", params: { progress: 1 } };
+  const after = { jsonrpc: "2.0", id: 4, result: { content: [] } };
+  // Chunks cut anywhere: inside a line, between two, at a multi-byte character.
+  const text = line(before) + line(fetchRequest("opentide-fetch-1")) + line(after);
+  const encoded = Buffer.from(text);
+  for (let at = 0; at < encoded.length; at += 7) {
+    bridge.fromServer(encoded.subarray(at, at + 7));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(toClient, [before, after], "the tenant request is the host's, not the client's");
+  assert.equal(toServer.length, 1);
+  assert.equal(toServer[0].id, "opentide-fetch-1");
+  assert.equal((toServer[0].result as FetchResult).status, 200);
+  assert.equal(bridge.pending, 0);
+});
+
+test("the mcp bridge hands the module the client's messages one whole line at a time", async () => {
+  const { bridge, raw } = bridged(async (request) => ({ status: 204, headers: [], url: request.url, body: "", elapsed_ms: 0 }));
+  const ping = line({ jsonrpc: "2.0", id: 1, method: "ping" });
+  // The client's line arrives in two chunks, an answer is ready between them:
+  // it must not land inside the line.
+  bridge.fromClient(ping.slice(0, 10));
+  bridge.fromServer(line(fetchRequest("opentide-fetch-2")));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  bridge.fromClient(ping.slice(10));
+  assert.equal(raw.toServer.length, 2);
+  assert.equal((JSON.parse(raw.toServer[0]) as { id: string }).id, "opentide-fetch-2");
+  assert.equal(raw.toServer[1], ping);
+  // A last line without its newline is delivered once the input ends.
+  bridge.fromClient('{"jsonrpc":"2.0","id":2,"method":"ping"}');
+  assert.equal(raw.toServer.length, 2);
+  bridge.endClient();
+  assert.equal(raw.toServer[2], line({ jsonrpc: "2.0", id: 2, method: "ping" }));
+});
+
+test("the mcp bridge aborts a request the module withdraws and does not pass the withdrawal on", async () => {
+  let aborted = false;
+  const { bridge, toServer, toClient } = bridged(
+    (_request, signal) =>
+      new Promise<FetchResult>((_resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          aborted = true;
+          reject(new Error("aborted"));
+        });
+      }),
+  );
+  bridge.fromServer(line(fetchRequest("opentide-fetch-1")));
+  assert.equal(bridge.pending, 1);
+  bridge.fromServer(
+    line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: "opentide-fetch-1", reason: "x" } }),
+  );
+  // A withdrawal of one already answered is the host's too, not the client's.
+  bridge.fromServer(
+    line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: "opentide-fetch-9" } }),
+  );
+  // But a cancellation of anything else is an MCP message.
+  const theirs = { jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 3 } };
+  bridge.fromServer(line(theirs));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(aborted, "the request was aborted");
+  assert.equal(toServer.length, 0, "a withdrawn request is not answered");
+  assert.deepEqual(toClient, [theirs]);
+  assert.equal(bridge.pending, 0);
+});
+
+test("the mcp bridge never forwards a line that might hold a tenant request, and starts none once disposed", async () => {
+  let performed = 0;
+  let release: () => void = () => {};
+  const { bridge, raw } = bridged(
+    () =>
+      new Promise<FetchResult>((resolve) => {
+        performed += 1;
+        release = () => resolve({ status: 200, headers: [], url: "https://t.invalid/", body: "", elapsed_ms: 0 });
+      }),
+  );
+  // A message that merely mentions the method in its text is an MCP message.
+  const mention = line({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "opentide/fetch" }] } });
+  bridge.fromServer(mention);
+  assert.deepEqual(raw.toClient, [mention]);
+  // A line that mentions the method and cannot be read as a message of the host's carries
+  // the tenant's credentials, maybe: it is dropped, never passed on.
+  const secret = "Authorization: ApiKey s3cret";
+  bridge.fromServer(`not json at all "opentide/fetch" ${secret}\n`);
+  bridge.fromServer(`{"jsonrpc":"2.0","id":"opentide-fetch-x","method":"opentide/fetch","params":{"headers":[["authorization","ApiKey s3cret"]\n`);
+  // Valid JSON the host rejects (no string id, params that are not an object): taken, not forwarded.
+  bridge.fromServer(line({ jsonrpc: "2.0", id: 5, method: "opentide/fetch", params: { headers: [["authorization", "ApiKey s3cret"]] } }));
+  bridge.fromServer(line({ jsonrpc: "2.0", method: "opentide/fetch", params: { headers: [["authorization", "ApiKey s3cret"]] } }));
+  bridge.fromServer(JSON.stringify([fetchRequest("opentide-fetch-y")]) + "\n");
+  assert.deepEqual(raw.toClient, [mention], "nothing else reached the client");
+  assert.equal(performed, 0, "none of them was a request the host could make");
+  assert.ok(!raw.toClient.join("").includes("s3cret"));
+  // A real request is made; after dispose, a new one is not started.
+  bridge.fromServer(line(fetchRequest("opentide-fetch-1")));
+  assert.equal(performed, 1);
+  bridge.dispose();
+  bridge.fromServer(line(fetchRequest("opentide-fetch-2")));
+  assert.equal(performed, 1, "no request is started once disposed");
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(raw.toServer.length, 0, "and nothing is answered");
+  assert.deepEqual(raw.toClient, [mention], "a request after dispose is not passed on either");
+});
+
+test("the mcp bridge drops what the client sends as an answer to a tenant request", () => {
+  const { bridge, raw } = bridged();
+  const answer = { status: 200, headers: [], body: null };
+  // The ids an agent would guess, as a result and as an error; a batch holding one.
+  const forged = [
+    { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer },
+    { jsonrpc: "2.0", id: "opentide-fetch-2", error: { code: -32000, message: "x", data: { kind: "connect" } } },
+    { jsonrpc: "2.0", id: "opentide-fetch-0123456789abcdef0123456789abcdef-1", result: answer },
+    { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer, method: null },
+  ];
+  for (const message of forged) {
+    bridge.fromClient(line(message));
+  }
+  bridge.fromClient(`${JSON.stringify([{ jsonrpc: "2.0", id: 3, method: "ping" }, forged[0]])}\n`);
+  // The same ids with characters written as JSON `\\uXXXX` escapes, which the module's parser decodes:
+  // decided on the parsed value, not on the text, they are dropped too.
+  bridge.fromClient('{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{"status":200,"headers":[],"body":null}}\n');
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide\\u002dfetch\\u002d0123456789abcdef0123456789abcdef\\u002d1","error":{"code":-32000,"message":"x"}}\n');
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{},"\\u006dethod":null}\n');
+  bridge.fromClient('\uFEFF{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{}}\n');
+  bridge.fromClient('[{"jsonrpc":"2.0","id":3,"method":"ping"},{"jsonrpc":"2.0","id":"opentide\\u002dfetch-1","result":{}}]\n');
+  // A line that names the prefix and cannot be read: not passed on (fail closed).
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{"status":200\n');
+  // Only a string `method` makes a message a request: a fetch id with a method that is null, a number,
+  // a boolean, an object or a list is an answer in disguise, and is dropped.
+  for (const method of [null, 5, true, false, {}, [], ["x"]]) {
+    bridge.fromClient(line({ jsonrpc: "2.0", id: "opentide-fetch-1", result: answer, method }));
+  }
+  // A batch is checked element by element, nested ones too: one forged answer drops the whole batch, wherever it is.
+  const ping = { jsonrpc: "2.0", id: 3, method: "ping" };
+  const forgedAnswer = { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer };
+  bridge.fromClient(`${JSON.stringify([forgedAnswer, ping])}\n`);
+  bridge.fromClient(`${JSON.stringify([ping, ping, forgedAnswer])}\n`);
+  bridge.fromClient(`${JSON.stringify([ping, [ping, [forgedAnswer]]])}\n`);
+  bridge.fromClient(`${JSON.stringify([ping, { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer, method: 7 }])}\n`);
+  // JSON-looking and unreadable, with the prefix escaped: not passed on either.
+  bridge.fromClient('{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{"status":200\n');
+  assert.deepEqual(raw.toServer, [], "a forged answer never reaches the module");
+  // What is the client's own goes through, in order: a response to a request of the server's own
+  // (a number id), a request that merely mentions the prefix in its arguments, and the rest.
+  const mine = [
+    { jsonrpc: "2.0", id: 5, result: {} },
+    { jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "search", arguments: { query: "opentide-fetch-1" } } },
+    { jsonrpc: "2.0", id: "abc", result: {} },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+  ];
+  for (const message of mine) {
+    bridge.fromClient(line(message));
+  }
+  assert.deepEqual(raw.toServer.map((text) => JSON.parse(text)), mine);
+  // A batch with nothing forged in it goes on: the module has no batches (MCP's 2025-06-18 revision dropped
+  // them, and rmcp has none) and answers it `-32600`, as it answers any JSON that is not a message.
+  const innocent = `${JSON.stringify([{ jsonrpc: "2.0", id: 3, method: "ping" }, { jsonrpc: "2.0", id: 4, method: "ping" }])}\n`;
+  bridge.fromClient(innocent);
+  assert.equal(raw.toServer[raw.toServer.length - 1], innocent);
+  raw.toServer.pop();
+  // A line that is not a message at all (a `Content-Length` header, a blank line) goes on as it is.
+  bridge.fromClient("Content-Length: 12\n");
+  bridge.fromClient("\n");
+  assert.deepEqual(raw.toServer.slice(mine.length), ["Content-Length: 12\n", "\n"]);
+  raw.toServer.length = mine.length;
+  // An unterminated forged line at the end of input is not passed on either.
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{}}');
+  bridge.endClient();
+  assert.equal(raw.toServer.length, mine.length);
+});
+
+test("the mcp bridge drops a line nested past the module's limit and never loses the lines after it", () => {
+  const errors: unknown[] = [];
+  const toServer: string[] = [];
+  const bridge = new McpFetchBridge({ toServer: (text) => toServer.push(text), toClient: () => {} }, { onError: (error) => errors.push(error) });
+  const ping = line({ jsonrpc: "2.0", id: 1, method: "ping" });
+  // A batch nested a few thousand levels deep: parsed, walked without recursion, dropped (the module refuses
+  // anything past 128 levels); and so is one too deep for the parser itself.
+  for (const depth of [129, 5_000, 200_000]) {
+    bridge.fromClient(`${"[".repeat(depth)}${"]".repeat(depth)}\n${ping}`);
+  }
+  // The ping after each deep line (in the same chunk) still arrives, and nothing threw.
+  assert.deepEqual(toServer, [ping, ping, ping]);
+  assert.deepEqual(errors, []);
+  // A batch within the limit, with nothing forged in it, goes on.
+  const shallow = `${"[".repeat(100)}${"]".repeat(100)}\n`;
+  bridge.fromClient(shallow);
+  assert.equal(toServer[toServer.length - 1], shallow);
+  // One at the limit holding a forged answer is dropped.
+  const answer = { jsonrpc: "2.0", id: "opentide-fetch-1", result: {} };
+  bridge.fromClient(`${"[".repeat(100)}${JSON.stringify(answer)}${"]".repeat(100)}\n`);
+  assert.equal(toServer.length, 4);
+});
+
+test("the mcp bridge isolates a sink that throws: later lines arrive, nothing escapes, onError is told", () => {
+  const errors: unknown[] = [];
+  const toServer: string[] = [];
+  let calls = 0;
+  const bridge = new McpFetchBridge(
+    {
+      toServer: (text) => {
+        calls += 1;
+        if (calls === 2) throw new Error("EPIPE");
+        toServer.push(text);
+      },
+      toClient: () => {},
+    },
+    { onError: (error) => errors.push(error) },
+  );
+  const lines = [1, 2, 3].map((id) => line({ jsonrpc: "2.0", id, method: "ping" }));
+  bridge.fromClient(lines.join(""));
+  assert.deepEqual(toServer, [lines[0], lines[2]], "the line after the failing one still arrived");
+  assert.equal(errors.length, 1);
+  // A reporter that throws is no reason to lose lines either.
+  const quiet: string[] = [];
+  let first = true;
+  const strict = new McpFetchBridge(
+    {
+      toServer: (text) => {
+        if (first) {
+          first = false;
+          throw new Error("x");
+        }
+        quiet.push(text);
+      },
+      toClient: () => {},
+    },
+    {
+      onError: () => {
+        throw new Error("reporter");
+      },
+    },
+  );
+  strict.fromClient(lines.join(""));
+  assert.deepEqual(quiet, [lines[1], lines[2]]);
+});
+
+test("the mcp bridge does not pass on the response to a request the client cancelled", () => {
+  const { bridge, raw } = bridged();
+  // The module may finish a call it was told to cancel: its response is dropped, once.
+  bridge.fromClient(line({ jsonrpc: "2.0", id: 2, method: "tools/call", params: {} }));
+  bridge.fromClient(line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 2 } }));
+  bridge.fromClient(line({ jsonrpc: "2.0", id: "s", method: "tools/call", params: {} }));
+  // The cancellation written with escapes in its method is still one.
+  bridge.fromClient('{"jsonrpc":"2.0","method":"notifications\\u002fcancelled","params":{"requestId":"s"}}\n');
+  assert.equal(raw.toServer.length, 4, "the cancellations reach the module");
+  const other = line({ jsonrpc: "2.0", id: 20, result: { n: 1 } });
+  const notification = line({ jsonrpc: "2.0", method: "notifications/progress", params: { id: 2 } });
+  bridge.fromServer(other);
+  bridge.fromServer(line({ jsonrpc: "2.0", id: 2, result: { content: [] } }));
+  bridge.fromServer(notification);
+  bridge.fromServer(line({ jsonrpc: "2.0", id: "s", error: { code: -32603, message: "Request cancelled" } }));
+  assert.deepEqual(raw.toClient, [other, notification]);
+  // Once dropped the id is forgotten: nothing else is held back.
+  const later = line({ jsonrpc: "2.0", id: 2, result: {} });
+  bridge.fromServer(later);
+  assert.deepEqual(raw.toClient, [other, notification, later]);
+});
+
+test("the mcp bridge's environment turns the module's side on", () => {
+  assert.deepEqual({ ...MCP_FETCH_ENVIRONMENT }, { OPENTIDE_FETCH: "stdio" });
+});
+
+/**
+ * `opentide mcp start` in the WASI module with `OPENTIDE_FETCH=stdio`, its
+ * stdio through a `McpFetchBridge`: a client's end of it, and a scripted host.
+ */
+class McpSession {
+  readonly bridge: McpFetchBridge;
+  readonly messages: Record<string, unknown>[] = [];
+  readonly leaked: string[] = [];
+  readonly process: ChildProcessWithoutNullStreams;
+  readonly exited: Promise<void>;
+  private readonly waiting = new Map<number, (message: Record<string, unknown>) => void>();
+  private stderr = "";
+  private closed = false;
+
+  constructor(ws: string, perform: (params: FetchParams, signal: AbortSignal) => Promise<FetchResult>) {
+    this.process = spawn(
+      process.execPath,
+      ["--no-turbo-fast-api-calls", join(root, "scripts/engine/wasi-run.mjs"), wasiModule as string, "mcp", "start"],
+      {
+        cwd: ws,
+        env: {
+          PATH: process.env.PATH ?? "",
+          HOME: ws,
+          PWD: ws,
+          NO_COLOR: "1",
+          TZ: "UTC",
+          LANG: "C.UTF-8",
+          ELASTIC_API_KEY: SECRET,
+          CROWDSTRIKE_CLIENT_SECRET: SECRET,
+          SENTINEL_SECRET: SECRET,
+          ...MCP_FETCH_ENVIRONMENT,
+        },
+      },
+    );
+    this.bridge = new McpFetchBridge(
+      {
+        toServer: (text) => {
+          if (!this.closed) this.process.stdin.write(text);
+        },
+        toClient: (text) => {
+          if (text.includes("opentide-fetch-")) this.leaked.push(text);
+          const message = JSON.parse(text) as Record<string, unknown>;
+          this.messages.push(message);
+          if (typeof message.id === "number") this.waiting.get(message.id)?.(message);
+        },
+      },
+      { perform },
+    );
+    this.process.stdout.on("data", (chunk: Buffer) => this.bridge.fromServer(chunk));
+    this.process.stderr.setEncoding("utf8");
+    this.process.stderr.on("data", (chunk: string) => {
+      this.stderr += chunk;
+    });
+    this.exited = new Promise((resolve) => this.process.once("close", () => resolve()));
+  }
+
+  /** What the module wrote on stderr, for a failure's message. */
+  get log(): string {
+    return this.stderr.slice(-2000);
+  }
+
+  send(message: object): void {
+    this.bridge.fromClient(line(message));
+  }
+
+  /** The answer to request *id*, or a failure if the module exits or keeps quiet. */
+  answer(id: number): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      const known = this.messages.find((message) => message.id === id && message.method === undefined);
+      if (known !== undefined) {
+        resolve(known);
+        return;
+      }
+      const timer = setTimeout(() => reject(new Error(`no answer to ${id}:\n${this.log}`)), 90_000);
+      this.waiting.set(id, (message) => {
+        clearTimeout(timer);
+        resolve(message);
+      });
+      void this.exited.then(() => reject(new Error(`the module exited before answering ${id}:\n${this.log}`)));
+    });
+  }
+
+  request(id: number, method: string, params: object): Promise<Record<string, unknown>> {
+    const answered = this.answer(id);
+    this.send({ jsonrpc: "2.0", id, method, params });
+    return answered;
+  }
+
+  async initialize(): Promise<void> {
+    await this.request(1, "initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "wasi-host-test", version: "0" },
+    });
+    this.send({ jsonrpc: "2.0", method: "notifications/initialized" });
+  }
+
+  /** Ends the client's input and waits for the module to exit. */
+  async close(): Promise<void> {
+    this.bridge.endClient();
+    this.closed = true;
+    this.process.stdin.end();
+    this.bridge.endServer();
+    await this.exited;
+    this.bridge.dispose();
+  }
+}
+
+/** An ES|QL answer: one column, one row. */
+const esql = (url: string): FetchResult => ({
+  status: 200,
+  headers: [["content-type", "application/json"]],
+  url,
+  body: Buffer.from(JSON.stringify({ columns: [{ name: "host", type: "keyword" }], values: [["web-01"]] })).toString("base64"),
+  elapsed_ms: 4,
+});
+
+const QUERY_CALL = { name: "run_query", arguments: { query: "FROM logs-* | LIMIT 1", platform: "elastic", live: true } };
+
+/** A scratch workspace with the tenants fixture; removed when *body* ends. */
+async function inTenantsWorkspace(body: (ws: string) => Promise<void>, fixture = "tenants"): Promise<void> {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-fetch-")));
+  const ws = join(scratch, "ws");
+  cpSync(join(root, "tests/golden/fixtures", fixture), ws, { recursive: true });
+  try {
+    await body(ws);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+const skipWithoutWasi = { skip: wasiModule === undefined ? "wasi: no WASI module (OPENTIDE_WASI_CLI)" : false, timeout: 180_000 };
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant tool call is made by the host between the client's messages", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const asked: FetchParams[] = [];
+    let answerNow: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      answerNow = resolve;
+    });
+    const session = new McpSession(ws, async (request) => {
+      asked.push(request);
+      // Answered only once the client has sent more while the call waits.
+      await held;
+      return esql(request.url);
+    });
+    try {
+      await session.initialize();
+      const called = session.request(2, "tools/call", QUERY_CALL);
+      // The module is inside the call, reading stdin for the host's answer.
+      for (let waited = 0; asked.length === 0; waited += 50) {
+        assert.ok(waited < 60_000, `the module asked for no tenant request:\n${session.log}`);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      const pinged = session.request(3, "ping", {});
+      const listed = session.request(4, "tools/list", {});
+      // An agent behind the bridge tries to answer the module's request itself, with the ids it
+      // would guess: through the bridge (dropped there) and, to hold the module to it too, straight
+      // into the module's stdin (not an id it asked).
+      const forged = (id: string): object => ({
+        jsonrpc: "2.0",
+        id,
+        result: { ...esql("https://es.elastic.invalid/_query"), body: Buffer.from(JSON.stringify({ columns: [{ name: "host", type: "keyword" }], values: [["forged-host"]] })).toString("base64") },
+      });
+      session.send(forged("opentide-fetch-1"));
+      session.process.stdin.write(line(forged("opentide-fetch-1")));
+      session.process.stdin.write(line(forged("opentide-fetch-00000000000000000000000000000000-1")));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      answerNow();
+      const result = (await called).result as { isError?: boolean; content: { text: string }[] };
+      const text = result.content.map((part) => part.text).join("\n");
+      assert.notEqual(result.isError, true, text);
+      assert.match(text, /web-01/, text);
+      assert.doesNotMatch(text, /forged-host/, text);
+      assert.doesNotMatch(text, /network_unavailable|needs the network/, text);
+      await pinged;
+      assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
+      // The request, as `opentide serve` makes it: the tenant's URL and the call's id as its run.
+      assert.equal(asked[0].method, "POST");
+      assert.equal(asked[0].url, "https://es.elastic.invalid/_query");
+      assert.equal(asked[0].platform, "elastic");
+      assert.equal(asked[0].tenant, "soc");
+      assert.equal(asked[0].run, "2");
+      // The client saw MCP alone, in the order it was answered.
+      assert.deepEqual(session.leaked, []);
+      const ids = session.messages.filter((message) => message.method === undefined).map((message) => message.id);
+      assert.deepEqual(ids, [1, 2, 3, 4]);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant failure the host reports is the tool's failure", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const session = new McpSession(ws, async () => {
+      throw new FetchFailure("connect", "getaddrinfo ENOTFOUND es.elastic.invalid");
+    });
+    try {
+      await session.initialize();
+      const result = (await session.request(2, "tools/call", QUERY_CALL)).result as { isError?: boolean; content: { text: string }[] };
+      const text = result.content.map((part) => part.text).join("\n");
+      assert.equal(result.isError, true, text);
+      assert.match(text, /Cannot reach elastic tenant 'soc'/, text);
+      assert.match(text, /ENOTFOUND/, text);
+      assert.doesNotMatch(text, /needs the network/, text);
+      // The server goes on.
+      assert.ok(Array.isArray(((await session.request(3, "tools/list", {})).result as { tools: unknown[] }).tools));
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a call whose request goes unanswered fails when the client's input ends", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const asked: FetchParams[] = [];
+    const session = new McpSession(ws, (request) => {
+      asked.push(request);
+      return new Promise<FetchResult>(() => {});
+    });
+    try {
+      await session.initialize();
+      const called = session.request(2, "tools/call", QUERY_CALL);
+      called.catch(() => {});
+      for (let waited = 0; asked.length === 0; waited += 50) {
+        assert.ok(waited < 60_000, `the module asked for no tenant request:\n${session.log}`);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      // EOF: the host never answers, and the client leaves.
+      session.bridge.endClient();
+      session.process.stdin.end();
+      const result = (await called).result as { isError?: boolean; content: { text: string }[] };
+      const text = result.content.map((part) => part.text).join("\n");
+      assert.equal(result.isError, true, text);
+      assert.match(text, /closed its input before answering an opentide\/fetch request/, text);
+      assert.doesNotMatch(text, /network_unavailable|needs the network/, text);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+/**
+ * A scratch workspace holding the end-to-end corpus (`tests/fixtures/tide_corpus`) with a Sentinel tenant whose
+ * secret is in `SENTINEL_SECRET`; removed when *body* ends.
+ */
+async function inCorpusWorkspace(body: (ws: string) => Promise<void>): Promise<void> {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-corpus-")));
+  const ws = join(scratch, "ws");
+  const source = join(root, "tests/fixtures/tide_corpus/current");
+  cpSync(join(source, "Configurations"), join(ws, ".opentide/configurations"), { recursive: true });
+  for (const [family, folder] of [
+    ["threats", "Threat Vectors"],
+    ["objectives", "Detection Objectives"],
+    ["rules", "Detection Rules"],
+  ]) {
+    cpSync(join(source, "Objects", folder), join(ws, "objects", family), { recursive: true });
+  }
+  const config = join(ws, ".opentide/configurations/platforms/sentinel.toml");
+  appendFileSync(
+    config,
+    '\n[[tenants]]\nname = "lab"\n[tenants.setup]\nresource_group = "rg"\nworkspace_name = "soc"\n' +
+      'workspace_id = "11111111-2222-4333-8444-555555555555"\nazure_tenant_id = "t"\nazure_subscription_id = "s"\n' +
+      'azure_client_id = "c"\nazure_client_secret = "$SENTINEL_SECRET"\n',
+  );
+  try {
+    await body(ws);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/** A tenant that answers every request 401. */
+const refusing = async (request: FetchParams): Promise<FetchResult> => ({
+  status: 401,
+  headers: [["content-type", "application/json"]],
+  url: request.url,
+  body: Buffer.from('{"error":"unauthorized"}').toString("base64"),
+  elapsed_ms: 2,
+});
+
+/** A tool call that failed: `isError` true, with the same JSON as an answer. */
+async function expectToolError(session: McpSession, id: number, name: string, args: object): Promise<string> {
+  const result = (await session.request(id, "tools/call", { name, arguments: args })).result as {
+    isError?: boolean;
+    content: { text: string }[];
+  };
+  const text = result.content.map((part) => part.text).join("\n");
+  assert.equal(result.isError, true, `${name}: ${text}`);
+  assert.doesNotMatch(text, /needs the network|network_unavailable|stopped unexpectedly/, `${name}: ${text}`);
+  return text;
+}
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant that refuses the credential fails a live query as a tool error", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const session = new McpSession(ws, refusing);
+    try {
+      await session.initialize();
+      await expectToolError(session, 2, "run_query", QUERY_CALL.arguments);
+      // What only previews is an answer, not an error.
+      const preview = (
+        await session.request(4, "tools/call", {
+          name: "validate_query",
+          arguments: { query: "FROM logs-* | LIMIT 1", platform: "elastic", language: "esql" },
+        })
+      ).result as { isError?: boolean };
+      assert.notEqual(preview.isError, true);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant that refuses the credential fails a live check as a tool error", skipWithoutWasi, async () => {
+  await inCorpusWorkspace(async (ws) => {
+    const session = new McpSession(ws, refusing);
+    try {
+      await session.initialize();
+      const text = await expectToolError(session, 2, "validate_query", {
+        query: "SecurityEvent | take 1",
+        platform: "sentinel",
+        live: true,
+      });
+      assert.match(text, /"status": ?"failed"/, text);
+      assert.match(text, /Cannot authenticate|sentinel/, text);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant that refuses the credential fails a live deploy as a tool error", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const session = new McpSession(ws, refusing);
+    try {
+      await session.initialize();
+      const text = await expectToolError(session, 2, "deploy_rule", {
+        uuid: "00000000-0000-4000-8047-000000000021",
+        platform: "crowdstrike",
+        dry_run: false,
+      });
+      assert.match(text, /"status": ?"failed"/, text);
+    } finally {
+      await session.close();
+    }
+  }, "deploy-tenants");
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, cancelling the call withdraws its request and aborts the host's", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const asked: FetchParams[] = [];
+    let aborted = false;
+    const session = new McpSession(
+      ws,
+      (request, signal) =>
+        new Promise<FetchResult>((_resolve, reject) => {
+          asked.push(request);
+          signal.addEventListener("abort", () => {
+            aborted = true;
+            reject(new Error("aborted"));
+          });
+        }),
+    );
+    try {
+      await session.initialize();
+      session.send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: QUERY_CALL });
+      for (let waited = 0; asked.length === 0; waited += 50) {
+        assert.ok(waited < 60_000, `the module asked for no tenant request:\n${session.log}`);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      session.send({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 2, reason: "user" } });
+      // The module stops the call (its answer, if any, is the client's to ignore) and serves on.
+      const listed = await session.request(3, "tools/list", {});
+      assert.ok(Array.isArray((listed.result as { tools: unknown[] }).tools));
+      assert.ok(aborted, "the host aborted the request the module withdrew");
+      // The module may still finish the cancelled call; MCP has no response go out for it, and the bridge sends none.
+      assert.equal(
+        session.messages.find((message) => message.id === 2 && message.method === undefined),
+        undefined,
+        "the cancelled call's response reached the client",
+      );
+      assert.equal(session.bridge.pending, 0);
+      assert.deepEqual(session.leaked, []);
+    } finally {
+      await session.close();
+    }
+  });
+});

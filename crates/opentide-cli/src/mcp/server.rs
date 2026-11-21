@@ -48,17 +48,34 @@ impl Manifest {
         });
         Manifest {
             info: from_value(info).expect("the manifest's initialize result"),
-            tools: from_value(json!({"tools": manifest["tools"]})).expect("the manifest's tools"),
-            resources: from_value(json!({"resources": manifest["resources"]}))
+            tools: from_value(complete(json!({"tools": manifest["tools"]})))
+                .expect("the manifest's tools"),
+            resources: from_value(complete(json!({"resources": manifest["resources"]})))
                 .expect("the manifest's resources"),
-            templates: from_value(json!({"resourceTemplates": manifest["resourceTemplates"]}))
-                .expect("the manifest's resource templates"),
+            templates: from_value(complete(
+                json!({"resourceTemplates": manifest["resourceTemplates"]}),
+            ))
+            .expect("the manifest's resource templates"),
         }
     }
 }
 
 fn from_value<T: DeserializeOwned>(value: Value) -> Result<T, serde_json::Error> {
     serde_json::from_value(value)
+}
+
+/// *result* as a complete result: `resultType: "complete"`, which revision
+/// 2026-07-28 of MCP requires on every result. rmcp takes it off again for a
+/// peer on an older revision (`ServerResult::strip_result_type_for_legacy_peer`),
+/// so a session that began with `initialize` keeps the shape it always had.
+fn complete(mut result: Value) -> Value {
+    if let Some(members) = result.as_object_mut() {
+        members.insert(
+            "resultType".to_owned(),
+            Value::String("complete".to_owned()),
+        );
+    }
+    result
 }
 
 /// The MCP server.
@@ -76,7 +93,16 @@ pub struct Server {
     /// The session's end ([`Server::run`]): the call running, interrupted,
     /// and whether the session is over, so a queued call does not start.
     ending: Arc<Ending>,
+    /// Where a call's work runs: with the thread that drives the session,
+    /// outside the runtime (WASI).
+    #[cfg(target_os = "wasi")]
+    jobs: Option<tokio::sync::mpsc::UnboundedSender<Job>>,
 }
+
+/// A tool call's work, handed to the thread that drives the session (WASI):
+/// [`Server::offloading`].
+#[cfg(any(target_os = "wasi", test))]
+pub(crate) type Job = Box<dyn FnOnce() + Send>;
 
 /// What [`Server::run`] stops when the session ends.
 #[derive(Default)]
@@ -154,7 +180,22 @@ impl Server {
             }),
             turn: Arc::default(),
             ending: Arc::default(),
+            #[cfg(target_os = "wasi")]
+            jobs: None,
         }
+    }
+
+    /// Has each call's work run where *jobs* are taken (WASI).
+    ///
+    /// The server's tasks run on the one thread's runtime, and a call that
+    /// reaches a tenant blocks on that same runtime (`opentide_connectors::runtime::block_on`),
+    /// which it may not from inside it: the call's work is handed to the
+    /// thread that drives the session, which runs it between two polls of the
+    /// session, outside the runtime, and the call answers once it is done.
+    #[cfg(target_os = "wasi")]
+    pub(crate) fn offloading(mut self, jobs: tokio::sync::mpsc::UnboundedSender<Job>) -> Server {
+        self.jobs = Some(jobs);
+        self
     }
 
     /// Runs `work` on the runtime's blocking pool once the calls before it
@@ -192,7 +233,17 @@ impl Server {
         #[cfg(target_os = "wasi")]
         {
             let _turn = turn;
-            Ok(work(&state, &interrupt))
+            let Some(jobs) = &self.jobs else {
+                return Ok(work(&state, &interrupt));
+            };
+            let (done, result) = tokio::sync::oneshot::channel();
+            let job: Job = Box::new(move || {
+                let _sent = done.send(work(&state, &interrupt));
+            });
+            jobs.send(job).map_err(|_| stopped())?;
+            result
+                .await
+                .map_err(|_| ErrorData::internal_error("the call stopped unexpectedly", None))
         }
         #[cfg(not(target_os = "wasi"))]
         {
@@ -337,7 +388,7 @@ impl ServerHandler for Server {
                 tools::call(&request.name, &arguments, &state.context(Some(interrupt)))
             })
             .await?;
-        from_value::<CallToolResult>(result)
+        from_value::<CallToolResult>(complete(result))
             .map(CallToolResponse::from)
             .map_err(|error| invalid_result(&error))
     }
@@ -369,7 +420,7 @@ impl ServerHandler for Server {
             })
             .await?;
         match answer {
-            Answer::Result(result) => from_value::<ReadResourceResult>(result)
+            Answer::Result(result) => from_value::<ReadResourceResult>(complete(result))
                 .map(ReadResourceResponse::from)
                 .map_err(|error| invalid_result(&error)),
             Answer::Error(error) => Err(error_data(&error)),

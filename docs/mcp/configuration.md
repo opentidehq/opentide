@@ -103,6 +103,7 @@ Set in the MCP host's server environment block when the catalogue is not discove
 | `OPENTIDE_REPO_ROOT` | When cwd is not the detection repo | Detection content repository root |
 | `OPENTIDE_DATA_ROOT` | No | Accepted, and changes nothing in this release: the vocabularies are compiled in |
 | `DEBUG` | No | Verbose logging |
+| `OPENTIDE_FETCH` | No | `stdio` makes the WASI build's server ask its client to make each tenant request; the native server ignores it ([`opentide mcp`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch)) |
 
 If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nearest directory holding `.opentide/` or `objects/`, without leaving the enclosing git checkout, and falls back to the git top level. See [Repository root resolution](../cli/global-options.md#repository-root-resolution). A literal unexpanded token such as `${workspaceFolder}` is treated as a path, not interpolated by the server.
 
