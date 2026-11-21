@@ -16,6 +16,14 @@ readme = "../COMPONENT.md"
 [lints]
 workspace = true
 
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+
+# The bundled vocabularies are split and compressed by build.rs (the `text!` literals name only
+# the other data): `scripts/engine/release.py vendor` copies the folder into the published crate.
+[package.metadata.opentide]
+assets = ["src/opentide/data/vocabulary"]
+
 [features]
 # The Python classes (`#[pyclass(frozen, get_all)]`), for the PyO3 binding.
 # abi3-py310: one build serves CPython 3.10 and later, as bindings/python/ does.
@@ -25,6 +33,7 @@ python = ["dep:pyo3"]
 stubs = ["python", "pyo3/experimental-inspect"]
 
 [dependencies]
+opentide-dataset.workspace = true
 opentide-core.workspace = true
 serde.workspace = true
 schemars.workspace = true

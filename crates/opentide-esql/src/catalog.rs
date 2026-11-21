@@ -10,22 +10,18 @@ use opentide_core::{catalog, suggest};
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-const COMMANDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/esql/commands.toml"
-));
-const FUNCTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/esql/functions.toml"
-));
-const OPERATORS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/esql/operators.toml"
-));
-const TYPES_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/esql/types.toml"
-));
+fn commands_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/esql/commands.toml")
+}
+fn functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/esql/functions.toml")
+}
+fn operators_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/esql/operators.toml")
+}
+fn types_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/esql/types.toml")
+}
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Deserialize))]
@@ -258,28 +254,28 @@ fn files() -> (CommandsFile, FunctionsFile, OperatorsFile, TypesFile) {
     let branches =
         |file: &str, text: &str| read::<Branches>(file, catalog::preamble(text)).branches;
     let commands = CommandsFile {
-        branches: branches("commands.toml", COMMANDS_TOML),
+        branches: branches("commands.toml", commands_toml()),
         commands: read(
             "commands.toml",
-            catalog::array_items(COMMANDS_TOML, "commands"),
+            catalog::array_items(commands_toml(), "commands"),
         ),
     };
     let functions = FunctionsFile {
-        branches: branches("functions.toml", FUNCTIONS_TOML),
+        branches: branches("functions.toml", functions_toml()),
         functions: read(
             "functions.toml",
-            catalog::array_items(FUNCTIONS_TOML, "functions"),
+            catalog::array_items(functions_toml(), "functions"),
         ),
     };
     let operators = OperatorsFile {
         operators: read(
             "operators.toml",
-            catalog::array_items(OPERATORS_TOML, "operators"),
+            catalog::array_items(operators_toml(), "operators"),
         ),
     };
     let types = TypesFile {
-        branches: branches("types.toml", TYPES_TOML),
-        types: read("types.toml", catalog::array_items(TYPES_TOML, "types")),
+        branches: branches("types.toml", types_toml()),
+        types: read("types.toml", catalog::array_items(types_toml(), "types")),
     };
     (commands, functions, operators, types)
 }
@@ -760,19 +756,19 @@ mod tests {
         let pairs = [
             (
                 format!("{commands:?}"),
-                format!("{:?}", whole::<CommandsFile>(COMMANDS_TOML)),
+                format!("{:?}", whole::<CommandsFile>(commands_toml())),
             ),
             (
                 format!("{functions:?}"),
-                format!("{:?}", whole::<FunctionsFile>(FUNCTIONS_TOML)),
+                format!("{:?}", whole::<FunctionsFile>(functions_toml())),
             ),
             (
                 format!("{operators:?}"),
-                format!("{:?}", whole::<OperatorsFile>(OPERATORS_TOML)),
+                format!("{:?}", whole::<OperatorsFile>(operators_toml())),
             ),
             (
                 format!("{types:?}"),
-                format!("{:?}", whole::<TypesFile>(TYPES_TOML)),
+                format!("{:?}", whole::<TypesFile>(types_toml())),
             ),
         ];
         for (read, whole) in pairs {

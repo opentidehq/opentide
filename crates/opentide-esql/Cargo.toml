@@ -14,6 +14,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+opentide-dataset.workspace = true
 opentide-core.workspace = true
 opentide-ecs.workspace = true
 opentide-lucene.workspace = true
@@ -26,3 +27,6 @@ rowan.workspace = true
 [dev-dependencies]
 toml.workspace = true
 insta.workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }

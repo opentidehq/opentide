@@ -9,14 +9,12 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
-const MODULES_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/yara/modules.toml"
-));
-const LANGUAGE_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/yara/language.toml"
-));
+fn modules_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/yara/modules.toml")
+}
+fn language_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/yara/language.toml")
+}
 
 /// A scalar type, or the shape of a module member.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -116,13 +114,14 @@ pub struct Catalog {
 fn files() -> (ModulesFile, LanguageFile) {
     const MODULES: &str = "data/catalogs/yara/modules.toml";
     const LANGUAGE: &str = "data/catalogs/yara/language.toml";
-    let preamble: ModulesPreamble = catalog::compiled_in(MODULES, catalog::preamble(MODULES_TOML));
+    let preamble: ModulesPreamble =
+        catalog::compiled_in(MODULES, catalog::preamble(modules_toml()));
     let modules = ModulesFile {
         meta: preamble.meta,
         unsupported: preamble.unsupported,
-        member: catalog::compiled_in(MODULES, catalog::array_items(MODULES_TOML, "member")),
+        member: catalog::compiled_in(MODULES, catalog::array_items(modules_toml(), "member")),
     };
-    let language = catalog::compiled_in(LANGUAGE, catalog::preamble(LANGUAGE_TOML));
+    let language = catalog::compiled_in(LANGUAGE, catalog::preamble(language_toml()));
     (modules, language)
 }
 
@@ -214,10 +213,11 @@ mod tests {
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
         let (modules, language) = super::files();
-        let whole: super::ModulesFile = toml::from_str(super::MODULES_TOML).expect("modules.toml");
+        let whole: super::ModulesFile =
+            toml::from_str(super::modules_toml()).expect("modules.toml");
         assert_eq!(format!("{modules:?}"), format!("{whole:?}"));
         let whole: super::LanguageFile =
-            toml::from_str(super::LANGUAGE_TOML).expect("language.toml");
+            toml::from_str(super::language_toml()).expect("language.toml");
         assert_eq!(format!("{language:?}"), format!("{whole:?}"));
     }
 

@@ -733,6 +733,8 @@ mod tests {
     /// real graph; this copy lets a unit test change it.
     const WORKSPACE: &Graph<'static> = &[
         ("opentide-core", &[]),
+        // The embedded datasets' container and decoder (#1743): no workspace dependency.
+        ("opentide-dataset", &[]),
         ("opentide-parse", &[]),
         ("opentide-highlight", &[("opentide-core", None)]),
         ("opentide-ecs", &[("opentide-core", None)]),
@@ -940,7 +942,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 30);
+        assert_eq!(report.crates, 31);
     }
 
     #[test]

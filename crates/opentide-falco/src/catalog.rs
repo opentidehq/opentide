@@ -10,18 +10,15 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::OnceLock;
 
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/falco/fields.toml"
-));
-const DEFAULTS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/falco/defaults.toml"
-));
-const EVENTS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/falco/events.toml"
-));
+fn fields_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/falco/fields.toml")
+}
+fn defaults_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/falco/defaults.toml")
+}
+fn events_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/falco/events.toml")
+}
 
 /// The event source of a rule when its block does not name one.
 pub const DEFAULT_SOURCE: &str = "syscall";
@@ -250,34 +247,37 @@ impl Catalog {
             let fields = FieldsFile {
                 classes: read(
                     "fields.toml",
-                    catalog::preamble::<FieldsPreamble>(FIELDS_TOML),
+                    catalog::preamble::<FieldsPreamble>(fields_toml()),
                 )
                 .classes,
-                sources: read("fields.toml", catalog::array_items(FIELDS_TOML, "sources")),
-                fields: read("fields.toml", catalog::array_items(FIELDS_TOML, "fields")),
+                sources: read(
+                    "fields.toml",
+                    catalog::array_items(fields_toml(), "sources"),
+                ),
+                fields: read("fields.toml", catalog::array_items(fields_toml(), "fields")),
             };
             let defaults = DefaultsFile {
                 macros: read(
                     "defaults.toml",
-                    catalog::array_items(DEFAULTS_TOML, "macros"),
+                    catalog::array_items(defaults_toml(), "macros"),
                 ),
                 lists: read(
                     "defaults.toml",
-                    catalog::array_items(DEFAULTS_TOML, "lists"),
+                    catalog::array_items(defaults_toml(), "lists"),
                 ),
                 rules: read(
                     "defaults.toml",
-                    catalog::array_items(DEFAULTS_TOML, "rules"),
+                    catalog::array_items(defaults_toml(), "rules"),
                 ),
             };
             let events = EventsFile {
                 syscalls: read(
                     "events.toml",
-                    catalog::preamble::<EventsPreamble>(EVENTS_TOML),
+                    catalog::preamble::<EventsPreamble>(events_toml()),
                 )
                 .syscalls,
-                events: read("events.toml", catalog::array_items(EVENTS_TOML, "events")),
-                params: read("events.toml", catalog::array_items(EVENTS_TOML, "params")),
+                events: read("events.toml", catalog::array_items(events_toml(), "events")),
+                params: read("events.toml", catalog::array_items(events_toml(), "params")),
             };
             let by_name = fields
                 .fields
@@ -394,27 +394,27 @@ mod tests {
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
         let fields = FieldsFile {
-            classes: catalog::preamble::<FieldsPreamble>(FIELDS_TOML)
+            classes: catalog::preamble::<FieldsPreamble>(fields_toml())
                 .unwrap()
                 .classes,
-            sources: catalog::array_items(FIELDS_TOML, "sources").unwrap(),
-            fields: catalog::array_items(FIELDS_TOML, "fields").unwrap(),
+            sources: catalog::array_items(fields_toml(), "sources").unwrap(),
+            fields: catalog::array_items(fields_toml(), "fields").unwrap(),
         };
         let defaults = DefaultsFile {
-            macros: catalog::array_items(DEFAULTS_TOML, "macros").unwrap(),
-            lists: catalog::array_items(DEFAULTS_TOML, "lists").unwrap(),
-            rules: catalog::array_items(DEFAULTS_TOML, "rules").unwrap(),
+            macros: catalog::array_items(defaults_toml(), "macros").unwrap(),
+            lists: catalog::array_items(defaults_toml(), "lists").unwrap(),
+            rules: catalog::array_items(defaults_toml(), "rules").unwrap(),
         };
         let events = EventsFile {
-            syscalls: catalog::preamble::<EventsPreamble>(EVENTS_TOML)
+            syscalls: catalog::preamble::<EventsPreamble>(events_toml())
                 .unwrap()
                 .syscalls,
-            events: catalog::array_items(EVENTS_TOML, "events").unwrap(),
-            params: catalog::array_items(EVENTS_TOML, "params").unwrap(),
+            events: catalog::array_items(events_toml(), "events").unwrap(),
+            params: catalog::array_items(events_toml(), "params").unwrap(),
         };
-        let whole_fields: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
-        let whole_defaults: DefaultsFile = toml::from_str(DEFAULTS_TOML).unwrap();
-        let whole_events: EventsFile = toml::from_str(EVENTS_TOML).unwrap();
+        let whole_fields: FieldsFile = toml::from_str(fields_toml()).unwrap();
+        let whole_defaults: DefaultsFile = toml::from_str(defaults_toml()).unwrap();
+        let whole_events: EventsFile = toml::from_str(events_toml()).unwrap();
         assert_eq!(format!("{fields:?}"), format!("{whole_fields:?}"));
         assert_eq!(format!("{defaults:?}"), format!("{whole_defaults:?}"));
         assert_eq!(format!("{events:?}"), format!("{whole_events:?}"));

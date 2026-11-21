@@ -8,14 +8,12 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
-const UDM_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/yaral/udm.toml"
-));
-const FUNCTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/yaral/functions.toml"
-));
+fn udm_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/yaral/udm.toml")
+}
+fn functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/yaral/functions.toml")
+}
 
 /// The keywords of yara-l-1.0 "Lexical structure": the section names and the
 /// operators. A keyword is never a rule name, meta key or variable
@@ -190,12 +188,12 @@ const FUNCTIONS: &str = "data/catalogs/yaral/functions.toml";
 
 /// Reads `udm.toml` item by item.
 fn udm_file() -> UdmFile {
-    let preamble: UdmPreamble = catalog::compiled_in(UDM, catalog::preamble(UDM_TOML));
+    let preamble: UdmPreamble = catalog::compiled_in(UDM, catalog::preamble(udm_toml()));
     UdmFile {
         roots: preamble.roots,
         free: preamble.free,
-        types: catalog::compiled_in(UDM, catalog::array_items(UDM_TOML, "types")),
-        enums: catalog::compiled_in(UDM, catalog::array_items(UDM_TOML, "enums")),
+        types: catalog::compiled_in(UDM, catalog::array_items(udm_toml(), "types")),
+        enums: catalog::compiled_in(UDM, catalog::array_items(udm_toml(), "enums")),
     }
 }
 
@@ -204,7 +202,7 @@ fn functions_file() -> FunctionsFile {
     FunctionsFile {
         functions: catalog::compiled_in(
             FUNCTIONS,
-            catalog::array_items(FUNCTIONS_TOML, "functions"),
+            catalog::array_items(functions_toml(), "functions"),
         ),
     }
 }
@@ -484,9 +482,9 @@ mod tests {
     /// The item-by-item read is field for field the whole-file parse (ADR 0013).
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        let whole: UdmFile = toml::from_str(UDM_TOML).expect("udm.toml");
+        let whole: UdmFile = toml::from_str(udm_toml()).expect("udm.toml");
         assert_eq!(format!("{:?}", udm_file()), format!("{whole:?}"));
-        let whole: FunctionsFile = toml::from_str(FUNCTIONS_TOML).expect("functions.toml");
+        let whole: FunctionsFile = toml::from_str(functions_toml()).expect("functions.toml");
         assert_eq!(format!("{:?}", functions_file()), format!("{whole:?}"));
     }
 

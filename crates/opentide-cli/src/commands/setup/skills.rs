@@ -34,66 +34,62 @@ pub const STARTER_SKILLS: [&str; 2] = ["opentide-detection-rule", "detection-eng
 type Files = Vec<(String, Vec<u8>)>;
 
 /// A bundled skill: its slug and its files.
-type Bundled = (&'static str, &'static [(&'static str, &'static [u8])]);
+type Bundled = (
+    &'static str,
+    &'static [(&'static str, fn() -> &'static [u8])],
+);
 
 /// The authoring skills' files, shipped with opentide
 /// (`data/setup/skills/authoring/<slug>/`).
 const BUNDLED: [Bundled; 4] = [
     (
         "detection-engineering",
-        &[(
-            "SKILL.md",
-            include_bytes!(concat!(
-                env!("OPENTIDE_ASSETS"),
-                "/src/opentide/data/setup/skills/authoring/detection-engineering/SKILL.md"
-            )),
-        )],
+        &[("SKILL.md", || {
+            opentide_dataset::text!(
+                "src/opentide/data/setup/skills/authoring/detection-engineering/SKILL.md"
+            )
+            .as_bytes()
+        })],
     ),
     (
         "opentide-detection-objective",
-        &[(
-            "SKILL.md",
-            include_bytes!(concat!(
-                env!("OPENTIDE_ASSETS"),
-                "/src/opentide/data/setup/skills/authoring/opentide-detection-objective/SKILL.md"
-            )),
-        )],
+        &[("SKILL.md", || {
+            opentide_dataset::text!(
+                "src/opentide/data/setup/skills/authoring/opentide-detection-objective/SKILL.md"
+            )
+            .as_bytes()
+        })],
     ),
     (
         "opentide-detection-rule",
-        &[(
-            "SKILL.md",
-            include_bytes!(concat!(
-                env!("OPENTIDE_ASSETS"),
-                "/src/opentide/data/setup/skills/authoring/opentide-detection-rule/SKILL.md"
-            )),
-        )],
+        &[("SKILL.md", || {
+            opentide_dataset::text!(
+                "src/opentide/data/setup/skills/authoring/opentide-detection-rule/SKILL.md"
+            )
+            .as_bytes()
+        })],
     ),
     (
         "opentide-threat-vector",
-        &[(
-            "SKILL.md",
-            include_bytes!(concat!(
-                env!("OPENTIDE_ASSETS"),
-                "/src/opentide/data/setup/skills/authoring/opentide-threat-vector/SKILL.md"
-            )),
-        )],
+        &[("SKILL.md", || {
+            opentide_dataset::text!(
+                "src/opentide/data/setup/skills/authoring/opentide-threat-vector/SKILL.md"
+            )
+            .as_bytes()
+        })],
     ),
 ];
 
 /// The entrypoint templates (`data/setup/skills/`).
-const CLAUDE_TEMPLATE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/src/opentide/data/setup/skills/CLAUDE.md.template"
-));
-const AGENTS_TEMPLATE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/src/opentide/data/setup/skills/AGENTS.md.template"
-));
-const COPILOT_TEMPLATE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/src/opentide/data/setup/skills/copilot-instructions.md"
-));
+fn claude_template() -> &'static str {
+    opentide_dataset::text!("src/opentide/data/setup/skills/CLAUDE.md.template")
+}
+fn agents_template() -> &'static str {
+    opentide_dataset::text!("src/opentide/data/setup/skills/AGENTS.md.template")
+}
+fn copilot_template() -> &'static str {
+    opentide_dataset::text!("src/opentide/data/setup/skills/copilot-instructions.md")
+}
 
 /// The preview deploy the templates name (`render_agent_entrypoint`).
 const DEPLOY: &str = "opentide deploy --dry-run --strategy PREVIEW --all";
@@ -345,7 +341,7 @@ fn bundled_files(slug: &str) -> Option<Files> {
         .map(|(_, files)| {
             files
                 .iter()
-                .map(|(name, bytes)| ((*name).to_owned(), bytes.to_vec()))
+                .map(|(name, bytes)| ((*name).to_owned(), bytes().to_vec()))
                 .collect()
         })
 }
@@ -826,23 +822,23 @@ pub fn install(
                 written.extend(copy_into(stage, ".cursor", &mut entrypoints.warnings));
             }
             Target::ClaudeCode => {
-                let claude = render(CLAUDE_TEMPLATE, &context);
+                let claude = render(claude_template(), &context);
                 written.extend(entrypoints.write(stage, root, "CLAUDE.md", &claude));
                 if !options.plugin {
                     written.extend(copy_into(stage, ".claude", &mut entrypoints.warnings));
                 }
             }
             Target::Generic => {
-                let agents = render(AGENTS_TEMPLATE, &context);
+                let agents = render(agents_template(), &context);
                 written.extend(entrypoints.write(stage, root, "AGENTS.md", &agents));
             }
             Target::GithubCopilot => {
                 if !options.targets.contains(&Target::Generic) {
-                    let agents = render(AGENTS_TEMPLATE, &context);
+                    let agents = render(agents_template(), &context);
                     written.extend(entrypoints.write(stage, root, "AGENTS.md", &agents));
                     also_applied.push("generic".to_owned());
                 }
-                let copilot = render(COPILOT_TEMPLATE, &context);
+                let copilot = render(copilot_template(), &context);
                 written.extend(entrypoints.write(
                     stage,
                     root,
@@ -1049,7 +1045,7 @@ mod tests {
         assert!(read(&root.join("CLAUDE.md")).starts_with("# Detections\n"));
         assert_eq!(
             std::fs::read(root.join(".claude/skills/detection-engineering/SKILL.md")).unwrap(),
-            BUNDLED[0].1[0].1
+            BUNDLED[0].1[0].1()
         );
     }
 
@@ -1153,7 +1149,7 @@ mod tests {
         );
         assert_eq!(
             std::fs::read(root.join(".agents/skills/detection-engineering/SKILL.md")).unwrap(),
-            BUNDLED[0].1[0].1
+            BUNDLED[0].1[0].1()
         );
         let warnings = result.strings("warnings");
         assert_eq!(warnings.len(), 1, "{warnings:?}");
@@ -1241,7 +1237,7 @@ mod tests {
         assert!(result.get("warnings").is_none());
         assert_eq!(
             std::fs::read(root.join(".agents/skills/opentide-detection-rule/SKILL.md")).unwrap(),
-            BUNDLED[2].1[0].1
+            BUNDLED[2].1[0].1()
         );
     }
 
@@ -1324,7 +1320,7 @@ mod tests {
         assert!(!cursor.join("SKILL.md").is_symlink());
         assert_eq!(
             std::fs::read(cursor.join("SKILL.md")).unwrap(),
-            BUNDLED[0].1[0].1
+            BUNDLED[0].1[0].1()
         );
         let warnings = result.strings("warnings");
         assert_eq!(

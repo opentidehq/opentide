@@ -56,18 +56,46 @@ pub struct Metadata {
 const DESCRIPTION_LINE: &str = "description = ";
 
 /// An entry's description: its text, or for a bundled vocabulary its entry's
-/// line in the compiled-in document, read the first time it is asked for.
-/// A validation reads keys, names and versions, never a description: the
-/// bundled descriptions were most of the vocabularies' text, parsed and kept
-/// for nothing (#1071). It reads, compares and prints as its text.
+/// line of the compiled-in descriptions, decoded and read the first time it
+/// is asked for. A validation reads keys, names and versions, never a
+/// description: the bundled descriptions were most of the vocabularies' text,
+/// parsed and kept for nothing (#1071), and are now not even decompressed
+/// (#1743). It reads, compares and prints as its text.
 #[derive(Clone, Default)]
 pub struct Description(DescriptionText);
+
+/// A bundled vocabulary's descriptions: a line an entry, decoded when the
+/// first is asked for ([`crate::vocab::bundled::DESCRIPTIONS`]).
+pub struct Descriptions {
+    text: opentide_dataset::TextFn,
+    lines: OnceLock<Vec<&'static str>>,
+}
+
+impl Descriptions {
+    /// The descriptions `text` decodes to, a line an entry.
+    pub const fn new(text: opentide_dataset::TextFn) -> Self {
+        Self {
+            text,
+            lines: OnceLock::new(),
+        }
+    }
+
+    /// The `description = "..."` line of entry `index`; empty for an entry without one.
+    fn line(&self, index: usize) -> &'static str {
+        self.lines
+            .get_or_init(|| (self.text)().lines().collect())
+            .get(index)
+            .copied()
+            .unwrap_or_default()
+    }
+}
 
 #[derive(Clone)]
 enum DescriptionText {
     Text(String),
     Bundled {
-        item: &'static str,
+        descriptions: &'static Descriptions,
+        index: usize,
         read: OnceLock<String>,
     },
 }
@@ -79,10 +107,11 @@ impl Default for DescriptionText {
 }
 
 impl Description {
-    /// The description of the bundled entry whose document text is `item`.
-    fn bundled(item: &'static str) -> Self {
+    /// The description of entry `index` of a bundled document.
+    fn bundled(descriptions: &'static Descriptions, index: usize) -> Self {
         Self(DescriptionText::Bundled {
-            item,
+            descriptions,
+            index,
             read: OnceLock::new(),
         })
     }
@@ -91,9 +120,13 @@ impl Description {
     pub fn as_str(&self) -> &str {
         match &self.0 {
             DescriptionText::Text(text) => text,
-            DescriptionText::Bundled { item, read } => read.get_or_init(|| {
-                item.lines()
-                    .find(|line| line.starts_with(DESCRIPTION_LINE))
+            DescriptionText::Bundled {
+                descriptions,
+                index,
+                read,
+            } => read.get_or_init(|| {
+                Some(descriptions.line(*index))
+                    .filter(|line| line.starts_with(DESCRIPTION_LINE))
                     .and_then(|line| line.trim_end().parse::<Table>().ok())
                     .and_then(|line| line.get("description").and_then(text_of))
                     .unwrap_or_default()
@@ -231,8 +264,12 @@ impl Vocabulary {
     /// built theirs together (#1071). The result is [`Vocabulary::from_file`]'s
     /// (a test holds every bundled file to it). A user's own vocabulary is
     /// hand-written, not in the loader's form: it is read whole.
-    pub fn from_bundled_file(file_name: &str, text: &'static str) -> Result<Self, VocabError> {
-        use opentide_core::catalog::{CatalogError, array_items, array_items_keeping, preamble};
+    pub fn from_bundled_file(
+        file_name: &str,
+        text: &'static str,
+        descriptions: &'static Descriptions,
+    ) -> Result<Self, VocabError> {
+        use opentide_core::catalog::{CatalogError, array_items, preamble};
         let toml_error = |error: CatalogError| VocabError::Toml {
             file: file_name.to_owned(),
             message: error.to_string(),
@@ -246,20 +283,15 @@ impl Vocabulary {
             let stages: Vec<Value> = array_items(text, "stages").map_err(toml_error)?;
             table.insert("stages".to_owned(), Value::Array(stages));
         }
-        // The entries without their descriptions, which stay in `text` until
-        // one is asked for ([`Description`]).
-        let mut items = Vec::new();
+        // The entries, in the document `text` that has no descriptions: those
+        // are `descriptions`' lines, read when one is asked for ([`Description`]).
         if !table.contains_key("keys") {
-            let keys: Vec<(Value, &'static str)> =
-                array_items_keeping(text, "keys", &|line| !line.starts_with(DESCRIPTION_LINE))
-                    .map_err(toml_error)?;
-            let (values, texts): (Vec<Value>, Vec<&'static str>) = keys.into_iter().unzip();
+            let values: Vec<Value> = array_items(text, "keys").map_err(toml_error)?;
             if !values.is_empty() {
                 table.insert("keys".to_owned(), Value::Array(values));
             }
-            items = texts;
         }
-        let vocabulary = Self::from_table_with(table, file_name, Some(&items))?;
+        let vocabulary = Self::from_table_with(table, file_name, Some(descriptions))?;
         Self::named(file_name, vocabulary)
     }
 
@@ -292,12 +324,12 @@ impl Vocabulary {
         Self::from_table_with(table, source, None)
     }
 
-    /// [`Vocabulary::from_table`]; with `items`, the bundled document text of
-    /// each entry of `keys`, which holds its description.
+    /// [`Vocabulary::from_table`]; with `descriptions`, those of a bundled
+    /// document, a line for each entry of `keys`.
     fn from_table_with(
         mut table: Table,
         source: &str,
-        items: Option<&[&'static str]>,
+        descriptions: Option<&'static Descriptions>,
     ) -> Result<Self, VocabError> {
         let missing = |key: &str| VocabError::MissingKey {
             file: source.to_owned(),
@@ -353,9 +385,9 @@ impl Vocabulary {
                     // Only a description the read left out: one written
                     // otherwise was parsed, and keeps its text.
                     if entry.description.is_empty()
-                        && let Some(&item) = items.and_then(|items| items.get(index))
+                        && let Some(descriptions) = descriptions
                     {
-                        entry.description = Description::bundled(item);
+                        entry.description = Description::bundled(descriptions, index);
                     }
                     if entries.contains_key(&entry.key) {
                         return Err(VocabError::DuplicateKey {

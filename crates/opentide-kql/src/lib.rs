@@ -20,6 +20,7 @@ use opentide_highlight::HighlightToken;
 mod perf;
 pub mod schema;
 pub mod tables;
+mod tables_model;
 
 // The pure-Rust parser (#1230, ADR 0012): a logos lexer, a recursive
 // descent on opentide-parse, a rowan tree. Generated from kql.ungram by `cargo xtask codegen`: an accessor for every
@@ -51,46 +52,36 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
-const OPERATORS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/core/operators.toml"
-));
-const FUNCTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/core/functions.toml"
-));
-const TYPES_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/core/types.toml"
-));
-const SCALAR_OPERATORS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/core/operators-scalar.toml"
-));
-const PLUGINS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/core/evaluate-plugins.toml"
-));
-const SENTINEL_TABLES: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/sentinel/tables.toml"
-));
-const DEFENDER_TABLES: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/defender/tables.toml"
-));
-const SENTINEL_COLUMNS: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/sentinel/columns.toml"
-));
-const DEFENDER_COLUMNS: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/defender/columns.toml"
-));
-const OPERATOR_OPTIONS: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/core/operator-options.toml"
-));
+fn operators_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/core/operators.toml")
+}
+fn functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/core/functions.toml")
+}
+fn types_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/core/types.toml")
+}
+fn scalar_operators_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/core/operators-scalar.toml")
+}
+fn plugins_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/core/evaluate-plugins.toml")
+}
+fn sentinel_tables() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/sentinel/tables.toml")
+}
+fn defender_tables() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/defender/tables.toml")
+}
+fn sentinel_columns() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/sentinel/columns.toml")
+}
+fn defender_columns() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/defender/columns.toml")
+}
+fn operator_options() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/core/operator-options.toml")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Profile {
@@ -392,21 +383,21 @@ fn rows<T: serde::de::DeserializeOwned>(file: &str, text: &str, key: &str) -> Ve
 
 impl Catalog {
     pub fn core() -> Self {
-        let types: Vec<TypeRow> = rows("core/types.toml", TYPES_TOML, "types");
+        let types: Vec<TypeRow> = rows("core/types.toml", types_toml(), "types");
         Self {
             profile: Profile::Core,
-            operators: rows("core/operators.toml", OPERATORS_TOML, "operators"),
-            functions: rows("core/functions.toml", FUNCTIONS_TOML, "functions"),
+            operators: rows("core/operators.toml", operators_toml(), "operators"),
+            functions: rows("core/functions.toml", functions_toml(), "functions"),
             scalar_operators: rows(
                 "core/operators-scalar.toml",
-                SCALAR_OPERATORS_TOML,
+                scalar_operators_toml(),
                 "scalar_operators",
             ),
-            plugins: rows("core/evaluate-plugins.toml", PLUGINS_TOML, "plugins"),
+            plugins: rows("core/evaluate-plugins.toml", plugins_toml(), "plugins"),
             types: types.into_iter().map(|t| t.name).collect(),
             tables: Vec::new(),
             columns: Vec::new(),
-            options: rows("core/operator-options.toml", OPERATOR_OPTIONS, "options"),
+            options: rows("core/operator-options.toml", operator_options(), "options"),
             table_index: HashMap::new(),
             column_index: HashMap::new(),
             memo: Memo::default(),
@@ -429,20 +420,20 @@ impl Catalog {
             return self;
         }
         self.profile = profile;
-        let defender: Vec<TableRow> = rows("defender/tables.toml", DEFENDER_TABLES, "tables");
+        let defender: Vec<TableRow> = rows("defender/tables.toml", defender_tables(), "tables");
         let defender_columns: Vec<ColumnRow> =
-            rows("defender/columns.toml", DEFENDER_COLUMNS, "columns");
+            rows("defender/columns.toml", defender_columns(), "columns");
         let mut tables = Vec::new();
         let mut columns = Vec::new();
         if profile == Profile::Sentinel {
             tables.extend(rows::<TableRow>(
                 "sentinel/tables.toml",
-                SENTINEL_TABLES,
+                sentinel_tables(),
                 "tables",
             ));
             columns.extend(rows::<ColumnRow>(
                 "sentinel/columns.toml",
-                SENTINEL_COLUMNS,
+                sentinel_columns(),
                 "columns",
             ));
         }
@@ -2138,45 +2129,52 @@ mod tests {
         fn same<T: std::fmt::Debug>(read: &[T], whole: &[T], file: &str) {
             assert_eq!(format!("{read:?}"), format!("{whole:?}"), "{file}");
         }
-        let o: OperatorsFile = toml::from_str(OPERATORS_TOML).unwrap();
+        let o: OperatorsFile = toml::from_str(operators_toml()).unwrap();
         same(
-            &rows::<OperatorRow>("", OPERATORS_TOML, "operators"),
+            &rows::<OperatorRow>("", operators_toml(), "operators"),
             &o.operators,
             "operators",
         );
-        let f: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
+        let f: FunctionsFile = toml::from_str(functions_toml()).unwrap();
         same(
-            &rows::<FunctionRow>("", FUNCTIONS_TOML, "functions"),
+            &rows::<FunctionRow>("", functions_toml(), "functions"),
             &f.functions,
             "functions",
         );
-        let t: TypesFile = toml::from_str(TYPES_TOML).unwrap();
-        same(&rows::<TypeRow>("", TYPES_TOML, "types"), &t.types, "types");
-        let so: ScalarOperatorsFile = toml::from_str(SCALAR_OPERATORS_TOML).unwrap();
+        let t: TypesFile = toml::from_str(types_toml()).unwrap();
         same(
-            &rows::<ScalarOperatorRow>("", SCALAR_OPERATORS_TOML, "scalar_operators"),
+            &rows::<TypeRow>("", types_toml(), "types"),
+            &t.types,
+            "types",
+        );
+        let so: ScalarOperatorsFile = toml::from_str(scalar_operators_toml()).unwrap();
+        same(
+            &rows::<ScalarOperatorRow>("", scalar_operators_toml(), "scalar_operators"),
             &so.scalar_operators,
             "operators-scalar",
         );
-        let p: PluginsFile = toml::from_str(PLUGINS_TOML).unwrap();
+        let p: PluginsFile = toml::from_str(plugins_toml()).unwrap();
         same(
-            &rows::<PluginRow>("", PLUGINS_TOML, "plugins"),
+            &rows::<PluginRow>("", plugins_toml(), "plugins"),
             &p.plugins,
             "plugins",
         );
-        let op: OptionsFile = toml::from_str(OPERATOR_OPTIONS).unwrap();
+        let op: OptionsFile = toml::from_str(operator_options()).unwrap();
         same(
-            &rows::<OperatorOption>("", OPERATOR_OPTIONS, "options"),
+            &rows::<OperatorOption>("", operator_options(), "options"),
             &op.options,
             "options",
         );
-        for (text, name) in [(SENTINEL_TABLES, "sentinel"), (DEFENDER_TABLES, "defender")] {
+        for (text, name) in [
+            (sentinel_tables(), "sentinel"),
+            (defender_tables(), "defender"),
+        ] {
             let file: TablesFile = toml::from_str(text).unwrap();
             same(&rows::<TableRow>("", text, "tables"), &file.tables, name);
         }
         for (text, name) in [
-            (SENTINEL_COLUMNS, "sentinel"),
-            (DEFENDER_COLUMNS, "defender"),
+            (sentinel_columns(), "sentinel"),
+            (defender_columns(), "defender"),
         ] {
             let file: ColumnsFile = toml::from_str(text).unwrap();
             same(&rows::<ColumnRow>("", text, "columns"), &file.columns, name);

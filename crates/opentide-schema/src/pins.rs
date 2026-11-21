@@ -86,28 +86,16 @@ impl Pins {
 }
 
 /// The bundled pin files: `(file name, text)`.
-pub const FILES: [(&str, &str); 3] = [
-    (
-        "objective.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/pins/objective.toml"
-        )),
-    ),
-    (
-        "rule.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/pins/rule.toml"
-        )),
-    ),
-    (
-        "threat.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/pins/threat.toml"
-        )),
-    ),
+pub const FILES: [(&str, opentide_dataset::TextFn); 3] = [
+    ("objective.toml", || {
+        opentide_dataset::text!("src/opentide/data/pins/objective.toml")
+    }),
+    ("rule.toml", || {
+        opentide_dataset::text!("src/opentide/data/pins/rule.toml")
+    }),
+    ("threat.toml", || {
+        opentide_dataset::text!("src/opentide/data/pins/threat.toml")
+    }),
 ];
 
 /// A pin file that cannot be read.
@@ -199,7 +187,10 @@ impl PinTable {
     )]
     pub fn bundled() -> &'static Self {
         static TABLE: OnceLock<PinTable> = OnceLock::new();
-        TABLE.get_or_init(|| Self::parse(FILES).expect("the bundled pin files read"))
+        TABLE.get_or_init(|| {
+            Self::parse(FILES.iter().map(|(file, text)| (*file, text())))
+                .expect("the bundled pin files read")
+        })
     }
 
     /// The pins of `revision` (`threat::1.0`).

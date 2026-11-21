@@ -230,7 +230,7 @@ pub fn page(code: &str) -> Option<Page> {
         return None;
     }
     if let Some((code, markdown)) = pages::PAGES.iter().find(|(name, _)| *name == code) {
-        return Some(file_page(code, markdown));
+        return Some(file_page(code, markdown()));
     }
     engine_page(&code).or_else(|| {
         RETIRED
@@ -568,7 +568,7 @@ mod tests {
             .iter()
             .find(|(name, _)| *name == "vocab_unknown")
             .unwrap();
-        let lf = file_page(code, &markdown.replace("\r\n", "\n"));
+        let lf = file_page(code, &markdown().replace("\r\n", "\n"));
         let crlf = file_page(code, &lf.markdown.replace('\n', "\r\n"));
         assert_eq!(crlf, lf);
         assert_eq!(

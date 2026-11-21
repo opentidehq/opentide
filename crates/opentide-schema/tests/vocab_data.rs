@@ -3,6 +3,10 @@
 use opentide_schema::pins;
 use opentide_schema::vocab::{SUFFIX, bundled};
 
+// The split the build script stores each vocabulary by (`build.rs`, #1743).
+#[path = "../src/vocab/split.rs"]
+mod split;
+
 const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../src/opentide/data");
 
 #[test]
@@ -25,9 +29,13 @@ fn the_bundle_is_the_data_directory() {
         compiled, on_disk,
         "add or remove the file in vocab/bundled.rs"
     );
-    for (field, text) in bundled::FILES {
+    // What is compiled in is the file, split: the document without its entries' descriptions, and
+    // their descriptions.
+    for ((field, lean), (_, descriptions)) in bundled::FILES.iter().zip(bundled::DESCRIPTIONS) {
         let path = format!("{dir}/{field}{SUFFIX}");
-        assert_eq!(*text, std::fs::read_to_string(path).unwrap());
+        let (want_lean, want_descriptions) = split::split(&std::fs::read_to_string(path).unwrap());
+        assert_eq!(lean(), want_lean, "{field}");
+        assert_eq!(descriptions(), want_descriptions, "{field}");
     }
 }
 
@@ -47,7 +55,7 @@ fn the_bundled_pins_are_the_data_directory() {
     assert_eq!(compiled, on_disk, "add or remove the file in pins.rs");
     for (name, text) in pins::FILES {
         assert_eq!(
-            text,
+            text(),
             std::fs::read_to_string(format!("{DATA}/pins/{name}")).unwrap()
         );
     }

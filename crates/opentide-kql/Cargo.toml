@@ -14,6 +14,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+opentide-dataset.workspace = true
 opentide-core.workspace = true
 strsim.workspace = true
 foldhash.workspace = true
@@ -29,3 +30,9 @@ regex.workspace = true
 [dev-dependencies]
 toml.workspace = true
 insta.workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+# The Azure Monitor reference and the ASIM schemas are parsed once at build time (`build.rs`, #1743).
+serde = { workspace = true, features = ["rc"] }
+toml.workspace = true

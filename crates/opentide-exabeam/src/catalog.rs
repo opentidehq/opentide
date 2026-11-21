@@ -14,14 +14,12 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/exabeam/fields.toml"
-));
-const VALUES_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/exabeam/values.toml"
-));
+fn fields_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/exabeam/fields.toml")
+}
+fn values_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/exabeam/values.toml")
+}
 
 /// The CIM data type of a field, as far as the checks need it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,13 +130,13 @@ fn files() -> (FieldsFile, ValuesFile) {
     const FIELDS: &str = "data/catalogs/exabeam/fields.toml";
     const VALUES: &str = "data/catalogs/exabeam/values.toml";
     let fields = FieldsFile {
-        prefixes: compiled_in(FIELDS, array_items(FIELDS_TOML, "prefixes")),
-        fields: compiled_in(FIELDS, array_items(FIELDS_TOML, "fields")),
+        prefixes: compiled_in(FIELDS, array_items(fields_toml(), "prefixes")),
+        fields: compiled_in(FIELDS, array_items(fields_toml(), "fields")),
     };
     let values = ValuesFile {
-        outcomes: compiled_in(VALUES, preamble::<ValuesPreamble>(VALUES_TOML)).outcomes,
-        subjects: compiled_in(VALUES, array_items(VALUES_TOML, "subjects")),
-        activity_types: compiled_in(VALUES, array_items(VALUES_TOML, "activity_types")),
+        outcomes: compiled_in(VALUES, preamble::<ValuesPreamble>(values_toml())).outcomes,
+        subjects: compiled_in(VALUES, array_items(values_toml(), "subjects")),
+        activity_types: compiled_in(VALUES, array_items(values_toml(), "activity_types")),
     };
     (fields, values)
 }
@@ -317,9 +315,9 @@ mod tests {
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
         let (fields, values) = files();
-        let whole: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
+        let whole: FieldsFile = toml::from_str(fields_toml()).unwrap();
         assert_eq!(format!("{fields:?}"), format!("{whole:?}"));
-        let whole: ValuesFile = toml::from_str(VALUES_TOML).unwrap();
+        let whole: ValuesFile = toml::from_str(values_toml()).unwrap();
         assert_eq!(format!("{values:?}"), format!("{whole:?}"));
     }
 

@@ -22,6 +22,8 @@ pub mod attack;
 pub mod bundled;
 mod document;
 pub mod sentinel;
+#[cfg(test)]
+mod split;
 mod version;
 
 use std::collections::BTreeSet;
@@ -31,7 +33,9 @@ use opentide_core::suggest::Candidates;
 
 use indexmap::{IndexMap, IndexSet};
 
-pub use document::{Description, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary};
+pub use document::{
+    Description, Descriptions, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary,
+};
 pub use version::{Contract, Version, VocabRef};
 
 /// The object families whose workspace objects form vocabularies of their

@@ -1,21 +1,13 @@
-//! Points `include_str!` at the shared catalogs and highlight data:
-//! the workspace root in a checkout, or else the `assets/` copy that
-//! `scripts/engine/release.py vendor` puts inside a published crate. The checkout wins, so
-//! a copy left behind never shadows the real files.
-#[expect(
-    clippy::unwrap_used,
-    reason = "cargo sets CARGO_MANIFEST_DIR for every build script"
-)]
-fn main() {
-    let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let workspace = manifest.join("../..");
-    // A packaged crate builds under target/package/ or the registry, where ../.. has no
-    // data/catalogs/.
-    let root = if workspace.join("data/catalogs").is_dir() {
-        workspace
-    } else {
-        manifest.join("assets")
-    };
-    println!("cargo:rustc-env=OPENTIDE_ASSETS={}", root.display());
-    println!("cargo:rerun-if-changed=build.rs");
+//! Compresses the datasets this crate compiles in (#1743): every
+//! `opentide_dataset::text!("<path>")` in `src/` names a file of the shared catalogs and highlight data,
+//! which becomes a zstd blob in `OUT_DIR`, decoded once on first use.
+//!
+//! The files are read from the workspace root in a checkout, or else from the
+//! `assets/` copy that `scripts/engine/release.py vendor` puts inside a
+//! published crate; the checkout wins, so a copy left behind never shadows the
+//! real files. `OPENTIDE_ASSETS` names that root for the crate's tests.
+
+fn main() -> Result<(), opentide_dataset::build::BuildError> {
+    opentide_dataset::build::Datasets::for_crate("data/catalogs")?.text_from_sources()?;
+    Ok(())
 }

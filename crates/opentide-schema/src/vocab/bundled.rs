@@ -3,251 +3,227 @@
 
 use std::sync::{Arc, OnceLock};
 
-use super::{VocabError, Vocabulary};
+use super::{Descriptions, VocabError, Vocabulary};
 
-/// Every bundled vocabulary: its field and its document.
-pub const FILES: &[(&str, &str)] = &[
-    (
-        "actors",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/actors.vocab.toml"
-        )),
-    ),
-    (
-        "alert_severity",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/alert_severity.vocab.toml"
-        )),
-    ),
-    (
-        "att&ck.groups",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/att&ck.groups.vocab.toml"
-        )),
-    ),
-    (
-        "att&ck",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/att&ck.vocab.toml"
-        )),
-    ),
-    (
-        "chaining_relations",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/chaining_relations.vocab.toml"
-        )),
-    ),
-    (
-        "collection",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/collection.vocab.toml"
-        )),
-    ),
-    (
-        "criticality",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/criticality.vocab.toml"
-        )),
-    ),
-    (
-        "datasources",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/datasources.vocab.toml"
-        )),
-    ),
-    (
-        "detection.composition",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/detection.composition.vocab.toml"
-        )),
-    ),
-    (
-        "detection.methodology",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/detection.methodology.vocab.toml"
-        )),
-    ),
-    (
-        "detection.types",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/detection.types.vocab.toml"
-        )),
-    ),
-    (
-        "efforts",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/efforts.vocab.toml"
-        )),
-    ),
-    (
-        "feasibility",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/feasibility.vocab.toml"
-        )),
-    ),
-    (
-        "impact",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/impact.vocab.toml"
-        )),
-    ),
-    (
-        "killchain",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/killchain.vocab.toml"
-        )),
-    ),
-    (
-        "level",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/level.vocab.toml"
-        )),
-    ),
-    (
-        "leverage",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/leverage.vocab.toml"
-        )),
-    ),
-    (
-        "malapi",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/malapi.vocab.toml"
-        )),
-    ),
-    (
-        "maturity",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/maturity.vocab.toml"
-        )),
-    ),
-    (
-        "mitigations",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/mitigations.vocab.toml"
-        )),
-    ),
-    (
-        "objectives",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/objectives.vocab.toml"
-        )),
-    ),
-    (
-        "pap",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/pap.vocab.toml"
-        )),
-    ),
-    (
-        "resources",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/resources.vocab.toml"
-        )),
-    ),
-    (
-        "rsit",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/rsit.vocab.toml"
-        )),
-    ),
-    (
-        "scheduling",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/scheduling.vocab.toml"
-        )),
-    ),
-    (
-        "sectors",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/sectors.vocab.toml"
-        )),
-    ),
-    (
-        "severity",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/severity.vocab.toml"
-        )),
-    ),
-    (
-        "signal.entities",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/signal.entities.vocab.toml"
-        )),
-    ),
-    (
-        "sophistication",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/sophistication.vocab.toml"
-        )),
-    ),
-    (
-        "surface",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/surface.vocab.toml"
-        )),
-    ),
-    (
-        "tier",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/tier.vocab.toml"
-        )),
-    ),
-    (
-        "tlp",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/tlp.vocab.toml"
-        )),
-    ),
-    (
-        "viability",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/viability.vocab.toml"
-        )),
-    ),
-    (
-        "violation",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/vocabulary/violation.vocab.toml"
-        )),
-    ),
+/// Every bundled vocabulary: its field and its document **without the entries' descriptions**, which
+/// are most of a vocabulary's text and which a validation never reads (#1071). Each is decoded on
+/// first use; [`DESCRIPTIONS`] holds the descriptions, decoded when one is asked for (#1743).
+pub const FILES: &[(&str, opentide_dataset::TextFn)] = &[
+    ("actors", || {
+        opentide_dataset::text_blob!("vocab/lean/actors")
+    }),
+    ("alert_severity", || {
+        opentide_dataset::text_blob!("vocab/lean/alert_severity")
+    }),
+    ("att&ck.groups", || {
+        opentide_dataset::text_blob!("vocab/lean/att&ck.groups")
+    }),
+    ("att&ck", || {
+        opentide_dataset::text_blob!("vocab/lean/att&ck")
+    }),
+    ("chaining_relations", || {
+        opentide_dataset::text_blob!("vocab/lean/chaining_relations")
+    }),
+    ("collection", || {
+        opentide_dataset::text_blob!("vocab/lean/collection")
+    }),
+    ("criticality", || {
+        opentide_dataset::text_blob!("vocab/lean/criticality")
+    }),
+    ("datasources", || {
+        opentide_dataset::text_blob!("vocab/lean/datasources")
+    }),
+    ("detection.composition", || {
+        opentide_dataset::text_blob!("vocab/lean/detection.composition")
+    }),
+    ("detection.methodology", || {
+        opentide_dataset::text_blob!("vocab/lean/detection.methodology")
+    }),
+    ("detection.types", || {
+        opentide_dataset::text_blob!("vocab/lean/detection.types")
+    }),
+    ("efforts", || {
+        opentide_dataset::text_blob!("vocab/lean/efforts")
+    }),
+    ("feasibility", || {
+        opentide_dataset::text_blob!("vocab/lean/feasibility")
+    }),
+    ("impact", || {
+        opentide_dataset::text_blob!("vocab/lean/impact")
+    }),
+    ("killchain", || {
+        opentide_dataset::text_blob!("vocab/lean/killchain")
+    }),
+    ("level", || opentide_dataset::text_blob!("vocab/lean/level")),
+    ("leverage", || {
+        opentide_dataset::text_blob!("vocab/lean/leverage")
+    }),
+    ("malapi", || {
+        opentide_dataset::text_blob!("vocab/lean/malapi")
+    }),
+    ("maturity", || {
+        opentide_dataset::text_blob!("vocab/lean/maturity")
+    }),
+    ("mitigations", || {
+        opentide_dataset::text_blob!("vocab/lean/mitigations")
+    }),
+    ("objectives", || {
+        opentide_dataset::text_blob!("vocab/lean/objectives")
+    }),
+    ("pap", || opentide_dataset::text_blob!("vocab/lean/pap")),
+    ("resources", || {
+        opentide_dataset::text_blob!("vocab/lean/resources")
+    }),
+    ("rsit", || opentide_dataset::text_blob!("vocab/lean/rsit")),
+    ("scheduling", || {
+        opentide_dataset::text_blob!("vocab/lean/scheduling")
+    }),
+    ("sectors", || {
+        opentide_dataset::text_blob!("vocab/lean/sectors")
+    }),
+    ("severity", || {
+        opentide_dataset::text_blob!("vocab/lean/severity")
+    }),
+    ("signal.entities", || {
+        opentide_dataset::text_blob!("vocab/lean/signal.entities")
+    }),
+    ("sophistication", || {
+        opentide_dataset::text_blob!("vocab/lean/sophistication")
+    }),
+    ("surface", || {
+        opentide_dataset::text_blob!("vocab/lean/surface")
+    }),
+    ("tier", || opentide_dataset::text_blob!("vocab/lean/tier")),
+    ("tlp", || opentide_dataset::text_blob!("vocab/lean/tlp")),
+    ("viability", || {
+        opentide_dataset::text_blob!("vocab/lean/viability")
+    }),
+    ("violation", || {
+        opentide_dataset::text_blob!("vocab/lean/violation")
+    }),
+];
+
+/// The descriptions of each bundled vocabulary's entries, in [`FILES`]' order: one line a
+/// `[[keys]]` entry, the entry's `description = "..."` line as the document wrote it, or an empty
+/// line for an entry without one.
+pub const DESCRIPTIONS: &[(&str, opentide_dataset::TextFn)] = &[
+    ("actors", || {
+        opentide_dataset::text_blob!("vocab/descriptions/actors")
+    }),
+    ("alert_severity", || {
+        opentide_dataset::text_blob!("vocab/descriptions/alert_severity")
+    }),
+    ("att&ck.groups", || {
+        opentide_dataset::text_blob!("vocab/descriptions/att&ck.groups")
+    }),
+    ("att&ck", || {
+        opentide_dataset::text_blob!("vocab/descriptions/att&ck")
+    }),
+    ("chaining_relations", || {
+        opentide_dataset::text_blob!("vocab/descriptions/chaining_relations")
+    }),
+    ("collection", || {
+        opentide_dataset::text_blob!("vocab/descriptions/collection")
+    }),
+    ("criticality", || {
+        opentide_dataset::text_blob!("vocab/descriptions/criticality")
+    }),
+    ("datasources", || {
+        opentide_dataset::text_blob!("vocab/descriptions/datasources")
+    }),
+    ("detection.composition", || {
+        opentide_dataset::text_blob!("vocab/descriptions/detection.composition")
+    }),
+    ("detection.methodology", || {
+        opentide_dataset::text_blob!("vocab/descriptions/detection.methodology")
+    }),
+    ("detection.types", || {
+        opentide_dataset::text_blob!("vocab/descriptions/detection.types")
+    }),
+    ("efforts", || {
+        opentide_dataset::text_blob!("vocab/descriptions/efforts")
+    }),
+    ("feasibility", || {
+        opentide_dataset::text_blob!("vocab/descriptions/feasibility")
+    }),
+    ("impact", || {
+        opentide_dataset::text_blob!("vocab/descriptions/impact")
+    }),
+    ("killchain", || {
+        opentide_dataset::text_blob!("vocab/descriptions/killchain")
+    }),
+    ("level", || {
+        opentide_dataset::text_blob!("vocab/descriptions/level")
+    }),
+    ("leverage", || {
+        opentide_dataset::text_blob!("vocab/descriptions/leverage")
+    }),
+    ("malapi", || {
+        opentide_dataset::text_blob!("vocab/descriptions/malapi")
+    }),
+    ("maturity", || {
+        opentide_dataset::text_blob!("vocab/descriptions/maturity")
+    }),
+    ("mitigations", || {
+        opentide_dataset::text_blob!("vocab/descriptions/mitigations")
+    }),
+    ("objectives", || {
+        opentide_dataset::text_blob!("vocab/descriptions/objectives")
+    }),
+    ("pap", || {
+        opentide_dataset::text_blob!("vocab/descriptions/pap")
+    }),
+    ("resources", || {
+        opentide_dataset::text_blob!("vocab/descriptions/resources")
+    }),
+    ("rsit", || {
+        opentide_dataset::text_blob!("vocab/descriptions/rsit")
+    }),
+    ("scheduling", || {
+        opentide_dataset::text_blob!("vocab/descriptions/scheduling")
+    }),
+    ("sectors", || {
+        opentide_dataset::text_blob!("vocab/descriptions/sectors")
+    }),
+    ("severity", || {
+        opentide_dataset::text_blob!("vocab/descriptions/severity")
+    }),
+    ("signal.entities", || {
+        opentide_dataset::text_blob!("vocab/descriptions/signal.entities")
+    }),
+    ("sophistication", || {
+        opentide_dataset::text_blob!("vocab/descriptions/sophistication")
+    }),
+    ("surface", || {
+        opentide_dataset::text_blob!("vocab/descriptions/surface")
+    }),
+    ("tier", || {
+        opentide_dataset::text_blob!("vocab/descriptions/tier")
+    }),
+    ("tlp", || {
+        opentide_dataset::text_blob!("vocab/descriptions/tlp")
+    }),
+    ("viability", || {
+        opentide_dataset::text_blob!("vocab/descriptions/viability")
+    }),
+    ("violation", || {
+        opentide_dataset::text_blob!("vocab/descriptions/violation")
+    }),
 ];
 
 type Slot = OnceLock<Result<Arc<Vocabulary>, VocabError>>;
+
+/// The descriptions of each bundled vocabulary, in [`FILES`]' order, each decoded when one of its
+/// entries is asked for its description.
+fn descriptions() -> &'static [Descriptions] {
+    static DESCRIPTIONS_OF: OnceLock<Vec<Descriptions>> = OnceLock::new();
+    DESCRIPTIONS_OF.get_or_init(|| {
+        DESCRIPTIONS
+            .iter()
+            .map(|(_, text)| Descriptions::new(*text))
+            .collect()
+    })
+}
 
 fn slots() -> &'static [Slot] {
     static SLOTS: OnceLock<Vec<Slot>> = OnceLock::new();
@@ -259,11 +235,16 @@ fn slots() -> &'static [Slot] {
 pub fn load(field: &str) -> Option<Result<Arc<Vocabulary>, VocabError>> {
     let index = FILES.iter().position(|(name, _)| *name == field)?;
     let (name, text) = FILES[index];
+    let text = text();
     Some(
         slots()[index]
             .get_or_init(|| {
-                Vocabulary::from_bundled_file(&format!("{name}{}", super::SUFFIX), text)
-                    .map(Arc::new)
+                Vocabulary::from_bundled_file(
+                    &format!("{name}{}", super::SUFFIX),
+                    text,
+                    &descriptions()[index],
+                )
+                .map(Arc::new)
             })
             .clone(),
     )

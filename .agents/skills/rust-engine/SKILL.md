@@ -42,7 +42,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 
 `scripts/engine/check-io-free.sh` greps `use std::fs` and `std::fs::` under those engine `src/` trees. `build.rs` and `tests/` may touch the filesystem. `opentide-lsp` and `main.rs` are the native host.
 
-New engine code takes bytes or strings from the caller. It does not open paths, environment variables, or the network. Catalog text is `include_str!` at compile time. `WorkspaceHost` is how analysis sees a workspace (`MemoryWorkspace` in tests).
+New engine code takes bytes or strings from the caller. It does not open paths, environment variables, or the network. Catalog text is compiled in as a compressed blob and decoded on first use (`opentide_dataset::text!`, #1743; never `include_str!`). `WorkspaceHost` is how analysis sees a workspace (`MemoryWorkspace` in tests).
 
 ## Dependencies
 
@@ -92,7 +92,7 @@ pub enum HighlightError {
 }
 ```
 
-`#[error("...")]` is the display text. `anyhow` stays in the binary (`Context` on I/O). Do not return `anyhow::Error` from an engine crate. Do not `unwrap()` catalog parses on a request path that should surface a diagnostic. `expect` on `include_str!` data is acceptable because a bad catalog fails the build's tests, not a user document; the workspace denies `unwrap_used` and `expect_used` outside tests, so the function says so: `#[expect(clippy::expect_used, reason = "parses a catalog compiled in with include_str!: ...")]`. The lints and their allow-list: `crates/AGENTS.md`, "Lints".
+`#[error("...")]` is the display text. `anyhow` stays in the binary (`Context` on I/O). Do not return `anyhow::Error` from an engine crate. Do not `unwrap()` catalog parses on a request path that should surface a diagnostic. `expect` on compiled-in data is acceptable because a bad catalog fails the build's tests, not a user document (`opentide_dataset` checks its own blobs at build time); the workspace denies `unwrap_used` and `expect_used` outside tests, so the function says so: `#[expect(clippy::expect_used, reason = "parses a catalog compiled in with include_str!: ...")]`. The lints and their allow-list: `crates/AGENTS.md`, "Lints".
 
 `clap` 4: `#[derive(Parser)]` on `Cli`, `#[command(subcommand)]` for `analyze` / `highlight` / `generate-highlights`. `--stdio` and `--listen` are flags checked **before** the subcommand. A new subcommand must print plain JSON or text. It must not write `Content-Length` frames.
 

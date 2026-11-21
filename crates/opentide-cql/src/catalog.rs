@@ -12,18 +12,15 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const FUNCTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/cql/functions.toml"
-));
-const EVENTS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/cql/events.toml"
-));
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/cql/fields.toml"
-));
+fn functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/cql/functions.toml")
+}
+fn events_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/cql/events.toml")
+}
+fn fields_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/cql/fields.toml")
+}
 
 /// One CQL function (`groupBy`, `array:filter`, `ioc:lookup`).
 #[derive(Debug, Clone, Deserialize)]
@@ -231,22 +228,23 @@ fn files() -> (FunctionsFile, EventsFile, FieldsFile) {
     let functions = FunctionsFile {
         functions: compiled_in(
             "data/catalogs/cql/functions.toml",
-            array_items(FUNCTIONS_TOML, "functions"),
+            array_items(functions_toml(), "functions"),
         ),
     };
-    let first: EventsPreamble = compiled_in("data/catalogs/cql/events.toml", preamble(EVENTS_TOML));
+    let first: EventsPreamble =
+        compiled_in("data/catalogs/cql/events.toml", preamble(events_toml()));
     let events = EventsFile {
         platforms: first.platforms,
         common_fields: first.common_fields,
         events: compiled_in(
             "data/catalogs/cql/events.toml",
-            array_items(EVENTS_TOML, "events"),
+            array_items(events_toml(), "events"),
         ),
     };
     let fields = FieldsFile {
         fields: compiled_in(
             "data/catalogs/cql/fields.toml",
-            array_items(FIELDS_TOML, "fields"),
+            array_items(fields_toml(), "fields"),
         ),
     };
     (functions, events, fields)
@@ -350,9 +348,9 @@ mod tests {
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
         let (functions, events, fields) = files();
-        let whole_functions: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
-        let whole_events: EventsFile = toml::from_str(EVENTS_TOML).unwrap();
-        let whole_fields: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
+        let whole_functions: FunctionsFile = toml::from_str(functions_toml()).unwrap();
+        let whole_events: EventsFile = toml::from_str(events_toml()).unwrap();
+        let whole_fields: FieldsFile = toml::from_str(fields_toml()).unwrap();
         assert_eq!(format!("{functions:?}"), format!("{whole_functions:?}"));
         assert_eq!(format!("{events:?}"), format!("{whole_events:?}"));
         assert_eq!(format!("{fields:?}"), format!("{whole_fields:?}"));

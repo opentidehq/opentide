@@ -43,26 +43,21 @@ use std::sync::OnceLock;
 mod index;
 mod parens;
 
-const COMMANDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/spl/commands.toml"
-));
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/spl/fields.toml"
-));
-const DATAMODELS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/spl/datamodels.toml"
-));
-const MACROS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/spl/macros.toml"
-));
-const OPTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/spl/command-options.toml"
-));
+fn commands_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/spl/commands.toml")
+}
+fn fields_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/spl/fields.toml")
+}
+fn datamodels_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/spl/datamodels.toml")
+}
+fn macros_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/spl/macros.toml")
+}
+fn options_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/spl/command-options.toml")
+}
 
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
@@ -228,24 +223,27 @@ fn files() -> (
         compiled_in(&format!("data/catalogs/spl/{file}"), result)
     }
     let commands = CommandsFile {
-        commands: read("commands.toml", array_items(COMMANDS_TOML, "commands")),
-        functions: read("commands.toml", array_items(COMMANDS_TOML, "functions")),
+        commands: read("commands.toml", array_items(commands_toml(), "commands")),
+        functions: read("commands.toml", array_items(commands_toml(), "functions")),
     };
     let fields = FieldsFile {
-        fields: read("fields.toml", array_items(FIELDS_TOML, "fields")),
+        fields: read("fields.toml", array_items(fields_toml(), "fields")),
     };
     let datamodels = DatamodelsFile {
-        models: read::<DatamodelsPreamble>("datamodels.toml", preamble(DATAMODELS_TOML)).models,
+        models: read::<DatamodelsPreamble>("datamodels.toml", preamble(datamodels_toml())).models,
         datamodels: read(
             "datamodels.toml",
-            array_items(DATAMODELS_TOML, "datamodels"),
+            array_items(datamodels_toml(), "datamodels"),
         ),
     };
     let macros = MacrosFile {
-        macros: read("macros.toml", array_items(MACROS_TOML, "macros")),
+        macros: read("macros.toml", array_items(macros_toml(), "macros")),
     };
     let options = OptionsFile {
-        options: read("command-options.toml", array_items(OPTIONS_TOML, "options")),
+        options: read(
+            "command-options.toml",
+            array_items(options_toml(), "options"),
+        ),
     };
     (commands, fields, datamodels, macros, options)
 }
@@ -1241,15 +1239,15 @@ mod tests {
         let (commands, fields, datamodels, macros, options) = files();
         assert_eq!(
             format!("{commands:?}"),
-            whole::<CommandsFile>(COMMANDS_TOML)
+            whole::<CommandsFile>(commands_toml())
         );
-        assert_eq!(format!("{fields:?}"), whole::<FieldsFile>(FIELDS_TOML));
+        assert_eq!(format!("{fields:?}"), whole::<FieldsFile>(fields_toml()));
         assert_eq!(
             format!("{datamodels:?}"),
-            whole::<DatamodelsFile>(DATAMODELS_TOML)
+            whole::<DatamodelsFile>(datamodels_toml())
         );
-        assert_eq!(format!("{macros:?}"), whole::<MacrosFile>(MACROS_TOML));
-        assert_eq!(format!("{options:?}"), whole::<OptionsFile>(OPTIONS_TOML));
+        assert_eq!(format!("{macros:?}"), whole::<MacrosFile>(macros_toml()));
+        assert_eq!(format!("{options:?}"), whole::<OptionsFile>(options_toml()));
     }
 
     /// #179: tree-sitter's `prev_sibling()` cycled between a MISSING `)` and a

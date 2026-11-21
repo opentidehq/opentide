@@ -123,7 +123,11 @@ PYTHON_BINDING = ROOT / "bindings" / "python" / "Cargo.toml"
 LOCK = ROOT / "Cargo.lock"
 # Cargo workspaces of their own, under ROOT, whose locks pin the workspace crates.
 NESTED_WORKSPACES = ("fuzz",)
-ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
+# A path a crate compiles in: `opentide_dataset::text!("<path>")` (#1743), or the older
+# `include_str!(concat!(env!("OPENTIDE_ASSETS"), "/<path>"))` (a test's fixture).
+ASSET_INCLUDE = re.compile(
+    r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"|opentide_dataset::text!\(\s*"([^"]+)"'
+)
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
 SUMS = "SHA256SUMS"
@@ -423,7 +427,7 @@ def crate_assets(package: dict) -> list[str]:
     crate = Path(package["manifest_path"]).parent
     found = set()
     for source in crate.glob("src/**/*.rs"):
-        found.update(ASSET_INCLUDE.findall(source.read_text()))
+        found.update(a or b for a, b in ASSET_INCLUDE.findall(source.read_text()))
     meta = (package.get("metadata") or {}).get("opentide") or {}
     found.update(meta.get("assets", []))
     return sorted(found)

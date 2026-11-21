@@ -14,6 +14,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+opentide-dataset.workspace = true
 opentide-core.workspace = true
 # The Sysdig block's exception shape, which the model checks for `validate`
 # (`falco::exception_diagnostics` leaves an exception it refuses to it).
@@ -40,3 +41,12 @@ regex.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+# The vocabularies are parsed once at build time (`build.rs`, #1743).
+serde.workspace = true
+toml.workspace = true
+
+[package.metadata.opentide]
+assets = ["src/opentide/data/vocabulary"]

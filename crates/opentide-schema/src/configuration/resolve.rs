@@ -48,7 +48,7 @@ impl Folder {
             path: "opentide/data/configurations".to_owned(),
             files: bundled::FILES
                 .iter()
-                .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
+                .map(|(path, text)| ((*path).to_owned(), text().to_owned()))
                 .collect(),
             folders,
         }

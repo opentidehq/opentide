@@ -23,12 +23,13 @@ use thiserror::Error;
 pub use keywords::{Capture, Keywords, keywords};
 pub use markdown::highlight_markdown_line;
 
-pub const SPEC_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/highlights/spec.toml"));
+pub fn spec_toml() -> &'static str {
+    opentide_dataset::text!("highlights/spec.toml")
+}
 /// Tide field catalog generated from the Rust models (`cargo xtask codegen`).
-pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/tide/generated/fields.json"
-));
+pub fn tide_fields_json() -> &'static str {
+    opentide_dataset::text!("data/catalogs/tide/generated/fields.json")
+}
 #[derive(Debug, Error)]
 pub enum HighlightError {
     #[error("highlight spec: {0}")]
@@ -83,7 +84,7 @@ impl HighlightSpec {
             return Ok(spec);
         }
         let file: SpecFile =
-            toml::from_str(SPEC_TOML).map_err(|e| HighlightError::Spec(e.to_string()))?;
+            toml::from_str(spec_toml()).map_err(|e| HighlightError::Spec(e.to_string()))?;
         if file.meta.legend.is_empty() {
             return Err(HighlightError::Spec("empty legend".into()));
         }
@@ -295,7 +296,7 @@ fn build_tide_catalog(json: &str) -> Result<TideCatalog, String> {
 )]
 fn bundled_tide_catalog() -> &'static TideCatalog {
     static CATALOG: OnceLock<TideCatalog> = OnceLock::new();
-    CATALOG.get_or_init(|| build_tide_catalog(TIDE_FIELDS_JSON).expect("generated fields.json"))
+    CATALOG.get_or_init(|| build_tide_catalog(tide_fields_json()).expect("generated fields.json"))
 }
 
 /// The workspace catalog a host installed, and the text it was built from.
@@ -1227,7 +1228,7 @@ mod tests {
         assert!(spec.token_index("keyword").is_ok());
         assert!(!load_tide_fields().is_empty());
         let bundled: serde_json::Value =
-            serde_json::from_str(TIDE_FIELDS_JSON).expect("fields.json");
+            serde_json::from_str(tide_fields_json()).expect("fields.json");
         assert_eq!(Some(tide_catalog_version()), bundled["opentide"].as_str());
         assert_eq!(tide_key_capture("description"), "tide.property");
         assert_eq!(tide_key_capture("alert"), "tide.property");

@@ -387,28 +387,74 @@ fn misspellings(value: &str, seed: usize) -> Vec<String> {
     typos
 }
 
-/// Every bundled vocabulary read item by item is field for field the
-/// document read whole (ADR 0013, #1071).
+/// The bundled document of `field` as the repository holds it.
+fn on_disk(field: &str) -> String {
+    let path = format!(
+        "{}/src/opentide/data/vocabulary/{field}{}",
+        env!("OPENTIDE_ASSETS"),
+        super::SUFFIX
+    );
+    std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path}: {error}"))
+}
+
+/// Every bundled vocabulary read item by item, its descriptions from the compiled-in lines, is field
+/// for field the document read whole (ADR 0013, #1071, #1743).
 #[test]
 fn bundled_vocabularies_read_item_by_item_are_the_whole_documents() {
-    for (field, text) in super::bundled::FILES {
+    for field in super::bundled::fields() {
         let file = format!("{field}{}", super::SUFFIX);
-        let read = super::Vocabulary::from_bundled_file(&file, text).expect("item by item");
-        let whole = super::Vocabulary::from_file(&file, text).expect("whole");
+        let read = super::bundled::load(field).unwrap().expect("item by item");
+        let whole = super::Vocabulary::from_file(&file, &on_disk(field)).expect("whole");
         assert_eq!(format!("{read:?}"), format!("{whole:?}"), "{file}");
     }
+}
+
+/// What the build stores (`build.rs`) is the document split in two: the document without its entries'
+/// descriptions, and those descriptions, a line for each entry.
+#[test]
+fn the_compiled_in_texts_are_the_split_documents() {
+    for ((field, lean), (same, descriptions)) in super::bundled::FILES
+        .iter()
+        .zip(super::bundled::DESCRIPTIONS)
+    {
+        assert_eq!(field, same);
+        let (want_lean, want_descriptions) = super::split::split(&on_disk(field));
+        assert_eq!(
+            lean(),
+            want_lean,
+            "{field}: the document without descriptions"
+        );
+        assert_eq!(
+            descriptions(),
+            want_descriptions,
+            "{field}: the descriptions"
+        );
+    }
+}
+
+#[test]
+fn splitting_moves_the_descriptions_of_entries_only() {
+    let text = "name = \"V\"\ndescription = \"the document's own\"\n[[stages]]\nname = \"S\"\ndescription = \"a stage\"\n\
+                [[keys]]\nname = \"a\"\ndescription = \"first\"\n[[keys]]\nname = \"b\"\n[[keys]]\nname = \"c\"\ndescription = \"third\"\n";
+    let (lean, descriptions) = super::split::split(text);
+    assert_eq!(
+        lean,
+        "name = \"V\"\ndescription = \"the document's own\"\n[[stages]]\nname = \"S\"\ndescription = \"a stage\"\n\
+         [[keys]]\nname = \"a\"\n[[keys]]\nname = \"b\"\n[[keys]]\nname = \"c\"\n"
+    );
+    assert_eq!(
+        descriptions,
+        "description = \"first\"\n\ndescription = \"third\"\n"
+    );
 }
 
 /// The alert severity scale's display name names no product
 /// (opentidehq/specifications#96).
 #[test]
 fn the_alert_severity_vocabulary_is_named_alert_severity() {
-    let (_, text) = super::bundled::FILES
-        .iter()
-        .find(|(field, _)| *field == "alert_severity")
-        .expect("alert_severity is bundled");
+    let text = on_disk("alert_severity");
     let vocabulary =
-        super::Vocabulary::from_file("alert_severity.vocab.toml", text).expect("it parses");
+        super::Vocabulary::from_file("alert_severity.vocab.toml", &text).expect("it parses");
     assert_eq!(vocabulary.metadata.name, "Alert Severity");
     assert!(!text.contains("MDR"), "{text}");
 }
