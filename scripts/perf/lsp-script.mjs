@@ -2,7 +2,7 @@
 // Writes a fixed LSP session to stdout, for profilers that wrap the server (callgrind, perf):
 //   node lsp-script.mjs WORKSPACE DOC SCENARIO | valgrind --tool=callgrind opentide-lsp --stdio
 // SCENARIO: wspull (three workspace/diagnostic pulls), edit (typing + document diagnostics),
-//           complete (completion, hover and tokens at fixed positions, repeated).
+//           editpull (a keystroke, then a workspace pull), complete (completion, hover and tokens at fixed positions, repeated).
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -35,6 +35,11 @@ for (let i = 0; i < n; i += 1) {
     const p = pos('description: |', 14);
     note('textDocument/didChange', { textDocument: { uri, version: 2 + i }, contentChanges: [{ range: { start: p, end: p }, text: ' ' }] });
     req('textDocument/diagnostic', { textDocument: { uri } });
+  }
+  if (scenario === 'editpull') {
+    const p = pos('description: |', 14);
+    note('textDocument/didChange', { textDocument: { uri, version: 2 + i }, contentChanges: [{ range: { start: p, end: p }, text: ' ' }] });
+    req('workspace/diagnostic', { previousResultIds: [] });
   }
   if (scenario === 'complete') {
     req('textDocument/completion', { textDocument: { uri }, position: pos('  - T1059', 7), context: { triggerKind: 1 } });

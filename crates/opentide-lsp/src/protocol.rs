@@ -527,6 +527,7 @@ fn respond(
     }
     let method = request.method.clone();
     let id = request.id.clone();
+    let _span = crate::timing::Span::new(format!("request {method}"));
     let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::handlers::request(session, request)
     }));

@@ -1005,9 +1005,14 @@ impl Session {
         // the queries it carries. The editor's index is built on the first
         // request that reads it (a hover, a completion, the catalog), not
         // before the first diagnostics (#926).
-        let mut response = analyze(&host, request);
+        let _span = crate::timing::Span::new("analysis of an open document");
+        let mut response = {
+            let _span = crate::timing::Span::new("analysis: the engine");
+            analyze(&host, request)
+        };
         match doc.language {
             LanguageId::TideYaml => {
+                let _span = crate::timing::Span::new("analysis: the object's findings");
                 let found = self.object_findings(uri, doc);
                 response.diagnostics.splice(0..0, found);
             }
@@ -1190,6 +1195,7 @@ impl Session {
         };
         let buffers = self.buffers(Some(root));
         let mut checks = r.checks.borrow_mut();
+        let _span = crate::timing::Span::new("closed findings (every object, once per generation)");
         let found = checks.all_findings(&r.path, buffers, self.generation.get());
         let key = checks.resolve(Path::new(path));
         drop(checks);

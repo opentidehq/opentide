@@ -1103,8 +1103,16 @@ fn handle_workspace_diagnostics(
         .collect();
     let mut items = Vec::new();
     for root in 0..session.roots.len() {
-        let host = session.host(Some(root));
-        for (path, text) in session.closed_objects(root) {
+        let host = {
+            let _span = crate::timing::Span::new("workspace/diagnostic: host");
+            session.host(Some(root))
+        };
+        let closed = {
+            let _span = crate::timing::Span::new("workspace/diagnostic: closed objects");
+            session.closed_objects(root)
+        };
+        let _span = crate::timing::Span::new("workspace/diagnostic: files");
+        for (path, text) in closed {
             if open.contains(&crate::session::path_key(&path)) {
                 continue;
             }
