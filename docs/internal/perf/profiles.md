@@ -1,3 +1,8 @@
+---
+title: "Profiles: where the editor's time goes"
+description: "Callgrind call-tree summaries and the server's timing trace for the workspace pull, start-up and first requests, behind the 2026-11-21 editor-latency report."
+---
+
 # Profiles: where the editor's time goes
 
 Call-tree summaries from `valgrind --tool=callgrind` of the release `opentide-lsp` (line tables kept, LTO as shipped), a scripted session on the 1,200-object workspace (`scripts/perf/lsp-script.mjs`). Inclusive instruction counts (Ir), the biggest frames first; frames that only wrap others (threads, runtime entry points, once-cells) are left out. Instructions are not time (valgrind runs the server 30 to 60 times slower), but their shares are the shares of the CPU time.

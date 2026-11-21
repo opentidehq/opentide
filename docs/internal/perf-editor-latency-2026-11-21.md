@@ -1,3 +1,8 @@
+---
+title: "Editor latency: Ctrl+Space, hover and diagnostics (2026-11-21)"
+description: "Why Ctrl+Space took seconds in the VS Code extension, measured per runtime tier (Python 0.28.1, native, WASI, browser engine) and in VS Code, the cause in the server's workspace diagnostics, the fix, the regression gate and what is left."
+---
+
 # Editor latency: Ctrl+Space, hover and diagnostics (2026-11-21)
 
 Customers reported that Ctrl+Space in the VS Code extension took a very long time to show anything. This is the measurement, the cause, the fix, and what is left.
