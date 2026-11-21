@@ -500,7 +500,11 @@ pub fn coverage(index: &Index, technique: &str, tactic: &str) -> Json {
     ])
 }
 
-fn platform_state(block: Option<&Node>, external_ids: Option<&IndexMap<String, String>>) -> Json {
+fn platform_state(
+    name: &str,
+    block: Option<&Node>,
+    external_ids: Option<&IndexMap<String, String>>,
+) -> Json {
     let ids: Vec<(String, Json)> = external_ids
         .map(|ids| {
             ids.iter()
@@ -520,15 +524,29 @@ fn platform_state(block: Option<&Node>, external_ids: Option<&IndexMap<String, S
     } else {
         Json::Null
     };
-    Json::object([
+    let mut state = vec![
         (
-            "deployed",
+            "deployed".to_owned(),
             Json::Bool(!ids.is_empty() || !tenants.is_empty()),
         ),
-        ("rule_id", rule_id),
-        ("external_ids", Json::object(ids)),
-        ("tenants", Json::Array(tenants)),
-    ])
+        ("rule_id".to_owned(), rule_id),
+        ("external_ids".to_owned(), Json::object(ids)),
+        ("tenants".to_owned(), Json::Array(tenants)),
+    ];
+    // A platform that addresses its rules without a vendor id has no state to
+    // read: a deploy leaves no trace here, and `deployed` only says the rule's
+    // block names tenants.
+    if opentide_schema::platforms::external_id_kind(name)
+        == opentide_schema::platforms::ExternalId::None
+    {
+        state.push(("note".to_owned(), Json::Str(format!(
+            "opentide records no deployment state for {name}: it addresses its rules without a vendor id, \
+             so a deploy leaves nothing here and deployed only says the rule's block names tenants. \
+             Ask the tenant: validate_query or run_query with live true; deploy_rule with dry_run true \
+             previews what a deploy sends."
+        ))));
+    }
+    Json::object(state)
 }
 
 /// `deployment_status`: where the rule `uuid` is deployed.
@@ -574,12 +592,15 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
         for entry in blocks {
             let name = entry.key.value.to_string();
             let block = matches!(entry.value.value, Value::Map(_)).then_some(entry.value.as_ref());
-            platforms.push((name.clone(), platform_state(block, recorded.get(&name))));
+            platforms.push((
+                name.clone(),
+                platform_state(&name, block, recorded.get(&name)),
+            ));
         }
     }
     for (name, ids) in &recorded {
         if !platforms.iter().any(|(key, _)| key == name) {
-            platforms.push((name.clone(), platform_state(None, Some(ids))));
+            platforms.push((name.clone(), platform_state(name, None, Some(ids))));
         }
     }
     let mut payload = vec![

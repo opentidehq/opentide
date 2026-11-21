@@ -118,6 +118,13 @@ fn every_catalogue_tool_answers_on_the_corpus() {
     assert_eq!(coverage["covered"], true);
     let status = call(&server, "deployment_status", json!({"uuid": SENTINEL_RULE}));
     assert_eq!(status["platforms"]["sentinel"]["deployed"], false);
+    // Sentinel addresses its rules without a vendor id: no state is kept, and
+    // the answer says why `deployed` cannot say more.
+    let note = status["platforms"]["sentinel"]["note"].as_str().unwrap();
+    assert!(
+        note.contains("records no deployment state for sentinel"),
+        "{note}"
+    );
     let report = call(&server, "validate_rule", json!({"uuid": SENTINEL_RULE}));
     assert_eq!(report["valid"], true, "{report}");
     assert_eq!(report["next_actions"][0]["tool"], "deploy_rule");
