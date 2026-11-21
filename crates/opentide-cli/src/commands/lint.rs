@@ -144,6 +144,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             query_check: queries
                 .as_ref()
                 .map(|check| check as &dyn opentide_workspace::lint::LintQueryCheck),
+            selected: None,
         };
         ws.lint(Some(&OsFs), &options)
     };

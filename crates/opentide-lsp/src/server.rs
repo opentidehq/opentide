@@ -253,6 +253,7 @@ pub fn validate_file(root: &Path, file: &Path, text: &str) -> Vec<opentide_core:
         crate::checks::Buffers::default(),
         vec![file.clone()],
         0,
+        0,
     );
     found
         .get(&checks.resolve(&file))
@@ -279,7 +280,7 @@ pub fn validate_standalone(file: &Path, text: &str) -> Vec<opentide_core::Diagno
         return Vec::new();
     };
     buffers.files.insert(placed.clone(), text.to_string());
-    let found = checks.findings(&root, buffers, vec![placed.clone()], 0);
+    let found = checks.findings(&root, buffers, vec![placed.clone()], 0, 0);
     found
         .get(&checks.resolve(&placed))
         .map(|findings| {
@@ -305,7 +306,7 @@ impl ObjectFindings {
     /// does not resolve gives no finding (`validate` stops there).
     pub fn validate(root: &Path) -> Self {
         let mut checks = crate::checks::RootChecks::default();
-        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0);
+        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0, 0);
         Self { checks, found }
     }
 

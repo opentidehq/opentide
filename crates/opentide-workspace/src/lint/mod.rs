@@ -201,6 +201,19 @@ pub trait LintQueryCheck: Sync {
     }
 }
 
+/// Whether `file` is one `lint` reads for the workspace at `root`: a file
+/// directly in the folder of a family under `objects/`.
+pub fn is_lint_candidate(root: &Path, file: &Path) -> bool {
+    let Some(folder) = file.parent() else {
+        return false;
+    };
+    folder.parent() == Some(root.join("objects").as_path())
+        && folder
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| OBJECT_FAMILIES.contains(&name))
+}
+
 /// `lint`'s options.
 #[derive(Default)]
 pub struct LintOptions<'a> {
@@ -219,6 +232,12 @@ pub struct LintOptions<'a> {
     pub cwd: PathBuf,
     /// The queries check; without one it finds nothing.
     pub query_check: Option<&'a dyn LintQueryCheck>,
+    /// The object files to report on, as the workspace names them (its
+    /// index's paths): given by a host that already holds the workspace, which
+    /// resolves no path against the disk to find them. A file that is not an
+    /// object file of the run refuses it, as a `--file` that matches none
+    /// does. Takes the place of `files`.
+    pub selected: Option<Vec<PathBuf>>,
 }
 
 impl std::fmt::Debug for LintOptions<'_> {
@@ -231,6 +250,7 @@ impl std::fmt::Debug for LintOptions<'_> {
             .field("changed", &self.changed)
             .field("cwd", &self.cwd)
             .field("query_check", &self.query_check.is_some())
+            .field("selected", &self.selected)
             .finish()
     }
 }
@@ -519,13 +539,65 @@ pub fn lint(
     config: &LintConfig,
     options: &LintOptions<'_>,
 ) -> LintReport {
-    lint_with(fs, writer, root, config, options, &Parses::new())
+    lint_with(fs, writer, root, config, options, &Parses::new(), None)
 }
 
 /// Object files already parsed, by path: what a [`crate::Workspace`]'s
 /// index holds. Lint reads such a file from its parse, not the disk; the
 /// parse is the same (`load::parse` reads a file as lint does).
 type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>;
+
+/// What a host that runs `lint` again and again over one workspace
+/// ([`crate::Workspace::editor_lint`], once per keystroke) keeps between runs:
+/// the light record of each object file the run does not report on
+/// ([`load_record`]), for the document it was read from. A file whose
+/// document is the one it was is not read again.
+#[derive(Default)]
+pub struct RecordCache(
+    std::sync::Mutex<std::collections::HashMap<PathBuf, (std::sync::Arc<node::Document>, Record)>>,
+);
+
+impl std::fmt::Debug for RecordCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecordCache").finish_non_exhaustive()
+    }
+}
+
+impl RecordCache {
+    /// The record of `path` for `document`: the kept one, or the one `load`
+    /// makes, kept.
+    fn record(
+        &self,
+        path: &Path,
+        document: &std::sync::Arc<node::Document>,
+        load: impl FnOnce() -> Record,
+    ) -> Record {
+        let kept = self.0.lock().ok().and_then(|cache| {
+            cache
+                .get(path)
+                .filter(|(known, _)| std::sync::Arc::ptr_eq(known, document))
+                .map(|(_, record)| record.clone())
+        });
+        if let Some(record) = kept {
+            return record;
+        }
+        let record = load();
+        if let Ok(mut cache) = self.0.lock() {
+            cache.insert(
+                path.to_path_buf(),
+                (std::sync::Arc::clone(document), record.clone()),
+            );
+        }
+        record
+    }
+
+    /// Forgets the files `parses` does not hold any more.
+    fn retain(&self, parses: &Parses) {
+        if let Ok(mut cache) = self.0.lock() {
+            cache.retain(|path, _| parses.contains_key(path));
+        }
+    }
+}
 
 /// How many object files lint parses and checks at a time: their trees are
 /// alive together.
@@ -540,6 +612,7 @@ fn lint_with(
     config: &LintConfig,
     options: &LintOptions<'_>,
     parses: &Parses,
+    cache: Option<&RecordCache>,
 ) -> LintReport {
     let target = fs.resolve(root);
     let selected: Vec<LintCheck> = if options.checks.is_empty() {
@@ -549,7 +622,9 @@ fn lint_with(
     };
     let (object_files, nested) = object_files(fs, &target);
     let candidates: Vec<PathBuf> = object_files.iter().chain(&nested).cloned().collect();
-    let scope = match narrow(fs, &target, &candidates, options) {
+    let scope = match narrow_selected(&target, &candidates, options)
+        .unwrap_or_else(|| narrow(fs, &target, &candidates, options))
+    {
         Ok(scope) => scope,
         Err(mut refused) => {
             refused.checks = selected;
@@ -580,7 +655,15 @@ fn lint_with(
     for chunk in candidates.chunks(LOAD_CHUNK) {
         let loaded: Vec<Record> = chunk
             .par_iter()
-            .map(|path| load_record(fs, &target, path, parses.get(*path)))
+            .map(|path| {
+                let light = !in_scope(path);
+                match (cache.filter(|_| light), parses.get(*path)) {
+                    (Some(cache), Some(document)) => cache.record(path, document, || {
+                        load_record(fs, &target, path, Some(document), true)
+                    }),
+                    (_, tree) => load_record(fs, &target, path, tree, light),
+                }
+            })
             .collect();
         let first = records.len();
         for mut record in loaded {
@@ -613,6 +696,9 @@ fn lint_with(
         for record in &mut records[first..] {
             record.document = None;
         }
+    }
+    if let Some(cache) = cache {
+        cache.retain(parses);
     }
     let shown: Vec<usize> = (0..records.len())
         .filter(|&index| in_scope(&records[index].path))
@@ -700,19 +786,25 @@ pub fn lint_file(
         fs,
         root,
         config,
-        Some(&[file.to_path_buf()]),
+        Some(vec![file.to_path_buf()]),
+        false,
         &Parses::new(),
+        None,
     )
 }
 
 /// [`lint_file`] on `files`, or on every object file for `None`, in one
-/// run, reading the files `parses` holds from there.
+/// run, reading the files `parses` holds from there. `named`: `files` are
+/// the workspace's own names for them ([`LintOptions::selected`]), not paths
+/// to resolve.
 fn editor_findings(
     fs: &dyn FileSystem,
     root: &Path,
     config: &LintConfig,
-    files: Option<&[PathBuf]>,
+    files: Option<Vec<PathBuf>>,
+    named: bool,
     parses: &Parses,
+    cache: Option<&RecordCache>,
 ) -> Vec<LintFinding> {
     let checks: Vec<LintCheck> = enabled_checks(config)
         .into_iter()
@@ -723,20 +815,22 @@ fn editor_findings(
             )
         })
         .collect();
-    if checks.is_empty() || files.is_some_and(<[PathBuf]>::is_empty) {
+    if checks.is_empty() || files.as_ref().is_some_and(Vec::is_empty) {
         return Vec::new();
     }
     let options = LintOptions {
         checks,
         files: files
-            .unwrap_or_default()
             .iter()
+            .flatten()
+            .filter(|_| !named)
             .map(|file| file.to_string_lossy().into_owned())
             .collect(),
+        selected: files.filter(|_| named),
         cwd: root.to_path_buf(),
         ..LintOptions::default()
     };
-    let report = lint_with(fs, None, root, config, &options, parses);
+    let report = lint_with(fs, None, root, config, &options, parses, cache);
     report
         .findings
         .into_iter()
@@ -797,6 +891,47 @@ struct Narrowed {
     files: Vec<PathBuf>,
     flags: Vec<String>,
     warning: Option<String>,
+}
+
+/// [`narrow`] for a run whose files the host named already
+/// ([`LintOptions::selected`]): nothing is resolved against the disk. `None`
+/// when the host named none.
+fn narrow_selected(
+    target: &Path,
+    candidates: &[PathBuf],
+    options: &LintOptions<'_>,
+) -> Option<Result<Option<Narrowed>, Box<LintReport>>> {
+    let selected = options.selected.as_ref()?;
+    let known: std::collections::HashSet<&PathBuf> = candidates.iter().collect();
+    let unmatched: Vec<String> = selected
+        .iter()
+        .filter(|path| !known.contains(path))
+        .map(|path| relative(target, path))
+        .collect();
+    if !unmatched.is_empty() {
+        let folders = OBJECT_FAMILIES
+            .iter()
+            .map(|family| format!("objects/{family}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut refused = LintReport::refused(
+            target,
+            Vec::new(),
+            format!(
+                "No object file directly in {folders} matched: {}",
+                unmatched.join(", ")
+            ),
+            1,
+        );
+        refused.unmatched = unmatched;
+        return Some(Err(Box::new(refused)));
+    }
+    Some(Ok(Some(Narrowed {
+        label: "selected",
+        files: selected.clone(),
+        flags: Vec::new(),
+        warning: None,
+    })))
 }
 
 fn narrow(
@@ -903,11 +1038,17 @@ fn as_str(node: Option<&Node>) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// `light`: the record is for a file the run does not report on, read only
+/// for what the other files' expected stems depend on (its name, UUID and
+/// kind), not for what a finding about it would show (its text, its key lines
+/// and its placeholders): on a narrowed run, as the editor makes for each
+/// keystroke, those are most of what loading every object file cost.
 fn load_record(
     fs: &dyn FileSystem,
     root: &Path,
     path: &Path,
     parsed: Option<&std::sync::Arc<node::Document>>,
+    light: bool,
 ) -> Record {
     let relative = path.strip_prefix(root).map_or_else(|_| posix(path), posix);
     let parts: Vec<&str> = relative.split('/').collect();
@@ -919,6 +1060,9 @@ fn load_record(
         ..Record::default()
     };
     if let Some(document) = parsed {
+        if light {
+            return read_parsed(record, document);
+        }
         return read_document(record, document.source().to_owned(), document);
     }
     let bytes = match fs.read(path) {
@@ -964,6 +1108,12 @@ fn read_document(
     record.key_lines = top_level_key_lines(&text);
     record.placeholders = placeholder_lines(&text);
     record.text = Some(text);
+    read_parsed(record, document)
+}
+
+/// What a parsed document says of its record: the problem with its root, or
+/// its name, UUID, schema and metadata ([`load_record`]'s `light` stops here).
+fn read_parsed(mut record: Record, document: &std::sync::Arc<node::Document>) -> Record {
     if let Some(problem) = crate::load::root_mapping_problem(document) {
         record.parse_error = Some(problem);
         return record;
@@ -1885,7 +2035,29 @@ impl crate::Workspace {
             .iter()
             .map(|source| (source.path.clone(), std::sync::Arc::clone(&source.document)))
             .collect();
-        editor_findings(self.fs().as_ref(), self.root(), &config, files, &parses)
+        // The files as the index names them: a symbolic link is named by its
+        // link, and a file asked for by what it resolves to.
+        let selected = files.map(|files| {
+            let mut named: Vec<PathBuf> = Vec::with_capacity(files.len());
+            for file in files {
+                let found = self.index().sources.iter().find(|source| {
+                    source.path == *file || self.links().get(&source.path) == Some(file)
+                });
+                // A file the workspace holds no object of (an unsaved buffer)
+                // is left as asked: the run refuses it, as before.
+                named.push(found.map_or_else(|| file.clone(), |source| source.path.clone()));
+            }
+            named
+        });
+        editor_findings(
+            self.fs().as_ref(),
+            self.root(),
+            &config,
+            selected,
+            true,
+            &parses,
+            Some(&self.lint_records),
+        )
     }
 
     /// `lint` on this workspace, with its resolved `lint.toml`. A `lint.toml`

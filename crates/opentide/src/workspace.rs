@@ -235,6 +235,7 @@ impl Workspace {
                     changed: None,
                     cwd: self.inner.cwd().to_path_buf(),
                     query_check: Some(check),
+                    selected: None,
                 },
             )
         })

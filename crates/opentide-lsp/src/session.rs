@@ -313,7 +313,7 @@ impl CatalogSightings {
 
 /// One closed file's entry of a workspace pull: its URI, the id of its
 /// diagnostics and the diagnostics.
-pub(crate) type ReportEntry = (lsp_types::Uri, String, Vec<lsp_types::Diagnostic>);
+pub(crate) type ReportEntry = Arc<(lsp_types::Uri, String, Vec<lsp_types::Diagnostic>)>;
 
 /// A workspace pull's report, and the [`Session::state_key`] it was made in.
 pub(crate) type CachedReport = ((u64, u64), Arc<Vec<ReportEntry>>);
@@ -330,6 +330,12 @@ struct DiskFile {
     /// repeats every two seconds for as long as the editor runs, and an
     /// analysis reads nothing but the text and the epoch's catalogs.
     analysis: Mutex<Option<(u64, Arc<Vec<opentide_core::Diagnostic>>)>>,
+    /// This file's entry of the last workspace pull that held it, with the
+    /// epoch and the stamp of the workspace's findings it was made from
+    /// ([`RootChecks::stamp_of`]): an edit elsewhere leaves it as it was.
+    reported: Mutex<Option<(u64, u64, ReportEntry)>>,
+    /// The path as the workspace names the file ([`RootChecks::resolve`]).
+    resolved: OnceLock<PathBuf>,
 }
 
 impl DiskFile {
@@ -339,6 +345,8 @@ impl DiskFile {
             text,
             indexed: OnceLock::new(),
             analysis: Mutex::new(None),
+            reported: Mutex::new(None),
+            resolved: OnceLock::new(),
         }
     }
 
@@ -1287,9 +1295,9 @@ impl Session {
             files
         };
         let buffers = self.buffers(doc.root);
-        let generation = self.generation.get();
+        let (generation, epoch) = self.state_key();
         let run = |root: &Path, checks: &mut RootChecks| {
-            let found = checks.findings(root, buffers, files, generation);
+            let found = checks.findings(root, buffers, files, generation, epoch);
             (found, checks.resolve(&path), checks.failure.clone())
         };
         let (found, key, failure, root) = match doc.root.and_then(|i| self.roots.get(i)) {
@@ -1421,32 +1429,105 @@ impl Session {
             .unwrap_or_default()
     }
 
-    /// What `validate` reports on a closed object file of `root`, placed in
-    /// `text` (a client that pulls the workspace's diagnostics).
-    pub(crate) fn closed_findings(
+    /// What a workspace pull reports for each closed object file of `root`
+    /// (the files the editor has not open): the workspace's findings and the
+    /// engine's analysis, built into an entry by `build`. An entry is kept
+    /// with its file, for the epoch and the stamp of the findings it was made
+    /// from, and used again while both are the same: the pull repeats every
+    /// two seconds, and an edit changes the findings of one file.
+    pub(crate) fn closed_entries(
         &self,
         root: usize,
-        path: &str,
-        text: &str,
-    ) -> Vec<opentide_core::Diagnostic> {
+        open: &BTreeSet<String>,
+        host: &dyn WorkspaceHost,
+        build: &dyn Fn(&str, Vec<opentide_core::Diagnostic>) -> Option<ReportEntry>,
+    ) -> Vec<ReportEntry> {
         let Some(r) = self.roots.get(root) else {
             return Vec::new();
         };
-        let buffers = self.buffers(Some(root));
-        let mut checks = r.checks.borrow_mut();
-        let _span = crate::timing::Span::new("closed findings (every object, once per generation)");
-        let found = checks.all_findings(&r.path, buffers, self.generation.get());
-        let key = checks.resolve(Path::new(path));
-        drop(checks);
-        found
-            .get(&key)
-            .map(|findings| {
-                findings
+        let (generation, epoch) = self.state_key();
+        let found = {
+            let buffers = self.buffers(Some(root));
+            let _span = crate::timing::Span::new("workspace/diagnostic: findings of every object");
+            r.checks
+                .borrow_mut()
+                .all_findings(&r.path, buffers, generation, epoch)
+        };
+        // A client that does not watch files is not told what changed on
+        // disk: nothing is kept for it.
+        let keeps = self.caps.watch_files;
+        let parses = || {
+            r.checks
+                .try_borrow()
+                .map(|checks| checks.parses_under(&r.path))
+                .unwrap_or_default()
+        };
+        let disk = r.disk.borrow();
+        let _span = crate::timing::Span::new("workspace/diagnostic: files");
+        let mut entries = Vec::new();
+        for file in disk.index_pending(&parses).values() {
+            let Some(object) = file.entry() else {
+                continue;
+            };
+            let path = object.path.as_str();
+            if open.contains(&path_key(path)) {
+                continue;
+            }
+            let key = file.resolved.get_or_init(|| {
+                r.checks.try_borrow().map_or_else(
+                    |_| PathBuf::from(path),
+                    |checks| checks.resolve(Path::new(path)),
+                )
+            });
+            let stamp = r
+                .checks
+                .try_borrow()
+                .map_or(0, |checks| checks.stamp_of(key));
+            let kept = keeps
+                .then(|| {
+                    file.reported
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .as_ref()
+                        .filter(|(at, from, _)| *at == epoch && *from == stamp)
+                        .map(|(_, _, entry)| Arc::clone(entry))
+                })
+                .flatten();
+            if let Some(entry) = kept {
+                entries.push(entry);
+                continue;
+            }
+            let mut diagnostics: Vec<opentide_core::Diagnostic> = found
+                .get(key)
+                .map(|findings| {
+                    findings
+                        .iter()
+                        .map(|finding| engine_diagnostic(&file.text, finding))
+                        .collect()
+                })
+                .unwrap_or_default();
+            diagnostics.extend(
+                self.closed_analysis(root, path, &file.text, host)
                     .iter()
-                    .map(|finding| engine_diagnostic(text, finding))
-                    .collect()
-            })
-            .unwrap_or_default()
+                    .cloned(),
+            );
+            // A duplicate's finding points at the other file's lines: not kept.
+            let stable = !diagnostics
+                .iter()
+                .any(|d| d.code == opentide_analysis::codes::DUPLICATE_ID);
+            let Some(entry) = build(path, diagnostics) else {
+                continue;
+            };
+            if keeps && stable {
+                *file
+                    .reported
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some((epoch, stamp, Arc::clone(&entry)));
+            }
+            entries.push(entry);
+        }
+        entries
     }
 
     /// How many object files on disk the editor's index holds an entry
@@ -1489,6 +1570,18 @@ impl Session {
             }
         }
         sum
+    }
+
+    /// How many times the roots' objects were all checked, and how many
+    /// times only the files that changed were, summed.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn validation_runs(&self) -> (u64, u64) {
+        self.roots
+            .iter()
+            .map(|r| r.checks.borrow().validations)
+            .fold((0, 0), |sum, (full, partial)| {
+                (sum.0 + full, sum.1 + partial)
+            })
     }
 
     /// The files the editor and the host hold for a root's workspace: the
@@ -1686,25 +1779,6 @@ impl Session {
         if !self.docs.is_empty() {
             self.mark_all();
         }
-    }
-
-    /// A root's object files on disk, as last read.
-    pub(crate) fn closed_objects(&self, root: usize) -> Vec<(String, String)> {
-        let Some(r) = self.roots.get(root) else {
-            return Vec::new();
-        };
-        let parses = || {
-            r.checks
-                .try_borrow()
-                .map(|checks| checks.parses_under(&r.path))
-                .unwrap_or_default()
-        };
-        r.disk
-            .borrow()
-            .index_pending(&parses)
-            .values()
-            .filter_map(|file| Some((file.entry()?.path.clone(), file.text.clone())))
-            .collect()
     }
 
     /// What the engine's analysis finds in the object file at `path` of

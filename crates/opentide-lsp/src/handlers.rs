@@ -326,6 +326,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
                 "analyses": s.analyses.get(),
                 "closedAnalyses": s.closed_analyses.get(),
                 "workspaceReportHits": s.workspace_report_hits.get(),
+                "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),
                 "workspace": {
@@ -1171,7 +1172,8 @@ fn handle_workspace_diagnostics(
     };
     let items = entries
         .iter()
-        .map(|(uri, id, found)| {
+        .map(|entry| {
+            let (uri, id, found) = &**entry;
             if previous.get(uri.as_str()) == Some(id) {
                 lsp::WorkspaceDocumentDiagnosticReport::Unchanged(
                     lsp::WorkspaceUnchangedDocumentDiagnosticReport {
@@ -1214,32 +1216,16 @@ fn workspace_report(session: &Session) -> Vec<crate::session::ReportEntry> {
         // Each root's own catalogs and datasets are the ones installed while
         // its files are analysed.
         let host = session.host(Some(root));
-        let closed = {
-            let _span = crate::timing::Span::new("workspace/diagnostic: closed objects");
-            session.closed_objects(root)
-        };
-        let _span = crate::timing::Span::new("workspace/diagnostic: files");
-        for (path, text) in closed {
-            if open.contains(&crate::session::path_key(&path)) {
-                continue;
-            }
-            let Some(uri) = file_uri(&path) else {
-                continue;
-            };
-            let mut diagnostics = session.closed_findings(root, &path, &text);
-            diagnostics.extend(
-                session
-                    .closed_analysis(root, &path, &text, &host)
-                    .iter()
-                    .cloned(),
-            );
+        let build = |path: &str, diagnostics: Vec<opentide_core::Diagnostic>| {
+            let uri = file_uri(path)?;
             let found: Vec<lsp::Diagnostic> = diagnostics
                 .iter()
-                .map(|d| lsp_diagnostic(session, Some(root), &path, d))
+                .map(|d| lsp_diagnostic(session, Some(root), path, d))
                 .collect();
             let id = result_id(&found);
-            entries.push((uri, id, found));
-        }
+            Some(Arc::new((uri, id, found)))
+        };
+        entries.extend(session.closed_entries(root, &open, &host, &build));
     }
     entries
 }
