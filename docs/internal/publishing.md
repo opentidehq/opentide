@@ -41,7 +41,7 @@ The train publishes **eleven** npm packages, and every one needs a name, a place
 | 10 | `@opentide/lsp-worker` | step 9, or 10.5 |
 | 11 | `@opentide/wasi-host` | step 10.5 |
 
-Until the final release, the `latest` dist-tag of each stays on its `0.0.0` placeholder (a candidate publishes under `next` only): `npm install @opentide/opentide@next` installs the newest candidate, and plain `npm install @opentide/opentide` the placeholder.
+Until the final release, the `latest` dist-tag of each stays on its `0.0.0` placeholder (a candidate publishes under `next` only): `npm install @opentide/opentide@next` installs the newest candidate, and plain `npm install @opentide/opentide` the empty placeholder. **`next` only moves forward**: the `npm` job refuses a candidate older (by SemVer) than the `next` of `@opentide/opentide` ([The npm job's checks](#the-npm-jobs-checks)), and the guard refuses a `checkout_ref` resume of a candidate before `v1.0.0-rc.3`, the first one that publishes to npm.
 
 | Name | Today | Maintainers today | Trusted publisher required |
 |------|-------|-------------------|----------------------------|
@@ -170,9 +170,35 @@ The guard runs `scripts/build/release.py check-candidate`, which refuses a candi
 
 #### The npm pre-flight check
 
-PyPI and crates.io versions are permanent, and npm's trusted publishing cannot create a package. So the guard job (`Release guard`, the first job, before anything is built, attested or published) has a step, **Every npm package exists on npm**, for a release and a public candidate: it reads the registry's package document of each of the eleven packages (`https://registry.npmjs.org/<name>`, no authentication; the list is the tree's npm manifests, as `release.py`'s `npm_packages()`). If any answers 404, the run fails with `These npm packages do not exist on npm yet: ...`, naming them and pointing at [step 10.5](#10-at-uc-55-publishyml), and nothing was built or published: PyPI and crates.io are never published for a run npm would then fail. A registry that cannot be read (a 5xx, a timeout) fails the run too, with another message: an outage is not a missing package, and not checked is not released. A `dry_run` reports the same as warnings and passes, so a rehearsal shows what is missing; an internal candidate publishes nothing and does not look. To read the same by hand: `npm view <package> name` (E404 when missing).
+PyPI and crates.io versions are permanent, and npm's trusted publishing cannot create a package. So the guard job (`Release guard`, the first job, before anything is built, attested or published) has a step, **Every npm package exists on npm**, for a release and a public candidate: it reads the registry's package document of each of the eleven packages (`https://registry.npmjs.org/<name>`, no authentication; the list is the tree's npm manifests, as `release.py`'s `npm_packages()`). If any answers 404, the run fails with `These npm packages do not exist on npm yet: ...`, naming them and pointing at [step 10.5](#10-at-uc-55-publishyml), and nothing was built or published: PyPI and crates.io are never published for a run npm would then fail. A registry that cannot be read (a 5xx, a timeout, a refused, reset or hung-up connection) fails the run too, with another message: an outage is not a missing package, and not checked is not released (each package is tried three times). A `dry_run` reports the same as warnings and passes, so a rehearsal shows what is missing; an internal candidate publishes nothing and does not look. To read the same by hand: `npm view <package> name` (E404 when missing).
 
 **What it cannot check.** Whether `publish.yml` is registered as each package's trusted publisher is private to a signed-in maintainer (the package's **Settings**, **Trusted publishing**, or `npm trust list <package>`), and an npm configuration expires after two days without a publish. So the step prints that it did not check it. A package with no (or an expired) trusted publisher fails the `npm` job, after PyPI and crates.io have published: register it, then resume the run with `checkout_ref` ([Resuming a run](#resuming-a-run); versions npm already has are skipped). Register the publishers within two days before a candidate, and check them with `npm trust list` first.
+
+#### The npm job's checks
+
+The `npm` job (channel `rc` or `release`) runs, in order:
+
+1. **`next` never moves backwards** (a candidate only). It reads `dist-tags.next` of `@opentide/opentide` from the registry without a login and fails, publishing nothing, when that is a newer SemVer than this run's version (a resumed older run, a run of an older branch). A `next` that is the same version, older, a final release below this candidate (`1.0.0` under `1.0.1-rc.1`), or absent passes. A registry that cannot be read fails it too.
+2. **`publish`**. Every tarball's version is checked against the channel **first** (a candidate's must be `X.Y.Z-rc.N`, a release's `X.Y.Z`), so a mismatch leaves nothing half published; then each tarball is published, natives first, with `npm publish --provenance --access public --tag next` (a candidate) or `--tag latest` (a release); a version npm already has is skipped.
+3. **dist-tags of every package.** For each of the eleven packages, the registry's `dist-tags` must show a candidate as its `next` (and not as its `latest`), or a release as its `latest`; it waits out the registry's cache for up to five minutes. After a release it also names every package whose `next` still trails `latest`, as a warning with the command below.
+
+The guard also refuses `checkout_ref` of a `vX.Y.Z-rc.N` tag older than `v1.0.0-rc.3`: resuming `1.0.0-rc.1` or `rc.2` would publish an old version under `next`.
+
+#### After the final release
+
+A final release publishes `latest`, and `next` keeps the last candidate (`1.0.0-rc.N`), so `npm install @opentide/opentide@next` would install an older version than `latest`. Move `next` to the release, for every package. **Trusted publishing covers `npm publish` only**, so the workflow cannot do it (it names the packages that need it, as a warning: `dist-tags of every package`); a maintainer signed in to npm (`npm whoami`, two-factor authentication) runs, from anywhere:
+
+```bash
+version=1.0.0   # the release
+for p in @opentide/opentide opentide @opentide/opentide-linux-x64-gnu @opentide/opentide-linux-arm64-gnu \
+    @opentide/opentide-darwin-x64 @opentide/opentide-darwin-arm64 @opentide/opentide-win32-x64-msvc \
+    @opentide/opentide-win32-arm64-msvc @opentide/lsp-client @opentide/lsp-worker @opentide/wasi-host; do
+  npm dist-tag add "$p@$version" next
+done
+npm view @opentide/opentide dist-tags    # latest and next: the release
+```
+
+Later releases and candidates keep `next` at the newest of the two: a candidate of the next version (`1.1.0-rc.1`) is above the release and publishes `next` as before.
 
 #### The WASI command line module
 

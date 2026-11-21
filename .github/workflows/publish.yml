@@ -206,6 +206,12 @@ jobs:
                 echo "::error::public release candidates are disabled while the internal channel exists: ${tag} cannot be resumed to the registries." >&2
                 exit 1
               fi
+              # A resumed candidate publishes to npm under `next`: one older than
+              # the first npm candidate (v1.0.0-rc.3) would move `next` backwards.
+              if python3 -c 'import re,sys; m = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)-rc\.(\d+)", sys.argv[1]); sys.exit(0 if m and tuple(map(int, m.groups())) < (1, 0, 0, 3) else 1)' "${tag}"; then
+                echo "::error::${tag} is older than v1.0.0-rc.3, the first candidate that publishes to npm: resuming it would publish an old version under npm's next tag. Cut the next candidate instead." >&2
+                exit 1
+              fi
               channel=rc
             else
               channel=release
@@ -297,6 +303,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import glob
+          import http.client
           import json
           import os
           import sys
@@ -332,8 +339,10 @@ jobs:
                           status = response.status
                   except urllib.error.HTTPError as error:
                       status = error.code
-                  except (urllib.error.URLError, TimeoutError) as error:
-                      status = str(error)
+                  except (OSError, http.client.HTTPException) as error:
+                      # A refused or reset connection, a server that hangs up
+                      # (RemoteDisconnected), a short body (IncompleteRead), a timeout.
+                      status = f"{type(error).__name__}: {error}"
                   if status == 200 or status == 404:
                       break
                   time.sleep(float(os.environ.get("NPM_RETRY_SECONDS", "5")) * attempt)
@@ -957,6 +966,58 @@ jobs:
         with:
           name: npm-packages
           path: npm
+      # A candidate never moves `next` backwards (a resumed older candidate, a
+      # run of an older branch): `next` of @opentide/opentide, read from the
+      # registry without a login, must not be a newer SemVer than this version.
+      # A release does not look: it publishes `latest`.
+      - name: next never moves backwards
+        if: env.CHANNEL == 'rc'
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+          NPM_REGISTRY: https://registry.npmjs.org
+        run: |
+          python3 - <<'PY'
+          import http.client
+          import json
+          import os
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          def key(version):
+              """SemVer order for X.Y.Z and X.Y.Z-rc.N: a release is above its candidates."""
+              match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?", version)
+              if match is None:
+                  sys.exit(f"::error::{version} is not X.Y.Z or X.Y.Z-rc.N: cannot compare it with next.")
+              major, minor, patch, rc = match.groups()
+              return (int(major), int(minor), int(patch), float("inf") if rc is None else int(rc))
+
+          version = os.environ["VERSION"]
+          url = os.environ["NPM_REGISTRY"].rstrip("/") + "/@opentide%2Fopentide"
+          request = urllib.request.Request(url, headers={"Accept": "application/vnd.npm.install-v1+json"})
+          document = None
+          for attempt in range(1, 4):
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      document = json.load(response)
+                  break
+              except (OSError, http.client.HTTPException, ValueError) as error:
+                  print(f"@opentide/opentide: {type(error).__name__}: {error}")
+                  time.sleep(float(os.environ.get("NPM_RETRY_SECONDS", "5")) * attempt)
+          if document is None:
+              sys.exit(f"::error::Could not read @opentide/opentide's dist-tags from {url}: not checked, so not published.")
+          current = document.get("dist-tags", {}).get("next")
+          print(f"next is {current}; this run publishes {version}")
+          if current is not None and key(current) > key(version):
+              sys.exit(
+                  f"::error::npm's next is already {current}, newer than {version}: publishing "
+                  f"{version} under next would move it backwards. Nothing was published to npm."
+              )
+          PY
+      # Every tarball is checked against the channel before the first publish, so
+      # a version that does not fit leaves nothing half published.
       - name: publish
         run: |
           set -euo pipefail
@@ -965,6 +1026,9 @@ jobs:
           # release never carries a pre-release version.
           dist_tag=latest
           if [ "${CHANNEL}" = "rc" ]; then dist_tag=next; fi
+          tarballs=()
+          names=()
+          versions=()
           # The directories sort in publishing order: native, package, alias, lsp.
           for tarball in npm/*/*.tgz; do
             manifest="$(tar -xzOf "${tarball}" package/package.json)"
@@ -978,18 +1042,67 @@ jobs:
               echo "::error::${name}@${version} is a pre-release: refusing to publish it under latest." >&2
               exit 1
             fi
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
-              echo "${name}@${version} is already published"
+            tarballs+=("${tarball}")
+            names+=("${name}")
+            versions+=("${version}")
+          done
+          for i in "${!tarballs[@]}"; do
+            if npm view "${names[i]}@${versions[i]}" version >/dev/null 2>&1; then
+              echo "${names[i]}@${versions[i]} is already published"
               continue
             fi
-            npm publish "${tarball}" --provenance --access public --tag "${dist_tag}"
+            npm publish "${tarballs[i]}" --provenance --access public --tag "${dist_tag}"
           done
+      # What the registry now says about every package, not only the first:
+      # a candidate is each package's `next` and never its `latest`; a release is
+      # each package's `latest`. After a release `next` must not trail `latest`:
+      # npm's trusted publishing covers `npm publish` only, so moving `next` is
+      # the maintainer's `npm dist-tag add` (docs/internal/publishing.md, "After
+      # the final release"), and this step names the packages that need it.
+      - name: dist-tags of every package
+        run: |
+          set -euo pipefail
+          lagging=()
+          for tarball in npm/*/*.tgz; do
+            manifest="$(tar -xzOf "${tarball}" package/package.json)"
+            name="$(node -p 'JSON.parse(process.argv[1]).name' "${manifest}")"
+            version="$(node -p 'JSON.parse(process.argv[1]).version' "${manifest}")"
+            tags='{}'
+            for attempt in $(seq 1 20); do
+              if tags="$(npm view "${name}" dist-tags --json)"; then
+                if [ "${CHANNEL}" = "rc" ]; then
+                  wanted="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+                else
+                  wanted="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
+                fi
+                if [ "${wanted}" = "${version}" ]; then break; fi
+              fi
+              if [ "${attempt}" = 20 ]; then
+                echo "::error::${name}: the registry's dist-tags are ${tags}, not ${CHANNEL} ${version}." >&2
+                exit 1
+              fi
+              sleep 15
+            done
+            latest="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
+            next="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+            echo "${name}: latest ${latest}, next ${next}"
+            if [ "${CHANNEL}" = "rc" ] && [ "${latest}" = "${version}" ]; then
+              echo "::error::${name}@${version} is also latest: a candidate must not be." >&2
+              exit 1
+            fi
+            if [ "${CHANNEL}" = "release" ] && [ "${next}" != "${version}" ]; then
+              lagging+=("${name}@${version}")
+            fi
+          done
+          if [ "${#lagging[@]}" -gt 0 ]; then
+            echo "::warning::next trails latest for ${#lagging[@]} packages. Trusted publishing cannot move a dist-tag: as a maintainer, signed in to npm, run: for p in ${lagging[*]}; do npm dist-tag add \"\$p\" next; done (docs/internal/publishing.md, After the final release)."
+          fi
 
   # What the registries now serve installs and runs: pip from PyPI (a
   # candidate's pre-release by its exact version, which pip installs without
   # --pre), `cargo install opentide --features cli` from crates.io, and npx
-  # from npm (a candidate by its exact version too, then its dist-tag is
-  # checked). Each waits out the registry's cache.
+  # from npm (a candidate by its exact version too; the dist-tags of every
+  # package are the npm job's). Each waits out the registry's cache.
   smoke-registries:
     name: Smoke the registries
     needs: [guard, pypi, npm, crates]
@@ -1048,24 +1161,6 @@ jobs:
           done
           echo "${out}"
           grep -qF "${VERSION}" <<< "${out}"
-      # A candidate is the package's `next` and never its `latest`.
-      - name: a candidate's dist-tag is next, never latest
-        if: env.CHANNEL == 'rc'
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 20); do
-            if ! tags="$(npm view @opentide/opentide dist-tags --json)"; then tags='{}'; fi
-            if [ "$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")" = "${VERSION}" ]; then
-              break
-            fi
-            if [ "${attempt}" = 20 ]; then echo "::error::@opentide/opentide's next is not ${VERSION}: ${tags}"; exit 1; fi
-            sleep 30
-          done
-          echo "${tags}"
-          if [ "$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")" = "${VERSION}" ]; then
-            echo "::error::@opentide/opentide@${VERSION} is also latest: a candidate must not be." >&2
-            exit 1
-          fi
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
       - name: cargo install opentide --features cli, then opentide --version

@@ -106,7 +106,7 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 | GitHub | A **pre-release** (never Latest) tagged `v1.0.0-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
 | PyPI | `1.0.0rcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==1.0.0rc1` |
 | crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
-| npm | All eleven packages at `1.0.0-rc.N` under the dist-tag **`next`**, never `latest` (`npm publish --provenance --tag next`, OIDC): `npm install @opentide/opentide@next` or the exact version. **Every package must already exist on npm with `publish.yml` as its trusted publisher** (publishing.md, step 10.5; the guard checks the first, not the second). Before `1.0.0-rc.3` a candidate published nothing to npm. Test the tarballs without publishing from ci.yml's `release` artifacts (`npm-packages`) |
+| npm | All eleven packages at `1.0.0-rc.N` under the dist-tag **`next`** (it only moves forward: the job refuses a candidate older than the current `next`, and the guard refuses resuming a candidate before `v1.0.0-rc.3`), never `latest` (`npm publish --provenance --tag next`, OIDC): `npm install @opentide/opentide@next` or the exact version. **Every package must already exist on npm with `publish.yml` as its trusted publisher** (publishing.md, step 10.5; the guard checks the first, not the second). Before `1.0.0-rc.3` a candidate published nothing to npm. Test the tarballs without publishing from ci.yml's `release` artifacts (`npm-packages`) |
 
 Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates"). The stub has no `repository_dispatch` trigger either: resume a candidate with a Run workflow **on `integration/unified-core`** (Step 2).
 
@@ -322,6 +322,8 @@ gh api repos/opentidehq/opentide/releases/tags/v0.x.y --jq '.tag_name, .prerelea
 python3 scripts/engine/release.py assets v0.x.y | wc -l                 # the same count
 ```
 
+**After a final release, move npm's `next`** to it for all eleven packages: `npm dist-tag add <pkg>@X.Y.Z next` (trusted publishing covers `npm publish` only, so a maintainer signed in to npm runs it; the `npm` job's warning names the packages; `docs/internal/publishing.md`, "After the final release"), so that `@next` never installs something older than `latest`.
+
 ---
 
 ### Step 4 — Group the shipped issues
@@ -372,7 +374,10 @@ Link that pull request from the tracking issue in Step 4.
 | Guard: `These npm packages do not exist on npm yet: …` | A candidate or release needs all eleven packages on npm first (nothing was built or published). Publish each named package once by hand and register `publish.yml` on it (`docs/internal/publishing.md`, step 10.5), then run again |
 | Guard: `Could not read … from https://registry.npmjs.org` | The registry did not answer (5xx or timeout), which is not read as missing. Run again |
 | npm: `E404` / `ENEEDAUTH` on publish | The package has no trusted publisher for `publish.yml`, or it expired (two days without a publish): the guard cannot see this. Register it, resume (PyPI and crates.io have published by then) |
-| npm: `refusing to publish it under next` / `under latest` | A tarball's version does not fit the channel (a candidate must be `X.Y.Z-rc.N`, a release `X.Y.Z`). Nothing was published for it; fix the build |
+| npm: `refusing to publish it under next` / `under latest` | A tarball's version does not fit the channel (a candidate must be `X.Y.Z-rc.N`, a release `X.Y.Z`). Every tarball is checked before the first publish, so nothing was published; fix the build |
+| npm: `npm's next is already …, newer than …` | The candidate would move `next` backwards (an older candidate resumed, or an older branch). Nothing was published to npm; cut the next candidate instead |
+| Guard: `… is older than v1.0.0-rc.3, the first candidate that publishes to npm` | A `checkout_ref` resume of `v1.0.0-rc.1` or `rc.2` would publish an old version under `next`. Cut the next candidate |
+| npm: `::warning::next trails latest …` (after a release) | Trusted publishing cannot move a dist-tag. As a maintainer signed in to npm run `npm dist-tag add <pkg>@X.Y.Z next` for each of the eleven packages (`docs/internal/publishing.md`, "After the final release") |
 | `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y` on the ref that has the full `publish.yml` (`integration/unified-core` until it merges); `skip-existing` uploads only the missing files. The step log prints the command for the ref the run was on |
 | Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then resume |
 | New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |

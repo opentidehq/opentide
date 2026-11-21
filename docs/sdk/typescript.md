@@ -9,7 +9,7 @@ description: The @opentide/opentide npm package — the opentide SDK and command
 
 ## Install
 
-A release candidate publishes the packages to npm from `1.0.0-rc.3`, under the dist-tag `next`, and the final release will publish them under `latest`: `npm install @opentide/opentide@next` installs the newest candidate (`1.0.0-rc.1` and `1.0.0-rc.2` published none), and until 1.0.0 a plain `npm install @opentide/opentide` installs none. Build from this repository for anything newer.
+A release candidate publishes the packages to npm from `1.0.0-rc.3`, under the dist-tag `next`, and the final release will publish them under `latest`: `npm install @opentide/opentide@next` installs the newest candidate (`1.0.0-rc.1` and `1.0.0-rc.2` published none). Until 1.0.0, a plain `npm install @opentide/opentide` installs the empty `0.0.0` placeholder, not a candidate: always ask for `@next` or an exact version. Build from this repository for anything newer.
 
 ```bash
 npm install @opentide/opentide@next

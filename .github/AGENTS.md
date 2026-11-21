@@ -312,7 +312,10 @@ anything reaches a package manager (`v1.0.0-rc.N` until the final 1.0.0). The pu
 (`public_candidates=true` in the guard), and `checkout_ref` resumes an `-rc` tag. For a release or
 a public candidate the guard also checks, before anything is built, that every npm package already
 exists on npm (the registry's JSON, no login: `docs/internal/publishing.md`, "The npm pre-flight
-check"; trusted-publisher configuration cannot be read without one and is not checked). The
+check"; trusted-publisher configuration cannot be read without one and is not checked), and refuses a
+resume of a candidate before `v1.0.0-rc.3`. The `npm` job never moves `next` backwards, checks every
+package's dist-tags, and names the packages a maintainer must move with `npm dist-tag add` after a
+final release (trusted publishing covers `npm publish` only). The
 GitHub Release carries `opentide-wasm32-wasip1.wasm`, the command line as one WASI module for the VS
 Code extension (built by `engine-release-build.yml`'s `wasm` job with the release's
 `OPENTIDE_BUILD_VERSION`, run under wasmtime before it is an asset, a *product* asset for the licence scan). `dry_run` publishes nothing;
