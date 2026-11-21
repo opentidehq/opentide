@@ -23,6 +23,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import release
@@ -1357,7 +1362,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         build = build[: build.index("\n      - name:", 1)]
         # build-wasm.sh cli, with the version the binaries report (the tag without its v).
         self.assertIn("run: bash scripts/engine/build-wasm.sh cli", build)
-        self.assertIn("OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}", build)
+        # The version is the job's variable (every WebAssembly build has it, below).
+        self.assertIn(
+            "      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}\n",
+            wasm.split("    steps:\n", 1)[0],
+        )
         self.assertEqual(
             re.findall(
                 r"^\s+OPENTIDE_BUILD_VERSION: (.*)$", workflow_jobs(BUILD)["native"], re.MULTILINE
@@ -1373,7 +1382,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # it is packaged: `--version` prints the candidate.
         smoke = wasm[wasm.index("- name: smoke test opentide.wasm under wasmtime") :]
         smoke = smoke[: smoke.index("\n      - name:", 1)]
-        self.assertIn("OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}", smoke)
         self.assertRegex(smoke, r"WASMTIME_SHA256: [0-9a-f]{64}\n")
         self.assertIn("sha256sum -c -", smoke)
         self.assertIn('"${wasmtime}" run "${module}" --version', smoke)
@@ -1610,6 +1618,53 @@ class ReleaseWorkflowTest(unittest.TestCase):
             done.stdout + done.stderr,
             log.read_text(encoding="utf-8").splitlines(),
         )
+
+    def test_every_webassembly_build_reports_the_releases_version(self) -> None:
+        """rc.2's browser zip reported 1.0.0, not 1.0.0-rc.2: opentide-core reads
+        OPENTIDE_BUILD_VERSION at compile time, so every WebAssembly build (the
+        browser module, the language server's WASI module and the command line's)
+        needs it. It is the `wasm` job's own variable, once, so no step can leave
+        it out."""
+        wasm = workflow_jobs(BUILD)["wasm"]
+        header, steps = wasm.split("    steps:\n", 1)
+        self.assertIn("      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}\n", header)
+        self.assertEqual(len(re.findall(r"OPENTIDE_BUILD_VERSION:", wasm)), 1)
+        # Every build runs in that job through build-wasm.sh, which passes the
+        # environment on to cargo and never clears it.
+        self.assertEqual(
+            re.findall(r"bash scripts/engine/build-wasm\.sh(?: \w+)*", steps),
+            ["bash scripts/engine/build-wasm.sh", "bash scripts/engine/build-wasm.sh cli"],
+        )
+        script = (Path(__file__).resolve().parent / "build-wasm.sh").read_text(encoding="utf-8")
+        self.assertNotIn("env -i", script)
+        self.assertNotIn("unset OPENTIDE_BUILD_VERSION", script)
+        # The compiled-in version is that variable, for the crates all three share.
+        core = (Path(__file__).resolve().parents[2] / "crates/opentide-core/src/lib.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('option_env!("OPENTIDE_BUILD_VERSION")', core)
+        # The smoke test reads the same variable for the expected version.
+        smoke = steps[steps.index("- name: smoke test opentide.wasm under wasmtime") :]
+        self.assertIn('grep -qF "${OPENTIDE_BUILD_VERSION}"', smoke)
+
+    def test_the_licence_file_covers_every_target_the_release_builds(self) -> None:
+        """THIRD-PARTY-LICENSES.html is the licence file of every module: cargo-about
+        lists a crate only for the targets about.toml names, and `wasi` (a
+        dependency of the command line's WASI module alone) is on none of the
+        native ones. The `wasm` job's targets are in the list."""
+        root = Path(__file__).resolve().parents[2]
+        about = tomllib.loads((root / "about.toml").read_text(encoding="utf-8"))
+        native = {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+        }
+        wasm = targets_added(workflow_jobs(BUILD)["wasm"])
+        self.assertEqual(wasm, {"wasm32-unknown-unknown", "wasm32-wasip1"})
+        self.assertEqual(set(about["targets"]), native | wasm)
+        # The licences job renders it for the workspace, from this file.
+        licences = workflow_jobs(BUILD)["licences"]
+        self.assertIn("cargo about generate --workspace about.hbs", licences)
 
     @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
     def test_the_publish_loop_publishes_every_tarball_under_the_channels_tag(self) -> None:

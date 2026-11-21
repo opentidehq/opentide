@@ -236,11 +236,17 @@ jobs:
           path: product/*
           if-no-files-found: error
 
+  # Every WebAssembly build reports the release's version, as the native
+  # binaries do (OPENTIDE_BUILD_VERSION, which opentide-core reads at compile
+  # time): the browser build's wasm-bindgen module, the language server's WASI
+  # module and the command line's. The variable is the job's, so that no build
+  # step can leave it out (rc.2's browser zip reported 1.0.0, not 1.0.0-rc.2).
   wasm:
     name: WebAssembly builds
     needs: meta
     env:
       VERSION: ${{ needs.meta.outputs.version }}
+      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -300,8 +306,6 @@ jobs:
       # version (OPENTIDE_BUILD_VERSION), as the native binaries do, and the
       # script fails above its 15 MiB gzipped budget (the .vsix's).
       - name: build the opentide command line (wasm32-wasip1)
-        env:
-          OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
         run: bash scripts/engine/build-wasm.sh cli
       # Smoke test, before the module is an asset: wasmtime itself (not Node's
       # WASI, which ci.yml's `wasm` job runs it under) loads it and it says the
@@ -309,7 +313,6 @@ jobs:
       # pinned by release and SHA-256 and fetched only for this step.
       - name: smoke test opentide.wasm under wasmtime
         env:
-          OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
           WASMTIME_VERSION: "50.0.0"
           WASMTIME_SHA256: 77c19ee0437991f9ac7837b9c269d9c7076744f85dad263fea5214cc2723c7ff
         run: |

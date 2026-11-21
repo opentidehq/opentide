@@ -70,7 +70,15 @@ export function pinsFor(tag, digests) {
       thirdPartyLicenses: pin("THIRD-PARTY-LICENSES.html"),
     },
     // One module for every platform, named without a version: the release is the version.
-    wasi: { version, ...pin(WASI_CLI) },
+    // The module's third-party licences, shipped beside it: the Rust crates (about.toml names
+    // wasm32-wasip1), the C library it links, the licence and the embedded data's notice.
+    wasi: {
+      version,
+      ...pin(WASI_CLI),
+      licenses: Object.fromEntries(
+        ["THIRD-PARTY-LICENSES.html", "WASI-LIBC-LICENSES.txt", "LICENSE", "NOTICE"].map((name) => [name, pin(name)]),
+      ),
+    },
   };
 }
 

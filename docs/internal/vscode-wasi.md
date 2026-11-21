@@ -42,6 +42,10 @@ it, how to launch it, and what it does and does not do. The decision is [ADR 000
 - **Panics abort.** A trap ends the process, not one request: the extension restarts a process that
   exits, as it would restart a crashed native one.
 
+## Licences
+
+The module's third-party licences are four release assets the extension ships beside it, each with the release's pin (`SHA256SUMS`): `THIRD-PARTY-LICENSES.html` (every Rust crate compiled into the module, by licence: `about.toml` names `wasm32-wasip1`, so `wasi`, which only this build links, is listed), `WASI-LIBC-LICENSES.txt` (wasi-libc, the C library the module links), `LICENSE` and `NOTICE` (the embedded data). The module is EUPL-1.2 and its package data is opentide's own ([publishing](./publishing.md#the-wasi-command-line-module) has the evidence that the file covers the module's 311 crates).
+
 ## Pinning the module
 
 The extension pins one release's module by URL and SHA-256, as it pins `highlights-vX.Y.Z.zip` and
