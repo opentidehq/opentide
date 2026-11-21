@@ -1372,6 +1372,10 @@ jobs:
       revision: ${{ github.sha }}
       dry-run: true
       retention-days: 14
+      # The antivirus gate (av-gate.yml: ClamAV, YARA, Microsoft Defender, the marker and size
+      # checks) is the release tier's: a release pull request, the `release` label, Run
+      # workflow with scope `release`; not an ordinary pull request, and not the nightly.
+      av-gate: ${{ needs.changes.outputs.release == 'true' }}
 
   # Every publish this repository makes, rehearsed with --dry-run and no
   # token (publish-dry-run.yml).

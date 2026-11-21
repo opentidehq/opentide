@@ -54,8 +54,9 @@
 #
 # Jobs: the guard; `build` (release-build.yml: every crate built from its
 # package with the licence scan, the Release's assets, the wheels and npm
-# packages of build-packages.yml, the sdist, and a smoke test of each artifact
-# on its platform); then for an internal candidate
+# packages of build-packages.yml, the sdist, a smoke test of each artifact
+# on its platform, and the antivirus gate over all of them: av-gate.yml, so no
+# job below runs on an artifact a scanner flags); then for an internal candidate
 # `internal-release` (the tag and the draft, nothing else), and for a release
 # (or a public candidate) `attest`
 # (GitHub artifact attestations of every artifact), `release` (the tag and the
@@ -292,6 +293,9 @@ jobs:
       npm-version: ${{ needs.guard.outputs.version }}
       crates-version: ${{ needs.guard.outputs.version }}
       dry-run: false
+      # The antivirus gate (av-gate.yml): ClamAV, YARA, Microsoft Defender and the marker and
+      # size checks over every artifact, before any job below tags, attests or publishes.
+      av-gate: true
 
   # --- An internal candidate: a tag and a draft, no registry ---------------
 

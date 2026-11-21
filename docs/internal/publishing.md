@@ -119,6 +119,25 @@ Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, 
 | `dry_run: true` | a rehearsal of the workspace version, from any branch |
 | `checkout_ref: vX.Y.Z` | resume that release (or that `vX.Y.Z-rc.N` candidate) |
 
+### The antivirus gate
+
+Antivirus engines flagged opentide's distributables in November 2026 (the VS Code Marketplace removed `opentidehq.opentide` as "Malware" on 2026-11-08; ClamAV `Win.Coinminer.Generic-7150608-0` fired on every Windows PE and `.pyd`; the investigation is [`av-false-positives-2026-11-21.md`](av-false-positives-2026-11-21.md), the causes and the fix [#1743](https://github.com/opentidehq/opentide/issues/1743)). The cause was the embedded datasets (the Falco miner-domain lists, the ATT&CK vocabulary), compiled in as plain text; they are now compressed (`opentide-dataset`, [datasets.md](datasets.md)). The gate keeps a dataset, a vocabulary or a dependency from bringing a detection back unnoticed: [`av-gate.yml`](../../.github/workflows/av-gate.yml) scans what a release ships, **before anything publishes**.
+
+| Job | What it holds the artifacts to |
+|-----|--------------------------------|
+| `markers` | [`scripts/av/markers.py`](../../scripts/av/markers.py): none of `moneropool`, `sekurlsa`, `Login Data`, `Invoke-Mimikatz`, `jndi:ldap` in plain text (ASCII case folded, and as UTF-16) in any file, wheels, the sdist, `.crate`s and npm tarballs opened member by member; [`scripts/av/sizes.py`](../../scripts/av/sizes.py): every artifact within its budget in [`tests/bench/sizes.toml`](../../tests/bench/sizes.toml) |
+| `clamav` | ClamAV with signatures fetched by `freshclam` on the run: `clamscan -r --scan-archive=yes` over the artifacts and over their extracted files. Any detection fails |
+| `yara` | Neo23x0 signature-base and Elastic protections-artifacts at the commits [`scripts/av/fetch-rules.sh`](../../scripts/av/fetch-rules.sh) pins, compiled file by file ([`yara_gate.py`](../../scripts/av/yara_gate.py)). A hit fails unless its rule is on the reviewed allow-list [`scripts/av/yara-allowlist.toml`](../../scripts/av/yara-allowlist.toml): each entry names the rule, why it is noise, who reviewed it and when |
+| `defender` | Microsoft Defender on `windows-latest`: `MpCmdRun -SignatureUpdate`, then `MpCmdRun -Scan -ScanType 3 -File <file> -DisableRemediation` on each extracted binary and on the whole tree, the output parsed ([`defender-scan.ps1`](../../scripts/av/defender-scan.ps1)). Any detection, or a result it cannot read, fails |
+
+Nothing is uploaded to a scanner (VirusTotal and the like publish the file and hand it to vendors): every engine runs on the runner, against signatures the runner fetched, and the engine and signature versions are in each job's log.
+
+It runs only in the release tier: ci.yml's `release` job passes `av-gate` when `changes` found a release pull request (the `release` label, a pull request from the release branches) or Run workflow with `scope: release`, and publish.yml's `build` job always (so a candidate, a dry run and a release are all scanned). [`release-build.yml`](../../.github/workflows/release-build.yml) scans the wheels, npm packages, sdist and crates, and [`engine-release-build.yml`](../../.github/workflows/engine-release-build.yml) the Release's assets; a failure fails that workflow, and every job of publish.yml that tags, attests or publishes needs `build`. An ordinary pull request and the nightly never run it.
+
+**A detection.** Read the job's log: the engine, the signature or rule, the file. A real detection of a string in a dataset means a dataset is plain text again (the marker check names it); fix the build. A false positive of one engine is reported to its vendor (Microsoft: the WDSI file submission portal; ClamAV: its false-positive report; the routes and what to send are in the investigation, section 7), with the file's SHA-256 from `SHA256SUMS`; never upload the file to a public scanner. A YARA hunting rule that matches noise is added to `yara-allowlist.toml` with its reason, in a pull request a second person reviews.
+
+**The size budgets.** `tests/bench/sizes.toml` holds each artifact's most bytes. Compression took about a fifth off the binaries; the budgets sit a few percent above what the first release-tier run measured, so a dataset stored loose again, or a decoder that grew, fails. Move one in a change that says why.
+
 ### Resuming a run
 
 A run that failed partway is resumed with `checkout_ref` set to its tag: it rebuilds from the tag, uploads nothing to its GitHub Release, verifies the published assets and publishes only what each registry lacks. Never retag and never delete a published Release. **Which ref to run on depends on whose `publish.yml` is the default branch's:**
@@ -174,7 +193,7 @@ CI proves the connectors against recorded cassettes and stand-in servers, never 
 
 ### Testing a build without publishing
 
-ci.yml's `release` job (the nightly, a release pull request, and Run workflow with `scope: release` on any branch) runs [`release-build.yml`](../../.github/workflows/release-build.yml), the build `publish.yml` uses, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
+ci.yml's `release` job (the nightly, a release pull request, and Run workflow with `scope: release` on any branch) runs [`release-build.yml`](../../.github/workflows/release-build.yml), the build `publish.yml` uses (and, outside the nightly, [the antivirus gate](#the-antivirus-gate) over every artifact), at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
 
 | Artifact | Holds |
 |----------|-------|

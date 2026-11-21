@@ -1,0 +1,13 @@
+# Rules the release gate's YARA scan (scripts/av/yara_gate.py) may hit without failing the release (#1743).
+#
+# A rule is listed only after a person read what it matched in the artifact and judged it noise, and says
+# why: the rule, the reason, who reviewed it and when. Everything else fails the gate. The list starts empty:
+# the datasets are compressed, so the hunting rules that matched their plain text (Mimikatz_Memory_Rule_1,
+# HKTL_Keyword_InjectDLL, Hacktool_Strings_p0wnedShell, EXPL_Log4j_CVE_2021_44228_Dec21_Soft, see
+# docs/internal/av-false-positives-2026-11-21.md) no longer match. A first release-tier run that hits a
+# rule fails with its name and file; review the match, then add it here in the same pull request.
+#
+# [[allow]]
+# rule = "SUSP_Blocked_Download_Proxy_Replacement_Jan23_1"
+# reason = "generic phrases (`is blocked`, `blocked by`) in the explain pages' prose"
+# reviewed = "2026-11-21 by <name>"
