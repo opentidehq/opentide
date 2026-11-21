@@ -1192,24 +1192,9 @@ fn measure_scenario(
             }
             Kind::LspEditor | Kind::LspEditorTyping => {
                 let ws = workspaces.context("no workspace")?;
-                let typing = scenario.kind == Kind::LspEditorTyping;
-                let latency = lsp::editor_latency(program, args, &run_dir, &ws.rule, typing)?;
-                note = Some(format!(
-                    "{}: the longest a textDocument/completion waited, of {} each sent 2 ms \
-                     after {}a workspace/diagnostic pull of the workspace's {} rules (the \
-                     first pull took {:.3} s, the median of the others {:.3} s)",
-                    display(program, args),
-                    lsp::EDITOR_CYCLES,
-                    if typing {
-                        "a keystroke, the pull of its document and "
-                    } else {
-                        ""
-                    },
-                    ws.rules,
-                    latency.first_pull.as_secs_f64(),
-                    latency.repeat_pull.as_secs_f64()
-                ));
-                latency.sample
+                let (sample, text) = editor_sample(scenario.kind, program, args, &run_dir, ws)?;
+                note = Some(text);
+                sample
             }
             Kind::Lsp => {
                 let ws = workspaces.context("no workspace")?;
@@ -1254,6 +1239,35 @@ fn measure_scenario(
             .with_context(|| format!("remove {}", run_root.display()))?;
     }
     Ok(result)
+}
+
+/// One run of [`Kind::LspEditor`] or [`Kind::LspEditorTyping`]: its sample and
+/// the note that says what was measured.
+fn editor_sample(
+    kind: Kind,
+    program: &Path,
+    args: &[OsString],
+    run_dir: &measure::RunDir,
+    ws: &workspace::Workspaces,
+) -> Result<(Sample, String)> {
+    let typing = kind == Kind::LspEditorTyping;
+    let latency = lsp::editor_latency(program, args, run_dir, &ws.rule, typing)?;
+    let note = format!(
+        "{}: the longest a textDocument/completion waited, of {} each sent 2 ms \
+         after {}a workspace/diagnostic pull of the workspace's {} rules (the \
+         first pull took {:.3} s, the median of the others {:.3} s)",
+        display(program, args),
+        lsp::EDITOR_CYCLES,
+        if typing {
+            "a keystroke, the pull of its document and "
+        } else {
+            ""
+        },
+        ws.rules,
+        latency.first_pull.as_secs_f64(),
+        latency.repeat_pull.as_secs_f64()
+    );
+    Ok((latency.sample, note))
 }
 
 /// A `--version` run counts only when it exits 0 and prints one line,
