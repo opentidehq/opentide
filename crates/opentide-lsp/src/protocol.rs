@@ -366,6 +366,12 @@ impl Driver {
             }
             edited_after[i] = edited;
         }
+        // The workspace's diagnostics are background work that can take a
+        // second on a large workspace, and the client asks again two seconds
+        // after every answer: a hover, a completion or a keystroke that waits
+        // in the same batch is answered first (it reads the later state, which
+        // the notifications of the batch have already applied).
+        let mut deferred: Vec<Request> = Vec::new();
         for (i, frame) in batch.into_iter().enumerate() {
             let message = match frame {
                 Frame::Invalid { id, code, message } => {
@@ -397,6 +403,13 @@ impl Driver {
                         handle_notification(session, notification);
                     }
                 }
+                Message::Request(request)
+                    if request.method == WORKSPACE_DIAGNOSTIC
+                        && self.state == Lifecycle::Running
+                        && !cancelled.contains(&request.id) =>
+                {
+                    deferred.push(request);
+                }
                 Message::Request(request) => {
                     let staled_by = &edited_after[i + 1];
                     let response =
@@ -409,10 +422,25 @@ impl Driver {
             }
             write_outbox(session, writer)?;
         }
+        let nothing_staled = HashSet::new();
+        for request in deferred {
+            let response = respond(
+                session,
+                &mut self.state,
+                request,
+                &cancelled,
+                &nothing_staled,
+            );
+            write_outbox(session, writer)?;
+            write(writer, &Message::Response(response))?;
+        }
         flush(session, writer, self.state)?;
         Ok(None)
     }
 }
+
+/// The request for the diagnostics of every file of the workspace.
+const WORKSPACE_DIAGNOSTIC: &str = "workspace/diagnostic";
 
 /// One message's JSON text, without its `Content-Length` header, read as
 /// [`read_frame`] reads a framed one: the same answers for a body that is
