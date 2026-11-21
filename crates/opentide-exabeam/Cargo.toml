@@ -31,3 +31,6 @@ insta.workspace = true
 
 [build-dependencies]
 opentide-dataset = { workspace = true, features = ["encode"] }
+# The catalogue is parsed once at build time (`build.rs`, #1743).
+serde.workspace = true
+toml.workspace = true

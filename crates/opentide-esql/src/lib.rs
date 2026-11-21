@@ -38,6 +38,7 @@
     reason = "engine dispatchers match every node kind in one function"
 )]
 pub mod catalog;
+mod catalog_model;
 mod columns;
 mod ecs;
 mod gates;

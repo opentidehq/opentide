@@ -37,8 +37,12 @@ A parse at run time is what a dataset costs most. Where a model is plain data, t
 |---------|------------------|-----|
 | The Tide vocabularies (`src/opentide/data/vocabulary/*.vocab.toml`, thirty-four files) | `opentide-tide`'s `Vocab` list (`vocab_model.rs`) | The editor's hover and completion on a technique, an actor or a TLP level read them, all thirty-four at once, with a whole-document TOML parse of each |
 | The Azure Monitor Logs table reference (3.4 MB) and the ASIM schemas and parsers | `opentide-kql`'s `tables_model.rs` | The first KQL query of a Sentinel or Defender workspace read them |
+| The Tide field catalog (`data/catalogs/tide/generated/fields.json`, 1.1 MB) | `opentide-highlight`'s `tide_model.rs`: every string once, the fields by place in that table, and the lists of enum values (440 KB of the file, repeated for each revision of each schema that has them) as a blob of their own, decoded when a field's list is first read | The first Tide document of a process parsed all of it |
+| The CQL, Falco, Exabeam, ES\|QL, SPL, YARA and YARA-L catalogs (`data/catalogs/<language>/*.toml`) | Each crate's `catalog_model.rs` | The first query or rule of the language read them item by item (ADR 0013), the larger part of its first answer |
 
-Everything else is stored as compressed text and parsed by the loader it always had (the ADR 0013 catalog reader, the vocabularies' lazy descriptions, `serde_json`). Moving another one is a change of its crate: put its model in a file that depends on `serde` and nothing else of the crate, `#[path]`-include it from `build.rs`, write it with `Datasets::value`, and measure with the bench below.
+Not pre-parsed: the small catalogs read once and cheaply (EQL, Carbon Black's Lucene fields, the ECS fields), which are stored as compressed text.
+
+The bundled vocabularies are stored as compressed text parsed by their loader, with their descriptions split off and decoded when one is asked for. Moving another dataset to a pre-parsed model is a change of its crate: put its model in a file that depends on `serde` and nothing else of the crate, `#[path]`-include it from `build.rs`, write it with `Datasets::value`, and measure with the bench below.
 
 ## Measurements
 

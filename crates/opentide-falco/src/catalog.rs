@@ -5,92 +5,13 @@
 //! An unknown field of a catalogued source is an error, as Falco refuses it; an
 //! unknown macro, list, or tuned rule is a warning (Sysdig manages its own).
 
-use opentide_core::catalog;
-use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::OnceLock;
 
-fn fields_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/falco/fields.toml")
-}
-fn defaults_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/falco/defaults.toml")
-}
-fn events_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/falco/events.toml")
-}
+pub use crate::catalog_model::{ArgRule, Event, Field, Kind, List, Macro, Param, Rule, Source};
 
 /// The event source of a rule when its block does not name one.
 pub const DEFAULT_SOURCE: &str = "syscall";
-
-/// One event source (`syscall`, `k8s_audit`, ...).
-#[derive(Debug, Clone, Deserialize)]
-pub struct Source {
-    pub name: String,
-    pub plugin: String,
-    pub description: String,
-}
-
-/// What a field holds, for operator and value checks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Kind {
-    String,
-    Number,
-    Bool,
-    Ip,
-    Other,
-}
-
-/// Whether a field takes an argument (`EPF_ARG_REQUIRED`, `EPF_ARG_ALLOWED`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ArgRule {
-    None,
-    Allowed,
-    Required,
-}
-
-/// One Falco field, with libsinsp's type name (`CHARBUF`, `UINT64`, `IPNET`)
-/// and flags.
-#[derive(Debug, Clone, Deserialize)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the catalog's columns: one flag per libsinsp EPF_* field flag"
-)]
-pub struct Field {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub field_type: String,
-    /// `EPF_IS_LIST`: the field extracts several values.
-    pub list: bool,
-    pub kind: Kind,
-    /// libsinsp filter check class (`gen_event`, `thread`, ...) or plugin name.
-    pub class: String,
-    /// `libsinsp` or `plugin`.
-    pub origin: String,
-    /// Event sources the field applies to; `*` is every source.
-    pub sources: Vec<String>,
-    pub arg: ArgRule,
-    /// `EPF_ARG_INDEX`: the argument may be a number.
-    pub arg_index: bool,
-    /// `EPF_ARG_KEY`: the argument may be a string.
-    pub arg_key: bool,
-    /// `EPF_NO_RHS`: no right-hand side field, and never one itself.
-    pub no_rhs: bool,
-    /// `EPF_NO_TRANSFORMER`.
-    pub no_transformer: bool,
-    /// `EPF_FILTER_ONLY`: not in output.
-    pub filter_only: bool,
-    /// `EPF_PRINT_ONLY`.
-    pub print_only: bool,
-    /// libsinsp's `EPF_DEPRECATED`, or deprecated by Falco's rule loader.
-    pub deprecated: bool,
-    /// The values libsinsp extracts, for an enumerated field (`fd.type`).
-    #[serde(default)]
-    pub values: Vec<String>,
-    pub description: String,
-}
 
 impl Field {
     pub fn applies_to(&self, source: &str) -> bool {
@@ -101,98 +22,6 @@ impl Field {
     pub fn takes_arg(&self) -> bool {
         self.arg != ArgRule::None
     }
-}
-
-/// A macro of the Falco default rules.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Macro {
-    pub name: String,
-    pub condition: String,
-    pub source: String,
-    /// The first default rules file that defines it: stable, then incubating,
-    /// then sandbox.
-    pub origin: String,
-    /// Differing definitions in later files (`<file>: <condition>`).
-    #[serde(default)]
-    pub also: Vec<String>,
-}
-
-/// A list of the Falco default rules.
-#[derive(Debug, Clone, Deserialize)]
-pub struct List {
-    pub name: String,
-    pub items: Vec<String>,
-    /// The first default rules file that defines it (see [`Macro::origin`]).
-    pub origin: String,
-    /// Differing definitions in later files (`<file>: [<items>]`).
-    #[serde(default)]
-    pub also: Vec<String>,
-}
-
-/// A rule of the Falco default rules: what a tuning (`append_to_rule`) extends.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Rule {
-    pub name: String,
-    pub condition: String,
-    pub source: String,
-    pub origin: String,
-}
-
-/// One event of the driver's event table: its category and its codes
-/// (the enter and exit events, `PPME_*`).
-#[derive(Debug, Clone, Deserialize)]
-pub struct Event {
-    pub name: String,
-    pub kind: String,
-    pub codes: Vec<String>,
-}
-
-/// An event argument (`evt.arg.<name>`, `evt.rawarg.<name>`) and its type, as
-/// libsinsp's longest-match lookup first finds it.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Param {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub param_type: String,
-}
-
-/// `fields.toml`, read item by item.
-#[cfg_attr(test, derive(Debug, Deserialize))]
-struct FieldsFile {
-    sources: Vec<Source>,
-    classes: Vec<String>,
-    fields: Vec<Field>,
-}
-
-/// `defaults.toml`, read item by item.
-#[cfg_attr(test, derive(Debug, Deserialize))]
-struct DefaultsFile {
-    #[cfg_attr(test, serde(default))]
-    macros: Vec<Macro>,
-    #[cfg_attr(test, serde(default))]
-    lists: Vec<List>,
-    #[cfg_attr(test, serde(default))]
-    rules: Vec<Rule>,
-}
-
-/// `events.toml`, read item by item.
-#[cfg_attr(test, derive(Debug, Deserialize))]
-struct EventsFile {
-    syscalls: Vec<String>,
-    events: Vec<Event>,
-    params: Vec<Param>,
-}
-
-/// `fields.toml`'s preamble.
-#[derive(Deserialize)]
-struct FieldsPreamble {
-    classes: Vec<String>,
-}
-
-/// `events.toml`'s preamble.
-#[derive(Deserialize)]
-struct EventsPreamble {
-    syscalls: Vec<String>,
 }
 
 /// Every Falco catalog.
@@ -230,95 +59,56 @@ pub enum Lookup<'c> {
     Unknown,
 }
 
-/// A Falco catalog file compiled in, read.
-fn read<T>(file: &str, result: Result<T, catalog::CatalogError>) -> T {
-    catalog::compiled_in(&format!("data/catalogs/falco/{file}"), result)
+/// What `build.rs` stores (#1743), parsed once at build time: the event sources, the filter
+/// check classes, the fields, the default rules' macros, lists and rules, the syscall names, the
+/// events and their arguments.
+type Model = (
+    Vec<Source>,
+    Vec<String>,
+    Vec<Field>,
+    Vec<Macro>,
+    Vec<List>,
+    Vec<Rule>,
+    Vec<String>,
+    Vec<Event>,
+    Vec<Param>,
+);
+
+/// The Falco catalogs, pre-parsed by `build.rs` and decoded on first use.
+fn model() -> Model {
+    opentide_dataset::compiled_value("falco-catalog", opentide_dataset::blob!("falco-catalog"))
 }
 
 impl Catalog {
-    /// Every Falco catalog, read once per process (ADR 0013): the first
-    /// caller reads it, every other thread waits for that read and then
-    /// shares it.
+    /// Every Falco catalog, decoded once per process: the first caller decodes it, every other
+    /// thread waits for that and then shares it.
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            // Item by item (ADR 0013, `opentide_core::catalog`): never a
-            // whole TOML document of a catalog.
-            let fields = FieldsFile {
-                classes: read(
-                    "fields.toml",
-                    catalog::preamble::<FieldsPreamble>(fields_toml()),
-                )
-                .classes,
-                sources: read(
-                    "fields.toml",
-                    catalog::array_items(fields_toml(), "sources"),
-                ),
-                fields: read("fields.toml", catalog::array_items(fields_toml(), "fields")),
-            };
-            let defaults = DefaultsFile {
-                macros: read(
-                    "defaults.toml",
-                    catalog::array_items(defaults_toml(), "macros"),
-                ),
-                lists: read(
-                    "defaults.toml",
-                    catalog::array_items(defaults_toml(), "lists"),
-                ),
-                rules: read(
-                    "defaults.toml",
-                    catalog::array_items(defaults_toml(), "rules"),
-                ),
-            };
-            let events = EventsFile {
-                syscalls: read(
-                    "events.toml",
-                    catalog::preamble::<EventsPreamble>(events_toml()),
-                )
-                .syscalls,
-                events: read("events.toml", catalog::array_items(events_toml(), "events")),
-                params: read("events.toml", catalog::array_items(events_toml(), "params")),
-            };
+            let (sources, classes, fields, macros, lists, rules, syscalls, events, params) =
+                model();
             let by_name = fields
-                .fields
                 .iter()
                 .enumerate()
                 .map(|(i, f)| (f.name.clone(), i))
                 .collect();
             let all_codes = events
-                .events
                 .iter()
                 .flat_map(|e| e.codes.iter().cloned())
                 .collect();
             Catalog {
-                sources: fields.sources,
-                classes: fields.classes,
-                params: events.params,
-                syscalls: events.syscalls.into_iter().collect(),
+                sources,
+                classes,
+                params,
+                syscalls: syscalls.into_iter().collect(),
                 all_codes,
-                fields: fields.fields,
+                fields,
                 by_name,
-                macros: defaults
-                    .macros
-                    .into_iter()
-                    .map(|m| (m.name.clone(), m))
-                    .collect(),
-                list_order: defaults.lists.iter().map(|l| l.name.clone()).collect(),
-                lists: defaults
-                    .lists
-                    .into_iter()
-                    .map(|l| (l.name.clone(), l))
-                    .collect(),
-                rules: defaults
-                    .rules
-                    .into_iter()
-                    .map(|r| (r.name.clone(), r))
-                    .collect(),
-                events: events
-                    .events
-                    .into_iter()
-                    .map(|e| (e.name.clone(), e))
-                    .collect(),
+                macros: macros.into_iter().map(|m| (m.name.clone(), m)).collect(),
+                list_order: lists.iter().map(|l| l.name.clone()).collect(),
+                lists: lists.into_iter().map(|l| (l.name.clone(), l)).collect(),
+                rules: rules.into_iter().map(|r| (r.name.clone(), r)).collect(),
+                events: events.into_iter().map(|e| (e.name.clone(), e)).collect(),
             }
         })
     }
@@ -388,39 +178,66 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
 
-    /// ADR 0013: the catalogs read item by item are what `toml` reads from
-    /// the whole files, item for item and field for field.
+    fn fields_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/falco/fields.toml")
+    }
+    fn defaults_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/falco/defaults.toml")
+    }
+    fn events_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/falco/events.toml")
+    }
+
+    #[derive(Deserialize)]
+    struct FieldsFile {
+        sources: Vec<Source>,
+        classes: Vec<String>,
+        fields: Vec<Field>,
+    }
+
+    #[derive(Deserialize)]
+    struct DefaultsFile {
+        #[serde(default)]
+        macros: Vec<Macro>,
+        #[serde(default)]
+        lists: Vec<List>,
+        #[serde(default)]
+        rules: Vec<Rule>,
+    }
+
+    #[derive(Deserialize)]
+    struct EventsFile {
+        syscalls: Vec<String>,
+        events: Vec<Event>,
+        params: Vec<Param>,
+    }
+
+    /// What the build stored is the catalog files parsed whole, item for item and field for field
+    /// (#1743).
     #[test]
-    fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        let fields = FieldsFile {
-            classes: catalog::preamble::<FieldsPreamble>(fields_toml())
-                .unwrap()
-                .classes,
-            sources: catalog::array_items(fields_toml(), "sources").unwrap(),
-            fields: catalog::array_items(fields_toml(), "fields").unwrap(),
-        };
-        let defaults = DefaultsFile {
-            macros: catalog::array_items(defaults_toml(), "macros").unwrap(),
-            lists: catalog::array_items(defaults_toml(), "lists").unwrap(),
-            rules: catalog::array_items(defaults_toml(), "rules").unwrap(),
-        };
-        let events = EventsFile {
-            syscalls: catalog::preamble::<EventsPreamble>(events_toml())
-                .unwrap()
-                .syscalls,
-            events: catalog::array_items(events_toml(), "events").unwrap(),
-            params: catalog::array_items(events_toml(), "params").unwrap(),
-        };
+    fn the_stored_catalogs_are_the_whole_files() {
+        let (sources, classes, fields, macros, lists, rules, syscalls, events, params) = model();
         let whole_fields: FieldsFile = toml::from_str(fields_toml()).unwrap();
         let whole_defaults: DefaultsFile = toml::from_str(defaults_toml()).unwrap();
         let whole_events: EventsFile = toml::from_str(events_toml()).unwrap();
-        assert_eq!(format!("{fields:?}"), format!("{whole_fields:?}"));
-        assert_eq!(format!("{defaults:?}"), format!("{whole_defaults:?}"));
-        assert_eq!(format!("{events:?}"), format!("{whole_events:?}"));
-        assert!(
-            fields.fields.len() > 500 && defaults.macros.len() > 300 && events.events.len() > 100
+        assert_eq!(
+            format!("{sources:?}"),
+            format!("{:?}", whole_fields.sources)
         );
+        assert_eq!(classes, whole_fields.classes);
+        assert_eq!(format!("{fields:?}"), format!("{:?}", whole_fields.fields));
+        assert_eq!(
+            format!("{macros:?}"),
+            format!("{:?}", whole_defaults.macros)
+        );
+        assert_eq!(format!("{lists:?}"), format!("{:?}", whole_defaults.lists));
+        assert_eq!(format!("{rules:?}"), format!("{:?}", whole_defaults.rules));
+        assert_eq!(syscalls, whole_events.syscalls);
+        assert_eq!(format!("{events:?}"), format!("{:?}", whole_events.events));
+        assert_eq!(format!("{params:?}"), format!("{:?}", whole_events.params));
+        assert!(fields.len() > 500 && macros.len() > 300 && events.len() > 100);
     }
 
     #[test]

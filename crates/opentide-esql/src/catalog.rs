@@ -6,51 +6,10 @@
 //! process, item by item ([`opentide_core::catalog`]).
 
 use crate::version::Availability;
-use opentide_core::{catalog, suggest};
-use serde::Deserialize;
+use opentide_core::suggest;
 use std::sync::OnceLock;
 
-fn commands_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/esql/commands.toml")
-}
-fn functions_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/esql/functions.toml")
-}
-fn operators_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/esql/operators.toml")
-}
-fn types_toml() -> &'static str {
-    opentide_dataset::text!("data/catalogs/esql/types.toml")
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-struct CommandsFile {
-    #[cfg_attr(test, serde(default))]
-    branches: Vec<String>,
-    commands: Vec<CommandRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CommandRow {
-    pub name: String,
-    pub kind: String,
-    #[serde(default)]
-    pub syntax: String,
-    #[serde(default)]
-    pub docs: String,
-    #[serde(default)]
-    pub stack: String,
-    /// Release branches that accept the command (`None`: not recorded).
-    #[serde(default)]
-    pub versions: Option<Vec<String>>,
-    #[serde(default)]
-    pub snapshot_only: bool,
-    #[serde(default)]
-    pub citation: Option<String>,
-    #[serde(default)]
-    pub alias_of: Option<String>,
-}
+pub use crate::catalog_model::{CommandRow, FunctionRow, OperatorRow, ParamRow, TypeRow};
 
 impl CommandRow {
     pub fn availability(&self) -> Option<Availability> {
@@ -72,45 +31,6 @@ impl CommandRow {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-struct FunctionsFile {
-    #[cfg_attr(test, serde(default))]
-    branches: Vec<String>,
-    functions: Vec<FunctionRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct FunctionRow {
-    pub name: String,
-    pub kind: String,
-    pub signature: String,
-    #[serde(default)]
-    pub docs: String,
-    #[serde(default)]
-    pub returns: Vec<String>,
-    /// Other registered names (`to_str` for `to_string`).
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    #[serde(default)]
-    pub stack: String,
-    /// Release branches that accept the function (`None`: not recorded).
-    #[serde(default)]
-    pub versions: Option<Vec<String>>,
-    #[serde(default)]
-    pub preview: bool,
-    #[serde(default)]
-    pub snapshot_only: bool,
-    #[serde(default)]
-    pub license: Option<String>,
-    #[serde(default)]
-    pub citation: Option<String>,
-    #[serde(default)]
-    pub example: Option<String>,
-    #[serde(default)]
-    pub parameters: Vec<ParamRow>,
-}
-
 impl FunctionRow {
     pub fn availability(&self) -> Option<Availability> {
         self.prepared().available
@@ -129,53 +49,6 @@ impl FunctionRow {
         static PREPARED: OnceLock<Vec<Prepared>> = OnceLock::new();
         bundled(&Catalog::cached().functions, self, &PREPARED, Self::read)
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ParamRow {
-    pub name: String,
-    #[serde(default)]
-    pub docs: String,
-    #[serde(default)]
-    pub types: Vec<String>,
-    #[serde(default)]
-    pub required: bool,
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-struct OperatorsFile {
-    operators: Vec<OperatorRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct OperatorRow {
-    pub name: String,
-    pub operator: String,
-    #[serde(default)]
-    pub docs: String,
-    #[serde(default)]
-    pub preview: bool,
-    #[serde(default)]
-    pub citation: Option<String>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-struct TypesFile {
-    #[cfg_attr(test, serde(default))]
-    branches: Vec<String>,
-    types: Vec<TypeRow>,
-}
-
-/// A `::type` cast target and the conversion function it calls.
-#[derive(Debug, Clone, Deserialize)]
-pub struct TypeRow {
-    pub name: String,
-    #[serde(default)]
-    pub function: String,
-    #[serde(default)]
-    pub versions: Vec<String>,
 }
 
 impl TypeRow {
@@ -239,60 +112,32 @@ pub struct Catalog {
     pub branches: Vec<String>,
 }
 
-/// A file's preamble: the release branches its `versions` were read from.
-#[derive(Deserialize)]
-struct Branches {
-    #[serde(default)]
-    branches: Vec<String>,
-}
+/// What `build.rs` stores (#1743), parsed once at build time: the release branches, the commands,
+/// the functions, the operators and the cast types.
+type Model = (
+    Vec<String>,
+    Vec<CommandRow>,
+    Vec<FunctionRow>,
+    Vec<OperatorRow>,
+    Vec<TypeRow>,
+);
 
-/// Reads the compiled-in files item by item.
-fn files() -> (CommandsFile, FunctionsFile, OperatorsFile, TypesFile) {
-    fn read<T>(file: &str, result: Result<T, catalog::CatalogError>) -> T {
-        catalog::compiled_in(&format!("data/catalogs/esql/{file}"), result)
-    }
-    let branches =
-        |file: &str, text: &str| read::<Branches>(file, catalog::preamble(text)).branches;
-    let commands = CommandsFile {
-        branches: branches("commands.toml", commands_toml()),
-        commands: read(
-            "commands.toml",
-            catalog::array_items(commands_toml(), "commands"),
-        ),
-    };
-    let functions = FunctionsFile {
-        branches: branches("functions.toml", functions_toml()),
-        functions: read(
-            "functions.toml",
-            catalog::array_items(functions_toml(), "functions"),
-        ),
-    };
-    let operators = OperatorsFile {
-        operators: read(
-            "operators.toml",
-            catalog::array_items(operators_toml(), "operators"),
-        ),
-    };
-    let types = TypesFile {
-        branches: branches("types.toml", types_toml()),
-        types: read("types.toml", catalog::array_items(types_toml(), "types")),
-    };
-    (commands, functions, operators, types)
+/// The catalogs, pre-parsed by `build.rs` and decoded on first use.
+fn model() -> Model {
+    opentide_dataset::compiled_value("esql-catalog", opentide_dataset::blob!("esql-catalog"))
 }
 
 impl Catalog {
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let (commands, functions, operators, types) = files();
-            debug_assert_eq!(commands.branches, functions.branches);
-            debug_assert_eq!(commands.branches, types.branches);
+            let (branches, commands, functions, operators, types) = model();
             Catalog {
-                commands: commands.commands,
-                functions: functions.functions,
-                operators: operators.operators,
-                types: types.types,
-                branches: commands.branches,
+                commands,
+                functions,
+                operators,
+                types,
+                branches,
             }
         })
     }
@@ -581,6 +426,46 @@ impl Lifecycle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
+
+    fn commands_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/esql/commands.toml")
+    }
+    fn functions_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/esql/functions.toml")
+    }
+    fn operators_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/esql/operators.toml")
+    }
+    fn types_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/esql/types.toml")
+    }
+
+    #[derive(Deserialize)]
+    struct CommandsFile {
+        #[serde(default)]
+        branches: Vec<String>,
+        commands: Vec<CommandRow>,
+    }
+
+    #[derive(Deserialize)]
+    struct FunctionsFile {
+        #[serde(default)]
+        branches: Vec<String>,
+        functions: Vec<FunctionRow>,
+    }
+
+    #[derive(Deserialize)]
+    struct OperatorsFile {
+        operators: Vec<OperatorRow>,
+    }
+
+    #[derive(Deserialize)]
+    struct TypesFile {
+        #[serde(default)]
+        branches: Vec<String>,
+        types: Vec<TypeRow>,
+    }
 
     /// Every name of the catalog, its aliases, in three cases, and near
     /// misses of each: what a query may write.
@@ -746,34 +631,30 @@ mod tests {
         assert_eq!(cast.availability(), Availability::ONLY_8_19);
     }
 
-    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    /// What the build stored is the whole-file parse, field for field (#1743).
     #[test]
-    fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        fn whole<T: serde::de::DeserializeOwned>(text: &str) -> T {
-            toml::from_str(text).expect("a compiled-in catalog")
-        }
-        let (commands, functions, operators, types) = files();
-        let pairs = [
-            (
-                format!("{commands:?}"),
-                format!("{:?}", whole::<CommandsFile>(commands_toml())),
-            ),
-            (
-                format!("{functions:?}"),
-                format!("{:?}", whole::<FunctionsFile>(functions_toml())),
-            ),
-            (
-                format!("{operators:?}"),
-                format!("{:?}", whole::<OperatorsFile>(operators_toml())),
-            ),
-            (
-                format!("{types:?}"),
-                format!("{:?}", whole::<TypesFile>(types_toml())),
-            ),
-        ];
-        for (read, whole) in pairs {
-            assert_eq!(read, whole);
-        }
+    fn the_stored_catalogs_are_the_whole_files() {
+        let (branches, commands, functions, operators, types) = model();
+        let whole_commands: CommandsFile = toml::from_str(commands_toml()).unwrap();
+        let whole_functions: FunctionsFile = toml::from_str(functions_toml()).unwrap();
+        let whole_operators: OperatorsFile = toml::from_str(operators_toml()).unwrap();
+        let whole_types: TypesFile = toml::from_str(types_toml()).unwrap();
+        assert_eq!(branches, whole_commands.branches);
+        assert_eq!(branches, whole_functions.branches);
+        assert_eq!(branches, whole_types.branches);
+        assert_eq!(
+            format!("{commands:?}"),
+            format!("{:?}", whole_commands.commands)
+        );
+        assert_eq!(
+            format!("{functions:?}"),
+            format!("{:?}", whole_functions.functions)
+        );
+        assert_eq!(
+            format!("{operators:?}"),
+            format!("{:?}", whole_operators.operators)
+        );
+        assert_eq!(format!("{types:?}"), format!("{:?}", whole_types.types));
     }
 
     #[test]
