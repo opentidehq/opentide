@@ -1183,6 +1183,96 @@ fn workspace_diagnostics_cover_closed_files() {
     assert_eq!(again["result"]["items"][0]["kind"], "unchanged", "{again}");
 }
 
+/// The editor's client pulls the workspace's diagnostics again two seconds
+/// after every answer, for as long as it runs: a closed file's analysis is
+/// made once, not on every pull, and typing in an object (or editing one on
+/// disk) does not make it again, since no other object's analysis reads it.
+/// A configuration change does.
+#[test]
+fn a_workspace_pull_analyses_each_closed_file_once() {
+    let scratch = workspace("workspace-pull-cache", true);
+    let capabilities = json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": {
+            "diagnostics": { "refreshSupport": true },
+            "didChangeWatchedFiles": { "dynamicRegistration": true }
+        }
+    });
+    let (mut lsp, _) =
+        start(json!({ "capabilities": capabilities, "rootUri": file_uri(&scratch.0) }));
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let objective_text = fixture(OBJECTIVE);
+    open(&mut lsp, &objective, "opentide-yaml", &objective_text);
+    let closed_analyses = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["closedAnalyses"]
+            .as_u64()
+            .unwrap()
+    };
+    let pull = |lsp: &mut Lsp| {
+        let report = lsp.request("workspace/diagnostic", json!({ "previousResultIds": [] }));
+        report["result"]["items"].as_array().unwrap().len()
+    };
+    // The rule is the one closed file; the objective is open.
+    assert_eq!(pull(&mut lsp), 1);
+    assert_eq!(closed_analyses(&mut lsp), 1);
+    assert_eq!(pull(&mut lsp), 1);
+    assert_eq!(closed_analyses(&mut lsp), 1, "the second pull analysed again");
+
+    // A keystroke in the open object changes what the workspace's findings
+    // are, not how the rule is analysed.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": objective, "version": 2 },
+                "contentChanges": [{ "text": format!("{objective_text}\n# typed\n") }] }),
+    );
+    assert_eq!(pull(&mut lsp), 1);
+    assert_eq!(closed_analyses(&mut lsp), 1, "a keystroke made every closed file analysed again");
+
+    // A configuration file changed on disk is read by every analysis.
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{
+            "uri": file_uri(&scratch.0.join(".opentide/configurations/platforms/sentinel.toml")),
+            "type": 2
+        }] }),
+    );
+    assert_eq!(pull(&mut lsp), 1);
+    assert_eq!(closed_analyses(&mut lsp), 2, "a configuration change kept the old analysis");
+}
+
+/// The diagnostics requests are the slow ones on a large workspace: what the
+/// editor asks in the same batch (a hover, a completion) is answered first,
+/// whatever the order they arrived in.
+#[test]
+fn a_batch_answers_diagnostics_after_hovers_and_completions() {
+    let scratch = workspace("batch-order", true);
+    let capabilities = json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true } }
+    });
+    let (mut lsp, _) =
+        start(json!({ "capabilities": capabilities, "rootUri": file_uri(&scratch.0) }));
+    let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
+    let text = fixture(RULE);
+    open(&mut lsp, &uri, "opentide-yaml", &text);
+    hold(&mut lsp, 900);
+    let at = json!({ "textDocument": { "uri": uri }, "position": { "line": 0, "character": 2 } });
+    send(&mut lsp, 901, "workspace/diagnostic", json!({ "previousResultIds": [] }));
+    send(&mut lsp, 902, "textDocument/diagnostic", json!({ "textDocument": { "uri": uri } }));
+    send(&mut lsp, 903, "textDocument/hover", at.clone());
+    send(&mut lsp, 904, "textDocument/completion", at);
+    // The two diagnostics requests are deferred in the order they arrived.
+    let seen: Vec<Value> = until_response(&mut lsp, 902);
+    let position = |id: i64| seen.iter().position(|m| m["id"] == id && m.get("method").is_none());
+    let (hover, completion) = (position(903), position(904));
+    let (workspace_pull, document_pull) = (position(901), position(902));
+    assert!(hover.is_some() && completion.is_some(), "{seen:#?}");
+    assert!(workspace_pull.is_some() && document_pull.is_some(), "{seen:#?}");
+    assert!(hover < workspace_pull && completion < workspace_pull, "{seen:#?}");
+    assert!(workspace_pull < document_pull, "{seen:#?}");
+    assert!(seen[workspace_pull.unwrap()]["result"]["items"].is_array(), "{seen:#?}");
+}
+
 /// #215: a file-name finding's suggestion is a file name. A client that applies
 /// `RenameFile` gets an action that renames the file; no client gets an edit
 /// of the text, which is the object's name, and fixAll leaves it out.

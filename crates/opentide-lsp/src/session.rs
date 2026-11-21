@@ -549,6 +549,9 @@ pub(crate) struct Session {
     cache: RefCell<HashMap<String, (u64, Arc<AnalyzeResponse>)>>,
     /// How many analyses ran, for the tests (`opentide/__stats`).
     pub analyses: Cell<u64>,
+    /// How many closed object files were analysed (not read from their
+    /// entry), for the tests (`opentide/__stats`).
+    pub closed_analyses: Cell<u64>,
     batch: Cell<u64>,
     /// The root whose catalogs and declared datasets the engine has
     /// installed; `None` until the first request, and again after they
@@ -1492,6 +1495,7 @@ impl Session {
         if let Some(found) = cached {
             return found;
         }
+        self.closed_analyses.set(self.closed_analyses.get() + 1);
         let found = Arc::new(
             opentide_analysis::analyze(
                 host,
