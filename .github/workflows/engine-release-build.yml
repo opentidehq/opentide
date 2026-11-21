@@ -507,3 +507,5 @@ jobs:
     uses: ./.github/workflows/av-gate.yml
     with:
       artifacts: release-assets
+      # No standalone Windows executable ships (#1747): nothing here to read imports from.
+      windows-binaries: false

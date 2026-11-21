@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """List the Windows imports of a release's binaries; fail on a keylogger-like set (#1743).
 
-    pe_imports.py PATH...
+    pe_imports.py [--allow-none] PATH...
 
 PATH is a file or a directory searched recursively (the extracted artifacts: extract.py). Every PE
 file (`.exe`, `.dll`, `.pyd`, `.node`) is parsed with pefile and its user32 imports are printed.
@@ -11,7 +11,9 @@ translation, which the terminal UI (`opentide tui`, the `setup` wizard's prompts
 and which antivirus heuristics read as a keylogger's. The Python extension module (`_native.pyd`) is
 built without the terminal UI (the facade's `cli-core` feature) and the language server never had
 it, so neither may import them. The `opentide` command line's binary and the Node.js addon keep the
-terminal UI and are only listed. Exit status: 0 policy met, 1 a forbidden import, 2 no PE found.
+terminal UI and are only listed. Exit status: 0 policy met, 1 a forbidden import, 2 no PE found
+(`--allow-none`: 0, for a set of artifacts that ships no Windows binary, the GitHub Release's since
+the standalone Windows executables were dropped).
 """
 
 from __future__ import annotations
@@ -56,7 +58,8 @@ def user32_imports(path: Path) -> list[str] | None:
 
 
 def main(argv: list[str]) -> int:
-    paths = [Path(a) for a in argv]
+    allow_none = "--allow-none" in argv
+    paths = [Path(a) for a in argv if a != "--allow-none"]
     if not paths or any(not p.exists() for p in paths):
         print(__doc__, file=sys.stderr)
         return 2
@@ -80,7 +83,7 @@ def main(argv: list[str]) -> int:
         bad += bool(hits)
     if read == 0:
         print("pe_imports: no PE file found", file=sys.stderr)
-        return 2
+        return 0 if allow_none else 2
     return 1 if bad else 0
 
 

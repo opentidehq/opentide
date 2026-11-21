@@ -190,3 +190,18 @@ def test_the_yara_gate_skips_the_text_sources_of_a_source_distribution(tmp_path:
     assert gate.in_source_distribution(source, tree)
     assert not gate.in_source_distribution(binary, tree)
     assert not gate.in_source_distribution(wheel, tree)
+
+
+def test_a_set_of_artifacts_without_windows_binaries_passes_only_when_allowed(
+    tmp_path: Path,
+) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "av_pe_imports", _MODULE.with_name("pe_imports.py")
+    )
+    assert spec
+    assert spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    (tmp_path / "opentide-lsp-wasm32-wasip1.wasm").write_bytes(b"\0asm\1\0\0\0")
+    assert module.main([str(tmp_path)]) == 2
+    assert module.main(["--allow-none", str(tmp_path)]) == 0

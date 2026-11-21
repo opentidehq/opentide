@@ -35,6 +35,11 @@ on:
         description: "A glob of the run's artifact names to scan, as download-artifact's `pattern` (brace alternatives allowed): `release-assets`, or `{wheels-*,sdist,npm-packages,crates}`."
         required: true
         type: string
+      windows-binaries:
+        description: "Whether the artifacts hold Windows binaries (`.pyd`, `.node`, `.exe`) whose imports are checked: the wheels and npm packages do, the GitHub Release's assets have none since the standalone Windows executables were dropped."
+        required: false
+        default: true
+        type: boolean
       revision:
         description: "The commit whose scripts and budgets are used, as its 40-hex SHA; empty: the caller's."
         required: false
@@ -81,7 +86,9 @@ jobs:
           set -o pipefail
           python3 -m pip install --quiet pefile==2024.8.26
           python3 scripts/av/extract.py av-artifacts av-extracted
-          python3 scripts/av/pe_imports.py av-extracted | tee "${RUNNER_TEMP}/imports.txt"
+          allow_none=""
+          if [ "${{ inputs.windows-binaries }}" != "true" ]; then allow_none="--allow-none"; fi
+          python3 scripts/av/pe_imports.py ${allow_none} av-extracted | tee "${RUNNER_TEMP}/imports.txt"
       # Code is never compressed: no code section, and not a whole file, is at or above 7.0
       # bits per byte (the datasets' compressed blobs are in the data sections, which are
       # reported). scripts/av/entropy.py.
