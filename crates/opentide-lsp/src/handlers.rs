@@ -31,6 +31,15 @@ pub const DIAGNOSTICS_DOCS: &str = "https://opentide.org/docs/cli/diagnostics/";
 const TRIGGERS: &[&str] = &["|", " ", ":", ".", "(", ",", "`", "="];
 
 /// The `opentide/*` requests, and the test-only ones of debug builds.
+/// `textDocument/completion` with the result as a JSON value: the response
+/// may carry `itemDefaults`, which `lsp-types` has no field for.
+enum CompletionList {}
+impl lsp::request::Request for CompletionList {
+    type Params = lsp::CompletionParams;
+    type Result = Option<Value>;
+    const METHOD: &'static str = <lsp::request::Completion as lsp::request::Request>::METHOD;
+}
+
 pub mod custom {
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
@@ -341,7 +350,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<Initialize>(|s, p| initialize(s, p, raw.as_ref().unwrap_or(&Value::Null)))
         .on::<Shutdown>(|_, ()| ())
         .on::<HoverRequest>(handle_hover)
-        .on::<Completion>(handle_completion)
+        .on::<CompletionList>(handle_completion)
         .on::<ResolveCompletionItem>(handle_resolve)
         .on::<SignatureHelpRequest>(handle_signature_help)
         .on::<GotoDefinition>(handle_definition)
@@ -417,6 +426,15 @@ fn plaintext_only(formats: Option<&Vec<lsp::MarkupKind>>) -> bool {
     formats.is_some_and(|f| !f.is_empty() && !f.contains(&lsp::MarkupKind::Markdown))
 }
 
+/// Whether the client resolves `property` of a completion item
+/// (`completionItem.resolveSupport.properties`).
+fn resolves(text: Option<&lsp::TextDocumentClientCapabilities>, property: &str) -> bool {
+    text.and_then(|t| t.completion.as_ref())
+        .and_then(|c| c.completion_item.as_ref())
+        .and_then(|i| i.resolve_support.as_ref())
+        .is_some_and(|support| support.properties.iter().any(|name| name == property))
+}
+
 fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::ClientCaps {
     let text = caps.text_document.as_ref();
     let workspace = caps.workspace.as_ref();
@@ -443,6 +461,19 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
             text.and_then(|t| t.hover.as_ref())
                 .and_then(|h| h.content_format.as_ref()),
         ),
+        resolve_completion_documentation: resolves(text, "documentation"),
+        resolve_completion_detail: resolves(text, "detail"),
+        completion_item_defaults: {
+            let defaults = text
+                .and_then(|t| t.completion.as_ref())
+                .and_then(|c| c.completion_list.as_ref())
+                .and_then(|list| list.item_defaults.as_ref());
+            defaults.is_some_and(|names| {
+                ["data", "editRange"]
+                    .iter()
+                    .all(|wanted| names.iter().any(|name| name == wanted))
+            })
+        },
         plaintext_completion: plaintext_only(
             text.and_then(|t| t.completion.as_ref())
                 .and_then(|c| c.completion_item.as_ref())
@@ -1281,10 +1312,7 @@ struct ItemData {
     clippy::cast_possible_truncation,
     reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
 )]
-fn handle_completion(
-    session: &mut Session,
-    params: lsp::CompletionParams,
-) -> Option<lsp::CompletionResponse> {
+fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Option<Value> {
     let (uri, doc, offset) = at(session, &params.text_document_position)?;
     let typed_space = params.context.as_ref().is_some_and(|c| {
         c.trigger_kind == lsp::CompletionTriggerKind::TRIGGER_CHARACTER
@@ -1339,11 +1367,18 @@ fn handle_completion(
                 schema: field.map(|(schema, _)| schema.to_string()),
                 field_path: field.map(|(_, path)| path.to_string()),
             };
+            // A value of a Tide field is documented, and its detail made, from
+            // the schema and field its `data` names (`completionItem/resolve`):
+            // for a client that resolves them, the list holds labels, a few
+            // hundred of them for the ATT&CK techniques.
+            let resolvable = field.is_some() && session.caps.resolve_completion_documentation;
+            let detail_resolved = resolvable && session.caps.resolve_completion_detail;
             lsp::CompletionItem {
                 kind: Some(completion_kind(&c.kind)),
-                detail: c.detail.clone(),
+                detail: c.detail.clone().filter(|_| !detail_resolved),
                 documentation: c
                     .documentation
+                    .filter(|_| !resolvable)
                     .map(|d| lsp::Documentation::MarkupContent(markup(plain, d))),
                 insert_text: Some(c.label.clone()),
                 filter_text: dotted_edit.then(|| c.label.clone()),
@@ -1359,7 +1394,57 @@ fn handle_completion(
             }
         })
         .collect();
-    Some(lsp::CompletionResponse::Array(items))
+    Some(completion_response(session, items))
+}
+
+/// The list as the client takes it: an array of items, or, for a client that
+/// reads `itemDefaults`, a list that says once what each item would say again
+/// when they all say the same (the `data` that `completionItem/resolve` reads,
+/// and the range every item replaces).
+fn completion_response(session: &Session, items: Vec<lsp::CompletionItem>) -> Value {
+    let range_of = |item: &lsp::CompletionItem| match &item.text_edit {
+        Some(lsp::CompletionTextEdit::Edit(edit)) => Some(edit.range),
+        _ => None,
+    };
+    let shared = items.first().and_then(|first| {
+        let range = range_of(first)?;
+        items
+            .iter()
+            .all(|item| range_of(item) == Some(range) && item.data == first.data)
+            .then(|| (range, first.data.clone()))
+    });
+    let Some((range, data)) = shared.filter(|_| session.caps.completion_item_defaults) else {
+        return serde_json::to_value(lsp::CompletionResponse::Array(items)).unwrap_or(Value::Null);
+    };
+    let items: Vec<Value> = items
+        .into_iter()
+        .map(|item| {
+            let label = item.label.clone();
+            let new_text = match &item.text_edit {
+                Some(lsp::CompletionTextEdit::Edit(edit)) => Some(edit.new_text.clone()),
+                _ => None,
+            };
+            let mut value = serde_json::to_value(item).unwrap_or(Value::Null);
+            if let Some(object) = value.as_object_mut() {
+                for key in ["data", "textEdit", "insertText"] {
+                    object.remove(key);
+                }
+                if object.get("filterText").and_then(Value::as_str) == Some(label.as_str()) {
+                    object.remove("filterText");
+                }
+                // The text an item inserts is its label unless it says otherwise.
+                if let Some(text) = new_text.filter(|text| *text != label) {
+                    object.insert("textEditText".into(), Value::String(text));
+                }
+            }
+            value
+        })
+        .collect();
+    json!({
+        "isIncomplete": false,
+        "itemDefaults": { "data": data, "editRange": range },
+        "items": items,
+    })
 }
 
 /// The client's item with documentation (and a detail) added: its edit and

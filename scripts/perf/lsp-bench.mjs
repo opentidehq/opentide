@@ -65,7 +65,7 @@ function capabilities() {
       insertReplaceSupport: true,
       resolveSupport: { properties: ['documentation', 'detail', 'additionalTextEdits'] },
     },
-    completionList: { itemDefaults: ['commitCharacters', 'editRange', 'insertTextFormat', 'insertTextMode'] },
+    completionList: { itemDefaults: ['commitCharacters', 'editRange', 'insertTextFormat', 'insertTextMode', 'data'] }, // vscode-languageclient 10.1: completion.js
   };
   caps.textDocument.hover = { dynamicRegistration: true, contentFormat: ['markdown', 'plaintext'] };
   caps.textDocument.semanticTokens = {

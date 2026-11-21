@@ -49,6 +49,14 @@ pub(crate) struct ClientCaps {
     /// Hover and completion documentation as plain text, not Markdown.
     pub plaintext_hover: bool,
     pub plaintext_completion: bool,
+    /// The client asks `completionItem/resolve` for an item's documentation,
+    /// and for its detail (`completionItem.resolveSupport`): a list of a few
+    /// hundred values need not carry either.
+    pub resolve_completion_documentation: bool,
+    pub resolve_completion_detail: bool,
+    /// The client takes the `data` and the edit range of a completion list's
+    /// items from its `itemDefaults` (`completionList.itemDefaults`).
+    pub completion_item_defaults: bool,
     /// A workspace edit may create a file (`documentChanges` with the
     /// `create` resource operation).
     pub create_files: bool,

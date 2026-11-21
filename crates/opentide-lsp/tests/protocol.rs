@@ -1712,6 +1712,80 @@ fn a_keystroke_checks_the_file_it_changed_not_every_object() {
     );
 }
 
+/// A client that resolves a completion item's detail and reads `itemDefaults`
+/// is sent the list of a Tide field's values (the ATT&CK techniques) as
+/// labels: what every item would say again (the data `completionItem/resolve`
+/// reads, the range each replaces) is said once. Applied as the client
+/// applies them, the items are what a client that reads neither gets.
+#[test]
+fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
+    let text = fixture(RULE).replacen("  - T1059\n", "  - T10\n", 1);
+    let line = text.lines().position(|l| l == "  - T10").unwrap();
+    let uri = "file:///tmp/objects/rules/techniques.yaml";
+    let complete = |capabilities: Value| {
+        let (mut lsp, _) = start(json!({ "capabilities": capabilities }));
+        open(&mut lsp, uri, "opentide-yaml", &text);
+        let list = lsp.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": 7 }
+            }),
+        );
+        (lsp, list["result"].clone())
+    };
+    let (mut plain, whole) = complete(json!({}));
+    let whole = whole
+        .as_array()
+        .expect("an array for a client with no defaults");
+    let (mut lsp, list) = complete(json!({ "textDocument": { "completion": {
+        "completionItem": { "resolveSupport": { "properties": ["documentation", "detail"] } },
+        "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
+    } } }));
+    let items = list["items"]
+        .as_array()
+        .expect("a list for a client with defaults");
+    assert!(whole.len() > 300, "the ATT&CK list: {}", whole.len());
+    assert_eq!(items.len(), whole.len());
+    assert_eq!(list["isIncomplete"], false);
+    let size = |value: &Value| serde_json::to_string(value).unwrap().len();
+    // A label, a kind and, where it differs, the text: 51 bytes an item here,
+    // 383 when each item says its data and its range again.
+    assert!(
+        size(&list) < items.len() * 64,
+        "labels: {} bytes for {} items, whole: {} bytes",
+        size(&list),
+        items.len(),
+        size(&Value::Array(whole.clone()))
+    );
+    let defaults = &list["itemDefaults"];
+    for (item, held) in items.iter().zip(whole).take(60) {
+        // What the client makes of the item and the defaults.
+        assert_eq!(item["label"], held["label"]);
+        for key in ["data", "textEdit", "detail", "documentation"] {
+            assert!(
+                item.get(key).is_none(),
+                "{key} is said once or resolved: {item}"
+            );
+        }
+        let text = item.get("textEditText").unwrap_or(&item["label"]);
+        assert_eq!(*text, held["textEdit"]["newText"]);
+        assert_eq!(defaults["editRange"], held["textEdit"]["range"]);
+        assert_eq!(defaults["data"], held["data"]);
+        // And what resolving it gives, as a client sends it back.
+        let mut sent = item.clone();
+        sent["data"] = defaults["data"].clone();
+        let resolved = lsp.request("completionItem/resolve", sent);
+        let expected = plain.request("completionItem/resolve", held.clone());
+        assert_eq!(
+            resolved["result"]["documentation"],
+            expected["result"]["documentation"]
+        );
+        assert_eq!(resolved["result"]["detail"], expected["result"]["detail"]);
+        assert!(resolved["result"]["detail"].is_string(), "{resolved}");
+    }
+}
+
 /// What nothing reports (no watcher) is never served from what was kept:
 /// every pull is made again, as before.
 #[test]
