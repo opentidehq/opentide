@@ -106,7 +106,7 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 | GitHub | A **pre-release** (never Latest) tagged `v1.0.0-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
 | PyPI | `1.0.0rcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==1.0.0rc1` |
 | crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
-| npm | **Nothing.** Test the npm packages from ci.yml's `release` artifacts (`npm-packages`) |
+| npm | All eleven packages at `1.0.0-rc.N` under the dist-tag **`next`** (it only moves forward: the job refuses a candidate older than the current `next`, and the guard refuses resuming a candidate before `v1.0.0-rc.3`), never `latest` (`npm publish --provenance --tag next`, OIDC): `npm install @opentide/opentide@next` or the exact version. **Every package must already exist on npm with `publish.yml` as its trusted publisher** (publishing.md, step 10.5; the guard checks the first, not the second). Before `1.0.0-rc.3` a candidate published nothing to npm. Test the tarballs without publishing from ci.yml's `release` artifacts (`npm-packages`) |
 
 Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates"). The stub has no `repository_dispatch` trigger either: resume a candidate with a Run workflow **on `integration/unified-core`** (Step 2).
 
@@ -249,13 +249,13 @@ Run **Publish** on `development` with no inputs:
 
 The run:
 
-1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading, runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin) and `scripts/engine/release.py lockstep 0.x.y`. It refuses a tag or Release that already exists and a run from another branch.
+1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading, runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin) and `scripts/engine/release.py lockstep 0.x.y`. It refuses a tag or Release that already exists and a run from another branch. For a release or a public candidate it also checks, **before anything is built or published**, that every one of the eleven npm packages exists on registry.npmjs.org (the registry's package document, no authentication): a missing one fails the run with its name and a pointer to publishing.md step 10.5, so PyPI and crates.io never publish for a run npm would then fail. It cannot see npm's trusted-publisher configuration (a signed-in maintainer's, `npm trust list <package>`, expiring after two days without a publish): the step says so.
 2. **Checks**: every crate built from its package (`cargo package`), the licence scan.
-3. **Builds**: the wheels, the sdist, the npm native packages and tarballs, the GitHub Release's assets (binaries, installers, engine assets, SBOMs, `SHA256SUMS`).
+3. **Builds**: the wheels, the sdist, the npm native packages and tarballs, the GitHub Release's assets (binaries, installers, engine assets, the command line's WASI module `opentide-wasm32-wasip1.wasm` (smoke-tested under wasmtime: `--version` is the release's), SBOMs, `SHA256SUMS`).
 4. **Smoke tests**: `pip install` the wheel and `opentide --version` (Linux, macOS, Windows); a build from the sdist; the npm tarballs published to a throwaway local registry and `npm install @opentide/opentide` in a clean project, which must pick the host's native package, run `npx opentide --version`, load the SDK and type-check (`scripts/engine/npm-local-registry/test.mjs`; Linux, macOS, Windows); `cargo install opentide --features cli` from the crates' packages; the binary installers.
 5. **Attestations** of every artifact, then **GitHub Release**: the tag `v0.x.y` on the built commit (`--target $GITHUB_SHA`) with the notes file as body, every asset attached. Latest by default.
 6. **Verify the published assets**: `sha256sum -c`, the asset set, and each asset's attestation signed by `publish.yml` on `development`.
-7. **Publish to PyPI**, **Publish to crates.io** (dependencies first), **Publish to npm**, in parallel; then **Smoke the registries** installs from each.
+7. **Publish to PyPI**, **Publish to crates.io** (dependencies first), **Publish to npm** (`latest` for a release, `next` for a candidate), in parallel; then **Smoke the registries** installs from each (npx by the exact version; a candidate's `next` is checked and its `latest` must not be the candidate).
 
 The Release comes from `GITHUB_TOKEN`, which starts no other workflow: one publish per version.
 
@@ -316,11 +316,13 @@ The other registries and the Release:
 
 ```bash
 curl -s -A release-check https://crates.io/api/v1/crates/opentide | jq -r '.crate.max_version'   # 0.x.y
-npm view @opentide/opentide dist-tags                                  # latest: 0.x.y
+npm view @opentide/opentide dist-tags                                  # latest: 0.x.y (a candidate: next: 1.0.0-rc.N, latest still the placeholder)
 npx --yes @opentide/opentide@0.x.y --version
 gh api repos/opentidehq/opentide/releases/tags/v0.x.y --jq '.tag_name, .prerelease, (.assets|length)'
 python3 scripts/engine/release.py assets v0.x.y | wc -l                 # the same count
 ```
+
+**After a final release, move npm's `next`** to it for all eleven packages: `npm dist-tag add <pkg>@X.Y.Z next` (trusted publishing covers `npm publish` only, so a maintainer signed in to npm runs it; the `npm` job's warning names the packages; `docs/internal/publishing.md`, "After the final release"), so that `@next` never installs something older than `latest`.
 
 ---
 
@@ -369,7 +371,13 @@ Link that pull request from the tracking issue in Step 4.
 | crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume, then **delete** it again. The trust step runs only when the trusted login failed or a crate was created with the token; a failure there is a warning |
 | crates.io: `::warning::Trusted publishing was not registered …` | The crates are published. Register `publish.yml` on the crates named in the log (crate settings, Trusted Publishing), or add a token with the `trusted-publishing` scope and resume |
 | crates.io: `rate limited, retrying in …` | Normal for new crates: the job waits until the time crates.io names (capped at 30 minutes, 11 without one) and tries again, 12 times at most |
-| npm: `E404` / `ENEEDAUTH` on publish | The package has no trusted publisher for `publish.yml`, or it expired (two days without a publish). Register it, resume |
+| Guard: `These npm packages do not exist on npm yet: …` | A candidate or release needs all eleven packages on npm first (nothing was built or published). Publish each named package once by hand and register `publish.yml` on it (`docs/internal/publishing.md`, step 10.5), then run again |
+| Guard: `Could not read … from https://registry.npmjs.org` | The registry did not answer (5xx or timeout), which is not read as missing. Run again |
+| npm: `E404` / `ENEEDAUTH` on publish | The package has no trusted publisher for `publish.yml`, or it expired (two days without a publish): the guard cannot see this. Register it, resume (PyPI and crates.io have published by then) |
+| npm: `refusing to publish it under next` / `under latest` | A tarball's version does not fit the channel (a candidate must be `X.Y.Z-rc.N`, a release `X.Y.Z`). Every tarball is checked before the first publish, so nothing was published; fix the build |
+| npm: `npm's next is already …, newer than …` | The candidate would move `next` backwards (an older candidate resumed, or an older branch). Nothing was published to npm; cut the next candidate instead |
+| Guard: `… is older than v1.0.0-rc.3, the first candidate that publishes to npm` | A `checkout_ref` resume of `v1.0.0-rc.1` or `rc.2` would publish an old version under `next`. Cut the next candidate |
+| npm: `::warning::next trails latest …` (after a release) | Trusted publishing cannot move a dist-tag. As a maintainer signed in to npm run `npm dist-tag add <pkg>@X.Y.Z next` for each of the eleven packages (`docs/internal/publishing.md`, "After the final release") |
 | `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y` on the ref that has the full `publish.yml` (`integration/unified-core` until it merges); `skip-existing` uploads only the missing files. The step log prints the command for the ref the run was on |
 | Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then resume |
 | New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |

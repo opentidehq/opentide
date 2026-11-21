@@ -211,11 +211,13 @@ def test_a_candidates_notes_quote_unreleased(repo: Path) -> None:
     fixed = "## [Unreleased]\n\n### Fixed\n\n- **A fix.**\n"
     _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", fixed)
     notes = _script().notes(repo, "v1.3.0-rc.2")
-    # Where the candidate is (PyPI and crates.io pre-releases), and is not (npm).
+    # Where the candidate is: PyPI, crates.io and npm (under `next`, never `latest`).
     assert notes.startswith(
         "Release candidate 2 of 1.3.0, for testing: a pre-release on PyPI "
-        "(`pip install --pre opentide`) and on crates.io, not on npm. "
+        "(`pip install --pre opentide`), on crates.io and on npm under the `next` tag "
+        "(`npm install @opentide/opentide@next`), never `latest`. "
     )
+    assert "not on npm" not in notes
     assert "TestPyPI" not in notes
     assert "- **A fix.**" in notes
     # Nothing of the released version leaks in.

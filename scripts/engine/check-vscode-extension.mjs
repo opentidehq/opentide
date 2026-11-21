@@ -9,8 +9,13 @@
 // It writes pins.json in that checkout (the URLs of <tag>'s release here, the digests of SHA256SUMS),
 // then runs `scripts/grammars.mjs --zip` (the grammars it bundles) and `prepareEngine` from
 // `scripts/engine-lib.mjs` (the engine it bundles) on the local files. Either refusing them fails.
-// It prints the pins.json sections the extension's pull request would carry. ci.yml runs it on
-// every pull request, on the engine release dry run's assets (job engine-release-consumers).
+// It prints the pins.json sections the extension's pull request would carry, and the pin of the
+// WASI command line, `opentide-wasm32-wasip1.wasm` (docs/internal/vscode-wasi.md): the one module
+// for every platform that the extension runs under @vscode/wasm-wasi, pinned by URL and SHA-256
+// like the zips. Its section is printed, not written to pins.json, and its asset is checked to
+// be in SHA256SUMS and a WebAssembly module: the extension's pins.json format for it is its own.
+// ci.yml runs it on the nightly, on the engine release dry run's assets (job
+// engine-release-consumers).
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -21,6 +26,9 @@ import { pathToFileURL } from "node:url";
 const REPOSITORY = "opentidehq/opentide";
 // The release train's tags (vX.Y.Z, vX.Y.Z-rc.N); the engine's own engine-v* series ended there.
 const TAG = /^v(\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?)$/;
+// The opentide command line on wasm32-wasip1: scripts/engine/release.py CLI_WASM_ASSET. The name is
+// fixed, the extension pins it.
+export const WASI_CLI = "opentide-wasm32-wasip1.wasm";
 
 function fail(message) {
   console.error(`check-vscode-extension: ${message}`);
@@ -61,6 +69,16 @@ export function pinsFor(tag, digests) {
       ...pin(`opentide-wasm-web-v${version}.zip`),
       thirdPartyLicenses: pin("THIRD-PARTY-LICENSES.html"),
     },
+    // One module for every platform, named without a version: the release is the version.
+    // The module's third-party licences, shipped beside it: the Rust crates (about.toml names
+    // wasm32-wasip1), the C library it links, the licence and the embedded data's notice.
+    wasi: {
+      version,
+      ...pin(WASI_CLI),
+      licenses: Object.fromEntries(
+        ["THIRD-PARTY-LICENSES.html", "WASI-LIBC-LICENSES.txt", "LICENSE", "NOTICE"].map((name) => [name, pin(name)]),
+      ),
+    },
   };
 }
 
@@ -77,6 +95,11 @@ async function main() {
   const sections = pinsFor(tag, digests);
 
   const pins = JSON.parse(readFileSync(pinsPath, "utf8"));
+  // The WASI module is a WebAssembly binary: \0asm, version 1.
+  const wasi = readFileSync(join(assets, WASI_CLI));
+  if (wasi.length < 8 || !wasi.subarray(0, 8).equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))) {
+    fail(`${WASI_CLI} is not a WebAssembly module`);
+  }
   for (const key of ["highlights", "engine"]) {
     if (!pins[key]) fail(`pins.json has no ${key}: the extension's format changed`);
     // Keep the extension's own fields ($comment); replace what names the release.
@@ -103,7 +126,7 @@ async function main() {
     if (!existsSync(join(dir, name))) fail(`prepareEngine left no ${name}`);
   }
 
-  console.log(`vscode-extension accepts ${tag}'s assets. Its pins.json would read:`);
+  console.log(`vscode-extension accepts ${tag}'s assets. Its pins.json would read (wasi: the command line module):`);
   console.log(JSON.stringify(sections, null, 2));
 }
 

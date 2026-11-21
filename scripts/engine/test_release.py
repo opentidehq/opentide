@@ -9,15 +9,24 @@ and the asset build it shares with ci.yml's dry run, engine-release-build.yml
 from __future__ import annotations
 
 import hashlib
+import http.server
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -650,9 +659,12 @@ V0_11_0_ASSETS = [
     "opentide-wasm-web-v0.11.0.zip",
 ]
 
-# What the release train adds: the `opentide` binaries, their installers, and
-# the SBOMs scripts/engine/sbom.py writes.
+# What the release train adds: the `opentide` binaries, their installers, the
+# command line's WASI module (one for every platform, named without a version:
+# the VS Code extension pins this exact name) and the SBOMs
+# scripts/engine/sbom.py writes.
 PRODUCT_ASSETS = [
+    "opentide-wasm32-wasip1.wasm",
     "opentide-v0.11.0-aarch64-apple-darwin",
     "opentide-v0.11.0-aarch64-pc-windows-msvc.exe",
     "opentide-v0.11.0-aarch64-unknown-linux-gnu",
@@ -792,6 +804,57 @@ def targets_added(body: str) -> set[str]:
         for listed in re.findall(rf"rustup target add((?: (?:{TARGET}))+)", body)
         for name in re.findall(TARGET, listed)
     }
+
+
+def step_script(job: str, step: str) -> str:
+    """The `run:` body of the named step of a publish.yml job, dedented, as the
+    runner's shell gets it (comment lines left out, as `workflow_jobs` does)."""
+    text = workflow_jobs()[job]
+    start = text.index(f"- name: {step}\n")
+    body = text[text.index("        run: |\n", start) + len("        run: |\n") :]
+    lines = []
+    for line in body.splitlines():
+        if line.strip() and not line.startswith("          "):
+            break
+        lines.append(line)
+    return textwrap.dedent("\n".join(lines)) + "\n"
+
+
+class FakeRegistry:
+    """A local npm registry: `routes` maps a request path to (status, body), or
+    to None for a server that hangs up without answering."""
+
+    def __init__(self, routes: dict[str, tuple[int, bytes] | None]) -> None:
+        routes_ = routes
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                route = routes_.get(self.path)
+                if route is None:
+                    self.close_connection = True
+                    self.connection.close()
+                    return
+                status, body = route
+                self.send_response(status)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def __enter__(self) -> FakeRegistry:
+        threading.Thread(
+            target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        ).start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.server.shutdown()
+        self.server.server_close()
 
 
 class ReleaseWorkflowTest(unittest.TestCase):
@@ -1035,9 +1098,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # The release job does not check: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
 
-    def test_a_release_candidate_is_a_pre_release_on_github_pypi_and_crates_io(self) -> None:
+    def test_a_release_candidate_is_a_pre_release_on_github_pypi_crates_io_and_npm(self) -> None:
         """For the Rust-core transition: a candidate publishes pre-releases on
-        GitHub, PyPI and crates.io, and nothing on npm."""
+        GitHub, PyPI, crates.io and npm (under `next`, never `latest`)."""
         jobs = workflow_jobs()
         # crates.io: every crate at X.Y.Z-rc.N, a pre-release, as for a release
         # (never for an internal candidate or a dry run).
@@ -1079,14 +1142,39 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish_step = jobs["pypi"][jobs["pypi"].index("- name: Publish to PyPI") :]
         publish_step = publish_step[: publish_step.index("- name:", 1)]
         self.assertNotIn("if:", publish_step)
-        # npm: a release only, under `latest`.
-        self.assertIn("if: needs.guard.outputs.channel == 'release'", jobs["npm"])
-        self.assertIn("--provenance --access public --tag latest", jobs["npm"])
-        self.assertNotIn("next", jobs["npm"])
+        # npm: a release under `latest`, a candidate under `next` (a deliberate
+        # change from "a release only": the candidates publish to npm too).
+        npm = jobs["npm"]
+        self.assertRegex(
+            npm,
+            r"\n    if: needs\.guard\.outputs\.channel == 'release' "
+            r"\|\| needs\.guard\.outputs\.channel == 'rc'\n",
+        )
+        self.assertIn("CHANNEL: ${{ needs.guard.outputs.channel }}", npm)
+        self.assertIn('if [ "${CHANNEL}" = "rc" ]; then dist_tag=next; fi', npm)
+        self.assertIn('--provenance --access public --tag "${dist_tag}"', npm)
+        # `latest` is the default and never spelled for a candidate: the one
+        # publish command takes the tag from the channel, and the tag and the
+        # version are checked against each other first.
+        self.assertEqual(len(re.findall(r"\bnpm publish\b", npm)), 1)
+        self.assertIn("refusing to publish it under next", npm)
+        self.assertIn("refusing to publish it under latest", npm)
+        self.assertLess(npm.index("refusing to publish it under next"), npm.index("npm publish"))
+        self.assertLess(npm.index("refusing to publish it under latest"), npm.index("npm publish"))
+        # Trusted publishing (OIDC, no token) with provenance, in both channels.
+        self.assertNotIn("NODE_AUTH_TOKEN", npm)
+        self.assertNotIn("secrets.", npm)
         smoke = jobs["smoke-registries"]
-        self.assertIn("needs.npm.result == 'skipped' && needs.guard.outputs.channel == 'rc'", smoke)
+        self.assertIn("&& needs.npm.result == 'success' }}", smoke)
+        self.assertNotIn("needs.npm.result == 'skipped'", smoke)
+        # npx by the exact version, in both channels; a candidate's dist-tag is checked.
         npx = smoke[smoke.index("- name: npx @opentide/opentide --version") :]
-        self.assertIn("if: env.CHANNEL == 'release'", npx.splitlines()[1])
+        self.assertNotIn("if:", npx.splitlines()[1])
+        self.assertIn('npx --yes "@opentide/opentide@${VERSION}" --version', npx)
+        # The dist-tags of every package are the npm job's, not one package's here.
+        self.assertNotIn("dist-tags", smoke)
+        self.assertIn("- name: dist-tags of every package", npm)
+        self.assertIn("a candidate must not be", npm)
         self.assertIn('cargo install opentide --version "=${VERSION}"', smoke)
         # GitHub: a pre-release, never Latest; a release is Latest by default.
         attach = jobs["release"]
@@ -1243,6 +1331,603 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertTrue(checks)
             for check in checks:
                 self.assertIn("--cert-identity-regex", check)
+
+    def test_the_command_line_wasi_module_is_a_release_asset(self) -> None:
+        """The VS Code extension pins `opentide-wasm32-wasip1.wasm` by name and
+        SHA-256 (docs/internal/vscode-wasi.md): the name is fixed."""
+        name = "opentide-wasm32-wasip1.wasm"
+        self.assertEqual(release.CLI_WASM_ASSET, name)
+        # One module for every platform, with no version in its name, whatever the tag.
+        for tag in ["v1.0.0", "v1.0.0-rc.3"]:
+            assets = release.expected_assets(tag)
+            self.assertEqual(assets.count(name), 1, tag)
+        self.assertIn(name, release.expected_assets("v1.0.0-rc.3"))
+        # The language server's WASI build keeps its own name beside it.
+        self.assertIn("opentide-lsp-wasm32-wasip1.wasm", release.expected_assets("v1.0.0"))
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        for asset in release.expected_assets("v1.0.0-rc.3"):
+            (tmp / asset).write_bytes(b"x")
+        (tmp / name).unlink()
+        self.assertEqual(release.check_assets(tmp, "v1.0.0-rc.3"), [f"missing asset: {name}"])
+        # SHA256SUMS lists it: sums and verify-sums cover every file of the directory.
+        (tmp / name).write_bytes(b"\0asm\1\0\0\0")
+        release.write_sums(tmp)
+        self.assertIn(f"  {name}\n", (tmp / "SHA256SUMS").read_text(encoding="utf-8"))
+        self.assertEqual(release.verify_sums(tmp), [])
+
+    def test_the_asset_build_makes_the_module_with_the_releases_version(self) -> None:
+        wasm = workflow_jobs(BUILD)["wasm"]
+        build = wasm[wasm.index("- name: build the opentide command line (wasm32-wasip1)") :]
+        build = build[: build.index("\n      - name:", 1)]
+        # build-wasm.sh cli, with the version the binaries report (the tag without its v).
+        self.assertIn("run: bash scripts/engine/build-wasm.sh cli", build)
+        # The version is the job's variable (every WebAssembly build has it, below).
+        self.assertIn(
+            "      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}\n",
+            wasm.split("    steps:\n", 1)[0],
+        )
+        self.assertEqual(
+            re.findall(
+                r"^\s+OPENTIDE_BUILD_VERSION: (.*)$", workflow_jobs(BUILD)["native"], re.MULTILINE
+            ),
+            ["${{ needs.meta.outputs.semver }}"],
+        )
+        # The size budget (the .vsix's 15 MiB, gzipped) stays in the script the job runs.
+        script = (Path(__file__).resolve().parent / "build-wasm.sh").read_text(encoding="utf-8")
+        self.assertIn("budget=$((15 * 1024 * 1024))", script)
+        self.assertIn("if ((gz > budget)); then", script)
+        self.assertIn('OPENTIDE_BUILD_VERSION="${OPENTIDE_BUILD_VERSION:-', script)
+        # Smoke-tested under wasmtime, from a pinned and checked download, before
+        # it is packaged: `--version` prints the candidate.
+        smoke = wasm[wasm.index("- name: smoke test opentide.wasm under wasmtime") :]
+        smoke = smoke[: smoke.index("\n      - name:", 1)]
+        self.assertRegex(smoke, r"WASMTIME_SHA256: [0-9a-f]{64}\n")
+        self.assertIn("sha256sum -c -", smoke)
+        self.assertIn('"${wasmtime}" run "${module}" --version', smoke)
+        self.assertIn('grep -qF "${OPENTIDE_BUILD_VERSION}" <<< "${out}"', smoke)
+        self.assertIn("set -euo pipefail", smoke)
+        self.assertLess(wasm.index("build-wasm.sh cli"), wasm.index("under wasmtime"))
+        self.assertLess(wasm.index("under wasmtime"), wasm.index("- name: package"))
+        # Packaged under the fixed name, as a product asset: it carries the
+        # command line's package data, which the licence scan reads as a
+        # product's (the oracle scan of the engine assets would refuse it).
+        package = wasm[wasm.index("- name: package") :]
+        self.assertIn(
+            'cp target/wasm32-wasip1/wasi/opentide.wasm "product/opentide-wasm32-wasip1.wasm"',
+            package,
+        )
+        self.assertIn("name: product-asset-opentide-wasm", package)
+        assets = workflow_jobs(BUILD)["assets"]
+        self.assertIn("pattern: product-asset-*", assets)
+        self.assertLess(
+            assets.index("license-scan.sh --product product"), assets.index("mv product/* dist/")
+        )
+        # release-assets (SHA256SUMS, check-assets, the attestations and the
+        # published-asset checks all read the directory) carries it: no
+        # per-file list in any of them but check-assets'.
+        subject = workflow_jobs()["attest"]
+        self.assertIn("dist/release/*", subject)
+        self.assertIn("for asset in published/*; do", workflow_jobs()["verify-assets"])
+        # Its SBOM is the facade's: the same opentide-cli crate.
+        self.assertIn("opentide.cdx.json", release.SBOM_ASSETS)
+
+    def _preflight(self, channel: str, statuses: dict[str, int]) -> tuple[int, str, list[str]]:
+        """Run the guard's npm check against a local registry that answers each
+        package name with its status in `statuses` (404 when it names none);
+        the exit status, the output and the paths asked for."""
+        guard = workflow_jobs()["guard"]
+        step = guard[guard.index("- name: Every npm package exists on npm") :]
+        heredoc = step[step.index("python3 - <<'PY'\n") + len("python3 - <<'PY'\n") :]
+        script = textwrap.dedent(heredoc[: heredoc.index("\n          PY")])
+        asked: list[str] = []
+
+        class Registry(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                asked.append(self.path)
+                name = self.path.lstrip("/").replace("%2F", "/").replace("%2f", "/")
+                code = statuses.get(name, 404)
+                self.send_response(code)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Registry)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        env = {
+            **os.environ,
+            "CHANNEL": channel,
+            "NPM_REGISTRY": f"http://127.0.0.1:{server.server_address[1]}",
+            "NPM_RETRY_SECONDS": "0",
+        }
+        done = subprocess.run(
+            [sys.executable, "-I", "-c", script],
+            cwd=Path(release.__file__).resolve().parents[2],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return done.returncode, done.stdout + done.stderr, asked
+
+    def test_every_npm_package_is_the_eleven_the_preflight_asks_for(self) -> None:
+        names = sorted(
+            read["name"]
+            for read in (release.read_json(d / "package.json") for d in release.npm_packages())
+        )
+        self.assertEqual(len(names), 11)
+        self.assertEqual(
+            names,
+            sorted(
+                [
+                    "@opentide/lsp-client",
+                    "@opentide/lsp-worker",
+                    "@opentide/opentide",
+                    "@opentide/opentide-darwin-arm64",
+                    "@opentide/opentide-darwin-x64",
+                    "@opentide/opentide-linux-arm64-gnu",
+                    "@opentide/opentide-linux-x64-gnu",
+                    "@opentide/opentide-win32-arm64-msvc",
+                    "@opentide/opentide-win32-x64-msvc",
+                    "@opentide/wasi-host",
+                    "opentide",
+                ]
+            ),
+        )
+        # The guard's check asks for exactly those (the registry's `%2F` for the slash).
+        code, output, asked = self._preflight("rc", dict.fromkeys(names, 200))
+        self.assertEqual(code, 0, output)
+        self.assertEqual(sorted(p.lstrip("/").replace("%2F", "/") for p in asked), names)
+
+    def test_the_guard_refuses_a_candidate_or_release_when_an_npm_package_is_missing(self) -> None:
+        names = [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        present = dict.fromkeys(names, 200)
+        for channel in ["rc", "release"]:
+            self.assertEqual(self._preflight(channel, present)[0], 0, channel)
+            absent = {**present, "@opentide/wasi-host": 404, "@opentide/opentide-darwin-x64": 404}
+            code, output, _ = self._preflight(channel, absent)
+            self.assertEqual(code, 1, channel)
+            # A clear error that names every missing package, and points at the steps.
+            self.assertIn("::error::These npm packages do not exist on npm yet:", output)
+            self.assertIn("@opentide/wasi-host", output)
+            self.assertIn("@opentide/opentide-darwin-x64", output)
+            self.assertNotIn("@opentide/lsp-client,", output)
+            self.assertIn("docs/internal/publishing.md, step 10.5", output)
+
+    def test_the_preflight_does_not_read_an_outage_as_a_missing_package(self) -> None:
+        names = [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        outage = {**dict.fromkeys(names, 200), "opentide": 503}
+        code, output, _ = self._preflight("rc", outage)
+        self.assertEqual(code, 1)
+        self.assertIn("Could not read opentide (503)", output)
+        self.assertNotIn("do not exist on npm yet", output)
+
+    def test_a_dry_run_reports_missing_npm_packages_without_failing(self) -> None:
+        code, output, _ = self._preflight("dry-run", {})
+        self.assertEqual(code, 0, output)
+        self.assertIn("::warning::These npm packages do not exist on npm yet:", output)
+        self.assertNotIn("::error::", output)
+
+    def test_the_npm_preflight_runs_in_the_guard_before_anything_is_built(self) -> None:
+        jobs = workflow_jobs()
+        guard = jobs["guard"]
+        step = guard[guard.index("- name: Every npm package exists on npm") :]
+        self.assertIn(
+            "if: steps.version.outputs.channel == 'release' || "
+            "steps.version.outputs.channel == 'rc' || steps.version.outputs.channel == 'dry-run'",
+            step.splitlines()[1],
+        )
+        # An internal candidate publishes nothing and does not look; no token, no secret.
+        self.assertNotIn("internal", step.split("run: |", 1)[0])
+        self.assertNotIn("id-token", guard)
+        self.assertNotIn("secrets.", step)
+        self.assertNotRegex(step, r"\bnpm (?:view|publish)\b")  # the registry's JSON, no CLI login
+        self.assertNotIn("Authorization", step)
+        # Every job that builds or publishes waits for the guard; `build` is what
+        # the registries' jobs need (through verify-assets and attest).
+        self.assertIn("needs: guard", jobs["build"])
+        for job in ["attest", "pypi", "crates", "npm"]:
+            self.assertIn("guard", jobs[job], job)
+        # Trusted-publisher configuration cannot be read without a login: said so.
+        self.assertIn("Not checked (it needs the maintainer's npm login)", step)
+        self.assertIn("trusted publisher", step)
+
+    # --- The npm job and the guard, run (not read) --------------------------
+
+    def _npm_packages_dir(self, versions: dict[str, str] | str) -> Path:
+        """A temp directory with `npm/<n>-<kind>/<package>.tgz` for each of the
+        eleven packages, each file holding its package.json (what the stub `tar`
+        prints); `versions` is one version for all, or per package."""
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        for directory in release.npm_packages():
+            name = release.read_json(directory / "package.json")["name"]
+            if directory in release.npm_native_dirs():
+                kind = "1-native"
+            elif directory == release.NPM_NODE:
+                kind = "2-package"
+            elif directory.name == "alias":
+                kind = "3-alias"
+            else:
+                kind = "4-lsp"
+            version = versions if isinstance(versions, str) else versions[name]
+            target = tmp / "npm" / kind
+            target.mkdir(parents=True, exist_ok=True)
+            (target / f"{name.replace('/', '-')}-{version}.tgz").write_text(
+                json.dumps({"name": name, "version": version}), encoding="utf-8"
+            )
+        return tmp
+
+    def _run_with_stubs(
+        self,
+        script: str,
+        cwd: Path,
+        channel: str,
+        tags: dict[str, dict[str, str]] | None = None,
+        published: list[str] | None = None,
+    ) -> tuple[int, str, list[str]]:
+        """Run a step's bash with stub `npm`, `tar` and `sleep` first on PATH:
+        the exit status, the output, and the `npm` command lines run. `tags`
+        maps a package to the dist-tags `npm view <pkg> dist-tags --json` prints;
+        `published` lists the `name@version`s `npm view` already knows."""
+        stubs = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, stubs)
+        (stubs / "npm").write_text(
+            "#!/usr/bin/env bash\n"
+            'echo "$*" >> "$NPM_LOG"\n'
+            'case "$1" in\n'
+            "  view)\n"
+            '    if [ "$3" = "version" ]; then grep -qxF -- "$2" "$PUBLISHED"; exit $?; fi\n'
+            '    if [ "$3" = "dist-tags" ]; then cat "$TAGS_DIR/${2//\\//_}"; fi ;;\n'
+            "esac\n",
+            encoding="utf-8",
+        )
+        (stubs / "tar").write_text('#!/usr/bin/env bash\ncat "$2"\n', encoding="utf-8")
+        (stubs / "sleep").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        for stub in stubs.iterdir():
+            stub.chmod(0o755)
+        tags_dir = stubs / "tags"
+        tags_dir.mkdir()
+        for package, document in (tags or {}).items():
+            (tags_dir / package.replace("/", "_")).write_text(
+                json.dumps(document), encoding="utf-8"
+            )
+        (stubs / "published").write_text("\n".join(published or []) + "\n", encoding="utf-8")
+        log = stubs / "npm.log"
+        log.write_text("", encoding="utf-8")
+        env = {
+            **os.environ,
+            "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}",
+            "CHANNEL": channel,
+            "NPM_LOG": str(log),
+            "TAGS_DIR": str(tags_dir),
+            "PUBLISHED": str(stubs / "published"),
+        }
+        done = subprocess.run(
+            ["bash", "-c", script], cwd=cwd, env=env, capture_output=True, text=True, check=False
+        )
+        return (
+            done.returncode,
+            done.stdout + done.stderr,
+            log.read_text(encoding="utf-8").splitlines(),
+        )
+
+    def test_every_webassembly_build_reports_the_releases_version(self) -> None:
+        """rc.2's browser zip reported 1.0.0, not 1.0.0-rc.2: opentide-core reads
+        OPENTIDE_BUILD_VERSION at compile time, so every WebAssembly build (the
+        browser module, the language server's WASI module and the command line's)
+        needs it. It is the `wasm` job's own variable, once, so no step can leave
+        it out."""
+        wasm = workflow_jobs(BUILD)["wasm"]
+        header, steps = wasm.split("    steps:\n", 1)
+        self.assertIn("      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}\n", header)
+        self.assertEqual(len(re.findall(r"OPENTIDE_BUILD_VERSION:", wasm)), 1)
+        # Every build runs in that job through build-wasm.sh, which passes the
+        # environment on to cargo and never clears it.
+        self.assertEqual(
+            re.findall(r"bash scripts/engine/build-wasm\.sh(?: \w+)*", steps),
+            ["bash scripts/engine/build-wasm.sh", "bash scripts/engine/build-wasm.sh cli"],
+        )
+        script = (Path(__file__).resolve().parent / "build-wasm.sh").read_text(encoding="utf-8")
+        self.assertNotIn("env -i", script)
+        self.assertNotIn("unset OPENTIDE_BUILD_VERSION", script)
+        # The compiled-in version is that variable, for the crates all three share.
+        core = (Path(__file__).resolve().parents[2] / "crates/opentide-core/src/lib.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('option_env!("OPENTIDE_BUILD_VERSION")', core)
+        # The smoke test reads the same variable for the expected version.
+        smoke = steps[steps.index("- name: smoke test opentide.wasm under wasmtime") :]
+        self.assertIn('grep -qF "${OPENTIDE_BUILD_VERSION}"', smoke)
+
+    def test_the_licence_file_covers_every_target_the_release_builds(self) -> None:
+        """THIRD-PARTY-LICENSES.html is the licence file of every module: cargo-about
+        lists a crate only for the targets about.toml names, and `wasi` (a
+        dependency of the command line's WASI module alone) is on none of the
+        native ones. The `wasm` job's targets are in the list."""
+        root = Path(__file__).resolve().parents[2]
+        about = tomllib.loads((root / "about.toml").read_text(encoding="utf-8"))
+        native = {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+        }
+        wasm = targets_added(workflow_jobs(BUILD)["wasm"])
+        self.assertEqual(wasm, {"wasm32-unknown-unknown", "wasm32-wasip1"})
+        self.assertEqual(set(about["targets"]), native | wasm)
+        # The licences job renders it for the workspace, from this file.
+        licences = workflow_jobs(BUILD)["licences"]
+        self.assertIn("cargo about generate --workspace about.hbs", licences)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
+    def test_the_publish_loop_publishes_every_tarball_under_the_channels_tag(self) -> None:
+        script = step_script("npm", "publish")
+        names = sorted(
+            release.read_json(d / "package.json")["name"] for d in release.npm_packages()
+        )
+        for channel, version, tag in [
+            ("rc", "1.0.0-rc.3", "next"),
+            ("release", "1.0.0", "latest"),
+        ]:
+            with self.subTest(channel=channel):
+                packages = self._npm_packages_dir(version)
+                code, output, log = self._run_with_stubs(script, packages, channel)
+                self.assertEqual(code, 0, output)
+                published = [line for line in log if line.startswith("publish ")]
+                self.assertEqual(len(published), 11, published)
+                # Each of the eleven tarballs, once, with the exact flags and tag.
+                tarballs = sorted(
+                    str(p.relative_to(packages)) for p in packages.glob("npm/*/*.tgz")
+                )
+                self.assertEqual(
+                    sorted(published),
+                    sorted(
+                        f"publish {tarball} --provenance --access public --tag {tag}"
+                        for tarball in tarballs
+                    ),
+                )
+                self.assertEqual(
+                    sorted(Path(line.split()[1]).name for line in published),
+                    sorted(f"{name.replace('/', '-')}-{version}.tgz" for name in names),
+                )
+                # Natives first (@opentide/opentide depends on them), the lsp packages last.
+                self.assertIn(
+                    "-darwin-",
+                    published[0]
+                    + published[1]
+                    + published[2]
+                    + published[3]
+                    + published[4]
+                    + published[5],
+                )
+                self.assertIn("lsp", published[-1] + published[-2])
+                # `latest` is never spelled for a candidate, nor `next` for a release.
+                other = "latest" if tag == "next" else "next"
+                self.assertFalse([line for line in published if f"--tag {other}" in line])
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
+    def test_the_publish_loop_refuses_a_version_that_does_not_fit_the_channel(self) -> None:
+        script = step_script("npm", "publish")
+        names = [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        # One tarball of the wrong kind, the last to be read: nothing may have
+        # been published before the refusal (every tarball is checked first).
+        for channel, good, bad, message in [
+            ("rc", "1.0.0-rc.3", "1.0.0", "refusing to publish it under next"),
+            ("rc", "1.0.0-rc.3", "1.0.0-beta.1", "refusing to publish it under next"),
+            ("release", "1.0.0", "1.0.0-rc.3", "refusing to publish it under latest"),
+        ]:
+            with self.subTest(channel=channel, bad=bad):
+                versions = dict.fromkeys(names, good)
+                versions["@opentide/wasi-host"] = bad
+                packages = self._npm_packages_dir(versions)
+                code, output, log = self._run_with_stubs(script, packages, channel)
+                self.assertEqual(code, 1, output)
+                self.assertIn(message, output)
+                self.assertIn("@opentide/wasi-host@" + bad, output)
+                self.assertFalse([line for line in log if line.startswith("publish ")], log)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
+    def test_the_publish_loop_skips_a_version_npm_has(self) -> None:
+        script = step_script("npm", "publish")
+        packages = self._npm_packages_dir("1.0.0-rc.3")
+        code, output, log = self._run_with_stubs(
+            script, packages, "rc", published=["@opentide/lsp-client@1.0.0-rc.3"]
+        )
+        self.assertEqual(code, 0, output)
+        self.assertIn("@opentide/lsp-client@1.0.0-rc.3 is already published", output)
+        self.assertEqual(len([line for line in log if line.startswith("publish ")]), 10)
+        self.assertFalse(
+            [line for line in log if line.startswith("publish ") and "lsp-client" in line]
+        )
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
+    def test_every_package_is_checked_for_its_dist_tags(self) -> None:
+        script = step_script("npm", "dist-tags of every package")
+        names = [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        # A candidate: next is the candidate for all eleven, latest is not.
+        packages = self._npm_packages_dir("1.0.0-rc.3")
+        good = {n: {"latest": "0.0.0", "next": "1.0.0-rc.3"} for n in names}
+        code, output, log = self._run_with_stubs(script, packages, "rc", tags=good)
+        self.assertEqual(code, 0, output)
+        asked = sorted(line.split()[1] for line in log if line.endswith("dist-tags --json"))
+        self.assertEqual(asked, sorted(names))
+        # One package whose next is behind fails, naming it.
+        behind = {**good, "@opentide/wasi-host": {"latest": "0.0.0", "next": "1.0.0-rc.2"}}
+        code, output, _ = self._run_with_stubs(script, packages, "rc", tags=behind)
+        self.assertEqual(code, 1, output)
+        self.assertIn("@opentide/wasi-host: the registry's dist-tags are", output)
+        # A candidate that took `latest` too fails.
+        latest = {**good, "opentide": {"latest": "1.0.0-rc.3", "next": "1.0.0-rc.3"}}
+        code, output, _ = self._run_with_stubs(script, packages, "rc", tags=latest)
+        self.assertEqual(code, 1, output)
+        self.assertIn("opentide@1.0.0-rc.3 is also latest", output)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
+    def test_after_a_release_a_next_that_trails_latest_is_named_with_its_fix(self) -> None:
+        script = step_script("npm", "dist-tags of every package")
+        names = [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        packages = self._npm_packages_dir("1.0.0")
+        done = {n: {"latest": "1.0.0", "next": "1.0.0"} for n in names}
+        code, output, _ = self._run_with_stubs(script, packages, "release", tags=done)
+        self.assertEqual(code, 0, output)
+        self.assertNotIn("::warning::", output)
+        trailing = {**done, "@opentide/opentide": {"latest": "1.0.0", "next": "1.0.0-rc.4"}}
+        code, output, _ = self._run_with_stubs(script, packages, "release", tags=trailing)
+        self.assertEqual(code, 0, output)  # a warning: trusted publishing cannot move a tag
+        self.assertIn("::warning::next trails latest for 1 packages", output)
+        self.assertIn("@opentide/opentide@1.0.0", output)
+        self.assertIn('npm dist-tag add "$p" next', output)
+        # A release whose latest is not the release fails.
+        stale = {**done, "@opentide/wasi-host": {"latest": "0.0.0", "next": "0.0.0"}}
+        code, output, _ = self._run_with_stubs(script, packages, "release", tags=stale)
+        self.assertEqual(code, 1, output)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
+    def test_a_candidate_never_moves_next_backwards(self) -> None:
+        script = step_script("npm", "next never moves backwards")
+        path = "/@opentide%2Fopentide"
+
+        def run(version: str, nxt: str | None) -> tuple[int, str]:
+            tags = {"latest": "0.0.0"} if nxt is None else {"latest": "0.0.0", "next": nxt}
+            body = json.dumps({"name": "@opentide/opentide", "dist-tags": tags}).encode()
+            with FakeRegistry({path: (200, body)}) as registry:
+                done = subprocess.run(
+                    ["bash", "-c", script],
+                    env={
+                        **os.environ,
+                        "VERSION": version,
+                        "NPM_REGISTRY": registry.url,
+                        "NPM_RETRY_SECONDS": "0",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            return done.returncode, done.stdout + done.stderr
+
+        # Forward, equal and no next at all publish.
+        for version, nxt in [
+            ("1.0.0-rc.3", None),
+            ("1.0.0-rc.3", "1.0.0-rc.2"),
+            ("1.0.0-rc.3", "1.0.0-rc.3"),
+            ("1.0.1-rc.1", "1.0.0"),
+            ("1.1.0-rc.1", "1.0.0-rc.9"),
+            ("1.0.0-rc.10", "1.0.0-rc.9"),
+        ]:
+            code, output = run(version, nxt)
+            self.assertEqual(code, 0, (version, nxt, output))
+        # Backwards fails, whatever the spelling of the numbers.
+        for version, nxt in [
+            ("1.0.0-rc.3", "1.0.0-rc.4"),
+            ("1.0.0-rc.9", "1.0.0-rc.10"),
+            ("1.0.0-rc.5", "1.0.0"),
+            ("1.0.0-rc.5", "1.1.0-rc.1"),
+        ]:
+            code, output = run(version, nxt)
+            self.assertEqual(code, 1, (version, nxt, output))
+            self.assertIn(f"npm's next is already {nxt}, newer than {version}", output)
+            self.assertIn("Nothing was published to npm", output)
+        # A registry that cannot be read does not pass the check.
+        with FakeRegistry({path: (503, b"{}")}) as registry:
+            done = subprocess.run(
+                ["bash", "-c", script],
+                env={
+                    **os.environ,
+                    "VERSION": "1.0.0-rc.3",
+                    "NPM_REGISTRY": registry.url,
+                    "NPM_RETRY_SECONDS": "0",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("not checked, so not published", done.stdout + done.stderr)
+        # It runs for a candidate only, before the publish step.
+        npm = workflow_jobs()["npm"]
+        step = npm[npm.index("- name: next never moves backwards") :]
+        self.assertIn("if: env.CHANNEL == 'rc'", step.splitlines()[1])
+        self.assertLess(
+            npm.index("- name: next never moves backwards"), npm.index("- name: publish")
+        )
+
+    def test_a_resume_of_a_candidate_before_the_first_npm_candidate_is_refused(self) -> None:
+        guard = workflow_jobs()["guard"]
+        snippet = re.search(r"if python3 -c '([^']+)' \"\$\{tag\}\"; then", guard)
+        assert snippet is not None, "the guard checks the resumed candidate"
+
+        def refused(tag: str) -> bool:
+            done = subprocess.run(
+                [sys.executable, "-c", snippet.group(1), tag], capture_output=True, check=False
+            )
+            return done.returncode == 0
+
+        for tag in ["v1.0.0-rc.1", "v1.0.0-rc.2", "v0.28.2-rc.9"]:
+            self.assertTrue(refused(tag), tag)
+        for tag in ["v1.0.0-rc.3", "v1.0.0-rc.4", "v1.0.0-rc.10", "v1.0.1-rc.1", "v1.1.0-rc.1"]:
+            self.assertFalse(refused(tag), tag)
+        # It sits in the resume branch, after the switch and before the channel is set to rc.
+        resume = guard[guard.index('elif [[ -n "${CHECKOUT_REF}" ]]; then') :]
+        resume = resume[: resume.index('elif [[ "${DRY_RUN}"')]
+        self.assertLess(
+            resume.index("public release candidates are disabled"), resume.index(snippet.group(0))
+        )
+        self.assertLess(resume.index(snippet.group(0)), resume.index("channel=rc"))
+        self.assertIn(
+            "is older than v1.0.0-rc.3, the first candidate that publishes to npm", resume
+        )
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
+    def test_the_preflight_survives_a_refused_or_dropped_connection(self) -> None:
+        names = [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        script = step_script("guard", "Every npm package exists on npm")
+        root = Path(release.__file__).resolve().parents[2]
+
+        def run(registry_url: str, channel: str) -> tuple[int, str]:
+            done = subprocess.run(
+                ["bash", "-c", script],
+                cwd=root,
+                env={
+                    **os.environ,
+                    "CHANNEL": channel,
+                    "NPM_REGISTRY": registry_url,
+                    "NPM_RETRY_SECONDS": "0",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return done.returncode, done.stdout + done.stderr
+
+        # Connection refused: nothing listens on the port (a closed one).
+        probe = http.server.ThreadingHTTPServer(
+            ("127.0.0.1", 0), http.server.BaseHTTPRequestHandler
+        )
+        refused = f"http://127.0.0.1:{probe.server_address[1]}"
+        probe.server_close()
+        code, output = run(refused, "rc")
+        self.assertEqual(code, 1, output)
+        self.assertIn("Could not read", output)
+        self.assertIn("Connection refused", output)
+        self.assertNotIn("do not exist on npm yet", output)  # an outage is not "missing"
+        # The server hangs up without an answer (RemoteDisconnected is an HTTPException).
+        quoted = {"/" + name.replace("/", "%2F"): None for name in names}
+        with FakeRegistry(quoted) as registry:
+            code, output = run(registry.url, "release")
+        self.assertEqual(code, 1, output)
+        self.assertIn("Could not read", output)
+        self.assertIn("RemoteDisconnected", output)
+        # A dry run only warns.
+        code, output = run(refused, "dry-run")
+        self.assertEqual(code, 0, output)
+        self.assertIn("::warning::Could not read", output)
 
     @staticmethod
     def _identity(channel: str) -> re.Pattern[str]:
