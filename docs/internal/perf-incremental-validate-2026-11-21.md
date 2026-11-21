@@ -70,7 +70,7 @@ A workspace pull then needs to build nothing for a file that did not change: eac
 
 ### The gate
 
-`lsp_editor_typing_latency` (`tests/bench/budgets.toml`) was 0.5 s and is 0.05 s: twice what it measures here, which the slowest recorded CPU class (1.8 times slower) stays under.
+`cargo xtask bench --engine rust --only lsp_editor_latency,lsp_editor_typing_latency` with its own release build (LTO): 0.005 s idle and 0.022 s after a keystroke, median of 7 runs. `lsp_editor_typing_latency` (`tests/bench/budgets.toml`) was 0.5 s and is 0.05 s: twice what it measures here, which the slowest recorded CPU class (1.8 times slower) stays under.
 
 ## 2. Completion: labels, with the rest said once
 

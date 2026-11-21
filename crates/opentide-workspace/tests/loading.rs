@@ -660,7 +660,7 @@ mod loading {
             "/ws/objects/rules/r2.yml",
             "name: n\nmetadata:\n  uuid: r-2\n# typed\n",
         );
-        assert_eq!(done.changed, [r2.clone()]);
+        assert_eq!(done.changed, std::slice::from_ref(&r2));
         assert!(!done.identity_changed && !done.cross_changed, "{done:?}");
 
         // A name is read by the others' suggestions and file names.
