@@ -15,6 +15,13 @@
 //
 // The native `opentide serve` speaks the same protocol, so one client drives
 // both builds.
+//
+// `opentide mcp start` in the WASI build asks the same way when it is started
+// with OPENTIDE_FETCH=stdio: its `opentide/fetch` requests (ids
+// "opentide-fetch-1", ...) are lines on its stdout among its MCP messages, and
+// the answers go in on its stdin among the client's. `McpFetchBridge` splits
+// the two on that stdio pair, so an extension that serves MCP to an agent
+// bridges the module's stdio with it.
 
 import * as http from "node:http";
 import * as https from "node:https";
@@ -102,7 +109,8 @@ export class FetchHost {
 
   /**
    * Takes *message* when it is the server's `opentide/fetch` or its
-   * withdrawal; whether it did.
+   * withdrawal (`$/cancelRequest` from `opentide serve`, MCP's
+   * `notifications/cancelled` from `opentide mcp start`); whether it did.
    */
   handle(message: unknown): boolean {
     if (!isObject(message)) {
@@ -112,8 +120,11 @@ export class FetchHost {
       this.start(message.id, message.params);
       return true;
     }
-    if (message.method === "$/cancelRequest" && isObject(message.params)) {
-      const id = message.params.id;
+    if (
+      (message.method === "$/cancelRequest" || message.method === "notifications/cancelled") &&
+      isObject(message.params)
+    ) {
+      const id = message.method === "$/cancelRequest" ? message.params.id : message.params.requestId;
       if (typeof id === "string" && this.inFlight.has(id)) {
         this.inFlight.get(id)?.abort();
         this.inFlight.delete(id);
@@ -492,5 +503,160 @@ export async function performRequest(params: FetchParams, signal: AbortSignal): 
       headers = headers.filter(([name]) => !SENSITIVE.has(name.toLowerCase()));
     }
     url = next;
+  }
+}
+
+// ---- opentide mcp start, its tenant requests among its MCP messages ----
+
+/** The variable that makes the WASI build's `opentide mcp start` ask its client for each tenant request. */
+export const MCP_FETCH_VARIABLE = "OPENTIDE_FETCH";
+
+/**
+ * The environment to start the WASI module's `opentide mcp start` with, added
+ * to whatever else it is given (the native build ignores it).
+ */
+export const MCP_FETCH_ENVIRONMENT = { [MCP_FETCH_VARIABLE]: "stdio" } as const;
+
+/** The prefix of the ids of `opentide mcp start`'s requests: no MCP client's id starts so by accident. */
+export const MCP_FETCH_ID_PREFIX = "opentide-fetch-";
+
+/** Where a `McpFetchBridge` writes: whole lines, each with its newline, ready for a pipe. */
+export interface McpFetchSink {
+  /** To the module's stdin: the client's MCP messages and the answers to its tenant requests. */
+  toServer: (line: string) => void;
+  /** To the MCP client: the module's MCP messages, its tenant requests taken out. */
+  toClient: (line: string) => void;
+}
+
+/** Splits a stream of chunks into lines, holding back a partial one. */
+class LineSplitter {
+  private readonly decoder = new TextDecoder();
+  private partial = "";
+
+  push(chunk: string | Uint8Array): string[] {
+    this.partial += typeof chunk === "string" ? chunk : this.decoder.decode(chunk, { stream: true });
+    const lines: string[] = [];
+    for (let end = this.partial.indexOf("\n"); end >= 0; end = this.partial.indexOf("\n")) {
+      lines.push(this.partial.slice(0, end + 1));
+      this.partial = this.partial.slice(end + 1);
+    }
+    return lines;
+  }
+
+  /** What is left when the stream ends: a last line without its newline. */
+  end(): string | undefined {
+    const rest = this.partial + this.decoder.decode();
+    this.partial = "";
+    return rest === "" ? undefined : `${rest}\n`;
+  }
+}
+
+/**
+ * Splits `opentide mcp start`'s tenant requests from its MCP messages on its
+ * stdio pair. Started with `MCP_FETCH_ENVIRONMENT`, the WASI module writes
+ * each tenant request as an `opentide/fetch` line on stdout among its MCP
+ * messages, and reads the answer on stdin among the client's. The bridge sits
+ * between the module and the MCP client:
+ *
+ * - `fromServer(chunk)`: the module's stdout. An `opentide/fetch` line (and
+ *   the `notifications/cancelled` that withdraws one) is the host's, which
+ *   answers it with `FetchHost`; every other line goes to `toClient`.
+ * - `fromClient(chunk)`: the client's messages, to `toServer` a whole line at
+ *   a time, so an answer the host writes never lands inside one.
+ *
+ * Neither direction reorders anything: the MCP messages reach each side in the
+ * order they were written. `toServer` is called for answers asynchronously, as
+ * each request finishes.
+ */
+export class McpFetchBridge {
+  private readonly sink: McpFetchSink;
+  private readonly host: FetchHost;
+  private readonly fromModule = new LineSplitter();
+  private readonly fromAgent = new LineSplitter();
+  private disposed = false;
+
+  constructor(sink: McpFetchSink, options: { perform?: Perform } = {}) {
+    this.sink = sink;
+    this.host = new FetchHost(
+      (message) => {
+        // After the module has gone there is nobody to answer.
+        if (!this.disposed) {
+          this.sink.toServer(`${JSON.stringify(message)}\n`);
+        }
+      },
+      options,
+    );
+  }
+
+  /** The number of tenant requests in flight. */
+  get pending(): number {
+    return this.host.pending;
+  }
+
+  /** A chunk of the module's stdout. */
+  fromServer(chunk: string | Uint8Array): void {
+    for (const line of this.fromModule.push(chunk)) {
+      this.serverLine(line);
+    }
+  }
+
+  /** A chunk of the client's messages for the module. */
+  fromClient(chunk: string | Uint8Array): void {
+    for (const line of this.fromAgent.push(chunk)) {
+      this.sink.toServer(line);
+    }
+  }
+
+  /** The module's stdout ended: a last line without its newline is delivered. */
+  endServer(): void {
+    const rest = this.fromModule.end();
+    if (rest !== undefined) {
+      this.serverLine(rest);
+    }
+  }
+
+  /** The client's input ended: a last line without its newline is delivered. */
+  endClient(): void {
+    const rest = this.fromAgent.end();
+    if (rest !== undefined) {
+      this.sink.toServer(rest);
+    }
+  }
+
+  /** Aborts every request in flight, unanswered: the module has gone. */
+  dispose(): void {
+    this.disposed = true;
+    this.host.dispose();
+  }
+
+  private serverLine(line: string): void {
+    // Cheap test first: most lines are tool results, which are never parsed.
+    if (line.includes('"opentide/fetch"') || line.includes('"notifications/cancelled"')) {
+      let message: unknown;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        message = undefined;
+      }
+      if (isObject(message) && this.takes(message)) {
+        return;
+      }
+    }
+    this.sink.toClient(line);
+  }
+
+  /** Whether *message* is the module's own (a tenant request or its withdrawal), handled. */
+  private takes(message: Record<string, unknown>): boolean {
+    if (this.host.handle(message)) {
+      return true;
+    }
+    // A withdrawal of a request already answered: nothing to abort, and not the client's either.
+    const params = message.params;
+    return (
+      message.method === "notifications/cancelled" &&
+      isObject(params) &&
+      typeof params.requestId === "string" &&
+      params.requestId.startsWith(MCP_FETCH_ID_PREFIX)
+    );
   }
 }

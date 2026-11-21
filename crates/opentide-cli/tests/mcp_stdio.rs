@@ -559,3 +559,62 @@ fn a_plugin_launch_without_a_workspace_says_how_to_name_one() {
     assert!(explained.is_object(), "{explained}");
     client.close();
 }
+
+/// `OPENTIDE_FETCH=stdio` is the WASI build's (tenant requests made by the
+/// client, `docs/mcp/index.md`): a native server ignores it. It makes the tenant
+/// request itself, as without the variable, and writes no `opentide/fetch`.
+#[test]
+fn a_native_server_ignores_opentide_fetch() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = corpus(dir.path());
+    // Nothing listens here: the connection is refused.
+    let closed = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        format!("http://{}", listener.local_addr().unwrap())
+    };
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        format!(
+            "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+             [[tenants]]\nname = \"closed\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+             url = \"{closed}\"\nelasticsearch_url = \"{closed}\"\napi_key = \"key\"\n"
+        ),
+    )
+    .unwrap();
+    let env = [
+        ("OPENTIDE_REPO_ROOT", &*ws),
+        ("OPENTIDE_TIDE_WORKSPACE", &*ws),
+        ("OPENTIDE_FETCH", Path::new("stdio")),
+        // The tenant is on the loopback: no proxy in between.
+        ("NO_PROXY", Path::new("127.0.0.1")),
+    ];
+    let mut client = start(&ws, &[], &env);
+    client.handshake();
+    client.send(
+        &json!({"jsonrpc": "2.0", "id": 100, "method": "tools/call", "params": {
+        "name": "run_query",
+        "arguments": {"query": "FROM x", "platform": "elastic", "live": true}}}),
+    );
+    let answer = loop {
+        let line = client.lines.recv_timeout(PATIENCE).ok().flatten();
+        let line = line.unwrap_or_else(|| panic!("no answer: {}", client.stderr()));
+        let line = client.text(line);
+        let frame = frame(&line);
+        assert_ne!(
+            frame["method"], "opentide/fetch",
+            "a native server makes its own requests: {line}"
+        );
+        if frame["id"] == 100 {
+            break frame;
+        }
+    };
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("Cannot reach elastic tenant 'closed'"),
+        "{text}"
+    );
+    assert!(!text.contains("network_unavailable"), "{text}");
+    client.close();
+}

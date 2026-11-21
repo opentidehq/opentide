@@ -1240,7 +1240,8 @@ jobs:
       # made by @opentide/wasi-host's FetchHost and answered from the golden
       # cassettes (no network in the module; the extension host performs the
       # requests); and `opentide mcp start` answering a client that waits for
-      # each answer before its next request.
+      # each answer before its next request, and, with OPENTIDE_FETCH=stdio,
+      # making its tenant requests through McpFetchBridge.
       - name: opentide serve and mcp start, in the WASI module
         env:
           OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm

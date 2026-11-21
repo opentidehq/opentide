@@ -21,6 +21,27 @@ Serves MCP over stdio until the host closes stdin. It takes no options of its ow
 - **Output.** Like [`opentide lsp start`](./lsp.md) and [`opentide serve`](./serve.md), it runs in the `mcp` [output mode](./json-output.md#output-modes): stdout carries JSON-RPC and nothing else, and logs go to stderr.
 - **The Rust server.** The server is the Rust one, on rmcp, the official Rust MCP SDK, with the Python server's name, instructions, tools, schemas, resources and answers. Every tool and every resource runs in Rust: no Python handler answers any of them, and the standalone `opentide` binary (`cargo install opentide --features cli`, the npm package) serves the same tools. The tools that reach a tenant (`validate_query` and `run_query` with `live: true`, `deploy_rule` with `dry_run: false`) run the command line's own `validate query --live`, `query` and `deploy` in the same process.
 
+### Tenant requests over stdio: OPENTIDE_FETCH
+
+The WASI build of opentide (the module the VS Code extension runs) has no sockets, so there the tools that reach a tenant fail with `network_unavailable`, naming the native CLI. Started with `OPENTIDE_FETCH=stdio`, the WASI build's `mcp start` instead asks its client to make each tenant request, as [`opentide serve`](./serve.md#tenant-requests-the-client-makes-opentidefetch) does: the full set of tools then works with no native opentide installed.
+
+| `OPENTIDE_FETCH` | Build | Effect |
+|------------------|-------|--------|
+| `stdio` | WASI (`wasm32-wasip1`) | Each tenant request is written to stdout as an `opentide/fetch` request, and its answer is read from stdin |
+| anything else, or unset | WASI | Unchanged: a tenant tool fails with `network_unavailable` |
+| any value | native | Ignored: opentide makes the requests with its own HTTP client, and writes no `opentide/fetch` |
+
+- **Framing.** MCP's stdio is one JSON-RPC message a line, and the requests are messages of that stream: each is a JSON-RPC 2.0 request line on stdout, method `opentide/fetch`, with the [params `opentide serve` sends](./serve.md#tenant-requests-the-client-makes-opentidefetch) (`run` is the `tools/call`'s request id as text, `"2"`), among the server's MCP messages. The client answers with a JSON-RPC response line on stdin, with the same id, among its own MCP messages. The answer is read as `opentide serve` reads it: a result with `status`, `headers`, `body` (base64) and optionally `url` and `elapsed_ms`, or an error whose `data.kind` is `connect`, `timeout`, `aborted`, `unreachable` or `answer`.
+  ```json illustrative
+  {"jsonrpc":"2.0","id":"opentide-fetch-1","method":"opentide/fetch","params":{"run":"2","platform":"elastic","tenant":"soc","method":"POST","url":"https://es.example.com/_query","headers":[["content-type","application/json"]],"body":"eyJxdWVyeSI6Ii4uLiJ9","connect_timeout_ms":120000,"read_timeout_ms":120000,"tls":{"verify":true,"ca_bundles":[]},"proxy":null}}
+  {"jsonrpc":"2.0","id":"opentide-fetch-1","result":{"status":200,"headers":[["content-type","application/json"]],"body":"eyJ2YWx1ZXMiOltdfQ==","elapsed_ms":120}}
+  ```
+- **Ids.** The server's ids are strings, `opentide-fetch-1`, `opentide-fetch-2`, …, so they cannot collide with the client's.
+- **While a call waits.** The WASI build has no thread to read stdin with, so a tool call that waits for an answer reads stdin itself. The answer reaches the call; the client's other messages (`ping`, a list, a later request, a notification) are kept in order and read once the call returns, so they are answered after it, not during it. This differs from the native server, which answers a `ping` or a list while a call runs.
+- **Cancellation follows MCP's.** `notifications/cancelled` for the running `tools/call` stops it at once: its pending request is withdrawn, and the call ends without waiting. The server withdraws a request with MCP's own `notifications/cancelled` with `requestId` set to the request's id; a late answer to a withdrawn request is dropped.
+- **No answer.** If the client closes stdin while a request is unanswered, the call fails with a message that says so (`the client closed its input before answering an opentide/fetch request`), as a tenant that cannot be reached, and the server then exits. A client that stays connected and never answers leaves the call waiting: the WASI build has no clock to time the wait out, so the client enforces the limits (`connect_timeout_ms`, `read_timeout_ms`).
+- **The client** is typically the VS Code extension, which bridges the module's stdio with [`@opentide/wasi-host`](https://github.com/opentidehq/opentide/tree/development/packages/wasi-host)'s `McpFetchBridge`.
+
 ## mcp
 
 `opentide mcp` on its own does not start the server. Like every group that only holds subcommands, it is a usage error: it names `start` and exits `2` with `failure.code` `usage_error`.

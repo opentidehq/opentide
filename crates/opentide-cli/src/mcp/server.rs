@@ -76,7 +76,16 @@ pub struct Server {
     /// The session's end ([`Server::run`]): the call running, interrupted,
     /// and whether the session is over, so a queued call does not start.
     ending: Arc<Ending>,
+    /// Where a call's work runs: with the thread that drives the session,
+    /// outside the runtime (WASI).
+    #[cfg(target_os = "wasi")]
+    jobs: Option<tokio::sync::mpsc::UnboundedSender<Job>>,
 }
+
+/// A tool call's work, handed to the thread that drives the session (WASI):
+/// [`Server::offloading`].
+#[cfg(target_os = "wasi")]
+pub(crate) type Job = Box<dyn FnOnce() + Send>;
 
 /// What [`Server::run`] stops when the session ends.
 #[derive(Default)]
@@ -154,7 +163,22 @@ impl Server {
             }),
             turn: Arc::default(),
             ending: Arc::default(),
+            #[cfg(target_os = "wasi")]
+            jobs: None,
         }
+    }
+
+    /// Has each call's work run where *jobs* are taken (WASI).
+    ///
+    /// The server's tasks run on the one thread's runtime, and a call that
+    /// reaches a tenant blocks on that same runtime (`opentide_connectors::runtime::block_on`),
+    /// which it may not from inside it: the call's work is handed to the
+    /// thread that drives the session, which runs it between two polls of the
+    /// session, outside the runtime, and the call answers once it is done.
+    #[cfg(target_os = "wasi")]
+    pub(crate) fn offloading(mut self, jobs: tokio::sync::mpsc::UnboundedSender<Job>) -> Server {
+        self.jobs = Some(jobs);
+        self
     }
 
     /// Runs `work` on the runtime's blocking pool once the calls before it
@@ -192,7 +216,17 @@ impl Server {
         #[cfg(target_os = "wasi")]
         {
             let _turn = turn;
-            Ok(work(&state, &interrupt))
+            let Some(jobs) = &self.jobs else {
+                return Ok(work(&state, &interrupt));
+            };
+            let (done, result) = tokio::sync::oneshot::channel();
+            let job: Job = Box::new(move || {
+                let _sent = done.send(work(&state, &interrupt));
+            });
+            jobs.send(job).map_err(|_| stopped())?;
+            result
+                .await
+                .map_err(|_| ErrorData::internal_error("the call stopped unexpectedly", None))
         }
         #[cfg(not(target_os = "wasi"))]
         {

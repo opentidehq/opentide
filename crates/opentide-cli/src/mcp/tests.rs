@@ -639,6 +639,11 @@ fn a_blocking_client_gets_each_answer_before_its_next_read() {
     );
 }
 
+/// Held by the tests that reach a tenant: the transport a bridge installs is the
+/// process's, so under `cargo test` (one process, many threads) another test's
+/// network call must not run while it is installed.
+static NETWORK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Network tool calls, each on a `spawn_blocking` thread of the process's
 /// runtime as the server dispatches them, block on that runtime: they reach
 /// the tenant (refused here: nothing listens) and no call starts a runtime
@@ -646,6 +651,9 @@ fn a_blocking_client_gets_each_answer_before_its_next_read() {
 #[cfg(not(target_os = "wasi"))]
 #[test]
 fn network_tool_calls_run_on_the_one_runtime() {
+    let _network = NETWORK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let closed = {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         format!("http://{}", listener.local_addr().unwrap())
@@ -708,6 +716,9 @@ fn network_tool_calls_run_on_the_one_runtime() {
 #[cfg(not(target_os = "wasi"))]
 #[test]
 fn the_session_ending_stops_the_running_call_and_waits_for_it() {
+    let _network = NETWORK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use std::io::Read;
     use tokio::io::AsyncWriteExt;
 
@@ -795,4 +806,291 @@ fn the_session_ending_stops_the_running_call_and_waits_for_it() {
     // interrupt the request stays open past the bound (the query's own
     // timeout is 120 s).
     assert_eq!(finished.recv_timeout(patience), Ok("closed"));
+}
+
+/// A client that answers the server's `opentide/fetch` requests over the same
+/// two streams (`OPENTIDE_FETCH=stdio`): it sends its opening messages one
+/// at a time, then, for each tenant request the server has written and not
+/// yet had answered, first some MCP messages of its own and then the answer.
+struct FetchingClient {
+    out: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    opening: std::collections::VecDeque<Vec<u8>>,
+    /// Sent while the first request waits, before its answer.
+    meanwhile: std::collections::VecDeque<Vec<u8>>,
+    answered: usize,
+    /// How each request is answered: a result or an error, by its params.
+    answer: Box<dyn Fn(&Value) -> Value + Send>,
+    /// Ends the input instead of answering the request with this number.
+    hang_up_at: Option<usize>,
+    current: Vec<u8>,
+    at: usize,
+    /// The requests seen, in the order they were written.
+    requests: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+}
+
+impl FetchingClient {
+    fn new(out: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>) -> Self {
+        FetchingClient {
+            out: std::sync::Arc::clone(out),
+            opening: std::collections::VecDeque::new(),
+            meanwhile: std::collections::VecDeque::new(),
+            answered: 0,
+            answer: Box::new(|_| json!({"status": 200, "headers": [], "body": null})),
+            hang_up_at: None,
+            current: Vec::new(),
+            at: 0,
+            requests: std::sync::Arc::default(),
+        }
+    }
+
+    fn requests_written(&self) -> Vec<Value> {
+        String::from_utf8_lossy(&self.out.lock().unwrap())
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .filter(|message| message["method"] == "opentide/fetch")
+            .collect()
+    }
+}
+
+impl std::io::Read for FetchingClient {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let available = std::io::BufRead::fill_buf(self)?;
+        let n = available.len().min(buf.len());
+        buf[..n].copy_from_slice(&available[..n]);
+        std::io::BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl std::io::BufRead for FetchingClient {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.at == self.current.len() {
+            self.at = 0;
+            self.current.clear();
+            if let Some(next) = self.opening.pop_front() {
+                self.current = next;
+            } else {
+                let written = self.requests_written();
+                if let Some(request) = written.get(self.answered) {
+                    if let Some(next) = self.meanwhile.pop_front() {
+                        self.current = next;
+                    } else if self.hang_up_at == Some(self.answered + 1) {
+                        return Ok(&[]);
+                    } else {
+                        let result = (self.answer)(request);
+                        let message =
+                            json!({"jsonrpc": "2.0", "id": request["id"], "result": result});
+                        self.requests.lock().unwrap().push(request.clone());
+                        self.answered += 1;
+                        self.current = format!("{message}\n").into_bytes();
+                    }
+                }
+            }
+        }
+        Ok(&self.current[self.at..])
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.at += amount;
+    }
+}
+
+fn elastic_workspace(root: &Path) -> PathBuf {
+    let ws = corpus(root);
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+         [[tenants]]\nname = \"lab\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+         url = \"https://lab.invalid\"\nelasticsearch_url = \"https://lab.invalid\"\n\
+         api_key = \"key\"\n",
+    )
+    .unwrap();
+    ws
+}
+
+fn mcp_line(message: &Value) -> Vec<u8> {
+    format!("{message}\n").into_bytes()
+}
+
+fn opening(call_id: u64) -> Vec<Vec<u8>> {
+    vec![
+        mcp_line(
+            &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"}}}),
+        ),
+        mcp_line(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"})),
+        mcp_line(
+            &json!({"jsonrpc": "2.0", "id": call_id, "method": "tools/call", "params": {
+            "name": "run_query",
+            "arguments": {"query": "FROM x", "platform": "elastic", "live": true}}}),
+        ),
+    ]
+}
+
+/// Serves *client*'s session with the bridge installed; what the server wrote.
+fn serve_bridged(
+    ws: &Path,
+    client: FetchingClient,
+    out: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+) -> Vec<Value> {
+    let _network = NETWORK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let bridge = super::fetch::Bridge::new(client, Shared(std::sync::Arc::clone(out)));
+    let _installed = bridge.install();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(super::interactive::serve_lines(
+            server(ws),
+            super::interactive::Bridged(bridge),
+            Shared(std::sync::Arc::clone(out)),
+        ))
+        .unwrap();
+    String::from_utf8(out.lock().unwrap().clone())
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+#[test]
+fn a_tenant_call_is_answered_by_the_client_between_its_mcp_messages() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    // Messages of the client's own that arrive while the call waits: they are
+    // read after it, in order, and answered.
+    client.meanwhile = [
+        mcp_line(&json!({"jsonrpc": "2.0", "id": 3, "method": "ping"})),
+        mcp_line(&json!({"jsonrpc": "2.0", "id": 4, "method": "tools/list"})),
+    ]
+    .into();
+    client.answer = Box::new(|_| {
+        json!({"status": 401, "headers": [["content-type", "application/json"]],
+            "url": "https://lab.invalid/", "body": null, "elapsed_ms": 3})
+    });
+    let seen = std::sync::Arc::clone(&client.requests);
+    let written = serve_bridged(&ws, client, &out);
+
+    let fetches: Vec<&Value> = written
+        .iter()
+        .filter(|m| m["method"] == "opentide/fetch")
+        .collect();
+    assert!(
+        !fetches.is_empty(),
+        "the tenant call was sent to the client: {written:?}"
+    );
+    for (index, fetch) in fetches.iter().enumerate() {
+        assert_eq!(fetch["jsonrpc"], "2.0");
+        assert_eq!(fetch["id"], format!("opentide-fetch-{}", index + 1));
+        assert_eq!(fetch["params"]["platform"], "elastic");
+        assert_eq!(fetch["params"]["tenant"], "lab");
+        assert!(
+            fetch["params"]["url"]
+                .as_str()
+                .unwrap()
+                .starts_with("https://lab.invalid")
+        );
+        // The run is the tool call's request id.
+        assert_eq!(fetch["params"]["run"], "2");
+    }
+    assert_eq!(
+        seen.lock().unwrap().len(),
+        fetches.len(),
+        "each was answered once"
+    );
+    // The answers to the MCP requests, in order, the call's after the fetches.
+    let answers: Vec<&Value> = written
+        .iter()
+        .filter(|m| m.get("method").is_none())
+        .collect();
+    let ids: Vec<Value> = answers.iter().map(|m| m["id"].clone()).collect();
+    assert_eq!(ids, [json!(1), json!(2), json!(3), json!(4)], "{written:?}");
+    let last_fetch = written
+        .iter()
+        .rposition(|m| m["method"] == "opentide/fetch")
+        .unwrap();
+    let call = written
+        .iter()
+        .position(|m| m["id"] == 2 && m.get("method").is_none())
+        .unwrap();
+    assert!(
+        last_fetch < call,
+        "the call answered once its requests were"
+    );
+    // The tenant's 401 reached the tool as the tenant's answer, not as a missing network.
+    let text = answers[1]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(!text.contains("network_unavailable"), "{text}");
+    assert!(!text.contains("needs the network"), "{text}");
+    assert!(
+        text.contains("401") || text.to_lowercase().contains("auth"),
+        "{text}"
+    );
+}
+
+#[test]
+fn an_unanswered_tenant_call_fails_clearly_when_the_input_ends() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    client.hang_up_at = Some(1);
+    let written = serve_bridged(&ws, client, &out);
+    let call = written
+        .iter()
+        .find(|m| m["id"] == 2 && m.get("method").is_none())
+        .unwrap_or_else(|| panic!("the call is answered: {written:?}"));
+    // As any tenant failure: the tool answers, with the tenant's status.
+    let text = call["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"status\": \"failed\""), "{text}");
+    assert!(
+        text.contains("closed its input before answering an opentide/fetch request"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_cancelled_call_withdraws_its_request_and_stops() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    // The client cancels the call while its request waits, and never answers.
+    client.meanwhile = [mcp_line(
+        &json!({"jsonrpc": "2.0", "method": "notifications/cancelled",
+        "params": {"requestId": 2, "reason": "user"}}),
+    )]
+    .into();
+    client.hang_up_at = Some(1);
+    let written = serve_bridged(&ws, client, &out);
+    let withdrawn: Vec<&Value> = written
+        .iter()
+        .filter(|m| m["method"] == "notifications/cancelled")
+        .collect();
+    assert_eq!(withdrawn.len(), 1, "{written:?}");
+    assert_eq!(withdrawn[0]["params"]["requestId"], "opentide-fetch-1");
+    // Stopped by the cancellation, not by the end of input.
+    let text = written
+        .iter()
+        .find(|m| m["id"] == 2 && m.get("method").is_none())
+        .map_or(String::new(), |call| {
+            call["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned()
+        });
+    assert!(!text.contains("closed its input"), "{text}");
 }

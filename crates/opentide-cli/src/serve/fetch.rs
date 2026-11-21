@@ -50,6 +50,37 @@ pub const METHOD: &str = "opentide/fetch";
 /// The prefix of the server's request ids.
 pub const ID_PREFIX: &str = "h";
 
+/// How a [`Fetcher`] words its requests to the client: the dialect of the
+/// protocol it speaks. `opentide serve` and `opentide mcp start` (WASI,
+/// `OPENTIDE_FETCH=stdio`) send the same `opentide/fetch`, params and answers;
+/// they differ in the ids of the requests and in how a request is withdrawn.
+#[derive(Debug, Clone, Copy)]
+pub struct Wire {
+    /// The prefix of the request ids (`"h"`: `"h1"`).
+    pub prefix: &'static str,
+    /// The notification that withdraws request *id*.
+    pub withdraw: fn(&str) -> Json,
+    /// Why a request fails when the client has gone.
+    pub gone: &'static str,
+}
+
+impl Wire {
+    /// `opentide serve`: ids `h1`, `h2`…, withdrawn with `$/cancelRequest`.
+    pub const SERVE: Wire = Wire {
+        prefix: ID_PREFIX,
+        withdraw: serve_withdrawal,
+        gone: "the client that made the tenant's requests has gone",
+    };
+}
+
+fn serve_withdrawal(id: &str) -> Json {
+    Json::object([
+        ("jsonrpc", Json::str("2.0")),
+        ("method", Json::str("$/cancelRequest")),
+        ("params", Json::object([("id", Json::str(id))])),
+    ])
+}
+
 /// How long past a tenant's own limits the server waits for the client's
 /// answer before it reads the request as timed out.
 const GRACE: Duration = Duration::from_secs(5);
@@ -59,6 +90,7 @@ type Reply = Result<Json, Json>;
 
 /// The requests in flight to the client, and how to write one.
 pub struct Fetcher {
+    wire: Wire,
     send: Box<dyn Fn(&str) + Send + Sync>,
     /// The id of the run in progress, named in each request.
     run: Box<dyn Fn() -> Option<String> + Send + Sync>,
@@ -97,7 +129,19 @@ impl Fetcher {
         pump: impl Fn() -> bool + Send + Sync + 'static,
         cancelled: impl Fn() -> bool + Send + Sync + 'static,
     ) -> Arc<Self> {
+        Self::with_wire(Wire::SERVE, send, run, pump, cancelled)
+    }
+
+    /// As [`Fetcher::with_input`], in the dialect *wire* speaks.
+    pub fn with_wire(
+        wire: Wire,
+        send: impl Fn(&str) + Send + Sync + 'static,
+        run: impl Fn() -> Option<String> + Send + Sync + 'static,
+        pump: impl Fn() -> bool + Send + Sync + 'static,
+        cancelled: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Arc<Self> {
         Arc::new(Self {
+            wire,
             send: Box::new(send),
             run: Box::new(run),
             pending: Mutex::new(HashMap::new()),
@@ -131,8 +175,14 @@ impl Fetcher {
             .clear();
     }
 
-    fn ask(&self, params: Json) -> (String, oneshot::Receiver<Reply>) {
-        let id = format!("{ID_PREFIX}{}", self.next.fetch_add(1, Ordering::SeqCst));
+    /// Sends one `opentide/fetch` with *params*: its id, and the receiver of
+    /// the client's answer.
+    pub(crate) fn ask(&self, params: Json) -> (String, oneshot::Receiver<Reply>) {
+        let id = format!(
+            "{}{}",
+            self.wire.prefix,
+            self.next.fetch_add(1, Ordering::SeqCst)
+        );
         let (sender, receiver) = oneshot::channel();
         self.pending
             .lock()
@@ -148,19 +198,14 @@ impl Fetcher {
         (id, receiver)
     }
 
-    fn cancel(&self, id: &str) {
+    pub(crate) fn cancel(&self, id: &str) {
         let waiting = self
             .pending
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(id);
         if waiting.is_some() {
-            let message = Json::object([
-                ("jsonrpc", Json::str("2.0")),
-                ("method", Json::str("$/cancelRequest")),
-                ("params", Json::object([("id", Json::str(id))])),
-            ]);
-            (self.send)(&compact(&message));
+            (self.send)(&compact(&(self.wire.withdraw)(id)));
         }
     }
 }
@@ -368,7 +413,7 @@ impl Transport for ClientTransport {
         Box::pin(async move {
             let Some(fetcher) = self.fetcher.upgrade() else {
                 return Err(TransportFailure::Unreachable {
-                    reason: "the client that made the tenant's requests has gone".to_owned(),
+                    reason: Wire::SERVE.gone.to_owned(),
                 });
             };
             let started = std::time::Instant::now();
@@ -400,8 +445,7 @@ impl Transport for ClientTransport {
                     Err(oneshot::error::TryRecvError::Closed) => {
                         drop(pending);
                         return Err(TransportFailure::Unreachable {
-                            reason: "the client that made the tenant's requests has gone"
-                                .to_owned(),
+                            reason: fetcher.wire.gone.to_owned(),
                         });
                     }
                     Err(oneshot::error::TryRecvError::Empty) => {}
@@ -424,7 +468,7 @@ impl Transport for ClientTransport {
             match outcome {
                 Err(_) => Err(TransportFailure::Timeout),
                 Ok(Err(_)) => Err(TransportFailure::Unreachable {
-                    reason: "the client that made the tenant's requests has gone".to_owned(),
+                    reason: fetcher.wire.gone.to_owned(),
                 }),
                 Ok(Ok(Err(error))) => Err(failure(&error)),
                 Ok(Ok(Ok(result))) => response(&result, &url, started.elapsed()),
