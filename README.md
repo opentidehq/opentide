@@ -1,7 +1,7 @@
 # opentide
 
 [![PyPI](https://img.shields.io/pypi/v/opentide.svg)](https://pypi.org/project/opentide/)
-[![Coverage](https://raw.githubusercontent.com/opentidehq/opentide/python-coverage-comment-action-data/badge.svg)](https://github.com/opentidehq/opentide/actions/workflows/ci.yml)
+[![CI](https://github.com/opentidehq/opentide/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/opentidehq/opentide/actions/workflows/ci.yml)
 
 **opentide** — spec-driven development for agentic detection engineering.
 
@@ -10,12 +10,12 @@ opentide gives every detection an ontology and a taxonomy, so it stays threat-al
 ## Install
 
 ```bash
-pip install opentide==0.28.1
+pip install --pre opentide        # the 1.0.0 release candidate, which this page describes
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
 
-The Rust core is released as **1.0.0 release candidates** first (`1.0.0rcN`, a PyPI pre-release): pip and uv skip them unless asked, `pip install --pre opentide` or `uv pip install --prerelease=allow opentide`. The pin above is the newest stable release, and `pip install opentide` installs it.
+The Rust core is released as **1.0.0 release candidates** first (`1.0.0rcN`, a PyPI pre-release): pip and uv skip them unless asked, `pip install --pre opentide` or `uv pip install --prerelease=allow opentide`. The newest stable release is 0.28.1: `pip install opentide==0.28.1`, or `pip install opentide`, installs it.
 
 Release notes: [CHANGELOG.md](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
 
