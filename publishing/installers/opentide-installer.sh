@@ -39,7 +39,7 @@ case "$(uname -s)" in
     fi
     os="unknown-linux-gnu" ;;
   Darwin) os="apple-darwin" ;;
-  *) echo "opentide-installer: $(uname -s) is not supported; on Windows, use opentide-installer.ps1" >&2; exit 1 ;;
+  *) echo "opentide-installer: $(uname -s) is not supported; on Windows, install with uv tool install opentide, pip install opentide or npm i -g @opentide/opentide" >&2; exit 1 ;;
 esac
 case "$(uname -m)" in
   x86_64 | amd64) arch="x86_64" ;;
