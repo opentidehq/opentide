@@ -632,7 +632,8 @@ def workflow_header(path: Path = WORKFLOW) -> str:
 
 
 # language-server v0.11.0's GitHub Release (its SHA256SUMS, and SHA256SUMS),
-# without the musl binaries: no musl build ships (the maintainer's decision).
+# without the musl binaries (no musl build ships) and without the Windows
+# binaries (no standalone Windows executable ships: the maintainer's decisions).
 V0_11_0_ASSETS = [
     "LICENSE",
     "NOTICE",
@@ -641,26 +642,21 @@ V0_11_0_ASSETS = [
     "WASI-LIBC-LICENSES.txt",
     "highlights-v0.11.0.zip",
     "opentide-lsp-v0.11.0-aarch64-apple-darwin",
-    "opentide-lsp-v0.11.0-aarch64-pc-windows-msvc.exe",
     "opentide-lsp-v0.11.0-aarch64-unknown-linux-gnu",
     "opentide-lsp-v0.11.0-x86_64-apple-darwin",
-    "opentide-lsp-v0.11.0-x86_64-pc-windows-msvc.exe",
     "opentide-lsp-v0.11.0-x86_64-unknown-linux-gnu",
     "opentide-lsp-wasm32-wasip1.wasm",
     "opentide-wasm-web-v0.11.0.zip",
 ]
 
-# What the release train adds: the `opentide` binaries, their installers, and
+# What the release train adds: the `opentide` binaries, their installer, and
 # the SBOMs scripts/engine/sbom.py writes.
 PRODUCT_ASSETS = [
     "opentide-v0.11.0-aarch64-apple-darwin",
-    "opentide-v0.11.0-aarch64-pc-windows-msvc.exe",
     "opentide-v0.11.0-aarch64-unknown-linux-gnu",
     "opentide-v0.11.0-x86_64-apple-darwin",
-    "opentide-v0.11.0-x86_64-pc-windows-msvc.exe",
     "opentide-v0.11.0-x86_64-unknown-linux-gnu",
     "opentide-installer.sh",
-    "opentide-installer.ps1",
 ]
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
@@ -697,13 +693,15 @@ class TagTest(unittest.TestCase):
 
     def test_the_asset_set_is_language_servers_last_with_the_trains_additions(self) -> None:
         # language-server's assets keep their names (editors pin them); the
-        # musl binaries are gone, the `opentide` binaries, installers and
+        # musl binaries are gone, the `opentide` binaries, installer and
         # SBOMs (#843) are new.
         names = V0_11_0_ASSETS + PRODUCT_ASSETS + SBOM_ASSETS
         self.assertEqual(sorted(release.expected_assets("v0.11.0")), sorted(names))
         rc = release.expected_assets("v0.11.1-rc.1")
         self.assertEqual(sorted(rc), sorted(a.replace("v0.11.0", "v0.11.1-rc.1") for a in names))
         self.assertFalse([a for a in rc if "musl" in a])
+        # No standalone Windows executable, and no PowerShell installer.
+        self.assertFalse([a for a in rc if "windows" in a or a.endswith((".exe", ".ps1"))])
 
     def test_check_assets_names_what_is_missing_or_extra(self) -> None:
         tmp = Path(tempfile.mkdtemp())
@@ -772,7 +770,8 @@ class TagTest(unittest.TestCase):
     def test_the_native_matrix_builds_every_target(self) -> None:
         native = workflow_jobs(BUILD)["native"]
         built = re.findall(r"^\s+target: (\S+)$", native, re.MULTILINE)
-        self.assertEqual(built, release.TARGETS)
+        self.assertEqual(built, release.BINARY_TARGETS)
+        self.assertFalse([t for t in built if "windows" in t])
         npm = workflow_jobs(PACKAGES)["npm-native"]
         self.assertEqual(
             sorted(re.findall(r"^\s+target: (\S+)$", npm, re.MULTILINE)), sorted(release.TARGETS)
