@@ -34,6 +34,11 @@ Branch `investigate/av-false-positives`, no PR.
   and file the false-positive reports and the Marketplace appeal in parallel. Compression also shrinks the
   Windows exe by about 9.8 MB.
 
+- **RedLine (section 9):** 0 hits for every RedLine rule in Elastic, YARA-Forge (16), signature-base and the
+  ReversingLabs infostealer set, and no stealer paths, wallet IDs or browser store names in the datasets beyond one
+  ATT&CK `Login Data` path; compression removes all stealer strings, but the CLI's user32 key-translation imports
+  and the Google ADC path strings remain.
+
 ### What this investigation could not do
 
 - The `opentidehq/vscode-extension` PR #95 build (feat/agent-knowledge) **was not reproduced**: attaching
@@ -355,6 +360,118 @@ design.
 6. **Add a release gate** (option h) that runs ClamAV and signature-base YARA over every file in the
    release, so that a new dataset cannot reintroduce a hit unnoticed; consider Authenticode signing
    (option e) for the Windows binaries as a separate reputation measure.
+
+## 9. RedLine (addendum, same day)
+
+Request: Microsoft Defender is reported to flag opentide with RedLine Stealer signatures. Defender cannot
+run here, so this section uses local proxies and the same rules as before (read-only, nothing uploaded).
+Added rule sets: YARA-Forge `full` 2026 package (11 852 rules, public release asset, downloaded only),
+ReversingLabs public rules (`yara/infostealer`, 8 files) and the Elastic and signature-base sets from section 2.
+Scan targets: every Windows PE (both `.exe`, rc2 and 0.28.1 and 0.21.0 to 0.25.0 `_native.pyd`), the Linux
+ELFs, the wasm modules, and the datasets as standalone files (`data/catalogs`, `src/opentide/data`,
+`highlights`, the skills repo, the sdist tree): 1 760 files.
+
+### 9.1 RedLine-specific rules: 0 hits
+
+| Set | RedLine rules run | Hits |
+|---|---|---:|
+| Elastic `Windows_Trojan_RedLineStealer.yar` | `..._17ee6a17`, `_f54632eb`, `_3d9371fd`, `_63e7e006`, `_f07b3cb4`, `_4df4bcb6`, `_15ee6903`, `_6dfafd7b`, `_983cd7a7` | **0** each |
+| YARA-Forge full | `ESET_Cw_Windows_Redline_Panel_{Tab_Headers,Distinctive_Strings,Prompts,Status_Message_Strings,Commands}`, `TRELLIX_ARC_Redline_Payload`, `ARKBIRD_SOLG_Mal_Stealer_NET_Redline_Aug_2020_1`, `SECUINFRA_MAL_Redline_Certificate_{Bosch,Geforce}`, `EMBEERESEARCH_Win_Redline_{Updated_Bytecodes_Oct_2023,Loader_Dec_2023,Bytecodes_Jan_2024,Payload_Dec_2023}`, `DITEKSHEN_MALWARE_Win_Redlinedropper{ahk,exe}`, `SEKOIA_Infostealer_Win_Redline_Strings` (16) | **0** each |
+| signature-base | `SUSP_MAL_EXFIL_Stealer_Output_Characteristics_Sep22_1` (the only RedLine/Raccoon rule) | **0** |
+| ReversingLabs public rules | no RedLine rule exists in the public set; its `infostealer` rules (Gomorrah, Lumar, StealC, Daolpu, Skuld, WeaselStore, two POS families) were run instead | **0** |
+| Any stealer-family rule in any set | | the only family-named hit is `DITEKSHEN_MALWARE_Win_Asyncrat` (22 files), triggered by the bare word `AsyncRAT` in the ATT&CK/actors text, not by AsyncRAT code |
+
+Other Forge rules that fire (none stealer-specific): `SIGNATURE_BASE_Mimikatz_Memory_Rule_1`,
+`SIGNATURE_BASE_HKTL_Keyword_Injectdll`, `SIGNATURE_BASE_Hacktool_Strings_P0Wnedshell`,
+`SIGNATURE_BASE_EXPL_Log4J_CVE_2021_44228_Dec21_Soft` (section 4.2), `GODMODERULES_IDDQD_God_Mode_Rule` (a
+meta-rule of generic strings such as `sekurlsa::logonpasswords`, score 60), `DITEKSHEN_INDICATOR_SUSPICIOUS_EXE_Nonewindowsua`
+(Windows PE containing iPhone/Android/Mac user-agent strings, score 40, 12 PEs) and `CAPE_Eternalromance` (one
+PE, matched string `Frag`). After the compression experiment all of them are gone (9.3).
+
+### 9.2 Stealer-target strings in the datasets and binaries
+
+Census with word-boundary regexes (exact case for ambiguous words), per embedded dataset, then per binary.
+A first, substring-based pass over-counted (`tdata` sits inside "metadata"; `Exodus` is a citation title;
+`Phantom` is a SOAR product), so only the refined counts are reported.
+
+| Target class | Strings searched | Found in datasets | Where |
+|---|---|---|---|
+| Stealer family names | `RedLine`, `Lumma`, `Vidar`, `StealC`, `Raccoon`, `stealer` | RedLine 2, Lumma 6, Vidar 2, StealC 1, "stealer" 61 (+1 in `fields.json`); Raccoon 0 | `actors.vocab.toml` (MISP descriptions: "...Atlantida Stealer, Rhadamanthys, RisePro, Lumma Stealer, and RedLine."), `att&ck.vocab.toml` (Lumma 2) |
+| Browser credential stores | `Login Data`, `Local State`, `Web Data`, `logins.json`, `key4.db`, `cookies.sqlite`, `CryptUnprotectData`, `os_crypt`, `encrypted_key` | `Login Data` 1, `CryptUnprotectData` 2; the rest 0; the word `Cookies` 14 (ATT&CK, Sentinel schema, KQL tables) | `att&ck.vocab.toml` T1555.003 text: `AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data` and the `CryptUnprotectData` explanation |
+| Crypto wallets | Electrum, Exodus (wallet), Atomic Wallet, MetaMask, Coinomi, Jaxx, Armory, `wallet.dat`, eight wallet-extension IDs incl. `nkbihfbeogaeaoehlefnkodbefgpgknn` | **0** | no wallet name, path or extension ID in any dataset |
+| Telegram, Discord | `tdata`, `discordcanary`, `discordptb`, `dQw4w9WgXcQ:`, token regexes, `leveldb`, webhook URLs | **0** (whole-word `tdata` in the datasets: 0; the substring hits, checked file by file, are "metadata"-like words) | none |
+| FileZilla, Steam, VPN | `recentservers.xml`, `sitemanager.xml`, `ssfn`, `loginusers.vdf`, `NordVPN`, `ProtonVPN`, `OpenVPN` | `OpenVPN` 4 (product name in vocabulary and `fields.json`); others 0 | |
+| RedLine recon | `ipinfo.io`, `api.ip.sb`, `api.ipify.org`, `ip-api.com`, `Win32_VideoController`, `Win32_Processor` | **0** | |
+
+So the datasets mention stealers only descriptively, in ATT&CK and MISP prose. They contain none of the
+paths, IDs or regexes that stealers (and RedLine detections) key on, apart from one documented Chrome `Login Data` path
+and the `CryptUnprotectData` function name, both inside the ATT&CK T1555.003 (Credentials from Web
+Browsers) description. The same counts appear in the Windows, Linux and wasm builds because they come from the
+shared vocabulary; the Linux CLI binary additionally carries one whole-word `tdata` (source not traced).
+
+Per binary (before and after the compression experiment of section 5, `V4` = all 337 datasets deflated):
+
+| Class | CLI exe V0 | CLI exe V4 | LSP exe V0 → V4 | `.pyd` V0 → V4 |
+|---|---:|---:|---|---|
+| RedLine / Lumma / Vidar / StealC | 2 / 6 / 2 / 1 | **0** | 2/6/2/1 → 0 | 2/6/2/1 → 0 |
+| `stealer` (any case) | 62 | **0** | 62 → 0 | 62 → 0 |
+| `Login Data`, `CryptUnprotectData` | 1, 2 | **0, 0** | 1, 2 → 0 | 1, 2 → 0 |
+| `Cookies` word / `OpenVPN` | 14 / 4 | **0 / 0** | 14/4 → 0 | 14/4 → 0 |
+
+### 9.3 Does option (a) cover it?
+
+For the string and rule-based families: yes. After deflating all datasets, none of the stealer strings above
+survives in plain text in the CLI exe, the LSP exe or the `.pyd`, and 0 rules hit in YARA-Forge (all 11 852),
+signature-base or Elastic (V0 CLI exe had six Forge rules; V4 has none; the LSP exe and `.pyd` likewise).
+
+What stays in plain text, and what compression does not touch (printable strings of the compressed CLI exe,
+432 117 strings; counts case-insensitive):
+
+| Residual | Count / content | Where it comes from | Risk |
+|---|---|---|---|
+| Credential vocabulary | `token` 111, `credential` 70, `api key` 24, `password` 8, `cookie` 4 | connectors and schema field names, TLS library error names, the TUI redaction pattern `(?i)(secret|token|password|passwd|passphrase|api[_\-\s.]?key|private[_\-\s.]?key|credential|auth|^key$|[_\-\s.]key$|cookie|session)`, deploy-action docs ("force a password reset") | low: no store path, no wallet or browser word |
+| Google ADC path | `APPDATA`, `LOCALAPPDATA`, `gcloud`, `application_default_credentials.json`, `GOOGLE_APPLICATION_CREDENTIALS` | `crates/opentide-connectors/src/google_secops/auth.rs` (ADC lookup in Google's order) | moderate: the strings "read a credentials file in AppData" are the one code-side pattern near a stealer's behaviour |
+| Git and SSH | `git config core.sshCommand "ssh -i \"$OPENTIDE_PUSH_SSH_KEY\" ...`, `.ssh` ×1, `libexec/git-core`, `git.exe` | push/share helper | low |
+| Process and shell | `powershell` 5, `cmd.exe` 4 | CLI helpers | low |
+| Other literals | `wallet`, `chrome`, `firefox`, `keychain`, `keyring`, `dpapi`, `discord`, `telegram`, `id_rsa`, `.aws`, `netrc`, `webhook`, `ipify` | all **0** | none |
+| **Imports (not strings)** | CLI exe and `.pyd`: user32 `GetForegroundWindow`, `GetWindowThreadProcessId`, `GetKeyboardLayout`, `ToUnicodeEx`; advapi32 `OpenProcessToken`, `GetTokenInformation`, `CheckTokenMembership`; crypt32 only the certificate-store calls (`CertOpenStore`, `CertEnumCertificatesInStore`, ...) | the user32 set comes from `termina` 0.3.3 (`src/parse/windows.rs`), a terminal-input crate that `Cargo.lock` lists as a dependency of `opentide-cli` and `ratatui-termina` (the terminal UI and prompts; whether it can be feature-gated out was not checked) | **the one residual that heuristics could read as keylogging**: foreground-window plus keyboard-layout plus `ToUnicodeEx` is the classic key-translation set. The LSP exe imports none of user32. No `CryptUnprotectData` and no `mscoree` import; no .NET (CLR) header (the Data Directory 14 size is 0 in all three), so a `Trojan:MSIL/RedLine...` verdict cannot match this native Rust code on structure |
+
+Compression therefore removes the string evidence and leaves two code-side signals: the Google ADC path
+strings and, in the CLI exe and `.pyd` only, the user32 key-translation imports (from the terminal UI
+feature). If a cloud ML verdict persists after (a), the next levers are: check whether the terminal-input
+dependency can be gated behind a feature or split into a separate binary (the LSP exe already has no user32
+imports); the evidence for this is the import list above, not a Defender result.
+
+### 9.4 Likely Defender verdict families and what to put in the WDSI submission
+
+Microsoft's [malware naming page](https://learn.microsoft.com/en-us/defender-xdr/malware-naming) says a
+suffix beginning with `!` is an internal indicator and lists only `!rfn`; it does not define `!ml` or
+`!MTB`. The meanings below are the community's and are labelled as such. The exact Defender detection name,
+the file's SHA-256 and the engine and signature versions are needed from the owner before any of this can
+be settled: the report on file gives only "RedLine".
+
+| Verdict form | What it most likely implies (community reading) | Fit with the evidence | WDSI text |
+|---|---|---|---|
+| `Trojan:Win32/RedLine.<x>` without a suffix, or `Trojan:MSIL/RedLine.<x>` | a byte or behaviour signature for the RedLine family; `MSIL` means a .NET assembly | **No fit on structure:** no CLR header, no .NET metadata (`BSJB` count 0), 0 RedLine rules hit; a `MSIL` name on a native Rust PE would itself be a mismatch to point out | state that the file is a native Rust x64 PE with no .NET header and that 25 public RedLine rules (Elastic, YARA-Forge, signature-base) and 8 ReversingLabs infostealer rules produce no match; give the PE section and import facts (9.3); ask for the matched signature or the sample it was derived from |
+| `...!MTB` (e.g. `Trojan:Win32/RedLine.MC!MTB`) | commonly read as a machine-learning or cloud-classification verdict tied to a family label, not a byte signature (not defined by Microsoft; Trend Micro lists `Trojan:MSIL/RedLine.MC!MTB` as a Microsoft alias for RedLine) | plausible trigger: a very large PE with 11 MB of mixed credential, miner, C2 and injection vocabulary in `.rdata`, unsigned, and the user32 key-translation imports | say it is a false positive of a classification verdict; explain the dataset content (MITRE ATT&CK and MISP descriptions, Falco default rules, malapi) as detection content, link the public source repository, the licence, and the build provenance; after (a) and the signing steps resubmit the new hash |
+| `...!ml` | machine-learning detection (Microsoft Q&A and Rust forum reports of `Bearfoos.A!ml`, `Wacatac.B!ml` on Rust binaries) | plausible: unsigned large Rust PE with no reputation | report as an ML false positive; unsigned and new binaries start without reputation, so signing and consistent publishing matter as much as the content |
+| `...!rfn`, `...!pz` and other reputation suffixes | reputation or prevalence verdicts, not content | applies to every new unsigned release hash | ask for the hash to be allowed or its reputation reviewed after signing |
+| `Behavior:Win32/...` or `Trojan:Script/...` | runtime behaviour in the clean-room or on the endpoint | not testable here: no process, network or file-system behaviour was exercised | describe what `opentide` does at runtime (reads its repository, calls vendor HTTP APIs with user-provided credentials, and for Google SecOps reads the ADC file); provide the command line used when Defender fired |
+
+What every submission should carry: the exact detection name and the Defender product, engine and
+signature versions; the file's SHA-256 (the release `SHA256SUMS`); the download URL; the sentence that the
+file is a developer tool that embeds public detection content; the facts from sections 4, 5 and 9 (no stealer
+store, wallet or browser paths; no RedLine rule matches; no .NET header); and, once available, the compressed
+rebuild's hash. Submit each distinct hash separately (each `exe`, the LSP, the wheels' `.pyd`), and keep the
+Marketplace appeal (section 7) and the Defender submissions pointing at the same evidence.
+
+### 9.5 Revised recommendation
+
+Section 8 stands, with two additions: (a) now also covers the stealer-vocabulary families, so the compression
+work should land before the next Windows release; and (7) review the Windows CLI's user32 key-translation
+imports (the `termina` dependency) and the Google ADC string path, since compression does not touch them.
+Open items: the exact Defender detection name and hash from the owner; a run against Defender itself, which
+only the owner can do.
 
 ## Appendix: commands
 
