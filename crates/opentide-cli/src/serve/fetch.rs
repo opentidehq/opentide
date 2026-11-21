@@ -58,6 +58,10 @@ pub const ID_PREFIX: &str = "h";
 pub struct Wire {
     /// The prefix of the request ids (`"h"`: `"h1"`).
     pub prefix: &'static str,
+    /// Whether each fetcher puts a random per-process token after the prefix
+    /// (`opentide-fetch-<token>-1`), so a peer that can write to the server's
+    /// input cannot guess the id of a request and answer it.
+    pub token: bool,
     /// The notification that withdraws request *id*.
     pub withdraw: fn(&str) -> Json,
     /// Why a request fails when the client has gone.
@@ -68,6 +72,7 @@ impl Wire {
     /// `opentide serve`: ids `h1`, `h2`…, withdrawn with `$/cancelRequest`.
     pub const SERVE: Wire = Wire {
         prefix: ID_PREFIX,
+        token: false,
         withdraw: serve_withdrawal,
         gone: "the client that made the tenant's requests has gone",
     };
@@ -91,6 +96,8 @@ type Reply = Result<Json, Json>;
 /// The requests in flight to the client, and how to write one.
 pub struct Fetcher {
     wire: Wire,
+    /// What every request id starts with: the wire's prefix, and its token.
+    prefix: String,
     send: Box<dyn Fn(&str) + Send + Sync>,
     /// The id of the run in progress, named in each request.
     run: Box<dyn Fn() -> Option<String> + Send + Sync>,
@@ -140,8 +147,14 @@ impl Fetcher {
         pump: impl Fn() -> bool + Send + Sync + 'static,
         cancelled: impl Fn() -> bool + Send + Sync + 'static,
     ) -> Arc<Self> {
+        let prefix = if wire.token {
+            format!("{}{}-", wire.prefix, uuid::Uuid::new_v4().simple())
+        } else {
+            wire.prefix.to_owned()
+        };
         Arc::new(Self {
             wire,
+            prefix,
             send: Box::new(send),
             run: Box::new(run),
             pending: Mutex::new(HashMap::new()),
@@ -175,12 +188,18 @@ impl Fetcher {
             .clear();
     }
 
+    /// What every request id starts with.
+    #[cfg(test)]
+    pub(crate) fn id_prefix(&self) -> &str {
+        &self.prefix
+    }
+
     /// Sends one `opentide/fetch` with *params*: its id, and the receiver of
     /// the client's answer.
     pub(crate) fn ask(&self, params: Json) -> (String, oneshot::Receiver<Reply>) {
         let id = format!(
             "{}{}",
-            self.wire.prefix,
+            self.prefix,
             self.next.fetch_add(1, Ordering::SeqCst)
         );
         let (sender, receiver) = oneshot::channel();
@@ -416,6 +435,11 @@ impl Transport for ClientTransport {
                     reason: Wire::SERVE.gone.to_owned(),
                 });
             };
+            // A call that was cancelled sends nothing more: the request
+            // carries the tenant's credentials, and would only be withdrawn.
+            if cancel.is_cancelled() || (fetcher.cancelled)() {
+                return Err(TransportFailure::Cancelled);
+            }
             let started = std::time::Instant::now();
             let url = request.url().clone();
             let read = request.timeout().unwrap_or(self.timeout);
@@ -474,5 +498,75 @@ impl Transport for ClientTransport {
                 Ok(Ok(Ok(result))) => response(&result, &url, started.elapsed()),
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+
+    use super::*;
+
+    fn transport(fetcher: &Arc<Fetcher>) -> ClientTransport {
+        ClientTransport {
+            fetcher: Arc::downgrade(fetcher),
+            platform: "elastic".to_owned(),
+            tenant: "lab".to_owned(),
+            verify: true,
+            bundles: Vec::new(),
+            proxies: opentide_connectors::proxy::ProxySettings::default(),
+            timeout: Duration::from_secs(1),
+        }
+    }
+
+    fn request() -> Request {
+        let url = url::Url::parse("https://lab.invalid/_query").unwrap();
+        Request::new(opentide_connectors::transport::Method::GET, url)
+    }
+
+    /// A call that was cancelled sends nothing more: a request carries the
+    /// tenant's credentials, and would only be withdrawn.
+    #[test]
+    fn a_cancelled_call_writes_no_further_request() {
+        let written = Arc::new(Mutex::new(Vec::<String>::new()));
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let fetcher = Fetcher::with_input(
+            {
+                let written = Arc::clone(&written);
+                move |message: &str| written.lock().unwrap().push(message.to_owned())
+            },
+            || None,
+            || false,
+            {
+                let cancelled = Arc::clone(&cancelled);
+                move || cancelled.load(Ordering::SeqCst)
+            },
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let transport = transport(&fetcher);
+        // The run was cancelled (the client's cancellation, noted by the reader).
+        let outcome = runtime.block_on(transport.execute(request(), &CancellationToken::new()));
+        assert!(
+            matches!(outcome, Err(TransportFailure::Cancelled)),
+            "{outcome:?}"
+        );
+        assert!(
+            written.lock().unwrap().is_empty(),
+            "{:?}",
+            written.lock().unwrap()
+        );
+        // So is a request whose token fired.
+        cancelled.store(false, Ordering::SeqCst);
+        let token = CancellationToken::new();
+        token.cancel();
+        let outcome = runtime.block_on(transport.execute(request(), &token));
+        assert!(
+            matches!(outcome, Err(TransportFailure::Cancelled)),
+            "{outcome:?}"
+        );
+        assert!(written.lock().unwrap().is_empty());
     }
 }

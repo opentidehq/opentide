@@ -567,12 +567,31 @@ class LineSplitter {
  * Neither direction reorders anything: the MCP messages reach each side in the
  * order they were written. `toServer` is called for answers asynchronously, as
  * each request finishes.
+ *
+ * What the bridge keeps from the client, and from the agent behind it:
+ *
+ * - **A tenant request never reaches the client.** It carries the tenant's
+ *   credentials (the `Authorization` and API-key headers, the CA bundles). A
+ *   line that mentions `opentide/fetch` and cannot be read as a message of the
+ *   host's is dropped, not forwarded: nothing that might hold a credential
+ *   goes to `toClient` on a failure to understand it.
+ * - **The client cannot answer a tenant request.** A client line that is a
+ *   response (it has no `method`) to an id with the `MCP_FETCH_ID_PREFIX`, or
+ *   that mentions the prefix and cannot be read, is dropped: the module trusts
+ *   an answer on its stdin for the request it asked, and an agent could
+ *   otherwise forge the result of a deploy or a query.
+ * - **A response to a request the client cancelled is dropped.** The module may
+ *   still finish a call it was told to cancel, and MCP has the receiver send
+ *   no response for it.
+ * - **After `dispose()` no new tenant request is started.**
  */
 export class McpFetchBridge {
   private readonly sink: McpFetchSink;
   private readonly host: FetchHost;
   private readonly fromModule = new LineSplitter();
   private readonly fromAgent = new LineSplitter();
+  /** Request ids the client cancelled (as their JSON text): their responses are dropped. */
+  private readonly cancelled = new Set<string>();
   private disposed = false;
 
   constructor(sink: McpFetchSink, options: { perform?: Perform } = {}) {
@@ -603,7 +622,7 @@ export class McpFetchBridge {
   /** A chunk of the client's messages for the module. */
   fromClient(chunk: string | Uint8Array): void {
     for (const line of this.fromAgent.push(chunk)) {
-      this.sink.toServer(line);
+      this.clientLine(line);
     }
   }
 
@@ -619,7 +638,7 @@ export class McpFetchBridge {
   endClient(): void {
     const rest = this.fromAgent.end();
     if (rest !== undefined) {
-      this.sink.toServer(rest);
+      this.clientLine(rest);
     }
   }
 
@@ -629,34 +648,133 @@ export class McpFetchBridge {
     this.host.dispose();
   }
 
-  private serverLine(line: string): void {
-    // Cheap test first: most lines are tool results, which are never parsed.
-    if (line.includes('"opentide/fetch"') || line.includes('"notifications/cancelled"')) {
+  private clientLine(line: string): void {
+    if (line.includes(MCP_FETCH_ID_PREFIX)) {
       let message: unknown;
       try {
         message = JSON.parse(line);
       } catch {
-        message = undefined;
-      }
-      if (isObject(message) && this.takes(message)) {
+        // Fail closed: a line that names the prefix and cannot be read is not passed on.
         return;
       }
+      if (forgesAnAnswer(message)) {
+        return;
+      }
+    }
+    if (line.includes("notifications/cancelled")) {
+      const id = cancelledRequest(line);
+      if (id !== undefined) {
+        this.cancelled.add(id);
+        // Bounded: the oldest are forgotten (a cancelled request that was already answered).
+        while (this.cancelled.size > MAX_CANCELLED) {
+          const oldest = this.cancelled.values().next().value;
+          if (oldest === undefined) break;
+          this.cancelled.delete(oldest);
+        }
+      }
+    }
+    this.sink.toServer(line);
+  }
+
+  private serverLine(line: string): void {
+    if (line.includes("opentide/fetch")) {
+      let message: unknown;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        // Fail closed: a line that mentions the method and cannot be read may
+        // hold a tenant's credentials, and is never forwarded.
+        return;
+      }
+      if (!isObject(message) || message.method === "opentide/fetch") {
+        // A tenant request (or something shaped so it cannot be told from
+        // one): the host's alone, started only while the bridge is live.
+        if (!this.disposed && isObject(message)) {
+          this.host.handle(message);
+        }
+        return;
+      }
+      // Valid JSON that is not a request: an MCP message that mentions the
+      // method in its text (a tool's result), passed on below.
+    }
+    if (line.includes("notifications/cancelled")) {
+      const message = parseObject(line);
+      if (message !== undefined && this.takesWithdrawal(message)) {
+        return;
+      }
+    }
+    if (this.cancelled.size > 0 && this.dropsCancelledResponse(line)) {
+      return;
     }
     this.sink.toClient(line);
   }
 
-  /** Whether *message* is the module's own (a tenant request or its withdrawal), handled. */
-  private takes(message: Record<string, unknown>): boolean {
-    if (this.host.handle(message)) {
-      return true;
+  /** Whether *message* withdraws one of the module's tenant requests: the host's, handled. */
+  private takesWithdrawal(message: Record<string, unknown>): boolean {
+    if (message.method !== "notifications/cancelled") {
+      return false;
     }
-    // A withdrawal of a request already answered: nothing to abort, and not the client's either.
     const params = message.params;
-    return (
-      message.method === "notifications/cancelled" &&
-      isObject(params) &&
-      typeof params.requestId === "string" &&
-      params.requestId.startsWith(MCP_FETCH_ID_PREFIX)
-    );
+    if (!isObject(params) || typeof params.requestId !== "string" || !params.requestId.startsWith(MCP_FETCH_ID_PREFIX)) {
+      return false;
+    }
+    // A withdrawal of a request already answered has nothing to abort, and is not the client's either.
+    this.host.handle(message);
+    return true;
   }
+
+  /** Whether *line* is the response to a request the client cancelled; the id is then forgotten. */
+  private dropsCancelledResponse(line: string): boolean {
+    for (const id of this.cancelled) {
+      if (!line.includes(`"id":${id}`)) {
+        continue;
+      }
+      const message = parseObject(line);
+      if (message !== undefined && message.method === undefined && JSON.stringify(message.id) === id) {
+        this.cancelled.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+/** How many cancelled request ids the bridge remembers. */
+const MAX_CANCELLED = 256;
+
+/** *line* as an object, or undefined. */
+function parseObject(line: string): Record<string, unknown> | undefined {
+  try {
+    const message: unknown = JSON.parse(line);
+    return isObject(message) ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The id (as JSON text) of the request a `notifications/cancelled` line cancels. */
+function cancelledRequest(line: string): string | undefined {
+  const message = parseObject(line);
+  if (message === undefined || message.method !== "notifications/cancelled" || !isObject(message.params)) {
+    return undefined;
+  }
+  const id = message.params.requestId;
+  return typeof id === "string" || typeof id === "number" ? JSON.stringify(id) : undefined;
+}
+
+/**
+ * Whether the client message *message* answers (or is shaped to look like an
+ * answer to) a request of the module's: a response, with no `method`, to an
+ * id that starts with `MCP_FETCH_ID_PREFIX`. A batch holding one is one.
+ */
+function forgesAnAnswer(message: unknown): boolean {
+  if (Array.isArray(message)) {
+    return message.some(forgesAnAnswer);
+  }
+  return (
+    isObject(message) &&
+    typeof message.id === "string" &&
+    message.id.startsWith(MCP_FETCH_ID_PREFIX) &&
+    typeof message.method !== "string"
+  );
 }

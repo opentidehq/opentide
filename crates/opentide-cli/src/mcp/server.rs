@@ -84,7 +84,7 @@ pub struct Server {
 
 /// A tool call's work, handed to the thread that drives the session (WASI):
 /// [`Server::offloading`].
-#[cfg(target_os = "wasi")]
+#[cfg(any(target_os = "wasi", test))]
 pub(crate) type Job = Box<dyn FnOnce() + Send>;
 
 /// What [`Server::run`] stops when the session ends.

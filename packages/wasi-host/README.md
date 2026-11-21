@@ -14,7 +14,7 @@ if (!host.handle(message)) {
 serve.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: FETCH_CAPABILITY })}\n`);
 ```
 
-`opentide mcp start` asks the same way when it is started with `OPENTIDE_FETCH=stdio`: its requests are lines on its stdout, among its MCP messages, with ids `opentide-fetch-1`, `-2`, …, and the answers go in on its stdin. `McpFetchBridge` splits the two on the module's stdio pair, answers the requests with a `FetchHost`, and passes every MCP message through in order, one whole line at a time:
+`opentide mcp start` asks the same way when it is started with `OPENTIDE_FETCH=stdio`: its requests are lines on its stdout, among its MCP messages, with ids `opentide-fetch-<token>-1`, `-2`, …, and the answers go in on its stdin. `McpFetchBridge` splits the two on the module's stdio pair, answers the requests with a `FetchHost`, and passes every MCP message through in order, one whole line at a time:
 
 ```ts
 import { MCP_FETCH_ENVIRONMENT, McpFetchBridge } from "@opentide/wasi-host";
@@ -31,6 +31,13 @@ module.on("close", () => {
   bridge.dispose();
 });
 ```
+
+The requests carry the tenant's credentials (`Authorization` and API-key headers, the body, CA bundles), and the module's stdout is not an MCP stream while `OPENTIDE_FETCH=stdio` is set (MCP's 2026-07-28 revision forbids server requests on stdout), so it must never reach an agent directly. The bridge enforces that:
+
+- a line that mentions `opentide/fetch` and cannot be read as a request of the host's is dropped, never forwarded;
+- a client line that is a response to an `opentide-fetch-` id, or that mentions the prefix and cannot be read, is dropped, so an agent cannot answer a tenant request itself;
+- the module's response to a request the client cancelled is dropped (MCP has no response go out for a cancelled request);
+- after `dispose()` no new tenant request is started.
 
 The protocol is in [opentide serve](https://github.com/opentidehq/opentide/blob/development/docs/cli/serve.md#tenant-requests-the-client-makes-opentidefetch).
 

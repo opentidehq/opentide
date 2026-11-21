@@ -209,7 +209,7 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
 
 /// Drives *session* on the process's runtime and runs the calls' work it hands
 /// over (`Server::offloading`) between its polls, outside the runtime.
-#[cfg(target_os = "wasi")]
+#[cfg(any(target_os = "wasi", test))]
 fn offloaded<F: std::future::Future<Output = std::io::Result<()>>>(
     session: F,
     mut queue: tokio::sync::mpsc::UnboundedReceiver<server::Job>,
@@ -230,6 +230,49 @@ fn offloaded<F: std::future::Future<Output = std::io::Result<()>>>(
             Step::Done(outcome) => return Ok(outcome),
             Step::Work(work) => work(),
         }
+    }
+}
+
+#[cfg(test)]
+mod offload_tests {
+    use super::{offloaded, server};
+
+    /// The WASI build's tool calls run on the thread that drives the session,
+    /// between two polls of it: outside the runtime, where a tenant call may
+    /// block on the process's runtime. Run inside the session's own future the
+    /// same call is refused.
+    #[test]
+    fn a_calls_work_runs_outside_the_runtime_that_drives_the_session() {
+        let (jobs, queue) = tokio::sync::mpsc::unbounded_channel::<server::Job>();
+        let session = async move {
+            // Inside the session: refused, as the WASI build's tenant calls were.
+            assert_eq!(
+                opentide_connectors::runtime::block_on(async { 1 }),
+                Err(opentide_connectors::runtime::INSIDE_THE_RUNTIME.to_owned())
+            );
+            // Handed over: runs outside it, and may block on the runtime.
+            let (done, result) = tokio::sync::oneshot::channel();
+            let job: server::Job = Box::new(move || {
+                let outside = tokio::runtime::Handle::try_current().is_err();
+                let blocked = opentide_connectors::runtime::block_on(async { 7 });
+                let _sent = done.send((outside, blocked));
+            });
+            jobs.send(job).unwrap();
+            let (outside, blocked) = result.await.unwrap();
+            assert!(outside, "the work ran inside a runtime");
+            assert_eq!(blocked, Ok(7));
+            // And more than one, one after the other.
+            for expected in 0..3_u32 {
+                let (done, result) = tokio::sync::oneshot::channel();
+                let job: server::Job = Box::new(move || {
+                    let _sent = done.send(expected);
+                });
+                jobs.send(job).unwrap();
+                assert_eq!(result.await.unwrap(), expected);
+            }
+            Ok(())
+        };
+        offloaded(session, queue).unwrap().unwrap();
     }
 }
 

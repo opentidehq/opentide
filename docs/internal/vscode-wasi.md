@@ -95,7 +95,7 @@ Three long-lived processes, one per protocol, each started from the same compile
 - **Tenant requests from `mcp start`.** With `OPENTIDE_FETCH=stdio` in its environment (the WASI
   build only; the native build ignores it), `mcp start` writes each tenant request as an
   `opentide/fetch` JSON-RPC request line on stdout, among its MCP messages, with the same params as
-  `serve`'s and ids `opentide-fetch-1`, `-2`, …, and reads the answer, a response line with the same
+  `serve`'s and ids `opentide-fetch-<token>-1`, `-2`, …, and reads the answer, a response line with the same
   id, on stdin, among the client's messages ([`opentide mcp`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch)).
   `McpFetchBridge` sits between the module and the MCP client, splits the two kinds of line and
   answers the requests with `FetchHost`:
@@ -124,6 +124,12 @@ Three long-lived processes, one per protocol, each started from the same compile
     private transport between the module and `McpFetchBridge`, which strips those lines before the
     editor or agent sees anything. Never hand that stdout to an MCP client directly. Without the
     variable the stdout is MCP alone.
+  - **The lines carry tenant credentials** (`Authorization`, API-key headers, the body, CA bundles).
+    `McpFetchBridge` never forwards a line that mentions `opentide/fetch` and cannot be read as the
+    host's own, and drops a client line that is a response to an `opentide-fetch-` id, so an agent
+    behind it cannot answer a request itself. The ids are `opentide-fetch-<token>-N` with a random
+    per-process token, so a client that writes to the module's stdin directly cannot guess one
+    either. The bridge also drops the module's response to a request the client cancelled.
   - **Withdrawals** are MCP's `notifications/cancelled {requestId: "opentide-fetch-N"}` from the
     module; `FetchHost` aborts the request, and `McpFetchBridge` does not pass it on. Without the
     bridge, a client that gets these lines must handle `notifications/cancelled` itself.

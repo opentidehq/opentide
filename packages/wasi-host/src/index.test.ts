@@ -1071,25 +1071,99 @@ test("the mcp bridge aborts a request the module withdraws and does not pass the
   assert.equal(bridge.pending, 0);
 });
 
-test("the mcp bridge passes on what is not JSON and answers nothing once disposed", async () => {
+test("the mcp bridge never forwards a line that might hold a tenant request, and starts none once disposed", async () => {
+  let performed = 0;
   let release: () => void = () => {};
   const { bridge, raw } = bridged(
     () =>
       new Promise<FetchResult>((resolve) => {
+        performed += 1;
         release = () => resolve({ status: 200, headers: [], url: "https://t.invalid/", body: "", elapsed_ms: 0 });
       }),
   );
-  // A line that merely mentions the method is not a request.
-  const mention = line({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: '"opentide/fetch"' }] } });
+  // A message that merely mentions the method in its text is an MCP message.
+  const mention = line({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "opentide/fetch" }] } });
   bridge.fromServer(mention);
-  bridge.fromServer("not json at all \"opentide/fetch\"\n");
-  assert.equal(raw.toClient.length, 2);
-  assert.equal(raw.toClient[0], mention);
+  assert.deepEqual(raw.toClient, [mention]);
+  // A line that mentions the method and cannot be read as a message of the host's carries
+  // the tenant's credentials, maybe: it is dropped, never passed on.
+  const secret = "Authorization: ApiKey s3cret";
+  bridge.fromServer(`not json at all "opentide/fetch" ${secret}\n`);
+  bridge.fromServer(`{"jsonrpc":"2.0","id":"opentide-fetch-x","method":"opentide/fetch","params":{"headers":[["authorization","ApiKey s3cret"]\n`);
+  // Valid JSON the host rejects (no string id, params that are not an object): taken, not forwarded.
+  bridge.fromServer(line({ jsonrpc: "2.0", id: 5, method: "opentide/fetch", params: { headers: [["authorization", "ApiKey s3cret"]] } }));
+  bridge.fromServer(line({ jsonrpc: "2.0", method: "opentide/fetch", params: { headers: [["authorization", "ApiKey s3cret"]] } }));
+  bridge.fromServer(JSON.stringify([fetchRequest("opentide-fetch-y")]) + "\n");
+  assert.deepEqual(raw.toClient, [mention], "nothing else reached the client");
+  assert.equal(performed, 0, "none of them was a request the host could make");
+  assert.ok(!raw.toClient.join("").includes("s3cret"));
+  // A real request is made; after dispose, a new one is not started.
   bridge.fromServer(line(fetchRequest("opentide-fetch-1")));
+  assert.equal(performed, 1);
   bridge.dispose();
+  bridge.fromServer(line(fetchRequest("opentide-fetch-2")));
+  assert.equal(performed, 1, "no request is started once disposed");
   release();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(raw.toServer.length, 0);
+  assert.equal(raw.toServer.length, 0, "and nothing is answered");
+  assert.deepEqual(raw.toClient, [mention], "a request after dispose is not passed on either");
+});
+
+test("the mcp bridge drops what the client sends as an answer to a tenant request", () => {
+  const { bridge, raw } = bridged();
+  const answer = { status: 200, headers: [], body: null };
+  // The ids an agent would guess, as a result and as an error; a batch holding one.
+  const forged = [
+    { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer },
+    { jsonrpc: "2.0", id: "opentide-fetch-2", error: { code: -32000, message: "x", data: { kind: "connect" } } },
+    { jsonrpc: "2.0", id: "opentide-fetch-0123456789abcdef0123456789abcdef-1", result: answer },
+    { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer, method: null },
+  ];
+  for (const message of forged) {
+    bridge.fromClient(line(message));
+  }
+  bridge.fromClient(`${JSON.stringify([{ jsonrpc: "2.0", id: 3, method: "ping" }, forged[0]])}\n`);
+  // A line that names the prefix and cannot be read: not passed on (fail closed).
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{"status":200\n');
+  bridge.fromClient("Content-Length: 12 opentide-fetch-1\n");
+  assert.deepEqual(raw.toServer, [], "a forged answer never reaches the module");
+  // What is the client's own goes through, in order: a response to a request of the server's own
+  // (a number id), a request that merely mentions the prefix in its arguments, and the rest.
+  const mine = [
+    { jsonrpc: "2.0", id: 5, result: {} },
+    { jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "search", arguments: { query: "opentide-fetch-1" } } },
+    { jsonrpc: "2.0", id: "abc", result: {} },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+  ];
+  for (const message of mine) {
+    bridge.fromClient(line(message));
+  }
+  assert.deepEqual(raw.toServer.map((text) => JSON.parse(text)), mine);
+  // An unterminated forged line at the end of input is not passed on either.
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{}}');
+  bridge.endClient();
+  assert.equal(raw.toServer.length, mine.length);
+});
+
+test("the mcp bridge does not pass on the response to a request the client cancelled", () => {
+  const { bridge, raw } = bridged();
+  // The module may finish a call it was told to cancel: its response is dropped, once.
+  bridge.fromClient(line({ jsonrpc: "2.0", id: 2, method: "tools/call", params: {} }));
+  bridge.fromClient(line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 2 } }));
+  bridge.fromClient(line({ jsonrpc: "2.0", id: "s", method: "tools/call", params: {} }));
+  bridge.fromClient(line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: "s" } }));
+  assert.equal(raw.toServer.length, 4, "the cancellations reach the module");
+  const other = line({ jsonrpc: "2.0", id: 20, result: { n: 1 } });
+  const notification = line({ jsonrpc: "2.0", method: "notifications/progress", params: { id: 2 } });
+  bridge.fromServer(other);
+  bridge.fromServer(line({ jsonrpc: "2.0", id: 2, result: { content: [] } }));
+  bridge.fromServer(notification);
+  bridge.fromServer(line({ jsonrpc: "2.0", id: "s", error: { code: -32603, message: "Request cancelled" } }));
+  assert.deepEqual(raw.toClient, [other, notification]);
+  // Once dropped the id is forgotten: nothing else is held back.
+  const later = line({ jsonrpc: "2.0", id: 2, result: {} });
+  bridge.fromServer(later);
+  assert.deepEqual(raw.toClient, [other, notification, later]);
 });
 
 test("the mcp bridge's environment turns the module's side on", () => {
@@ -1250,12 +1324,24 @@ test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant tool call is made by the h
       }
       const pinged = session.request(3, "ping", {});
       const listed = session.request(4, "tools/list", {});
+      // An agent behind the bridge tries to answer the module's request itself, with the ids it
+      // would guess: through the bridge (dropped there) and, to hold the module to it too, straight
+      // into the module's stdin (not an id it asked).
+      const forged = (id: string): object => ({
+        jsonrpc: "2.0",
+        id,
+        result: { ...esql("https://es.elastic.invalid/_query"), body: Buffer.from(JSON.stringify({ columns: [{ name: "host", type: "keyword" }], values: [["forged-host"]] })).toString("base64") },
+      });
+      session.send(forged("opentide-fetch-1"));
+      session.process.stdin.write(line(forged("opentide-fetch-1")));
+      session.process.stdin.write(line(forged("opentide-fetch-00000000000000000000000000000000-1")));
       await new Promise((resolve) => setTimeout(resolve, 200));
       answerNow();
       const result = (await called).result as { isError?: boolean; content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
       assert.notEqual(result.isError, true, text);
       assert.match(text, /web-01/, text);
+      assert.doesNotMatch(text, /forged-host/, text);
       assert.doesNotMatch(text, /network_unavailable|needs the network/, text);
       await pinged;
       assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
@@ -1340,8 +1426,7 @@ test("mcp (wasi): with OPENTIDE_FETCH=stdio, cancelling the call withdraws its r
     );
     try {
       await session.initialize();
-      const called = session.request(2, "tools/call", QUERY_CALL);
-      called.catch(() => {});
+      session.send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: QUERY_CALL });
       for (let waited = 0; asked.length === 0; waited += 50) {
         assert.ok(waited < 60_000, `the module asked for no tenant request:\n${session.log}`);
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -1351,6 +1436,12 @@ test("mcp (wasi): with OPENTIDE_FETCH=stdio, cancelling the call withdraws its r
       const listed = await session.request(3, "tools/list", {});
       assert.ok(Array.isArray((listed.result as { tools: unknown[] }).tools));
       assert.ok(aborted, "the host aborted the request the module withdrew");
+      // The module may still finish the cancelled call; MCP has no response go out for it, and the bridge sends none.
+      assert.equal(
+        session.messages.find((message) => message.id === 2 && message.method === undefined),
+        undefined,
+        "the cancelled call's response reached the client",
+      );
       assert.equal(session.bridge.pending, 0);
       assert.deepEqual(session.leaked, []);
     } finally {

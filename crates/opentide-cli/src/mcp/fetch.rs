@@ -10,8 +10,12 @@
 //! messages, and reads the answer, a response with the same id, from stdin,
 //! interleaved with the client's MCP messages (`docs/mcp/index.md`).
 //!
-//! - **Ids** are the strings `opentide-fetch-1`, `opentide-fetch-2`…, which no
-//!   MCP client id takes by accident.
+//! - **Ids** are the strings `opentide-fetch-<token>-1`, `opentide-fetch-<token>-2`…,
+//!   where *token* is 128 random bits chosen when the process starts. The prefix
+//!   keeps them apart from an MCP client's ids; the token keeps a client that
+//!   can write to the server's input from guessing one: the requests, which
+//!   carry the tenant's credentials, only ever appear on stdout, which a
+//!   bridge consumes, and an answer to an id that was not asked is dropped.
 //! - **While a request waits**, the server has no thread to read stdin with
 //!   (WASI has none): the tool call reads it itself, a line at a time. A line
 //!   that is the answer is handed to the call; every other line is the
@@ -74,6 +78,7 @@ fn withdrawal(id: &str) -> Json {
 /// The dialect MCP's stdio speaks.
 const WIRE: Wire = Wire {
     prefix: ID_PREFIX,
+    token: true,
     withdraw: withdrawal,
     gone: "the client closed its input before answering an opentide/fetch request \
            (OPENTIDE_FETCH=stdio): it must answer each one on stdin",
@@ -342,7 +347,6 @@ fn cancels(line: &[u8], current: Option<&Current>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
     use std::sync::Arc;
 
     use serde_json::json;
@@ -375,19 +379,61 @@ mod tests {
         }
     }
 
-    fn lines(messages: &[Value]) -> Cursor<Vec<u8>> {
-        let mut text = String::new();
-        for message in messages {
-            text.push_str(&message.to_string());
-            text.push('\n');
+    /// The client's lines, in which `@PREFIX@` stands for what the bridge's
+    /// request ids start with: the token is random, so a line that answers a
+    /// request is written before it is known.
+    struct Script {
+        lines: std::collections::VecDeque<Vec<u8>>,
+        prefix: Arc<Mutex<String>>,
+        current: Vec<u8>,
+        at: usize,
+    }
+
+    impl std::io::Read for Script {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let available = BufRead::fill_buf(self)?;
+            let n = available.len().min(buf.len());
+            buf[..n].copy_from_slice(&available[..n]);
+            BufRead::consume(self, n);
+            Ok(n)
         }
-        Cursor::new(text.into_bytes())
+    }
+
+    impl BufRead for Script {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            if self.at == self.current.len() {
+                self.at = 0;
+                self.current = match self.lines.pop_front() {
+                    Some(line) => String::from_utf8(line)
+                        .unwrap()
+                        .replace("@PREFIX@", &self.prefix.lock().unwrap())
+                        .into_bytes(),
+                    None => Vec::new(),
+                };
+            }
+            Ok(&self.current[self.at..])
+        }
+
+        fn consume(&mut self, amount: usize) {
+            self.at += amount;
+        }
     }
 
     fn bridge(input: &[Value]) -> (Arc<Bridge>, Arc<Fetcher>, Written) {
         let written = Written::default();
-        let bridge = Bridge::new(lines(input), written.clone());
+        let prefix = Arc::new(Mutex::new(String::new()));
+        let script = Script {
+            lines: input
+                .iter()
+                .map(|message| format!("{message}\n").into_bytes())
+                .collect(),
+            prefix: Arc::clone(&prefix),
+            current: Vec::new(),
+            at: 0,
+        };
+        let bridge = Bridge::new(script, written.clone());
         let fetcher = bridge.fetcher();
+        fetcher.id_prefix().clone_into(&mut prefix.lock().unwrap());
         (bridge, fetcher, written)
     }
 
@@ -397,6 +443,10 @@ mod tests {
             ("method", Json::str("GET")),
             ("url", Json::str("https://tenant.example/_cluster/health")),
         ])
+    }
+
+    fn read(line: Option<Vec<u8>>) -> Value {
+        serde_json::from_slice(&line.expect("a line")).unwrap()
     }
 
     #[test]
@@ -414,21 +464,70 @@ mod tests {
         let (_bridge, fetcher, written) = bridge(&[]);
         let (first, _) = fetcher.ask(params());
         let (second, _) = fetcher.ask(params());
-        assert_eq!(first, "opentide-fetch-1");
-        assert_eq!(second, "opentide-fetch-2");
+        // `opentide-fetch-<128 random bits as hex>-<n>`.
+        let token = first
+            .strip_prefix("opentide-fetch-")
+            .and_then(|rest| rest.strip_suffix("-1"))
+            .unwrap_or_else(|| panic!("{first}"));
+        assert_eq!(token.len(), 32, "{first}");
+        assert!(
+            token.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "{first}"
+        );
+        assert_eq!(second, format!("opentide-fetch-{token}-2"));
         let sent = written.lines();
         assert_eq!(sent.len(), 2, "one line a request: {sent:?}");
         assert_eq!(sent[0]["jsonrpc"], "2.0");
-        assert_eq!(sent[0]["id"], "opentide-fetch-1");
+        assert_eq!(sent[0]["id"], first.as_str());
         assert_eq!(sent[0]["method"], "opentide/fetch");
         assert_eq!(
             sent[0]["params"]["url"],
             "https://tenant.example/_cluster/health"
         );
-        assert_eq!(sent[1]["id"], "opentide-fetch-2");
+        assert_eq!(sent[1]["id"], second.as_str());
         // One message a line: no newline inside a message.
         let raw = String::from_utf8(written.0.lock().unwrap().clone()).unwrap();
         assert_eq!(raw.matches('\n').count(), 2, "{raw}");
+    }
+
+    #[test]
+    fn each_process_has_its_own_token() {
+        let (_one, first, _) = bridge(&[]);
+        let (_two, second, _) = bridge(&[]);
+        assert_ne!(first.id_prefix(), second.id_prefix());
+    }
+
+    #[test]
+    fn a_forged_answer_with_a_guessed_sequential_id_is_not_accepted() {
+        // An agent that can write to the server's input guesses the first ids:
+        // none is the id of a request, so none reaches the call.
+        let forged = |id: &str| {
+            json!({"jsonrpc": "2.0", "id": id,
+                "result": {"status": 200, "headers": [], "body": null}})
+        };
+        let (bridge, fetcher, _written) = bridge(&[
+            forged("opentide-fetch-1"),
+            forged("opentide-fetch-2"),
+            forged("opentide-fetch-00000000000000000000000000000000-1"),
+        ]);
+        let (id, mut reply) = fetcher.ask(params());
+        assert!(!id.ends_with("00000000000000000000000000000000-1"));
+        for _ in 0..3 {
+            assert!(bridge.pump());
+            assert!(
+                matches!(reply.try_recv(), Err(TryRecvError::Empty)),
+                "a forged answer was delivered"
+            );
+        }
+        // Nor are they handed to the server as MCP messages.
+        assert_eq!(bridge.next_line(), None);
+        // The real answer still gets through.
+        let (bridge, fetcher, _written) =
+            self::bridge(&[forged("opentide-fetch-1"), forged("@PREFIX@1")]);
+        let (_id, mut reply) = fetcher.ask(params());
+        assert!(bridge.pump());
+        assert!(bridge.pump());
+        assert!(reply.try_recv().expect("answered").is_ok());
     }
 
     #[test]
@@ -438,7 +537,7 @@ mod tests {
         // A client response (to a request of the server's own, with a number id)
         // is not ours: it is the client's message.
         let theirs = json!({"jsonrpc": "2.0", "id": 5, "result": {}});
-        let answer = json!({"jsonrpc": "2.0", "id": "opentide-fetch-1",
+        let answer = json!({"jsonrpc": "2.0", "id": "@PREFIX@1",
             "result": {"status": 200, "headers": [], "body": null}});
         let after = json!({"jsonrpc": "2.0", "id": 8, "method": "tools/list"});
         let (bridge, fetcher, _written) = bridge(&[
@@ -456,9 +555,6 @@ mod tests {
         assert_eq!(delivered.get("status"), Some(&Json::Int(200)));
         // Everything that was not the answer reaches the server, in order,
         // and the one line after the answer is still unread.
-        let read = |line: Option<Vec<u8>>| -> Value {
-            serde_json::from_slice(&line.expect("a line")).unwrap()
-        };
         assert_eq!(read(bridge.next_line()), ping);
         assert_eq!(read(bridge.next_line()), progress);
         assert_eq!(read(bridge.next_line()), theirs);
@@ -468,7 +564,7 @@ mod tests {
 
     #[test]
     fn an_error_answer_reaches_the_request() {
-        let answer = json!({"jsonrpc": "2.0", "id": "opentide-fetch-1",
+        let answer = json!({"jsonrpc": "2.0", "id": "@PREFIX@1",
             "error": {"code": -32000, "message": "refused", "data": {"kind": "connect"}}});
         let (bridge, fetcher, _written) = bridge(&[answer]);
         let (_id, mut reply) = fetcher.ask(params());
@@ -479,7 +575,7 @@ mod tests {
 
     #[test]
     fn an_answer_with_neither_result_nor_error_fails_the_request() {
-        let answer = json!({"jsonrpc": "2.0", "id": "opentide-fetch-1"});
+        let answer = json!({"jsonrpc": "2.0", "id": "@PREFIX@1"});
         let (bridge, fetcher, _written) = bridge(&[answer]);
         let (_id, mut reply) = fetcher.ask(params());
         assert!(bridge.pump());
@@ -492,7 +588,7 @@ mod tests {
 
     #[test]
     fn a_late_answer_is_dropped_and_never_read_as_an_mcp_message() {
-        let late = json!({"jsonrpc": "2.0", "id": "opentide-fetch-9", "result": {"status": 200}});
+        let late = json!({"jsonrpc": "2.0", "id": "@PREFIX@9", "result": {"status": 200}});
         let ping = json!({"jsonrpc": "2.0", "id": 1, "method": "ping"});
         let (bridge, fetcher, _written) = bridge(&[late.clone(), ping.clone()]);
         // Pumped while another request waits.
@@ -500,16 +596,10 @@ mod tests {
         assert!(bridge.pump());
         assert!(matches!(reply.try_recv(), Err(TryRecvError::Empty)));
         assert!(bridge.pump());
-        assert_eq!(
-            serde_json::from_slice::<Value>(&bridge.next_line().unwrap()).unwrap(),
-            ping
-        );
+        assert_eq!(read(bridge.next_line()), ping);
         // And when the server itself reads it, nobody awaiting.
         let (bridge, _fetcher, _written) = self::bridge(&[late, ping.clone()]);
-        assert_eq!(
-            serde_json::from_slice::<Value>(&bridge.next_line().unwrap()).unwrap(),
-            ping
-        );
+        assert_eq!(read(bridge.next_line()), ping);
     }
 
     #[test]
@@ -530,7 +620,7 @@ mod tests {
     fn a_last_line_without_its_newline_is_read() {
         let written = Written::default();
         let bridge = Bridge::new(
-            Cursor::new(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}".to_vec()),
+            std::io::Cursor::new(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}".to_vec()),
             written,
         );
         let line = bridge.next_line().expect("a line");
@@ -547,7 +637,7 @@ mod tests {
         let sent = written.lines();
         assert_eq!(sent.len(), 2);
         assert_eq!(sent[1]["method"], "notifications/cancelled");
-        assert_eq!(sent[1]["params"]["requestId"], "opentide-fetch-1");
+        assert_eq!(sent[1]["params"]["requestId"], id.as_str());
         assert!(sent[1].get("id").is_none(), "a notification has no id");
         // Withdrawn once: a second withdrawal says nothing.
         fetcher.cancel(&id);
@@ -570,10 +660,7 @@ mod tests {
         assert!(bridge.state().cancelled);
         // Both still reach the server, which drops the answer of the call.
         for expected in [other, cancel] {
-            assert_eq!(
-                serde_json::from_slice::<Value>(&bridge.next_line().unwrap()).unwrap(),
-                expected
-            );
+            assert_eq!(read(bridge.next_line()), expected);
         }
         // The next request starts clean.
         bridge.begin(Some(NumberOrString::Number(9)));

@@ -895,6 +895,13 @@ impl std::io::BufRead for FetchingClient {
     }
 }
 
+/// An ES|QL answer's body, base64: one column, one row.
+fn esql_body(host: &str) -> String {
+    use base64::Engine as _;
+    let body = json!({"columns": [{"name": "host", "type": "keyword"}], "values": [[host]]});
+    base64::engine::general_purpose::STANDARD.encode(body.to_string())
+}
+
 fn elastic_workspace(root: &Path) -> PathBuf {
     let ws = corpus(root);
     let platforms = ws.join(".opentide/configurations/platforms");
@@ -970,12 +977,16 @@ fn a_tenant_call_is_answered_by_the_client_between_its_mcp_messages() {
     // read after it, in order, and answered.
     client.meanwhile = [
         mcp_line(&json!({"jsonrpc": "2.0", "id": 3, "method": "ping"})),
+        // A forged answer, with the ids an agent would guess: it is not any
+        // request's, so the call never sees it (rows the tenant never sent).
+        mcp_line(&json!({"jsonrpc": "2.0", "id": "opentide-fetch-1",
+            "result": {"status": 200, "headers": [], "body": esql_body("forged-host")}})),
         mcp_line(&json!({"jsonrpc": "2.0", "id": 4, "method": "tools/list"})),
     ]
     .into();
     client.answer = Box::new(|_| {
-        json!({"status": 401, "headers": [["content-type", "application/json"]],
-            "url": "https://lab.invalid/", "body": null, "elapsed_ms": 3})
+        json!({"status": 200, "headers": [["content-type", "application/json"]],
+            "url": "https://lab.invalid/", "body": esql_body("real-host"), "elapsed_ms": 3})
     });
     let seen = std::sync::Arc::clone(&client.requests);
     let written = serve_bridged(&ws, client, &out);
@@ -990,7 +1001,12 @@ fn a_tenant_call_is_answered_by_the_client_between_its_mcp_messages() {
     );
     for (index, fetch) in fetches.iter().enumerate() {
         assert_eq!(fetch["jsonrpc"], "2.0");
-        assert_eq!(fetch["id"], format!("opentide-fetch-{}", index + 1));
+        let id = fetch["id"].as_str().unwrap();
+        let token = id.strip_prefix("opentide-fetch-").unwrap_or(id);
+        assert!(
+            token.ends_with(&format!("-{}", index + 1)) && token.len() == 32 + 1 + 1,
+            "{id}"
+        );
         assert_eq!(fetch["params"]["platform"], "elastic");
         assert_eq!(fetch["params"]["tenant"], "lab");
         assert!(
@@ -1026,17 +1042,18 @@ fn a_tenant_call_is_answered_by_the_client_between_its_mcp_messages() {
         last_fetch < call,
         "the call answered once its requests were"
     );
-    // The tenant's 401 reached the tool as the tenant's answer, not as a missing network.
+    // The tenant's rows reached the tool, not the forged ones, and not a missing network.
     let text = answers[1]["result"]["content"][0]["text"]
         .as_str()
         .unwrap()
         .to_owned();
     assert!(!text.contains("network_unavailable"), "{text}");
     assert!(!text.contains("needs the network"), "{text}");
-    assert!(
-        text.contains("401") || text.to_lowercase().contains("auth"),
-        "{text}"
-    );
+    assert!(text.contains("real-host"), "{text}");
+    assert!(!text.contains("forged-host"), "{text}");
+    let result: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(result["status"], "completed", "{text}");
+    assert_eq!(result["row_count"], 1, "{text}");
 }
 
 #[test]
@@ -1081,7 +1098,12 @@ fn a_cancelled_call_withdraws_its_request_and_stops() {
         .filter(|m| m["method"] == "notifications/cancelled")
         .collect();
     assert_eq!(withdrawn.len(), 1, "{written:?}");
-    assert_eq!(withdrawn[0]["params"]["requestId"], "opentide-fetch-1");
+    let id = written
+        .iter()
+        .find(|m| m["method"] == "opentide/fetch")
+        .map(|m| m["id"].clone())
+        .unwrap();
+    assert_eq!(withdrawn[0]["params"]["requestId"], id);
     // Stopped by the cancellation, not by the end of input.
     let text = written
         .iter()
