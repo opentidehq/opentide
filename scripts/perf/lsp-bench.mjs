@@ -290,6 +290,10 @@ async function oneRun(runIndex) {
     capabilities: capabilities(),
     initializationOptions: worker ? { workspace: suppliedWorkspace() } : undefined,
   });
+  // What the server does decides how its diagnostics are read: a client that pulls gets pull
+  // diagnostics only from a server that advertises them, else the server pushes.
+  const diagMode = opts.diag === 'pull' && init.msg.result?.capabilities?.diagnosticProvider ? 'pull' : 'push';
+  out.diag_mode = diagMode;
   out.init_ms = init.ms;
   out.init_bytes = init.bytes;
   out.server = init.msg.result?.serverInfo;
@@ -297,10 +301,10 @@ async function oneRun(runIndex) {
 
   // didOpen, then the first diagnostics: pulled as the extension does, or pushed.
   const tOpen = performance.now();
-  const pushed = opts.diag === 'push' ? nextPublish() : null;
+  const pushed = diagMode === 'push' ? nextPublish() : null;
   notify('textDocument/didOpen', { textDocument: { uri, languageId: 'yaml', version: 1, text } });
   let first;
-  if (opts.diag === 'pull') {
+  if (diagMode === 'pull') {
     first = await request('textDocument/diagnostic', { textDocument: { uri } });
     out.diag_count = first.msg.result?.items?.length ?? 0;
   } else {
@@ -318,7 +322,7 @@ async function oneRun(runIndex) {
   let wsStop = false;
   let wsLoop = Promise.resolve();
   const advertised = init.msg.result?.capabilities?.diagnosticProvider?.workspaceDiagnostics === true;
-  if (opts.wspull === 'on' || (opts.wspull === 'auto' && opts.diag === 'pull' && advertised)) {
+  if (opts.wspull === 'on' || (opts.wspull === 'auto' && diagMode === 'pull' && advertised)) {
     wsLoop = (async () => {
       let previous = [];
       while (!wsStop) {
@@ -349,9 +353,9 @@ async function oneRun(runIndex) {
   out.edit_diag_ms = [];
   for (let i = 0; i < Math.min(warmCount, 5); i += 1) {
     const t = performance.now();
-    const pushedNext = opts.diag === 'push' ? nextPublish() : null;
+    const pushedNext = diagMode === 'push' ? nextPublish() : null;
     await edit(i % 2 === 0 ? 'add' : 'del');
-    const r = opts.diag === 'pull' ? await request('textDocument/diagnostic', { textDocument: { uri } }) : await pushedNext;
+    const r = diagMode === 'pull' ? await request('textDocument/diagnostic', { textDocument: { uri } }) : await pushedNext;
     out.edit_diag_ms.push(r.t1 - t);
   }
   if ((Math.min(warmCount, 5)) % 2 === 1) await edit('del'); // leave the text as it was
@@ -473,7 +477,7 @@ const report = {
 if (opts.out) writeFileSync(opts.out, JSON.stringify(report, null, 1));
 
 const f = (x) => (x === null || x === undefined ? '    -' : x.toFixed(1).padStart(7));
-console.log(`\n== ${opts.label}  (${report.machine.cpus} cpus, ${runs} runs, ${results.length - ok.length} failed, diag=${opts.diag} watch=${opts.watch})`);
+console.log(`\n== ${opts.label}  (${report.machine.cpus} cpus, ${runs} runs, ${results.length - ok.length} failed, diag=${ok[0]?.diag_mode ?? opts.diag} watch=${opts.watch})`);
 console.log(`init ms           p50 ${f(summary.init_ms.p50)}  p95 ${f(summary.init_ms.p95)}  max ${f(summary.init_ms.max)}`);
 console.log(`first diag ms     p50 ${f(summary.first_diag_ms.p50)}  p95 ${f(summary.first_diag_ms.p95)}  max ${f(summary.first_diag_ms.max)}   (${summary.diag_count} diagnostics)`);
 console.log(`edit->diag ms     p50 ${f(summary.edit_diag_ms.p50)}  p95 ${f(summary.edit_diag_ms.p95)}  max ${f(summary.edit_diag_ms.max)}`);
