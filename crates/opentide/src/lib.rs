@@ -92,7 +92,9 @@
 //! live and deploys a compiled rule, as `opentide query`,
 //! `opentide validate query --live` and `opentide deploy` do. Its operations
 //! are `async`, on tokio; [`connectors::block_on`] runs one from synchronous
-//! code. A `wasm32` build takes the default features.
+//! code. The default features do not build for `wasm32-unknown-unknown`: a
+//! build for it sets `default-features = false` and the features it needs, as
+//! `opentide-wasm` does (`analysis` and `lsp`).
 //!
 //! ## Errors
 //!
