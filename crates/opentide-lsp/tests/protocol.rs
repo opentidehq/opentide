@@ -1240,6 +1240,53 @@ fn a_workspace_pull_analyses_each_closed_file_once() {
     assert_eq!(closed_analyses(&mut lsp), 2, "a configuration change kept the old analysis");
 }
 
+/// The client pulls again two seconds after every answer: when nothing changed
+/// since, the answer is the last one, not made again, and an edit (or any other
+/// change of what an analysis reads) makes it again.
+#[test]
+fn a_workspace_pull_with_nothing_changed_is_answered_from_the_last_report() {
+    let scratch = workspace("workspace-pull-report", true);
+    let capabilities = json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true } }
+    });
+    let (mut lsp, _) =
+        start(json!({ "capabilities": capabilities, "rootUri": file_uri(&scratch.0) }));
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let objective_text = fixture(OBJECTIVE);
+    open(&mut lsp, &objective, "opentide-yaml", &objective_text);
+    let hits = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["workspaceReportHits"]
+            .as_u64()
+            .unwrap()
+    };
+    let pull = |lsp: &mut Lsp, previous: Value| {
+        lsp.request("workspace/diagnostic", json!({ "previousResultIds": previous }))
+    };
+    let first = pull(&mut lsp, json!([]));
+    assert_eq!(hits(&mut lsp), 0);
+    let rule = &first["result"]["items"][0];
+    let again = pull(&mut lsp, json!([]));
+    assert_eq!(hits(&mut lsp), 1, "the second pull was made again");
+    assert_eq!(first["result"], again["result"], "a cached report differs");
+    // What the client sends back, the cached report answers as unchanged.
+    let third = pull(&mut lsp, json!([{ "uri": rule["uri"], "value": rule["resultId"] }]));
+    assert_eq!(hits(&mut lsp), 2);
+    assert_eq!(third["result"]["items"][0]["kind"], "unchanged", "{third}");
+
+    // A keystroke in an open object: what the workspace's findings are may
+    // have changed, so the report is made again.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": objective, "version": 2 },
+                "contentChanges": [{ "text": format!("{objective_text}\n# typed\n") }] }),
+    );
+    pull(&mut lsp, json!([]));
+    assert_eq!(hits(&mut lsp), 2, "a pull after an edit came from the old report");
+    pull(&mut lsp, json!([]));
+    assert_eq!(hits(&mut lsp), 3);
+}
+
 /// The diagnostics requests are the slow ones on a large workspace: what the
 /// editor asks in the same batch (a hover, a completion) is answered first,
 /// whatever the order they arrived in.
