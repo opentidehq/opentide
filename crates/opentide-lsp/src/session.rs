@@ -39,6 +39,10 @@ pub(crate) struct Document {
 pub(crate) struct ClientCaps {
     /// The client watches files for the server (`didChangeWatchedFiles`).
     pub watch_files: bool,
+    /// A watcher may be a folder and a pattern under it
+    /// (`relativePatternSupport`): the way to watch a folder outside every
+    /// workspace folder.
+    pub relative_watch_patterns: bool,
     /// The client pulls diagnostics and can be told to pull again: the server
     /// then publishes none (#185 P0.8).
     pub pull_diagnostics: bool,
@@ -579,6 +583,31 @@ impl Supplied {
     }
 }
 
+/// What a watched folder is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScopeKind {
+    /// Object files `paths.toml` put elsewhere than `objects/`.
+    Objects,
+    /// Configuration files layered in from a folder outside the root.
+    Configuration,
+}
+
+/// A folder the client is asked to watch, and the files under it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct WatchTarget {
+    folder: PathBuf,
+    pattern: &'static str,
+}
+
+/// The registration that watches the loaded workspaces' own folders.
+#[derive(Default)]
+struct Watched {
+    targets: Vec<WatchTarget>,
+    /// The registration's id while one is in place.
+    id: Option<String>,
+    serial: u32,
+}
+
 #[derive(Default)]
 pub(crate) struct Session {
     pub docs: HashMap<String, Document>,
@@ -613,6 +642,9 @@ pub(crate) struct Session {
     /// How many workspace pulls were answered from [`workspace_report`](Self::workspace_report),
     /// for the tests (`opentide/__stats`).
     pub workspace_report_hits: Cell<u64>,
+    /// The folders the client was last asked to watch beyond the fixed
+    /// globs ([`sync_watchers`](Self::sync_watchers)).
+    watched: RefCell<Watched>,
     batch: Cell<u64>,
     /// The root whose catalogs and declared datasets the engine has
     /// installed; `None` until the first request, and again after they
@@ -1013,6 +1045,138 @@ impl Session {
     pub(crate) fn reactivate(&self) {
         self.active.set(None);
         self.touch();
+    }
+
+    /// The folders the loaded workspaces read that the fixed globs
+    /// ([`initialized`](crate::handlers)) do not reach: an object folder
+    /// `paths.toml` put outside `objects/`, and a configuration folder
+    /// layered in from outside the root.
+    fn watch_targets(&self) -> Vec<WatchTarget> {
+        let mut targets = Vec::new();
+        for root in &self.roots {
+            let scope = root
+                .checks
+                .try_borrow()
+                .map(|checks| checks.watch_scope())
+                .unwrap_or_default();
+            let objects = root.path.join("objects");
+            for folder in scope.object_folders {
+                if !folder.starts_with(&objects) {
+                    targets.push(WatchTarget {
+                        folder,
+                        pattern: "**",
+                    });
+                }
+            }
+            for folder in scope.configuration_folders {
+                if !folder.starts_with(&root.path) {
+                    targets.push(WatchTarget {
+                        folder,
+                        pattern: "**/*.toml",
+                    });
+                }
+            }
+        }
+        targets.sort();
+        targets.dedup();
+        targets
+    }
+
+    /// Ask the client to watch the folders the loaded workspaces read
+    /// ([`watch_targets`](Self::watch_targets)), and to stop watching the
+    /// ones they no longer read: asked again when `paths.toml` moves a folder
+    /// or a layer comes or goes. Nothing is sent while they are the same.
+    pub(crate) fn sync_watchers(&self) {
+        use lsp_types::notification::Notification as _;
+        if !self.caps.watch_files {
+            return;
+        }
+        let targets = self.watch_targets();
+        let mut watched = self.watched.borrow_mut();
+        if watched.targets == targets {
+            return;
+        }
+        if let Some(id) = watched.id.take() {
+            self.send_request::<lsp_types::request::UnregisterCapability>(
+                lsp_types::UnregistrationParams {
+                    unregisterations: vec![lsp_types::Unregistration {
+                        id,
+                        method: lsp_types::notification::DidChangeWatchedFiles::METHOD.into(),
+                    }],
+                },
+            );
+        }
+        watched.targets.clone_from(&targets);
+        if targets.is_empty() {
+            return;
+        }
+        watched.serial += 1;
+        let id = format!("opentide-watch-folders-{}", watched.serial);
+        watched.id = Some(id.clone());
+        let watchers = targets
+            .iter()
+            .map(|target| lsp_types::FileSystemWatcher {
+                glob_pattern: self.watch_glob(target),
+                kind: None,
+            })
+            .collect();
+        self.send_request::<lsp_types::request::RegisterCapability>(
+            lsp_types::RegistrationParams {
+                registrations: vec![lsp_types::Registration {
+                    id,
+                    method: lsp_types::notification::DidChangeWatchedFiles::METHOD.into(),
+                    register_options: serde_json::to_value(
+                        lsp_types::DidChangeWatchedFilesRegistrationOptions { watchers },
+                    )
+                    .ok(),
+                }],
+            },
+        );
+    }
+
+    /// `target` as a watcher: a pattern under its folder, or, for a client
+    /// that has no such pattern, a glob on the folder's whole path.
+    fn watch_glob(&self, target: &WatchTarget) -> lsp_types::GlobPattern {
+        let folder = target.folder.display().to_string();
+        let uri = crate::uri::path_to_uri(&folder)
+            .parse::<lsp_types::Uri>()
+            .ok();
+        match uri {
+            Some(uri) if self.caps.relative_watch_patterns => {
+                lsp_types::GlobPattern::Relative(lsp_types::RelativePattern {
+                    base_uri: lsp_types::OneOf::Right(uri),
+                    pattern: target.pattern.to_string(),
+                })
+            }
+            _ => lsp_types::GlobPattern::String(format!(
+                "{}/{}",
+                folder.replace('\\', "/").trim_end_matches('/'),
+                target.pattern
+            )),
+        }
+    }
+
+    /// The roots whose workspace reads the folder `path` is in, for a
+    /// folder [`sync_watchers`](Self::sync_watchers) asks about; `None` when
+    /// no root does.
+    pub(crate) fn scoped_roots(&self, path: &str) -> Option<Vec<(usize, ScopeKind)>> {
+        let mut found = Vec::new();
+        for (index, root) in self.roots.iter().enumerate() {
+            let Ok(checks) = root.checks.try_borrow() else {
+                continue;
+            };
+            let scope = checks.watch_scope();
+            let resolved = checks.resolve(Path::new(path));
+            let inside = |folder: &PathBuf| {
+                Path::new(path).starts_with(folder) || resolved.starts_with(folder)
+            };
+            if scope.object_folders.iter().any(inside) {
+                found.push((index, ScopeKind::Objects));
+            } else if scope.configuration_folders.iter().any(inside) {
+                found.push((index, ScopeKind::Configuration));
+            }
+        }
+        (!found.is_empty()).then_some(found)
     }
 
     /// Something an analysis reads changed.

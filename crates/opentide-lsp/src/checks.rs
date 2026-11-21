@@ -111,6 +111,15 @@ fn open_options(root: &Path) -> Options {
     }
 }
 
+/// The folders the loaded workspace reads that a fixed glob does not name:
+/// where `paths.toml` put the object families, and the configuration folders
+/// layered in (a parent's `.opentide/configurations/`).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct WatchScope {
+    pub object_folders: Vec<PathBuf>,
+    pub configuration_folders: Vec<PathBuf>,
+}
+
 /// A root's workspace, loaded once and kept current: what changed since
 /// (an edit, a watcher's event, a file the host supplied) is handed to
 /// [`Workspace::invalidate`] before the next check.
@@ -158,6 +167,24 @@ impl Default for RootChecks {
 }
 
 impl RootChecks {
+    /// The folders the workspace reads, once loaded (none before), as the
+    /// configuration resolved them: a watcher is asked for each, and asked
+    /// again when `paths.toml` moves one.
+    pub(crate) fn watch_scope(&self) -> WatchScope {
+        let Some(workspace) = self.workspace.as_ref() else {
+            return WatchScope::default();
+        };
+        let configuration = workspace.configuration();
+        WatchScope {
+            object_folders: configuration
+                .object_folders
+                .iter()
+                .filter_map(|folder| folder.path.clone())
+                .collect(),
+            configuration_folders: configuration.folders.clone(),
+        }
+    }
+
     /// What the workspace read and parsed so far, once loaded.
     #[cfg(all(debug_assertions, not(fuzzing)))]
     pub(crate) fn stats(&self) -> Option<opentide_workspace::Stats> {

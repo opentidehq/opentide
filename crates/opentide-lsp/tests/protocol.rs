@@ -352,6 +352,7 @@ fn files_changed_on_disk_reach_the_open_documents() {
             "**/objects",
             "**/objects/**",
             "**/.opentide/configurations/**/*.toml",
+            "**/.opentide/states/deployment/*.json",
         ]
     );
     lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
@@ -1362,6 +1363,297 @@ fn without_a_watcher_a_workspace_pull_follows_a_configuration_written_on_disk() 
     std::fs::remove_file(configurations.join("deployment.toml")).unwrap();
     let codes = workspace_pull_codes(&mut lsp);
     assert!(!codes.contains(&unknown), "{codes:?}");
+}
+
+/// An object folder `paths.toml` moved is read by `validate`, not by the
+/// object index: a file changed there changes what the workspace pull says of
+/// a rule that references it. The server asks the client to watch the folder,
+/// and the event it sends makes the pull follow the disk.
+#[test]
+fn a_moved_object_folders_file_changed_on_disk_is_followed_by_the_next_pull() {
+    let scratch = workspace("workspace-pull-moved-folder", false);
+    let root = &scratch.0;
+    let configurations = root.join(".opentide/configurations");
+    std::fs::create_dir_all(&configurations).unwrap();
+    std::fs::write(
+        configurations.join("paths.toml"),
+        "[paths.objects]\nobjective = \"objectives-moved/\"\n",
+    )
+    .unwrap();
+    let moved = root.join("objectives-moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    let objective = moved.join("objective-1.0.yaml");
+    std::fs::write(&objective, fixture(OBJECTIVE)).unwrap();
+
+    let capabilities = json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": {
+            "diagnostics": { "refreshSupport": true },
+            "didChangeWatchedFiles": { "dynamicRegistration": true, "relativePatternSupport": true }
+        }
+    });
+    let (mut lsp, _) = start(json!({ "capabilities": capabilities, "rootUri": file_uri(root) }));
+    let invalid = "invalid_ref".to_string();
+    let codes = workspace_pull_codes(&mut lsp);
+    assert!(!codes.contains(&invalid), "{codes:?}");
+
+    std::fs::remove_file(&objective).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&objective), "type": 3 }] }),
+    );
+    let codes = workspace_pull_codes(&mut lsp);
+    assert!(
+        codes.contains(&invalid),
+        "the pull did not follow the moved folder's file: {codes:?}"
+    );
+}
+
+/// Every request the server sent the client since the last call: a request
+/// the test sends in between is answered after them.
+fn server_requests(lsp: &mut Lsp) -> Vec<Value> {
+    send(lsp, 7000, "opentide/__stats", Value::Null);
+    until_response(lsp, 7000)
+        .into_iter()
+        .filter(|m| m.get("method").is_some() && m.get("id").is_some())
+        .collect()
+}
+
+/// The watchers of the registrations among `requests`, as `(base, pattern)`:
+/// a relative pattern's folder and glob, or `("", glob)` for a string.
+fn registered_watchers(requests: &[Value]) -> Vec<(String, String)> {
+    let mut watchers = Vec::new();
+    for request in requests {
+        if request["method"] != "client/registerCapability" {
+            continue;
+        }
+        for registration in request["params"]["registrations"].as_array().unwrap() {
+            for watcher in registration["registerOptions"]["watchers"]
+                .as_array()
+                .unwrap()
+            {
+                let glob = &watcher["globPattern"];
+                watchers.push(match glob.as_str() {
+                    Some(text) => (String::new(), text.to_string()),
+                    None => (
+                        glob["baseUri"].as_str().unwrap().to_string(),
+                        glob["pattern"].as_str().unwrap().to_string(),
+                    ),
+                });
+            }
+        }
+    }
+    watchers
+}
+
+/// What the workspace's own folders ask: the watchers outside the scratch
+/// folder's parent, whose `.opentide/configurations/` is layered in whatever
+/// is above the test's folder.
+fn own_watchers(requests: &[Value], root: &std::path::Path) -> Vec<(String, String)> {
+    let layered = root.parent().unwrap().join(".opentide/configurations");
+    let by_path = format!(
+        "{}/**/*.toml",
+        layered.display().to_string().replace('\\', "/")
+    );
+    let layered = file_uri(&layered);
+    registered_watchers(requests)
+        .into_iter()
+        .filter(|(base, glob)| !(*base == layered && glob == "**/*.toml") && *glob != by_path)
+        .collect()
+}
+
+fn watching_relative() -> Value {
+    json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": {
+            "diagnostics": { "refreshSupport": true },
+            "didChangeWatchedFiles": { "dynamicRegistration": true, "relativePatternSupport": true }
+        }
+    })
+}
+
+/// `paths.toml` in `root`, naming where the objectives are.
+fn move_objectives(root: &std::path::Path, folder: &str) -> std::path::PathBuf {
+    let configurations = root.join(".opentide/configurations");
+    std::fs::create_dir_all(&configurations).unwrap();
+    std::fs::write(
+        configurations.join("paths.toml"),
+        format!("[paths.objects]\nobjective = \"{folder}/\"\n"),
+    )
+    .unwrap();
+    root.join(folder)
+}
+
+/// The folders the loaded workspace reads (where `paths.toml` put the
+/// objects, a parent's configuration) are watched, from the moment the
+/// workspace is loaded, and again when `paths.toml` moves one.
+#[test]
+fn the_folders_a_workspace_reads_are_watched_and_watched_again_when_they_move() {
+    let scratch = workspace("workspace-watch-folders", false);
+    let root = &scratch.0;
+    let moved = move_objectives(root, "objectives-moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    std::fs::write(moved.join("objective-1.0.yaml"), fixture(OBJECTIVE)).unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
+    // Nothing is known of the folders before the workspace loads.
+    let first = server_requests(&mut lsp);
+    let fixed = registered_watchers(&first);
+    assert!(
+        fixed
+            .iter()
+            .any(|(_, glob)| glob == "**/.opentide/states/deployment/*.json"),
+        "the state shards are not watched: {fixed:?}"
+    );
+    assert!(
+        !fixed
+            .iter()
+            .any(|(base, _)| base.contains("objectives-moved")),
+        "{fixed:?}"
+    );
+
+    workspace_pull_codes(&mut lsp);
+    let after_load = server_requests(&mut lsp);
+    assert_eq!(
+        own_watchers(&after_load, root),
+        vec![(file_uri(&moved), "**".to_string())],
+        "{after_load:#?}"
+    );
+
+    // Nothing changed: nothing is asked again.
+    workspace_pull_codes(&mut lsp);
+    assert!(server_requests(&mut lsp).is_empty());
+
+    // `paths.toml` moves the objectives: the old folder is let go of.
+    let elsewhere = move_objectives(root, "objectives-elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{
+            "uri": file_uri(&root.join(".opentide/configurations/paths.toml")),
+            "type": 2
+        }] }),
+    );
+    workspace_pull_codes(&mut lsp);
+    let moved_again = server_requests(&mut lsp);
+    let methods: Vec<&str> = moved_again
+        .iter()
+        .map(|m| m["method"].as_str().unwrap())
+        .filter(|method| method.contains("Capability"))
+        .collect();
+    assert_eq!(
+        methods,
+        ["client/unregisterCapability", "client/registerCapability"],
+        "{moved_again:#?}"
+    );
+    assert_eq!(
+        own_watchers(&moved_again, root),
+        vec![(file_uri(&elsewhere), "**".to_string())]
+    );
+    let old = moved_again
+        .iter()
+        .find(|m| m["method"] == "client/unregisterCapability")
+        .unwrap()["params"]["unregisterations"][0]["id"]
+        .clone();
+    let earlier = after_load[0]["params"]["registrations"][0]["id"].clone();
+    assert_eq!(old, earlier, "another registration was let go of");
+}
+
+/// A client that cannot watch a folder by a base and a pattern is asked by
+/// the folder's whole path.
+#[test]
+fn a_client_without_relative_patterns_is_asked_to_watch_by_a_path_glob() {
+    let scratch = workspace("workspace-watch-glob", false);
+    let moved = move_objectives(&scratch.0, "objectives-moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true }, "didChangeWatchedFiles": { "dynamicRegistration": true } }
+    }, "rootUri": file_uri(&scratch.0) }));
+    server_requests(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    let watchers = own_watchers(&server_requests(&mut lsp), &scratch.0);
+    assert_eq!(
+        watchers,
+        vec![(
+            String::new(),
+            format!("{}/**", moved.display().to_string().replace('\\', "/"))
+        )]
+    );
+}
+
+/// A configuration folder layered in from above the root is watched, and a
+/// change in it is followed by the next pull.
+#[test]
+fn a_parents_configuration_folder_is_watched_and_followed() {
+    let scratch = workspace("workspace-watch-parent", false);
+    let root = scratch.0.join("child");
+    std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+    std::fs::write(root.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let parent = scratch.0.join(".opentide/configurations");
+    std::fs::create_dir_all(&parent).unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(&root) }));
+    server_requests(&mut lsp);
+    let unknown = "config_enum_unknown".to_string();
+    assert!(!workspace_pull_codes(&mut lsp).contains(&unknown));
+    let watchers = registered_watchers(&server_requests(&mut lsp));
+    assert!(
+        watchers.contains(&(file_uri(&parent), "**/*.toml".to_string())),
+        "{watchers:?}"
+    );
+
+    std::fs::write(parent.join("deployment.toml"), DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&parent.join("deployment.toml")), "type": 1 }] }),
+    );
+    let codes = workspace_pull_codes(&mut lsp);
+    assert!(
+        codes.contains(&unknown),
+        "the parent's configuration was not followed: {codes:?}"
+    );
+}
+
+/// A deployment state shard is read by `validate` alone: its event makes the
+/// workspace's findings be made again, and no analysis.
+#[test]
+fn a_state_shard_written_on_disk_makes_the_next_pull_be_made_again() {
+    let scratch = workspace("workspace-watch-shard", true);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
+    let objective = file_uri(&root.join("objects/objectives/objective-1.0.yaml"));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    let stat = |lsp: &mut Lsp, key: &str| {
+        lsp.request("opentide/__stats", Value::Null)["result"][key]
+            .as_u64()
+            .unwrap()
+    };
+    workspace_pull_codes(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    assert_eq!(stat(&mut lsp, "workspaceReportHits"), 1);
+    let analyses = stat(&mut lsp, "closedAnalyses");
+
+    let shards = root.join(".opentide/states/deployment");
+    std::fs::create_dir_all(&shards).unwrap();
+    let shard = shards.join("00000000-0000-4000-8003-000000000001.json");
+    std::fs::write(&shard, "{}").unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&shard), "type": 1 }] }),
+    );
+    workspace_pull_codes(&mut lsp);
+    assert_eq!(
+        stat(&mut lsp, "workspaceReportHits"),
+        1,
+        "the pull after a shard was written came from the old report"
+    );
+    assert_eq!(
+        stat(&mut lsp, "closedAnalyses"),
+        analyses,
+        "a shard changes no analysis"
+    );
 }
 
 /// What nothing reports (no watcher) is never served from what was kept:

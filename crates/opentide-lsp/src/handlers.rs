@@ -5,7 +5,7 @@
 //! (P1.5).
 
 use crate::server::{host_info, path_to_uri_value};
-use crate::session::{Document, Root, Session, path_key};
+use crate::session::{Document, Root, ScopeKind, Session, path_key};
 use crate::uri::{path_to_uri, uri_to_path};
 use lsp_server::{ErrorCode, Request, Response};
 use lsp_types as lsp;
@@ -433,6 +433,10 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
             .and_then(|w| w.did_change_watched_files.as_ref())
             .and_then(|w| w.dynamic_registration)
             .unwrap_or(false),
+        relative_watch_patterns: workspace
+            .and_then(|w| w.did_change_watched_files.as_ref())
+            .and_then(|w| w.relative_pattern_support)
+            .unwrap_or(false),
         pull_diagnostics: text.and_then(|t| t.diagnostic.as_ref()).is_some() && diagnostic_refresh,
         plaintext_hover: plaintext_only(
             text.and_then(|t| t.hover.as_ref())
@@ -610,6 +614,8 @@ fn initialized(session: &mut Session) {
         "**/objects".to_string(),
         "**/objects/**".to_string(),
         "**/.opentide/configurations/**/*.toml".to_string(),
+        // The deployment state shards `validate` checks.
+        "**/.opentide/states/deployment/*.json".to_string(),
     ]
     .into_iter()
     .map(|glob| lsp::FileSystemWatcher {
@@ -832,6 +838,29 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.touch();
                 everything = true;
             }
+        } else if let Some(scoped) = session.scoped_roots(&path) {
+            // A folder `paths.toml` moved the objects to, or one layered in
+            // from outside the root: the workspace reads it, the object index
+            // does not.
+            for (root, kind) in scoped {
+                session.roots[root]
+                    .checks
+                    .borrow_mut()
+                    .changed([PathBuf::from(&path)]);
+                match kind {
+                    ScopeKind::Objects => session.touch_object(),
+                    ScopeKind::Configuration => session.touch(),
+                }
+            }
+            everything = true;
+        } else if is_state_shard(&normalized) {
+            // Only `validate` reads a deployment state shard: the findings
+            // it keeps are out of date, no analysis is.
+            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
+                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
+            }
+            session.touch_object();
+            everything = true;
         } else if Session::is_visibility(uri) {
             if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
                 root.checks.borrow_mut().changed([PathBuf::from(&path)]);
@@ -857,6 +886,14 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
     if everything {
         session.mark_all();
     }
+}
+
+/// Whether `path` (with `/` separators) is a deployment state shard.
+fn is_state_shard(path: &str) -> bool {
+    path.contains("/.opentide/states/deployment/")
+        && std::path::Path::new(path)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
 }
 
 /// `opentide/didChangeWorkspace`: merge the change into the supplied

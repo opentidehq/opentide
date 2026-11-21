@@ -654,6 +654,9 @@ fn document_uri(params: &Value) -> Option<String> {
 fn flush(session: &mut Session, writer: &mut dyn Write, state: Lifecycle) -> io::Result<()> {
     if state == Lifecycle::Running {
         session.flush_publishes();
+        // The workspace may have loaded, or `paths.toml` moved a folder, in
+        // this batch.
+        session.sync_watchers();
     } else {
         session.discard_publishes();
     }
