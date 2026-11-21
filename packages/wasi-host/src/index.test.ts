@@ -751,6 +751,97 @@ for (const server of SERVERS) {
   );
 }
 
+// The protocol versions `opentide mcp start` speaks: the VS Code bridge serves
+// the WASI module to editors on MCP 2026-07-28, which has no `initialize`. The
+// legacy handshake negotiates the versions before it, `server/discover`
+// answers the revisions it supports, and a request that carries its version
+// and capabilities in `_meta` is answered with no handshake at all.
+for (const server of SERVERS) {
+  const name = typeof server === "string" ? server.split(":")[0] : server.name;
+  test(
+    `mcp (${name}): initialize negotiates the legacy versions, server/discover and stateless requests answer 2026-07-28`,
+    { skip: typeof server === "string" ? server : false, timeout: 180_000 },
+    async () => {
+      const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-")));
+      const ws = join(scratch, "ws");
+      cpSync(join(root, "tests/golden/fixtures/tenants"), ws, { recursive: true });
+      const { command, args } = server as Server;
+      const child = spawn(command, [...args, "mcp", "start"], {
+        cwd: ws,
+        env: { PATH: process.env.PATH ?? "", HOME: ws, PWD: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" },
+      });
+      let buffer = "";
+      const answers = new Map<number, (message: Record<string, unknown>) => void>();
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        buffer += chunk;
+        for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+          const message = JSON.parse(buffer.slice(0, end)) as Record<string, unknown>;
+          buffer = buffer.slice(end + 1);
+          answers.get(message.id as number)?.(message);
+        }
+      });
+      let next = 0;
+      const call = (method: string, params: object): Promise<Record<string, unknown>> => {
+        next += 1;
+        const id = next;
+        const answered = new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error(`no answer to ${method}`)), 60_000);
+          answers.set(id, (message) => {
+            clearTimeout(timer);
+            resolve(message);
+          });
+        });
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+        return answered;
+      };
+      const meta = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+      };
+      try {
+        // Without `initialize` and without them, a request is refused, naming what it lacks.
+        const refused = await call("tools/list", {});
+        assert.equal((refused.error as { code: number }).code, -32602, JSON.stringify(refused));
+        assert.match((refused.error as { message: string }).message, /io\.modelcontextprotocol\/protocolVersion/);
+        // `server/discover` (no handshake before it) lists what the server supports.
+        const discovered = (await call("server/discover", { _meta: meta })).result as {
+          supportedVersions: string[];
+          capabilities: Record<string, unknown>;
+          _meta: Record<string, { name: string }>;
+        };
+        assert.deepEqual(discovered.supportedVersions, ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]);
+        assert.ok("tools" in discovered.capabilities, JSON.stringify(discovered));
+        assert.equal(discovered._meta["io.modelcontextprotocol/serverInfo"].name, "opentide");
+        // A stateless request: its version and capabilities in `_meta`.
+        const listed = (await call("tools/list", { _meta: meta })).result as { tools: { name: string }[] };
+        assert.ok(listed.tools.length > 0 && listed.tools.some((tool) => tool.name === "search"), JSON.stringify(listed));
+        // Legacy `initialize`: the version asked for when it is known, else the newest that has `initialize`.
+        for (const [asked, answered] of [
+          ["2024-11-05", "2024-11-05"],
+          ["2025-06-18", "2025-06-18"],
+          ["2025-11-25", "2025-11-25"],
+          ["2026-07-28", "2025-11-25"],
+        ]) {
+          const initialized = await call("initialize", {
+            protocolVersion: asked,
+            capabilities: {},
+            clientInfo: { name: "wasi-host-test", version: "0" },
+          });
+          assert.equal((initialized.result as { protocolVersion: string }).protocolVersion, answered, asked);
+        }
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+        // Still serving after the handshake.
+        assert.ok(Array.isArray(((await call("tools/list", { _meta: meta })).result as { tools: unknown[] }).tools));
+      } finally {
+        child.stdin.end();
+        if (child.exitCode === null) await new Promise((resolve) => child.once("exit", resolve));
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
 // `opentide mcp start` in the WASI module (#1180, #1142). A live `deploy_rule`
 // runs the command line's deploy inside the server's runtime, and WASI has
 // no other thread to hand it to. The deploy built a runtime of its own there
