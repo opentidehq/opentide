@@ -119,6 +119,11 @@ Three long-lived processes, one per protocol, each started from the same compile
     not during it. Cancelling the call (`notifications/cancelled` for its request id) stops it at
     once and withdraws its request; the server then answers, or not, and the client ignores it as MCP
     says.
+  - **Not an MCP stream.** MCP's 2026-07-28 revision forbids a server writing requests to stdout,
+    and `opentide/fetch` lines are requests: with `OPENTIDE_FETCH=stdio` the module's stdout is a
+    private transport between the module and `McpFetchBridge`, which strips those lines before the
+    editor or agent sees anything. Never hand that stdout to an MCP client directly. Without the
+    variable the stdout is MCP alone.
   - **Withdrawals** are MCP's `notifications/cancelled {requestId: "opentide-fetch-N"}` from the
     module; `FetchHost` aborts the request, and `McpFetchBridge` does not pass it on. Without the
     bridge, a client that gets these lines must handle `notifications/cancelled` itself.

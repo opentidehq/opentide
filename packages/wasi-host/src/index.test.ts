@@ -786,6 +786,8 @@ test(
     );
     let buffer = "";
     let stderr = "";
+    // Everything the module wrote on stdout.
+    const written: Record<string, unknown>[] = [];
     const waiting = new Map<number, { resolve: (message: Record<string, unknown>) => void; reject: (error: Error) => void }>();
     server.stderr.setEncoding("utf8");
     server.stderr.on("data", (chunk: string) => {
@@ -808,6 +810,7 @@ test(
         buffer = buffer.slice(end + 1);
         if (line === "") continue;
         const message = JSON.parse(line) as Record<string, unknown>;
+        written.push(message);
         if (typeof message.id === "number") {
           waiting.get(message.id)?.resolve(message);
           waiting.delete(message.id);
@@ -848,6 +851,17 @@ test(
       assert.doesNotMatch(text, /stopped unexpectedly/, text);
       // The server still serves after the deploy.
       assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
+      // Without OPENTIDE_FETCH the stream is MCP alone: no request of the
+      // server's own (a tenant request is `opentide/fetch`, and only a bridge
+      // may consume a stream that has any).
+      assert.ok(written.length >= 3, JSON.stringify(written));
+      for (const message of written) {
+        assert.equal(message.jsonrpc, "2.0", JSON.stringify(message));
+        assert.notEqual(message.method, "opentide/fetch", JSON.stringify(message));
+        assert.ok(!String(message.id).startsWith("opentide-fetch-"), JSON.stringify(message));
+        // The server writes answers; the only message of its own MCP allows here is a notification.
+        assert.ok(message.method === undefined || String(message.method).startsWith("notifications/"), JSON.stringify(message));
+      }
     } finally {
       server.stdin.end();
       await exited;

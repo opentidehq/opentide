@@ -618,3 +618,56 @@ fn a_native_server_ignores_opentide_fetch() {
     assert!(!text.contains("network_unavailable"), "{text}");
     client.close();
 }
+
+/// Which protocol versions the server speaks, as rmcp 3.9 gives it (UC-3.7):
+/// `initialize` negotiates every version before 2026-07-28 and answers the
+/// newest of them (`2025-11-25`) to a client that asks for more; the
+/// 2026-07-28 revision's stateless requests, which carry their version and
+/// capabilities in `_meta` instead, and `server/discover` are answered too.
+#[test]
+fn the_server_negotiates_the_protocol_versions_and_answers_server_discover() {
+    let (_dir, _ws, mut client) = on_the_corpus();
+    for (asked, answered) in [
+        ("2024-11-05", "2024-11-05"),
+        ("2025-06-18", "2025-06-18"),
+        ("2025-11-25", "2025-11-25"),
+        // `initialize` cannot name 2026-07-28: the newest it can is answered.
+        ("2026-07-28", "2025-11-25"),
+        ("2099-01-01", "2025-11-25"),
+    ] {
+        let response = client.request(
+            "initialize",
+            json!({"protocolVersion": asked, "capabilities": {},
+                   "clientInfo": {"name": "opentide-e2e", "version": "1"}}),
+        );
+        assert_eq!(response["result"]["protocolVersion"], answered, "{asked}");
+    }
+    client.notify("notifications/initialized");
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let discovered = client.request("server/discover", json!({"_meta": meta}));
+    let result = &discovered["result"];
+    assert_eq!(
+        result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"], "opentide",
+        "{discovered}"
+    );
+    let versions: Vec<&str> = result["supportedVersions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|version| version.as_str().unwrap())
+        .collect();
+    assert!(versions.contains(&"2026-07-28"), "{versions:?}");
+    assert!(versions.contains(&"2025-11-25"), "{versions:?}");
+    // A stateless request: no `initialize`, its version and capabilities in `_meta`.
+    let listed = client.request("tools/list", json!({"_meta": meta}));
+    assert!(
+        listed["result"]["tools"]
+            .as_array()
+            .is_some_and(|tools| !tools.is_empty()),
+        "{listed}"
+    );
+    client.close();
+}

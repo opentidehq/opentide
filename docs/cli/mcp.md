@@ -36,6 +36,7 @@ The WASI build of opentide (the module the VS Code extension runs) has no socket
   {"jsonrpc":"2.0","id":"opentide-fetch-1","method":"opentide/fetch","params":{"run":"2","platform":"elastic","tenant":"soc","method":"POST","url":"https://es.example.com/_query","headers":[["content-type","application/json"]],"body":"eyJxdWVyeSI6Ii4uLiJ9","connect_timeout_ms":120000,"read_timeout_ms":120000,"tls":{"verify":true,"ca_bundles":[]},"proxy":null}}
   {"jsonrpc":"2.0","id":"opentide-fetch-1","result":{"status":200,"headers":[["content-type","application/json"]],"body":"eyJ2YWx1ZXMiOltdfQ==","elapsed_ms":120}}
   ```
+- **Not MCP-conformant.** MCP's 2026-07-28 revision says a server must not write JSON-RPC requests to stdout, and `opentide/fetch` lines are requests. While `OPENTIDE_FETCH=stdio` is set the module's stdout is therefore a private stream between the module and the bridge that started it, not an MCP transport: only a bridge such as `McpFetchBridge` may consume it, and it must take the `opentide/fetch` lines (and the `notifications/cancelled` that withdraws one) out before anything reaches an MCP client, which would reject them. Without the variable the stream is MCP and nothing else.
 - **Ids.** The server's ids are strings, `opentide-fetch-1`, `opentide-fetch-2`, …, so they cannot collide with the client's.
 - **While a call waits.** The WASI build has no thread to read stdin with, so a tool call that waits for an answer reads stdin itself. The answer reaches the call; the client's other messages (`ping`, a list, a later request, a notification) are kept in order and read once the call returns, so they are answered after it, not during it. This differs from the native server, which answers a `ping` or a list while a call runs.
 - **Cancellation follows MCP's.** `notifications/cancelled` for the running `tools/call` stops it at once: its pending request is withdrawn, and the call ends without waiting. The server withdraws a request with MCP's own `notifications/cancelled` with `requestId` set to the request's id; a late answer to a withdrawn request is dropped.
@@ -57,6 +58,10 @@ error: missing command: choose from start
 ```
 
 This is not captured by the docs harness, which does not run `mcp`; `opentide mcp --help` prints the help and exits `0`.
+
+## Protocol versions
+
+`initialize` negotiates `2024-11-05`, `2025-03-26`, `2025-06-18` and `2025-11-25`: the server answers the version the client asks for when it knows it, else `2025-11-25`, the newest that has `initialize` (a client that asks for `2026-07-28` in `initialize` is answered `2025-11-25`). The 2026-07-28 revision, which has no `initialize`, is served too: `server/discover` answers `supportedVersions` (the four above and `2026-07-28`), and a request that carries `io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities` in its `_meta` is answered without a handshake.
 
 ## Protocol errors
 
