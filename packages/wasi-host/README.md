@@ -38,6 +38,7 @@ The requests carry the tenant's credentials (`Authorization` and API-key headers
 - a client line that is a response to an `opentide-fetch-` id, or that mentions the prefix and cannot be read, is dropped, so an agent cannot answer a tenant request itself;
 - the module's response to a request the client cancelled is dropped (MCP has no response go out for a cancelled request);
 - after `dispose()` no new tenant request is started.
+- one line cannot cost the others: a line that raises (a batch nested past the module's 128-level limit, a sink that throws) is dropped, the lines after it are still handled, and nothing escapes `fromClient` or `fromServer`; pass `{ onError }` to hear of it.
 
 The protocol is in [opentide serve](https://github.com/opentidehq/opentide/blob/development/docs/cli/serve.md#tenant-requests-the-client-makes-opentidefetch).
 

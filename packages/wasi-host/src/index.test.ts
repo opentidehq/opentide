@@ -1216,6 +1216,72 @@ test("the mcp bridge drops what the client sends as an answer to a tenant reques
   assert.equal(raw.toServer.length, mine.length);
 });
 
+test("the mcp bridge drops a line nested past the module's limit and never loses the lines after it", () => {
+  const errors: unknown[] = [];
+  const toServer: string[] = [];
+  const bridge = new McpFetchBridge({ toServer: (text) => toServer.push(text), toClient: () => {} }, { onError: (error) => errors.push(error) });
+  const ping = line({ jsonrpc: "2.0", id: 1, method: "ping" });
+  // A batch nested a few thousand levels deep: parsed, walked without recursion, dropped (the module refuses
+  // anything past 128 levels); and so is one too deep for the parser itself.
+  for (const depth of [129, 5_000, 200_000]) {
+    bridge.fromClient(`${"[".repeat(depth)}${"]".repeat(depth)}\n${ping}`);
+  }
+  // The ping after each deep line (in the same chunk) still arrives, and nothing threw.
+  assert.deepEqual(toServer, [ping, ping, ping]);
+  assert.deepEqual(errors, []);
+  // A batch within the limit, with nothing forged in it, goes on.
+  const shallow = `${"[".repeat(100)}${"]".repeat(100)}\n`;
+  bridge.fromClient(shallow);
+  assert.equal(toServer[toServer.length - 1], shallow);
+  // One at the limit holding a forged answer is dropped.
+  const answer = { jsonrpc: "2.0", id: "opentide-fetch-1", result: {} };
+  bridge.fromClient(`${"[".repeat(100)}${JSON.stringify(answer)}${"]".repeat(100)}\n`);
+  assert.equal(toServer.length, 4);
+});
+
+test("the mcp bridge isolates a sink that throws: later lines arrive, nothing escapes, onError is told", () => {
+  const errors: unknown[] = [];
+  const toServer: string[] = [];
+  let calls = 0;
+  const bridge = new McpFetchBridge(
+    {
+      toServer: (text) => {
+        calls += 1;
+        if (calls === 2) throw new Error("EPIPE");
+        toServer.push(text);
+      },
+      toClient: () => {},
+    },
+    { onError: (error) => errors.push(error) },
+  );
+  const lines = [1, 2, 3].map((id) => line({ jsonrpc: "2.0", id, method: "ping" }));
+  bridge.fromClient(lines.join(""));
+  assert.deepEqual(toServer, [lines[0], lines[2]], "the line after the failing one still arrived");
+  assert.equal(errors.length, 1);
+  // A reporter that throws is no reason to lose lines either.
+  const quiet: string[] = [];
+  let first = true;
+  const strict = new McpFetchBridge(
+    {
+      toServer: (text) => {
+        if (first) {
+          first = false;
+          throw new Error("x");
+        }
+        quiet.push(text);
+      },
+      toClient: () => {},
+    },
+    {
+      onError: () => {
+        throw new Error("reporter");
+      },
+    },
+  );
+  strict.fromClient(lines.join(""));
+  assert.deepEqual(quiet, [lines[1], lines[2]]);
+});
+
 test("the mcp bridge does not pass on the response to a request the client cancelled", () => {
   const { bridge, raw } = bridged();
   // The module may finish a call it was told to cancel: its response is dropped, once.

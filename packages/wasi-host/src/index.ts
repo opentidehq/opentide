@@ -594,8 +594,12 @@ export class McpFetchBridge {
   private readonly cancelled = new Set<string>();
   private disposed = false;
 
-  constructor(sink: McpFetchSink, options: { perform?: Perform } = {}) {
+  /** Told of an error a line raised (the line is dropped); none by default. */
+  private readonly onError: (error: unknown) => void;
+
+  constructor(sink: McpFetchSink, options: { perform?: Perform; onError?: (error: unknown) => void } = {}) {
     this.sink = sink;
+    this.onError = options.onError ?? (() => {});
     this.host = new FetchHost(
       (message) => {
         // After the module has gone there is nobody to answer.
@@ -615,14 +619,14 @@ export class McpFetchBridge {
   /** A chunk of the module's stdout. */
   fromServer(chunk: string | Uint8Array): void {
     for (const line of this.fromModule.push(chunk)) {
-      this.serverLine(line);
+      this.isolated(() => this.serverLine(line));
     }
   }
 
   /** A chunk of the client's messages for the module. */
   fromClient(chunk: string | Uint8Array): void {
     for (const line of this.fromAgent.push(chunk)) {
-      this.clientLine(line);
+      this.isolated(() => this.clientLine(line));
     }
   }
 
@@ -630,7 +634,7 @@ export class McpFetchBridge {
   endServer(): void {
     const rest = this.fromModule.end();
     if (rest !== undefined) {
-      this.serverLine(rest);
+      this.isolated(() => this.serverLine(rest));
     }
   }
 
@@ -638,7 +642,7 @@ export class McpFetchBridge {
   endClient(): void {
     const rest = this.fromAgent.end();
     if (rest !== undefined) {
-      this.clientLine(rest);
+      this.isolated(() => this.clientLine(rest));
     }
   }
 
@@ -646,6 +650,23 @@ export class McpFetchBridge {
   dispose(): void {
     this.disposed = true;
     this.host.dispose();
+  }
+
+  /**
+   * Runs the handling of one line so that nothing it raises (a line that overflows the stack,
+   * a sink that throws) escapes into the host's data handler or costs the lines after it:
+   * the line is dropped, and `onError` is told.
+   */
+  private isolated(handle: () => void): void {
+    try {
+      handle();
+    } catch (error) {
+      try {
+        this.onError(error);
+      } catch {
+        // A reporter that throws is no reason to lose the lines that follow.
+      }
+    }
   }
 
   private clientLine(line: string): void {
@@ -775,19 +796,36 @@ function cancelledRequest(message: unknown): string | undefined {
   return typeof id === "string" || typeof id === "number" ? JSON.stringify(id) : undefined;
 }
 
+/** How deep a batch may nest: `serde_json`'s recursion limit, past which the module refuses the line. */
+const MAX_BATCH_DEPTH = 128;
+
 /**
  * Whether the client message *message* answers (or is shaped to look like an
- * answer to) a request of the module's: a response, with no `method`, to an
- * id that starts with `MCP_FETCH_ID_PREFIX`. A batch holding one is one.
+ * answer to) a request of the module's: a response, with no string `method`, to
+ * an id that starts with `MCP_FETCH_ID_PREFIX`. A batch holding one is one, to any
+ * depth up to the module's own limit; a batch nested deeper than that is dropped
+ * too (the module would refuse it, and walking it must not overflow the stack,
+ * so the walk is iterative).
  */
 function forgesAnAnswer(message: unknown): boolean {
-  if (Array.isArray(message)) {
-    return message.some(forgesAnAnswer);
+  const pending: [unknown, number][] = [[message, 0]];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const [item, depth] = next;
+    if (Array.isArray(item)) {
+      if (depth >= MAX_BATCH_DEPTH) {
+        return true;
+      }
+      for (const element of item) {
+        pending.push([element, depth + 1]);
+      }
+    } else if (
+      isObject(item) &&
+      typeof item.id === "string" &&
+      item.id.startsWith(MCP_FETCH_ID_PREFIX) &&
+      typeof item.method !== "string"
+    ) {
+      return true;
+    }
   }
-  return (
-    isObject(message) &&
-    typeof message.id === "string" &&
-    message.id.startsWith(MCP_FETCH_ID_PREFIX) &&
-    typeof message.method !== "string"
-  );
+  return false;
 }

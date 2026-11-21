@@ -32,7 +32,7 @@ A tool that ran and could not do what it was asked answers with MCP's tool-level
 
 | Tool | `isError: true` when | Still an answer (`isError: false`) |
 |------|----------------------|------------------------------------|
-| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check could not run (no tenant configured, the tenant refused the credential or could not be reached; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | a verdict, whichever it is: the query is invalid (`valid: false`, with its diagnostics) or valid; and a live check every tenant answered, which adds `valid` to the command's document (`valid: false` when a tenant rejected a query, `status: "failed"`) |
+| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check could not run (no tenant configured, the tenant refused the credential or could not be reached; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | a verdict, whichever it is: the query is invalid (`valid: false`, with its diagnostics) or valid; and a live check every tenant answered, which adds `valid` to the command's document (`valid: false` when a tenant rejected a query, `status: "failed"`). A check that got no answer is not a rejection: a read timeout, a gateway's 502, 503 or 504, or a search still running at the deadline is listed in `timed_out`, the document has no `valid`, and the call failed |
 | `run_query` | the call did not run (not `live`, an unknown tenant, no query, an unknown platform) or `status` is `failed`: every tenant failed, or some did (the rows of the others are in the payload) | `status: "completed"` |
 | `deploy_rule` | `action` is `error`: the rule is missing, has no block for the platform, or could not be deployed (a tenant that refused the credential or could not be reached, a refused rule, `network_unavailable`) | a dry-run preview, a deploy that went through |
 | `validation_report` | `queries` is not one of the three (`{"ok": false, "error": ...}`) | the report, whatever it finds |
@@ -402,7 +402,7 @@ Offline, the result has `valid` (`false` when the engine found an error), `statu
 }
 ```
 
-SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed. A missing plan or a tenant it cannot reach is a failed live check.
+SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). With `live: true` the result is the `opentide --json validate query --live` document without its envelope: `status` says whether the check failed, and `valid` (added by this tool) says whether the queries passed when every tenant answered every check; a tenant that could not be reached, refused the credential or gave no answer within the check timeout leaves `valid` out and fails the call (`isError`, [above](#failures-and-iserror)). A missing plan or a tenant it cannot reach is a failed live check.
 
 **Unsupported platforms** return:
 
