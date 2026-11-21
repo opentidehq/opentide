@@ -116,6 +116,30 @@ def test_a_readme_with_two_pins_is_refused(repo: Path) -> None:
     ]
 
 
+def test_a_final_release_whose_readme_still_leads_with_pre_is_refused(repo: Path) -> None:
+    """The final release's notes PR puts the stable pin back first in the README."""
+    _write(
+        repo / "README.md",
+        "pip install --pre opentide\n\nThe newest stable release: `pip install opentide==1.2.0`.\n",
+    )
+    found = _script().problems(repo, "v1.2.0")
+    assert len(found) == 1
+    assert found[0].startswith("README.md's first install command is a `--pre` one")
+
+
+def test_a_readme_may_lead_with_pre_while_a_candidate_is_documented(repo: Path) -> None:
+    """While a candidate is documented, the tree of the previous release leads with --pre."""
+    _write(
+        repo / "README.md",
+        "pip install --pre opentide\n\nThe newest stable release: `pip install opentide==1.2.0`.\n",
+    )
+    _write(repo / "docs" / "usage" / "installation.md", "pip install 'opentide==1.3.0rc2'\n")
+    assert _script().problems(repo, "v1.2.0") == []
+    # A stable pin first is right with or without a candidate; only `--pre` is read.
+    _write(repo / "README.md", "pip install opentide==1.2.0\n\npip install --pre opentide\n")
+    assert _script().problems(repo, "v1.2.0") == []
+
+
 def test_main_prints_the_version_and_the_verdict(
     repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

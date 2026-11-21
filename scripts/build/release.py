@@ -49,6 +49,10 @@ _CANDIDATE = re.compile(r"v(\d+\.\d+\.\d+)-rc\.([1-9]\d*)")
 #: A release's pin. A pre-release pin (`opentide==1.0.0rc1`, `1.0.0-rc.1`, `1.0.0.dev3`)
 #: names a candidate, not the release, so it is not one.
 _PIN = re.compile(r"opentide==(\d+\.\d+\.\d+)(?![0-9A-Za-z]|[.-][0-9A-Za-z])")
+#: The first install command of the README: ``pip install ...`` or ``uv pip install ...``.
+_INSTALL = re.compile(r"^\s*(?:uv )?pip install .*$", re.MULTILINE)
+#: A candidate's pin (``opentide==1.0.0rc2``): what the installation page documents.
+_CANDIDATE_PIN = re.compile(r"opentide==\d+\.\d+\.\d+rc\d+")
 #: ``## 0.19.0 — 29 October 2026`` in ``docs/usage/releases.md``.
 _RELEASES_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+)\b")
 
@@ -105,12 +109,36 @@ def problems(root: Path, tag: str) -> list[str]:
     )
     if top != release:
         found.append(f"docs/usage/releases.md starts with {top}, not {release}")
-    pins = set(_PIN.findall((root / "README.md").read_text(encoding="utf-8")))
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    pins = set(_PIN.findall(readme))
     if pins != {release}:
         found.append(
             f"README.md pins opentide=={', '.join(sorted(pins)) or '(nothing)'}, not {release}"
         )
+    if _leads_with_pre(readme) and not _documents_a_candidate(root):
+        found.append(
+            "README.md's first install command is a `--pre` one, but "
+            "docs/usage/installation.md documents no release candidate: "
+            "put the stable pin back first (the final release's notes PR)"
+        )
     return found
+
+
+def _leads_with_pre(readme: str) -> bool:
+    """The README's first ``pip install`` line asks for pre-releases (``--pre``)."""
+    first = _INSTALL.search(readme)
+    return first is not None and "--pre" in first.group(0)
+
+
+def _documents_a_candidate(root: Path) -> bool:
+    """``docs/usage/installation.md`` still has a candidate's pin (``opentide==1.0.0rc2``).
+
+    While a candidate is current, the README leads with ``--pre`` (the candidate's PyPI
+    page), and the newest dated release is still the previous one: only the final
+    release's notes PR removes the candidate text, and it puts the stable pin first.
+    """
+    page = root / "docs" / "usage" / "installation.md"
+    return page.is_file() and _CANDIDATE_PIN.search(page.read_text(encoding="utf-8")) is not None
 
 
 def _section(changelog: str, heading: str) -> str | None:
