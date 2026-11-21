@@ -2,9 +2,11 @@ name: Engine release build
 
 # Builds every asset of opentide's GitHub Release into one artifact,
 # `release-assets`: the `opentide` and `opentide-lsp` binaries per target, their
-# installers (publishing/installers/), the WASI module, the browser build
-# (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE, the
-# CycloneDX SBOMs (scripts/engine/sbom.py), and SHA256SUMS last. It publishes,
+# installers (publishing/installers/), the two WASI modules (the language server's
+# `opentide-lsp-wasm32-wasip1.wasm` and the command line's
+# `opentide-wasm32-wasip1.wasm`, which the VS Code extension pins), the browser
+# build (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE,
+# the CycloneDX SBOMs (scripts/engine/sbom.py), and SHA256SUMS last. It publishes,
 # attests and uploads to no release: the caller does. Two callers:
 #
 # - publish.yml, the release train (UC-5.5), with the release's tag (`vX.Y.Z`
@@ -292,11 +294,46 @@ jobs:
         with:
           tool: wasm-bindgen@0.2.128
       - run: bash scripts/engine/build-wasm.sh
+      # The command line as one WASI module for every platform, which the VS
+      # Code extension pins (docs/internal/vscode-wasi.md). wasi-sdk, fetched
+      # and checked by the script, is for `ring`'s C. It reports the release's
+      # version (OPENTIDE_BUILD_VERSION), as the native binaries do, and the
+      # script fails above its 15 MiB gzipped budget (the .vsix's).
+      - name: build the opentide command line (wasm32-wasip1)
+        env:
+          OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
+        run: bash scripts/engine/build-wasm.sh cli
+      # Smoke test, before the module is an asset: wasmtime itself (not Node's
+      # WASI, which ci.yml's `wasm` job runs it under) loads it and it says the
+      # version of the tag, and a command proves the engine runs. wasmtime is
+      # pinned by release and SHA-256 and fetched only for this step.
+      - name: smoke test opentide.wasm under wasmtime
+        env:
+          OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
+          WASMTIME_VERSION: "50.0.0"
+          WASMTIME_SHA256: 77c19ee0437991f9ac7837b9c269d9c7076744f85dad263fea5214cc2723c7ff
+        run: |
+          set -euo pipefail
+          archive="wasmtime-v${WASMTIME_VERSION}-x86_64-linux"
+          curl -fsSL -o "${RUNNER_TEMP}/wasmtime.tar.xz" \
+            "https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}/${archive}.tar.xz"
+          echo "${WASMTIME_SHA256}  ${RUNNER_TEMP}/wasmtime.tar.xz" | sha256sum -c -
+          tar -xJf "${RUNNER_TEMP}/wasmtime.tar.xz" -C "${RUNNER_TEMP}"
+          wasmtime="${RUNNER_TEMP}/${archive}/wasmtime"
+          module="target/wasm32-wasip1/wasi/opentide.wasm"
+          out="$("${wasmtime}" run "${module}" --version)"
+          echo "${out}"
+          grep -qF "${OPENTIDE_BUILD_VERSION}" <<< "${out}"
+          # --version checks nothing (#1072): a command proves the engine loads.
+          "${wasmtime}" run "${module}" --json explain yaml_parse > /dev/null
       - name: package
         run: |
           set -euo pipefail
-          mkdir -p dist
+          mkdir -p dist product
           cp target/wasm32-wasip1/release/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
+          # The command line carries opentide's own package data: a product
+          # asset, scanned as the `opentide` binaries are (the assets job).
+          cp target/wasm32-wasip1/wasi/opentide.wasm "product/opentide-wasm32-wasip1.wasm"
           wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/opentide_wasm.wasm
           cp LICENSE NOTICE pkg/
           cp -r licenses pkg/licenses
@@ -311,6 +348,11 @@ jobs:
         with:
           name: engine-asset-wasm
           path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: product-asset-opentide-wasm
+          path: product/*
           if-no-files-found: error
 
   highlights:
@@ -461,7 +503,8 @@ jobs:
           pattern: product-asset-*
           merge-multiple: true
       # The engine's assets carry no oracle reference at all. The `opentide`
-      # binaries carry opentide's package data, as the wheel does: its
+      # binaries and the command line's WASI module carry opentide's package
+      # data, as the wheel does: its
       # `platform_sdk` explain page names the Splunk client's Python module
       # (license-scan.sh --product). Every product asset is scanned, the
       # wheel's SBOM included: the wheel has no Python dependency, and its SBOM

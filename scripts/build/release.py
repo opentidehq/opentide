@@ -23,9 +23,9 @@ lockstep`` checks them, and the workflow runs both.
 
 ``check-candidate`` refuses a release candidate (``vX.Y.Z-rc.N``) of a version
 that is not newer than the last release. Candidates are for the Rust-core
-transition (they may be retired after): pre-releases on GitHub, PyPI and
-crates.io, nothing on npm. A candidate needs no notes PR: its GitHub
-pre-release says what ``## [Unreleased]`` holds (``notes``).
+transition (they may be retired after): pre-releases on GitHub, PyPI, crates.io
+and npm (the dist-tag ``next``, never ``latest``). A candidate needs no notes
+PR: its GitHub pre-release says what ``## [Unreleased]`` holds (``notes``).
 
 An internal candidate (``publish.yml``'s ``internal_candidate``) is the same
 tag on a draft GitHub pre-release only, with every package attached and nothing
@@ -182,7 +182,8 @@ def notes(root: Path, tag: str, *, internal: bool = False) -> str:
     """The GitHub Release body of ``tag``: a release's is the file its notes PR
     wrote; a public candidate's says what it is, then gives its own short notes
     file (``.github/release-notes/vX.Y.Z-rc.N.md``, which carries install
-    commands) when there is one, else quotes ``## [Unreleased]``. An internal
+    commands) when there is one, else quotes ``## [Unreleased]``. A public
+    candidate's summary names its registries, npm's ``next`` tag included. An internal
     candidate's (``internal``) says that no registry has it and always quotes
     ``## [Unreleased]``."""
     match = _CANDIDATE.fullmatch(tag)
@@ -202,8 +203,9 @@ def notes(root: Path, tag: str, *, internal: bool = False) -> str:
         else:
             where = (
                 f"Release candidate {match.group(2)} of {match.group(1)}, for testing: "
-                "a pre-release on PyPI (`pip install --pre opentide`) and on crates.io, "
-                "not on npm. "
+                "a pre-release on PyPI (`pip install --pre opentide`), on crates.io and on "
+                "npm under the `next` tag (`npm install @opentide/opentide@next`), never "
+                "`latest`. "
             )
         own = root / ".github" / "release-notes" / f"{tag}.md"
         if not internal and own.is_file() and own.read_text(encoding="utf-8").strip():

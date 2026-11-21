@@ -9,10 +9,10 @@ description: The @opentide/opentide npm package — the opentide SDK and command
 
 ## Install
 
-The packages are not on npm yet; they are built and tested from this repository until the release that publishes them. Once they are published:
+A release candidate publishes the packages to npm from `1.0.0-rc.3`, under the dist-tag `next`, and the final release will publish them under `latest`: `npm install @opentide/opentide@next` installs the newest candidate (`1.0.0-rc.1` and `1.0.0-rc.2` published none), and until 1.0.0 a plain `npm install @opentide/opentide` installs none. Build from this repository for anything newer.
 
 ```bash
-npm install @opentide/opentide
+npm install @opentide/opentide@next
 ```
 
 npm installs the one native package your machine needs (`@opentide/opentide-<platform>`, an optional dependency) beside it: Linux x64 and arm64 (glibc; there is no musl build, so not Alpine), macOS x64 and arm64, and Windows x64 and arm64, on Node.js 18 or later.
