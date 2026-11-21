@@ -136,6 +136,8 @@ exports.run = async function run() {
       await sleep(50);
     }
     result.rss_mib = serverRss();
+    // A run whose server is not the one asked for measured the extension's fallback (the WASM engine): refuse it.
+    if (env.OPENTIDE_PERF_PROC && !(result.rss_mib > 0)) throw new Error(`no process matching ${env.OPENTIDE_PERF_PROC} was running: the extension fell back to another runtime`);
   } catch (e) {
     result.errors.push(String(e && e.stack || e));
   }
