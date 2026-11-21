@@ -498,7 +498,7 @@ jobs:
   # tier and the release train; a failure fails this workflow's caller, so
   # nothing downstream of it (the internal release, the attestations, the
   # registries) runs.
-  av-gate:
+  av-gate-assets:
     name: AV gate (release assets)
     needs: assets
     if: inputs.av-gate

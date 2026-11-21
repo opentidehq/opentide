@@ -2863,6 +2863,7 @@ dependencies = [
  "opentide-parse",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2915,6 +2916,7 @@ dependencies = [
  "opentide-parse",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2930,6 +2932,7 @@ dependencies = [
  "regex-syntax",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2944,6 +2947,7 @@ dependencies = [
  "regex",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -3094,6 +3098,7 @@ dependencies = [
  "rowan",
  "serde",
  "strsim",
+ "toml",
 ]
 
 [[package]]
@@ -3156,6 +3161,7 @@ dependencies = [
  "opentide-dataset",
  "opentide-highlight",
  "serde",
+ "toml",
  "yara-x-fmt",
  "yara-x-parser",
 ]
@@ -3172,6 +3178,7 @@ dependencies = [
  "regex-syntax",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]

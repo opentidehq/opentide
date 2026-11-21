@@ -272,7 +272,7 @@ jobs:
   # npm packages (the Node.js addons), the sdist and the crates (#1743):
   # av-gate.yml. The release assets' own gate is engine-release-build.yml's.
   # Only for the release tier and the release train.
-  av-gate:
+  av-gate-packages:
     name: AV gate (packages)
     needs: [release-versions, packages, sdist, crate-packages]
     if: ${{ inputs.av-gate }}
