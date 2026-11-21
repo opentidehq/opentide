@@ -35,7 +35,8 @@ A tool that ran and could not do what it was asked answers with MCP's tool-level
 | `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check failed (no tenant configured, the tenant refused the credential or could not be reached, a rejected query; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | the query is invalid (`valid: false`, with its diagnostics), or valid |
 | `run_query` | the call did not run (not `live`, an unknown tenant, no query, an unknown platform) or `status` is `failed`: every tenant failed, or some did (the rows of the others are in the payload) | `status: "completed"` |
 | `deploy_rule` | `action` is `error`: the rule is missing, has no block for the platform, or could not be deployed (a tenant that refused the credential or could not be reached, a refused rule, `network_unavailable`) | a dry-run preview, a deploy that went through |
-| every other tool | the call is malformed: a missing or mistyped argument, an unknown tool, no workspace | `validation_report` and `validate_rule`'s findings, a lookup that finds nothing (`found: false`), a `queries` mode that is not one (`{"ok": false, "error": ...}`) |
+| `validation_report` | `queries` is not one of the three (`{"ok": false, "error": ...}`) | the report, whatever it finds |
+| every other tool | the call is malformed: a missing or mistyped argument, an unknown tool, no workspace | `validate_rule`'s findings, a lookup that finds nothing (`found: false`) |
 
 Before the release candidates changed it, a failed live check, query or deploy answered `isError: false` with `status: "failed"` in the payload, as the Python server did.
 
@@ -214,7 +215,7 @@ Structured validation report for agents. Full registry by default; narrow with f
 | `file` | string | `""` | Single file: a repo-relative or absolute path matches that file only; a bare file name matches every object file with that name (as [`validate --file`](../cli/validate.md#selecting-a-file)) |
 | `uuid` | string | `""` | Single UUID |
 | `object_type` | string | `""` | `rule`, `threat`, or `objective`. Any other value is refused (`isError`, `usage_invalid_choice`), as `validate --type` refuses it |
-| `queries` | string | `"error"` | How a query the platform would reject is reported, as [`validate --queries`](../cli/validate.md#queries): `error` (an issue), `warn` (a warning: `ok` stays `true`) or `off` (queries are not checked). Another value returns `ok: false` and an `error` naming the three |
+| `queries` | string | `"error"` | How a query the platform would reject is reported, as [`validate --queries`](../cli/validate.md#queries): `error` (an issue), `warn` (a warning: `ok` stays `true`) or `off` (queries are not checked). Another value is an invalid argument (`isError`): `ok: false` and an `error` naming the three |
 
 Every rule query is checked offline with the analysis engine, as `opentide validate` checks it; its style (the engine's warnings and notes) is `opentide lint`'s. Returns the validation report (`ok`, `issues`, `warnings`, `stats`) plus `next_actions`; `stats.queries_checked` counts the queries. A rule with `tlp: clearr`:
 

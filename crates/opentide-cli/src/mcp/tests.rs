@@ -1187,6 +1187,8 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
             "validate_query",
             json!({"query": "x", "platform": "sentinel_one"}),
         ),
+        // An invalid argument: the same JSON as the report, `ok: false`.
+        ("validation_report", json!({"queries": "loud"})),
     ] {
         failed_call(&server, tool, args);
     }
@@ -1210,9 +1212,6 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
     );
     assert_eq!(preview["action"], "dry-run", "{preview}");
     call(&server, "validation_report", json!({}));
-    // A `queries` mode that is not one is an answer too, as the Python server had it.
-    let loud = call(&server, "validation_report", json!({"queries": "loud"}));
-    assert_eq!(loud["ok"], false, "{loud}");
     call(
         &server,
         "get_chaining",

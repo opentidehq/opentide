@@ -203,10 +203,12 @@ pub fn failed_result(payload: &Json) -> Value {
 /// - `deploy_rule`: `action: "error"`, a rule that could not be deployed or
 ///   previewed (a real deploy that failed or was refused included).
 ///
+/// - `validation_report`: a `queries` mode that is not one, an invalid
+///   argument (the payload is `{"ok": false, "error": ...}`).
+///
 /// What stays an answer, as the Python server had it: the findings of
-/// `validation_report` and `validate_rule`, a lookup that finds nothing
-/// (`found: false`), and a `queries` mode that is not one
-/// (`{"ok": false, "error": ...}`, documented as an answer).
+/// `validation_report` and `validate_rule`, and a lookup that finds nothing
+/// (`found: false`).
 fn is_failure(name: &str, payload: &Json) -> bool {
     let text = |key: &str| payload.get(key).and_then(Json::as_str);
     let flag = |key: &str| payload.get(key).and_then(Json::as_bool);
@@ -217,6 +219,9 @@ fn is_failure(name: &str, payload: &Json) -> bool {
         }
         "run_query" => flag("supported") == Some(false) || text("status") == Some("failed"),
         "deploy_rule" => text("action") == Some("error"),
+        // A `queries` mode that is not one: an invalid argument, as every other
+        // argument error is (the payload is `{"ok": false, "error": ...}`).
+        "validation_report" => flag("ok") == Some(false) && text("error").is_some(),
         _ => false,
     }
 }
@@ -569,14 +574,15 @@ mod tests {
     }
 
     #[test]
-    fn a_bad_queries_mode_is_an_answer_not_a_refusal() {
+    fn a_bad_queries_mode_is_an_invalid_argument_with_its_reason_as_the_payload() {
         let env = Env::from_pairs::<&str, &str>([]);
         let result = call(
             "validation_report",
             &serde_json::from_value(json!({"queries": "loud"})).unwrap(),
             &context(&env),
         );
-        assert_eq!(result["isError"], false);
+        // An invalid argument is a tool error, as the others are: the same JSON.
+        assert_eq!(result["isError"], true);
         assert_eq!(
             text_of(&result),
             json!({"ok": false, "error": "queries must be one of error, warn, off, got \"loud\""})
