@@ -156,10 +156,15 @@ def test_the_installation_page_documents_the_release_candidate() -> None:
     page = (DOCS / "usage" / "installation.md").read_text(encoding="utf-8")
     for text in (
         "pip install --pre opentide",
-        "opentide==1.0.0rc1",
-        "cargo install opentide --version 1.0.0-rc.1 --features cli",
         "opentide-installer.sh",
         "SHA256SUMS",
         "gh attestation verify",
     ):
         assert text in page, text
+    # The current candidate's pins, whichever candidate that is: each candidate
+    # moves them (release-management skill, "Known locations").
+    pypi = re.search(r"opentide==1\.0\.0rc(\d+)", page)
+    assert pypi, "no opentide==1.0.0rcN pin"
+    n = pypi.group(1)
+    assert f"cargo install opentide --version 1.0.0-rc.{n} --features cli" in page
+    assert f"releases/download/v1.0.0-rc.{n}/opentide-installer.sh" in page
