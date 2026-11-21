@@ -25,7 +25,7 @@ import { Worker } from 'node:worker_threads';
 
 const argv = process.argv.slice(2);
 const sep = argv.indexOf('--');
-const opts = { runs: 10, warm: 10, diag: 'pull', watch: 'on', doc: 'objects/rules/rule-0001-sentinel-kql.yaml', label: 'run', timeout: 120 };
+const opts = { runs: 10, warm: 10, pause: 0, wspull: 'auto', diag: 'pull', watch: 'on', doc: 'objects/rules/rule-0001-sentinel-kql.yaml', label: 'run', timeout: 120 };
 const flags = sep < 0 ? argv : argv.slice(0, sep);
 for (let i = 0; i < flags.length; i += 2) opts[flags[i].replace(/^--/, '')] = flags[i + 1];
 const command = sep < 0 ? [] : argv.slice(sep + 1);
@@ -311,6 +311,29 @@ async function oneRun(runIndex) {
   out.start_to_first_diag_ms = first.t1 - t0;
   out.diag_bytes = first.bytes;
 
+  // vscode-languageclient pulls workspace diagnostics for a server that advertises them: at start,
+  // then 2 s after each answer, for as long as the client runs (diagnostic.js, pullWorkspace). The
+  // loop feeds each answer's resultIds back, as the client does.
+  const wsPull = { count: 0, ms: [], items: 0 };
+  let wsStop = false;
+  let wsLoop = Promise.resolve();
+  const advertised = init.msg.result?.capabilities?.diagnosticProvider?.workspaceDiagnostics === true;
+  if (opts.wspull === 'on' || (opts.wspull === 'auto' && opts.diag === 'pull' && advertised)) {
+    wsLoop = (async () => {
+      let previous = [];
+      while (!wsStop) {
+        const r = await request('workspace/diagnostic', { previousResultIds: previous }).catch(() => null);
+        if (!r) break;
+        const items = r.msg.result?.items ?? [];
+        wsPull.count += 1; wsPull.ms.push(r.ms); wsPull.items = items.length;
+        previous = items.filter((i) => i.resultId).map((i) => ({ uri: i.uri, value: i.resultId }));
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+    })();
+  }
+  out.workspace_pull = wsPull;
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
   let version = 1;
   const edit = async (kind) => {
     // Typing: append a space to the first description line, the way an editor sends one keystroke.
@@ -356,12 +379,13 @@ async function oneRun(runIndex) {
     };
     const cold = await sample();
     const warm = [];
-    for (let i = 0; i < warmCount; i += 1) warm.push((await sample()).ms);
+    for (let i = 0; i < warmCount; i += 1) { warm.push((await sample()).ms); if (Number(opts.pause)) await sleep(Number(opts.pause)); }
     const typed = [];
     if (sc.method === 'textDocument/completion') {
       for (let i = 0; i < Math.min(warmCount, 5); i += 1) {
         await edit(i % 2 === 0 ? 'add' : 'del');
         typed.push((await sample()).ms);
+        if (Number(opts.pause)) await sleep(Number(opts.pause));
       }
       if (typed.length % 2 === 1) await edit('del');
     }
@@ -380,6 +404,7 @@ async function oneRun(runIndex) {
     }
   }
 
+  wsStop = true;
   const mem = rssMiB(server.pids());
   out.rss_mib = mem.rss;
   out.hwm_mib = mem.hwm;
@@ -411,6 +436,8 @@ const summary = {
   start_to_first_diag_ms: stats(ok.map((r) => r.start_to_first_diag_ms)),
   edit_diag_ms: stats(ok.flatMap((r) => r.edit_diag_ms)),
   resolve_ms: stats(ok.map((r) => r.resolve_ms).filter((x) => x !== undefined)),
+  workspace_pull_ms: stats(ok.flatMap((r) => r.workspace_pull.ms)),
+  workspace_pull_items: ok[0]?.workspace_pull.items,
   rss_mib: stats(ok.map((r) => r.rss_mib)),
   hwm_mib: stats(ok.map((r) => r.hwm_mib)),
   diag_count: ok[0]?.diag_count,
@@ -450,6 +477,7 @@ console.log(`\n== ${opts.label}  (${report.machine.cpus} cpus, ${runs} runs, ${r
 console.log(`init ms           p50 ${f(summary.init_ms.p50)}  p95 ${f(summary.init_ms.p95)}  max ${f(summary.init_ms.max)}`);
 console.log(`first diag ms     p50 ${f(summary.first_diag_ms.p50)}  p95 ${f(summary.first_diag_ms.p95)}  max ${f(summary.first_diag_ms.max)}   (${summary.diag_count} diagnostics)`);
 console.log(`edit->diag ms     p50 ${f(summary.edit_diag_ms.p50)}  p95 ${f(summary.edit_diag_ms.p95)}  max ${f(summary.edit_diag_ms.max)}`);
+console.log(`workspace/diag ms  p50 ${f(summary.workspace_pull_ms.p50)}  p95 ${f(summary.workspace_pull_ms.p95)}  max ${f(summary.workspace_pull_ms.max)}   (${summary.workspace_pull_items ?? '-'} items, ${summary.workspace_pull_ms.n} pulls)`);
 console.log(`rss MiB           p50 ${f(summary.rss_mib.p50)}  max ${f(summary.rss_mib.max)}`);
 console.log('scenario'.padEnd(34), 'cold p50    p95    max |  warm p50    p95    max | typed p50   p95 | items   bytes');
 for (const [name, s] of Object.entries(summary.scenarios)) {
