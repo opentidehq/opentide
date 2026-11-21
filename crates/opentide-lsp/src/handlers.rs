@@ -706,7 +706,11 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
     let Some(closed) = session.docs.remove(uri) else {
         return;
     };
-    session.touch();
+    if closed.language == LanguageId::TideYaml {
+        session.touch_object();
+    } else {
+        session.touch();
+    }
     if closed.language == LanguageId::TideYaml {
         // The file on disk is the object again, as last saved.
         let path = uri_to_path(uri);
@@ -738,7 +742,11 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
 /// referenced by the others, so those re-check every open document. Anything
 /// else re-checks itself.
 fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root: Option<usize>) {
-    session.touch();
+    if language == LanguageId::TideYaml {
+        session.touch_object();
+    } else {
+        session.touch();
+    }
     session.mark(uri);
     if language == LanguageId::TideYaml {
         session.invalidate_index(root);
@@ -813,7 +821,7 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
         if let Some(root) = session.object_root(&path) {
             if !session.docs.contains_key(uri) {
                 session.roots[root].refresh_object(&path);
-                session.touch();
+                session.touch_object();
                 everything = true;
             }
         } else if let Some(root) = session.folder_root(&path) {
@@ -1104,15 +1112,7 @@ fn handle_workspace_diagnostics(
                 continue;
             };
             let mut diagnostics = session.closed_findings(root, &path, &text);
-            let response = opentide_analysis::analyze(
-                &host,
-                opentide_analysis::AnalyzeRequest {
-                    uri: path.clone(),
-                    language: LanguageId::TideYaml,
-                    text,
-                },
-            );
-            diagnostics.extend(response.diagnostics);
+            diagnostics.extend(session.closed_analysis(root, &path, &text, &host).iter().cloned());
             let found: Vec<lsp::Diagnostic> = diagnostics
                 .iter()
                 .map(|d| lsp_diagnostic(session, Some(root), &path, d))

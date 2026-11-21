@@ -18,7 +18,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// An open document.
 pub(crate) struct Document {
@@ -268,6 +268,11 @@ struct DiskFile {
     path: String,
     text: String,
     indexed: OnceLock<Option<IndexedObject>>,
+    /// What the engine's analysis of this text found (the queries it carries),
+    /// and the [`Session::env_epoch`] it was made in: a workspace pull
+    /// repeats every two seconds for as long as the editor runs, and an
+    /// analysis reads nothing but the text and the epoch's catalogs.
+    analysis: Mutex<Option<(u64, Arc<Vec<opentide_core::Diagnostic>>)>>,
 }
 
 impl DiskFile {
@@ -276,7 +281,26 @@ impl DiskFile {
             path,
             text,
             indexed: OnceLock::new(),
+            analysis: Mutex::new(None),
         }
+    }
+
+    /// The analysis made in `epoch`, if there is one.
+    fn cached_analysis(&self, epoch: u64) -> Option<Arc<Vec<opentide_core::Diagnostic>>> {
+        let held = self
+            .analysis
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        held.as_ref()
+            .filter(|(at, _)| *at == epoch)
+            .map(|(_, found)| Arc::clone(found))
+    }
+
+    fn keep_analysis(&self, epoch: u64, found: Arc<Vec<opentide_core::Diagnostic>>) {
+        *self
+            .analysis
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((epoch, found));
     }
 
     /// Its index entry; `None` for a file that is no object. It is read
@@ -516,6 +540,12 @@ pub(crate) struct Session {
     /// disk, `visibility.toml`, the roots. A cached analysis is current only
     /// for the generation it ran in (#185 P1.3).
     generation: Cell<u64>,
+    /// Bumped by what changes how *any* object is analysed: the same causes as
+    /// [`generation`](Self::generation) except an edit of, or a change to, an
+    /// object file, which no other object's analysis reads. A closed file's
+    /// analysis is current for the epoch it ran in, so typing in one rule
+    /// does not make the editor's workspace pull analyse every other again.
+    env_epoch: Cell<u64>,
     cache: RefCell<HashMap<String, (u64, Arc<AnalyzeResponse>)>>,
     /// How many analyses ran, for the tests (`opentide/__stats`).
     pub analyses: Cell<u64>,
@@ -882,6 +912,9 @@ impl Session {
                 // Catalogs generated on a thread arrive whenever they are
                 // ready, after the declarations were installed.
                 self.active.set(None);
+                // Every analysis reads the catalogs: the first generated one
+                // replaces the compiled-in snapshot without a `touch`.
+                self.env_epoch.set(self.env_epoch.get() + 1);
                 if installed.replace(catalog).is_some() {
                     self.touch();
                 }
@@ -917,6 +950,14 @@ impl Session {
     /// Something an analysis reads changed.
     pub(crate) fn touch(&self) {
         self.generation.set(self.generation.get() + 1);
+        self.env_epoch.set(self.env_epoch.get() + 1);
+    }
+
+    /// An object file changed (an edit of an open one, a file on disk): the
+    /// analyses of the open documents and the workspace's findings are out
+    /// of date, the analysis of every other object is not.
+    pub(crate) fn touch_object(&self) {
+        self.generation.set(self.generation.get() + 1);
     }
 
     /// An open Tide document changed: the index of its root is rebuilt on
@@ -929,7 +970,7 @@ impl Session {
                 self.loose_catalog.dirty.set(true);
             }
         }
-        self.touch();
+        self.touch_object();
     }
 
     /// A new batch: without a file watcher the disk is read again, and an
@@ -1419,6 +1460,49 @@ impl Session {
             .values()
             .filter_map(|file| Some((file.entry()?.path.clone(), file.text.clone())))
             .collect()
+    }
+
+    /// What the engine's analysis finds in the object file at `path` of
+    /// `root`, which `text` is the text of: made once for each file text and
+    /// [`env_epoch`](Self::env_epoch), then read from the file's entry (a
+    /// workspace pull asks for every closed file every two seconds).
+    pub(crate) fn closed_analysis(
+        &self,
+        root: usize,
+        path: &str,
+        text: &str,
+        host: &dyn opentide_analysis::WorkspaceHost,
+    ) -> Arc<Vec<opentide_core::Diagnostic>> {
+        let epoch = self.env_epoch.get();
+        let key = path_key(path);
+        let cached = self.roots.get(root).and_then(|r| {
+            r.disk
+                .borrow()
+                .files
+                .get(&key)
+                .filter(|file| file.text == text)
+                .and_then(|file| file.cached_analysis(epoch))
+        });
+        if let Some(found) = cached {
+            return found;
+        }
+        let found = Arc::new(
+            opentide_analysis::analyze(
+                host,
+                opentide_analysis::AnalyzeRequest {
+                    uri: path.to_string(),
+                    language: LanguageId::TideYaml,
+                    text: text.to_string(),
+                },
+            )
+            .diagnostics,
+        );
+        if let Some(r) = self.roots.get(root)
+            && let Some(file) = r.disk.borrow().files.get(&key).filter(|f| f.text == text)
+        {
+            file.keep_analysis(epoch, Arc::clone(&found));
+        }
+        found
     }
 
     /// The root holding an object file, by its path.
