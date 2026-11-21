@@ -740,6 +740,8 @@ for (const server of SERVERS) {
         const tools = await call(2, "tools/list", {});
         const listed = (tools.result as { tools: { name: string }[] }).tools.map((tool) => tool.name);
         assert.ok(listed.length > 0, JSON.stringify(tools));
+        // A session that began with `initialize` keeps the legacy shapes: no `resultType` (2026-07-28 requires it).
+        assert.equal("resultType" in (tools.result as object), false, JSON.stringify(Object.keys(tools.result as object)));
         const again = await call(3, "tools/list", {});
         assert.deepEqual(again.result, tools.result);
       } finally {
@@ -813,7 +815,20 @@ for (const server of SERVERS) {
         assert.deepEqual(discovered.supportedVersions, ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]);
         assert.ok("tools" in discovered.capabilities, JSON.stringify(discovered));
         assert.equal(discovered._meta["io.modelcontextprotocol/serverInfo"].name, "opentide");
-        // A stateless request: its version and capabilities in `_meta`.
+        // A stateless request: its version and capabilities in `_meta`. Revision 2026-07-28 requires
+        // `resultType` on every result (Kiro closes the connection on a tools/list without it).
+        for (const [method, params] of [
+          ["tools/list", {}],
+          ["tools/call", { name: "explain", arguments: { code: "yaml_parse" } }],
+          ["resources/list", {}],
+          ["resources/templates/list", {}],
+          ["resources/read", { uri: "opentide://vocabularies" }],
+          ["prompts/list", {}],
+          ["server/discover", {}],
+        ] as const) {
+          const answered = (await call(method, { ...params, _meta: meta })).result as { resultType?: string };
+          assert.equal(answered.resultType, "complete", method);
+        }
         const listed = (await call("tools/list", { _meta: meta })).result as { tools: { name: string }[] };
         assert.ok(listed.tools.length > 0 && listed.tools.some((tool) => tool.name === "search"), JSON.stringify(listed));
         // Legacy `initialize`: the version asked for when it is known, else the newest that has `initialize`.

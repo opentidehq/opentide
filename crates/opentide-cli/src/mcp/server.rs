@@ -48,17 +48,34 @@ impl Manifest {
         });
         Manifest {
             info: from_value(info).expect("the manifest's initialize result"),
-            tools: from_value(json!({"tools": manifest["tools"]})).expect("the manifest's tools"),
-            resources: from_value(json!({"resources": manifest["resources"]}))
+            tools: from_value(complete(json!({"tools": manifest["tools"]})))
+                .expect("the manifest's tools"),
+            resources: from_value(complete(json!({"resources": manifest["resources"]})))
                 .expect("the manifest's resources"),
-            templates: from_value(json!({"resourceTemplates": manifest["resourceTemplates"]}))
-                .expect("the manifest's resource templates"),
+            templates: from_value(complete(
+                json!({"resourceTemplates": manifest["resourceTemplates"]}),
+            ))
+            .expect("the manifest's resource templates"),
         }
     }
 }
 
 fn from_value<T: DeserializeOwned>(value: Value) -> Result<T, serde_json::Error> {
     serde_json::from_value(value)
+}
+
+/// *result* as a complete result: `resultType: "complete"`, which revision
+/// 2026-07-28 of MCP requires on every result. rmcp takes it off again for a
+/// peer on an older revision (`ServerResult::strip_result_type_for_legacy_peer`),
+/// so a session that began with `initialize` keeps the shape it always had.
+fn complete(mut result: Value) -> Value {
+    if let Some(members) = result.as_object_mut() {
+        members.insert(
+            "resultType".to_owned(),
+            Value::String("complete".to_owned()),
+        );
+    }
+    result
 }
 
 /// The MCP server.
@@ -371,7 +388,7 @@ impl ServerHandler for Server {
                 tools::call(&request.name, &arguments, &state.context(Some(interrupt)))
             })
             .await?;
-        from_value::<CallToolResult>(result)
+        from_value::<CallToolResult>(complete(result))
             .map(CallToolResponse::from)
             .map_err(|error| invalid_result(&error))
     }
@@ -403,7 +420,7 @@ impl ServerHandler for Server {
             })
             .await?;
         match answer {
-            Answer::Result(result) => from_value::<ReadResourceResult>(result)
+            Answer::Result(result) => from_value::<ReadResourceResult>(complete(result))
                 .map(ReadResourceResponse::from)
                 .map_err(|error| invalid_result(&error)),
             Answer::Error(error) => Err(error_data(&error)),

@@ -686,3 +686,80 @@ fn the_server_negotiates_the_protocol_versions_and_answers_server_discover() {
     );
     client.close();
 }
+
+/// Revision 2026-07-28 requires `resultType` on every result, and Kiro closes
+/// the connection on a `tools/list` without it. A request that carries its
+/// version in `_meta` (no `initialize`) gets `resultType: "complete"` on every
+/// result the server sends; a session that began with `initialize` keeps the
+/// shape it always had, with no `resultType` (rmcp takes it off for a peer on an
+/// older revision).
+#[test]
+fn every_result_of_the_2026_revision_has_result_type_and_a_legacy_session_has_none() {
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let calls = |meta: Option<&Value>| -> Vec<(&'static str, Value)> {
+        let with = |mut params: Value| {
+            if let Some(meta) = meta {
+                params["_meta"] = meta.clone();
+            }
+            params
+        };
+        vec![
+            ("tools/list", with(json!({}))),
+            (
+                "tools/call",
+                with(json!({"name": "explain", "arguments": {"code": "yaml_parse"}})),
+            ),
+            // A call that failed (isError true) is a complete result too.
+            (
+                "tools/call",
+                with(json!({"name": "validate_query",
+                            "arguments": {"query": "x", "platform": "splunk", "live": true}})),
+            ),
+            ("resources/list", with(json!({}))),
+            ("resources/templates/list", with(json!({}))),
+            (
+                "resources/read",
+                with(json!({"uri": "opentide://vocabularies"})),
+            ),
+            ("prompts/list", with(json!({}))),
+        ]
+    };
+    // No handshake: every result says it is complete.
+    let (_dir, _ws, mut stateless) = on_the_corpus();
+    for (method, params) in calls(Some(&meta)) {
+        let response = stateless.request(method, params);
+        let result = &response["result"];
+        assert_eq!(result["resultType"], "complete", "{method}: {response}");
+    }
+    let discovered = stateless.request("server/discover", json!({"_meta": meta}));
+    assert_eq!(
+        discovered["result"]["resultType"], "complete",
+        "{discovered}"
+    );
+    stateless.close();
+    // After `initialize`: the legacy shapes, no `resultType`, whichever version.
+    for version in ["2024-11-05", "2025-06-18", "2025-11-25"] {
+        let (_dir, _ws, mut legacy) = on_the_corpus();
+        let initialized = legacy.request(
+            "initialize",
+            json!({"protocolVersion": version, "capabilities": {},
+                   "clientInfo": {"name": "opentide-e2e", "version": "1"}}),
+        );
+        assert_eq!(initialized["result"]["protocolVersion"], version);
+        legacy.notify("notifications/initialized");
+        for (method, params) in calls(None) {
+            let response = legacy.request(method, params);
+            let result = response["result"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{response}"));
+            assert!(
+                !result.contains_key("resultType"),
+                "{version} {method}: {response}"
+            );
+        }
+        legacy.close();
+    }
+}
