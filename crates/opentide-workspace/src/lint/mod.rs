@@ -550,7 +550,7 @@ type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>
 /// What a host that runs `lint` again and again over one workspace
 /// ([`crate::Workspace::editor_lint`], once per keystroke) keeps between runs:
 /// the light record of each object file the run does not report on
-/// ([`load_record`]), for the document it was read from. A file whose
+/// (`load_record`), for the document it was read from. A file whose
 /// document is the one it was is not read again.
 #[derive(Default)]
 pub struct RecordCache {
