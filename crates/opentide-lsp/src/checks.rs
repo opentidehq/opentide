@@ -170,6 +170,8 @@ pub(crate) struct RootChecks {
     stamps: HashMap<PathBuf, u64>,
     /// Why the configuration does not resolve, when it does not.
     pub failure: Option<String>,
+    /// The folders the last workspace that loaded read.
+    scope: WatchScope,
     /// The field catalogs generated for the workspace.
     catalog: crate::models::FieldCatalog,
 }
@@ -192,28 +194,34 @@ impl Default for RootChecks {
             base_stamp: 0,
             stamps: HashMap::new(),
             failure: None,
+            scope: WatchScope::default(),
             catalog: crate::models::FieldCatalog::default(),
         }
     }
 }
 
 impl RootChecks {
-    /// The folders the workspace reads, once loaded (none before), as the
-    /// configuration resolved them: a watcher is asked for each, and asked
-    /// again when `paths.toml` moves one.
+    /// The folders the workspace read, as the configuration last resolved them
+    /// (none before the first load): kept across a configuration that does not
+    /// resolve, so what watches them is not dropped while it is being mended.
     pub(crate) fn watch_scope(&self) -> WatchScope {
+        self.scope.clone()
+    }
+
+    /// Take [`WatchScope`] from the workspace as it is.
+    fn note_scope(&mut self) {
         let Some(workspace) = self.workspace.as_ref() else {
-            return WatchScope::default();
+            return;
         };
         let configuration = workspace.configuration();
-        WatchScope {
+        self.scope = WatchScope {
             object_folders: configuration
                 .object_folders
                 .iter()
                 .filter_map(|folder| folder.path.clone())
                 .collect(),
             configuration_folders: configuration.folders.clone(),
-        }
+        };
     }
 
     /// What the workspace read and parsed so far, once loaded.
@@ -370,7 +378,10 @@ impl RootChecks {
                 }
             };
             match result {
-                Ok(()) => self.failure = None,
+                Ok(()) => {
+                    self.failure = None;
+                    self.note_scope();
+                }
                 Err(error) => {
                     // The configuration stops every command: nothing is
                     // checked until it resolves again.

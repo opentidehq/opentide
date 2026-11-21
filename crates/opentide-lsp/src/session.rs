@@ -285,6 +285,41 @@ pub(crate) enum Sighting {
     Changed,
 }
 
+/// `folder` as the front of a glob: its separators `/`, and the characters a
+/// glob reads (`[`, `*`, `?`) as one-character classes, which match only
+/// themselves. A brace cannot be escaped in an LSP glob: the folder is
+/// then its nearest ancestor with none (`true`), and the glob matches
+/// everything under that.
+fn glob_path(folder: &str) -> (String, bool) {
+    let folder = folder.replace('\\', "/");
+    let mut kept: Vec<&str> = Vec::new();
+    let mut coarse = false;
+    for part in folder.trim_end_matches('/').split('/') {
+        if part.contains(['{', '}']) {
+            coarse = true;
+            break;
+        }
+        kept.push(part);
+    }
+    let mut escaped = String::new();
+    for (i, part) in kept.iter().enumerate() {
+        if i > 0 {
+            escaped.push('/');
+        }
+        for c in part.chars() {
+            match c {
+                '[' | '*' | '?' => {
+                    escaped.push('[');
+                    escaped.push(c);
+                    escaped.push(']');
+                }
+                other => escaped.push(other),
+            }
+        }
+    }
+    (escaped, coarse)
+}
+
 /// The catalog each root (`None`: a document outside every root) last had
 /// installed for it, so that installing the catalog of another root, which
 /// happens each time requests alternate between roots, is not mistaken for
@@ -665,6 +700,9 @@ pub(crate) struct Session {
     /// The folders the client was last asked to watch beyond the fixed
     /// globs ([`sync_watchers`](Self::sync_watchers)).
     watched: RefCell<Watched>,
+    /// The client sent `initialized`: only then may the server ask it
+    /// anything.
+    pub(crate) client_initialized: Cell<bool>,
     batch: Cell<u64>,
     /// The root whose catalogs and declared datasets the engine has
     /// installed; `None` until the first request, and again after they
@@ -1071,35 +1109,57 @@ impl Session {
         self.touch();
     }
 
-    /// The folders the loaded workspaces read that the fixed globs
-    /// ([`initialized`](crate::handlers)) do not reach: an object folder
-    /// `paths.toml` put outside `objects/`, and a configuration folder
-    /// layered in from outside the root.
+    /// The folders root `index`'s workspace reads that the fixed globs
+    /// ([`initialized`](crate::handlers)) do not reach, as the editor spells
+    /// them: an object folder `paths.toml` put outside `objects/`, and the
+    /// configuration folder layered in from above the root. The workspace
+    /// names its folders resolved (symbolic links, macOS's `/var`, a Windows
+    /// short name), the root as the editor does: what is under the root is
+    /// mapped back to the editor's spelling, and what is not the root's own is
+    /// all that is left. The layered folder is the root's parent's, which
+    /// needs no workspace to load: a configuration that does not resolve (it
+    /// is being mended) does not drop the watch on it, and nor does the last
+    /// folders `paths.toml` named, which are kept across it.
+    fn extra_folders(&self, index: usize) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let Some(root) = self.roots.get(index) else {
+            return (Vec::new(), Vec::new());
+        };
+        let (scope, resolved_root) = root.checks.try_borrow().map_or_else(
+            |_| (crate::checks::WatchScope::default(), root.path.clone()),
+            |checks| (checks.watch_scope(), checks.resolve(&root.path)),
+        );
+        let own_objects = resolved_root.join("objects");
+        let in_editor_spelling = |folder: PathBuf| match folder.strip_prefix(&resolved_root) {
+            Ok(under) => root.path.join(under),
+            Err(_) => folder,
+        };
+        let objects = scope
+            .object_folders
+            .into_iter()
+            .filter(|folder| !folder.starts_with(&own_objects))
+            .map(in_editor_spelling)
+            .collect();
+        let layered = root
+            .path
+            .parent()
+            .map(|parent| parent.join(".opentide").join("configurations"))
+            .into_iter()
+            .collect();
+        (objects, layered)
+    }
+
     fn watch_targets(&self) -> Vec<WatchTarget> {
         let mut targets = Vec::new();
-        for root in &self.roots {
-            let scope = root
-                .checks
-                .try_borrow()
-                .map(|checks| checks.watch_scope())
-                .unwrap_or_default();
-            let objects = root.path.join("objects");
-            for folder in scope.object_folders {
-                if !folder.starts_with(&objects) {
-                    targets.push(WatchTarget {
-                        folder,
-                        pattern: "**",
-                    });
-                }
-            }
-            for folder in scope.configuration_folders {
-                if !folder.starts_with(&root.path) {
-                    targets.push(WatchTarget {
-                        folder,
-                        pattern: "**/*.toml",
-                    });
-                }
-            }
+        for index in 0..self.roots.len() {
+            let (objects, configurations) = self.extra_folders(index);
+            targets.extend(objects.into_iter().map(|folder| WatchTarget {
+                folder,
+                pattern: "**",
+            }));
+            targets.extend(configurations.into_iter().map(|folder| WatchTarget {
+                folder,
+                pattern: "**/*.toml",
+            }));
         }
         targets.sort();
         targets.dedup();
@@ -1112,7 +1172,7 @@ impl Session {
     /// or a layer comes or goes. Nothing is sent while they are the same.
     pub(crate) fn sync_watchers(&self) {
         use lsp_types::notification::Notification as _;
-        if !self.caps.watch_files {
+        if !self.caps.watch_files || !self.client_initialized.get() {
             return;
         }
         let targets = self.watch_targets();
@@ -1172,31 +1232,38 @@ impl Session {
                     pattern: target.pattern.to_string(),
                 })
             }
-            _ => lsp_types::GlobPattern::String(format!(
-                "{}/{}",
-                folder.replace('\\', "/").trim_end_matches('/'),
-                target.pattern
-            )),
+            _ => {
+                let (path, coarse) = glob_path(&folder);
+                if coarse {
+                    self.log_warning(&format!(
+                        "opentide-lsp: {folder} has a brace in its name, which a glob cannot \
+                         escape: the client is asked to watch {path} and everything under it"
+                    ));
+                }
+                let pattern = if coarse { "**" } else { target.pattern };
+                lsp_types::GlobPattern::String(format!("{path}/{pattern}"))
+            }
         }
     }
 
     /// The roots whose workspace reads the folder `path` is in, for a
-    /// folder [`sync_watchers`](Self::sync_watchers) asks about; `None` when
-    /// no root does.
+    /// folder [`sync_watchers`](Self::sync_watchers) asks about (not the
+    /// root's own `objects/` and `.opentide/configurations/`, which the fixed
+    /// globs name); `None` when no root does.
     pub(crate) fn scoped_roots(&self, path: &str) -> Option<Vec<(usize, ScopeKind)>> {
         let mut found = Vec::new();
         for (index, root) in self.roots.iter().enumerate() {
-            let Ok(checks) = root.checks.try_borrow() else {
-                continue;
-            };
-            let scope = checks.watch_scope();
-            let resolved = checks.resolve(Path::new(path));
+            let (objects, configurations) = self.extra_folders(index);
+            let resolved = root.checks.try_borrow().map_or_else(
+                |_| PathBuf::from(path),
+                |checks| checks.resolve(Path::new(path)),
+            );
             let inside = |folder: &PathBuf| {
                 Path::new(path).starts_with(folder) || resolved.starts_with(folder)
             };
-            if scope.object_folders.iter().any(inside) {
+            if objects.iter().any(inside) {
                 found.push((index, ScopeKind::Objects));
-            } else if scope.configuration_folders.iter().any(inside) {
+            } else if configurations.iter().any(inside) {
                 found.push((index, ScopeKind::Configuration));
             }
         }
@@ -2213,9 +2280,22 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::{
-        Arc, CatalogSightings, DiskObjects, HashMap, Ordering, Session, Sighting, path_key,
-        root_key,
+        Arc, CatalogSightings, DiskObjects, HashMap, Ordering, Session, Sighting, glob_path,
+        path_key, root_key,
     };
+
+    #[test]
+    fn a_folder_is_a_glob_that_matches_it_and_nothing_else() {
+        assert_eq!(
+            glob_path("/w/det [prod]"),
+            ("/w/det [[]prod]".into(), false)
+        );
+        assert_eq!(glob_path("/w/a*b?c"), ("/w/a[*]b[?]c".into(), false));
+        assert_eq!(glob_path("C:\\w\\x\\"), ("C:/w/x".into(), false));
+        // A brace cannot be escaped: the folder above it.
+        assert_eq!(glob_path("/w/{team}/rules"), ("/w".into(), true));
+        assert_eq!(glob_path("/w/a}"), ("/w".into(), true));
+    }
 
     #[test]
     fn switching_between_roots_is_not_a_catalog_that_changed() {

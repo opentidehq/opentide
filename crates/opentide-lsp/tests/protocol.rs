@@ -353,6 +353,8 @@ fn files_changed_on_disk_reach_the_open_documents() {
             "**/objects/**",
             "**/.opentide/configurations/**/*.toml",
             "**/.opentide/states/deployment/*.json",
+            "**/.opentide/states",
+            "**/.opentide/states/deployment",
         ]
     );
     lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
@@ -1412,11 +1414,18 @@ fn a_moved_object_folders_file_changed_on_disk_is_followed_by_the_next_pull() {
 /// Every request the server sent the client since the last call: a request
 /// the test sends in between is answered after them.
 fn server_requests(lsp: &mut Lsp) -> Vec<Value> {
-    send(lsp, 7000, "opentide/__stats", Value::Null);
-    until_response(lsp, 7000)
-        .into_iter()
-        .filter(|m| m.get("method").is_some() && m.get("id").is_some())
-        .collect()
+    // What the server asks after a batch is written after its answers: a second
+    // request, answered in a batch of its own, gathers it.
+    let mut asked = Vec::new();
+    for id in [7000, 7001] {
+        send(lsp, id, "opentide/__stats", Value::Null);
+        asked.extend(
+            until_response(lsp, id)
+                .into_iter()
+                .filter(|m| m.get("method").is_some() && m.get("id").is_some()),
+        );
+    }
+    asked
 }
 
 /// The watchers of the registrations among `requests`, as `(base, pattern)`:
@@ -1496,7 +1505,7 @@ fn the_folders_a_workspace_reads_are_watched_and_watched_again_when_they_move() 
     std::fs::write(moved.join("objective-1.0.yaml"), fixture(OBJECTIVE)).unwrap();
     let (mut lsp, _) =
         start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
-    // Nothing is known of the folders before the workspace loads.
+    // `paths.toml`'s folders are not known before the workspace loads.
     let first = server_requests(&mut lsp);
     let fixed = registered_watchers(&first);
     assert!(
@@ -1555,7 +1564,11 @@ fn the_folders_a_workspace_reads_are_watched_and_watched_again_when_they_move() 
         .find(|m| m["method"] == "client/unregisterCapability")
         .unwrap()["params"]["unregisterations"][0]["id"]
         .clone();
-    let earlier = after_load[0]["params"]["registrations"][0]["id"].clone();
+    let earlier = after_load
+        .iter()
+        .find(|m| m["method"] == "client/registerCapability")
+        .unwrap()["params"]["registrations"][0]["id"]
+        .clone();
     assert_eq!(old, earlier, "another registration was let go of");
 }
 
@@ -1594,10 +1607,12 @@ fn a_parents_configuration_folder_is_watched_and_followed() {
     std::fs::create_dir_all(&parent).unwrap();
     let (mut lsp, _) =
         start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(&root) }));
-    server_requests(&mut lsp);
+    let mut sent = Vec::new();
+    all_server_requests(&mut lsp, &mut sent);
     let unknown = "config_enum_unknown".to_string();
     assert!(!workspace_pull_codes(&mut lsp).contains(&unknown));
-    let watchers = registered_watchers(&server_requests(&mut lsp));
+    all_server_requests(&mut lsp, &mut sent);
+    let watchers = watchers_in_force(&sent);
     assert!(
         watchers.contains(&(file_uri(&parent), "**/*.toml".to_string())),
         "{watchers:?}"
@@ -1784,6 +1799,319 @@ fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
         assert_eq!(resolved["result"]["detail"], expected["result"]["detail"]);
         assert!(resolved["result"]["detail"].is_string(), "{resolved}");
     }
+}
+
+/// The watchers in force after `requests`, in the order the server sent them:
+/// each registration's, less those unregistered.
+fn watchers_in_force(requests: &[Value]) -> Vec<(String, String)> {
+    let mut registrations: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    for request in requests {
+        match request["method"].as_str() {
+            Some("client/registerCapability") => {
+                for registration in request["params"]["registrations"].as_array().unwrap() {
+                    registrations.push((
+                        registration["id"].as_str().unwrap().to_string(),
+                        registered_watchers(&[json!({
+                            "method": "client/registerCapability",
+                            "params": { "registrations": [registration] }
+                        })]),
+                    ));
+                }
+            }
+            Some("client/unregisterCapability") => {
+                for gone in request["params"]["unregisterations"].as_array().unwrap() {
+                    registrations.retain(|(id, _)| id != gone["id"].as_str().unwrap());
+                }
+            }
+            _ => {}
+        }
+    }
+    registrations.into_iter().flat_map(|(_, w)| w).collect()
+}
+
+/// Every server request since the client started, across calls.
+fn all_server_requests(lsp: &mut Lsp, so_far: &mut Vec<Value>) -> Vec<Value> {
+    let fresh = server_requests(lsp);
+    so_far.extend(fresh.clone());
+    fresh
+}
+
+/// A workspace pull's reports, by file URI.
+fn workspace_pull_items(lsp: &mut Lsp) -> Vec<(String, Vec<String>)> {
+    let report = lsp.request("workspace/diagnostic", json!({ "previousResultIds": [] }));
+    report["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{report}"))
+        .iter()
+        .map(|item| {
+            (
+                item["uri"].as_str().unwrap().to_string(),
+                codes_of(item["items"].as_array().unwrap_or(&Vec::new())),
+            )
+        })
+        .collect()
+}
+
+/// `visibility.toml` is the root's own configuration file, which the fixed
+/// globs name: once the workspace has loaded (and with it the folders it
+/// reads), writing it still declares the datasets the open queries are
+/// checked against.
+#[test]
+fn visibility_toml_written_after_the_workspace_loaded_rechecks_an_open_query() {
+    let scratch = workspace("visibility-loaded", true);
+    let root = &scratch.0;
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "rootUri": file_uri(root)
+    }));
+    // The workspace loads with the first pull.
+    workspace_pull_codes(&mut lsp);
+    let uri = file_uri(&root.join("hunt.kql"));
+    open(&mut lsp, &uri, "kql", "NTAIpDetails | take 1");
+    assert!(pulled(&mut lsp, &uri).is_empty());
+
+    let config = root.join(".opentide/configurations");
+    std::fs::create_dir_all(&config).unwrap();
+    let visibility = config.join("visibility.toml");
+    std::fs::write(
+        &visibility,
+        "[[logsources]]\nname = \"NTANetAnalytics\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
+    )
+    .unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&visibility), "type": 1 }] }),
+    );
+    assert_eq!(
+        pulled(&mut lsp, &uri),
+        ["kql_table_not_declared"],
+        "the file's event went to the configuration branch, not the datasets'"
+    );
+}
+
+/// A root named through a symbolic link: the workspace names its folders
+/// resolved, the editor by the link. The root's own folders are the fixed
+/// globs', whatever the spelling, and the client is not asked for them twice.
+#[cfg(unix)]
+#[test]
+fn a_root_named_through_a_symbolic_link_registers_no_folder_of_its_own() {
+    let scratch = workspace("workspace-watch-link-real", true);
+    let link = scratch.0.parent().unwrap().join(format!(
+        "opentide-e2e-link-{}",
+        scratch.0.file_name().unwrap().to_string_lossy()
+    ));
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&scratch.0, &link).unwrap();
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "rootUri": file_uri(&link)
+    }));
+    server_requests(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    let after_load = server_requests(&mut lsp);
+    let extra = own_watchers(&after_load, &link);
+    let _ = std::fs::remove_file(&link);
+    assert!(
+        extra.is_empty(),
+        "folders of the root's own were registered: {extra:?}"
+    );
+}
+
+/// A configuration that does not resolve (it is being mended) does not take
+/// the watch on the layered folder away, and one that is broken from the start
+/// is watched too: the file that mends it is what is waited for.
+#[test]
+fn the_layered_configuration_stays_watched_while_it_does_not_resolve() {
+    let scratch = workspace("workspace-watch-broken", false);
+    let root = scratch.0.join("child");
+    std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+    std::fs::write(root.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let parent = scratch.0.join(".opentide/configurations");
+    std::fs::create_dir_all(&parent).unwrap();
+    let layered = (file_uri(&parent), "**/*.toml".to_string());
+    let deployment = parent.join("deployment.toml");
+    // Broken from the start.
+    std::fs::write(&deployment, "[[statuses\n").unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(&root) }));
+    let mut sent = Vec::new();
+    all_server_requests(&mut lsp, &mut sent);
+    workspace_pull_codes(&mut lsp);
+    all_server_requests(&mut lsp, &mut sent);
+    assert!(
+        watchers_in_force(&sent).contains(&layered),
+        "the broken layer is not watched: {:?}",
+        watchers_in_force(&sent)
+    );
+
+    // Mended, then broken again once the workspace has loaded.
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 1 }] }),
+    );
+    let unknown = "config_enum_unknown".to_string();
+    assert!(workspace_pull_codes(&mut lsp).contains(&unknown));
+    all_server_requests(&mut lsp, &mut sent);
+    std::fs::write(&deployment, "[[statuses\n").unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
+    );
+    workspace_pull_codes(&mut lsp);
+    all_server_requests(&mut lsp, &mut sent);
+    assert!(
+        watchers_in_force(&sent).contains(&layered),
+        "the layer was let go of when it broke: {:?}",
+        watchers_in_force(&sent)
+    );
+    // And what mends it is followed.
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
+    );
+    assert!(workspace_pull_codes(&mut lsp).contains(&unknown));
+}
+
+/// Two workspace folders with a layered configuration each, the second one's
+/// broken at first: what mends it is followed for the second folder, not the
+/// first (the root a path under neither falls back to). This holds the
+/// routing; that the broken layer stays watched is
+/// `the_layered_configuration_stays_watched_while_it_does_not_resolve`.
+#[test]
+fn a_parents_configuration_change_goes_to_the_root_it_is_layered_into() {
+    let scratch = workspace("workspace-watch-two-parents", false);
+    let rule = fixture(RULE);
+    let child = |name: &str| {
+        let root = scratch.0.join(name).join("child");
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::write(root.join("objects/rules/rule-1.0.yaml"), &rule).unwrap();
+        std::fs::create_dir_all(root.parent().unwrap().join(".opentide/configurations")).unwrap();
+        root
+    };
+    let (first, second) = (child("one"), child("two"));
+    // The second root's layered configuration does not resolve at first: its
+    // workspace has none to name the folder, and the path is under no root.
+    std::fs::write(
+        second
+            .parent()
+            .unwrap()
+            .join(".opentide/configurations/deployment.toml"),
+        "[[statuses\n",
+    )
+    .unwrap();
+    let folder =
+        |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "workspaceFolders": [folder(&first, "one"), folder(&second, "two")]
+    }));
+    workspace_pull_items(&mut lsp);
+    let deployment = second
+        .parent()
+        .unwrap()
+        .join(".opentide/configurations/deployment.toml");
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 1 }] }),
+    );
+    let unknown = "config_enum_unknown".to_string();
+    let by_root = |items: &[(String, Vec<String>)], root: &std::path::Path| {
+        items
+            .iter()
+            .find(|(uri, _)| uri.starts_with(&file_uri(root)))
+            .map(|(_, codes)| codes.clone())
+            .unwrap_or_else(|| panic!("no report under {}: {items:?}", root.display()))
+    };
+    let items = workspace_pull_items(&mut lsp);
+    assert!(by_root(&items, &second).contains(&unknown), "{items:?}");
+    assert!(
+        !by_root(&items, &first).contains(&unknown),
+        "the first root's findings changed with the second's parent: {items:?}"
+    );
+}
+
+/// A folder named with what a glob reads is watched by its own name; one with
+/// a brace, which a glob cannot escape, by the folder above it.
+#[test]
+fn a_folder_with_a_glob_character_in_its_name_is_watched_by_its_name() {
+    let scratch = workspace("workspace-watch-glob-chars", false);
+    let moved = move_objectives(&scratch.0, "objectives [prod]");
+    std::fs::create_dir_all(&moved).unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true }, "didChangeWatchedFiles": { "dynamicRegistration": true } }
+    }, "rootUri": file_uri(&scratch.0) }));
+    server_requests(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    let watchers = own_watchers(&server_requests(&mut lsp), &scratch.0);
+    let root = scratch.0.display().to_string().replace('\\', "/");
+    assert_eq!(
+        watchers,
+        vec![(String::new(), format!("{root}/objectives [[]prod]/**"))]
+    );
+
+    move_objectives(&scratch.0, "{team}");
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{
+            "uri": file_uri(&scratch.0.join(".opentide/configurations/paths.toml")),
+            "type": 2
+        }] }),
+    );
+    workspace_pull_codes(&mut lsp);
+    let watchers = own_watchers(&server_requests(&mut lsp), &scratch.0);
+    assert_eq!(watchers, vec![(String::new(), format!("{root}/**"))]);
+}
+
+/// A branch switch deletes `.opentide/states/` whole, which a client reports
+/// as one event for the folder: the findings are made again, and the folders
+/// are watched for it.
+#[test]
+fn deleting_the_states_folder_makes_the_next_pull_be_made_again() {
+    let scratch = workspace("workspace-watch-states-folder", true);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
+    let fixed = registered_watchers(&server_requests(&mut lsp));
+    for glob in ["**/.opentide/states", "**/.opentide/states/deployment"] {
+        assert!(
+            fixed.iter().any(|(_, g)| g == glob),
+            "{glob} not watched: {fixed:?}"
+        );
+    }
+    let objective = file_uri(&root.join("objects/objectives/objective-1.0.yaml"));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    let hits = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["workspaceReportHits"]
+            .as_u64()
+            .unwrap()
+    };
+    let shards = root.join(".opentide/states/deployment");
+    std::fs::create_dir_all(&shards).unwrap();
+    std::fs::write(
+        shards.join("00000000-0000-4000-8003-000000000001.json"),
+        "{}",
+    )
+    .unwrap();
+    workspace_pull_codes(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    let before = hits(&mut lsp);
+    assert_eq!(before, 1);
+
+    std::fs::remove_dir_all(root.join(".opentide/states")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&root.join(".opentide/states")), "type": 3 }] }),
+    );
+    workspace_pull_codes(&mut lsp);
+    assert_eq!(
+        hits(&mut lsp),
+        before,
+        "the pull after the folder was deleted came from the old report"
+    );
 }
 
 /// What nothing reports (no watcher) is never served from what was kept:

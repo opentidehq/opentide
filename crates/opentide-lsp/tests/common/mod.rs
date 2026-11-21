@@ -101,10 +101,12 @@ impl Lsp {
         }));
         loop {
             let msg = self.read();
-            if msg.get("id") == Some(&json!(id)) {
+            // A request the server sends has an id of its own, which may be
+            // this one: only a response (no method) answers.
+            if msg.get("id") == Some(&json!(id)) && msg.get("method").is_none() {
                 return msg;
             }
-            // skip notifications (publishDiagnostics)
+            // skip notifications (publishDiagnostics) and the server's requests
         }
     }
 
