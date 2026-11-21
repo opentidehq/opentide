@@ -15,8 +15,8 @@ const q = (xs, p) => {
   return s[lo] + (s[hi] - s[lo]) * (i - lo);
 };
 const f = (x) => (Number.isNaN(x) ? '-' : x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2));
-const files = readdirSync(dir).filter((n) => n.endsWith('.json'));
-const reports = files.map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8')));
+const files = readdirSync(dir).filter((n) => n.endsWith('.json') && !n.startsWith('ed-'));
+const reports = files.map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8'))).filter((r) => r.machine);
 const tiers = order.length ? order : [...new Set(reports.map((r) => r.label.replace(/-(small|large)$/, '')))];
 const get = (tier, ws) => reports.find((r) => r.label === `${tier}-${ws}`);
 

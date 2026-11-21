@@ -23,7 +23,7 @@ bench() { # label workspace-name workspace-dir extra-args... -- command...
 }
 
 tiers=("$@")
-[ ${#tiers[@]} -eq 0 ] && tiers=(py0.28.1 engine0.10.0 native-rc2 py1.0.0rc2 wasi-rc2 engine-rc2 native-head native-fix-a native-fixed)
+[ ${#tiers[@]} -eq 0 ] && tiers=(py0.28.1 engine0.10.0 native-rc2 py1.0.0rc2 wasi-rc2 engine-rc2 wasi-fixed native-head native-fix-a native-fixed)
 
 for tier in "${tiers[@]}"; do
   for wsname in small large; do
@@ -34,6 +34,7 @@ for tier in "${tiers[@]}"; do
       native-rc2)  bin="$WORK/dl-rc2/opentide-lsp-v1.0.0-rc.2-x86_64-unknown-linux-gnu"; [ -x "$bin" ] && bench "$tier" "$wsname" "$ws" -- "$bin" --stdio ;;
       py1.0.0rc2)  [ -x "$WORK/venv-rc2/bin/opentide" ] && bench "$tier" "$wsname" "$ws" -- "$WORK/venv-rc2/bin/opentide" lsp start ;;
       wasi-rc2)    [ -f "$WORK/dl-rc2/opentide-lsp-wasm32-wasip1.wasm" ] && bench "$tier" "$wsname" "$ws" -- node --no-turbo-fast-api-calls "$WASI_RUN" "$WORK/dl-rc2/opentide-lsp-wasm32-wasip1.wasm" --stdio ;;
+      wasi-fixed)  [ -f "$WORK/bins/opentide-lsp-fixed.wasm" ] && bench "$tier" "$wsname" "$ws" -- node --no-turbo-fast-api-calls "$WASI_RUN" "$WORK/bins/opentide-lsp-fixed.wasm" --stdio ;;
       engine-rc2)  [ -f "$WORK/dl-rc2/web/opentide_wasm.js" ] && bench "$tier" "$wsname" "$ws" --worker "$HERE/engine-worker.mjs" --module "$WORK/dl-rc2/web/opentide_wasm_bg.wasm" --glue "$WORK/dl-rc2/web/opentide_wasm.js" ;;
       native-head) [ -x "$WORK/bins/opentide-lsp-head" ] && bench "$tier" "$wsname" "$ws" -- "$WORK/bins/opentide-lsp-head" --stdio ;;
       native-fix-a) [ -x "$WORK/bins/opentide-lsp-fix-a" ] && bench "$tier" "$wsname" "$ws" -- "$WORK/bins/opentide-lsp-fix-a" --stdio ;;
