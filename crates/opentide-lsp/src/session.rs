@@ -265,6 +265,9 @@ pub(crate) fn root_key(path: &str) -> String {
 /// diagnostics and the diagnostics.
 pub(crate) type ReportEntry = (lsp_types::Uri, String, Vec<lsp_types::Diagnostic>);
 
+/// A workspace pull's report, and the [`Session::state_key`] it was made in.
+pub(crate) type CachedReport = ((u64, u64), Arc<Vec<ReportEntry>>);
+
 /// An object file on disk: its path and text, indexed on first use (the
 /// first request that reads the editor's index: a hover, a completion, the
 /// catalog, an Elastic rule's advisories), not when it is read.
@@ -560,7 +563,7 @@ pub(crate) struct Session {
     /// [`state_key`](Self::state_key) it was made in: the client asks again
     /// two seconds after every answer, and when nothing changed since, the
     /// answer is the same.
-    pub workspace_report: RefCell<Option<((u64, u64), Arc<Vec<ReportEntry>>)>>,
+    pub workspace_report: RefCell<Option<CachedReport>>,
     /// How many workspace pulls were answered from [`workspace_report`](Self::workspace_report),
     /// for the tests (`opentide/__stats`).
     pub workspace_report_hits: Cell<u64>,

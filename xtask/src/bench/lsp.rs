@@ -156,7 +156,11 @@ fn run_server<T>(
     run: &RunDir,
     document: &Path,
     before_spawn: impl FnOnce(),
-    drive: impl FnOnce(&mut ChildStdin, &mpsc::Receiver<Result<Option<Value>>>, &SessionInfo) -> Result<T>,
+    drive: impl FnOnce(
+        &mut ChildStdin,
+        &mpsc::Receiver<Result<Option<Value>>>,
+        &SessionInfo,
+    ) -> Result<T>,
 ) -> Result<(T, u64)> {
     let mut command = measure::command(program, args, run)?;
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
@@ -354,10 +358,10 @@ fn wait_for(
 
 /// How many times the editor pulls the workspace while it completes, in
 /// [`editor_latency`].
-pub const EDITOR_CYCLES: usize = 10;
+pub const EDITOR_CYCLES: i64 = 10;
 
 /// The pulls after the first that [`editor_latency`] leaves unmeasured.
-const SETTLE_PULLS: usize = 2;
+const SETTLE_PULLS: i64 = 2;
 
 /// What one run of [`editor_latency`] measured.
 #[derive(Clone, Copy, Debug)]
@@ -398,11 +402,13 @@ pub fn editor_latency(
     })
 }
 
-fn drive_editor(
+/// `initialize` as VS Code's client sends it (pull diagnostics, refresh and
+/// file watching), `initialized`, and `didOpen` of the document.
+fn start_editor(
     stdin: &mut ChildStdin,
     messages: &mpsc::Receiver<Result<Option<Value>>>,
     session: &SessionInfo,
-) -> Result<(Duration, Duration, Duration)> {
+) -> Result<()> {
     let name = Path::new(&session.root_uri).file_name().map_or_else(
         || "workspace".to_owned(),
         |n| n.to_string_lossy().into_owned(),
@@ -443,6 +449,15 @@ fn drive_editor(
             } }
         }),
     )?;
+    Ok(())
+}
+
+fn drive_editor(
+    stdin: &mut ChildStdin,
+    messages: &mpsc::Receiver<Result<Option<Value>>>,
+    session: &SessionInfo,
+) -> Result<(Duration, Duration, Duration)> {
+    start_editor(stdin, messages, session)?;
     let request = |stdin: &mut ChildStdin, id: i64, method: &str, params: Value| {
         write_message(
             stdin,
@@ -468,14 +483,14 @@ fn drive_editor(
     // next analyse every file again, once, at start-up. The steady state
     // is what the user spends the day in.
     for settle in 0..SETTLE_PULLS {
-        request(stdin, 4 + settle as i64, "workspace/diagnostic", pull.clone())?;
-        wait_for_all(stdin, messages, session.start, &[4 + settle as i64])?;
+        request(stdin, 4 + settle, "workspace/diagnostic", pull.clone())?;
+        wait_for_all(stdin, messages, session.start, &[4 + settle])?;
     }
 
     let mut worst = Duration::ZERO;
-    let mut pulls = Vec::with_capacity(EDITOR_CYCLES);
+    let mut pulls = Vec::new();
     for cycle in 0..EDITOR_CYCLES {
-        let (pull_id, completion_id) = (10 + 2 * cycle as i64, 11 + 2 * cycle as i64);
+        let (pull_id, completion_id) = (10 + 2 * cycle, 11 + 2 * cycle);
         let pull_sent = Instant::now();
         request(stdin, pull_id, "workspace/diagnostic", pull.clone())?;
         // The server has the pull by now, as it has two seconds after the

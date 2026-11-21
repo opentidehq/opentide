@@ -1216,7 +1216,11 @@ fn a_workspace_pull_analyses_each_closed_file_once() {
     assert_eq!(pull(&mut lsp), 1);
     assert_eq!(closed_analyses(&mut lsp), 1);
     assert_eq!(pull(&mut lsp), 1);
-    assert_eq!(closed_analyses(&mut lsp), 1, "the second pull analysed again");
+    assert_eq!(
+        closed_analyses(&mut lsp),
+        1,
+        "the second pull analysed again"
+    );
 
     // A keystroke in the open object changes what the workspace's findings
     // are, not how the rule is analysed.
@@ -1226,7 +1230,11 @@ fn a_workspace_pull_analyses_each_closed_file_once() {
                 "contentChanges": [{ "text": format!("{objective_text}\n# typed\n") }] }),
     );
     assert_eq!(pull(&mut lsp), 1);
-    assert_eq!(closed_analyses(&mut lsp), 1, "a keystroke made every closed file analysed again");
+    assert_eq!(
+        closed_analyses(&mut lsp),
+        1,
+        "a keystroke made every closed file analysed again"
+    );
 
     // A configuration file changed on disk is read by every analysis.
     lsp.notify(
@@ -1237,7 +1245,11 @@ fn a_workspace_pull_analyses_each_closed_file_once() {
         }] }),
     );
     assert_eq!(pull(&mut lsp), 1);
-    assert_eq!(closed_analyses(&mut lsp), 2, "a configuration change kept the old analysis");
+    assert_eq!(
+        closed_analyses(&mut lsp),
+        2,
+        "a configuration change kept the old analysis"
+    );
 }
 
 /// The client pulls again two seconds after every answer: when nothing changed
@@ -1261,7 +1273,10 @@ fn a_workspace_pull_with_nothing_changed_is_answered_from_the_last_report() {
             .unwrap()
     };
     let pull = |lsp: &mut Lsp, previous: Value| {
-        lsp.request("workspace/diagnostic", json!({ "previousResultIds": previous }))
+        lsp.request(
+            "workspace/diagnostic",
+            json!({ "previousResultIds": previous }),
+        )
     };
     let first = pull(&mut lsp, json!([]));
     assert_eq!(hits(&mut lsp), 0);
@@ -1270,7 +1285,10 @@ fn a_workspace_pull_with_nothing_changed_is_answered_from_the_last_report() {
     assert_eq!(hits(&mut lsp), 1, "the second pull was made again");
     assert_eq!(first["result"], again["result"], "a cached report differs");
     // What the client sends back, the cached report answers as unchanged.
-    let third = pull(&mut lsp, json!([{ "uri": rule["uri"], "value": rule["resultId"] }]));
+    let third = pull(
+        &mut lsp,
+        json!([{ "uri": rule["uri"], "value": rule["resultId"] }]),
+    );
     assert_eq!(hits(&mut lsp), 2);
     assert_eq!(third["result"]["items"][0]["kind"], "unchanged", "{third}");
 
@@ -1282,7 +1300,11 @@ fn a_workspace_pull_with_nothing_changed_is_answered_from_the_last_report() {
                 "contentChanges": [{ "text": format!("{objective_text}\n# typed\n") }] }),
     );
     pull(&mut lsp, json!([]));
-    assert_eq!(hits(&mut lsp), 2, "a pull after an edit came from the old report");
+    assert_eq!(
+        hits(&mut lsp),
+        2,
+        "a pull after an edit came from the old report"
+    );
     pull(&mut lsp, json!([]));
     assert_eq!(hits(&mut lsp), 3);
 }
@@ -1304,20 +1326,42 @@ fn a_batch_answers_diagnostics_after_hovers_and_completions() {
     open(&mut lsp, &uri, "opentide-yaml", &text);
     hold(&mut lsp, 900);
     let at = json!({ "textDocument": { "uri": uri }, "position": { "line": 0, "character": 2 } });
-    send(&mut lsp, 901, "workspace/diagnostic", json!({ "previousResultIds": [] }));
-    send(&mut lsp, 902, "textDocument/diagnostic", json!({ "textDocument": { "uri": uri } }));
+    send(
+        &mut lsp,
+        901,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    send(
+        &mut lsp,
+        902,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
     send(&mut lsp, 903, "textDocument/hover", at.clone());
     send(&mut lsp, 904, "textDocument/completion", at);
     // The two diagnostics requests are deferred in the order they arrived.
     let seen: Vec<Value> = until_response(&mut lsp, 902);
-    let position = |id: i64| seen.iter().position(|m| m["id"] == id && m.get("method").is_none());
+    let position = |id: i64| {
+        seen.iter()
+            .position(|m| m["id"] == id && m.get("method").is_none())
+    };
     let (hover, completion) = (position(903), position(904));
     let (workspace_pull, document_pull) = (position(901), position(902));
     assert!(hover.is_some() && completion.is_some(), "{seen:#?}");
-    assert!(workspace_pull.is_some() && document_pull.is_some(), "{seen:#?}");
-    assert!(hover < workspace_pull && completion < workspace_pull, "{seen:#?}");
+    assert!(
+        workspace_pull.is_some() && document_pull.is_some(),
+        "{seen:#?}"
+    );
+    assert!(
+        hover < workspace_pull && completion < workspace_pull,
+        "{seen:#?}"
+    );
     assert!(workspace_pull < document_pull, "{seen:#?}");
-    assert!(seen[workspace_pull.unwrap()]["result"]["items"].is_array(), "{seen:#?}");
+    assert!(
+        seen[workspace_pull.unwrap()]["result"]["items"].is_array(),
+        "{seen:#?}"
+    );
 }
 
 /// #215: a file-name finding's suggestion is a file name. A client that applies

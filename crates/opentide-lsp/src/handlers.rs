@@ -20,8 +20,8 @@ use opentide_highlight::encode_lsp_semantic_tokens;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, HashMap};
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Where the diagnostics reference lives: `#<code>` is each code's section.
 pub const DIAGNOSTICS_DOCS: &str = "https://opentide.org/docs/cli/diagnostics/";
@@ -1103,7 +1103,7 @@ fn handle_workspace_diagnostics(
     // it, and installs the catalogs, either of which moves the state key.
     for root in 0..session.roots.len() {
         let _span = crate::timing::Span::new("workspace/diagnostic: host");
-        drop(session.host(Some(root)));
+        let _ = session.host(Some(root));
     }
     let key = session.state_key();
     let cached = session
