@@ -1896,6 +1896,23 @@ fn hits(body: &Json) -> Json {
     }
 }
 
+/// Whether `answer` is Elasticsearch's 404 for an index that does not exist
+/// (`index_not_found_exception`, at the error or in its root cause). A 404 for
+/// any other reason, and every other status, is not.
+fn is_index_not_found(answer: &Answer) -> bool {
+    if answer.status != 404 {
+        return false;
+    }
+    let Some(body) = answer.json() else {
+        return false;
+    };
+    let Some(error) = body.get("error") else {
+        return false;
+    };
+    let is_missing = |value: &Json| matches!(value.get("type"), Some(Json::Str(kind)) if kind == "index_not_found_exception");
+    is_missing(error) || list(error.get("root_cause")).iter().any(is_missing)
+}
+
 /// `_total`: `hits.total` (or its `value`) when it is an integer.
 fn total(hits: &Json) -> i64 {
     let total = hits.get("total");
@@ -2217,7 +2234,14 @@ async fn kuery_preview(
             false,
         )
         .await?;
-    let body = body(&found, tenant, "preview alerts")?;
+    // The preview alerts index is created by the first alert a preview raises:
+    // a preview that raised none, on a Kibana that never raised one, has no
+    // index to read, which is no alerts. Any other refusal stays an error.
+    let body = if is_index_not_found(&found) {
+        Json::Object(Object::new())
+    } else {
+        body(&found, tenant, "preview alerts")?
+    };
     let rows: Vec<Json> = list(hits(&body).get("hits"))
         .iter()
         .filter(|hit| hit.as_object().is_some())
@@ -2710,6 +2734,39 @@ mod tests {
             write_failed(&answer(200), "create_elastic_rule_failed", "lab"),
             Ok(None)
         ));
+    }
+
+    /// RC2-3: only Elasticsearch's own 404 for a missing index is no data.
+    #[test]
+    fn only_a_missing_index_answer_is_index_not_found() {
+        let answer = |status: u16, body: &str| crate::answer::Answer {
+            status,
+            content_type: None,
+            body: body.as_bytes().to_vec(),
+            elapsed: std::time::Duration::ZERO,
+            credentials: crate::answer::Credentials::default(),
+        };
+        let missing = r#"{"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [i]"}],"type":"index_not_found_exception"},"status":404}"#;
+        assert!(is_index_not_found(&answer(404, missing)));
+        // The type only in the root cause, as a wrapped error has it.
+        let wrapped = r#"{"error":{"root_cause":[{"type":"index_not_found_exception"}],"type":"search_phase_execution_exception"}}"#;
+        assert!(is_index_not_found(&answer(404, wrapped)));
+        // The same body under another status, another 404, and no JSON.
+        assert!(!is_index_not_found(&answer(200, missing)));
+        assert!(!is_index_not_found(&answer(400, missing)));
+        assert!(!is_index_not_found(&answer(
+            404,
+            r#"{"error":{"type":"resource_not_found_exception"}}"#
+        )));
+        assert!(!is_index_not_found(&answer(
+            404,
+            r#"{"message":"Not Found"}"#
+        )));
+        assert!(!is_index_not_found(&answer(404, "<html>404</html>")));
+        assert!(!is_index_not_found(&answer(
+            404,
+            r#"{"error":"index_not_found_exception"}"#
+        )));
     }
 
     #[test]

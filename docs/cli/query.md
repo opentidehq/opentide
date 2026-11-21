@@ -154,7 +154,7 @@ A failed tenant has `status: "failed"`, `error` and, when the platform gave one,
 
 ## Safety
 
-The command reads telemetry and saves no search or rule. Splunk runs a one-shot job. CrowdStrike's job is stopped when the command stops waiting. SentinelOne PowerQuery and Carbon Black process searches have no cancel call: a search that outlives `--timeout` finishes on the tenant and expires there. An Elastic `kuery` query writes its preview alerts to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself. Credentials come from the platform file, as for `deploy`; an unset `$VAR` refuses the tenant before anything is sent. Rows are telemetry: nothing is written to disk unless you redirect stdout.
+The command reads telemetry and saves no search or rule. Splunk runs a one-shot job. CrowdStrike's job is stopped when the command stops waiting. SentinelOne PowerQuery and Carbon Black process searches have no cancel call: a search that outlives `--timeout` finishes on the tenant and expires there. An Elastic `kuery` query writes its preview alerts to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself, and creates it when a preview first raises an alert, so on a Kibana where none has, the query reports `0 rows`. Credentials come from the platform file, as for `deploy`; an unset `$VAR` refuses the tenant before anything is sent. Rows are telemetry: nothing is written to disk unless you redirect stdout.
 
 ## Related
 

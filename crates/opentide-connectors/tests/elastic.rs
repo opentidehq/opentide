@@ -289,6 +289,88 @@ fn elastic_query_sends_what_the_python_runner_sent() {
     );
 }
 
+/// `elastic/query`'s KQL query (`process.name: "powershell.exe"`) with the
+/// preview alerts read answered `status` and `body`, as a Kibana whose preview
+/// alerts index does not exist yet answers it (RC2-3).
+fn kuery_with_preview_read_answered(status: u16, body: &str) -> Replayed {
+    let mut cassette = support::cassette("elastic/query");
+    let mut preview = cassette.interactions.drain(4..6).collect::<Vec<_>>();
+    assert!(
+        preview[1]
+            .request
+            .url
+            .ends_with("/.preview.alerts-security.alerts-soc/_search")
+    );
+    preview[1].response.status = status;
+    preview[1].response.headers = vec![("content-type".into(), "application/json".into())];
+    preview[1].response.body = opentide_cassette::Body::Text(body.into());
+    cassette.interactions = preview;
+    Replayed::start_with(
+        cassette,
+        elastic::PLATFORM,
+        SETUP,
+        "ELASTIC_API_KEY",
+        &elastic::http_settings(std::time::Duration::from_secs(30)),
+    )
+}
+
+fn run_kuery(
+    tenant: &Replayed,
+) -> Result<opentide_connectors::connector::QueryOutcome, ConnectorError> {
+    let inputs = fixture("elastic");
+    let query = inputs.get("query").unwrap();
+    let mut request = QueryRequest::new(
+        r#"process.name: "powershell.exe""#,
+        "",
+        window(query.get("window").unwrap()),
+    );
+    request.language = "kuery".into();
+    block_on(Elastic.run(tenant.cx(), &request, &setup_index())).unwrap()
+}
+
+/// RC2-3: the preview alerts index is created by the first alert a preview
+/// raises, so a KQL query on a Kibana that never raised one reads an index
+/// that is not there. That is no alerts: 0 rows, not a failed tenant.
+#[test]
+fn elastic_kuery_on_a_missing_preview_alerts_index_is_zero_rows() {
+    let tenant = kuery_with_preview_read_answered(
+        404,
+        r#"{"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [.preview.alerts-security.alerts-soc]","resource.type":"index_or_alias","resource.id":".preview.alerts-security.alerts-soc","index_uuid":"_na_","index":".preview.alerts-security.alerts-soc"}],"type":"index_not_found_exception","reason":"no such index [.preview.alerts-security.alerts-soc]","resource.type":"index_or_alias","resource.id":".preview.alerts-security.alerts-soc","index_uuid":"_na_","index":".preview.alerts-security.alerts-soc"},"status":404}"#,
+    );
+    let outcome = run_kuery(&tenant).unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert!(outcome.rows.is_empty());
+    assert!(!outcome.truncated);
+    assert_eq!(outcome.language.as_deref(), Some("kuery"));
+    assert_eq!(outcome.vendor_query_id.as_deref(), Some("p-1"));
+}
+
+/// Only a missing index is no alerts: any other 404 on that read, and a 404
+/// that is not Elasticsearch's own answer, stay a refused query.
+#[test]
+fn elastic_kuery_keeps_every_other_preview_alerts_refusal() {
+    for body in [
+        r#"{"error":{"root_cause":[{"type":"resource_not_found_exception","reason":"no such thing"}],"type":"resource_not_found_exception","reason":"no such thing"},"status":404}"#,
+        r#"{"message":"Not Found","statusCode":404}"#,
+        "<html>not found</html>",
+    ] {
+        let tenant = kuery_with_preview_read_answered(404, body);
+        match run_kuery(&tenant) {
+            Err(refused @ ConnectorError::Refused { .. }) => assert!(
+                refused
+                    .text()
+                    .starts_with("Elastic refused the preview alerts query on replayed (HTTP 404)")
+                    || refused.text().starts_with(
+                        "Elastic did not answer the preview alerts query on replayed with JSON"
+                    ),
+                "{}",
+                refused.text()
+            ),
+            other => panic!("{body}: {other:?}"),
+        }
+    }
+}
+
 #[test]
 fn elastic_validate_checks_and_previews_each_rule() {
     let inputs = fixture("elastic");
