@@ -607,6 +607,7 @@ fn initialize(
 /// `visibility.toml`). The field catalogs are generated from the models
 /// (#926): `.opentide/lsp/catalogs/generated/` is not read.
 fn initialized(session: &mut Session) {
+    session.client_initialized.set(true);
     if !session.caps.watch_files {
         return;
     }
@@ -616,6 +617,10 @@ fn initialized(session: &mut Session) {
         "**/.opentide/configurations/**/*.toml".to_string(),
         // The deployment state shards `validate` checks.
         "**/.opentide/states/deployment/*.json".to_string(),
+        // The folders themselves: a client reports a deleted folder as one
+        // event, for the folder (a branch switch).
+        "**/.opentide/states".to_string(),
+        "**/.opentide/states/deployment".to_string(),
     ]
     .into_iter()
     .map(|glob| lsp::FileSystemWatcher {
@@ -838,6 +843,19 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.touch();
                 everything = true;
             }
+        } else if Session::is_visibility(uri) {
+            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
+                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
+            }
+            let open = session
+                .root_for(&path)
+                .and_then(|i| session.roots.get(i))
+                .is_some_and(|r| r.visibility.is_some());
+            // While the file is open the editor's buffer is the truth.
+            if !open {
+                session.reactivate();
+                everything = true;
+            }
         } else if let Some(scoped) = session.scoped_roots(&path) {
             // A folder `paths.toml` moved the objects to, or one layered in
             // from outside the root: the workspace reads it, the object index
@@ -861,19 +879,6 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
             }
             session.touch_object();
             everything = true;
-        } else if Session::is_visibility(uri) {
-            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
-                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
-            }
-            let open = session
-                .root_for(&path)
-                .and_then(|i| session.roots.get(i))
-                .is_some_and(|r| r.visibility.is_some());
-            // While the file is open the editor's buffer is the truth.
-            if !open {
-                session.reactivate();
-                everything = true;
-            }
         } else if normalized.contains(".opentide/configurations/") {
             session.touch();
             // The workspace resolves its configuration again.
@@ -888,12 +893,17 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
     }
 }
 
-/// Whether `path` (with `/` separators) is a deployment state shard.
+/// Whether `path` (with `/` separators) is a deployment state shard, or a
+/// folder that holds them: a client reports a deleted folder as one event for
+/// the folder, not for each file in it.
 fn is_state_shard(path: &str) -> bool {
-    path.contains("/.opentide/states/deployment/")
-        && std::path::Path::new(path)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+    let path = path.trim_end_matches('/');
+    path.ends_with("/.opentide/states")
+        || path.ends_with("/.opentide/states/deployment")
+        || (path.contains("/.opentide/states/deployment/")
+            && std::path::Path::new(path)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")))
 }
 
 /// `opentide/didChangeWorkspace`: merge the change into the supplied
