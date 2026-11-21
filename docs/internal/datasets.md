@@ -86,27 +86,27 @@ The code sections and every whole file stay below 7.0 (the gate fails above it).
 
 `cargo bench -p opentide-analysis --features queries --bench datasets`: a dataset is read once per process, so each case is a fresh process. Wall time is the median of 15; instructions are callgrind's, in the bench's own code, deterministic (`[datasets]` in `tests/bench/instructions.toml`).
 
-| First use of | Before ms | After ms | Change | Instructions before | after | Change |
-|---|---:|---:|---:|---:|---:|---:|
-| vocab-attack | 7.8 | 6.3 | -20% | 29.3 M | 29.3 M | -0% |
-| vocab-actors | 11.1 | 8.7 | -22% | 41.1 M | 43.9 M | +7% |
-| vocab-malapi | 3.0 | 2.2 | -24% | 9.8 M | 10.4 M | +6% |
-| vocab-all | 33.3 | 24.7 | -26% | 117.3 M | 123.9 M | +6% |
-| tide-vocab-attack | 36.6 | 15.6 | -58% | 145.9 M | 85.4 M | -41% |
-| kql-sentinel | 137.1 | 40.4 | -71% | 621.2 M | 169.4 M | -73% |
-| kql-defender | 92.5 | 24.0 | -74% | 463.3 M | 106.6 M | -77% |
-| spl | 4.3 | 4.7 | +10% | 20.0 M | 23.9 M | +20% |
-| esql | 5.3 | 6.0 | +13% | 24.5 M | 27.3 M | +11% |
-| eql | 0.7 | 0.7 | +9% | 1.8 M | 2.3 M | +29% |
-| lucene-carbon-black | 0.7 | 0.7 | -5% | 1.8 M | 2.3 M | +26% |
-| falco | 13.8 | 14.2 | +3% | 64.5 M | 72.7 M | +13% |
-| cql | 9.2 | 12.8 | +39% | 43.6 M | 48.7 M | +12% |
-| exabeam | 7.8 | 7.8 | -1% | 35.2 M | 43.6 M | +24% |
-| yara | 4.8 | 4.9 | +2% | 22.1 M | 25.1 M | +14% |
-| yaral | 4.3 | 5.1 | +19% | 19.3 M | 24.3 M | +26% |
-| tide-yaml | 3.4 | 7.5 | +120% | 16.6 M | 32.2 M | +94% |
+| First use of | Before ms | After ms | Change | Instructions before | after | Change | RSS growth before KiB | after KiB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| vocab-attack | 6.2 | 6.2 | +0% | 29.3 M | 29.3 M | -0% | 4676 | 4052 |
+| vocab-actors | 8.2 | 9.0 | +10% | 41.1 M | 43.9 M | +7% | 4564 | 4636 |
+| vocab-malapi | 2.0 | 2.2 | +10% | 9.8 M | 10.4 M | +6% | 2376 | 2988 |
+| vocab-all | 23.9 | 24.0 | +0% | 117.3 M | 123.9 M | +6% | 10240 | 8652 |
+| tide-vocab-attack | 34.3 | 15.5 | -55% | 145.9 M | 85.4 M | -41% | 10668 | 6780 |
+| kql-sentinel | 116.8 | 39.7 | -66% | 621.2 M | 169.4 M | -73% | 20024 | 17108 |
+| kql-defender | 82.1 | 25.2 | -69% | 463.3 M | 106.6 M | -77% | 13916 | 10680 |
+| spl | 4.0 | 1.3 | -69% | 20.0 M | 5.8 M | -71% | 3544 | 3864 |
+| esql | 5.1 | 1.2 | -77% | 24.5 M | 4.7 M | -81% | 4448 | 3888 |
+| eql | 0.6 | 0.7 | +8% | 1.8 M | 2.3 M | +29% | 2452 | 3076 |
+| lucene-carbon-black | 0.6 | 0.7 | +18% | 1.8 M | 2.3 M | +26% | 2108 | 2820 |
+| falco | 12.6 | 3.2 | -75% | 64.5 M | 11.9 M | -82% | 4724 | 3644 |
+| cql | 8.5 | 1.6 | -81% | 43.6 M | 6.8 M | -84% | 3836 | 3264 |
+| exabeam | 6.4 | 2.2 | -65% | 35.2 M | 12.9 M | -63% | 3492 | 3164 |
+| yara | 4.4 | 1.1 | -76% | 22.1 M | 4.9 M | -78% | 3260 | 3288 |
+| yaral | 4.3 | 1.2 | -72% | 19.3 M | 6.8 M | -65% | 3468 | 3184 |
+| tide-yaml | 3.2 | 2.1 | -33% | 16.6 M | 8.8 M | -47% | 5720 | 4468 |
 
-The parsed-at-build datasets are faster (KQL's Sentinel and Defender catalogs 70% and 74% sooner, the Tide vocabularies the editor reads 57%). The vocabularies are not slower: their descriptions are decoded only when one is asked for. The language catalogs, which are only compressed, pay the decode: under 1 ms for most, 4 ms for the CQL catalog's 0.9 MB, and about 4 ms more for the first Tide YAML analysis, which reads the 1.1 MB Tide field catalog. Moving one of those to a pre-parsed model is a change of its crate (see above).
+Each case is measured by interleaving the two builds, one after the other, 15 rounds, in a fresh process each (`cargo bench -p opentide-analysis --features queries --bench datasets`; the raw samples of this run are kept with the PR). Run to run, a case moves by up to 10% (vocab-actors measured -1.7% over 41 rounds and +10% over 15), so read the large changes: every language catalog and the Tide field catalog are now parsed once at build time and are 33 to 81% faster to first use, KQL's Sentinel and Defender catalogs 66% and 69%, the Tide vocabularies the editor reads 55%. The bundled vocabularies (a lean document decoded and read item by item, descriptions decoded when one is asked for) and the small catalogs stored only as compressed text (EQL, Carbon Black's Lucene fields) are within noise in time, 5 to 29% more instructions (the decoder), and for the smallest of them 0.6 to 0.7 MiB more resident memory on first use: the decoder's code pages and its buffers. Every other case grows less than before.
 
 ### Language server
 
@@ -128,4 +128,4 @@ The WASI module's own start under wasmtime (`opentide-lsp.wasm help`): 153 ms, 1
 
 - `scripts/av/markers.py` (pytest, `tests/test_scripts/test_av_markers.py`, and [the release gate](publishing.md#the-antivirus-gate)): none of `moneropool`, `sekurlsa`, `Login Data`, `Invoke-Mimikatz`, `jndi:ldap` in plain text, ASCII case folded and as UTF-16, in any artifact, archives opened. A source distribution (the sdist, a `.crate`) keeps the datasets as the TOML sources the build compresses, and the tests' sources name the techniques they detect: the text source files of a `.tar.gz` or `.crate` (and its `data`, `assets`, `tests` directories) are exempt from the markers, and the YARA gate skips them; every compiled artifact and every binary member is held to both.
 - `cargo xtask throughput --check` holds the first use of each dataset to `tests/bench/instructions.toml` (`[datasets]`, within 3%); `cargo bench -p opentide-analysis --features queries --bench datasets` prints the wall time and the resident-set growth of each. `scripts/av/sizes.py` holds each artifact to `tests/bench/sizes.toml`.
-- The crates' tests hold what was pre-parsed to what the whole file holds, item for item (`opentide-kql` `tables.rs`, `opentide-tide` `vocabs.rs`), and `opentide-schema`'s tests hold every compiled-in file to the file on disk.
+- The crates' tests hold what was pre-parsed to what the whole file holds, item for item (`opentide-kql` `tables.rs`, `opentide-tide` `vocabs.rs`, `opentide-highlight`'s `the_stored_catalog_is_the_whole_file`, and each language crate's `the_stored_catalogs_are_the_whole_files`), and `opentide-schema`'s tests hold every compiled-in file to the file on disk.
