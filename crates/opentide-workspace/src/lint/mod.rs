@@ -553,9 +553,24 @@ type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>
 /// ([`load_record`]), for the document it was read from. A file whose
 /// document is the one it was is not read again.
 #[derive(Default)]
-pub struct RecordCache(
-    std::sync::Mutex<std::collections::HashMap<PathBuf, (std::sync::Arc<node::Document>, Record)>>,
-);
+pub struct RecordCache {
+    records: std::sync::Mutex<
+        std::collections::HashMap<PathBuf, (std::sync::Arc<node::Document>, Record)>,
+    >,
+    /// The object files and nested files `lint` lists, as last listed: kept
+    /// until the workspace lists its folders again ([`forget_listing`](Self::forget_listing)).
+    listing: std::sync::Mutex<Option<std::sync::Arc<Listing>>>,
+    /// The stem each object file is expected to have, as last assigned: while
+    /// no file came or went and no object's name or UUID changed, they are the
+    /// ones a run would assign again ([`forget_stems`](Self::forget_stems)).
+    stems: std::sync::Mutex<Option<std::sync::Arc<StemMap>>>,
+}
+
+/// The object files `lint` lists, and the YAML files in their subfolders.
+type Listing = (Vec<PathBuf>, Vec<PathBuf>);
+
+/// The stem each object file of a run is expected to have.
+type StemMap = std::collections::HashMap<PathBuf, Option<String>>;
 
 impl std::fmt::Debug for RecordCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -572,7 +587,7 @@ impl RecordCache {
         document: &std::sync::Arc<node::Document>,
         load: impl FnOnce() -> Record,
     ) -> Record {
-        let kept = self.0.lock().ok().and_then(|cache| {
+        let kept = self.records.lock().ok().and_then(|cache| {
             cache
                 .get(path)
                 .filter(|(known, _)| std::sync::Arc::ptr_eq(known, document))
@@ -582,7 +597,7 @@ impl RecordCache {
             return record;
         }
         let record = load();
-        if let Ok(mut cache) = self.0.lock() {
+        if let Ok(mut cache) = self.records.lock() {
             cache.insert(
                 path.to_path_buf(),
                 (std::sync::Arc::clone(document), record.clone()),
@@ -593,8 +608,51 @@ impl RecordCache {
 
     /// Forgets the files `parses` does not hold any more.
     fn retain(&self, parses: &Parses) {
-        if let Ok(mut cache) = self.0.lock() {
+        if let Ok(mut cache) = self.records.lock() {
             cache.retain(|path, _| parses.contains_key(path));
+        }
+    }
+
+    /// The listing of the object folders: the kept one, or the one `list`
+    /// makes, kept.
+    fn listing(&self, list: impl FnOnce() -> Listing) -> std::sync::Arc<Listing> {
+        if let Some(kept) = self.listing.lock().ok().and_then(|held| held.clone()) {
+            return kept;
+        }
+        let listed = std::sync::Arc::new(list());
+        if let Ok(mut held) = self.listing.lock() {
+            *held = Some(std::sync::Arc::clone(&listed));
+        }
+        listed
+    }
+
+    /// The workspace lists its folders again: so does the next run.
+    pub(crate) fn forget_listing(&self) {
+        if let Ok(mut held) = self.listing.lock() {
+            *held = None;
+        }
+        self.forget_stems();
+    }
+
+    /// An object's name or UUID is not what it was (or a file came or went):
+    /// the next run assigns every file's stem again.
+    pub(crate) fn forget_stems(&self) {
+        if let Ok(mut held) = self.stems.lock() {
+            *held = None;
+        }
+    }
+
+    fn kept_stems(&self) -> Option<std::sync::Arc<StemMap>> {
+        self.stems.lock().ok().and_then(|held| held.clone())
+    }
+
+    fn keep_stems(&self, records: &[Record]) {
+        let stems: StemMap = records
+            .iter()
+            .map(|record| (record.path.clone(), record.expected_stem.clone()))
+            .collect();
+        if let Ok(mut held) = self.stems.lock() {
+            *held = Some(std::sync::Arc::new(stems));
         }
     }
 }
@@ -620,7 +678,11 @@ fn lint_with(
     } else {
         options.checks.clone()
     };
-    let (object_files, nested) = object_files(fs, &target);
+    let listed = match cache {
+        Some(cache) => cache.listing(|| object_files(fs, &target)),
+        None => std::sync::Arc::new(object_files(fs, &target)),
+    };
+    let (object_files, nested) = (&listed.0, listed.1.clone());
     let candidates: Vec<PathBuf> = object_files.iter().chain(&nested).cloned().collect();
     let scope = match narrow_selected(&target, &candidates, options)
         .unwrap_or_else(|| narrow(fs, &target, &candidates, options))
@@ -632,7 +694,7 @@ fn lint_with(
         }
     };
     let reported = scope.as_ref().map(|scope| &scope.files);
-    let in_scope = |path: &Path| reported.is_none_or(|files| files.contains(&path.to_path_buf()));
+    let in_scope = |path: &Path| reported.is_none_or(|files| files.iter().any(|file| file == path));
     let nested: Vec<PathBuf> = nested.into_iter().filter(|p| in_scope(p)).collect();
     let every = reported.is_none() || selected.contains(&LintCheck::Filenames);
     let recommended = selected.contains(&LintCheck::Recommended);
@@ -641,9 +703,20 @@ fn lint_with(
     let query_check = options
         .query_check
         .filter(|_| selected.contains(&LintCheck::Queries));
+    // The stems kept from the last run stand for the files this run does not
+    // report on, if they hold every file it does.
+    let kept_stems = cache
+        .filter(|_| reported.is_some() && selected.contains(&LintCheck::Filenames))
+        .and_then(RecordCache::kept_stems)
+        .filter(|stems| {
+            object_files
+                .iter()
+                .filter(|path| in_scope(path))
+                .all(|path| stems.contains_key(path))
+        });
     let candidates: Vec<&PathBuf> = object_files
         .iter()
-        .filter(|path| every || in_scope(path))
+        .filter(|path| (every && kept_stems.is_none()) || in_scope(path))
         .collect();
     let mut records: Vec<Record> = Vec::with_capacity(candidates.len());
     // The queries check's results, in the order of the files it checked.
@@ -729,6 +802,11 @@ fn lint_with(
     let engine_at = findings.len();
     if selected.contains(&LintCheck::Filenames) {
         let reported_set = reported.cloned();
+        if let Some(stems) = &kept_stems {
+            for record in &mut records {
+                record.expected_stem = stems.get(&record.path).cloned().flatten();
+            }
+        }
         findings.extend(filename_findings(
             fs,
             writer.filter(|_| options.fix),
@@ -736,7 +814,13 @@ fn lint_with(
             &mut records,
             &config.filenames,
             reported_set.as_ref(),
+            kept_stems.is_some(),
         ));
+        if let Some(cache) = cache
+            && kept_stems.is_none()
+        {
+            cache.keep_stems(&records);
+        }
         rewrite_renamed_paths(&mut findings);
         findings.extend(nested.iter().map(|path| nested_finding(&target, path)));
     }
@@ -1707,10 +1791,13 @@ fn filename_findings(
     records: &mut [Record],
     filenames: &FilenameConfig,
     reported: Option<&Vec<PathBuf>>,
+    assigned: bool,
 ) -> Vec<Draft> {
     use opentide_schema::vocab::quote;
     let mut findings = Vec::new();
-    assign_expected_stems(records, filenames);
+    if !assigned {
+        assign_expected_stems(records, filenames);
+    }
     for record in records.iter() {
         if reported.is_some_and(|files| !files.contains(&record.path)) {
             continue;

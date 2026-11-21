@@ -742,16 +742,20 @@ fn validate_changed(workspace: &Workspace, files: &[PathBuf]) -> HashMap<PathBuf
         files: files.iter().map(|f| f.display().to_string()).collect(),
         ..Selection::default()
     };
-    let run = workspace.validate(&ValidateOptions {
-        selection: Some(&selection),
-        queries: QueriesMode::Off,
-        ..ValidateOptions::default()
-    });
+    let run = {
+        let _span = crate::timing::Span::new("validate: the narrowed run");
+        workspace.validate(&ValidateOptions {
+            selection: Some(&selection),
+            queries: QueriesMode::Off,
+            ..ValidateOptions::default()
+        })
+    };
     let linted: Vec<PathBuf> = files
         .iter()
         .filter(|file| lint::is_lint_candidate(workspace.root(), file))
         .cloned()
         .collect();
+    let _span = crate::timing::Span::new("validate: lint and placing");
     by_file(workspace, run, Some(&linted))
 }
 
@@ -1229,6 +1233,32 @@ mod tests {
             ),
             (
                 "the third rule names another again",
+                false,
+                Box::new(write(&third, with_block("3", "other_name"))),
+            ),
+            (
+                "the third rule is named as the first (a file name both want)",
+                false,
+                Box::new(write(
+                    &third,
+                    with_block("3", "other_name")
+                        .replace("name: Rule 3", "name: Sentinel KQL Rule"),
+                )),
+            ),
+            (
+                "a typed line in the third rule, which shares a name",
+                true,
+                Box::new(write(
+                    &third,
+                    format!(
+                        "{}\n# typed\n",
+                        with_block("3", "other_name")
+                            .replace("name: Rule 3", "name: Sentinel KQL Rule")
+                    ),
+                )),
+            ),
+            (
+                "the third rule's name as it was",
                 false,
                 Box::new(write(&third, with_block("3", "other_name"))),
             ),

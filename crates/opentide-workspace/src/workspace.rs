@@ -268,6 +268,7 @@ impl Workspace {
     fn refresh(&mut self, stale: &HashSet<PathBuf>, rescan: bool) -> Vec<PathBuf> {
         if rescan {
             self.scans = Arc::new(scan_all(self.fs.as_ref(), &self.config));
+            self.lint_records.forget_listing();
         }
         let scans = Arc::clone(&self.scans);
         let files = listed(&scans);
@@ -479,6 +480,9 @@ impl Workspace {
         let mut reread: Vec<PathBuf> = paths.iter().cloned().collect();
         reread.sort();
         let (identity_changed, cross_changed) = what_others_read(&before, &self.index, &paths);
+        if identity_changed {
+            self.lint_records.forget_stems();
+        }
         Ok(Invalidation {
             full: false,
             configuration,
