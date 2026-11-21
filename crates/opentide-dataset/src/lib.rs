@@ -5,7 +5,7 @@
 //! plain text. Plain text puts the words of every security vocabulary (stealer
 //! names, injection API names, miner domains) into every binary, where antivirus
 //! heuristics read them as the binary's own. Each dataset is now one blob,
-//! written by its crate's build script ([`build`]) and decoded here:
+//! written by its crate's build script (`build`) and decoded here:
 //!
 //! ```text
 //! "OTD" | version (1) | kind (1) | raw length (u32, little endian) | zstd frame
@@ -22,7 +22,7 @@
 //! decoder and the measurements.
 //!
 //! A crate that compiles a dataset in has a `build.rs` that calls
-//! [`build::Datasets`] (the `encode` feature, as a build dependency) and reads
+//! `build::Datasets` (the `encode` feature, as a build dependency) and reads
 //! the blob with [`text!`] or [`value!`], each decoded once and shared.
 
 use serde::de::DeserializeOwned;
@@ -204,7 +204,7 @@ pub fn compiled_value<T: DeserializeOwned>(name: &str, blob: &[u8]) -> T {
 pub type TextFn = fn() -> &'static str;
 
 /// The text of the dataset `$name` that the calling crate's `build.rs` wrote
-/// ([`build::Datasets::text`]): decoded on first use, once per process, and
+/// (`build::Datasets::text`): decoded on first use, once per process, and
 /// shared for the life of the process (`&'static str`).
 #[macro_export]
 macro_rules! text {
@@ -221,7 +221,7 @@ macro_rules! text {
 }
 
 /// The text of the blob `$name` that the calling crate's `build.rs` wrote itself
-/// ([`build::Datasets::text_named`]): a text the build derived from a dataset, not a file of the assets
+/// (`build::Datasets::text_named`): a text the build derived from a dataset, not a file of the assets
 /// root (`text!` names those, and `text_from_sources` finds them). Decoded on first use, once per
 /// process, and shared (`&'static str`).
 #[macro_export]
@@ -239,7 +239,7 @@ macro_rules! text_blob {
 }
 
 /// The model `$ty` of the dataset `$name` that the calling crate's `build.rs`
-/// wrote pre-parsed ([`build::Datasets::value`]): decoded on first use, once
+/// wrote pre-parsed (`build::Datasets::value`): decoded on first use, once
 /// per process, and shared (`&'static $ty`).
 #[macro_export]
 macro_rules! value {
@@ -255,7 +255,7 @@ macro_rules! value {
 }
 
 /// The blob `$name` that the calling crate's `build.rs` wrote with
-/// [`build::Datasets::value`], as bytes, for [`compiled_value`].
+/// `build::Datasets::value`, as bytes, for [`compiled_value`].
 #[macro_export]
 macro_rules! blob {
     ($name:literal) => {

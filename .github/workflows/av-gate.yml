@@ -128,7 +128,7 @@ jobs:
           # The databases' versions and signature counts go to the log: a verdict is only
           # meaningful with them (a database that freshclam updated is main.cld, not main.cvd).
           for database in main daily bytecode; do
-            file="$(ls /var/lib/clamav/${database}.c?d | head -n 1)"
+            file="$(find /var/lib/clamav -name "${database}.c[lv]d" | head -n 1)"
             echo "${file}: $(sigtool --info "${file}" | grep -E '^(Version|Signatures)' | tr '\n' ' ')"
           done
       - name: Extract the archives

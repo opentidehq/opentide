@@ -24,6 +24,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import tomllib
+from markers import is_source_member
 
 #: signature-base's rules read these externals.
 EXTERNALS = ("filename", "filepath", "extension", "filetype", "owner")
@@ -74,10 +75,22 @@ def compile_bundle(files: list[Path], out: Path) -> tuple[list[Path], list[tuple
     return good, bad
 
 
+def in_source_distribution(file: Path, tree: Path) -> bool:
+    """Whether `file` is a text source member of an extracted sdist or `.crate` (markers.py)."""
+    parts = file.relative_to(tree).parts
+    for index, part in enumerate(parts[:-1]):
+        if part.endswith((".tar.gz.d", ".crate.d")):
+            member = "/".join(parts[index + 1 :])
+            return is_source_member(part[: -len(".d")], member)
+    return False
+
+
 def scan(bundle: Path, tree: Path) -> dict[str, list[str]]:
     """`rule -> [paths]` for every file under `tree`."""
     hits: dict[str, list[str]] = defaultdict(list)
     for file in sorted(p for p in tree.rglob("*") if p.is_file()):
+        if in_source_distribution(file, tree):
+            continue
         result = subprocess.run(
             ["yara", "-C", "-w", *_externals(file), str(bundle), str(file)],
             capture_output=True,

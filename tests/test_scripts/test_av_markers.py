@@ -79,7 +79,14 @@ def test_markers_are_found_inside_archives_and_nested_archives() -> None:
     assert (
         tarball("opentide-falco-1.0.0/assets/data/catalogs/x.toml", b"sekurlsa", "o.crate") == set()
     )
+    # ...and so are its text sources (a test names the techniques it detects)...
+    assert (
+        tarball("opentide-exabeam-1.0.0/src/tests.rs", b"sekurlsa::logonpasswords", "o.crate")
+        == set()
+    )
+    assert tarball("opentide-1.0.0/crates/x/tests/h.rs", b"Login Data", "o.tar.gz") == set()
     # ...and nothing else of it, nor any other archive, is exempt.
+    assert tarball("opentide-1.0.0/src/lib.rs", b"sekurlsa", "o.zip.tar") == {"sekurlsa"}
     assert tarball(
         "opentide-1.0.0/src/opentide/loose.bin", b"sekurlsa::logonpasswords", "o.tar.gz"
     ) == {"sekurlsa"}
@@ -163,3 +170,23 @@ def test_the_windows_extension_module_and_language_server_do_not_build_the_termi
     )
     assert result.returncode != 0, f"crossterm is in {package}'s Windows build:\n{result.stdout}"
     assert "did not match any packages" in result.stderr, result.stderr
+
+
+def test_the_yara_gate_skips_the_text_sources_of_a_source_distribution(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("av_yara_gate", _MODULE.with_name("yara_gate.py"))
+    assert spec
+    assert spec.loader
+    sys.path.insert(0, str(_MODULE.parent))
+    try:
+        gate = importlib.util.module_from_spec(spec)
+        sys.modules["av_yara_gate"] = gate
+        spec.loader.exec_module(gate)
+    finally:
+        sys.path.remove(str(_MODULE.parent))
+    tree = tmp_path
+    source = tree / "o-1.0.tar.gz.d" / "o-1.0" / "src" / "tests.rs"
+    binary = tree / "o-1.0.tar.gz.d" / "o-1.0" / "src" / "blob.bin"
+    wheel = tree / "o.whl.d" / "o" / "data.toml"
+    assert gate.in_source_distribution(source, tree)
+    assert not gate.in_source_distribution(binary, tree)
+    assert not gate.in_source_distribution(wheel, tree)

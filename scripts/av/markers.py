@@ -41,19 +41,33 @@ ZIP_SUFFIXES = (".zip", ".whl", ".vsix", ".jar", ".nupkg", ".sigzip")
 TAR_SUFFIXES = (".tar.gz", ".tgz", ".crate", ".tar")
 
 #: A source distribution (the sdist, a `.crate`) carries the datasets as the TOML and JSON sources
-#: the build compresses: a sdist builds wherever a Rust toolchain is installed, and its build
-#: scripts read them. Those source files, and only those, are exempt inside a `.tar.gz` or
-#: `.crate`; every compiled artifact, and every other member of a source distribution, is held to
-#: the markers. (A source tree is not what antivirus engines flagged: the Windows PE and `.pyd`
-#: were built from the same files.)
+#: the build compresses, and the tests' own sources (a detection test names the techniques it
+#: detects): a sdist builds wherever a Rust toolchain is installed, and its build scripts read them.
+#: Inside a `.tar.gz` or `.crate`, text source files (`SOURCE_TEXT`) and everything under
+#: `SOURCE_DATA` are exempt; every compiled artifact, and every binary member of a source
+#: distribution, is held to the markers. (A source tree is not what antivirus engines flagged: the
+#: Windows PE and `.pyd` were built from the same files.)
 SOURCE_DATA = (
     "/data/catalogs/",
     "/src/opentide/data/",
     "/highlights/",
     "/assets/",
     "/crates/testdata/",
+    "/tests/",
 )
-SOURCE_SUFFIXES = (".tar.gz", ".tgz", ".crate")
+SOURCE_TEXT = frozenset(
+    {".rs", ".toml", ".json", ".md", ".py", ".yml", ".yaml", ".txt", ".lock", ".kql", ".spl",
+     ".yar", ".yara", ".yaral", ".yl2", ".exabeam", ".cql", ".eql", ".esql", ".ps1", ".sh", ".snap"}
+)  # fmt: skip
+SOURCE_SUFFIXES = (".tar.gz", ".crate")
+
+
+def is_source_member(archive: str, member: str) -> bool:
+    """Whether `member` of the archive named `archive` is source text of a source distribution."""
+    if not archive.lower().endswith(SOURCE_SUFFIXES):
+        return False
+    path = f"/{member}"
+    return any(part in path for part in SOURCE_DATA) or Path(member).suffix.lower() in SOURCE_TEXT
 
 
 @dataclass(frozen=True)
@@ -112,13 +126,10 @@ def scan_blob(name: str, data: bytes, where: str, depth: int = 0) -> Iterator[Hi
         except zipfile.BadZipFile:
             pass  # not an archive after all; its bytes were scanned above
     elif _is_tar(name):
-        source_distribution = name.lower().endswith(SOURCE_SUFFIXES)
         try:
             with tarfile.open(fileobj=io.BytesIO(data)) as archive:
                 for member in archive:
-                    if source_distribution and any(
-                        part in f"/{member.name}" for part in SOURCE_DATA
-                    ):
+                    if is_source_member(name, member.name):
                         continue
                     extracted = archive.extractfile(member) if member.isfile() else None
                     if extracted is not None:
