@@ -356,6 +356,9 @@ fn wait_for(
 /// [`editor_latency`].
 pub const EDITOR_CYCLES: usize = 10;
 
+/// The pulls after the first that [`editor_latency`] leaves unmeasured.
+const SETTLE_PULLS: usize = 2;
+
 /// What one run of [`editor_latency`] measured.
 #[derive(Clone, Copy, Debug)]
 pub struct EditorLatency {
@@ -373,7 +376,7 @@ pub struct EditorLatency {
 /// workspace's diagnostics again two seconds after every answer, for as long
 /// as it runs, and the user presses Ctrl+Space between two pulls or during
 /// one. The run opens `document` in the heavy workspace, pulls its
-/// diagnostics and the workspace's once, then [`EDITOR_CYCLES`] times pulls
+/// diagnostics and the workspace's three times, then [`EDITOR_CYCLES`] times pulls
 /// the workspace again and, 2 ms later, asks for a completion: the time that
 /// completion waits is what a server that runs the pull to its end first
 /// makes the user wait for.
@@ -459,6 +462,15 @@ fn drive_editor(
     request(stdin, 3, "workspace/diagnostic", pull.clone())?;
     let arrived = wait_for_all(stdin, messages, session.start, &[3])?;
     let first_pull = arrived[0].1.duration_since(began);
+
+    // Two more pulls, unmeasured: the catalogs the server generates for the
+    // workspace's own configuration arrive after the first one and make the
+    // next analyse every file again, once, at start-up. The steady state
+    // is what the user spends the day in.
+    for settle in 0..SETTLE_PULLS {
+        request(stdin, 4 + settle as i64, "workspace/diagnostic", pull.clone())?;
+        wait_for_all(stdin, messages, session.start, &[4 + settle as i64])?;
+    }
 
     let mut worst = Duration::ZERO;
     let mut pulls = Vec::with_capacity(EDITOR_CYCLES);
