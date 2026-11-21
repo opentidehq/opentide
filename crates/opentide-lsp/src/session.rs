@@ -293,23 +293,27 @@ pub(crate) enum Sighting {
 pub(crate) struct CatalogSightings(HashMap<Option<usize>, Arc<opentide_analysis::Catalog>>);
 
 impl CatalogSightings {
+    /// `installed` is what the engine has installed (what the analyses made
+    /// so far read): a root whose catalog is that is not a root whose
+    /// analyses change, however it is the first the session sees of it.
     pub(crate) fn saw(
         &mut self,
         root: Option<usize>,
         catalog: &Arc<opentide_analysis::Catalog>,
+        installed: Option<&Arc<opentide_analysis::Catalog>>,
     ) -> Sighting {
+        let same = |known: &Arc<opentide_analysis::Catalog>| {
+            Arc::ptr_eq(known, catalog)
+                || (known.fields == catalog.fields && known.deprecations == catalog.deprecations)
+        };
         match self.0.get(&root) {
-            Some(known)
-                if Arc::ptr_eq(known, catalog)
-                    || (known.fields == catalog.fields
-                        && known.deprecations == catalog.deprecations) =>
-            {
-                Sighting::Same
-            }
+            Some(known) if same(known) => Sighting::Same,
             known => {
                 let first = known.is_none();
                 self.0.insert(root, Arc::clone(catalog));
-                if first {
+                if first && installed.is_some_and(same) {
+                    Sighting::Same
+                } else if first {
                     Sighting::First
                 } else {
                     Sighting::Changed
@@ -1010,7 +1014,11 @@ impl Session {
         };
         // What an analysis reads changes when a root's own catalog does, not
         // when the catalog installed is another root's.
-        match self.sightings.borrow_mut().saw(root, &catalog) {
+        match self.sightings.borrow_mut().saw(
+            root,
+            &catalog,
+            self.installed_catalog.borrow().as_ref(),
+        ) {
             Sighting::Same => {}
             Sighting::First => self.env_epoch.set(self.env_epoch.get() + 1),
             Sighting::Changed => self.touch(),
@@ -2219,23 +2227,52 @@ mod tests {
         };
         let (a, b) = (catalog("a"), catalog("b"));
         let mut seen = CatalogSightings::default();
-        assert_eq!(seen.saw(Some(0), &a), Sighting::First);
-        assert_eq!(seen.saw(Some(1), &b), Sighting::First);
+        assert_eq!(seen.saw(Some(0), &a, None), Sighting::First);
+        assert_eq!(seen.saw(Some(1), &b, None), Sighting::First);
         // Requests alternate between the roots: each installs its own
         // catalog, which is the one it had.
         for _ in 0..3 {
-            assert_eq!(seen.saw(Some(0), &a), Sighting::Same);
-            assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+            assert_eq!(seen.saw(Some(0), &a, None), Sighting::Same);
+            assert_eq!(seen.saw(Some(1), &b, None), Sighting::Same);
         }
         // The same text in another allocation is the same catalog.
-        assert_eq!(seen.saw(Some(0), &catalog("a")), Sighting::Same);
+        assert_eq!(seen.saw(Some(0), &catalog("a"), None), Sighting::Same);
         // A root's own catalog arriving, or being generated again, changes it
         // for that root alone.
-        assert_eq!(seen.saw(Some(0), &catalog("a2")), Sighting::Changed);
-        assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+        assert_eq!(seen.saw(Some(0), &catalog("a2"), None), Sighting::Changed);
+        assert_eq!(seen.saw(Some(1), &b, None), Sighting::Same);
         // A document outside every root has its own.
-        assert_eq!(seen.saw(None, &a), Sighting::First);
-        assert_eq!(seen.saw(None, &a), Sighting::Same);
+        assert_eq!(seen.saw(None, &a, None), Sighting::First);
+        assert_eq!(seen.saw(None, &a, None), Sighting::Same);
+    }
+
+    /// A root whose own catalog is the one the engine has installed already
+    /// (what its analyses have read) changes none of them by arriving: its
+    /// workspace's configuration says what the bundled one does about
+    /// statuses and responders, which is most of them.
+    #[test]
+    fn a_catalog_the_engine_has_installed_is_not_one_that_arrives() {
+        let catalog = |text: &str| {
+            Arc::new(opentide_analysis::Catalog {
+                fields: Some(text.to_string()),
+                ..opentide_analysis::Catalog::default()
+            })
+        };
+        let installed = catalog("a");
+        let mut seen = CatalogSightings::default();
+        assert_eq!(
+            seen.saw(Some(0), &catalog("a"), Some(&installed)),
+            Sighting::Same
+        );
+        // It was seen: a catalog that differs later is a change.
+        assert_eq!(
+            seen.saw(Some(0), &catalog("b"), Some(&installed)),
+            Sighting::Changed
+        );
+        assert_eq!(
+            seen.saw(Some(1), &catalog("b"), Some(&installed)),
+            Sighting::First
+        );
     }
 
     /// #914: reading a root's object files indexes none of them; the first

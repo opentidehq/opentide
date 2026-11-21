@@ -686,14 +686,21 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
     let no_wrap = flag(map.get(keys::VOCAB_HINTS_NO_WRAP));
     let mut offer = Offer::default();
     for reference in &references {
-        let one = vocabulary_offer(
-            &sources.vocabularies,
-            reference,
-            &VocabOptions { scoped, no_wrap },
+        // The same reference is offered by every revision of every object
+        // that names it: made once.
+        let one = sources.vocabularies.memoized(
+            &format!("offer\u{0}{reference}\u{0}{scoped}\u{0}{no_wrap}"),
+            || {
+                vocabulary_offer(
+                    &sources.vocabularies,
+                    reference,
+                    &VocabOptions { scoped, no_wrap },
+                )
+            },
         );
-        offer.values.extend(one.values);
-        offer.markdown.extend(one.markdown);
-        offer.plain.extend(one.plain);
+        offer.values.extend(one.values.iter().cloned());
+        offer.markdown.extend(one.markdown.iter().cloned());
+        offer.plain.extend(one.plain.iter().cloned());
     }
     apply_enum(map, &offer.keywords(true));
 }

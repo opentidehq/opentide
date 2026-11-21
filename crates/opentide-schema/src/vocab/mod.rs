@@ -103,6 +103,21 @@ pub enum VocabError {
 pub struct Vocabularies {
     own: IndexMap<String, Arc<Vocabulary>>,
     bundled: bool,
+    /// What was made from these vocabularies and kept ([`memoized`](Self::memoized)).
+    memo: Memo,
+}
+
+/// Values made from a set of vocabularies, by the key they were asked for
+/// with. A clone shares it, until either adds a vocabulary.
+#[derive(Clone, Default)]
+struct Memo(
+    Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<dyn std::any::Any + Send + Sync>>>>,
+);
+
+impl std::fmt::Debug for Memo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Memo").finish_non_exhaustive()
+    }
 }
 
 impl Default for Vocabularies {
@@ -118,6 +133,7 @@ impl Vocabularies {
         Self {
             own: IndexMap::new(),
             bundled: true,
+            memo: Memo::default(),
         }
     }
 
@@ -131,6 +147,7 @@ impl Vocabularies {
         let mut set = Self {
             own: IndexMap::new(),
             bundled: false,
+            memo: Memo::default(),
         };
         let mut errors = Vec::new();
         for (name, text) in files {
@@ -152,7 +169,37 @@ impl Vocabularies {
     pub fn insert(&mut self, vocabulary: Vocabulary) -> &mut Self {
         self.own
             .insert(vocabulary.field().to_owned(), Arc::new(vocabulary));
+        // What was made from the vocabularies as they were is not theirs now.
+        self.memo = Memo::default();
         self
+    }
+
+    /// A value `make` builds from these vocabularies, made once for each
+    /// `key` and kept until a vocabulary is added: the catalog of every
+    /// revision of every object asks for the same few hundred ATT&CK values
+    /// again.
+    pub fn memoized<T: std::any::Any + Send + Sync>(
+        &self,
+        key: &str,
+        make: impl FnOnce() -> T,
+    ) -> Arc<T> {
+        let kept = self
+            .memo
+            .0
+            .lock()
+            .ok()
+            .and_then(|held| held.get(key).cloned());
+        if let Some(found) = kept.and_then(|found| found.downcast::<T>().ok()) {
+            return found;
+        }
+        let value = Arc::new(make());
+        if let Ok(mut held) = self.memo.0.lock() {
+            held.insert(
+                key.to_owned(),
+                Arc::clone(&value) as Arc<dyn std::any::Any + Send + Sync>,
+            );
+        }
+        value
     }
 
     /// The vocabulary `field`.

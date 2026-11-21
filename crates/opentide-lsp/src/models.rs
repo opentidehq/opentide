@@ -172,9 +172,22 @@ impl FieldCatalog {
 /// The catalogs `opentide generate schemas` writes for `sources`, labelled
 /// with this engine's version.
 fn build(sources: &Sources) -> Catalog {
+    let _span = crate::timing::Span::new("catalog: the models' field catalogs");
+    let fields = {
+        let _span = crate::timing::Span::new("catalog: fields_catalog");
+        fields_catalog(crate::VERSION, sources)
+    };
+    let fields = {
+        let _span = crate::timing::Span::new("catalog: dump fields");
+        dump(&fields)
+    };
+    let deprecations = {
+        let _span = crate::timing::Span::new("catalog: deprecations");
+        dump(&deprecations_catalog(crate::VERSION))
+    };
     Catalog {
-        fields: Some(dump(&fields_catalog(crate::VERSION, sources))),
-        deprecations: Some(dump(&deprecations_catalog(crate::VERSION))),
+        fields: Some(fields),
+        deprecations: Some(deprecations),
         // visibility.toml is installed on its own, so edits apply live.
         visibility: None,
     }
