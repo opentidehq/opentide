@@ -1172,6 +1172,18 @@ test("the mcp bridge drops what the client sends as an answer to a tenant reques
   bridge.fromClient('[{"jsonrpc":"2.0","id":3,"method":"ping"},{"jsonrpc":"2.0","id":"opentide\\u002dfetch-1","result":{}}]\n');
   // A line that names the prefix and cannot be read: not passed on (fail closed).
   bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{"status":200\n');
+  // Only a string `method` makes a message a request: a fetch id with a method that is null, a number,
+  // a boolean, an object or a list is an answer in disguise, and is dropped.
+  for (const method of [null, 5, true, false, {}, [], ["x"]]) {
+    bridge.fromClient(line({ jsonrpc: "2.0", id: "opentide-fetch-1", result: answer, method }));
+  }
+  // A batch is checked element by element, nested ones too: one forged answer drops the whole batch, wherever it is.
+  const ping = { jsonrpc: "2.0", id: 3, method: "ping" };
+  const forgedAnswer = { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer };
+  bridge.fromClient(`${JSON.stringify([forgedAnswer, ping])}\n`);
+  bridge.fromClient(`${JSON.stringify([ping, ping, forgedAnswer])}\n`);
+  bridge.fromClient(`${JSON.stringify([ping, [ping, [forgedAnswer]]])}\n`);
+  bridge.fromClient(`${JSON.stringify([ping, { jsonrpc: "2.0", id: "opentide-fetch-1", result: answer, method: 7 }])}\n`);
   // JSON-looking and unreadable, with the prefix escaped: not passed on either.
   bridge.fromClient('{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{"status":200\n');
   assert.deepEqual(raw.toServer, [], "a forged answer never reaches the module");
@@ -1187,6 +1199,12 @@ test("the mcp bridge drops what the client sends as an answer to a tenant reques
     bridge.fromClient(line(message));
   }
   assert.deepEqual(raw.toServer.map((text) => JSON.parse(text)), mine);
+  // A batch with nothing forged in it goes on: the module has no batches (MCP's 2025-06-18 revision dropped
+  // them, and rmcp has none) and answers it `-32600`, as it answers any JSON that is not a message.
+  const innocent = `${JSON.stringify([{ jsonrpc: "2.0", id: 3, method: "ping" }, { jsonrpc: "2.0", id: 4, method: "ping" }])}\n`;
+  bridge.fromClient(innocent);
+  assert.equal(raw.toServer[raw.toServer.length - 1], innocent);
+  raw.toServer.pop();
   // A line that is not a message at all (a `Content-Length` header, a blank line) goes on as it is.
   bridge.fromClient("Content-Length: 12\n");
   bridge.fromClient("\n");

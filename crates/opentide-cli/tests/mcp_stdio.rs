@@ -770,3 +770,29 @@ fn every_result_of_the_2026_revision_has_result_type_and_a_legacy_session_has_no
         legacy.close();
     }
 }
+
+/// The server has no JSON-RPC batches (MCP dropped them in 2025-06-18, and
+/// rmcp has none): a line holding an array is JSON that is not a message, and
+/// is answered `-32600` with no id, whatever it holds. A bridge in front of it
+/// (`McpFetchBridge`) drops a batch that holds a forged answer to a tenant
+/// request and passes the others on to be refused so.
+#[test]
+fn a_batch_is_refused_as_a_message_that_is_not_one() {
+    let (_dir, _ws, mut client) = on_the_corpus();
+    client.handshake();
+    client.send(&json!([
+        {"jsonrpc": "2.0", "id": 5, "method": "ping"},
+        {"jsonrpc": "2.0", "id": 6, "method": "ping"}
+    ]));
+    // Refused as JSON that is not a message: `-32600`, no id, and no ping answered.
+    let line = client.lines.recv_timeout(PATIENCE).ok().flatten();
+    let line = client.text(line.unwrap_or_else(|| panic!("no answer: {}", client.stderr())));
+    let refused = frame(&line);
+    assert_eq!(refused["error"]["code"], -32600, "{line}");
+    assert!(refused.get("id").is_none_or(Value::is_null), "{line}");
+    assert!(refused.get("result").is_none(), "{line}");
+    // The next request is still answered: the server went on.
+    let answered = client.request("tools/list", json!({}));
+    assert!(answered["result"]["tools"].is_array(), "{answered}");
+    client.close();
+}
