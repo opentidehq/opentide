@@ -366,12 +366,12 @@ impl Driver {
             }
             edited_after[i] = edited;
         }
-        // The workspace's diagnostics are background work that can take a
-        // second on a large workspace, and the client asks again two seconds
-        // after every answer: a hover, a completion or a keystroke that waits
-        // in the same batch is answered first (it reads the later state, which
-        // the notifications of the batch have already applied).
-        let mut deferred: Vec<Request> = Vec::new();
+        // The diagnostics requests are the slow ones (see [`DEFERRED`]), and
+        // the client asks for the workspace's again two seconds after every
+        // answer: a hover or a completion that waits in the same batch is
+        // answered first. A deferred request still answers `ContentModified`
+        // when the batch edits its document later.
+        let mut deferred: Vec<(Request, HashSet<String>)> = Vec::new();
         for (i, frame) in batch.into_iter().enumerate() {
             let message = match frame {
                 Frame::Invalid { id, code, message } => {
@@ -404,11 +404,11 @@ impl Driver {
                     }
                 }
                 Message::Request(request)
-                    if request.method == WORKSPACE_DIAGNOSTIC
+                    if DEFERRED.contains(&request.method.as_str())
                         && self.state == Lifecycle::Running
                         && !cancelled.contains(&request.id) =>
                 {
-                    deferred.push(request);
+                    deferred.push((request, edited_after[i + 1].clone()));
                 }
                 Message::Request(request) => {
                     let staled_by = &edited_after[i + 1];
@@ -422,15 +422,8 @@ impl Driver {
             }
             write_outbox(session, writer)?;
         }
-        let nothing_staled = HashSet::new();
-        for request in deferred {
-            let response = respond(
-                session,
-                &mut self.state,
-                request,
-                &cancelled,
-                &nothing_staled,
-            );
+        for (request, staled_by) in deferred {
+            let response = respond(session, &mut self.state, request, &cancelled, &staled_by);
             write_outbox(session, writer)?;
             write(writer, &Message::Response(response))?;
         }
@@ -439,8 +432,11 @@ impl Driver {
     }
 }
 
-/// The request for the diagnostics of every file of the workspace.
-const WORKSPACE_DIAGNOSTIC: &str = "workspace/diagnostic";
+/// The requests a batch answers last: the diagnostics of the workspace and of
+/// a document, which on a large workspace take tenths of a second (what
+/// `validate` and `lint` check across every object file) while a completion
+/// or a hover takes a millisecond.
+const DEFERRED: [&str; 2] = ["workspace/diagnostic", "textDocument/diagnostic"];
 
 /// One message's JSON text, without its `Content-Length` header, read as
 /// [`read_frame`] reads a framed one: the same answers for a body that is
