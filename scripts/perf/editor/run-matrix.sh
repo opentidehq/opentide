@@ -16,9 +16,10 @@ for t in "${tiers[@]}"; do
   case "$t" in
     py0.28.1)     one "ed-$t-large" large "$WORK/venv-028/bin/opentide" "venv-028/bin/opentide" ;;
     engine0.10.0) one "ed-$t-large" large "" "" ;;
-    native-rc2)   one "ed-$t-large" large "$WORK/dl-rc2/opentide-lsp-v1.0.0-rc.2-x86_64-unknown-linux-gnu" "opentide-lsp-v1.0.0-rc.2" ;;
-    native-head)  one "ed-$t-large" large "$WORK/bins/opentide-lsp-head" "opentide-lsp-head" ;;
-    native-fixed) one "ed-$t-large" large "$WORK/bins/opentide-lsp-fixed" "opentide-lsp-fixed" ;;
+    # The extension takes a runtime for a bare language server by its file name: `opentide-lsp`.
+    native-rc2)   one "ed-$t-large" large "$WORK/bins/rc2/opentide-lsp" "bins/rc2/opentide-lsp" ;;
+    native-head)  one "ed-$t-large" large "$WORK/bins/head/opentide-lsp" "bins/head/opentide-lsp" ;;
+    native-fixed) one "ed-$t-large" large "$WORK/bins/fixed/opentide-lsp" "bins/fixed/opentide-lsp" ;;
     *) echo "unknown tier $t" >&2; exit 2 ;;
   esac
 done
