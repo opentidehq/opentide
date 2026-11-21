@@ -725,6 +725,13 @@ fn every_result_of_the_2026_revision_has_result_type_and_a_legacy_session_has_no
                 with(json!({"uri": "opentide://vocabularies"})),
             ),
             ("prompts/list", with(json!({}))),
+            (
+                "completion/complete",
+                with(json!({
+                    "ref": {"type": "ref/resource", "uri": "opentide://rules/{uuid}"},
+                    "argument": {"name": "uuid", "value": ""}
+                })),
+            ),
         ]
     };
     // No handshake: every result says it is complete.

@@ -195,13 +195,16 @@ pub fn failed_result(payload: &Json) -> Value {
 ///
 /// - `validate_query`: nothing was checked (`valid` is not a verdict: an
 ///   unsupported platform, a language with no offline engine, a tenant that
-///   could not be reached, a live check that failed). A query that is
-///   invalid is the answer (`valid: false`), not an error.
+///   could not be reached or refused the credential, `network_unavailable`).
+///   A verdict is the answer, `valid: false` included: the offline check of an
+///   invalid query, and a live check every tenant answered (the MCP payload
+///   adds `valid` to it).
 /// - `run_query`: the call failed (`status: "failed"`, `supported: false`): it
 ///   did not run, or no tenant answered it. A call that failed on some tenants
 ///   and answered on others is a failure too: its rows are in the payload.
 /// - `deploy_rule`: `action: "error"`, a rule that could not be deployed or
 ///   previewed (a real deploy that failed or was refused included).
+/// - `validate_rule`: the rule is not in the catalogue (missing input).
 ///
 /// - `validation_report`: a `queries` mode that is not one, an invalid
 ///   argument (the payload is `{"ok": false, "error": ...}`).
@@ -219,6 +222,19 @@ fn is_failure(name: &str, payload: &Json) -> bool {
         }
         "run_query" => flag("supported") == Some(false) || text("status") == Some("failed"),
         "deploy_rule" => text("action") == Some("error"),
+        // A rule that is not in the catalogue: missing input, as `deploy_rule` has it.
+        // (A rule that is invalid has issues; this one has none, only the error.)
+        "validate_rule" => {
+            flag("valid") == Some(false)
+                && payload
+                    .get("issues")
+                    .and_then(Json::as_array)
+                    .is_some_and(Vec::is_empty)
+                && payload
+                    .get("errors")
+                    .and_then(Json::as_array)
+                    .is_some_and(|errors| !errors.is_empty())
+        }
         // A `queries` mode that is not one: an invalid argument, as every other
         // argument error is (the payload is `{"ok": false, "error": ...}`).
         "validation_report" => flag("ok") == Some(false) && text("error").is_some(),
@@ -571,6 +587,43 @@ mod tests {
             result["content"][0]["text"],
             "Error executing tool explain: argument code must be a string, not a number"
         );
+    }
+
+    #[test]
+    fn a_verdict_is_an_answer_and_a_check_that_could_not_run_is_an_error() {
+        let failure = |name: &str, payload: serde_json::Value| {
+            is_failure(name, &Json::parse(&payload.to_string()).unwrap())
+        };
+        // validate_query: a verdict, whichever it is; no verdict, with a failed status.
+        assert!(!failure(
+            "validate_query",
+            json!({"valid": false, "status": "failed"})
+        ));
+        assert!(!failure(
+            "validate_query",
+            json!({"valid": true, "status": "passed"})
+        ));
+        assert!(failure(
+            "validate_query",
+            json!({"status": "failed", "message": "unreachable"})
+        ));
+        assert!(failure(
+            "validate_query",
+            json!({"valid": null, "supported": false})
+        ));
+        // validate_rule: an invalid rule has issues; a missing one only the error.
+        assert!(!failure(
+            "validate_rule",
+            json!({"valid": false, "errors": ["x"], "warnings": [], "issues": [{"code": "x"}]})
+        ));
+        assert!(failure(
+            "validate_rule",
+            json!({"valid": false, "errors": ["Rule u not found"], "warnings": [], "issues": []})
+        ));
+        assert!(!failure(
+            "validate_rule",
+            json!({"valid": true, "errors": [], "issues": []})
+        ));
     }
 
     #[test]

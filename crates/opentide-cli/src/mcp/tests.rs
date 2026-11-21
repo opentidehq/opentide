@@ -1192,6 +1192,14 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
     ] {
         failed_call(&server, tool, args);
     }
+    // Missing input: a rule that is not in the catalogue, as `deploy_rule` has it.
+    let missing = failed_call(
+        &server,
+        "validate_rule",
+        json!({"uuid": "00000000-0000-4000-8003-ffffffffffff"}),
+    );
+    assert_eq!(missing["valid"], false, "{missing}");
+    assert_eq!(missing["next_actions"][0]["tool"], "search", "{missing}");
     // An answer, whatever it says of the query or the rule.
     let invalid = call(
         &server,

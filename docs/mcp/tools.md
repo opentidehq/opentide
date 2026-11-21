@@ -32,11 +32,12 @@ A tool that ran and could not do what it was asked answers with MCP's tool-level
 
 | Tool | `isError: true` when | Still an answer (`isError: false`) |
 |------|----------------------|------------------------------------|
-| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check failed (no tenant configured, the tenant refused the credential or could not be reached, a rejected query; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | the query is invalid (`valid: false`, with its diagnostics), or valid |
+| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check could not run (no tenant configured, the tenant refused the credential or could not be reached; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | a verdict, whichever it is: the query is invalid (`valid: false`, with its diagnostics) or valid; and a live check every tenant answered, which adds `valid` to the command's document (`valid: false` when a tenant rejected a query, `status: "failed"`) |
 | `run_query` | the call did not run (not `live`, an unknown tenant, no query, an unknown platform) or `status` is `failed`: every tenant failed, or some did (the rows of the others are in the payload) | `status: "completed"` |
 | `deploy_rule` | `action` is `error`: the rule is missing, has no block for the platform, or could not be deployed (a tenant that refused the credential or could not be reached, a refused rule, `network_unavailable`) | a dry-run preview, a deploy that went through |
 | `validation_report` | `queries` is not one of the three (`{"ok": false, "error": ...}`) | the report, whatever it finds |
-| every other tool | the call is malformed: a missing or mistyped argument, an unknown tool, no workspace | `validate_rule`'s findings, a lookup that finds nothing (`found: false`) |
+| `validate_rule` | the rule is not in the catalogue (missing input, as `deploy_rule` has it: `valid: false`, `errors` naming the UUID, no `issues`) | the rule's findings, whatever they are |
+| every other tool | the call is malformed: a missing or mistyped argument, an unknown tool, no workspace | a lookup that finds nothing (`get_chaining`, `deployment_status`: `found: false`) |
 
 Before the release candidates changed it, a failed live check, query or deploy answered `isError: false` with `status: "failed"` in the payload, as the Python server did.
 

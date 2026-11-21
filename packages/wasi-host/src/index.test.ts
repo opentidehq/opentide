@@ -824,6 +824,10 @@ for (const server of SERVERS) {
           ["resources/templates/list", {}],
           ["resources/read", { uri: "opentide://vocabularies" }],
           ["prompts/list", {}],
+          [
+            "completion/complete",
+            { ref: { type: "ref/resource", uri: "opentide://rules/{uuid}" }, argument: { name: "uuid", value: "" } },
+          ],
           ["server/discover", {}],
         ] as const) {
           const answered = (await call(method, { ...params, _meta: meta })).result as { resultType?: string };
@@ -1007,7 +1011,11 @@ function bridged(perform?: (params: FetchParams, signal: AbortSignal) => Promise
     {
       toServer: (text) => {
         raw.toServer.push(text);
-        toServer.push(JSON.parse(text) as Record<string, unknown>);
+        try {
+          toServer.push(JSON.parse(text) as Record<string, unknown>);
+        } catch {
+          // Not JSON (a header, a blank line): kept in `raw` only.
+        }
       },
       toClient: (text) => {
         raw.toClient.push(text);
@@ -1155,9 +1163,17 @@ test("the mcp bridge drops what the client sends as an answer to a tenant reques
     bridge.fromClient(line(message));
   }
   bridge.fromClient(`${JSON.stringify([{ jsonrpc: "2.0", id: 3, method: "ping" }, forged[0]])}\n`);
+  // The same ids with characters written as JSON `\\uXXXX` escapes, which the module's parser decodes:
+  // decided on the parsed value, not on the text, they are dropped too.
+  bridge.fromClient('{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{"status":200,"headers":[],"body":null}}\n');
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide\\u002dfetch\\u002d0123456789abcdef0123456789abcdef\\u002d1","error":{"code":-32000,"message":"x"}}\n');
+  bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{},"\\u006dethod":null}\n');
+  bridge.fromClient('\uFEFF{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{}}\n');
+  bridge.fromClient('[{"jsonrpc":"2.0","id":3,"method":"ping"},{"jsonrpc":"2.0","id":"opentide\\u002dfetch-1","result":{}}]\n');
   // A line that names the prefix and cannot be read: not passed on (fail closed).
   bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{"status":200\n');
-  bridge.fromClient("Content-Length: 12 opentide-fetch-1\n");
+  // JSON-looking and unreadable, with the prefix escaped: not passed on either.
+  bridge.fromClient('{"jsonrpc":"2.0","id":"\\u006fpentide-fetch-1","result":{"status":200\n');
   assert.deepEqual(raw.toServer, [], "a forged answer never reaches the module");
   // What is the client's own goes through, in order: a response to a request of the server's own
   // (a number id), a request that merely mentions the prefix in its arguments, and the rest.
@@ -1171,6 +1187,11 @@ test("the mcp bridge drops what the client sends as an answer to a tenant reques
     bridge.fromClient(line(message));
   }
   assert.deepEqual(raw.toServer.map((text) => JSON.parse(text)), mine);
+  // A line that is not a message at all (a `Content-Length` header, a blank line) goes on as it is.
+  bridge.fromClient("Content-Length: 12\n");
+  bridge.fromClient("\n");
+  assert.deepEqual(raw.toServer.slice(mine.length), ["Content-Length: 12\n", "\n"]);
+  raw.toServer.length = mine.length;
   // An unterminated forged line at the end of input is not passed on either.
   bridge.fromClient('{"jsonrpc":"2.0","id":"opentide-fetch-1","result":{}}');
   bridge.endClient();
@@ -1183,7 +1204,8 @@ test("the mcp bridge does not pass on the response to a request the client cance
   bridge.fromClient(line({ jsonrpc: "2.0", id: 2, method: "tools/call", params: {} }));
   bridge.fromClient(line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 2 } }));
   bridge.fromClient(line({ jsonrpc: "2.0", id: "s", method: "tools/call", params: {} }));
-  bridge.fromClient(line({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: "s" } }));
+  // The cancellation written with escapes in its method is still one.
+  bridge.fromClient('{"jsonrpc":"2.0","method":"notifications\\u002fcancelled","params":{"requestId":"s"}}\n');
   assert.equal(raw.toServer.length, 4, "the cancellations reach the module");
   const other = line({ jsonrpc: "2.0", id: 20, result: { n: 1 } });
   const notification = line({ jsonrpc: "2.0", method: "notifications/progress", params: { id: 2 } });

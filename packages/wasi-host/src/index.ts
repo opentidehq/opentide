@@ -649,34 +649,48 @@ export class McpFetchBridge {
   }
 
   private clientLine(line: string): void {
-    if (line.includes(MCP_FETCH_ID_PREFIX)) {
-      let message: unknown;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        // Fail closed: a line that names the prefix and cannot be read is not passed on.
+    // Decided on the parsed value, never on the text: JSON lets any character of
+    // an id or a key be written as a `\uXXXX` escape, which the module's parser
+    // decodes, so `"opentide-fetch-..."` can be written with no substring of it.
+    // Every line that could be a message is parsed (a client's lines are small).
+    let message: unknown;
+    try {
+      // The module's transport skips a byte-order mark; so does the bridge, to judge the same value.
+      message = JSON.parse(line.replace(/^\uFEFF/, ""));
+    } catch {
+      // Fail closed: a line that looks like JSON (an object or a batch) and cannot be
+      // read is not passed on; the module would skip it as not JSON, and nothing it
+      // might hide is let through. Anything else (a blank line, a `Content-Length`
+      // header) is not a message and goes on.
+      if (/^\s*[{[]/.test(line)) {
         return;
       }
-      if (forgesAnAnswer(message)) {
-        return;
-      }
+      this.sink.toServer(line);
+      return;
     }
-    if (line.includes("notifications/cancelled")) {
-      const id = cancelledRequest(line);
-      if (id !== undefined) {
-        this.cancelled.add(id);
-        // Bounded: the oldest are forgotten (a cancelled request that was already answered).
-        while (this.cancelled.size > MAX_CANCELLED) {
-          const oldest = this.cancelled.values().next().value;
-          if (oldest === undefined) break;
-          this.cancelled.delete(oldest);
-        }
+    if (forgesAnAnswer(message)) {
+      return;
+    }
+    const id = cancelledRequest(message);
+    if (id !== undefined) {
+      this.cancelled.add(id);
+      // Bounded: the oldest are forgotten (a cancelled request that was already answered).
+      while (this.cancelled.size > MAX_CANCELLED) {
+        const oldest = this.cancelled.values().next().value;
+        if (oldest === undefined) break;
+        this.cancelled.delete(oldest);
       }
     }
     this.sink.toServer(line);
   }
 
   private serverLine(line: string): void {
+    // The module's own lines are the one place a substring test is sound: it writes
+    // compact `serde_json`, which escapes nothing in the ASCII text `"opentide/fetch"` or
+    // `notifications/cancelled` (the characters `/`, letters and digits are written
+    // as they are), and what the module writes is not the agent's to shape. (The client's
+    // lines are different: an agent can escape any character, see `clientLine`.) A line
+    // that mentions either is parsed and judged on its value; any other is passed on unread.
     if (line.includes("opentide/fetch")) {
       let message: unknown;
       try {
@@ -752,10 +766,9 @@ function parseObject(line: string): Record<string, unknown> | undefined {
   }
 }
 
-/** The id (as JSON text) of the request a `notifications/cancelled` line cancels. */
-function cancelledRequest(line: string): string | undefined {
-  const message = parseObject(line);
-  if (message === undefined || message.method !== "notifications/cancelled" || !isObject(message.params)) {
+/** The id (as JSON text) of the request the parsed *message* cancels, if it is a `notifications/cancelled`. */
+function cancelledRequest(message: unknown): string | undefined {
+  if (!isObject(message) || message.method !== "notifications/cancelled" || !isObject(message.params)) {
     return undefined;
   }
   const id = message.params.requestId;
