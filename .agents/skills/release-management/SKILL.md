@@ -163,7 +163,7 @@ Search the repo for the old pin (`opentide==0.1.3` or whatever the previous vers
 | File | Notes |
 |------|--------|
 | `README.md` | The newest stable pin stays (the release check reads it); a candidate adds `pip install --pre opentide` as the first install command, the final release puts the stable pin first again |
-| `docs/index.md` | A candidate: `--pre` in the Quick start, beside the "latest release" claim, which stays the newest release |
+| `docs/index.md` | A candidate: `--pre` in the Quick start, and the sentence after the "latest release" claim saying `pip install opentide` still installs 0.28.1, beside the claim, which stays the newest release. The final release: the claim and the pin name 1.0.0, and that sentence, the `--pre` command and the `release-candidates` link go |
 | `docs/usage/index.md` | Card copy too |
 | `docs/usage/installation.md` | pip and uv pins; the **Release candidates** section: updated by each candidate, removed by the final release |
 | `docs/usage/quickstart.md` | |
@@ -171,11 +171,11 @@ Search the repo for the old pin (`opentide==0.1.3` or whatever the previous vers
 | `docs/usage/troubleshooting.md` | Pins **and** mention the new patch in the relevant bug sections |
 | `docs/usage/workflows/agentic-setup.md` | |
 | `docs/usage/workflows/ci-cd.md` | Hand-written pipeline examples and the callout above them |
-| `docs/cli/index.md` | A candidate: `--pre` and the candidate's pin, linking the installation page's Release candidates; the final release: the release pin |
-| `docs/mcp/index.md` | As `docs/cli/index.md` |
-| `docs/mcp/installation.md` | As `docs/cli/index.md` |
+| `docs/cli/index.md` | A candidate: `--pre` and the candidate's pin, linking the installation page's Release candidates, and the sentence "`pip install opentide` installs 0.28.1". The final release: the release pin, and that sentence, the `--pre` command and the link go (they have no pin, so only `test_a_page_of_the_1_0_api_installs_the_candidate` catches them) |
+| `docs/mcp/index.md` | As `docs/cli/index.md`; its sentence is "… without `--pre` it installs 0.28.1" in the Quick start paragraph |
+| `docs/mcp/installation.md` | As `docs/cli/index.md`; its sentence follows the PyPI install block |
 | `docs/sdk/rust.md` | Install: the `=1.0.0-rc.N` pins of a candidate; the final release installs `opentide = "1"` and drops the candidate text |
-| `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well; a candidate: the candidate's pin in both blocks, as `docs/cli/index.md` |
+| `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well; a candidate: the candidate's pin in both blocks, as `docs/cli/index.md`, with its sentence that `pip install opentide` still installs 0.28.1 |
 
 ```bash
 rg -n 'opentide==0\.[0-9]+\.[0-9]+' --glob '!CHANGELOG.md' --glob '!.github/release-notes/**'

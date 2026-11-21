@@ -195,8 +195,14 @@ def test_a_page_of_the_1_0_api_installs_the_candidate(name: str) -> None:
     candidate = _candidate()
     page = (DOCS / name).read_text(encoding="utf-8")
     if candidate is None:
-        # The final release: the page installs the release and names no candidate.
-        assert "--pre" not in page and "rc" not in "".join(re.findall(r"opentide==\S+", page))
+        # The final release: the page installs the release and names no candidate:
+        # no `--pre`, no candidate pin, no link to the Release candidates section,
+        # and none of the prose that says `pip install opentide` still gives 0.28.1
+        # (it has no pin, so only these words catch it).
+        assert "--pre" not in page, f"docs/{name} still installs with --pre"
+        assert "rc" not in "".join(re.findall(r"opentide==\S+", page)), f"docs/{name} pins a rc"
+        assert "#release-candidates" not in page, f"docs/{name} still links the candidates"
+        assert "0.28" not in page, f"docs/{name} still names 0.28"
         return
     assert "pip install --pre opentide" in page, f"docs/{name} does not install the candidate"
     assert "usage/installation.md#release-candidates" in page, f"docs/{name} does not link it"
