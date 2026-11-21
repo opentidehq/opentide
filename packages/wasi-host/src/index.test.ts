@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -930,16 +930,33 @@ test(
         name: "deploy_rule",
         arguments: { uuid: "00000000-0000-4000-8047-000000000021", platform: "crowdstrike", dry_run: false },
       });
+      const queried = request("tools/call", {
+        name: "run_query",
+        arguments: { query: "#event_simpleName=ProcessRollup2", platform: "crowdstrike", live: true },
+      });
+      const validated = request("tools/call", {
+        name: "validate_query",
+        arguments: { query: "#event_simpleName=ProcessRollup2", platform: "crowdstrike", live: true },
+      });
       const listed = request("tools/list", {});
       // Awaited below; a crash rejects them all at once.
-      for (const pending of [deployed, listed]) pending.catch(() => {});
+      for (const pending of [deployed, queried, validated, listed]) pending.catch(() => {});
       server.stdin.end();
       await initialized;
-      const result = (await deployed).result as { content: { text: string }[] };
+      const result = (await deployed).result as { isError?: boolean; content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
       assert.match(text, /"status": ?"failed"/, text);
       assert.match(text, /needs the network, which the WASI build of opentide does not have/, text);
       assert.doesNotMatch(text, /stopped unexpectedly/, text);
+      // A failure is a tool error (MCP's isError), with the same JSON as an answer.
+      assert.equal((result as { isError?: boolean }).isError, true, text);
+      for (const [name, call] of [["run_query", queried], ["validate_query", validated]] as const) {
+        const failed = (await call).result as { isError?: boolean; content: { text: string }[] };
+        const said = failed.content.map((part) => part.text).join("\n");
+        assert.equal(failed.isError, true, `${name}: ${said}`);
+        // run_query's payload says `status: failed`; validate_query's, on a platform with no tenant check, `supported: false`.
+        assert.match(said, name === "run_query" ? /"status": ?"failed"/ : /"supported": ?false/, `${name}: ${said}`);
+      }
       // The server still serves after the deploy.
       assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
       // Without OPENTIDE_FETCH the stream is MCP alone: no request of the
@@ -1198,6 +1215,8 @@ class McpSession {
           TZ: "UTC",
           LANG: "C.UTF-8",
           ELASTIC_API_KEY: SECRET,
+          CROWDSTRIKE_CLIENT_SECRET: SECRET,
+          SENTINEL_SECRET: SECRET,
           ...MCP_FETCH_ENVIRONMENT,
         },
       },
@@ -1288,10 +1307,10 @@ const esql = (url: string): FetchResult => ({
 const QUERY_CALL = { name: "run_query", arguments: { query: "FROM logs-* | LIMIT 1", platform: "elastic", live: true } };
 
 /** A scratch workspace with the tenants fixture; removed when *body* ends. */
-async function inTenantsWorkspace(body: (ws: string) => Promise<void>): Promise<void> {
+async function inTenantsWorkspace(body: (ws: string) => Promise<void>, fixture = "tenants"): Promise<void> {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-fetch-")));
   const ws = join(scratch, "ws");
-  cpSync(join(root, "tests/golden/fixtures/tenants"), ws, { recursive: true });
+  cpSync(join(root, "tests/golden/fixtures", fixture), ws, { recursive: true });
   try {
     await body(ws);
   } finally {
@@ -1368,8 +1387,9 @@ test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant failure the host reports i
     });
     try {
       await session.initialize();
-      const result = (await session.request(2, "tools/call", QUERY_CALL)).result as { content: { text: string }[] };
+      const result = (await session.request(2, "tools/call", QUERY_CALL)).result as { isError?: boolean; content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
+      assert.equal(result.isError, true, text);
       assert.match(text, /Cannot reach elastic tenant 'soc'/, text);
       assert.match(text, /ENOTFOUND/, text);
       assert.doesNotMatch(text, /needs the network/, text);
@@ -1399,14 +1419,121 @@ test("mcp (wasi): with OPENTIDE_FETCH=stdio, a call whose request goes unanswere
       // EOF: the host never answers, and the client leaves.
       session.bridge.endClient();
       session.process.stdin.end();
-      const result = (await called).result as { content: { text: string }[] };
+      const result = (await called).result as { isError?: boolean; content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
+      assert.equal(result.isError, true, text);
       assert.match(text, /closed its input before answering an opentide\/fetch request/, text);
       assert.doesNotMatch(text, /network_unavailable|needs the network/, text);
     } finally {
       await session.close();
     }
   });
+});
+
+/**
+ * A scratch workspace holding the end-to-end corpus (`tests/fixtures/tide_corpus`) with a Sentinel tenant whose
+ * secret is in `SENTINEL_SECRET`; removed when *body* ends.
+ */
+async function inCorpusWorkspace(body: (ws: string) => Promise<void>): Promise<void> {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-mcp-corpus-")));
+  const ws = join(scratch, "ws");
+  const source = join(root, "tests/fixtures/tide_corpus/current");
+  cpSync(join(source, "Configurations"), join(ws, ".opentide/configurations"), { recursive: true });
+  for (const [family, folder] of [
+    ["threats", "Threat Vectors"],
+    ["objectives", "Detection Objectives"],
+    ["rules", "Detection Rules"],
+  ]) {
+    cpSync(join(source, "Objects", folder), join(ws, "objects", family), { recursive: true });
+  }
+  const config = join(ws, ".opentide/configurations/platforms/sentinel.toml");
+  appendFileSync(
+    config,
+    '\n[[tenants]]\nname = "lab"\n[tenants.setup]\nresource_group = "rg"\nworkspace_name = "soc"\n' +
+      'workspace_id = "11111111-2222-4333-8444-555555555555"\nazure_tenant_id = "t"\nazure_subscription_id = "s"\n' +
+      'azure_client_id = "c"\nazure_client_secret = "$SENTINEL_SECRET"\n',
+  );
+  try {
+    await body(ws);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/** A tenant that answers every request 401. */
+const refusing = async (request: FetchParams): Promise<FetchResult> => ({
+  status: 401,
+  headers: [["content-type", "application/json"]],
+  url: request.url,
+  body: Buffer.from('{"error":"unauthorized"}').toString("base64"),
+  elapsed_ms: 2,
+});
+
+/** A tool call that failed: `isError` true, with the same JSON as an answer. */
+async function expectToolError(session: McpSession, id: number, name: string, args: object): Promise<string> {
+  const result = (await session.request(id, "tools/call", { name, arguments: args })).result as {
+    isError?: boolean;
+    content: { text: string }[];
+  };
+  const text = result.content.map((part) => part.text).join("\n");
+  assert.equal(result.isError, true, `${name}: ${text}`);
+  assert.doesNotMatch(text, /needs the network|network_unavailable|stopped unexpectedly/, `${name}: ${text}`);
+  return text;
+}
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant that refuses the credential fails a live query as a tool error", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const session = new McpSession(ws, refusing);
+    try {
+      await session.initialize();
+      await expectToolError(session, 2, "run_query", QUERY_CALL.arguments);
+      // What only previews is an answer, not an error.
+      const preview = (
+        await session.request(4, "tools/call", {
+          name: "validate_query",
+          arguments: { query: "FROM logs-* | LIMIT 1", platform: "elastic", language: "esql" },
+        })
+      ).result as { isError?: boolean };
+      assert.notEqual(preview.isError, true);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant that refuses the credential fails a live check as a tool error", skipWithoutWasi, async () => {
+  await inCorpusWorkspace(async (ws) => {
+    const session = new McpSession(ws, refusing);
+    try {
+      await session.initialize();
+      const text = await expectToolError(session, 2, "validate_query", {
+        query: "SecurityEvent | take 1",
+        platform: "sentinel",
+        live: true,
+      });
+      assert.match(text, /"status": ?"failed"/, text);
+      assert.match(text, /Cannot authenticate|sentinel/, text);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+test("mcp (wasi): with OPENTIDE_FETCH=stdio, a tenant that refuses the credential fails a live deploy as a tool error", skipWithoutWasi, async () => {
+  await inTenantsWorkspace(async (ws) => {
+    const session = new McpSession(ws, refusing);
+    try {
+      await session.initialize();
+      const text = await expectToolError(session, 2, "deploy_rule", {
+        uuid: "00000000-0000-4000-8047-000000000021",
+        platform: "crowdstrike",
+        dry_run: false,
+      });
+      assert.match(text, /"status": ?"failed"/, text);
+    } finally {
+      await session.close();
+    }
+  }, "deploy-tenants");
 });
 
 test("mcp (wasi): with OPENTIDE_FETCH=stdio, cancelling the call withdraws its request and aborts the host's", skipWithoutWasi, async () => {

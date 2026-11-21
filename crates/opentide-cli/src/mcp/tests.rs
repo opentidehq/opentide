@@ -76,6 +76,16 @@ fn call(server: &Server, name: &str, args: Value) -> Value {
     serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap()
 }
 
+/// The payload of a tool call that failed: the same JSON as an answer, with
+/// `isError` true (MCP's tool-level error).
+fn failed_call(server: &Server, name: &str, args: Value) -> Value {
+    let Answer::Result(result) = server.call(name, &arguments(args)) else {
+        panic!("{name}: not a result");
+    };
+    assert_eq!(result["isError"], true, "{name}: {result}");
+    serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap()
+}
+
 /// The document of a resource that answered.
 fn read(server: &Server, uri: &str) -> Value {
     let Answer::Result(result) = server.read(uri) else {
@@ -118,13 +128,13 @@ fn every_catalogue_tool_answers_on_the_corpus() {
     );
     assert_eq!(dry_run["action"], "dry-run");
     assert_eq!(dry_run["status"], "STAGING");
-    let unknown = call(
+    let unknown = failed_call(
         &server,
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "nowhere"}),
     );
     assert_eq!(unknown["status"], "unknown_platform");
-    let live = call(
+    let live = failed_call(
         &server,
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "sentinel", "dry_run": false}),
@@ -137,7 +147,7 @@ fn every_catalogue_tool_answers_on_the_corpus() {
         json!({"query": "SecurityEvent | take 1", "platform": "sentinel"}),
     );
     assert_eq!(query["valid"], true, "{query}");
-    let refused = call(
+    let refused = failed_call(
         &server,
         "run_query",
         json!({"query": "x", "platform": "splunk"}),
@@ -316,7 +326,13 @@ fn an_unknown_stack_or_object_type_is_refused() {
                    "language": "esql", "stack": stack}),
         )
     };
-    let refused = check("bogus");
+    // Refused, so nothing was checked: a tool error with the same payload.
+    let refused = failed_call(
+        &server,
+        "validate_query",
+        json!({"query": "FROM logs-* | LIMIT 10", "platform": "elastic",
+               "language": "esql", "stack": "bogus"}),
+    );
     assert_eq!(refused["status"], "failed", "{refused}");
     assert_eq!(refused["valid"], Value::Null, "{refused}");
     assert!(
@@ -348,7 +364,7 @@ fn an_unknown_stack_or_object_type_is_refused() {
 fn a_failed_live_query_check_carries_no_exit_code() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = corpus(scratch.path());
-    let live = call(
+    let live = failed_call(
         &server(&ws),
         "validate_query",
         json!({"query": "index=main", "platform": "splunk", "live": true}),
@@ -374,7 +390,7 @@ fn a_failed_deploy_names_its_cause() {
          azure_client_secret = \"$OPENTIDE_TEST_UNSET_SECRET\"\n",
     );
     std::fs::write(&config, text).unwrap();
-    let failed = call(
+    let failed = failed_call(
         &server(&ws),
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "sentinel", "dry_run": false}),
@@ -396,7 +412,7 @@ fn a_dry_run_without_the_platforms_block_is_refused_as_the_deploy_is() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = corpus(scratch.path());
     let server = server(&ws);
-    let preview = call(
+    let preview = failed_call(
         &server,
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "splunk"}),
@@ -1115,4 +1131,122 @@ fn a_cancelled_call_withdraws_its_request_and_stops() {
                 .to_owned()
         });
     assert!(!text.contains("closed its input"), "{text}");
+}
+
+/// MCP's tool-level error: a call that ran and could not do what it was asked
+/// reports `isError: true` with the same JSON as ever; one that answers with
+/// what it found (an invalid query, a lookup with no match) does not. A client
+/// that took a failed live check, query or deploy for an answer (QA, on the
+/// old module) read the failure as a result.
+#[test]
+fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
+    // The live check, the query and the deploy, with no tenant to reach.
+    let live = failed_call(
+        &server,
+        "validate_query",
+        json!({"query": "index=main", "platform": "splunk", "live": true}),
+    );
+    assert_eq!(live["status"], "failed", "{live}");
+    let query = failed_call(
+        &server,
+        "run_query",
+        json!({"query": "index=main", "platform": "splunk", "live": true}),
+    );
+    assert_eq!(query["status"], "failed", "{query}");
+    let deploy = failed_call(
+        &server,
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "splunk", "dry_run": false}),
+    );
+    assert_eq!(deploy["action"], "error", "{deploy}");
+    // Nothing was checked, run or sent: refused, unsupported, not live.
+    for (tool, args) in [
+        (
+            "run_query",
+            json!({"query": "index=main", "platform": "splunk"}),
+        ),
+        (
+            "run_query",
+            json!({"query": "x", "platform": "nowhere", "live": true}),
+        ),
+        (
+            "validate_query",
+            json!({"query": "x", "platform": "nowhere"}),
+        ),
+        (
+            "validate_query",
+            json!({"query": "x", "platform": "sentinel_one"}),
+        ),
+    ] {
+        failed_call(&server, tool, args);
+    }
+    // An answer, whatever it says of the query or the rule.
+    let invalid = call(
+        &server,
+        "validate_query",
+        json!({"query": "SecurityEvent | wher EventID == 4688", "platform": "sentinel"}),
+    );
+    assert_eq!(invalid["valid"], false, "{invalid}");
+    let valid = call(
+        &server,
+        "validate_query",
+        json!({"query": "SecurityEvent | where EventID == 4688", "platform": "sentinel"}),
+    );
+    assert_eq!(valid["valid"], true, "{valid}");
+    let preview = call(
+        &server,
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+    );
+    assert_eq!(preview["action"], "dry-run", "{preview}");
+    call(&server, "validation_report", json!({}));
+    // A `queries` mode that is not one is an answer too, as the Python server had it.
+    let loud = call(&server, "validation_report", json!({"queries": "loud"}));
+    assert_eq!(loud["ok"], false, "{loud}");
+    call(
+        &server,
+        "get_chaining",
+        json!({"uuid": "00000000-0000-4000-8001-ffffffffffff"}),
+    );
+}
+
+/// A tenant that refuses the credential, or cannot be reached, is a failed
+/// call too: the client made the request (`OPENTIDE_FETCH=stdio`) and
+/// answered 401, or never answered.
+#[test]
+fn a_tenant_that_refuses_or_goes_quiet_fails_the_call_as_a_tool_error() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let result_of = |out: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>, client: FetchingClient| {
+        let written = serve_bridged(&ws, client, out);
+        written
+            .into_iter()
+            .find(|m| m["id"] == 2 && m.get("method").is_none())
+            .map(|m| m["result"].clone())
+            .expect("the call is answered")
+    };
+    // 401: the tenant's refusal.
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    client.answer = Box::new(|_| {
+        json!({"status": 401, "headers": [["content-type", "application/json"]],
+            "url": "https://lab.invalid/", "body": null})
+    });
+    let refused = result_of(&out, client);
+    assert_eq!(refused["isError"], true, "{refused}");
+    let text = refused["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"status\": \"failed\""), "{text}");
+    // Never answered: the client's input ends.
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    client.hang_up_at = Some(1);
+    let quiet = result_of(&out, client);
+    assert_eq!(quiet["isError"], true, "{quiet}");
+    let text = quiet["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("closed its input"), "{text}");
 }

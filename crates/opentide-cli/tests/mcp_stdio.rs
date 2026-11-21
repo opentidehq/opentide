@@ -160,6 +160,18 @@ impl Client {
         result
     }
 
+    /// A tool call that failed: `isError` true (MCP's tool-level error), with
+    /// the same JSON as an answer.
+    fn failed_call(&mut self, name: &str, arguments: Value) -> Value {
+        let response = self.request("tools/call", json!({"name": name, "arguments": arguments}));
+        let result = &response["result"];
+        assert_eq!(result["isError"], true, "{name}: {result}");
+        match blocks(result) {
+            Value::Array(mut one) if one.len() == 1 => one.remove(0),
+            many => many,
+        }
+    }
+
     /// A tool's answer: its structured content, a list unwrapped, or else
     /// its text blocks parsed.
     fn call(&mut self, name: &str, arguments: Value) -> Value {
@@ -362,11 +374,14 @@ fn tools_and_resources_answer_with_nothing_but_json_rpc_on_stdout() {
     );
 
     let query = json!({"query": "SecurityEvent", "platform": "sentinel", "live": true});
-    let checked = client.call("validate_query", query);
+    // No tenant to check on: a failed live check, a tool error whose JSON is the
+    // command's document.
+    let checked = client.failed_call("validate_query", query);
     assert!(
         checked.is_object() && checked.get("_failure_code").is_none(),
         "{checked}"
     );
+    assert_eq!(checked["status"], "failed", "{checked}");
     client.call("validation_report", json!({}));
 
     let platforms = client.read("opentide://platforms");

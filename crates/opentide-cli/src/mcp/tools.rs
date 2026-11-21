@@ -130,6 +130,7 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
         other => return error_result(&format!("Unknown tool: {other}")),
     };
     match payload {
+        Ok(Payload::One(payload)) if is_failure(name, &payload) => failed_result(&payload),
         Ok(Payload::One(payload)) => ok_result(&payload),
         Ok(Payload::List(items)) => list_result(&items),
         // As MCPServer reports a tool that raised.
@@ -178,6 +179,46 @@ pub fn ok_result(payload: &Json) -> Value {
         "content": [{"type": "text", "text": text.trim_end_matches('\n')}],
         "isError": false,
     })
+}
+
+/// A tool that ran and could not do what it was asked: its payload as
+/// [`ok_result`] has it, so a client that reads the JSON sees what it always
+/// did, with `isError` true (MCP's tool-level error).
+pub fn failed_result(payload: &Json) -> Value {
+    let mut result = ok_result(payload);
+    result["isError"] = Value::Bool(true);
+    result
+}
+
+/// Whether the payload of the tool `name` says the call failed, as opposed to
+/// answering with what it found (MCP's `isError`):
+///
+/// - `validate_query`: nothing was checked (`valid` is not a verdict: an
+///   unsupported platform, a language with no offline engine, a tenant that
+///   could not be reached, a live check that failed). A query that is
+///   invalid is the answer (`valid: false`), not an error.
+/// - `run_query`: the call failed (`status: "failed"`, `supported: false`): it
+///   did not run, or no tenant answered it. A call that failed on some tenants
+///   and answered on others is a failure too: its rows are in the payload.
+/// - `deploy_rule`: `action: "error"`, a rule that could not be deployed or
+///   previewed (a real deploy that failed or was refused included).
+///
+/// What stays an answer, as the Python server had it: the findings of
+/// `validation_report` and `validate_rule`, a lookup that finds nothing
+/// (`found: false`), and a `queries` mode that is not one
+/// (`{"ok": false, "error": ...}`, documented as an answer).
+fn is_failure(name: &str, payload: &Json) -> bool {
+    let text = |key: &str| payload.get(key).and_then(Json::as_str);
+    let flag = |key: &str| payload.get(key).and_then(Json::as_bool);
+    match name {
+        "validate_query" => {
+            flag("supported") == Some(false)
+                || (text("status") == Some("failed") && flag("valid") != Some(false))
+        }
+        "run_query" => flag("supported") == Some(false) || text("status") == Some("failed"),
+        "deploy_rule" => text("action") == Some("error"),
+        _ => false,
+    }
 }
 
 /// A tool that refused: its message in one text block, `isError` true.

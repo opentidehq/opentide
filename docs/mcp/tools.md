@@ -26,6 +26,19 @@ The server's `instructions`, sent with the `initialize` response, open with the 
 
 `tool` and `arguments` are the MCP call. `command` is the same step as an `opentide` command line, for an agent with a shell (the CLI's own `next_actions` are `{command, reason}`). The list is empty when there is nothing to do. Every other key of these payloads is unchanged.
 
+### Failures and `isError`
+
+A tool that ran and could not do what it was asked answers with MCP's tool-level error: `isError: true`, and the same JSON an answer has, so a client that reads the payload sees what it always did (`status`, `message`, `error`). A tool that answers with what it found does not:
+
+| Tool | `isError: true` when | Still an answer (`isError: false`) |
+|------|----------------------|------------------------------------|
+| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check failed (no tenant configured, the tenant refused the credential or could not be reached, a rejected query; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | the query is invalid (`valid: false`, with its diagnostics), or valid |
+| `run_query` | the call did not run (not `live`, an unknown tenant, no query, an unknown platform) or `status` is `failed`: every tenant failed, or some did (the rows of the others are in the payload) | `status: "completed"` |
+| `deploy_rule` | `action` is `error`: the rule is missing, has no block for the platform, or could not be deployed (a tenant that refused the credential or could not be reached, a refused rule, `network_unavailable`) | a dry-run preview, a deploy that went through |
+| every other tool | the call is malformed: a missing or mistyped argument, an unknown tool, no workspace | `validation_report` and `validate_rule`'s findings, a lookup that finds nothing (`found: false`), a `queries` mode that is not one (`{"ok": false, "error": ...}`) |
+
+Before the release candidates changed it, a failed live check, query or deploy answered `isError: false` with `status: "failed"` in the payload, as the Python server did.
+
 ## search
 
 Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when you do not know a UUID.

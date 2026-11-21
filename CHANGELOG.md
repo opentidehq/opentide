@@ -156,6 +156,8 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **A failed live check, query or deploy is an MCP tool error: `isError: true`.** `validate_query` with `live`, `run_query` and `deploy_rule` answered a failure (a tenant that refuses the credential or cannot be reached, no tenant configured, `network_unavailable` in the WASI build, a refused rule) with `isError: false` and `status: "failed"` in the payload, so a client that reads `isError` took it for a result. They now set `isError: true` and keep the same JSON. A query that is invalid (`valid: false`), `validation_report`'s findings and a lookup that finds nothing are still answers. See [MCP tools](docs/mcp/tools.md#failures-and-iserror).
+
 - **The vulnerability lookup's `User-Agent` names the project only** ([#1722](https://github.com/opentidehq/opentide/pull/1722)). A CVE lookup on Vulnerability-Lookup (`vulnerability.circl.lu`) sent one team's contact address from every installation; it now sends `opentide/<version> (+https://github.com/opentidehq/opentide)`.
 - **The `alert_severity` vocabulary is named "Alert Severity"** ([opentidehq/specifications#96](https://github.com/opentidehq/specifications/pull/96)). Hover, `opentide info vocab` and generated documentation showed "MDR Alert Severity". Its values are unchanged.
 - **`validate query --live` logs name the rule with `rule_name`** ([#1718](https://github.com/opentidehq/opentide/pull/1718)). The `validating_query` and `valid_query` events carried it as `mdr_name`.
