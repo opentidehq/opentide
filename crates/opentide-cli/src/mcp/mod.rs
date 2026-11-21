@@ -23,6 +23,8 @@
 mod args;
 mod catalog;
 mod deploy;
+#[cfg(any(target_os = "wasi", test))]
+pub(crate) mod fetch;
 mod plugin;
 mod queries;
 mod resources;
@@ -153,6 +155,10 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
         .unwrap_or_default();
     // Started by an Agent Plugin client, the cwd is the plugin, not the catalogue (#431).
     let (env, workspace_problem) = plugin::served(env, &cwd);
+    // WASI only (no sockets): the client makes the tenant requests, over stdio.
+    // Natively the variable is ignored: opentide's own HTTP client makes them.
+    #[cfg(target_os = "wasi")]
+    let bridged = fetch::requested(&env);
     std::io::stdout().flush()?;
     let rpc = stdio::reserve_stdout()?;
     let server = Server::new(
@@ -175,14 +181,99 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
     // client is read with blocking reads, a message at a time, each answered
     // before the next read (`interactive`).
     #[cfg(target_os = "wasi")]
-    let outcome = opentide_connectors::runtime::block_on(interactive::serve(
-        server,
-        std::io::stdin().lock(),
-        rpc.writer()?,
-    ));
+    let outcome = {
+        let (jobs, queue) = tokio::sync::mpsc::unbounded_channel();
+        let server = server.offloading(jobs);
+        if bridged {
+            // Tenant requests are lines on the same two streams, so the reader
+            // that takes the client's messages is the bridge's.
+            // `Stdin` itself, not its lock: the bridge reads inside a tool call.
+            let bridge =
+                fetch::Bridge::new(std::io::BufReader::new(std::io::stdin()), rpc.writer()?);
+            let _fetching = bridge.install();
+            offloaded(
+                interactive::serve_lines(server, interactive::Bridged(bridge), rpc.writer()?),
+                queue,
+            )
+        } else {
+            offloaded(
+                interactive::serve(server, std::io::stdin().lock(), rpc.writer()?),
+                queue,
+            )
+        }
+    };
     rpc.restore()?;
     outcome.map_err(std::io::Error::other)??;
     Ok(0)
+}
+
+/// Drives *session* on the process's runtime and runs the calls' work it hands
+/// over (`Server::offloading`) between its polls, outside the runtime.
+#[cfg(any(target_os = "wasi", test))]
+fn offloaded<F: std::future::Future<Output = std::io::Result<()>>>(
+    session: F,
+    mut queue: tokio::sync::mpsc::UnboundedReceiver<server::Job>,
+) -> Result<std::io::Result<()>, String> {
+    enum Step {
+        Done(std::io::Result<()>),
+        Work(server::Job),
+    }
+    let mut session = Box::pin(session);
+    loop {
+        let step = opentide_connectors::runtime::block_on(async {
+            tokio::select! {
+                outcome = &mut session => Step::Done(outcome),
+                Some(work) = queue.recv() => Step::Work(work),
+            }
+        })?;
+        match step {
+            Step::Done(outcome) => return Ok(outcome),
+            Step::Work(work) => work(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod offload_tests {
+    use super::{offloaded, server};
+
+    /// The WASI build's tool calls run on the thread that drives the session,
+    /// between two polls of it: outside the runtime, where a tenant call may
+    /// block on the process's runtime. Run inside the session's own future the
+    /// same call is refused.
+    #[test]
+    fn a_calls_work_runs_outside_the_runtime_that_drives_the_session() {
+        let (jobs, queue) = tokio::sync::mpsc::unbounded_channel::<server::Job>();
+        let session = async move {
+            // Inside the session: refused, as the WASI build's tenant calls were.
+            assert_eq!(
+                opentide_connectors::runtime::block_on(async { 1 }),
+                Err(opentide_connectors::runtime::INSIDE_THE_RUNTIME.to_owned())
+            );
+            // Handed over: runs outside it, and may block on the runtime.
+            let (done, result) = tokio::sync::oneshot::channel();
+            let job: server::Job = Box::new(move || {
+                let outside = tokio::runtime::Handle::try_current().is_err();
+                let blocked = opentide_connectors::runtime::block_on(async { 7 });
+                let _sent = done.send((outside, blocked));
+            });
+            jobs.send(job).unwrap();
+            let (outside, blocked) = result.await.unwrap();
+            assert!(outside, "the work ran inside a runtime");
+            assert_eq!(blocked, Ok(7));
+            // And more than one, one after the other.
+            for expected in 0..3_u32 {
+                let (done, result) = tokio::sync::oneshot::channel();
+                let job: server::Job = Box::new(move || {
+                    let _sent = done.send(expected);
+                });
+                jobs.send(job).unwrap();
+                assert_eq!(result.await.unwrap(), expected);
+            }
+            Ok(())
+        };
+        offloaded(session, queue).unwrap().unwrap();
+    }
 }
 
 pub(crate) mod stdio {
@@ -280,6 +371,50 @@ pub(crate) mod interactive {
 
     use super::Server;
 
+    /// Where the client's lines come from.
+    pub trait Lines {
+        /// The next line, its newline included or not; `None` at the end of
+        /// input.
+        ///
+        /// # Errors
+        ///
+        /// An I/O error reading.
+        fn next_line(&mut self, line: &mut Vec<u8>) -> std::io::Result<bool>;
+
+        /// The request the server hands over next (`None` for a notification
+        /// or an answer).
+        fn begin(&mut self, _id: Option<&NumberOrString>) {}
+    }
+
+    /// A reader as the client's lines.
+    struct Reader<R>(R);
+
+    impl<R: BufRead> Lines for Reader<R> {
+        fn next_line(&mut self, line: &mut Vec<u8>) -> std::io::Result<bool> {
+            Ok(self.0.read_until(b'\n', line)? != 0)
+        }
+    }
+
+    /// The client's lines from a bridge that also carries its answers to the
+    /// server's tenant requests (`OPENTIDE_FETCH=stdio`).
+    pub struct Bridged(pub std::sync::Arc<super::fetch::Bridge>);
+
+    impl Lines for Bridged {
+        fn next_line(&mut self, line: &mut Vec<u8>) -> std::io::Result<bool> {
+            match self.0.next_line() {
+                Some(next) => {
+                    line.extend_from_slice(&next);
+                    Ok(true)
+                }
+                None => Ok(false),
+            }
+        }
+
+        fn begin(&mut self, id: Option<&NumberOrString>) {
+            self.0.begin(id.cloned());
+        }
+    }
+
     /// Room for the pipe's unread bytes; a longer message waits for the
     /// transport to read the first part, as it does on a real pipe.
     const PIPE: usize = 64 * 1024;
@@ -360,9 +495,22 @@ pub(crate) mod interactive {
     /// # Errors
     ///
     /// An I/O error reading *input* or writing *output*.
-    pub async fn serve<R, W>(server: Server, mut input: R, output: W) -> std::io::Result<()>
+    pub async fn serve<R, W>(server: Server, input: R, output: W) -> std::io::Result<()>
     where
         R: BufRead,
+        W: Write + Send + Unpin + 'static,
+    {
+        serve_lines(server, Reader(input), output).await
+    }
+
+    /// Serves *server* until *input* ends.
+    ///
+    /// # Errors
+    ///
+    /// An I/O error reading *input* or writing *output*.
+    pub async fn serve_lines<L, W>(server: Server, mut input: L, output: W) -> std::io::Result<()>
+    where
+        L: Lines,
         W: Write + Send + Unpin + 'static,
     {
         let seen = Arc::new(Seen::default());
@@ -384,7 +532,7 @@ pub(crate) mod interactive {
             while !seen.ended() {
                 line.clear();
                 // Blocks every task: whatever the client sent is answered.
-                if input.read_until(b'\n', &mut line)? == 0 {
+                if !input.next_line(&mut line)? {
                     break;
                 }
                 // A last message without its newline is framed now: the
@@ -394,6 +542,7 @@ pub(crate) mod interactive {
                     line.push(b'\n');
                 }
                 let id = request_id(&line);
+                input.begin(id.as_ref());
                 seen.expect();
                 if feed.write_all(&line).await.is_err() {
                     break; // the session ended: nothing reads the pipe

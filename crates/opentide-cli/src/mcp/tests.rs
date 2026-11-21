@@ -76,6 +76,16 @@ fn call(server: &Server, name: &str, args: Value) -> Value {
     serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap()
 }
 
+/// The payload of a tool call that failed: the same JSON as an answer, with
+/// `isError` true (MCP's tool-level error).
+fn failed_call(server: &Server, name: &str, args: Value) -> Value {
+    let Answer::Result(result) = server.call(name, &arguments(args)) else {
+        panic!("{name}: not a result");
+    };
+    assert_eq!(result["isError"], true, "{name}: {result}");
+    serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap()
+}
+
 /// The document of a resource that answered.
 fn read(server: &Server, uri: &str) -> Value {
     let Answer::Result(result) = server.read(uri) else {
@@ -108,6 +118,13 @@ fn every_catalogue_tool_answers_on_the_corpus() {
     assert_eq!(coverage["covered"], true);
     let status = call(&server, "deployment_status", json!({"uuid": SENTINEL_RULE}));
     assert_eq!(status["platforms"]["sentinel"]["deployed"], false);
+    // Sentinel addresses its rules without a vendor id: no state is kept, and
+    // the answer says why `deployed` cannot say more.
+    let note = status["platforms"]["sentinel"]["note"].as_str().unwrap();
+    assert!(
+        note.contains("records no deployment state for sentinel"),
+        "{note}"
+    );
     let report = call(&server, "validate_rule", json!({"uuid": SENTINEL_RULE}));
     assert_eq!(report["valid"], true, "{report}");
     assert_eq!(report["next_actions"][0]["tool"], "deploy_rule");
@@ -118,13 +135,13 @@ fn every_catalogue_tool_answers_on_the_corpus() {
     );
     assert_eq!(dry_run["action"], "dry-run");
     assert_eq!(dry_run["status"], "STAGING");
-    let unknown = call(
+    let unknown = failed_call(
         &server,
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "nowhere"}),
     );
     assert_eq!(unknown["status"], "unknown_platform");
-    let live = call(
+    let live = failed_call(
         &server,
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "sentinel", "dry_run": false}),
@@ -137,7 +154,7 @@ fn every_catalogue_tool_answers_on_the_corpus() {
         json!({"query": "SecurityEvent | take 1", "platform": "sentinel"}),
     );
     assert_eq!(query["valid"], true, "{query}");
-    let refused = call(
+    let refused = failed_call(
         &server,
         "run_query",
         json!({"query": "x", "platform": "splunk"}),
@@ -316,7 +333,13 @@ fn an_unknown_stack_or_object_type_is_refused() {
                    "language": "esql", "stack": stack}),
         )
     };
-    let refused = check("bogus");
+    // Refused, so nothing was checked: a tool error with the same payload.
+    let refused = failed_call(
+        &server,
+        "validate_query",
+        json!({"query": "FROM logs-* | LIMIT 10", "platform": "elastic",
+               "language": "esql", "stack": "bogus"}),
+    );
     assert_eq!(refused["status"], "failed", "{refused}");
     assert_eq!(refused["valid"], Value::Null, "{refused}");
     assert!(
@@ -348,7 +371,7 @@ fn an_unknown_stack_or_object_type_is_refused() {
 fn a_failed_live_query_check_carries_no_exit_code() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = corpus(scratch.path());
-    let live = call(
+    let live = failed_call(
         &server(&ws),
         "validate_query",
         json!({"query": "index=main", "platform": "splunk", "live": true}),
@@ -374,7 +397,7 @@ fn a_failed_deploy_names_its_cause() {
          azure_client_secret = \"$OPENTIDE_TEST_UNSET_SECRET\"\n",
     );
     std::fs::write(&config, text).unwrap();
-    let failed = call(
+    let failed = failed_call(
         &server(&ws),
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "sentinel", "dry_run": false}),
@@ -396,7 +419,7 @@ fn a_dry_run_without_the_platforms_block_is_refused_as_the_deploy_is() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = corpus(scratch.path());
     let server = server(&ws);
-    let preview = call(
+    let preview = failed_call(
         &server,
         "deploy_rule",
         json!({"uuid": SENTINEL_RULE, "platform": "splunk"}),
@@ -639,6 +662,11 @@ fn a_blocking_client_gets_each_answer_before_its_next_read() {
     );
 }
 
+/// Held by the tests that reach a tenant: the transport a bridge installs is the
+/// process's, so under `cargo test` (one process, many threads) another test's
+/// network call must not run while it is installed.
+static NETWORK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Network tool calls, each on a `spawn_blocking` thread of the process's
 /// runtime as the server dispatches them, block on that runtime: they reach
 /// the tenant (refused here: nothing listens) and no call starts a runtime
@@ -646,6 +674,9 @@ fn a_blocking_client_gets_each_answer_before_its_next_read() {
 #[cfg(not(target_os = "wasi"))]
 #[test]
 fn network_tool_calls_run_on_the_one_runtime() {
+    let _network = NETWORK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let closed = {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         format!("http://{}", listener.local_addr().unwrap())
@@ -708,6 +739,9 @@ fn network_tool_calls_run_on_the_one_runtime() {
 #[cfg(not(target_os = "wasi"))]
 #[test]
 fn the_session_ending_stops_the_running_call_and_waits_for_it() {
+    let _network = NETWORK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use std::io::Read;
     use tokio::io::AsyncWriteExt;
 
@@ -795,4 +829,438 @@ fn the_session_ending_stops_the_running_call_and_waits_for_it() {
     // interrupt the request stays open past the bound (the query's own
     // timeout is 120 s).
     assert_eq!(finished.recv_timeout(patience), Ok("closed"));
+}
+
+/// A client that answers the server's `opentide/fetch` requests over the same
+/// two streams (`OPENTIDE_FETCH=stdio`): it sends its opening messages one
+/// at a time, then, for each tenant request the server has written and not
+/// yet had answered, first some MCP messages of its own and then the answer.
+struct FetchingClient {
+    out: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    opening: std::collections::VecDeque<Vec<u8>>,
+    /// Sent while the first request waits, before its answer.
+    meanwhile: std::collections::VecDeque<Vec<u8>>,
+    answered: usize,
+    /// How each request is answered: a result or an error, by its params.
+    answer: Box<dyn Fn(&Value) -> Value + Send>,
+    /// Ends the input instead of answering the request with this number.
+    hang_up_at: Option<usize>,
+    current: Vec<u8>,
+    at: usize,
+    /// The requests seen, in the order they were written.
+    requests: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+}
+
+impl FetchingClient {
+    fn new(out: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>) -> Self {
+        FetchingClient {
+            out: std::sync::Arc::clone(out),
+            opening: std::collections::VecDeque::new(),
+            meanwhile: std::collections::VecDeque::new(),
+            answered: 0,
+            answer: Box::new(|_| json!({"status": 200, "headers": [], "body": null})),
+            hang_up_at: None,
+            current: Vec::new(),
+            at: 0,
+            requests: std::sync::Arc::default(),
+        }
+    }
+
+    fn requests_written(&self) -> Vec<Value> {
+        String::from_utf8_lossy(&self.out.lock().unwrap())
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .filter(|message| message["method"] == "opentide/fetch")
+            .collect()
+    }
+}
+
+impl std::io::Read for FetchingClient {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let available = std::io::BufRead::fill_buf(self)?;
+        let n = available.len().min(buf.len());
+        buf[..n].copy_from_slice(&available[..n]);
+        std::io::BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl std::io::BufRead for FetchingClient {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.at == self.current.len() {
+            self.at = 0;
+            self.current.clear();
+            if let Some(next) = self.opening.pop_front() {
+                self.current = next;
+            } else {
+                let written = self.requests_written();
+                if let Some(request) = written.get(self.answered) {
+                    if let Some(next) = self.meanwhile.pop_front() {
+                        self.current = next;
+                    } else if self.hang_up_at == Some(self.answered + 1) {
+                        return Ok(&[]);
+                    } else {
+                        let result = (self.answer)(request);
+                        let message =
+                            json!({"jsonrpc": "2.0", "id": request["id"], "result": result});
+                        self.requests.lock().unwrap().push(request.clone());
+                        self.answered += 1;
+                        self.current = format!("{message}\n").into_bytes();
+                    }
+                }
+            }
+        }
+        Ok(&self.current[self.at..])
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.at += amount;
+    }
+}
+
+/// An ES|QL answer's body, base64: one column, one row.
+fn esql_body(host: &str) -> String {
+    use base64::Engine as _;
+    let body = json!({"columns": [{"name": "host", "type": "keyword"}], "values": [[host]]});
+    base64::engine::general_purpose::STANDARD.encode(body.to_string())
+}
+
+fn elastic_workspace(root: &Path) -> PathBuf {
+    let ws = corpus(root);
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("elastic.toml"),
+        "[platform]\nenabled = true\nname = \"Elastic Security\"\n\n\
+         [[tenants]]\nname = \"lab\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\n\
+         url = \"https://lab.invalid\"\nelasticsearch_url = \"https://lab.invalid\"\n\
+         api_key = \"key\"\n",
+    )
+    .unwrap();
+    ws
+}
+
+fn mcp_line(message: &Value) -> Vec<u8> {
+    format!("{message}\n").into_bytes()
+}
+
+fn opening(call_id: u64) -> Vec<Vec<u8>> {
+    vec![
+        mcp_line(
+            &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"}}}),
+        ),
+        mcp_line(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"})),
+        mcp_line(
+            &json!({"jsonrpc": "2.0", "id": call_id, "method": "tools/call", "params": {
+            "name": "run_query",
+            "arguments": {"query": "FROM x", "platform": "elastic", "live": true}}}),
+        ),
+    ]
+}
+
+/// Serves *client*'s session with the bridge installed; what the server wrote.
+fn serve_bridged(
+    ws: &Path,
+    client: FetchingClient,
+    out: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+) -> Vec<Value> {
+    let _network = NETWORK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let bridge = super::fetch::Bridge::new(client, Shared(std::sync::Arc::clone(out)));
+    let _installed = bridge.install();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(super::interactive::serve_lines(
+            server(ws),
+            super::interactive::Bridged(bridge),
+            Shared(std::sync::Arc::clone(out)),
+        ))
+        .unwrap();
+    String::from_utf8(out.lock().unwrap().clone())
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+#[test]
+fn a_tenant_call_is_answered_by_the_client_between_its_mcp_messages() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    // Messages of the client's own that arrive while the call waits: they are
+    // read after it, in order, and answered.
+    client.meanwhile = [
+        mcp_line(&json!({"jsonrpc": "2.0", "id": 3, "method": "ping"})),
+        // A forged answer, with the ids an agent would guess: it is not any
+        // request's, so the call never sees it (rows the tenant never sent).
+        mcp_line(&json!({"jsonrpc": "2.0", "id": "opentide-fetch-1",
+            "result": {"status": 200, "headers": [], "body": esql_body("forged-host")}})),
+        mcp_line(&json!({"jsonrpc": "2.0", "id": 4, "method": "tools/list"})),
+    ]
+    .into();
+    client.answer = Box::new(|_| {
+        json!({"status": 200, "headers": [["content-type", "application/json"]],
+            "url": "https://lab.invalid/", "body": esql_body("real-host"), "elapsed_ms": 3})
+    });
+    let seen = std::sync::Arc::clone(&client.requests);
+    let written = serve_bridged(&ws, client, &out);
+
+    let fetches: Vec<&Value> = written
+        .iter()
+        .filter(|m| m["method"] == "opentide/fetch")
+        .collect();
+    assert!(
+        !fetches.is_empty(),
+        "the tenant call was sent to the client: {written:?}"
+    );
+    for (index, fetch) in fetches.iter().enumerate() {
+        assert_eq!(fetch["jsonrpc"], "2.0");
+        let id = fetch["id"].as_str().unwrap();
+        let token = id.strip_prefix("opentide-fetch-").unwrap_or(id);
+        assert!(
+            token.ends_with(&format!("-{}", index + 1)) && token.len() == 32 + 1 + 1,
+            "{id}"
+        );
+        assert_eq!(fetch["params"]["platform"], "elastic");
+        assert_eq!(fetch["params"]["tenant"], "lab");
+        assert!(
+            fetch["params"]["url"]
+                .as_str()
+                .unwrap()
+                .starts_with("https://lab.invalid")
+        );
+        // The run is the tool call's request id.
+        assert_eq!(fetch["params"]["run"], "2");
+    }
+    assert_eq!(
+        seen.lock().unwrap().len(),
+        fetches.len(),
+        "each was answered once"
+    );
+    // The answers to the MCP requests, in order, the call's after the fetches.
+    let answers: Vec<&Value> = written
+        .iter()
+        .filter(|m| m.get("method").is_none())
+        .collect();
+    let ids: Vec<Value> = answers.iter().map(|m| m["id"].clone()).collect();
+    assert_eq!(ids, [json!(1), json!(2), json!(3), json!(4)], "{written:?}");
+    let last_fetch = written
+        .iter()
+        .rposition(|m| m["method"] == "opentide/fetch")
+        .unwrap();
+    let call = written
+        .iter()
+        .position(|m| m["id"] == 2 && m.get("method").is_none())
+        .unwrap();
+    assert!(
+        last_fetch < call,
+        "the call answered once its requests were"
+    );
+    // The tenant's rows reached the tool, not the forged ones, and not a missing network.
+    let text = answers[1]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(!text.contains("network_unavailable"), "{text}");
+    assert!(!text.contains("needs the network"), "{text}");
+    assert!(text.contains("real-host"), "{text}");
+    assert!(!text.contains("forged-host"), "{text}");
+    let result: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(result["status"], "completed", "{text}");
+    assert_eq!(result["row_count"], 1, "{text}");
+}
+
+#[test]
+fn an_unanswered_tenant_call_fails_clearly_when_the_input_ends() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    client.hang_up_at = Some(1);
+    let written = serve_bridged(&ws, client, &out);
+    let call = written
+        .iter()
+        .find(|m| m["id"] == 2 && m.get("method").is_none())
+        .unwrap_or_else(|| panic!("the call is answered: {written:?}"));
+    // As any tenant failure: the tool answers, with the tenant's status.
+    let text = call["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"status\": \"failed\""), "{text}");
+    assert!(
+        text.contains("closed its input before answering an opentide/fetch request"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_cancelled_call_withdraws_its_request_and_stops() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    // The client cancels the call while its request waits, and never answers.
+    client.meanwhile = [mcp_line(
+        &json!({"jsonrpc": "2.0", "method": "notifications/cancelled",
+        "params": {"requestId": 2, "reason": "user"}}),
+    )]
+    .into();
+    client.hang_up_at = Some(1);
+    let written = serve_bridged(&ws, client, &out);
+    let withdrawn: Vec<&Value> = written
+        .iter()
+        .filter(|m| m["method"] == "notifications/cancelled")
+        .collect();
+    assert_eq!(withdrawn.len(), 1, "{written:?}");
+    let id = written
+        .iter()
+        .find(|m| m["method"] == "opentide/fetch")
+        .map(|m| m["id"].clone())
+        .unwrap();
+    assert_eq!(withdrawn[0]["params"]["requestId"], id);
+    // Stopped by the cancellation, not by the end of input.
+    let text = written
+        .iter()
+        .find(|m| m["id"] == 2 && m.get("method").is_none())
+        .map_or(String::new(), |call| {
+            call["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned()
+        });
+    assert!(!text.contains("closed its input"), "{text}");
+}
+
+/// MCP's tool-level error: a call that ran and could not do what it was asked
+/// reports `isError: true` with the same JSON as ever; one that answers with
+/// what it found (an invalid query, a lookup with no match) does not. A client
+/// that took a failed live check, query or deploy for an answer (QA, on the
+/// old module) read the failure as a result.
+#[test]
+fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
+    // The live check, the query and the deploy, with no tenant to reach.
+    let live = failed_call(
+        &server,
+        "validate_query",
+        json!({"query": "index=main", "platform": "splunk", "live": true}),
+    );
+    assert_eq!(live["status"], "failed", "{live}");
+    let query = failed_call(
+        &server,
+        "run_query",
+        json!({"query": "index=main", "platform": "splunk", "live": true}),
+    );
+    assert_eq!(query["status"], "failed", "{query}");
+    let deploy = failed_call(
+        &server,
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "splunk", "dry_run": false}),
+    );
+    assert_eq!(deploy["action"], "error", "{deploy}");
+    // Nothing was checked, run or sent: refused, unsupported, not live.
+    for (tool, args) in [
+        (
+            "run_query",
+            json!({"query": "index=main", "platform": "splunk"}),
+        ),
+        (
+            "run_query",
+            json!({"query": "x", "platform": "nowhere", "live": true}),
+        ),
+        (
+            "validate_query",
+            json!({"query": "x", "platform": "nowhere"}),
+        ),
+        (
+            "validate_query",
+            json!({"query": "x", "platform": "sentinel_one"}),
+        ),
+        // An invalid argument: the same JSON as the report, `ok: false`.
+        ("validation_report", json!({"queries": "loud"})),
+    ] {
+        failed_call(&server, tool, args);
+    }
+    // Missing input: a rule that is not in the catalogue, as `deploy_rule` has it.
+    let missing = failed_call(
+        &server,
+        "validate_rule",
+        json!({"uuid": "00000000-0000-4000-8003-ffffffffffff"}),
+    );
+    assert_eq!(missing["valid"], false, "{missing}");
+    assert_eq!(missing["next_actions"][0]["tool"], "search", "{missing}");
+    // An answer, whatever it says of the query or the rule.
+    let invalid = call(
+        &server,
+        "validate_query",
+        json!({"query": "SecurityEvent | wher EventID == 4688", "platform": "sentinel"}),
+    );
+    assert_eq!(invalid["valid"], false, "{invalid}");
+    let valid = call(
+        &server,
+        "validate_query",
+        json!({"query": "SecurityEvent | where EventID == 4688", "platform": "sentinel"}),
+    );
+    assert_eq!(valid["valid"], true, "{valid}");
+    let preview = call(
+        &server,
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+    );
+    assert_eq!(preview["action"], "dry-run", "{preview}");
+    call(&server, "validation_report", json!({}));
+    call(
+        &server,
+        "get_chaining",
+        json!({"uuid": "00000000-0000-4000-8001-ffffffffffff"}),
+    );
+}
+
+/// A tenant that refuses the credential, or cannot be reached, is a failed
+/// call too: the client made the request (`OPENTIDE_FETCH=stdio`) and
+/// answered 401, or never answered.
+#[test]
+fn a_tenant_that_refuses_or_goes_quiet_fails_the_call_as_a_tool_error() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = elastic_workspace(scratch.path());
+    let result_of = |out: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>, client: FetchingClient| {
+        let written = serve_bridged(&ws, client, out);
+        written
+            .into_iter()
+            .find(|m| m["id"] == 2 && m.get("method").is_none())
+            .map(|m| m["result"].clone())
+            .expect("the call is answered")
+    };
+    // 401: the tenant's refusal.
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    client.answer = Box::new(|_| {
+        json!({"status": 401, "headers": [["content-type", "application/json"]],
+            "url": "https://lab.invalid/", "body": null})
+    });
+    let refused = result_of(&out, client);
+    assert_eq!(refused["isError"], true, "{refused}");
+    let text = refused["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"status\": \"failed\""), "{text}");
+    // Never answered: the client's input ends.
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut client = FetchingClient::new(&out);
+    client.opening = opening(2).into();
+    client.hang_up_at = Some(1);
+    let quiet = result_of(&out, client);
+    assert_eq!(quiet["isError"], true, "{quiet}");
+    let text = quiet["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("closed its input"), "{text}");
 }
