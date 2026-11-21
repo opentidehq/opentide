@@ -1260,7 +1260,10 @@ fn a_workspace_pull_with_nothing_changed_is_answered_from_the_last_report() {
     let scratch = workspace("workspace-pull-report", true);
     let capabilities = json!({
         "textDocument": { "diagnostic": { "dynamicRegistration": false } },
-        "workspace": { "diagnostics": { "refreshSupport": true } }
+        "workspace": {
+            "diagnostics": { "refreshSupport": true },
+            "didChangeWatchedFiles": { "dynamicRegistration": true }
+        }
     });
     let (mut lsp, _) =
         start(json!({ "capabilities": capabilities, "rootUri": file_uri(&scratch.0) }));
@@ -1307,6 +1310,150 @@ fn a_workspace_pull_with_nothing_changed_is_answered_from_the_last_report() {
     );
     pull(&mut lsp, json!([]));
     assert_eq!(hits(&mut lsp), 3);
+}
+
+/// The codes of the diagnostics a workspace pull reports for the closed rule.
+fn workspace_pull_codes(lsp: &mut Lsp) -> Vec<String> {
+    let report = lsp.request("workspace/diagnostic", json!({ "previousResultIds": [] }));
+    let items = report["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{report}"));
+    let rule = items
+        .iter()
+        .find(|item| {
+            item["uri"]
+                .as_str()
+                .is_some_and(|uri| uri.ends_with("rule-1.0.yaml"))
+        })
+        .unwrap_or_else(|| panic!("no report for the rule: {report}"));
+    codes_of(rule["items"].as_array().unwrap_or(&Vec::new()))
+}
+
+fn workspace_pulling() -> Value {
+    pulling(json!({ "workspace": { "diagnostics": { "refreshSupport": true } } }))
+}
+
+/// A client that does not watch files has the disk read again with each
+/// batch, and the configuration resolved again: what a workspace pull
+/// reports for a closed file follows a configuration written under it,
+/// as it did before the pull's report was kept.
+#[test]
+fn without_a_watcher_a_workspace_pull_follows_a_configuration_written_on_disk() {
+    let scratch = workspace("workspace-pull-no-watcher", true);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(root) }));
+    // The objective is open; the rule is the closed file the pull reports.
+    let objective = file_uri(&root.join("objects/objectives/objective-1.0.yaml"));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    let unknown = "config_enum_unknown".to_string();
+    let codes = workspace_pull_codes(&mut lsp);
+    assert!(!codes.contains(&unknown), "{codes:?}");
+
+    let configurations = root.join(".opentide/configurations");
+    std::fs::create_dir_all(&configurations).unwrap();
+    std::fs::write(configurations.join("deployment.toml"), DESIGN_ONLY).unwrap();
+    let codes = workspace_pull_codes(&mut lsp);
+    assert!(
+        codes.contains(&unknown),
+        "a cached report hid the new configuration: {codes:?}"
+    );
+
+    std::fs::remove_file(configurations.join("deployment.toml")).unwrap();
+    let codes = workspace_pull_codes(&mut lsp);
+    assert!(!codes.contains(&unknown), "{codes:?}");
+}
+
+/// What nothing reports (no watcher) is never served from what was kept:
+/// every pull is made again, as before.
+#[test]
+fn a_client_that_does_not_watch_files_is_never_served_a_kept_report() {
+    let scratch = workspace("workspace-pull-no-cache", true);
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(&scratch.0) }));
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    for _ in 0..3 {
+        workspace_pull_codes(&mut lsp);
+    }
+    let stats = lsp.request("opentide/__stats", Value::Null);
+    assert_eq!(stats["result"]["workspaceReportHits"], 0, "{stats}");
+    assert_eq!(stats["result"]["closedAnalyses"], 3, "{stats}");
+}
+
+/// A diagnostics request sent in the batch before `shutdown` is answered
+/// as it was before diagnostics were answered last: not refused for the
+/// server being shut down by then.
+#[test]
+fn a_diagnostics_request_before_shutdown_in_one_batch_is_answered() {
+    let scratch = workspace("diagnostics-then-shutdown", true);
+    let (mut lsp, _) = start(json!({
+        "capabilities": workspace_pulling(),
+        "rootUri": file_uri(&scratch.0)
+    }));
+    let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    hold(&mut lsp, 900);
+    send(
+        &mut lsp,
+        901,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    send(
+        &mut lsp,
+        902,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    send(&mut lsp, 903, "shutdown", Value::Null);
+    let seen = until_response(&mut lsp, 903);
+    let reply = |id: i64| {
+        seen.iter()
+            .find(|m| m["id"] == id && m.get("method").is_none())
+    };
+    for id in [901, 902] {
+        let answer = reply(id).unwrap_or_else(|| panic!("no answer to {id}: {seen:#?}"));
+        assert!(answer.get("error").is_none(), "{id} was refused: {answer}");
+        assert!(answer["result"].is_object(), "{answer}");
+    }
+}
+
+/// A diagnostics request answered last is about a document that the batch
+/// closes after it: it is `ContentModified`, not a report for a document
+/// that is gone.
+#[test]
+fn a_deferred_diagnostics_request_for_a_document_closed_later_in_the_batch_is_outdated() {
+    let scratch = workspace("diagnostics-then-close", true);
+    let (mut lsp, _) = start(json!({
+        "capabilities": workspace_pulling(),
+        "rootUri": file_uri(&scratch.0)
+    }));
+    let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    hold(&mut lsp, 900);
+    send(
+        &mut lsp,
+        901,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    send(
+        &mut lsp,
+        902,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 0 }
+        }),
+    );
+    let seen = until_response(&mut lsp, 901);
+    let answer = seen.iter().find(|m| m["id"] == 901).unwrap();
+    assert_eq!(answer["error"]["code"], -32801, "{seen:#?}");
 }
 
 /// The diagnostics requests are the slow ones on a large workspace: what the

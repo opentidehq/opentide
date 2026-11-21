@@ -1106,11 +1106,16 @@ fn handle_workspace_diagnostics(
         let _ = session.host(Some(root));
     }
     let key = session.state_key();
+    // A client that does not watch files is told nothing of what changes on
+    // disk (the configuration is resolved again with each batch, and no
+    // counter moves for it): nothing is kept for it, and each pull reads the
+    // disk as it did before reports were kept.
+    let keeps = session.caps.watch_files;
     let cached = session
         .workspace_report
         .borrow()
         .as_ref()
-        .filter(|(at, _)| *at == key)
+        .filter(|(at, _)| keeps && *at == key)
         .map(|(_, entries)| Arc::clone(entries));
     let entries = match cached {
         Some(entries) => {
@@ -1121,7 +1126,9 @@ fn handle_workspace_diagnostics(
         }
         None => {
             let entries = Arc::new(workspace_report(session));
-            *session.workspace_report.borrow_mut() = Some((key, Arc::clone(&entries)));
+            if keeps {
+                *session.workspace_report.borrow_mut() = Some((key, Arc::clone(&entries)));
+            }
             entries
         }
     };

@@ -23,11 +23,16 @@ mod clock {
     }
 
     impl Span {
-        pub(crate) fn new(label: impl Into<String>) -> Self {
+        pub(crate) fn new(label: &str) -> Self {
+            Self::named(label, "")
+        }
+
+        /// A span named `prefix` and `name`, joined only when the trace is on.
+        pub(crate) fn named(prefix: &str, name: &str) -> Self {
             let start = enabled().then(Instant::now);
             Self {
                 label: if start.is_some() {
-                    label.into()
+                    format!("{prefix}{name}")
                 } else {
                     String::new()
                 },
@@ -55,7 +60,11 @@ mod clock {
     pub(crate) struct Span;
 
     impl Span {
-        pub(crate) fn new(_label: impl Into<String>) -> Self {
+        pub(crate) fn new(_label: &str) -> Self {
+            Self
+        }
+
+        pub(crate) fn named(_prefix: &str, _name: &str) -> Self {
             Self
         }
     }

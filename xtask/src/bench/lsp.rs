@@ -384,14 +384,27 @@ pub struct EditorLatency {
 /// the workspace again and, 2 ms later, asks for a completion: the time that
 /// completion waits is what a server that runs the pull to its end first
 /// makes the user wait for.
+///
+/// With `typing`, each cycle starts with a keystroke in the open document
+/// (`didChange`) and the pull of that document's diagnostics beside the
+/// workspace's: what an editor sends when the user types and then presses
+/// Ctrl+Space. The server then validates the workspace again before it can
+/// answer the pulls, so that is what a completion waits for.
 pub fn editor_latency(
     program: &Path,
     args: &[OsString],
     run: &RunDir,
     document: &Path,
+    typing: bool,
 ) -> Result<EditorLatency> {
-    let ((worst, first_pull, repeat_pull), peak_rss_bytes) =
-        run_server(program, args, run, document, || {}, drive_editor)?;
+    let ((worst, first_pull, repeat_pull), peak_rss_bytes) = run_server(
+        program,
+        args,
+        run,
+        document,
+        || {},
+        |stdin, messages, session| drive_editor(stdin, messages, session, typing),
+    )?;
     Ok(EditorLatency {
         sample: Sample {
             wall_s: worst.as_secs_f64(),
@@ -456,6 +469,7 @@ fn drive_editor(
     stdin: &mut ChildStdin,
     messages: &mpsc::Receiver<Result<Option<Value>>>,
     session: &SessionInfo,
+    typing: bool,
 ) -> Result<(Duration, Duration, Duration)> {
     start_editor(stdin, messages, session)?;
     let request = |stdin: &mut ChildStdin, id: i64, method: &str, params: Value| {
@@ -490,7 +504,32 @@ fn drive_editor(
     let mut worst = Duration::ZERO;
     let mut pulls = Vec::new();
     for cycle in 0..EDITOR_CYCLES {
-        let (pull_id, completion_id) = (10 + 2 * cycle, 11 + 2 * cycle);
+        let (pull_id, completion_id, document_id) =
+            (10 + 3 * cycle, 11 + 3 * cycle, 12 + 3 * cycle);
+        if typing {
+            // A keystroke, then the pull of the document it changed.
+            let text = if cycle % 2 == 0 {
+                format!("{}\n# typed\n", session.text)
+            } else {
+                session.text.clone()
+            };
+            write_message(
+                stdin,
+                &json!({
+                    "jsonrpc": "2.0", "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": { "uri": session.uri, "version": 2 + cycle },
+                        "contentChanges": [{ "text": text }]
+                    }
+                }),
+            )?;
+            request(
+                stdin,
+                document_id,
+                "textDocument/diagnostic",
+                json!({ "textDocument": { "uri": session.uri } }),
+            )?;
+        }
         let pull_sent = Instant::now();
         request(stdin, pull_id, "workspace/diagnostic", pull.clone())?;
         // The server has the pull by now, as it has two seconds after the
@@ -507,10 +546,14 @@ fn drive_editor(
                 "context": { "triggerKind": 1 }
             }),
         )?;
-        for (id, at) in wait_for_all(stdin, messages, session.start, &[pull_id, completion_id])? {
+        let mut waiting = vec![pull_id, completion_id];
+        if typing {
+            waiting.push(document_id);
+        }
+        for (id, at) in wait_for_all(stdin, messages, session.start, &waiting)? {
             if id == completion_id {
                 worst = worst.max(at.duration_since(completion_sent));
-            } else {
+            } else if id == pull_id {
                 pulls.push(at.duration_since(pull_sent));
             }
         }

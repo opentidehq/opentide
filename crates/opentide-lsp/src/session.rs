@@ -261,6 +261,52 @@ pub(crate) fn root_key(path: &str) -> String {
     trimmed.to_string()
 }
 
+/// What happened to the catalog a root is analysed with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Sighting {
+    /// The root had this catalog already.
+    Same,
+    /// The first catalog the root has had: what an analysis read before it
+    /// was the engine's compiled-in snapshot.
+    First,
+    /// Another catalog than the root had: every analysis of it reads it.
+    Changed,
+}
+
+/// The catalog each root (`None`: a document outside every root) last had
+/// installed for it, so that installing the catalog of another root, which
+/// happens each time requests alternate between roots, is not mistaken for
+/// a catalog that changed.
+#[derive(Default)]
+pub(crate) struct CatalogSightings(HashMap<Option<usize>, Arc<opentide_analysis::Catalog>>);
+
+impl CatalogSightings {
+    pub(crate) fn saw(
+        &mut self,
+        root: Option<usize>,
+        catalog: &Arc<opentide_analysis::Catalog>,
+    ) -> Sighting {
+        match self.0.get(&root) {
+            Some(known)
+                if Arc::ptr_eq(known, catalog)
+                    || (known.fields == catalog.fields
+                        && known.deprecations == catalog.deprecations) =>
+            {
+                Sighting::Same
+            }
+            known => {
+                let first = known.is_none();
+                self.0.insert(root, Arc::clone(catalog));
+                if first {
+                    Sighting::First
+                } else {
+                    Sighting::Changed
+                }
+            }
+        }
+    }
+}
+
 /// One closed file's entry of a workspace pull: its URI, the id of its
 /// diagnostics and the diagnostics.
 pub(crate) type ReportEntry = (lsp_types::Uri, String, Vec<lsp_types::Diagnostic>);
@@ -598,6 +644,8 @@ pub(crate) struct Session {
     /// The Tide field catalogs the engine has installed: the ones the models
     /// generate for the root of the last request ([`Session::host`]).
     installed_catalog: RefCell<Option<Arc<opentide_analysis::Catalog>>>,
+    /// The catalog each root last had installed for it ([`install_field_catalog`](Self::install_field_catalog)).
+    sightings: RefCell<CatalogSightings>,
 }
 
 /// `path` as the workspace reads it: an absolute path as it is; anything
@@ -912,6 +960,13 @@ impl Session {
         let Some(catalog) = own.or_else(crate::models::default_catalog_if_ready) else {
             return;
         };
+        // What an analysis reads changes when a root's own catalog does, not
+        // when the catalog installed is another root's.
+        match self.sightings.borrow_mut().saw(root, &catalog) {
+            Sighting::Same => {}
+            Sighting::First => self.env_epoch.set(self.env_epoch.get() + 1),
+            Sighting::Changed => self.touch(),
+        }
         let mut installed = self.installed_catalog.borrow_mut();
         if let Some(known) = installed.as_ref() {
             if Arc::ptr_eq(known, &catalog) {
@@ -930,12 +985,7 @@ impl Session {
                 // Catalogs generated on a thread arrive whenever they are
                 // ready, after the declarations were installed.
                 self.active.set(None);
-                // Every analysis reads the catalogs: the first generated one
-                // replaces the compiled-in snapshot without a `touch`.
-                self.env_epoch.set(self.env_epoch.get() + 1);
-                if installed.replace(catalog).is_some() {
-                    self.touch();
-                }
+                installed.replace(catalog);
             }
             Err(err) => self.log_warning(&format!(
                 "opentide-lsp: the generated field catalog does not install: {err}"
@@ -1506,7 +1556,11 @@ impl Session {
     ) -> Arc<Vec<opentide_core::Diagnostic>> {
         let epoch = self.env_epoch.get();
         let key = path_key(path);
-        let cached = self.roots.get(root).and_then(|r| {
+        // A client that does not watch files is not told what changed on
+        // disk (the configuration, the Elastic tenants an analysis reads):
+        // nothing is kept for it.
+        let keeps = self.caps.watch_files;
+        let cached = self.roots.get(root).filter(|_| keeps).and_then(|r| {
             r.disk
                 .borrow()
                 .files
@@ -1529,7 +1583,8 @@ impl Session {
             )
             .diagnostics,
         );
-        if let Some(r) = self.roots.get(root)
+        if keeps
+            && let Some(r) = self.roots.get(root)
             && let Some(file) = r.disk.borrow().files.get(&key).filter(|f| f.text == text)
         {
             file.keep_analysis(epoch, Arc::clone(&found));
@@ -1903,7 +1958,39 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use super::{Arc, DiskObjects, HashMap, Ordering, Session, path_key, root_key};
+    use super::{
+        Arc, CatalogSightings, DiskObjects, HashMap, Ordering, Session, Sighting, path_key,
+        root_key,
+    };
+
+    #[test]
+    fn switching_between_roots_is_not_a_catalog_that_changed() {
+        let catalog = |text: &str| {
+            Arc::new(opentide_analysis::Catalog {
+                fields: Some(text.to_string()),
+                ..opentide_analysis::Catalog::default()
+            })
+        };
+        let (a, b) = (catalog("a"), catalog("b"));
+        let mut seen = CatalogSightings::default();
+        assert_eq!(seen.saw(Some(0), &a), Sighting::First);
+        assert_eq!(seen.saw(Some(1), &b), Sighting::First);
+        // Requests alternate between the roots: each installs its own
+        // catalog, which is the one it had.
+        for _ in 0..3 {
+            assert_eq!(seen.saw(Some(0), &a), Sighting::Same);
+            assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+        }
+        // The same text in another allocation is the same catalog.
+        assert_eq!(seen.saw(Some(0), &catalog("a")), Sighting::Same);
+        // A root's own catalog arriving, or being generated again, changes it
+        // for that root alone.
+        assert_eq!(seen.saw(Some(0), &catalog("a2")), Sighting::Changed);
+        assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+        // A document outside every root has its own.
+        assert_eq!(seen.saw(None, &a), Sighting::First);
+        assert_eq!(seen.saw(None, &a), Sighting::Same);
+    }
 
     /// #914: reading a root's object files indexes none of them; the first
     /// request for the index indexes each, as `index_object` does, from the

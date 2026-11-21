@@ -366,6 +366,13 @@ impl Driver {
             }
             edited_after[i] = edited;
         }
+        // The documents each `didClose` closes, by where it is in the batch: a
+        // request answered last is about a document that is gone by then.
+        let closes: Vec<(usize, String)> = batch
+            .iter()
+            .enumerate()
+            .filter_map(|(i, frame)| closed_uri(frame).map(|uri| (i, uri)))
+            .collect();
         // The diagnostics requests are the slow ones (see [`DEFERRED`]), and
         // the client asks for the workspace's again two seconds after every
         // answer: a hover or a completion that waits in the same batch is
@@ -393,6 +400,9 @@ impl Driver {
                 Message::Response(response) => session.response(response),
                 Message::Notification(notification) => {
                     if notification.method == "exit" {
+                        // What the batch asked before `exit` is answered
+                        // first, as it was before diagnostics came last.
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
                         flush(session, writer, self.state)?;
                         return Ok(Some(self.state == Lifecycle::ShuttingDown));
                     }
@@ -408,9 +418,21 @@ impl Driver {
                         && self.state == Lifecycle::Running
                         && !cancelled.contains(&request.id) =>
                 {
-                    deferred.push((request, edited_after[i + 1].clone()));
+                    let mut staled_by = edited_after[i + 1].clone();
+                    staled_by.extend(
+                        closes
+                            .iter()
+                            .filter(|(at, _)| *at > i)
+                            .map(|(_, uri)| uri.clone()),
+                    );
+                    deferred.push((request, staled_by));
                 }
                 Message::Request(request) => {
+                    if request.method == "shutdown" {
+                        // The server is shut down for what follows, not for
+                        // what the batch asked before it.
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
+                    }
                     let staled_by = &edited_after[i + 1];
                     let response =
                         respond(session, &mut self.state, request, &cancelled, staled_by);
@@ -422,13 +444,25 @@ impl Driver {
             }
             write_outbox(session, writer)?;
         }
-        for (request, staled_by) in deferred {
-            let response = respond(session, &mut self.state, request, &cancelled, &staled_by);
+        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
+        flush(session, writer, self.state)?;
+        Ok(None)
+    }
+
+    /// Answer the requests [`DEFERRED`] put off, in the order they came.
+    fn answer_deferred(
+        &mut self,
+        session: &mut Session,
+        writer: &mut dyn Write,
+        deferred: &mut Vec<(Request, HashSet<String>)>,
+        cancelled: &HashSet<RequestId>,
+    ) -> io::Result<()> {
+        for (request, staled_by) in std::mem::take(deferred) {
+            let response = respond(session, &mut self.state, request, cancelled, &staled_by);
             write_outbox(session, writer)?;
             write(writer, &Message::Response(response))?;
         }
-        flush(session, writer, self.state)?;
-        Ok(None)
+        Ok(())
     }
 }
 
@@ -523,7 +557,7 @@ fn respond(
     }
     let method = request.method.clone();
     let id = request.id.clone();
-    let _span = crate::timing::Span::new(format!("request {method}"));
+    let _span = crate::timing::Span::named("request ", &method);
     let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::handlers::request(session, request)
     }));
@@ -591,6 +625,16 @@ fn edited_uri(frame: &Frame) -> Option<String> {
         return None;
     };
     (n.method == "textDocument/didChange")
+        .then(|| document_uri(&n.params))
+        .flatten()
+}
+
+/// The document a `didClose` notification closes.
+fn closed_uri(frame: &Frame) -> Option<String> {
+    let Frame::Message(Message::Notification(n)) = frame else {
+        return None;
+    };
+    (n.method == "textDocument/didClose")
         .then(|| document_uri(&n.params))
         .flatten()
 }
