@@ -126,7 +126,8 @@ NESTED_WORKSPACES = ("fuzz",)
 # A path a crate compiles in: `opentide_dataset::text!("<path>")` (#1743), or the older
 # `include_str!(concat!(env!("OPENTIDE_ASSETS"), "/<path>"))` (a test's fixture).
 ASSET_INCLUDE = re.compile(
-    r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"|opentide_dataset::text!\(\s*"([^"]+)"'
+    r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"'
+    r'|opentide_dataset::text!\(\s*"([A-Za-z0-9_./&+ -]+)"'
 )
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
