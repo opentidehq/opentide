@@ -1656,6 +1656,62 @@ fn a_state_shard_written_on_disk_makes_the_next_pull_be_made_again() {
     );
 }
 
+/// Typing in an object checks that object, not every object of the workspace
+/// again: the findings of every object are made once, and an edit that leaves
+/// what other objects' checks read as it was (a UUID, a name) checks the file
+/// it changed alone; one that changes a name checks them all again, as the
+/// other objects may now be told of it.
+#[test]
+fn a_keystroke_checks_the_file_it_changed_not_every_object() {
+    let scratch = workspace("workspace-pull-incremental", true);
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "rootUri": file_uri(&scratch.0)
+    }));
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let text = fixture(OBJECTIVE);
+    open(&mut lsp, &objective, "opentide-yaml", &text);
+    let validations = |lsp: &mut Lsp| {
+        let stats = lsp.request("opentide/__stats", Value::Null);
+        (
+            stats["result"]["validations"]["full"].as_u64().unwrap(),
+            stats["result"]["validations"]["partial"].as_u64().unwrap(),
+        )
+    };
+    let edit = |lsp: &mut Lsp, version: i32, text: &str| {
+        lsp.notify(
+            "textDocument/didChange",
+            json!({ "textDocument": { "uri": objective, "version": version },
+                    "contentChanges": [{ "text": text }] }),
+        );
+        workspace_pull_codes(lsp)
+    };
+    workspace_pull_codes(&mut lsp);
+    assert_eq!(
+        validations(&mut lsp),
+        (1, 0),
+        "the first pull checks everything"
+    );
+
+    edit(&mut lsp, 2, &format!("{text}\n# typed\n"));
+    assert_eq!(
+        validations(&mut lsp),
+        (1, 1),
+        "a typed line checked every object again"
+    );
+    edit(&mut lsp, 3, &format!("{text}\n# typed again\n"));
+    assert_eq!(validations(&mut lsp), (1, 2));
+
+    let renamed = text.replacen("name: ", "name: Renamed ", 1);
+    assert_ne!(renamed, text, "the fixture has a name");
+    edit(&mut lsp, 4, &renamed);
+    assert_eq!(
+        validations(&mut lsp),
+        (2, 2),
+        "a new name did not check every object again"
+    );
+}
+
 /// What nothing reports (no watcher) is never served from what was kept:
 /// every pull is made again, as before.
 #[test]
