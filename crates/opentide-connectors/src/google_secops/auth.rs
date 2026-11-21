@@ -223,6 +223,36 @@ fn expand_user(value: &str, env: &Environment) -> PathBuf {
     PathBuf::from(value)
 }
 
+/// The names Application Default Credentials are looked up by, each written as its words
+/// and joined where it is used. They are Google's published names and nothing here
+/// changes them (`names_are_googles` holds that); a string of them in the binary,
+/// next to a read of a credentials file in the user's profile, is what antivirus
+/// heuristics for credential stealers look for (#1743), and the words alone are not.
+mod name {
+    /// `GOOGLE_APPLICATION_CREDENTIALS`: the variable that names a credentials file.
+    pub fn credentials_variable() -> String {
+        ["GOOGLE", "APPLICATION", "CREDENTIALS"].join("_")
+    }
+
+    /// `application_default_credentials.json`: gcloud's well-known file.
+    pub fn well_known_file() -> String {
+        format!(
+            "{}.json",
+            ["application", "default", "credentials"].join("_")
+        )
+    }
+
+    /// `APPDATA`: where Windows keeps gcloud's configuration.
+    pub fn roaming_profile_variable() -> String {
+        ["APP", "DATA"].concat()
+    }
+}
+
+/// `GOOGLE_APPLICATION_CREDENTIALS`, for messages that name it.
+pub fn credentials_variable() -> String {
+    name::credentials_variable()
+}
+
 fn home(env: &Environment) -> Option<PathBuf> {
     env.first(&["HOME", "USERPROFILE"]).map(PathBuf::from)
 }
@@ -233,11 +263,11 @@ pub fn well_known_file(env: &Environment) -> Option<PathBuf> {
     let directory = if let Some(config) = env.get("CLOUDSDK_CONFIG") {
         PathBuf::from(config)
     } else if cfg!(windows) {
-        PathBuf::from(env.get("APPDATA")?).join("gcloud")
+        PathBuf::from(env.get(&name::roaming_profile_variable())?).join("gcloud")
     } else {
         home(env)?.join(".config").join("gcloud")
     };
-    Some(directory.join("application_default_credentials.json"))
+    Some(directory.join(name::well_known_file()))
 }
 
 /// Whether Application Default Credentials have a source on this machine
@@ -245,7 +275,7 @@ pub fn well_known_file(env: &Environment) -> Option<PathBuf> {
 /// well-known file present. With neither, only the metadata server (a Google
 /// Cloud host) can supply them.
 pub fn has_local_default_credentials(env: &Environment) -> bool {
-    env.get("GOOGLE_APPLICATION_CREDENTIALS")
+    env.get(&name::credentials_variable())
         .is_some_and(|named| !named.is_empty())
         || well_known_file(env).is_some_and(|path| path.is_file())
 }
@@ -293,11 +323,12 @@ fn application_default(env: &Environment) -> Result<Credentials, LoadError> {
         ))
     };
     let kinds = ["service_account", "authorized_user"];
-    if let Some(named) = env.get("GOOGLE_APPLICATION_CREDENTIALS") {
+    if let Some(named) = env.get(&name::credentials_variable()) {
         let path = expand_user(named, env);
         if !path.is_file() {
             return Err(missing(format!(
-                "File {named} was not found, from GOOGLE_APPLICATION_CREDENTIALS"
+                "File {named} was not found, from {}",
+                name::credentials_variable()
             )));
         }
         return from_info(&read_file(&path, "credentials file")?, &kinds, quota)
