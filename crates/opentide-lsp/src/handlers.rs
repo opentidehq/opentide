@@ -20,6 +20,7 @@ use opentide_highlight::encode_lsp_semantic_tokens;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 use std::path::PathBuf;
 
 /// Where the diagnostics reference lives: `#<code>` is each code's section.
@@ -324,6 +325,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             json!({
                 "analyses": s.analyses.get(),
                 "closedAnalyses": s.closed_analyses.get(),
+                "workspaceReportHits": s.workspace_report_hits.get(),
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),
                 "workspace": {
@@ -1097,17 +1099,77 @@ fn handle_workspace_diagnostics(
         .into_iter()
         .map(|p| (p.uri.as_str().to_string(), p.value))
         .collect();
+    // `host` first: it reads the disk again for a client that does not watch
+    // it, and installs the catalogs, either of which moves the state key.
+    for root in 0..session.roots.len() {
+        let _span = crate::timing::Span::new("workspace/diagnostic: host");
+        drop(session.host(Some(root)));
+    }
+    let key = session.state_key();
+    let cached = session
+        .workspace_report
+        .borrow()
+        .as_ref()
+        .filter(|(at, _)| *at == key)
+        .map(|(_, entries)| Arc::clone(entries));
+    let entries = match cached {
+        Some(entries) => {
+            session
+                .workspace_report_hits
+                .set(session.workspace_report_hits.get() + 1);
+            entries
+        }
+        None => {
+            let entries = Arc::new(workspace_report(session));
+            *session.workspace_report.borrow_mut() = Some((key, Arc::clone(&entries)));
+            entries
+        }
+    };
+    let items = entries
+        .iter()
+        .map(|(uri, id, found)| {
+            if previous.get(uri.as_str()) == Some(id) {
+                lsp::WorkspaceDocumentDiagnosticReport::Unchanged(
+                    lsp::WorkspaceUnchangedDocumentDiagnosticReport {
+                        uri: uri.clone(),
+                        version: None,
+                        unchanged_document_diagnostic_report:
+                            lsp::UnchangedDocumentDiagnosticReport {
+                                result_id: id.clone(),
+                            },
+                    },
+                )
+            } else {
+                lsp::WorkspaceDocumentDiagnosticReport::Full(
+                    lsp::WorkspaceFullDocumentDiagnosticReport {
+                        uri: uri.clone(),
+                        version: None,
+                        full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
+                            result_id: Some(id.clone()),
+                            items: found.clone(),
+                        },
+                    },
+                )
+            }
+        })
+        .collect();
+    lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport { items })
+}
+
+/// What the pull reports for each closed object file, in the order of the
+/// roots and their files: the workspace's findings and the engine's analysis,
+/// as the client takes them.
+fn workspace_report(session: &Session) -> Vec<crate::session::ReportEntry> {
     let open: BTreeSet<String> = session
         .docs
         .keys()
         .map(|uri| crate::session::path_key(&uri_to_path(uri)))
         .collect();
-    let mut items = Vec::new();
+    let mut entries = Vec::new();
     for root in 0..session.roots.len() {
-        let host = {
-            let _span = crate::timing::Span::new("workspace/diagnostic: host");
-            session.host(Some(root))
-        };
+        // Each root's own catalogs and datasets are the ones installed while
+        // its files are analysed.
+        let host = session.host(Some(root));
         let closed = {
             let _span = crate::timing::Span::new("workspace/diagnostic: closed objects");
             session.closed_objects(root)
@@ -1121,36 +1183,21 @@ fn handle_workspace_diagnostics(
                 continue;
             };
             let mut diagnostics = session.closed_findings(root, &path, &text);
-            diagnostics.extend(session.closed_analysis(root, &path, &text, &host).iter().cloned());
+            diagnostics.extend(
+                session
+                    .closed_analysis(root, &path, &text, &host)
+                    .iter()
+                    .cloned(),
+            );
             let found: Vec<lsp::Diagnostic> = diagnostics
                 .iter()
                 .map(|d| lsp_diagnostic(session, Some(root), &path, d))
                 .collect();
             let id = result_id(&found);
-            items.push(if previous.get(uri.as_str()) == Some(&id) {
-                lsp::WorkspaceDocumentDiagnosticReport::Unchanged(
-                    lsp::WorkspaceUnchangedDocumentDiagnosticReport {
-                        uri,
-                        version: None,
-                        unchanged_document_diagnostic_report:
-                            lsp::UnchangedDocumentDiagnosticReport { result_id: id },
-                    },
-                )
-            } else {
-                lsp::WorkspaceDocumentDiagnosticReport::Full(
-                    lsp::WorkspaceFullDocumentDiagnosticReport {
-                        uri,
-                        version: None,
-                        full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
-                            result_id: Some(id),
-                            items: found,
-                        },
-                    },
-                )
-            });
+            entries.push((uri, id, found));
         }
     }
-    lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport { items })
+    entries
 }
 
 // ---------------------------------------------------------------------------

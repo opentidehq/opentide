@@ -214,6 +214,10 @@ pub enum Kind {
     Cli,
     /// The language server, timed from spawn to the first diagnostics.
     Lsp,
+    /// The language server as an editor keeps it busy: the longest a
+    /// completion waits while the workspace's diagnostics are pulled
+    /// ([`lsp::editor_latency`]).
+    LspEditor,
     /// `opentide --version`: one process, timed from spawn to exit, that
     /// prints `opentide <version>` and nothing else (UC-3.8b, #960).
     Version,
@@ -440,6 +444,14 @@ pub const SCENARIOS: &[Scenario] = &[
         exit_codes: &[0],
         expect: lsp,
     },
+    Scenario {
+        id: "lsp_editor_latency",
+        args: &["lsp", "start"],
+        input: Input::Clean,
+        kind: Kind::LspEditor,
+        exit_codes: &[0],
+        expect: lsp,
+    },
 ];
 
 /// The options of a run.
@@ -631,7 +643,7 @@ enum Program {
 
 /// The scenarios the oracle does not run: `startup` measures the console
 /// script of this repository, `opentide._cli:main`, not the oracle's start.
-pub const ORACLE_UNMEASURED: &[&str] = &["startup"];
+pub const ORACLE_UNMEASURED: &[&str] = &["startup", "lsp_editor_latency"];
 
 /// The scenarios `--engine rust` measures through the console script,
 /// `opentide._cli:main` (UC-3.8b, #960; UC-6.2, #841): the plan's startup budgets,
@@ -680,7 +692,7 @@ fn rust_cli_plan(selected: &[&Scenario], options: &Options) -> Result<RustCli, S
         .iter()
         .filter(|s| {
             s.kind == Kind::Load
-                || (s.kind == Kind::Lsp && options.lsp.is_none())
+                || (matches!(s.kind, Kind::Lsp | Kind::LspEditor) && options.lsp.is_none())
                 || (LAUNCHER.contains(&s.id) && options.launcher.is_none())
         })
         .map(|s| s.id)
@@ -740,6 +752,11 @@ fn program(
             .collect()
     };
     match (engine, scenario.kind) {
+        (Engine::Python, Kind::LspEditor) => Program::Missing(
+            "not held to a budget for the oracle: the editor's steady state \
+             (workspace pulls beside completions) is the Rust server's budget"
+                .into(),
+        ),
         (Engine::Python, Kind::Version) => Program::Missing(
             "not held to a budget for the oracle: startup measures the launcher, \
              opentide._cli:main (UC-3.8b), under --engine rust"
@@ -774,7 +791,7 @@ fn program(
             ),
             None => Program::Missing("no opentide".into()),
         },
-        (Engine::Rust, Kind::Lsp) => match lsp {
+        (Engine::Rust, Kind::Lsp | Kind::LspEditor) => match lsp {
             Some(lsp) => Program::Run(lsp.to_owned(), vec![OsString::from("--stdio")]),
             None => Program::Missing("no language server".into()),
         },
@@ -895,7 +912,11 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
     };
     let lsp = match (options.engine, &options.lsp) {
         (Engine::Rust, Some(path)) => Some(path.clone()),
-        (Engine::Rust, None) if selected.iter().any(|s| s.kind == Kind::Lsp) => {
+        (Engine::Rust, None)
+            if selected
+                .iter()
+                .any(|s| matches!(s.kind, Kind::Lsp | Kind::LspEditor)) =>
+        {
             Some(oracle::build_lsp(root)?)
         }
         _ => None,
@@ -1155,6 +1176,21 @@ fn measure_scenario(
                     distinct => distinct?,
                 }
                 measured.sample
+            }
+            Kind::LspEditor => {
+                let ws = workspaces.context("no workspace")?;
+                let latency = lsp::editor_latency(program, args, &run_dir, &ws.rule)?;
+                note = Some(format!(
+                    "{}: the longest a textDocument/completion waited, of {} each sent 2 ms \
+                     after a workspace/diagnostic pull of the workspace's {} rules (the \
+                     first pull took {:.3} s, the median of the others {:.3} s)",
+                    display(program, args),
+                    lsp::EDITOR_CYCLES,
+                    ws.rules,
+                    latency.first_pull.as_secs_f64(),
+                    latency.repeat_pull.as_secs_f64()
+                ));
+                latency.sample
             }
             Kind::Lsp => {
                 let ws = workspaces.context("no workspace")?;
@@ -1527,7 +1563,9 @@ mod tests {
                 (_, Program::Missing(why)) if LAUNCHER.contains(&scenario.id) => {
                     assert!(why.starts_with("no launcher"), "{why}");
                 }
-                (Kind::Lsp, Program::Run(_, args)) => assert_eq!(args, ["--stdio"]),
+                (Kind::Lsp | Kind::LspEditor, Program::Run(_, args)) => {
+                    assert_eq!(args, ["--stdio"]);
+                }
                 (Kind::Load, Program::Run(bin, args)) => {
                     assert_eq!(bin, Path::new("load"));
                     assert!(args.is_empty());

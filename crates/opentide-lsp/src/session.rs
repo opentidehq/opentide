@@ -261,6 +261,10 @@ pub(crate) fn root_key(path: &str) -> String {
     trimmed.to_string()
 }
 
+/// One closed file's entry of a workspace pull: its URI, the id of its
+/// diagnostics and the diagnostics.
+pub(crate) type ReportEntry = (lsp_types::Uri, String, Vec<lsp_types::Diagnostic>);
+
 /// An object file on disk: its path and text, indexed on first use (the
 /// first request that reads the editor's index: a hover, a completion, the
 /// catalog, an Elastic rule's advisories), not when it is read.
@@ -552,6 +556,14 @@ pub(crate) struct Session {
     /// How many closed object files were analysed (not read from their
     /// entry), for the tests (`opentide/__stats`).
     pub closed_analyses: Cell<u64>,
+    /// What the last workspace pull answered for each closed file, and the
+    /// [`state_key`](Self::state_key) it was made in: the client asks again
+    /// two seconds after every answer, and when nothing changed since, the
+    /// answer is the same.
+    pub workspace_report: RefCell<Option<((u64, u64), Arc<Vec<ReportEntry>>)>>,
+    /// How many workspace pulls were answered from [`workspace_report`](Self::workspace_report),
+    /// for the tests (`opentide/__stats`).
+    pub workspace_report_hits: Cell<u64>,
     batch: Cell<u64>,
     /// The root whose catalogs and declared datasets the engine has
     /// installed; `None` until the first request, and again after they
@@ -954,6 +966,13 @@ impl Session {
     pub(crate) fn touch(&self) {
         self.generation.set(self.generation.get() + 1);
         self.env_epoch.set(self.env_epoch.get() + 1);
+    }
+
+    /// Everything a workspace pull's answer is read from: it is current for
+    /// the same pair ([`generation`](Self::generation), then
+    /// [`env_epoch`](Self::env_epoch)).
+    pub(crate) fn state_key(&self) -> (u64, u64) {
+        (self.generation.get(), self.env_epoch.get())
     }
 
     /// An object file changed (an edit of an open one, a file on disk): the
