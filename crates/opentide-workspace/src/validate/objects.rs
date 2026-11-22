@@ -334,6 +334,28 @@ pub struct Subject<'d> {
     pub document: &'d Arc<Document>,
 }
 
+/// The finding a run narrowed to rule `subject` (`validate --file`) files on
+/// the rule for its own deployment state shard, located in the rule as
+/// [`check_object`] locates its findings, before
+/// [`annotate`](super::annotate::annotate) places it: none when the shard is
+/// missing or usable. A full run reports the shards on themselves instead.
+pub fn shard_issue(
+    subject: &Subject<'_>,
+    fs: &dyn FileSystem,
+    workspace: &Path,
+) -> Option<Diagnostic> {
+    let Err(Some(error)) = states::check_shard(fs, workspace, subject.uuid) else {
+        return None;
+    };
+    let shard = error.path.clone().unwrap_or_default();
+    let mut issue = Diagnostic::error(error.code, error.message)
+        .object(subject.uuid, subject.family)
+        .file(subject.path)
+        .with("shard", shard.display().to_string());
+    issue.yaml_line = subject.document.locator().yaml_line(&issue.field_path);
+    Some(issue)
+}
+
 /// Every check of one object.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn check_object(
@@ -492,13 +514,8 @@ pub fn check_object(
                     .suggest(Some(states::MIGRATE_SUGGESTION.to_owned())),
                 );
             }
-            if checks.check_shard
-                && let Err(Some(error)) = states::check_shard(fs, workspace, subject.uuid)
-            {
-                let shard = error.path.clone().unwrap_or_default();
-                issues.push(
-                    new(error.code, error.message).with("shard", shard.display().to_string()),
-                );
+            if checks.check_shard {
+                issues.extend(shard_issue(subject, fs, workspace));
             }
             for (platform, anchored) in
                 opentide_schema::objects::platform::bitdefender::checks::signature_aliases(root)

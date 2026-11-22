@@ -471,10 +471,20 @@ impl RootChecks {
                 })
             });
             if holds {
-                let found: HashMap<PathBuf, Vec<Diagnostic>> = files
+                let mut found: HashMap<PathBuf, Vec<Diagnostic>> = files
                     .iter()
                     .filter_map(|file| Some((file.clone(), kept.get(file)?.clone())))
                     .collect();
+                // `validate --file` files an open rule's shard finding on the
+                // rule; the kept findings, a full run's, have it on the shard.
+                if let Some(workspace) = self.workspace.as_ref() {
+                    let fs = workspace.fs();
+                    for finding in workspace.rule_shard_findings(&files) {
+                        if let Some(file) = finding.file_path.as_deref() {
+                            found.entry(fs.resolve(file)).or_default().push(finding);
+                        }
+                    }
+                }
                 let found = Arc::new(found);
                 self.findings = Some((generation, files, Arc::clone(&found)));
                 return found;
@@ -778,9 +788,10 @@ pub(crate) fn is_state_shard(path: &str) -> bool {
 /// Whether `finding` is a `deployment_state_*` finding filed on a file other
 /// than a shard. A run narrowed to some objects checks each one's shard and
 /// files what it finds on the object (`validate --file`); a full run files it
-/// on the shard alone, where the editor shows it ([`RootChecks::all_findings`]
-/// keeps the shards' findings current): kept on the object, it would show
-/// twice, and stay there after the shard is fixed.
+/// on the shard alone ([`RootChecks::all_findings`] keeps the shards'
+/// findings current). The findings of every object are a full run's: kept on
+/// a closed rule, it would stay there after the shard is fixed. An open rule
+/// shows it, as `validate --file` does ([`RootChecks::findings`]).
 fn is_shard_finding_on_an_object(finding: &Diagnostic, file: &Path) -> bool {
     finding.code.starts_with("deployment_state_")
         && !is_state_shard(&file.to_string_lossy().replace('\\', "/"))
@@ -822,11 +833,7 @@ fn by_file(
         let Some(file) = finding.file_path.as_deref() else {
             continue;
         };
-        let file = fs.resolve(file);
-        if is_shard_finding_on_an_object(&finding, &file) {
-            continue;
-        }
-        by_file.entry(file).or_default().push(finding);
+        by_file.entry(fs.resolve(file)).or_default().push(finding);
     }
     by_file
 }
@@ -879,7 +886,13 @@ fn validate_changed(workspace: &Workspace, files: &[PathBuf]) -> HashMap<PathBuf
         .cloned()
         .collect();
     let _span = crate::timing::Span::new("validate: lint and placing");
-    by_file(workspace, run, Some(&linted))
+    let mut found = by_file(workspace, run, Some(&linted));
+    // These findings stand in for a full run's, which files a rule's shard
+    // finding on the shard alone ([`RootChecks::rescan_states`] keeps it).
+    for (file, findings) in &mut found {
+        findings.retain(|finding| !is_shard_finding_on_an_object(finding, file));
+    }
+    found
 }
 
 /// The UTF-16 column of the code-point column `column` (from 0) of `line`,
