@@ -76,9 +76,14 @@ pub struct TideField {
 /// The values an enum field allows: the list a catalog file gave it, or a place in the table of
 /// lists the bundled catalog stores (#1743). Each list is shared by every revision of every schema
 /// that has it, and is decoded when one is first read: a document that checks no enum field never
-/// decodes them. Reads as a slice.
+/// decodes them. Reads as a slice. Only the crate makes a place of the bundled table, so a
+/// place is always one the table has.
 #[derive(Debug, Clone)]
-pub enum Choices {
+pub struct Choices(pub(crate) Repr);
+
+/// What [`Choices`] holds.
+#[derive(Debug, Clone)]
+pub(crate) enum Repr {
     /// The field's own list.
     Own(Arc<[String]>),
     /// The place in the bundled table of lists.
@@ -87,13 +92,13 @@ pub enum Choices {
 
 impl Default for Choices {
     fn default() -> Self {
-        Self::Own(Arc::from([]))
+        Self(Repr::Own(Arc::from([])))
     }
 }
 
 impl<'de> Deserialize<'de> for Choices {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Vec::<String>::deserialize(deserializer).map(|list| Self::Own(list.into()))
+        Vec::<String>::deserialize(deserializer).map(|list| Self(Repr::Own(list.into())))
     }
 }
 

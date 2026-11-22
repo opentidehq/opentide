@@ -85,25 +85,52 @@ def in_source_distribution(file: Path, tree: Path) -> bool:
     return False
 
 
+#: A rule bundled with the others, and the file it matches: the gate scans the file first, and
+#: stops when the canary is not found (a bundle that does not load, a `yara` that scans nothing).
+CANARY_RULE = "OPENTIDE_AV_GATE_CANARY"
+CANARY_TEXT = "opentide-av-gate-canary-7f3a9c1e"
+CANARY_SOURCE = f'rule {CANARY_RULE} {{ strings: $a = "{CANARY_TEXT}" condition: $a }}\n'
+
+
+def scan_file(bundle: Path, file: Path) -> list[str]:
+    """The rules `file` matches. `yara` exits 0 whether or not a rule matched and 1 on an error
+    (a rule file that does not load, a scan that timed out or could not read the file), so any
+    non-zero exit, and any `error scanning` line, stops the gate."""
+    result = subprocess.run(
+        ["yara", "-C", "-w", *_externals(file), str(bundle), str(file)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or "error scanning" in result.stderr:
+        print(
+            f"yara_gate: yara failed on {file} (exit {result.returncode}): {result.stderr.strip()}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return [line.partition(" ")[0] for line in result.stdout.splitlines() if line.strip()]
+
+
+def check_canary(bundle: Path, scratch: Path) -> None:
+    """Stops the gate unless `bundle` finds the canary in a file that holds it."""
+    sample = scratch / "canary.txt"
+    sample.write_text(f"nothing to see here {CANARY_TEXT}\n")
+    if CANARY_RULE not in scan_file(bundle, sample):
+        print(
+            "yara_gate: the canary rule did not match its own file: the bundle scans nothing",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+
 def scan(bundle: Path, tree: Path) -> dict[str, list[str]]:
     """`rule -> [paths]` for every file under `tree`."""
     hits: dict[str, list[str]] = defaultdict(list)
     for file in sorted(p for p in tree.rglob("*") if p.is_file()):
         if in_source_distribution(file, tree):
             continue
-        result = subprocess.run(
-            ["yara", "-C", "-w", *_externals(file), str(bundle), str(file)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode not in (0, 1):
-            print(f"yara_gate: yara failed on {file}: {result.stderr.strip()}", file=sys.stderr)
-            raise SystemExit(2)
-        for line in result.stdout.splitlines():
-            rule, _, _path = line.partition(" ")
-            if rule:
-                hits[rule].append(str(file.relative_to(tree)))
+        for rule in scan_file(bundle, file):
+            hits[rule].append(str(file.relative_to(tree)))
     return hits
 
 
@@ -138,12 +165,16 @@ def main(argv: list[str]) -> int:
         return 2
     allowed = allowed_rules(args.allowlist)
     with tempfile.TemporaryDirectory() as scratch:
+        canary = Path(scratch) / "canary.yar"
+        canary.write_text(CANARY_SOURCE)
         bundle = Path(scratch) / "rules.yarc"
-        good, bad = compile_bundle(files, bundle)
+        good, bad = compile_bundle([canary, *files], bundle)
+        check_canary(bundle, Path(scratch))
         hits = scan(bundle, args.tree)
+    good = [file for file in good if file.name != "canary.yar"]
     lines = [
-        f"YARA: {len(good)} of {len(files)} rule files compiled ({len(bad)} skipped), "
-        f"{sum(len(v) for v in hits.values())} hit(s) in {len(hits)} rule(s)"
+        f"YARA: canary matched; {len(good)} of {len(files)} rule files compiled "
+        f"({len(bad)} skipped), {sum(len(v) for v in hits.values())} hit(s) in {len(hits)} rule(s)"
     ]
     failing = {rule: paths for rule, paths in hits.items() if rule not in allowed}
     for rule, paths in sorted(hits.items()):

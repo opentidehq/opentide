@@ -15,16 +15,16 @@
 //! left behind never shadows the real files. `OPENTIDE_ASSETS` names that root for the crate's
 //! tests.
 
-// The crate reads the lists of the bundled table (`Choices::Bundled`); this script only writes it.
+// The crate reads the lists of the bundled table (`Repr::Bundled`); this script only writes it.
 #[allow(
     dead_code,
-    reason = "`Choices::Bundled` is the crate's, built when the stored catalog is read"
+    reason = "`Repr::Bundled` is the crate's, built when the stored catalog is read"
 )]
 #[path = "src/tide_model.rs"]
 mod tide_model;
 
 use std::collections::{BTreeMap, HashMap};
-use tide_model::{Choices, StoredCatalog, StoredField, TideFieldsFile};
+use tide_model::{Repr, StoredCatalog, StoredField, TideFieldsFile};
 
 const FIELDS: &str = "data/catalogs/tide/generated/fields.json";
 
@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut choices: Vec<Vec<String>> = Vec::new();
     let mut fields = Vec::with_capacity(file.fields.len());
     for f in &file.fields {
-        let Choices::Own(list) = &f.enum_values else {
+        let Repr::Own(list) = &f.enum_values.0 else {
             return Err("fields.json read a list of the bundled table".into());
         };
         let values: Vec<String> = list.to_vec();

@@ -336,4 +336,28 @@ mod tests {
         wrong[3] = 9;
         assert_eq!(crate::text(&wrong), Err(crate::DatasetError::Version(9)));
     }
+
+    /// A header that states 4 GiB is a length error, not a 4 GiB reservation (which aborts the
+    /// process, and panics on wasm32): the reservation is capped and the decode stops at the
+    /// stated length.
+    #[test]
+    fn a_crafted_length_is_an_error_not_an_allocation() {
+        let blob = encode("t", Kind::Text, b"hello hello hello hello").unwrap();
+        let mut huge = blob.clone();
+        huge[5..9].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(matches!(
+            crate::text(&huge),
+            Err(crate::DatasetError::Length { .. })
+        ));
+        // And one that states less than the frame holds stops there, as a length error.
+        let mut short = blob;
+        short[5..9].copy_from_slice(&3_u32.to_le_bytes());
+        assert!(matches!(
+            crate::text(&short),
+            Err(crate::DatasetError::Length {
+                expected: 3,
+                actual: 4
+            })
+        ));
+    }
 }

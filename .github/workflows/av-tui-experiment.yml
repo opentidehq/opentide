@@ -1,0 +1,112 @@
+# The terminal UI's weight with antivirus engines (#1743): a Windows extension module built WITH
+# the terminal UI (the facade's `cli` feature, which brings crossterm's Windows key translation:
+# GetForegroundWindow, GetKeyboardLayout, ToUnicodeEx) on the compressed datasets, and the
+# win32 Node addons, which keep the terminal UI, put through the release gate's engines (ClamAV,
+# YARA, Microsoft Defender with its exclusions removed, signatures updated and a canary it must
+# detect: av-gate.yml). Run by hand to answer one question: do the engines flag the terminal UI
+# once the datasets are compressed? It builds, scans and reports; it ships nothing, publishes
+# nothing, and contacts no tenant. The variant is a throwaway: the shipped extension module is
+# the one build-packages.yml makes.
+#
+#   npm_run_id   a run (a publish.yml dry run) that has an `npm-packages` artifact: its
+#                win32 `.node` files are scanned with the variant.
+name: AV terminal UI experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_run_id:
+        description: "The run whose `npm-packages` artifact holds the win32 .node files (a publish.yml dry run)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # The extension module with the terminal UI, for the two Windows targets: the wheel is built as
+  # the release builds it, and its module is renamed `.dll` so that the gate's import policy
+  # (a `.pyd` may not import the key translation) lists it instead of failing on it.
+  variant:
+    name: Extension module with the terminal UI (${{ matrix.tag }})
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            tag: win_amd64
+          - target: aarch64-pc-windows-msvc
+            tag: win_arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Turn the terminal UI on (this checkout only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^    "cli-core",$' bindings/python/Cargo.toml
+          sed -i 's/^    "cli-core",$/    "cli",/' bindings/python/Cargo.toml
+          grep -n '"cli"' bindings/python/Cargo.toml
+      - name: Build the wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: build
+          target: ${{ matrix.target }}
+          args: --locked --out wheelhouse
+      - name: The module
+        shell: bash
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p variant
+          python - <<'PY'
+          import glob, os, zipfile
+          wheel = glob.glob("wheelhouse/*.whl")[0]
+          with zipfile.ZipFile(wheel) as archive:
+              member = next(n for n in archive.namelist() if n.endswith(".pyd"))
+              data = archive.read(member)
+          open(f"variant/opentide-native-{os.environ['TAG']}-with-terminal-ui.dll", "wb").write(data)
+          PY
+          ls -l variant
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tui-variant-${{ matrix.tag }}
+          path: variant/
+          if-no-files-found: error
+
+  # The win32 Node addons of a dry run, which keep the terminal UI.
+  addons:
+    name: The Node addons of the run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: npm
+          run-id: ${{ inputs.npm_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tui-variant-npm
+          path: npm/
+          if-no-files-found: error
+
+  gate:
+    name: AV gate (the terminal UI variant)
+    needs: [variant, addons]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/av-gate.yml
+    with:
+      artifacts: "tui-variant-*"

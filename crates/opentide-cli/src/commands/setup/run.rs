@@ -215,7 +215,6 @@ fn empty_repo_option(command: &str, name: Option<&str>, org: Option<&str>) -> Op
 /// The reason a prompt cannot be shown here, if one cannot
 /// (`require_interactive`).
 pub(crate) fn cannot_prompt(cx: &Context<'_>) -> Option<String> {
-    use std::io::IsTerminal as _;
     if cx.mode == Mode::Agent {
         let reader = crate::mode::detect_agent(cx.env).map_or_else(
             || "agent output mode".to_owned(),
@@ -223,7 +222,7 @@ pub(crate) fn cannot_prompt(cx: &Context<'_>) -> Option<String> {
         );
         return Some(format!("Interactive setup does not prompt in {reader}."));
     }
-    if !std::io::stdin().is_terminal() {
+    if !crate::commands::new::stdin_is_terminal() {
         return Some("Interactive setup requires a terminal.".to_owned());
     }
     None

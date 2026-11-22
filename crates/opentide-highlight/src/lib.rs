@@ -23,6 +23,7 @@ use thiserror::Error;
 
 pub use keywords::{Capture, Keywords, keywords};
 pub use markdown::highlight_markdown_line;
+use tide_model::Repr;
 pub use tide_model::{Choices, TideField, TideSchemaRoot};
 use tide_model::{StoredCatalog, TideFieldsFile};
 
@@ -188,7 +189,7 @@ impl StoredCatalog {
                 enum_values: f
                     .choices
                     .checked_sub(1)
-                    .map_or_else(Choices::default, Choices::Bundled),
+                    .map_or_else(Choices::default, |at| Choices(Repr::Bundled(at))),
                 enum_docs: f.enum_docs.iter().map(|&i| text(i)).collect(),
                 ref_kind: f.ref_kind.map(text),
                 const_value: f.const_value.map(text),
@@ -230,9 +231,12 @@ impl std::ops::Deref for Choices {
     type Target = [String];
 
     fn deref(&self) -> &[String] {
-        match self {
-            Self::Own(list) => list,
-            Self::Bundled(at) => &bundled_choices()[*at as usize],
+        match &self.0 {
+            Repr::Own(list) => list,
+            // The crate makes every place from the table's own ids; a place past it is no list.
+            Repr::Bundled(at) => bundled_choices()
+                .get(*at as usize)
+                .map_or(&[][..], |list| &list[..]),
         }
     }
 }
@@ -1208,6 +1212,14 @@ pub fn generated_artifacts_stale_for(
 
 #[cfg(test)]
 mod tests {
+    /// A place past the bundled table is no list, not a panic.
+    #[test]
+    fn a_place_past_the_bundled_table_reads_as_no_choices() {
+        let past = Choices(Repr::Bundled(u32::MAX));
+        assert!(past.is_empty());
+        assert!(Choices::default().is_empty());
+    }
+
     /// What the build stored (#1743, its strings and enum lists shared) is `fields.json` read whole: the same fields
     /// and schema roots, and the same lookup tables.
     #[test]

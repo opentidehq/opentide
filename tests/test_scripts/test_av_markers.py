@@ -205,3 +205,56 @@ def test_a_set_of_artifacts_without_windows_binaries_passes_only_when_allowed(
     (tmp_path / "opentide-lsp-wasm32-wasip1.wasm").write_bytes(b"\0asm\1\0\0\0")
     assert module.main([str(tmp_path)]) == 2
     assert module.main(["--allow-none", str(tmp_path)]) == 0
+
+
+def _yara_gate() -> object:
+    spec = importlib.util.spec_from_file_location(
+        "av_yara_gate_exit", _MODULE.with_name("yara_gate.py")
+    )
+    assert spec
+    assert spec.loader
+    sys.path.insert(0, str(_MODULE.parent))
+    try:
+        gate = importlib.util.module_from_spec(spec)
+        sys.modules["av_yara_gate_exit"] = gate
+        spec.loader.exec_module(gate)
+    finally:
+        sys.path.remove(str(_MODULE.parent))
+    return gate
+
+
+class _Ran:
+    def __init__(self, code: int, out: str = "", err: str = "") -> None:
+        self.returncode, self.stdout, self.stderr = code, out, err
+
+
+def test_the_yara_gate_stops_on_every_yara_error_and_a_missing_canary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gate = _yara_gate()
+    sample = tmp_path / "f.bin"
+    sample.write_bytes(b"x")
+    # An error exits 1 (a scan timeout, a rules file that does not load): never "clean".
+    monkeypatch.setattr(gate.subprocess, "run", lambda *a, **k: _Ran(1, "", "error: timeout"))
+    with pytest.raises(SystemExit) as stopped:
+        gate.scan_file(tmp_path / "rules.yarc", sample)
+    assert stopped.value.code == 2
+    # An error on one file with a zero exit is an error too.
+    monkeypatch.setattr(
+        gate.subprocess, "run", lambda *a, **k: _Ran(0, "", "error scanning f.bin: too many")
+    )
+    with pytest.raises(SystemExit):
+        gate.scan_file(tmp_path / "rules.yarc", sample)
+    # A match is a hit, no match is none.
+    monkeypatch.setattr(gate.subprocess, "run", lambda *a, **k: _Ran(0, "Rule_A f.bin\n"))
+    assert gate.scan_file(tmp_path / "rules.yarc", sample) == ["Rule_A"]
+    monkeypatch.setattr(gate.subprocess, "run", lambda *a, **k: _Ran(0, ""))
+    assert gate.scan_file(tmp_path / "rules.yarc", sample) == []
+    # A bundle that does not find the canary in its own file scans nothing: the gate stops.
+    with pytest.raises(SystemExit) as stopped:
+        gate.check_canary(tmp_path / "rules.yarc", tmp_path)
+    assert stopped.value.code == 2
+    monkeypatch.setattr(
+        gate.subprocess, "run", lambda *a, **k: _Ran(0, f"{gate.CANARY_RULE} canary.txt\n")
+    )
+    gate.check_canary(tmp_path / "rules.yarc", tmp_path)

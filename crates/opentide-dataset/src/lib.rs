@@ -37,6 +37,10 @@ pub const MAGIC: [u8; 3] = *b"OTD";
 /// The container's version, the byte after the magic.
 pub const VERSION: u8 = 1;
 
+/// The most bytes [`decode`] reserves before it has decoded any: what the header says is taken
+/// on trust no further.
+const MAX_RESERVE: usize = 16 * 1024 * 1024;
+
 /// The container's header: magic, version, kind, raw length.
 pub const HEADER_LEN: usize = 9;
 
@@ -150,8 +154,11 @@ pub fn decode(blob: &[u8], kind: Kind) -> Result<Vec<u8>, DatasetError> {
     let mut frame = &blob[HEADER_LEN..];
     let mut decoder = ruzstd::decoding::StreamingDecoder::new(&mut frame)
         .map_err(|error| DatasetError::Frame(error.to_string()))?;
-    let mut out = Vec::with_capacity(len);
-    decoder
+    // The header's length is not trusted: a crafted one must not make a reservation that aborts
+    // the process (or panics, on wasm32), nor let a frame decode past the length it states. The
+    // largest dataset is 3.4 MB; the vector grows from the reservation if a blob is larger.
+    let mut out = Vec::with_capacity(len.min(MAX_RESERVE));
+    std::io::Read::take(&mut decoder, len as u64 + 1)
         .read_to_end(&mut out)
         .map_err(|error| DatasetError::Frame(error.to_string()))?;
     if out.len() != len {

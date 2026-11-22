@@ -237,9 +237,11 @@ fn capitalised(family: &str) -> String {
     })
 }
 
-/// Whether stdin is a terminal.
+/// Whether the questions can be asked here: stdin is a terminal, and this build has the terminal
+/// prompts (the `terminal` feature: the wheel and the WASI module have none). A build without them
+/// behaves at a terminal exactly as it does with no terminal at all.
 pub fn stdin_is_terminal() -> bool {
-    std::io::stdin().is_terminal()
+    cfg!(feature = "terminal") && std::io::stdin().is_terminal()
 }
 
 /// Where a family's template, schema and objects are.

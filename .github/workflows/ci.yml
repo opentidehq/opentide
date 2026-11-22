@@ -286,6 +286,12 @@ jobs:
         if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
 
+      # A build without the terminal prompts (the wheel's, the WASI module's) at a terminal
+      # behaves as with none: it asks nothing and refuses nothing for want of prompts (#1743).
+      - name: the build without the terminal feature, at a terminal
+        if: needs.changes.outputs.rust == 'true'
+        run: cargo test --package opentide-cli --no-default-features --test no_terminal_prompts --locked
+
       # The code only wasm32 compiles (opentide-wasm's, the wasip1 paths of
       # opentide-lsp and opentide-cli), which the native clippy never sees:
       # when the `wasm` job runs (wasi-sdk only for the command line's ring).
