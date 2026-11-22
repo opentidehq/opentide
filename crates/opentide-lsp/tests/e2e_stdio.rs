@@ -328,16 +328,32 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
         "no global vocab dump: {labels:?}"
     );
 
-    let resolve = lsp.request(
-        "completionItem/resolve",
-        json!({ "label": "description", "kind": 5 }),
-    );
+    // An item as the list sent it keeps its documentation; one that names no
+    // field (no `data`) is documented from no field of the models by its label.
+    let author = completion["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["label"] == "author")
+        .cloned()
+        .unwrap();
+    let resolve = lsp.request("completionItem/resolve", author);
     assert!(
         resolve["result"]["documentation"]["value"]
             .as_str()
             .unwrap_or("")
-            .contains("Description"),
+            .contains("Author"),
         "{resolve}"
+    );
+    let bare = lsp.request(
+        "completionItem/resolve",
+        json!({ "label": "description", "kind": 5 }),
+    );
+    assert!(
+        bare["result"]
+            .get("documentation")
+            .is_none_or(Value::is_null),
+        "a bare item is documented by its label: {bare}"
     );
 
     let inlays = lsp.request(
