@@ -1,10 +1,10 @@
 //! An opt-in trace of where a request's time goes: with `OPENTIDE_LSP_TIMING`
 //! set (to anything but `0`), each [`Span`] writes `opentide-lsp: timing
 //! <label> <ms>` to stderr when it ends. Stdout stays protocol only. Off (the
-//! default) a span costs one atomic load; on a WebAssembly target, which has
-//! no clock to rely on, it is always off.
+//! default) a span costs one atomic load; on the browser's WebAssembly build,
+//! which has no clock to rely on, it is always off (WASI has one).
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 mod clock {
     use std::sync::OnceLock;
     use std::time::Instant;
@@ -54,9 +54,9 @@ mod clock {
     }
 }
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
 mod clock {
-    /// Always off on WebAssembly.
+    /// Always off on the browser build, which has no clock to rely on (WASI has one).
     pub(crate) struct Span;
 
     impl Span {

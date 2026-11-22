@@ -277,6 +277,17 @@ lto = true
 codegen-units = 1
 strip = "symbols"
 
+# The WASI build of the language server (`scripts/engine/build-wasm.sh wasi`, the release's
+# `opentide-lsp-wasm32-wasip1.wasm`): optimised for size, not speed. A host compiles the module on
+# every start (wasmtime's cache holds the compiled module compressed, and decompresses it on each
+# start; V8 compiles each function the first time it runs), so what a start costs follows the
+# module's size: `s` is 22% smaller than `release`'s opt-level 3 and starts 40 to 50 ms sooner under
+# wasmtime and Node's WASI, while validation, which runs in the code, takes 15 ms longer (#1767).
+# Native builds keep `release`.
+[profile.wasi-lsp]
+inherits = "release"
+opt-level = "s"
+
 # The WASI build of the command line (`scripts/engine/build-wasm.sh cli`), the
 # one module the VS Code extension runs (ADR 0007's amendment): optimised for
 # size, as the `.vsix` is held to 15 MiB. Unwinding stays: the crash handler
