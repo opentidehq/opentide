@@ -175,6 +175,7 @@ nightly. No scheduled ci.yml run exists on `integration/unified-core`: the sched
 | `engine-lint` ran seven checks in series | ci.yml | **#1783** |
 | "GitHub retired the Intel macOS runners; cross-compile on Apple silicon" | engine-release-build.yml, build-packages.yml | half-stale: `macos-15-intel` exists and the smoke jobs use it; cross-compiling is still the faster choice. Reword when next touched |
 | engine-release-build.yml's header says ci.yml calls it "in its full set" | engine-release-build.yml | stale: release-build.yml calls it for both callers. Reword when next touched |
+| `engine-release-consumers` (nightly) checks out opentidehq/vscode-extension at a pinned commit from 2026-11-06 (`9888813d…`, its PR #71) and runs that checkout's `scripts/engine-lib.mjs` on the release assets (`scripts/engine/check-vscode-extension.mjs`). That engine-lib refuses rc.3's engine zip, which now carries `data/catalogs/*/NOTICE` and `LICENSE*`. The check script's `pinsFor().wasi` lists four licence files where the extension now pins five (no `THIRD-PARTY-DATA-LICENSES.txt`), and it prints `licenses` where the extension's `pins.json` reads `licences`. The job prints the `wasi` section but runs none of the extension's WASI checks | ci.yml, scripts/engine/check-vscode-extension.mjs | stale: the nightly fails on a consumer that has moved on. Bump the `ref:` once vscode-extension #82 → #83 → #95 merge, and fix the script in the same change (P1, below) |
 | The full tier's 10 min budget (.github/AGENTS.md) | ci.yml `build` | not met: 18.3 min. nextest takes 8.8 of them. Either restate the budget or split the run (below) |
 
 ## Prioritised changes
@@ -191,6 +192,7 @@ nightly. No scheduled ci.yml run exists on `integration/unified-core`: the sched
 | 8 | ClamAV over the packages: parallel archive and extracted scans, or `--multiscan` | ~2–3 min off the packages' AV gate | low | proposed |
 | 9 | `build`: the full tier misses its 10 min budget (18.3). Partition nextest (two jobs on the same build's archive), or restate the budget | ~4–5 min off every push | medium (#1141 measured the archive's cost: 1.5 GB) | proposed: revisit only with a smaller archive |
 | 10 | `facade`: four builds in series (10–13 min); semver-checks (3.4) could run beside the feature builds | ~3 min off a facade PR | low | proposed |
+| 11 | `engine-release-consumers`: bump the vscode-extension `ref:` to the commit after its #82, #83 and #95. In `check-vscode-extension.mjs`, add `THIRD-PARTY-DATA-LICENSES.txt` to `pinsFor().wasi` and print the extension's key, `licences`. Then have the job run the extension's own WASI checks on the module (if its checkout carries them; not verified here) instead of only printing the pins it would read | restores a nightly signal that now fails for a stale reason; the WASI check catches a module the extension would refuse before a release ships it | low (nightly only, never gates) | waits for vscode-extension's merges |
 
 After #1780, #1781 and #4, the release build's floor is the windows-arm64 wheel plus the packages' AV
 gate. Items 7 and 8 are the next levers.
