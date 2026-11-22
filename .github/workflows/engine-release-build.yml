@@ -90,21 +90,31 @@ jobs:
           echo "Assets of ${tag}, named ${version}"
 
   # `opentide-lsp` and `opentide` (the facade with `cli`, as `cargo install
-  # opentide --features cli` builds it) for each target, two cargo builds so
-  # that neither takes the other's features. `opentide` reports the release's
-  # version (OPENTIDE_BUILD_VERSION, which a release candidate's crates cannot carry).
+  # opentide --features cli` builds it) for each target, one job per binary
+  # and target, so that neither takes the other's features and the two
+  # release builds (lto = true, codegen-units = 1: a long single-core tail)
+  # run side by side instead of one after the other. `opentide` reports the
+  # release's version (OPENTIDE_BUILD_VERSION, which a release candidate's
+  # crates cannot carry).
   native:
-    name: Binaries ${{ matrix.target }}
+    name: ${{ matrix.binary }} ${{ matrix.target }}
     needs: meta
     env:
       VERSION: ${{ needs.meta.outputs.version }}
       OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}
+      BINARY: ${{ matrix.binary }}
     strategy:
       fail-fast: false
       matrix:
+        binary: [opentide-lsp, opentide]
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
         # scripts/engine/release.py BINARY_TARGETS lists the same targets
         # (scripts/engine/test_release.py). No musl, no Windows (the header).
-        # `saves`: the one cell per runner that saves its compiler cache.
+        # `saves`: the one cell per runner and binary that saves its compiler cache.
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -133,8 +143,8 @@ jobs:
           rustup toolchain install --profile minimal --no-self-update
           rustup target add ${{ matrix.target }}
       # The dry run only (a release builds from nothing): sccache, by content,
-      # one family per Linux runner, which the cell marked `saves` saves on
-      # development and by the nightly. macOS keeps none: its
+      # one family per Linux runner and binary, which the cell marked `saves`
+      # saves on development and by the nightly. macOS keeps none: its
       # families crowded the ones pull requests restore out of the 10 GB
       # GitHub keeps (#841, tests/test_ci/test_workflows.py).
       - name: Install sccache
@@ -165,12 +175,14 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
-          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
+          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ matrix.binary }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ matrix.binary }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: build opentide-lsp
+        if: matrix.binary == 'opentide-lsp'
         shell: bash
         run: cargo build --locked --release -p opentide-lsp --target ${{ matrix.target }}
       - name: build opentide
+        if: matrix.binary == 'opentide'
         shell: bash
         run: cargo build --locked --release -p opentide --features cli --bin opentide --target ${{ matrix.target }}
       # opentide-lsp: 40 MiB. language-server's 30 MiB held until the 0.16
@@ -183,42 +195,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for budget in opentide-lsp:41943040 opentide:83886080; do
-            name="${budget%%:*}"
-            bin="target/${{ matrix.target }}/release/${name}"
-            test -f "$bin"
-            size=$(wc -c < "$bin")
-            echo "$bin is $size bytes"
-            test "$size" -lt "${budget#*:}"
-          done
+          case "${BINARY}" in
+            opentide-lsp) budget=41943040 ;;
+            opentide) budget=83886080 ;;
+          esac
+          bin="target/${{ matrix.target }}/release/${BINARY}"
+          test -f "$bin"
+          size=$(wc -c < "$bin")
+          echo "$bin is $size bytes"
+          test "$size" -lt "${budget}"
       # Every target's binaries have one name: name each by its target, or the
-      # assets job's merged download keeps only one.
+      # assets job's merged download keeps only one. The command line carries
+      # opentide's own package data, which the assets job scans as a product
+      # (license-scan.sh --product): `product-asset-*`; the language server
+      # is an engine asset.
       - name: rename
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist product
-          cp "target/${{ matrix.target }}/release/opentide-lsp" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}"
-          cp "target/${{ matrix.target }}/release/opentide" "product/opentide-${VERSION}-${{ matrix.target }}"
+          mkdir -p out
+          cp "target/${{ matrix.target }}/release/${BINARY}" "out/${BINARY}-${VERSION}-${{ matrix.target }}"
       - name: Save the compiler cache
         if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && runner.os == 'Linux' && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
-          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-      - name: upload opentide-lsp
+          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ matrix.binary }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+      - name: upload ${{ matrix.binary }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: engine-asset-opentide-lsp-${{ matrix.target }}
-          path: dist/*
-          if-no-files-found: error
-      # The command line carries opentide's own package data, which the
-      # assets job scans as a product (license-scan.sh --product).
-      - name: upload opentide
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: product-asset-opentide-${{ matrix.target }}
-          path: product/*
+          name: ${{ matrix.binary == 'opentide' && 'product' || 'engine' }}-asset-${{ matrix.binary }}-${{ matrix.target }}
+          path: out/*
           if-no-files-found: error
 
   # Every WebAssembly build reports the release's version, as the native

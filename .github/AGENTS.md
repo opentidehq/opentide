@@ -197,7 +197,7 @@ caches and `development`'s), and from a pull request only when it restored no co
 at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
 so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
 `facade` and the nightly's Linux Rust jobs restore it); the release dry run's own
-(`release-Linux-<arch>`, `release-wasm`). **Linux only**: macOS and Windows build cold (their
+(`release-Linux-<arch>-<binary>`, one per binary, and `release-wasm`). **Linux only**: macOS and Windows build cold (their
 caches crowded the Linux families out of the 10 GB GitHub keeps). **A pull request saves no
 cache** but that bootstrap copy. The one rust-cache left: `fuzz` (engine-fuzz.yml, saved by one cell of the scheduled run), plus coverage.yml's and
 oracle.yml's own. uv's cache (setup-uv) is keyed on `uv.lock`.
