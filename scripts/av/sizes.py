@@ -20,7 +20,10 @@ import fnmatch
 import sys
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10, which opentide's tests also run on
+    import tomli as tomllib  # the dev group's tomli there
 
 DEFAULT_BUDGETS = Path(__file__).resolve().parents[2] / "tests" / "bench" / "sizes.toml"
 
