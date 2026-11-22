@@ -144,15 +144,39 @@ jobs:
       # clamscan exits 0 clean, 1 a detection, 2 an error: the gate fails on
       # either. Archives are scanned by the engine (`--scan-archive`, nested
       # to a depth of 30) on the artifacts, and the extracted files one by one.
+      # clamscan uses one core: every file of both trees is dealt, largest
+      # first, into one list per core, and one clamscan reads each list
+      # (`--file-list`), so the packages' scan (4.5 to 6.5 min on one core,
+      # the release build's last job) runs on all of them. Every file is
+      # still scanned, with the same options; any one scan's failure fails
+      # the step.
       - name: clamscan
         run: |
-          set -o pipefail
-          for tree in av-artifacts av-extracted; do
-            echo "::group::clamscan ${tree}"
-            clamscan -r --scan-archive=yes --max-filesize=900M --max-scansize=4000M \
-              --max-recursion=30 --alert-exceeds-max=yes --infected "${tree}" | tee -a "${RUNNER_TEMP}/clamscan.txt"
-            echo "::endgroup::"
+          set -euo pipefail
+          lists="${RUNNER_TEMP}/clamscan-lists"
+          mkdir -p "${lists}"
+          jobs="$(nproc)"
+          find av-artifacts av-extracted -type f -printf '%s\t%p\n' | sort -rn | cut -f2- \
+            | awk -v n="${jobs}" -v dir="${lists}" '{ print > (dir "/" (NR - 1) % n ".txt") }'
+          wc -l "${lists}"/*.txt
+          pids=()
+          for list in "${lists}"/*.txt; do
+            clamscan --scan-archive=yes --max-filesize=900M --max-scansize=4000M \
+              --max-recursion=30 --alert-exceeds-max=yes --infected \
+              --file-list="${list}" > "${list%.txt}.log" 2>&1 &
+            pids+=("$!")
           done
+          status=0
+          for pid in "${pids[@]}"; do
+            wait "${pid}" || status=1
+          done
+          for log in "${lists}"/*.log; do
+            echo "::group::clamscan $(basename "${log}" .log)"
+            cat "${log}"
+            echo "::endgroup::"
+            cat "${log}" >> "${RUNNER_TEMP}/clamscan.txt"
+          done
+          exit "${status}"
       - name: Summary
         if: always()
         run: |
