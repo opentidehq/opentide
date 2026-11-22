@@ -112,12 +112,11 @@ fn open_options(root: &Path) -> Options {
 }
 
 /// The folders the loaded workspace reads that a fixed glob does not name:
-/// where `paths.toml` put the object families, and the configuration folders
-/// layered in (a parent's `.opentide/configurations/`).
+/// where `paths.toml` put the object families. (The configuration folder
+/// layered in is the root's parent's, which needs no workspace to name.)
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct WatchScope {
     pub object_folders: Vec<PathBuf>,
-    pub configuration_folders: Vec<PathBuf>,
 }
 
 /// The findings of every object, and what they were made in.
@@ -220,7 +219,6 @@ impl RootChecks {
                 .iter()
                 .filter_map(|folder| folder.path.clone())
                 .collect(),
-            configuration_folders: configuration.folders.clone(),
         };
     }
 
