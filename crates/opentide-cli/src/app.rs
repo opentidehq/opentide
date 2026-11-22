@@ -4197,6 +4197,16 @@ mod tests {
 
     #[test]
     fn a_repo_root_variable_naming_no_folder_is_a_usage_error() {
+        // `--json` prints a message as a JSON string, where a Windows path's
+        // `\` is escaped: the test reads the fields rather than the bytes.
+        fn failure_message(stdout: &str) -> String {
+            let value: serde_json::Value =
+                serde_json::from_str(stdout).unwrap_or_else(|err| panic!("{err}: {stdout}"));
+            value["failure"]["message"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        }
         // A10 (smoke test): `OPENTIDE_REPO_ROOT=/nonexist opentide validate`
         // passed on an empty catalogue, where `--repo /nonexist` exits 2.
         let missing =
@@ -4211,10 +4221,13 @@ mod tests {
                 ran.stdout, ran.stderr
             );
             let said = format!("{}{}", ran.stdout, ran.stderr);
-            assert!(
-                said.contains(&format!("OPENTIDE_REPO_ROOT={shown} does not exist")),
-                "{line}: {said}"
-            );
+            let message = format!("OPENTIDE_REPO_ROOT={shown} does not exist");
+            let printed = if line.starts_with("--json") {
+                failure_message(&ran.stdout)
+            } else {
+                said.clone()
+            };
+            assert!(printed.contains(&message), "{line}: {said}");
         }
         let json = dispatched("--json validate", &pairs, false);
         assert!(json.stdout.contains("\"code\":\"usage_invalid_value\""));
@@ -4239,7 +4252,7 @@ mod tests {
         let ran = dispatched("--json validate", &split, false);
         assert_eq!(ran.code, USAGE_EXIT_CODE, "{}", ran.stdout);
         assert!(
-            ran.stdout
+            failure_message(&ran.stdout)
                 .contains(&format!("OPENTIDE_TIDE_WORKSPACE={shown} does not exist")),
             "{}",
             ran.stdout
@@ -4273,10 +4286,17 @@ mod tests {
         // `doctor` reports it as its failed workspace check instead.
         let doctor = dispatched("--json doctor --offline", &pairs, false);
         assert_ne!(doctor.code, USAGE_EXIT_CODE, "{}", doctor.stdout);
+        let value: serde_json::Value = serde_json::from_str(&doctor.stdout)
+            .unwrap_or_else(|err| panic!("{err}: {}", doctor.stdout));
+        let workspace = value["checks"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|check| check["code"] == "workspace")
+            .and_then(|check| check["message"].as_str())
+            .unwrap_or_default();
         assert!(
-            doctor
-                .stdout
-                .contains(&format!("Workspace {shown} does not exist")),
+            workspace.contains(&format!("Workspace {shown} does not exist")),
             "{}{}",
             doctor.stdout,
             doctor.stderr
