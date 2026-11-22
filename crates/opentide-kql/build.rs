@@ -92,7 +92,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let azure: AzureMonitorFile = toml::from_str(&read(AZURE_MONITOR)?)
         .map_err(|error| format!("{AZURE_MONITOR}: {error}"))?;
-    datasets.value("kql-azure-monitor-tables", &[AZURE_MONITOR], &azure.tables)?;
+    // The tables' heads in one blob and their columns in shards of their own (#1767): the catalog
+    // reads a table's columns when something asks for them.
+    let reference: std::collections::BTreeMap<&str, &[tables_model::AzureMonitorColumn]> = azure
+        .tables
+        .iter()
+        .filter_map(|table| Some((table.name.as_str(), table.columns.as_deref()?)))
+        .collect();
+    let (heads, shards) = tables_model::split_azure_monitor(azure.tables.clone());
+    datasets.value("kql-azure-monitor-heads", &[AZURE_MONITOR], &heads)?;
+    let mut shard_table = String::from("pub(crate) const SHARDS: &[ShardFn] = &[\n");
+    for (index, shard) in shards.iter().enumerate() {
+        let name = format!("kql-azure-monitor-columns-{index}");
+        datasets.value(&name, &[AZURE_MONITOR], shard)?;
+        shard_table.push_str(&format!(
+            "    || opentide_dataset::value!(Vec<Vec<AzureMonitorColumn>>, {name:?}),\n"
+        ));
+    }
+    shard_table.push_str("];\n");
+    let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").ok_or("OUT_DIR is not set")?);
+    std::fs::write(out.join("kql_azure_shards.rs"), shard_table)?;
 
     let asim: AsimFile =
         toml::from_str(&read(ASIM)?).map_err(|error| format!("{ASIM}: {error}"))?;
@@ -130,18 +149,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             options.options,
         ),
     )?;
-    for (name, dir) in [("sentinel", SENTINEL), ("defender", DEFENDER)] {
+    let hand = |dir: &str| -> Result<(Vec<TableRow>, Vec<ColumnRow>), Box<dyn std::error::Error>> {
         let tables_path = format!("{dir}/tables.toml");
         let columns_path = format!("{dir}/columns.toml");
         let tables: Tables = toml::from_str(&read(&tables_path)?)
             .map_err(|error| format!("{tables_path}: {error}"))?;
         let columns: Columns = toml::from_str(&read(&columns_path)?)
             .map_err(|error| format!("{columns_path}: {error}"))?;
-        datasets.value(
-            &format!("kql-{name}-rows"),
-            &[&tables_path, &columns_path],
-            &(tables.tables, columns.columns),
-        )?;
+        Ok((tables.tables, columns.columns))
+    };
+    let reference_type = |table: &str, column: &str| {
+        reference
+            .get(table)?
+            .iter()
+            .find(|c| &*c.name == column)
+            .map(|c| std::sync::Arc::clone(&c.type_name))
+    };
+    for (name, sentinel) in [("sentinel", true), ("defender", false)] {
+        let rows =
+            rows_model::profile_rows(sentinel, hand(SENTINEL)?, hand(DEFENDER)?, reference_type);
+        let sources: Vec<String> = [SENTINEL, DEFENDER]
+            .iter()
+            .flat_map(|dir| [format!("{dir}/tables.toml"), format!("{dir}/columns.toml")])
+            .collect();
+        let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
+        datasets.value(&format!("kql-{name}-rows"), &sources, &rows)?;
     }
     Ok(())
 }

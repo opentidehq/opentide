@@ -116,8 +116,8 @@ fn core_rows() -> CoreRows {
     opentide_dataset::compiled_value("kql-core-rows", opentide_dataset::blob!("kql-core-rows"))
 }
 
-/// The hand-written tables and columns of a profile's `tables.toml` and `columns.toml`, as the
-/// build script pre-parsed them.
+/// A profile's hand-written tables and columns, with the types settled against the reference
+/// ([`rows_model::profile_rows`]), as the build script pre-parsed them.
 fn hand_written_rows(profile: Profile) -> (Vec<TableRow>, Vec<ColumnRow>) {
     match profile {
         Profile::Defender => opentide_dataset::compiled_value(
@@ -220,14 +220,34 @@ pub struct Catalog {
     pub plugins: Vec<PluginRow>,
     pub types: Vec<String>,
     pub tables: Vec<TableRow>,
+    /// The hand-written columns, then the ones a workspace declares
+    /// ([`Catalog::for_workspace`]). The Azure Monitor Logs reference's columns are not here:
+    /// a table's are read when something first asks for them
+    /// ([`Catalog::columns_for_table`]), which is nearly all of a catalog's columns.
     pub columns: Vec<ColumnRow>,
     pub options: Vec<OperatorOption>,
     /// `tables` by name.
     table_index: HashMap<String, usize>,
     /// `columns` by lower-cased table name.
     column_index: HashMap<String, Vec<usize>>,
+    /// How many of `columns` are the profile's own: those after them were declared.
+    hand_len: usize,
+    /// The reference's columns of each of `tables`, by position, read when first asked for.
+    lazy: Vec<Lazy>,
     /// What reading it builds once, for every thread.
     memo: Memo,
+}
+
+/// The columns the reference lists for one table, as rows: where they are stored, and the rows
+/// built from them the first time they are asked for (#1767).
+#[derive(Debug, Clone)]
+struct Lazy {
+    /// Where the table's columns are, and the reference page they come from; `None` for a table
+    /// the reference lists no columns of.
+    at: Option<(tables::ColumnsAt, Arc<str>)>,
+    /// What follows the hand-written columns of the table: the reference's other columns and, for
+    /// an advanced hunting table, its time column.
+    rows: OnceLock<Vec<ColumnRow>>,
 }
 
 /// What reading a catalog builds once and keeps on it, shared by every
@@ -253,6 +273,8 @@ struct Memo {
     table_names: OnceLock<suggest::Candidates>,
     /// The names of the hand-written columns.
     hand_written: OnceLock<HashSet<Box<str>>>,
+    /// The position in `tables` of each table, by lower-cased name.
+    table_lower: OnceLock<HashMap<String, usize>>,
 }
 
 impl Clone for Memo {
@@ -313,6 +335,8 @@ impl Catalog {
             options,
             table_index: HashMap::new(),
             column_index: HashMap::new(),
+            hand_len: 0,
+            lazy: Vec::new(),
             memo: Memo::default(),
         }
     }
@@ -333,107 +357,142 @@ impl Catalog {
             return self;
         }
         self.profile = profile;
-        let (defender, defender_columns) = hand_written_rows(Profile::Defender);
-        let mut tables = Vec::new();
-        let mut columns = Vec::new();
+        let (mut tables, columns) = hand_written_rows(profile);
+        let heads = tables::azure_monitor_heads();
         if profile == Profile::Sentinel {
-            let (sentinel_tables, sentinel_columns) = hand_written_rows(Profile::Sentinel);
-            tables.extend(sentinel_tables);
-            columns.extend(sentinel_columns);
-        }
-        for table in defender {
-            if !tables.iter().any(|t: &TableRow| t.name == table.name) {
-                tables.push(table);
-            }
-        }
-        columns.extend(defender_columns);
-        let reference = tables::azure_monitor();
-        if profile == Profile::Sentinel {
-            for (name, table) in reference {
-                if !tables.iter().any(|t| &t.name == name) {
+            let known: HashSet<String> = tables.iter().map(|t| t.name.clone()).collect();
+            for head in heads {
+                if !known.contains(&head.name) {
                     tables.push(TableRow {
-                        name: name.clone(),
+                        name: head.name.clone(),
                         profile: Some("sentinel".into()),
-                        category: table.categories.first().cloned(),
-                        docs: (!table.docs.is_empty()).then(|| table.docs.clone()),
-                        citation: Some(table.citation.to_string()),
+                        category: head.categories.first().cloned(),
+                        docs: (!head.docs.is_empty()).then(|| head.docs.clone()),
+                        citation: Some(head.citation.to_string()),
                         documented: false,
                         declared: false,
                     });
                 }
             }
         }
-        let profile_name = match profile {
+        // A table the reference lists columns of is documented; its columns are read when asked for.
+        let by_name: HashMap<&str, &tables::AzureMonitorHead> = heads
+            .iter()
+            .map(|head| (head.name.as_str(), head))
+            .collect();
+        let mut lazy = Vec::with_capacity(tables.len());
+        for row in &mut tables {
+            let at = by_name.get(row.name.as_str()).and_then(|head| {
+                let at = head.columns?;
+                row.documented = true;
+                if row.citation.is_none() {
+                    row.citation = Some(head.citation.to_string());
+                }
+                Some((at, Arc::clone(&head.citation)))
+            });
+            lazy.push(Lazy {
+                at,
+                rows: OnceLock::new(),
+            });
+        }
+        self.tables = tables;
+        self.hand_len = columns.len();
+        self.columns = columns;
+        self.lazy = lazy;
+        self.reindex();
+        self
+    }
+
+    /// The columns of `tables[i]` that follow its hand-written ones: the reference's, which it
+    /// does not have among them, in the reference's order, and an advanced hunting table's time
+    /// column (the Log Analytics copies the reference describes do not list it, yet queries over
+    /// them use it). Built from the reference the first time they are asked for.
+    fn reference_columns(&self, i: usize) -> &[ColumnRow] {
+        let Some(lazy) = self.lazy.get(i) else {
+            return &[];
+        };
+        lazy.rows.get_or_init(|| self.build_reference_columns(i))
+    }
+
+    fn build_reference_columns(&self, i: usize) -> Vec<ColumnRow> {
+        let (Some(row), Some(lazy)) = (self.tables.get(i), self.lazy.get(i)) else {
+            return Vec::new();
+        };
+        let profile_name = match self.profile {
             Profile::Defender => "defender",
             _ => "sentinel",
         };
-        let profile_shared: Arc<str> = Arc::from(profile_name);
-        // Keyed on the rows' own shared names: no copy of either per column.
-        let mut hand: HashMap<(Arc<str>, Arc<str>), usize> = columns
-            .iter()
-            .enumerate()
-            .map(|(i, c)| ((Arc::clone(&c.table), Arc::clone(&c.name)), i))
+        // The names the table's hand-written columns have, which the reference does not repeat.
+        let hand: HashSet<&str> = self
+            .column_index
+            .get(&row.name.to_ascii_lowercase())
+            .into_iter()
+            .flatten()
+            .filter(|&&j| j < self.hand_len)
+            .filter_map(|&j| self.columns.get(j))
+            .filter(|column| *column.table == *row.name)
+            .map(|column| &*column.name)
             .collect();
-        for row in &mut tables {
-            let Some(reference) = reference.get(&row.name) else {
-                continue;
-            };
-            let Some(listed) = &reference.columns else {
-                continue;
-            };
-            row.documented = true;
-            if row.citation.is_none() {
-                row.citation = Some(reference.citation.to_string());
-            }
-            // One allocation each, shared by the table's columns (#1071).
-            let table: Arc<str> = Arc::from(row.name.as_str());
-            for column in listed {
-                let key = (Arc::clone(&table), Arc::clone(&column.name));
-                if let Some(&i) = hand.get(&key) {
-                    // Where the hand-written type disagrees with the
-                    // reference, neither is trusted for type checks.
-                    if columns[i].type_name.as_deref() != Some(&*column.type_name) {
-                        columns[i].type_name = None;
+        // One allocation each, shared by the table's columns (#1071).
+        let table: Arc<str> = Arc::from(row.name.as_str());
+        let profile_shared: Arc<str> = Arc::from(profile_name);
+        let mut rows: Vec<ColumnRow> = Vec::new();
+        let mut at: HashMap<Arc<str>, usize> = HashMap::new();
+        if let Some((columns_at, citation)) = &lazy.at {
+            for column in tables::azure_monitor_columns(*columns_at) {
+                if hand.contains(&*column.name) {
+                    continue;
+                }
+                if let Some(&j) = at.get(&column.name) {
+                    // Listed twice, differently: neither is trusted for type checks.
+                    if let Some(earlier) = rows.get_mut(j)
+                        && earlier.type_name.as_deref() != Some(&*column.type_name)
+                    {
+                        earlier.type_name = None;
                     }
                     continue;
                 }
-                hand.insert(key, columns.len());
-                columns.push(ColumnRow {
+                at.insert(Arc::clone(&column.name), rows.len());
+                rows.push(ColumnRow {
                     table: Arc::clone(&table),
                     profile: Some(Arc::clone(&profile_shared)),
                     name: column.name.clone(),
                     type_name: Some(column.type_name.clone()),
                     docs: column.description.clone(),
-                    citation: Some(Arc::clone(&reference.citation)),
+                    citation: Some(Arc::clone(citation)),
                     from_reference: true,
                     declared: false,
                 });
             }
         }
-        // Advanced hunting's time column. The Log Analytics copies the
-        // reference describes do not list it, yet queries over them use it.
-        for row in &tables {
-            if row.profile.as_deref() == Some("defender")
-                && !hand.contains_key(&(Arc::from(row.name.as_str()), Arc::from("Timestamp")))
-            {
-                let table: Arc<str> = Arc::from(row.name.as_str());
-                hand.insert((Arc::clone(&table), Arc::from("Timestamp")), columns.len());
-                columns.push(ColumnRow {
-                    table,
-                    profile: Some(Arc::from("defender")),
-                    name: "Timestamp".into(),
-                    type_name: Some(tables::kusto_type("datetime")),
-                    docs: Some(Arc::from("Event time in advanced hunting.")),
-                    citation: row.citation.as_deref().map(Arc::from),
-                    from_reference: false,
-                    declared: false,
-                });
-            }
+        if row.profile.as_deref() == Some("defender")
+            && !hand.contains("Timestamp")
+            && !at.contains_key("Timestamp")
+        {
+            rows.push(ColumnRow {
+                table,
+                profile: Some(Arc::from("defender")),
+                name: "Timestamp".into(),
+                type_name: Some(tables::kusto_type("datetime")),
+                docs: Some(Arc::from("Event time in advanced hunting.")),
+                citation: row.citation.as_deref().map(Arc::from),
+                from_reference: false,
+                declared: false,
+            });
         }
-        self.tables = tables;
-        self.columns = columns;
-        self.reindex();
-        self
+        rows
+    }
+
+    /// The position in `tables` of the table `lower` (lower-cased) names.
+    fn table_by_lower(&self, lower: &str) -> Option<usize> {
+        let index = self.memo.table_lower.get_or_init(|| {
+            let mut index = HashMap::with_capacity(self.tables.len());
+            for (i, table) in self.tables.iter().enumerate() {
+                index.entry(table.name.to_ascii_lowercase()).or_insert(i);
+            }
+            index
+        });
+        index.get(lower).copied()
     }
 
     fn reindex(&mut self) {
@@ -618,23 +677,60 @@ impl Catalog {
                         documented: true,
                         declared: true,
                     });
+                    // A table the workspace names has no reference columns to read.
+                    self.lazy.push(Lazy {
+                        at: None,
+                        rows: OnceLock::from(Vec::new()),
+                    });
                 }
             }
+            let lower = table.to_ascii_lowercase();
+            // The reference's columns of the table, to find the ones a source declares among them.
+            if let Some(i) = self.table_index.get(table).copied() {
+                let _ = self.reference_columns(i);
+            }
             for column in sources.iter().flat_map(|s| s.columns.iter()) {
-                let existing = self
-                    .column_index
-                    .get(&table.to_ascii_lowercase())
-                    .and_then(|ids| {
+                let own = |this: &Self, wanted_declared: bool| -> Option<usize> {
+                    this.column_index.get(&lower).and_then(|ids| {
                         ids.iter().copied().find(|&i| {
-                            *self.columns[i].table == *table
-                                && *self.columns[i].name == *column.name
+                            (i >= this.hand_len) == wanted_declared
+                                && *this.columns[i].table == *table
+                                && *this.columns[i].name == *column.name
                         })
-                    });
+                    })
+                };
+                let in_reference = self.table_index.get(table).copied().and_then(|i| {
+                    let rows = self.lazy.get(i)?.rows.get()?;
+                    rows.iter()
+                        .position(|row| *row.name == *column.name)
+                        .map(|position| (i, position))
+                });
+                let existing = own(self, false)
+                    .map(|i| (None, i))
+                    .or_else(|| in_reference.map(|(t, p)| (Some(t), p)))
+                    .or_else(|| own(self, true).map(|i| (None, i)));
+                let declared_before = match existing {
+                    Some((None, i)) => self.columns[i].declared,
+                    Some((Some(t), p)) => self
+                        .lazy
+                        .get(t)
+                        .and_then(|lazy| lazy.rows.get())
+                        .is_some_and(|rows| rows[p].declared),
+                    None => false,
+                };
                 match existing {
                     // An earlier log source declared it already.
-                    Some(i) if self.columns[i].declared => {}
-                    Some(i) => {
-                        let row = &mut self.columns[i];
+                    Some(_) if declared_before => {}
+                    Some((place, i)) => {
+                        let row = match place {
+                            None => &mut self.columns[i],
+                            Some(t) => {
+                                match self.lazy.get_mut(t).and_then(|lazy| lazy.rows.get_mut()) {
+                                    Some(rows) => &mut rows[i],
+                                    None => continue,
+                                }
+                            }
+                        };
                         row.type_name = column.type_name.as_deref().map(tables::kusto_type);
                         if let Some(description) = &column.description {
                             row.docs = Some(Arc::from(description.as_str()));
@@ -644,7 +740,7 @@ impl Catalog {
                     }
                     None => {
                         self.column_index
-                            .entry(table.to_ascii_lowercase())
+                            .entry(lower.clone())
                             .or_default()
                             .push(self.columns.len());
                         self.columns.push(ColumnRow {
@@ -736,11 +832,25 @@ impl Catalog {
         self.functions.iter().map(|f| f.name.clone()).collect()
     }
 
+    /// The columns of `table`, ASCII case ignored: the hand-written ones, the reference's (read
+    /// the first time a table's are asked for) and the ones a workspace declares, in that order.
     pub fn columns_for_table(&self, table: &str) -> Vec<&ColumnRow> {
-        self.column_index
-            .get(&table.to_ascii_lowercase())
-            .map(|ids| ids.iter().map(|&i| &self.columns[i]).collect())
-            .unwrap_or_default()
+        let lower = table.to_ascii_lowercase();
+        let own: &[usize] = self.column_index.get(&lower).map_or(&[], Vec::as_slice);
+        let mut rows: Vec<&ColumnRow> = own
+            .iter()
+            .filter(|&&i| i < self.hand_len)
+            .filter_map(|&i| self.columns.get(i))
+            .collect();
+        if let Some(i) = self.table_by_lower(&lower) {
+            rows.extend(self.reference_columns(i));
+        }
+        rows.extend(
+            own.iter()
+                .filter(|&&i| i >= self.hand_len)
+                .filter_map(|&i| self.columns.get(i)),
+        );
+        rows
     }
 
     /// The catalog tables `source` names, in order of first mention.
@@ -2003,8 +2113,9 @@ mod tests {
     fn the_rows_share_the_reference_names_and_the_type_names() {
         let catalog = Catalog::cached(Profile::Sentinel);
         let reference = tables::azure_monitor();
-        let row = catalog
-            .columns
+        // A table's reference columns are read when asked for (#1767).
+        let rows = catalog.columns_for_table("SigninLogs");
+        let row = rows
             .iter()
             .find(|c| c.from_reference)
             .expect("a reference column");
@@ -2015,8 +2126,7 @@ mod tests {
             .find(|c| c.name == row.name)
             .expect("its reference column");
         assert!(Arc::ptr_eq(&row.name, &column.name), "the name");
-        let strings: Vec<&Arc<str>> = catalog
-            .columns
+        let strings: Vec<&Arc<str>> = rows
             .iter()
             .filter_map(|c| c.type_name.as_ref())
             .filter(|t| &***t == "string")
@@ -2024,6 +2134,328 @@ mod tests {
             .collect();
         assert!(Arc::ptr_eq(strings[0], strings[1]), "the type");
         assert!(Arc::ptr_eq(strings[0], &tables::kusto_type("string")));
+    }
+
+    /// The catalog as `with_profile` built it before the reference's columns were read on demand
+    /// (#1767): every column of every table a row of `columns`, from the TOML read item by item
+    /// and the reference decoded whole. The oracle the lazy catalog is held to.
+    fn eager(profile: Profile) -> Catalog {
+        let mut catalog = Catalog::core();
+        catalog.profile = profile;
+        let defender: Vec<TableRow> = rows("", defender_tables(), "tables");
+        let defender_columns: Vec<ColumnRow> = rows("", defender_columns(), "columns");
+        let mut tables = Vec::new();
+        let mut columns = Vec::new();
+        if profile == Profile::Sentinel {
+            tables.extend(rows::<TableRow>("", sentinel_tables(), "tables"));
+            columns.extend(rows::<ColumnRow>("", sentinel_columns(), "columns"));
+        }
+        for table in defender {
+            if !tables.iter().any(|t: &TableRow| t.name == table.name) {
+                tables.push(table);
+            }
+        }
+        columns.extend(defender_columns);
+        let reference = tables::azure_monitor();
+        if profile == Profile::Sentinel {
+            for (name, table) in reference {
+                if !tables.iter().any(|t| &t.name == name) {
+                    tables.push(TableRow {
+                        name: name.clone(),
+                        profile: Some("sentinel".into()),
+                        category: table.categories.first().cloned(),
+                        docs: (!table.docs.is_empty()).then(|| table.docs.clone()),
+                        citation: Some(table.citation.to_string()),
+                        documented: false,
+                        declared: false,
+                    });
+                }
+            }
+        }
+        let profile_name = match profile {
+            Profile::Defender => "defender",
+            _ => "sentinel",
+        };
+        let profile_shared: Arc<str> = Arc::from(profile_name);
+        let mut hand: HashMap<(Arc<str>, Arc<str>), usize> = columns
+            .iter()
+            .enumerate()
+            .map(|(i, c)| ((Arc::clone(&c.table), Arc::clone(&c.name)), i))
+            .collect();
+        for row in &mut tables {
+            let Some(reference) = reference.get(&row.name) else {
+                continue;
+            };
+            let Some(listed) = &reference.columns else {
+                continue;
+            };
+            row.documented = true;
+            if row.citation.is_none() {
+                row.citation = Some(reference.citation.to_string());
+            }
+            let table: Arc<str> = Arc::from(row.name.as_str());
+            for column in listed {
+                let key = (Arc::clone(&table), Arc::clone(&column.name));
+                if let Some(&i) = hand.get(&key) {
+                    if columns[i].type_name.as_deref() != Some(&*column.type_name) {
+                        columns[i].type_name = None;
+                    }
+                    continue;
+                }
+                hand.insert(key, columns.len());
+                columns.push(ColumnRow {
+                    table: Arc::clone(&table),
+                    profile: Some(Arc::clone(&profile_shared)),
+                    name: column.name.clone(),
+                    type_name: Some(column.type_name.clone()),
+                    docs: column.description.clone(),
+                    citation: Some(Arc::clone(&reference.citation)),
+                    from_reference: true,
+                    declared: false,
+                });
+            }
+        }
+        for row in &tables {
+            if row.profile.as_deref() == Some("defender")
+                && !hand.contains_key(&(Arc::from(row.name.as_str()), Arc::from("Timestamp")))
+            {
+                let table: Arc<str> = Arc::from(row.name.as_str());
+                hand.insert((Arc::clone(&table), Arc::from("Timestamp")), columns.len());
+                columns.push(ColumnRow {
+                    table,
+                    profile: Some(Arc::from("defender")),
+                    name: "Timestamp".into(),
+                    type_name: Some(tables::kusto_type("datetime")),
+                    docs: Some(Arc::from("Event time in advanced hunting.")),
+                    citation: row.citation.as_deref().map(Arc::from),
+                    from_reference: false,
+                    declared: false,
+                });
+            }
+        }
+        catalog.lazy = tables
+            .iter()
+            .map(|_| Lazy {
+                at: None,
+                rows: OnceLock::from(Vec::new()),
+            })
+            .collect();
+        catalog.tables = tables;
+        catalog.hand_len = columns.len();
+        catalog.columns = columns;
+        catalog.reindex();
+        catalog
+    }
+
+    /// `apply_declared` as it was before the reference's columns were read on demand: a declared
+    /// column is found among all the columns, in the order they were pushed.
+    fn declare_eagerly(catalog: &mut Catalog, targets: BTreeMap<String, Vec<&DeclaredSource>>) {
+        let profile_name = match catalog.profile {
+            Profile::Defender => "defender",
+            _ => "sentinel",
+        };
+        for (table, sources) in targets {
+            let table = table.as_str();
+            if sources.iter().all(|s| s.columns.is_empty()) {
+                continue;
+            }
+            match catalog.table_index.get(table) {
+                Some(&i) => {
+                    let row = &mut catalog.tables[i];
+                    row.documented = true;
+                    row.declared = true;
+                }
+                None => {
+                    catalog
+                        .table_index
+                        .insert(table.to_string(), catalog.tables.len());
+                    catalog.tables.push(TableRow {
+                        name: table.to_string(),
+                        profile: Some(profile_name.into()),
+                        category: None,
+                        docs: sources.iter().find_map(|s| s.description.clone()),
+                        citation: None,
+                        documented: true,
+                        declared: true,
+                    });
+                    catalog.lazy.push(Lazy {
+                        at: None,
+                        rows: OnceLock::from(Vec::new()),
+                    });
+                }
+            }
+            for column in sources.iter().flat_map(|s| s.columns.iter()) {
+                let existing = catalog
+                    .column_index
+                    .get(&table.to_ascii_lowercase())
+                    .and_then(|ids| {
+                        ids.iter().copied().find(|&i| {
+                            *catalog.columns[i].table == *table
+                                && *catalog.columns[i].name == *column.name
+                        })
+                    });
+                match existing {
+                    Some(i) if catalog.columns[i].declared => {}
+                    Some(i) => {
+                        let row = &mut catalog.columns[i];
+                        row.type_name = column.type_name.as_deref().map(tables::kusto_type);
+                        if let Some(description) = &column.description {
+                            row.docs = Some(Arc::from(description.as_str()));
+                            row.citation = None;
+                        }
+                        row.declared = true;
+                    }
+                    None => {
+                        catalog
+                            .column_index
+                            .entry(table.to_ascii_lowercase())
+                            .or_default()
+                            .push(catalog.columns.len());
+                        catalog.columns.push(ColumnRow {
+                            table: Arc::from(table),
+                            profile: Some(Arc::from(profile_name)),
+                            name: Arc::from(column.name.as_str()),
+                            type_name: column.type_name.as_deref().map(tables::kusto_type),
+                            docs: column.description.as_deref().map(Arc::from),
+                            citation: None,
+                            from_reference: false,
+                            declared: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    fn declared(name: &str, columns: &[(&str, Option<&str>, Option<&str>)]) -> DeclaredSource {
+        DeclaredSource {
+            system: "sentinel".into(),
+            name: name.into(),
+            description: Some(format!("{name}'s description")),
+            columns: columns
+                .iter()
+                .map(
+                    |(column, type_name, description)| opentide_core::datasets::DeclaredColumn {
+                        name: (*column).into(),
+                        type_name: type_name.map(str::to_owned),
+                        description: description.map(str::to_owned),
+                    },
+                )
+                .collect(),
+        }
+    }
+
+    /// Reading the reference's columns when a table's are first asked for gives, for every table,
+    /// the columns the whole reference read up front gave, in the same order: with nothing
+    /// declared, and with a workspace's declarations over them (a column the reference lists, one
+    /// it does not, one a hand-written row has, a table the reference has no columns of, a table
+    /// the workspace invents, a pattern, a column two sources declare).
+    #[test]
+    fn the_reference_columns_read_on_demand_are_the_ones_read_up_front() {
+        let rendered = |rows: Vec<&ColumnRow>| format!("{rows:?}");
+        for profile in [Profile::Sentinel, Profile::Defender] {
+            let lazy = Catalog::core().with_profile(profile);
+            let eager = eager(profile);
+            assert_eq!(format!("{:?}", lazy.tables), format!("{:?}", eager.tables));
+            let least = if profile == Profile::Sentinel {
+                900
+            } else {
+                50
+            };
+            assert!(lazy.tables.len() > least, "{profile:?}");
+            for table in &lazy.tables {
+                assert_eq!(
+                    rendered(lazy.columns_for_table(&table.name)),
+                    rendered(eager.columns_for_table(&table.name)),
+                    "{profile:?}: {}",
+                    table.name
+                );
+            }
+            // A name that is no table, in another case.
+            assert!(lazy.columns_for_table("nothing").is_empty());
+            // What is scanned without a table named is the hand-written ones, each name once, as
+            // the completions and the name set read them (the eager catalog also kept a
+            // `Timestamp` row per advanced hunting table among them, after the hand-written
+            // ones that name it: the same name, found later).
+            let hand = |c: &Catalog| {
+                let mut seen = HashSet::new();
+                c.columns
+                    .iter()
+                    .filter(|c| c.hand_written() && seen.insert(c.name.clone()))
+                    .map(|c| format!("{c:?}"))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(hand(&lazy), hand(&eager), "{profile:?}");
+
+            let sources = [
+                declared(
+                    "SecurityEvent",
+                    &[
+                        ("IpAddress", Some("string"), Some("redeclared")),
+                        ("Account", Some("dynamic"), Some("overridden")),
+                        ("Computer", None, None),
+                        ("NewCol_CF", Some("long"), Some("new")),
+                    ],
+                ),
+                declared(
+                    "SecurityEvent",
+                    &[("Account", Some("int"), None), ("Other_CF", None, None)],
+                ),
+                declared(
+                    "DeviceProcessEvents",
+                    &[
+                        ("Timestamp", Some("string"), None),
+                        ("Extra_CF", Some("bool"), None),
+                    ],
+                ),
+                declared(
+                    "AzureDiagnostics",
+                    &[("ResourceType_s", Some("string"), None)],
+                ),
+                declared("Contoso_CL", &[("Actor_s", Some("string"), Some("who"))]),
+                declared("Sign*Logs", &[("Pattern_CF", Some("string"), None)]),
+                declared("Device*Events", &[("Pattern2_CF", None, Some("again"))]),
+            ];
+            let names = ["Contoso_CL".to_owned(), "SigninLogs".to_owned()];
+            let lazy_declared = lazy.with_declared_columns(&sources, &names);
+            let mut eager_declared = eager.clone();
+            let exact: Vec<&DeclaredSource> =
+                sources.iter().filter(|s| !s.name.contains('*')).collect();
+            let patterns: Vec<&DeclaredSource> =
+                sources.iter().filter(|s| s.name.contains('*')).collect();
+            let mut targets: BTreeMap<String, Vec<&DeclaredSource>> = BTreeMap::new();
+            for source in exact {
+                targets.entry(source.name.clone()).or_default().push(source);
+            }
+            let known = eager
+                .tables
+                .iter()
+                .map(|t| t.name.as_str())
+                .chain(names.iter().map(String::as_str));
+            for (table, matched) in declared_targets(&patterns, known) {
+                targets.entry(table).or_default().extend(matched);
+            }
+            declare_eagerly(&mut eager_declared, targets);
+            assert_eq!(
+                format!("{:?}", lazy_declared.tables),
+                format!("{:?}", eager_declared.tables),
+                "{profile:?}: tables with declarations"
+            );
+            for table in &eager_declared.tables {
+                assert_eq!(
+                    rendered(lazy_declared.columns_for_table(&table.name)),
+                    rendered(eager_declared.columns_for_table(&table.name)),
+                    "{profile:?}: with declarations: {}",
+                    table.name
+                );
+            }
+            assert_eq!(hand(&lazy_declared), hand(&eager_declared), "{profile:?}");
+            // The catalog the declarations were applied to is as it was.
+            assert_eq!(
+                rendered(lazy.columns_for_table("SecurityEvent")),
+                rendered(eager.columns_for_table("SecurityEvent"))
+            );
+        }
     }
 
     /// What the build pre-parsed (`build.rs`, #1767) is what reading the TOML files item by item
@@ -2061,28 +2493,42 @@ mod tests {
             &rows::<OperatorOption>("", operator_options(), "options"),
             "options",
         );
-        let (tables, columns) = hand_written_rows(Profile::Sentinel);
-        same(
-            &tables,
-            &rows::<TableRow>("", sentinel_tables(), "tables"),
-            "sentinel tables",
-        );
-        same(
-            &columns,
-            &rows::<ColumnRow>("", sentinel_columns(), "columns"),
-            "sentinel columns",
-        );
-        let (tables, columns) = hand_written_rows(Profile::Defender);
-        same(
-            &tables,
-            &rows::<TableRow>("", defender_tables(), "tables"),
-            "defender tables",
-        );
-        same(
-            &columns,
-            &rows::<ColumnRow>("", defender_columns(), "columns"),
-            "defender columns",
-        );
+        // A profile's hand-written rows, with the types settled against the reference: the
+        // rows read from the TOML, put together as `profile_rows` does.
+        let reference = tables::azure_monitor();
+        for (profile, sentinel, name) in [
+            (Profile::Sentinel, true, "sentinel"),
+            (Profile::Defender, false, "defender"),
+        ] {
+            let (tables, columns) = rows_model::profile_rows(
+                sentinel,
+                (
+                    rows::<TableRow>("", sentinel_tables(), "tables"),
+                    rows::<ColumnRow>("", sentinel_columns(), "columns"),
+                ),
+                (
+                    rows::<TableRow>("", defender_tables(), "tables"),
+                    rows::<ColumnRow>("", defender_columns(), "columns"),
+                ),
+                |table, column| {
+                    reference
+                        .get(table)?
+                        .columns
+                        .as_ref()?
+                        .iter()
+                        .find(|c| &*c.name == column)
+                        .map(|c| Arc::clone(&c.type_name))
+                },
+            );
+            let (pre_tables, pre_columns) = hand_written_rows(profile);
+            same(&pre_tables, &tables, &format!("{name} tables"));
+            same(&pre_columns, &columns, &format!("{name} columns"));
+            // A hand-written column the reference types differently has no type.
+            assert!(
+                columns.iter().any(|c| c.type_name.is_none()),
+                "{name}: no column disagrees with the reference"
+            );
+        }
     }
 
     /// The core and profile catalogs read item by item are field for field
