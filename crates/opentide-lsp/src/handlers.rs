@@ -338,6 +338,15 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
                 "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),
+                "roots": s
+                    .workspace_stats_by_root()
+                    .iter()
+                    .map(|stats| json!({
+                        "fileReads": stats.file_reads,
+                        "parses": stats.parses,
+                        "configResolutions": stats.config_resolutions,
+                    }))
+                    .collect::<Vec<_>>(),
                 "workspace": {
                     "fileReads": loading.file_reads,
                     "parses": loading.parses,
@@ -887,24 +896,38 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.reactivate();
                 everything = true;
             }
+            // A root nested below this one layers this folder in: its
+            // configuration reads the file too.
+            if layered_roots_changed(session, &path, &[index]) {
+                everything = true;
+            }
         } else if let Some(scoped) = session.scoped_roots(&path) {
             // A folder `paths.toml` moved the objects to, or one layered in
             // from outside the root: the workspace reads it, the object index
             // does not.
+            let mut notified = Vec::new();
             for (root, kind) in scoped {
                 session.roots[root]
                     .checks
                     .borrow_mut()
                     .changed([PathBuf::from(&path)]);
+                notified.push(root);
                 match kind {
                     ScopeKind::Objects => session.touch_object(),
                     ScopeKind::Configuration => session.touch(),
                 }
             }
             // A folder that is one root's layer can be another root's own
-            // configuration folder (nested roots): that root is told too.
-            if normalized.contains(".opentide/configurations/") {
-                configuration_changed(session, &path);
+            // configuration folder (nested roots): that root, and no other,
+            // is told too.
+            if let Some(owner) = session.own_configuration_root(&path) {
+                if !notified.contains(&owner) {
+                    session.roots[owner]
+                        .checks
+                        .borrow_mut()
+                        .changed([PathBuf::from(&path)]);
+                }
+                session.touch();
             }
             everything = true;
         } else if is_state_shard(&normalized) {
@@ -923,6 +946,23 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
     if everything {
         session.mark_all();
     }
+}
+
+/// The roots other than `skip` that layer the folder holding the file at
+/// `path` in from above are told it changed. Whether there were any.
+fn layered_roots_changed(session: &Session, path: &str, skip: &[usize]) -> bool {
+    let mut any = false;
+    for (root, kind) in session.scoped_roots(path).unwrap_or_default() {
+        if kind == ScopeKind::Configuration && !skip.contains(&root) {
+            session.roots[root]
+                .checks
+                .borrow_mut()
+                .changed([PathBuf::from(path)]);
+            session.touch();
+            any = true;
+        }
+    }
+    any
 }
 
 /// A configuration file changed: the workspace of the root it belongs to

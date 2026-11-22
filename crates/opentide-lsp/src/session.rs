@@ -1755,6 +1755,15 @@ impl Session {
         sum
     }
 
+    /// What each root's workspace has loaded, by root (the debug `__stats`).
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn workspace_stats_by_root(&self) -> Vec<opentide_workspace::Stats> {
+        self.roots
+            .iter()
+            .map(|r| r.checks.borrow().stats().unwrap_or_default())
+            .collect()
+    }
+
     /// How many times the roots' objects were all checked, and how many
     /// times only the files that changed were, summed.
     #[cfg(all(debug_assertions, not(fuzzing)))]
@@ -1856,6 +1865,19 @@ impl Session {
             .filter(|(_, r)| path.starts_with(&r.path))
             .max_by_key(|(_, r)| r.path.components().count())
             .map(|(i, _)| i)
+    }
+
+    /// The root whose own `.opentide/configurations/` holds the file at
+    /// `path`: unlike [`root_for`](Self::root_for), none when no root does.
+    pub(crate) fn own_configuration_root(&self, path: &str) -> Option<usize> {
+        self.owning_root(path).filter(|&index| {
+            Path::new(path).starts_with(
+                self.roots[index]
+                    .path
+                    .join(".opentide")
+                    .join("configurations"),
+            )
+        })
     }
 
     /// The root a file belongs to: the deepest workspace folder holding it,

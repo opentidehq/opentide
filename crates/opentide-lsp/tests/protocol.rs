@@ -2111,6 +2111,116 @@ fn a_nested_root_does_not_take_the_outer_roots_configuration_event() {
     );
 }
 
+/// What each root's workspace has loaded so far, by root, as `(file reads,
+/// parses, configuration resolutions)`.
+fn loads_by_root(lsp: &mut Lsp) -> Vec<(u64, u64, u64)> {
+    lsp.request("opentide/__stats", Value::Null)["result"]["roots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|root| {
+            (
+                root["fileReads"].as_u64().unwrap(),
+                root["parses"].as_u64().unwrap(),
+                root["configResolutions"].as_u64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+/// A change to one root's layered configuration costs the others nothing:
+/// the other folder's workspace is not opened again (which re-reads every
+/// object) for a path that is not under it.
+#[test]
+fn a_layered_configuration_change_does_not_reload_the_other_roots() {
+    let scratch = workspace("workspace-watch-reload", false);
+    let rule = fixture(RULE);
+    let child = |name: &str| {
+        let root = scratch.0.join(name).join("child");
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::write(root.join("objects/rules/rule-1.0.yaml"), &rule).unwrap();
+        let layer = root.parent().unwrap().join(".opentide/configurations");
+        std::fs::create_dir_all(&layer).unwrap();
+        std::fs::write(layer.join("deployment.toml"), DESIGN_AND_STAGING).unwrap();
+        root
+    };
+    let (first, second) = (child("one"), child("two"));
+    let folder =
+        |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "workspaceFolders": [folder(&first, "one"), folder(&second, "two")]
+    }));
+    workspace_pull_items(&mut lsp);
+    let before = loads_by_root(&mut lsp);
+    assert_eq!(before.len(), 2);
+
+    let deployment = second
+        .parent()
+        .unwrap()
+        .join(".opentide/configurations/deployment.toml");
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
+    );
+    let items = workspace_pull_items(&mut lsp);
+    assert!(
+        items
+            .iter()
+            .any(|(_, codes)| codes.contains(&"config_enum_unknown".to_string())),
+        "the change was not followed: {items:?}"
+    );
+    let after = loads_by_root(&mut lsp);
+    assert_eq!(
+        after[0], before[0],
+        "the first root's workspace was loaded again for the second's configuration"
+    );
+    assert!(
+        after[1].2 > before[1].2,
+        "the second root's configuration was not resolved again: {before:?} {after:?}"
+    );
+}
+
+/// `visibility.toml` of the outer one of two nested roots is also read by the
+/// inner one, which layers the outer's configuration folder in: its
+/// configuration is resolved again.
+#[test]
+fn a_nested_roots_layered_visibility_toml_is_followed() {
+    let scratch = workspace("workspace-watch-nested-visibility", false);
+    let outer = &scratch.0;
+    let inner = outer.join("child");
+    std::fs::create_dir_all(inner.join("objects/rules")).unwrap();
+    std::fs::write(inner.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let layer = outer.join(".opentide/configurations");
+    std::fs::create_dir_all(&layer).unwrap();
+    let folder =
+        |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "workspaceFolders": [folder(outer, "outer"), folder(&inner, "inner")]
+    }));
+    workspace_pull_items(&mut lsp);
+    let before = loads_by_root(&mut lsp);
+
+    let visibility = layer.join("visibility.toml");
+    std::fs::write(
+        &visibility,
+        "[[logsources]]\nname = \"NTANetAnalytics\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
+    )
+    .unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&visibility), "type": 1 }] }),
+    );
+    workspace_pull_items(&mut lsp);
+    let after = loads_by_root(&mut lsp);
+    assert!(
+        after[1].2 > before[1].2,
+        "the inner root's configuration was not resolved again: {before:?} {after:?}"
+    );
+}
+
 /// A root named through a symbolic link to a folder whose parent differs from
 /// the link's: the configuration the workspace layers in is the resolved
 /// root's parent's, and that is the folder watched and followed.
