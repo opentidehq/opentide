@@ -5,7 +5,7 @@
 //! (P1.5).
 
 use crate::server::{host_info, path_to_uri_value};
-use crate::session::{Document, Root, Session, path_key};
+use crate::session::{Document, Root, ScopeKind, Session, path_key};
 use crate::uri::{path_to_uri, uri_to_path};
 use lsp_server::{ErrorCode, Request, Response};
 use lsp_types as lsp;
@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Where the diagnostics reference lives: `#<code>` is each code's section.
 pub const DIAGNOSTICS_DOCS: &str = "https://opentide.org/docs/cli/diagnostics/";
@@ -323,6 +324,8 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             let loading = s.workspace_stats();
             json!({
                 "analyses": s.analyses.get(),
+                "closedAnalyses": s.closed_analyses.get(),
+                "workspaceReportHits": s.workspace_report_hits.get(),
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),
                 "workspace": {
@@ -429,6 +432,10 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
         watch_files: workspace
             .and_then(|w| w.did_change_watched_files.as_ref())
             .and_then(|w| w.dynamic_registration)
+            .unwrap_or(false),
+        relative_watch_patterns: workspace
+            .and_then(|w| w.did_change_watched_files.as_ref())
+            .and_then(|w| w.relative_pattern_support)
             .unwrap_or(false),
         pull_diagnostics: text.and_then(|t| t.diagnostic.as_ref()).is_some() && diagnostic_refresh,
         plaintext_hover: plaintext_only(
@@ -600,6 +607,7 @@ fn initialize(
 /// `visibility.toml`). The field catalogs are generated from the models
 /// (#926): `.opentide/lsp/catalogs/generated/` is not read.
 fn initialized(session: &mut Session) {
+    session.client_initialized.set(true);
     if !session.caps.watch_files {
         return;
     }
@@ -607,6 +615,12 @@ fn initialized(session: &mut Session) {
         "**/objects".to_string(),
         "**/objects/**".to_string(),
         "**/.opentide/configurations/**/*.toml".to_string(),
+        // The deployment state shards `validate` checks.
+        "**/.opentide/states/deployment/*.json".to_string(),
+        // The folders themselves: a client reports a deleted folder as one
+        // event, for the folder (a branch switch).
+        "**/.opentide/states".to_string(),
+        "**/.opentide/states/deployment".to_string(),
     ]
     .into_iter()
     .map(|glob| lsp::FileSystemWatcher {
@@ -706,7 +720,11 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
     let Some(closed) = session.docs.remove(uri) else {
         return;
     };
-    session.touch();
+    if closed.language == LanguageId::TideYaml {
+        session.touch_object();
+    } else {
+        session.touch();
+    }
     if closed.language == LanguageId::TideYaml {
         // The file on disk is the object again, as last saved.
         let path = uri_to_path(uri);
@@ -738,7 +756,11 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
 /// referenced by the others, so those re-check every open document. Anything
 /// else re-checks itself.
 fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root: Option<usize>) {
-    session.touch();
+    if language == LanguageId::TideYaml {
+        session.touch_object();
+    } else {
+        session.touch();
+    }
     session.mark(uri);
     if language == LanguageId::TideYaml {
         session.invalidate_index(root);
@@ -813,7 +835,7 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
         if let Some(root) = session.object_root(&path) {
             if !session.docs.contains_key(uri) {
                 session.roots[root].refresh_object(&path);
-                session.touch();
+                session.touch_object();
                 everything = true;
             }
         } else if let Some(root) = session.folder_root(&path) {
@@ -821,31 +843,76 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.touch();
                 everything = true;
             }
-        } else if Session::is_visibility(uri) {
-            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
-                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
-            }
-            let open = session
-                .root_for(&path)
-                .and_then(|i| session.roots.get(i))
-                .is_some_and(|r| r.visibility.is_some());
+        } else if let Some(index) = session.visibility_root(&path) {
+            // A root's own `visibility.toml` (a parent's, layered in from
+            // above, is a configuration file like any other: below).
+            session.roots[index]
+                .checks
+                .borrow_mut()
+                .changed([PathBuf::from(&path)]);
             // While the file is open the editor's buffer is the truth.
-            if !open {
+            if session.roots[index].visibility.is_none() {
                 session.reactivate();
                 everything = true;
             }
-        } else if normalized.contains(".opentide/configurations/") {
-            session.touch();
-            // The workspace resolves its configuration again.
+        } else if let Some(scoped) = session.scoped_roots(&path) {
+            // A folder `paths.toml` moved the objects to, or one layered in
+            // from outside the root: the workspace reads it, the object index
+            // does not.
+            for (root, kind) in scoped {
+                session.roots[root]
+                    .checks
+                    .borrow_mut()
+                    .changed([PathBuf::from(&path)]);
+                match kind {
+                    ScopeKind::Objects => session.touch_object(),
+                    ScopeKind::Configuration => session.touch(),
+                }
+            }
+            // A folder that is one root's layer can be another root's own
+            // configuration folder (nested roots): that root is told too.
+            if normalized.contains(".opentide/configurations/") {
+                configuration_changed(session, &path);
+            }
+            everything = true;
+        } else if is_state_shard(&normalized) {
+            // Only `validate` reads a deployment state shard: the findings
+            // it keeps are out of date, no analysis is.
             if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
                 root.checks.borrow_mut().changed([PathBuf::from(&path)]);
             }
+            session.touch_object();
+            everything = true;
+        } else if normalized.contains(".opentide/configurations/") {
+            configuration_changed(session, &path);
             everything = true;
         }
     }
     if everything {
         session.mark_all();
     }
+}
+
+/// A configuration file changed: the workspace of the root it belongs to
+/// resolves its configuration again.
+fn configuration_changed(session: &Session, path: &str) {
+    session.touch();
+    if let Some(root) = session.root_for(path).and_then(|i| session.roots.get(i)) {
+        root.checks.borrow_mut().changed([PathBuf::from(path)]);
+    }
+}
+
+/// Whether `path` (with `/` separators) is a deployment state shard, or a
+/// folder that holds them: a client reports a deleted folder as one event for
+/// the folder, not for each file in it.
+fn is_state_shard(path: &str) -> bool {
+    let path = path.trim_end_matches('/');
+    path.ends_with("/.opentide/states")
+        || path.ends_with("/.opentide/states/deployment")
+        || (path.contains("/.opentide/states/deployment/")
+            && std::path::Path::new(path)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")))
 }
 
 /// `opentide/didChangeWorkspace`: merge the change into the supplied
@@ -1088,15 +1155,90 @@ fn handle_workspace_diagnostics(
         .into_iter()
         .map(|p| (p.uri.as_str().to_string(), p.value))
         .collect();
+    // `host` first: it reads the disk again for a client that does not watch
+    // it, and installs the catalogs, either of which moves the state key.
+    for root in 0..session.roots.len() {
+        let _span = crate::timing::Span::new("workspace/diagnostic: host");
+        let _ = session.host(Some(root));
+    }
+    let key = session.state_key();
+    // A client that does not watch files is told nothing of what changes on
+    // disk (the configuration is resolved again with each batch, and no
+    // counter moves for it): nothing is kept for it, and each pull reads the
+    // disk as it did before reports were kept.
+    let keeps = session.caps.watch_files;
+    let cached = session
+        .workspace_report
+        .borrow()
+        .as_ref()
+        .filter(|(at, _)| keeps && *at == key)
+        .map(|(_, entries)| Arc::clone(entries));
+    let entries = match cached {
+        Some(entries) => {
+            session
+                .workspace_report_hits
+                .set(session.workspace_report_hits.get() + 1);
+            entries
+        }
+        None => {
+            let entries = Arc::new(workspace_report(session));
+            if keeps {
+                *session.workspace_report.borrow_mut() = Some((key, Arc::clone(&entries)));
+            }
+            entries
+        }
+    };
+    let items = entries
+        .iter()
+        .map(|(uri, id, found)| {
+            if previous.get(uri.as_str()) == Some(id) {
+                lsp::WorkspaceDocumentDiagnosticReport::Unchanged(
+                    lsp::WorkspaceUnchangedDocumentDiagnosticReport {
+                        uri: uri.clone(),
+                        version: None,
+                        unchanged_document_diagnostic_report:
+                            lsp::UnchangedDocumentDiagnosticReport {
+                                result_id: id.clone(),
+                            },
+                    },
+                )
+            } else {
+                lsp::WorkspaceDocumentDiagnosticReport::Full(
+                    lsp::WorkspaceFullDocumentDiagnosticReport {
+                        uri: uri.clone(),
+                        version: None,
+                        full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
+                            result_id: Some(id.clone()),
+                            items: found.clone(),
+                        },
+                    },
+                )
+            }
+        })
+        .collect();
+    lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport { items })
+}
+
+/// What the pull reports for each closed object file, in the order of the
+/// roots and their files: the workspace's findings and the engine's analysis,
+/// as the client takes them.
+fn workspace_report(session: &Session) -> Vec<crate::session::ReportEntry> {
     let open: BTreeSet<String> = session
         .docs
         .keys()
         .map(|uri| crate::session::path_key(&uri_to_path(uri)))
         .collect();
-    let mut items = Vec::new();
+    let mut entries = Vec::new();
     for root in 0..session.roots.len() {
+        // Each root's own catalogs and datasets are the ones installed while
+        // its files are analysed.
         let host = session.host(Some(root));
-        for (path, text) in session.closed_objects(root) {
+        let closed = {
+            let _span = crate::timing::Span::new("workspace/diagnostic: closed objects");
+            session.closed_objects(root)
+        };
+        let _span = crate::timing::Span::new("workspace/diagnostic: files");
+        for (path, text) in closed {
             if open.contains(&crate::session::path_key(&path)) {
                 continue;
             }
@@ -1104,44 +1246,21 @@ fn handle_workspace_diagnostics(
                 continue;
             };
             let mut diagnostics = session.closed_findings(root, &path, &text);
-            let response = opentide_analysis::analyze(
-                &host,
-                opentide_analysis::AnalyzeRequest {
-                    uri: path.clone(),
-                    language: LanguageId::TideYaml,
-                    text,
-                },
+            diagnostics.extend(
+                session
+                    .closed_analysis(root, &path, &text, &host)
+                    .iter()
+                    .cloned(),
             );
-            diagnostics.extend(response.diagnostics);
             let found: Vec<lsp::Diagnostic> = diagnostics
                 .iter()
                 .map(|d| lsp_diagnostic(session, Some(root), &path, d))
                 .collect();
             let id = result_id(&found);
-            items.push(if previous.get(uri.as_str()) == Some(&id) {
-                lsp::WorkspaceDocumentDiagnosticReport::Unchanged(
-                    lsp::WorkspaceUnchangedDocumentDiagnosticReport {
-                        uri,
-                        version: None,
-                        unchanged_document_diagnostic_report:
-                            lsp::UnchangedDocumentDiagnosticReport { result_id: id },
-                    },
-                )
-            } else {
-                lsp::WorkspaceDocumentDiagnosticReport::Full(
-                    lsp::WorkspaceFullDocumentDiagnosticReport {
-                        uri,
-                        version: None,
-                        full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
-                            result_id: Some(id),
-                            items: found,
-                        },
-                    },
-                )
-            });
+            entries.push((uri, id, found));
         }
     }
-    lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport { items })
+    entries
 }
 
 // ---------------------------------------------------------------------------

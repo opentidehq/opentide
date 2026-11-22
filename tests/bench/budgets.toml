@@ -270,6 +270,32 @@ waived_s = 0.258
 # enforced as MiB (150e6 bytes).
 target_rss_mib = 143.1
 
+[commands.lsp_editor_latency]
+label = "language server, the longest completion beside workspace pulls (idle)"
+# The editor's steady state, the user reading or pressing Ctrl+Space with no edit in
+# the last two seconds (docs/internal/perf-editor-latency-2026-11-21.md):
+# vscode-languageclient pulls the workspace's diagnostics again two seconds after
+# every answer, for as long as it runs, and the server answers one request at a
+# time. Ctrl+Space waits for the pull in flight. Measured on the heavy workspace
+# (500 rules) from 10 completions, each sent 2 ms after a pull nothing changed
+# since: 0.41 s before the pull's per-file analysis and its report were kept, 0.006 s
+# after (4 vCPU Xeon 2.10GHz, median of 7 runs). Ten times what it measures, a tenth of
+# what it measured before the fix. It holds the idle state only: lsp_editor_typing_latency
+# holds the state after a keystroke. The oracle (0.23.0) is not measured.
+target_s = 0.05
+
+[commands.lsp_editor_typing_latency]
+label = "language server, the longest completion after a keystroke and its pulls"
+# The same, with a keystroke before each pull: the editor then pulls the edited
+# document's diagnostics and the workspace's, and the server validates and lints
+# the whole workspace again before it answers either (opentide-workspace, the
+# per-edit cost the report leaves as its next item). Measured on the heavy workspace
+# (500 rules): 0.63 s before the fixes, 0.24 s after (median of 7 runs, 4 vCPU Xeon
+# 2.10GHz). The target is twice what it measures here, which the slowest recorded CPU
+# class (1.8 times slower) stays under, and under what it measured before the fixes.
+# An incremental validate lowers it. The oracle (0.23.0) is not measured.
+target_s = 0.5
+
 # The medians on more CPU models of the runner class, from CI runs of the workflow
 # (same oracle, workspace and run count as [baseline]). Two runners with the same CPU
 # model differ by up to about 10% on every command (run 42587161988 measured 3 to 12%

@@ -18,7 +18,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// An open document.
 pub(crate) struct Document {
@@ -39,6 +39,10 @@ pub(crate) struct Document {
 pub(crate) struct ClientCaps {
     /// The client watches files for the server (`didChangeWatchedFiles`).
     pub watch_files: bool,
+    /// A watcher may be a folder and a pattern under it
+    /// (`relativePatternSupport`): the way to watch a folder outside every
+    /// workspace folder.
+    pub relative_watch_patterns: bool,
     /// The client pulls diagnostics and can be told to pull again: the server
     /// then publishes none (#185 P0.8).
     pub pull_diagnostics: bool,
@@ -261,6 +265,104 @@ pub(crate) fn root_key(path: &str) -> String {
     trimmed.to_string()
 }
 
+/// What happened to the catalog a root is analysed with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Sighting {
+    /// The root had this catalog already.
+    Same,
+    /// The first catalog the root has had: what an analysis read before it
+    /// was the engine's compiled-in snapshot.
+    First,
+    /// Another catalog than the root had: every analysis of it reads it.
+    Changed,
+}
+
+/// `folder` as the front of a glob: its separators `/`, and the characters a
+/// glob reads (`[`, `*`, `?`) as one-character classes, which match only
+/// themselves. A brace cannot be escaped in an LSP glob: the folder is
+/// then its nearest ancestor with none (`true`), and the glob matches
+/// everything under that, provided that ancestor is a `floor` or below one:
+/// a workspace never has a glob reach the top of a filesystem or a drive.
+/// `None` when it would.
+fn glob_path(folder: &str, floors: &[PathBuf]) -> Option<(String, bool)> {
+    let folder = folder.replace('\\', "/");
+    let mut kept: Vec<&str> = Vec::new();
+    let mut coarse = false;
+    for part in folder.trim_end_matches('/').split('/') {
+        if part.contains(['{', '}']) {
+            coarse = true;
+            break;
+        }
+        kept.push(part);
+    }
+    let ancestor = kept.join("/");
+    if coarse
+        && !floors
+            .iter()
+            .any(|floor| Path::new(&ancestor).starts_with(floor))
+    {
+        return None;
+    }
+    let mut escaped = String::new();
+    for (i, part) in kept.iter().enumerate() {
+        if i > 0 {
+            escaped.push('/');
+        }
+        for c in part.chars() {
+            match c {
+                '[' | '*' | '?' => {
+                    escaped.push('[');
+                    escaped.push(c);
+                    escaped.push(']');
+                }
+                other => escaped.push(other),
+            }
+        }
+    }
+    Some((escaped, coarse))
+}
+
+/// The catalog each root (`None`: a document outside every root) last had
+/// installed for it, so that installing the catalog of another root, which
+/// happens each time requests alternate between roots, is not mistaken for
+/// a catalog that changed.
+#[derive(Default)]
+pub(crate) struct CatalogSightings(HashMap<Option<usize>, Arc<opentide_analysis::Catalog>>);
+
+impl CatalogSightings {
+    pub(crate) fn saw(
+        &mut self,
+        root: Option<usize>,
+        catalog: &Arc<opentide_analysis::Catalog>,
+    ) -> Sighting {
+        match self.0.get(&root) {
+            Some(known)
+                if Arc::ptr_eq(known, catalog)
+                    || (known.fields == catalog.fields
+                        && known.deprecations == catalog.deprecations) =>
+            {
+                Sighting::Same
+            }
+            known => {
+                let first = known.is_none();
+                self.0.insert(root, Arc::clone(catalog));
+                if first {
+                    Sighting::First
+                } else {
+                    Sighting::Changed
+                }
+            }
+        }
+    }
+}
+
+/// One closed file's entry of a workspace pull: its URI, the id of its
+/// diagnostics and the diagnostics.
+pub(crate) type ReportEntry = (lsp_types::Uri, String, Vec<lsp_types::Diagnostic>);
+
+/// A workspace pull's report, and the [`Session::state_key`] it was made in.
+pub(crate) type CachedReport = ((u64, u64), Arc<Vec<ReportEntry>>);
+
 /// An object file on disk: its path and text, indexed on first use (the
 /// first request that reads the editor's index: a hover, a completion, the
 /// catalog, an Elastic rule's advisories), not when it is read.
@@ -268,6 +370,11 @@ struct DiskFile {
     path: String,
     text: String,
     indexed: OnceLock<Option<IndexedObject>>,
+    /// What the engine's analysis of this text found (the queries it carries),
+    /// and the [`Session::env_epoch`] it was made in: a workspace pull
+    /// repeats every two seconds for as long as the editor runs, and an
+    /// analysis reads nothing but the text and the epoch's catalogs.
+    analysis: Mutex<Option<(u64, Arc<Vec<opentide_core::Diagnostic>>)>>,
 }
 
 impl DiskFile {
@@ -276,7 +383,26 @@ impl DiskFile {
             path,
             text,
             indexed: OnceLock::new(),
+            analysis: Mutex::new(None),
         }
+    }
+
+    /// The analysis made in `epoch`, if there is one.
+    fn cached_analysis(&self, epoch: u64) -> Option<Arc<Vec<opentide_core::Diagnostic>>> {
+        let held = self
+            .analysis
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        held.as_ref()
+            .filter(|(at, _)| *at == epoch)
+            .map(|(_, found)| Arc::clone(found))
+    }
+
+    fn keep_analysis(&self, epoch: u64, found: Arc<Vec<opentide_core::Diagnostic>>) {
+        *self
+            .analysis
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((epoch, found));
     }
 
     /// Its index entry; `None` for a file that is no object. It is read
@@ -502,6 +628,53 @@ impl Supplied {
     }
 }
 
+/// What a watched folder is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScopeKind {
+    /// Object files `paths.toml` put elsewhere than `objects/`.
+    Objects,
+    /// Configuration files layered in from a folder outside the root.
+    Configuration,
+}
+
+/// The folders of one root a fixed glob does not name.
+#[derive(Default)]
+struct ExtraFolders {
+    /// Object folders `paths.toml` put outside `objects/`, as the editor
+    /// spells the root.
+    objects: Vec<PathBuf>,
+    /// The configuration folder layered in from above the root: as the editor
+    /// spells the root's parent where that is the same folder, else as the
+    /// workspace names it.
+    layered: Vec<PathBuf>,
+    /// The same folders, as the workspace names them.
+    layered_resolved: Vec<PathBuf>,
+    /// See [`WatchTarget::floors`].
+    floors: Vec<PathBuf>,
+    /// The root's own `.opentide/configurations/`, resolved.
+    own_configuration: PathBuf,
+}
+
+/// A folder the client is asked to watch, and the files under it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct WatchTarget {
+    folder: PathBuf,
+    pattern: &'static str,
+    /// The folders above which a glob that cannot name `folder` (a brace in
+    /// its path) may not reach: the root's parent, as the editor spells it and
+    /// as the workspace does.
+    floors: Vec<PathBuf>,
+}
+
+/// The registration that watches the loaded workspaces' own folders.
+#[derive(Default)]
+struct Watched {
+    targets: Vec<WatchTarget>,
+    /// The registration's id while one is in place.
+    id: Option<String>,
+    serial: u32,
+}
+
 #[derive(Default)]
 pub(crate) struct Session {
     pub docs: HashMap<String, Document>,
@@ -516,9 +689,32 @@ pub(crate) struct Session {
     /// disk, `visibility.toml`, the roots. A cached analysis is current only
     /// for the generation it ran in (#185 P1.3).
     generation: Cell<u64>,
+    /// Bumped by what changes how *any* object is analysed: the same causes as
+    /// [`generation`](Self::generation) except an edit of, or a change to, an
+    /// object file, which no other object's analysis reads. A closed file's
+    /// analysis is current for the epoch it ran in, so typing in one rule
+    /// does not make the editor's workspace pull analyse every other again.
+    env_epoch: Cell<u64>,
     cache: RefCell<HashMap<String, (u64, Arc<AnalyzeResponse>)>>,
     /// How many analyses ran, for the tests (`opentide/__stats`).
     pub analyses: Cell<u64>,
+    /// How many closed object files were analysed (not read from their
+    /// entry), for the tests (`opentide/__stats`).
+    pub closed_analyses: Cell<u64>,
+    /// What the last workspace pull answered for each closed file, and the
+    /// [`state_key`](Self::state_key) it was made in: the client asks again
+    /// two seconds after every answer, and when nothing changed since, the
+    /// answer is the same.
+    pub workspace_report: RefCell<Option<CachedReport>>,
+    /// How many workspace pulls were answered from [`workspace_report`](Self::workspace_report),
+    /// for the tests (`opentide/__stats`).
+    pub workspace_report_hits: Cell<u64>,
+    /// The folders the client was last asked to watch beyond the fixed
+    /// globs ([`sync_watchers`](Self::sync_watchers)).
+    watched: RefCell<Watched>,
+    /// The client sent `initialized`: only then may the server ask it
+    /// anything.
+    pub(crate) client_initialized: Cell<bool>,
     batch: Cell<u64>,
     /// The root whose catalogs and declared datasets the engine has
     /// installed; `None` until the first request, and again after they
@@ -550,6 +746,8 @@ pub(crate) struct Session {
     /// The Tide field catalogs the engine has installed: the ones the models
     /// generate for the root of the last request ([`Session::host`]).
     installed_catalog: RefCell<Option<Arc<opentide_analysis::Catalog>>>,
+    /// The catalog each root last had installed for it ([`install_field_catalog`](Self::install_field_catalog)).
+    sightings: RefCell<CatalogSightings>,
 }
 
 /// `path` as the workspace reads it: an absolute path as it is; anything
@@ -864,6 +1062,13 @@ impl Session {
         let Some(catalog) = own.or_else(crate::models::default_catalog_if_ready) else {
             return;
         };
+        // What an analysis reads changes when a root's own catalog does, not
+        // when the catalog installed is another root's.
+        match self.sightings.borrow_mut().saw(root, &catalog) {
+            Sighting::Same => {}
+            Sighting::First => self.env_epoch.set(self.env_epoch.get() + 1),
+            Sighting::Changed => self.touch(),
+        }
         let mut installed = self.installed_catalog.borrow_mut();
         if let Some(known) = installed.as_ref() {
             if Arc::ptr_eq(known, &catalog) {
@@ -882,9 +1087,7 @@ impl Session {
                 // Catalogs generated on a thread arrive whenever they are
                 // ready, after the declarations were installed.
                 self.active.set(None);
-                if installed.replace(catalog).is_some() {
-                    self.touch();
-                }
+                installed.replace(catalog);
             }
             Err(err) => self.log_warning(&format!(
                 "opentide-lsp: the generated field catalog does not install: {err}"
@@ -914,8 +1117,252 @@ impl Session {
         self.touch();
     }
 
+    /// The folders root `index`'s workspace reads that the fixed globs
+    /// ([`initialized`](crate::handlers)) do not reach, as the editor spells
+    /// them: an object folder `paths.toml` put outside `objects/`, and the
+    /// configuration folder layered in from above the root. The workspace
+    /// names its folders resolved (symbolic links, macOS's `/var`, a Windows
+    /// short name), the root as the editor does: what is under the root is
+    /// mapped back to the editor's spelling, and what is not the root's own is
+    /// all that is left. The layered folder is the root's parent's, which
+    /// needs no workspace to load: a configuration that does not resolve (it
+    /// is being mended) does not drop the watch on it, and nor does the last
+    /// folders `paths.toml` named, which are kept across it.
+    fn extra_folders(&self, index: usize) -> ExtraFolders {
+        let Some(root) = self.roots.get(index) else {
+            return ExtraFolders::default();
+        };
+        let (scope, resolved_root) = root.checks.try_borrow().map_or_else(
+            |_| (crate::checks::WatchScope::default(), root.path.clone()),
+            |checks| (checks.watch_scope(), checks.resolve(&root.path)),
+        );
+        let own_objects = resolved_root.join("objects");
+        let in_editor_spelling = |folder: PathBuf| match folder.strip_prefix(&resolved_root) {
+            Ok(under) => root.path.join(under),
+            Err(_) => folder,
+        };
+        let objects = scope
+            .object_folders
+            .into_iter()
+            .filter(|folder| !folder.starts_with(&own_objects))
+            .map(in_editor_spelling)
+            .collect();
+        // The workspace layers the folder above the root it resolved. Where
+        // that is the editor's root's parent spelled otherwise (macOS's
+        // `/var`, a Windows short name), the editor's spelling is kept; where
+        // the root is named through a symbolic link or a mapped drive the
+        // folder is another one, and stays as the workspace names it.
+        let layered_resolved: Vec<PathBuf> = resolved_root
+            .parent()
+            .map(|parent| parent.join(".opentide").join("configurations"))
+            .into_iter()
+            .collect();
+        let layered = match (root.path.parent(), resolved_root.parent()) {
+            (Some(editor), Some(resolved))
+                if root
+                    .checks
+                    .try_borrow()
+                    .is_ok_and(|checks| checks.resolve(editor) == resolved) =>
+            {
+                vec![editor.join(".opentide").join("configurations")]
+            }
+            _ => layered_resolved.clone(),
+        };
+        let floors = [root.path.parent(), resolved_root.parent()]
+            .into_iter()
+            .flatten()
+            // Not the top of a filesystem or of a drive.
+            .filter(|floor| floor.parent().is_some())
+            .map(Path::to_path_buf)
+            .collect();
+        ExtraFolders {
+            objects,
+            layered,
+            layered_resolved,
+            floors,
+            own_configuration: resolved_root.join(".opentide").join("configurations"),
+        }
+    }
+
+    fn watch_targets(&self) -> Vec<WatchTarget> {
+        let mut targets = Vec::new();
+        let all: Vec<ExtraFolders> = (0..self.roots.len())
+            .map(|i| self.extra_folders(i))
+            .collect();
+        for folders in &all {
+            let target = |folder: PathBuf, pattern| WatchTarget {
+                folder,
+                pattern,
+                floors: folders.floors.clone(),
+            };
+            targets.extend(folders.objects.iter().cloned().map(|f| target(f, "**")));
+            targets.extend(
+                folders
+                    .layered
+                    .iter()
+                    // Another root's own folder is a fixed glob's already.
+                    .zip(&folders.layered_resolved)
+                    .filter(|(_, resolved)| {
+                        !all.iter()
+                            .any(|other| other.own_configuration == **resolved)
+                    })
+                    .map(|(f, _)| target(f.clone(), "**/*.toml")),
+            );
+        }
+        targets.sort();
+        targets.dedup();
+        targets
+    }
+
+    /// Ask the client to watch the folders the loaded workspaces read
+    /// ([`watch_targets`](Self::watch_targets)), and to stop watching the
+    /// ones they no longer read: asked again when `paths.toml` moves a folder
+    /// or a layer comes or goes. Nothing is sent while they are the same.
+    pub(crate) fn sync_watchers(&self) {
+        use lsp_types::notification::Notification as _;
+        if !self.caps.watch_files || !self.client_initialized.get() {
+            return;
+        }
+        let targets = self.watch_targets();
+        let mut watched = self.watched.borrow_mut();
+        if watched.targets == targets {
+            return;
+        }
+        if let Some(id) = watched.id.take() {
+            self.send_request::<lsp_types::request::UnregisterCapability>(
+                lsp_types::UnregistrationParams {
+                    unregisterations: vec![lsp_types::Unregistration {
+                        id,
+                        method: lsp_types::notification::DidChangeWatchedFiles::METHOD.into(),
+                    }],
+                },
+            );
+        }
+        watched.targets.clone_from(&targets);
+        if targets.is_empty() {
+            return;
+        }
+        watched.serial += 1;
+        let id = format!("opentide-watch-folders-{}", watched.serial);
+        watched.id = Some(id.clone());
+        let watchers: Vec<lsp_types::FileSystemWatcher> = targets
+            .iter()
+            .filter_map(|target| self.watch_glob(target))
+            .map(|glob_pattern| lsp_types::FileSystemWatcher {
+                glob_pattern,
+                kind: None,
+            })
+            .collect();
+        if watchers.is_empty() {
+            watched.id = None;
+            return;
+        }
+        self.send_request::<lsp_types::request::RegisterCapability>(
+            lsp_types::RegistrationParams {
+                registrations: vec![lsp_types::Registration {
+                    id,
+                    method: lsp_types::notification::DidChangeWatchedFiles::METHOD.into(),
+                    register_options: serde_json::to_value(
+                        lsp_types::DidChangeWatchedFilesRegistrationOptions { watchers },
+                    )
+                    .ok(),
+                }],
+            },
+        );
+    }
+
+    /// `target` as a watcher: a pattern under its folder, or, for a client
+    /// that has no such pattern, a glob on the folder's whole path. `None`
+    /// when the folder cannot be named by a glob and no folder above it may
+    /// stand for it (see [`glob_path`]).
+    fn watch_glob(&self, target: &WatchTarget) -> Option<lsp_types::GlobPattern> {
+        let folder = target.folder.display().to_string();
+        let uri = crate::uri::path_to_uri(&folder)
+            .parse::<lsp_types::Uri>()
+            .ok();
+        if let Some(uri) = uri.filter(|_| self.caps.relative_watch_patterns) {
+            return Some(lsp_types::GlobPattern::Relative(
+                lsp_types::RelativePattern {
+                    base_uri: lsp_types::OneOf::Right(uri),
+                    pattern: target.pattern.to_string(),
+                },
+            ));
+        }
+        let Some((path, coarse)) = glob_path(&folder, &target.floors) else {
+            self.log_warning(&format!(
+                "opentide-lsp: {folder} has a brace in its name, which a glob cannot escape, \
+                 and no folder above it that is the workspace's to watch: it is not watched"
+            ));
+            return None;
+        };
+        if coarse {
+            self.log_warning(&format!(
+                "opentide-lsp: {folder} has a brace in its name, which a glob cannot escape: \
+                 the client is asked to watch {path} and everything under it"
+            ));
+        }
+        let pattern = if coarse { "**" } else { target.pattern };
+        Some(lsp_types::GlobPattern::String(format!("{path}/{pattern}")))
+    }
+
+    /// The roots whose workspace reads the folder `path` is in, for a
+    /// folder [`sync_watchers`](Self::sync_watchers) asks about (not the
+    /// root's own `objects/` and `.opentide/configurations/`, which the fixed
+    /// globs name); `None` when no root does.
+    pub(crate) fn scoped_roots(&self, path: &str) -> Option<Vec<(usize, ScopeKind)>> {
+        let mut found = Vec::new();
+        for (index, root) in self.roots.iter().enumerate() {
+            let folders = self.extra_folders(index);
+            let resolved = root.checks.try_borrow().map_or_else(
+                |_| PathBuf::from(path),
+                |checks| checks.resolve(Path::new(path)),
+            );
+            let inside = |folder: &PathBuf| {
+                Path::new(path).starts_with(folder)
+                    || resolved.starts_with(folder)
+                    || root
+                        .checks
+                        .try_borrow()
+                        .is_ok_and(|checks| resolved.starts_with(checks.resolve(folder)))
+            };
+            if folders.objects.iter().any(inside) {
+                found.push((index, ScopeKind::Objects));
+            } else if folders.layered.iter().any(inside) {
+                found.push((index, ScopeKind::Configuration));
+            }
+        }
+        (!found.is_empty()).then_some(found)
+    }
+
+    /// The root whose own `visibility.toml` is the file at `path`.
+    pub(crate) fn visibility_root(&self, path: &str) -> Option<usize> {
+        self.roots.iter().position(|root| {
+            let own = root.visibility_path();
+            Path::new(path) == own
+                || root
+                    .checks
+                    .try_borrow()
+                    .is_ok_and(|checks| checks.resolve(Path::new(path)) == checks.resolve(&own))
+        })
+    }
+
     /// Something an analysis reads changed.
     pub(crate) fn touch(&self) {
+        self.generation.set(self.generation.get() + 1);
+        self.env_epoch.set(self.env_epoch.get() + 1);
+    }
+
+    /// Everything a workspace pull's answer is read from: it is current for
+    /// the same pair ([`generation`](Self::generation), then
+    /// [`env_epoch`](Self::env_epoch)).
+    pub(crate) fn state_key(&self) -> (u64, u64) {
+        (self.generation.get(), self.env_epoch.get())
+    }
+
+    /// An object file changed (an edit of an open one, a file on disk): the
+    /// analyses of the open documents and the workspace's findings are out
+    /// of date, the analysis of every other object is not.
+    pub(crate) fn touch_object(&self) {
         self.generation.set(self.generation.get() + 1);
     }
 
@@ -929,7 +1376,7 @@ impl Session {
                 self.loose_catalog.dirty.set(true);
             }
         }
-        self.touch();
+        self.touch_object();
     }
 
     /// A new batch: without a file watcher the disk is read again, and an
@@ -964,9 +1411,14 @@ impl Session {
         // the queries it carries. The editor's index is built on the first
         // request that reads it (a hover, a completion, the catalog), not
         // before the first diagnostics (#926).
-        let mut response = analyze(&host, request);
+        let _span = crate::timing::Span::new("analysis of an open document");
+        let mut response = {
+            let _span = crate::timing::Span::new("analysis: the engine");
+            analyze(&host, request)
+        };
         match doc.language {
             LanguageId::TideYaml => {
+                let _span = crate::timing::Span::new("analysis: the object's findings");
                 let found = self.object_findings(uri, doc);
                 response.diagnostics.splice(0..0, found);
             }
@@ -1149,6 +1601,7 @@ impl Session {
         };
         let buffers = self.buffers(Some(root));
         let mut checks = r.checks.borrow_mut();
+        let _span = crate::timing::Span::new("closed findings (every object, once per generation)");
         let found = checks.all_findings(&r.path, buffers, self.generation.get());
         let key = checks.resolve(Path::new(path));
         drop(checks);
@@ -1419,6 +1872,55 @@ impl Session {
             .values()
             .filter_map(|file| Some((file.entry()?.path.clone(), file.text.clone())))
             .collect()
+    }
+
+    /// What the engine's analysis finds in the object file at `path` of
+    /// `root`, which `text` is the text of: made once for each file text and
+    /// [`env_epoch`](Self::env_epoch), then read from the file's entry (a
+    /// workspace pull asks for every closed file every two seconds).
+    pub(crate) fn closed_analysis(
+        &self,
+        root: usize,
+        path: &str,
+        text: &str,
+        host: &dyn opentide_analysis::WorkspaceHost,
+    ) -> Arc<Vec<opentide_core::Diagnostic>> {
+        let epoch = self.env_epoch.get();
+        let key = path_key(path);
+        // A client that does not watch files is not told what changed on
+        // disk (the configuration, the Elastic tenants an analysis reads):
+        // nothing is kept for it.
+        let keeps = self.caps.watch_files;
+        let cached = self.roots.get(root).filter(|_| keeps).and_then(|r| {
+            r.disk
+                .borrow()
+                .files
+                .get(&key)
+                .filter(|file| file.text == text)
+                .and_then(|file| file.cached_analysis(epoch))
+        });
+        if let Some(found) = cached {
+            return found;
+        }
+        self.closed_analyses.set(self.closed_analyses.get() + 1);
+        let found = Arc::new(
+            opentide_analysis::analyze(
+                host,
+                opentide_analysis::AnalyzeRequest {
+                    uri: path.to_string(),
+                    language: LanguageId::TideYaml,
+                    text: text.to_string(),
+                },
+            )
+            .diagnostics,
+        );
+        if keeps
+            && let Some(r) = self.roots.get(root)
+            && let Some(file) = r.disk.borrow().files.get(&key).filter(|f| f.text == text)
+        {
+            file.keep_analysis(epoch, Arc::clone(&found));
+        }
+        found
     }
 
     /// The root holding an object file, by its path.
@@ -1787,7 +2289,68 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use super::{Arc, DiskObjects, HashMap, Ordering, Session, path_key, root_key};
+    use super::{
+        Arc, CatalogSightings, DiskObjects, HashMap, Ordering, Session, Sighting, glob_path,
+        path_key, root_key,
+    };
+
+    #[test]
+    fn a_folder_is_a_glob_that_matches_it_and_nothing_else() {
+        let floors = [std::path::PathBuf::from("/w")];
+        assert_eq!(
+            glob_path("/w/det [prod]", &floors),
+            Some(("/w/det [[]prod]".into(), false))
+        );
+        assert_eq!(
+            glob_path("/w/a*b?c", &floors),
+            Some(("/w/a[*]b[?]c".into(), false))
+        );
+        assert_eq!(
+            glob_path("C:\\w\\x\\", &floors),
+            Some(("C:/w/x".into(), false))
+        );
+        // A brace cannot be escaped: the folder above it, if that is the
+        // workspace's to watch.
+        assert_eq!(
+            glob_path("/w/{team}/rules", &floors),
+            Some(("/w".into(), true))
+        );
+        assert_eq!(glob_path("/w/a}", &floors), Some(("/w".into(), true)));
+        // Never the filesystem root, or anything above the floors.
+        assert_eq!(glob_path("/{team}/rules", &floors), None);
+        assert_eq!(glob_path("/x/{team}/rules", &floors), None);
+        assert_eq!(glob_path("C:\\{team}\\rules", &floors), None);
+        assert_eq!(glob_path("/w/{team}", &[]), None);
+    }
+
+    #[test]
+    fn switching_between_roots_is_not_a_catalog_that_changed() {
+        let catalog = |text: &str| {
+            Arc::new(opentide_analysis::Catalog {
+                fields: Some(text.to_string()),
+                ..opentide_analysis::Catalog::default()
+            })
+        };
+        let (a, b) = (catalog("a"), catalog("b"));
+        let mut seen = CatalogSightings::default();
+        assert_eq!(seen.saw(Some(0), &a), Sighting::First);
+        assert_eq!(seen.saw(Some(1), &b), Sighting::First);
+        // Requests alternate between the roots: each installs its own
+        // catalog, which is the one it had.
+        for _ in 0..3 {
+            assert_eq!(seen.saw(Some(0), &a), Sighting::Same);
+            assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+        }
+        // The same text in another allocation is the same catalog.
+        assert_eq!(seen.saw(Some(0), &catalog("a")), Sighting::Same);
+        // A root's own catalog arriving, or being generated again, changes it
+        // for that root alone.
+        assert_eq!(seen.saw(Some(0), &catalog("a2")), Sighting::Changed);
+        assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+        // A document outside every root has its own.
+        assert_eq!(seen.saw(None, &a), Sighting::First);
+        assert_eq!(seen.saw(None, &a), Sighting::Same);
+    }
 
     /// #914: reading a root's object files indexes none of them; the first
     /// request for the index indexes each, as `index_object` does, from the

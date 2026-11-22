@@ -366,6 +366,19 @@ impl Driver {
             }
             edited_after[i] = edited;
         }
+        // The documents each `didClose` closes, by where it is in the batch: a
+        // request answered last is about a document that is gone by then.
+        let closes: Vec<(usize, String)> = batch
+            .iter()
+            .enumerate()
+            .filter_map(|(i, frame)| closed_uri(frame).map(|uri| (i, uri)))
+            .collect();
+        // The diagnostics requests are the slow ones (see [`DEFERRED`]), and
+        // the client asks for the workspace's again two seconds after every
+        // answer: a hover or a completion that waits in the same batch is
+        // answered first. A deferred request still answers `ContentModified`
+        // when the batch edits its document later.
+        let mut deferred: Vec<(Request, HashSet<String>)> = Vec::new();
         for (i, frame) in batch.into_iter().enumerate() {
             let message = match frame {
                 Frame::Invalid { id, code, message } => {
@@ -387,6 +400,9 @@ impl Driver {
                 Message::Response(response) => session.response(response),
                 Message::Notification(notification) => {
                     if notification.method == "exit" {
+                        // What the batch asked before `exit` is answered
+                        // first, as it was before diagnostics came last.
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
                         flush(session, writer, self.state)?;
                         return Ok(Some(self.state == Lifecycle::ShuttingDown));
                     }
@@ -397,7 +413,26 @@ impl Driver {
                         handle_notification(session, notification);
                     }
                 }
+                Message::Request(request)
+                    if DEFERRED.contains(&request.method.as_str())
+                        && self.state == Lifecycle::Running
+                        && !cancelled.contains(&request.id) =>
+                {
+                    let mut staled_by = edited_after[i + 1].clone();
+                    staled_by.extend(
+                        closes
+                            .iter()
+                            .filter(|(at, _)| *at > i)
+                            .map(|(_, uri)| uri.clone()),
+                    );
+                    deferred.push((request, staled_by));
+                }
                 Message::Request(request) => {
+                    if request.method == "shutdown" {
+                        // The server is shut down for what follows, not for
+                        // what the batch asked before it.
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
+                    }
                     let staled_by = &edited_after[i + 1];
                     let response =
                         respond(session, &mut self.state, request, &cancelled, staled_by);
@@ -409,10 +444,33 @@ impl Driver {
             }
             write_outbox(session, writer)?;
         }
+        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
         flush(session, writer, self.state)?;
         Ok(None)
     }
+
+    /// Answer the requests [`DEFERRED`] put off, in the order they came.
+    fn answer_deferred(
+        &mut self,
+        session: &mut Session,
+        writer: &mut dyn Write,
+        deferred: &mut Vec<(Request, HashSet<String>)>,
+        cancelled: &HashSet<RequestId>,
+    ) -> io::Result<()> {
+        for (request, staled_by) in std::mem::take(deferred) {
+            let response = respond(session, &mut self.state, request, cancelled, &staled_by);
+            write_outbox(session, writer)?;
+            write(writer, &Message::Response(response))?;
+        }
+        Ok(())
+    }
 }
+
+/// The requests a batch answers last: the diagnostics of the workspace and of
+/// a document, which on a large workspace take tenths of a second (what
+/// `validate` and `lint` check across every object file) while a completion
+/// or a hover takes a millisecond.
+const DEFERRED: [&str; 2] = ["workspace/diagnostic", "textDocument/diagnostic"];
 
 /// One message's JSON text, without its `Content-Length` header, read as
 /// [`read_frame`] reads a framed one: the same answers for a body that is
@@ -499,6 +557,7 @@ fn respond(
     }
     let method = request.method.clone();
     let id = request.id.clone();
+    let _span = crate::timing::Span::named("request ", &method);
     let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::handlers::request(session, request)
     }));
@@ -570,6 +629,16 @@ fn edited_uri(frame: &Frame) -> Option<String> {
         .flatten()
 }
 
+/// The document a `didClose` notification closes.
+fn closed_uri(frame: &Frame) -> Option<String> {
+    let Frame::Message(Message::Notification(n)) = frame else {
+        return None;
+    };
+    (n.method == "textDocument/didClose")
+        .then(|| document_uri(&n.params))
+        .flatten()
+}
+
 fn document_uri(params: &Value) -> Option<String> {
     Some(
         params
@@ -585,6 +654,9 @@ fn document_uri(params: &Value) -> Option<String> {
 fn flush(session: &mut Session, writer: &mut dyn Write, state: Lifecycle) -> io::Result<()> {
     if state == Lifecycle::Running {
         session.flush_publishes();
+        // The workspace may have loaded, or `paths.toml` moved a folder, in
+        // this batch.
+        session.sync_watchers();
     } else {
         session.discard_publishes();
     }

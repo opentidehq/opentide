@@ -18,6 +18,7 @@ mod models;
 mod protocol;
 pub mod server;
 mod session;
+mod timing;
 pub mod uri;
 
 pub use handlers::{DIAGNOSTICS_DOCS, SHOW_REFERENCES};
