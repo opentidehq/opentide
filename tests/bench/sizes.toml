@@ -7,7 +7,7 @@
 # of the run matches is reported and passes (the assets and the wheels are separate downloads).
 #
 # Linux and WebAssembly: what `cargo build --release` made on the change (51.8 MB, 29.4 MB, 24.6 MB,
-# 24.7 MB before), +3%. The wheels: what the publish.yml dry run of the change built (`opentide-1.0.0rc3`), +3%. The
+# 24.7 MB before), +3%. The wheels: what the publish.yml dry run built (`opentide-1.0.0rc3`), +3%, measured again on 2026-11-22 (run 45007567075) after the NOTICE and licence files, the editor's deployment-state findings and the severity checks landed: every wheel but the Windows x64 one had grown 0.2 to 0.8% past its budget. The
 # macOS binaries are not shipped as a budgeted file here: their wheels carry the same code.
 
 [[artifact]]
@@ -28,27 +28,27 @@ max_bytes = 5_800_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-win_amd64.whl"
-max_bytes = 23_490_000
+max_bytes = 24_190_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-win_arm64.whl"
-max_bytes = 21_730_000
+max_bytes = 22_440_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-manylinux_2_28_x86_64.whl"
-max_bytes = 21_920_000
+max_bytes = 22_720_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-manylinux_2_28_aarch64.whl"
-max_bytes = 20_440_000
+max_bytes = 21_230_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-macosx_10_12_x86_64.whl"
-max_bytes = 21_310_000
+max_bytes = 22_090_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-macosx_11_0_arm64.whl"
-max_bytes = 20_040_000
+max_bytes = 20_820_000
 
 [[artifact]]
 glob = "opentide-*.tar.gz"
