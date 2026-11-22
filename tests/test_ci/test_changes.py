@@ -157,8 +157,8 @@ def test_a_crate_runs_itself_and_its_reverse_dependencies() -> None:
         ("crates/opentide-wasm/src/lib.rs", True, True),
         ("vendor/memmap2/src/lib.rs", True, False),
         ("packages/lsp-client/src/index.ts", True, True),
-        # A wasm script alone: `wasm` without `rust`, so engine-lint runs its
-        # wasm32 clippy alone (ci.yml).
+        # A wasm script alone: `wasm` without `rust`, so engine-lint-variants
+        # runs its wasm32 clippy alone (ci.yml).
         ("scripts/engine/build-wasm.sh", True, False),
         ("scripts/engine/wasm-smoke.mjs", True, False),
         # Elsewhere, neither.
