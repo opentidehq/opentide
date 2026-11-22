@@ -117,14 +117,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         toml::from_str(&read(ASIM)?).map_err(|error| format!("{ASIM}: {error}"))?;
     datasets.value("kql-asim", &[ASIM], &(asim.schemas, asim.parsers))?;
 
-    let parse = |rel: String| -> Result<String, Box<dyn std::error::Error>> { Ok(read(&rel)?) };
-    let core = |file: &str| parse(format!("{CORE}/{file}"));
-    let operators: Operators = toml::from_str(&core("operators.toml")?)?;
-    let functions: Functions = toml::from_str(&core("functions.toml")?)?;
-    let scalar: ScalarOperators = toml::from_str(&core("operators-scalar.toml")?)?;
-    let plugins: Plugins = toml::from_str(&core("evaluate-plugins.toml")?)?;
-    let types: Types = toml::from_str(&core("types.toml")?)?;
-    let options: Options = toml::from_str(&core("operator-options.toml")?)?;
+    // A core file that does not parse names itself, as the Azure Monitor, ASIM, Sentinel and
+    // Defender ones do.
+    let core = |file: &str| -> Result<String, Box<dyn std::error::Error>> {
+        Ok(read(&format!("{CORE}/{file}"))?)
+    };
+    fn parsed<T: serde::de::DeserializeOwned>(
+        file: &str,
+        text: &str,
+    ) -> Result<T, Box<dyn std::error::Error>> {
+        toml::from_str(text).map_err(|error| format!("{CORE}/{file}: {error}").into())
+    }
+    let operators: Operators = parsed("operators.toml", &core("operators.toml")?)?;
+    let functions: Functions = parsed("functions.toml", &core("functions.toml")?)?;
+    let scalar: ScalarOperators = parsed("operators-scalar.toml", &core("operators-scalar.toml")?)?;
+    let plugins: Plugins = parsed("evaluate-plugins.toml", &core("evaluate-plugins.toml")?)?;
+    let types: Types = parsed("types.toml", &core("types.toml")?)?;
+    let options: Options = parsed("operator-options.toml", &core("operator-options.toml")?)?;
     let core_files: Vec<String> = [
         "operators.toml",
         "functions.toml",
