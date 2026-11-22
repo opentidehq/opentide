@@ -60,9 +60,13 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      # On a pull request, a language is analysed only when its files change:
-      # Python (*.py, pyproject.toml, uv.lock), Rust (the workspace's crates,
-      # bindings, xtask and its manifest and lockfile) or the workflows and actions.
+      # On a pull request, Python and the workflows are analysed when their files
+      # change (*.py, pyproject.toml, uv.lock; the workflows and actions). Rust,
+      # 19-23 minutes of the run where the others take about one, is not analysed
+      # on an ordinary pull request: every push to a base branch (each merge) and
+      # the nightly analyse it, and so does a release pull request (into
+      # development from integration/unified-core or release/*, or labelled
+      # `release`, as ci.yml defines it) and a change to this workflow.
       # The job still starts, so its check reports either way. Every
       # push and the nightly analyse every language;
       # so does a checkout that is not a pull request's merge commit (it fails
@@ -72,6 +76,9 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           LANGUAGE: ${{ matrix.language }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           PYTHON_PATHS: |
             *.py
             pyproject.toml
@@ -116,8 +123,22 @@ jobs:
               fi
             done <<<"${patterns}"
           done <<<"$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          if [[ "${LANGUAGE}" == rust && "${value}" == true ]]; then
+            release=false
+            if [[ "${BASE_REF}" == development && ( "${HEAD_REF}" == integration/unified-core || "${HEAD_REF}" == release/* ) ]]; then
+              release=true
+            fi
+            if jq -e 'index("release") != null' <<<"${LABELS:-[]}" >/dev/null 2>&1; then
+              release=true
+            fi
+            if [[ "${release}" != true ]] \
+              && ! git diff --no-renames --name-only HEAD^1 HEAD | grep -qx '.github/workflows/codeql.yml'; then
+              echo "Rust changed, but this is not a release pull request: Rust is analysed on merge, nightly and on release pull requests."
+              value=false
+            fi
+          fi
           if [[ "${value}" != true ]]; then
-            echo "No ${LANGUAGE} file changed: the analysis runs on merge and nightly."
+            echo "No ${LANGUAGE} analysis on this pull request: it runs on merge and nightly."
           fi
           echo "analyse=${value}" >> "$GITHUB_OUTPUT"
 
@@ -129,6 +150,19 @@ jobs:
           # cargo build (CodeQL 2.23.3+, GA), Python and Actions as before.
           build-mode: none
           queries: security-extended
+          # Analyse what ships, not what tests it: about 86% of the files under
+          # crates/ are tests and test data. Excluding them is GitHub's first
+          # advice for a slow analysis ("Analysis takes too long"); for
+          # build-mode none, paths-ignore applies to every language here.
+          config: |
+            paths-ignore:
+              - crates/testdata/**
+              - "**/tests/**"
+              - "**/benches/**"
+              - fuzz/**
+              - xtask/**
+              - vendor/**
+              - tests/**
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         if: steps.scope.outputs.analyse == 'true' && matrix.language == 'python'
