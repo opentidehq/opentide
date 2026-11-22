@@ -1,0 +1,36 @@
+# The language server's cold start (#1754): spawn to the first diagnostics of a rule it was
+# asked to open (`start_to_first_diag_ms` of scripts/perf/lsp-bench.mjs), native and WASI, on
+# the small workspace (the Tide corpus) and the large one (1,000 object files,
+# scripts/perf/make_workspace.py). Measured by scripts/perf/cold-start.sh in the nightly's
+# `Benchmarks (language server cold start)` job (bench.yml) and held by
+# scripts/perf/check_cold_start.py: a scenario's p50 fails when it is more than
+# policy.regression (10%) above budget_ms and the difference is also above policy.noise_floor_s
+# (20 ms), the headroom of tests/bench/budgets.toml's [policy], which the checker reads.
+#
+# The budgets are the p50s #1746 measured after its fix (docs/internal/datasets.md, "Language
+# server"). Re-record them only from a CI run of the job, in a change of its own that says why.
+
+schema_version = 1
+
+# Runs per scenario, each a fresh server: a report of another count fails.
+runs = 10
+
+[[scenario]]
+id = "native_small"
+label = "native, small workspace"
+budget_ms = 62
+
+[[scenario]]
+id = "native_large"
+label = "native, large workspace"
+budget_ms = 127
+
+[[scenario]]
+id = "wasi_small"
+label = "WASI, small workspace"
+budget_ms = 192
+
+[[scenario]]
+id = "wasi_large"
+label = "WASI, large workspace"
+budget_ms = 350

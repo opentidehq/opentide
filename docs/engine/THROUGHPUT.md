@@ -109,6 +109,49 @@ bench, the budgets or the command change, and on every push; the table goes to t
 change that raises a count on purpose records the budgets again and gives the reason in its pull
 request.
 
+## The language server's cold start
+
+The time from spawning the language server to the first diagnostics of a rule it was asked to open
+(`start_to_first_diag_ms`), as an editor sees it on start-up, is held in the nightly by bench.yml's
+`Benchmarks (language server cold start)` job (#1754). The scripted client of
+`scripts/perf/lsp-bench.mjs` (VS Code's recorded capabilities, pull diagnostics) measures four
+scenarios, 10 runs each, every run a fresh server (`scripts/perf/cold-start.sh`):
+
+| Scenario | Server | Workspace | Budget, p50 | Fails above |
+|---|---|---|---:|---:|
+| `native_small` | `opentide-lsp`, `--release` | the Tide corpus | 62 ms | 82 ms |
+| `native_large` | `opentide-lsp`, `--release` | 1,000 object files | 127 ms | 147 ms |
+| `wasi_small` | `opentide-lsp.wasm` (`wasm32-wasip1`, `--release`) under wasmtime | the Tide corpus | 192 ms | 212 ms |
+| `wasi_large` | the same | 1,000 object files | 350 ms | 385 ms |
+
+The workspaces are `scripts/perf/make_workspace.py`'s: the Tide corpus as the CLI E2E suite lays it
+out, and the corpus's rules copied up to 1,000 object files. The WASI module runs under wasmtime
+(`wasmtime run --dir / -S inherit-env`, the version bench.yml installs), the host #1746 measured
+with. `WASI_HOST=node` runs it under Node's WASI (`scripts/engine/wasi-run.mjs`) for comparing two
+builds on one machine; Node's own start and its compile of the module add about 100 ms, so those
+numbers are not held to the budgets (on a 4-vCPU Xeon: 276 and 395 ms where wasmtime's budgets are
+192 and 350).
+
+`scripts/perf/check_cold_start.py` holds each p50 to `tests/bench/lsp-cold-start.toml` with the
+headroom of every other benchmark budget, `tests/bench/budgets.toml`'s `[policy]`, which it reads:
+a p50 fails when it is more than `regression` (10%) above its budget and the difference is also
+above `noise_floor_s` (20 ms). A scenario with no report, a report with failed runs or another run
+count, and a report no scenario budgets fail too. The budgets are the p50s #1746 measured after
+its fix ([docs/internal/datasets.md](../internal/datasets.md), "Language server"); re-record them
+only from a CI run of the job, in a change of its own that says why. The reports, every sample
+kept, are the run's `bench-lsp-cold-start` artifact. To measure locally:
+
+```bash
+cargo build --release -p opentide-lsp
+cargo build --release -p opentide-lsp --target wasm32-wasip1
+scripts/perf/cold-start.sh /tmp/cold-start target/release/opentide-lsp \
+  target/wasm32-wasip1/release/opentide-lsp.wasm
+python3 scripts/perf/check_cold_start.py tests/bench/lsp-cold-start.toml /tmp/cold-start
+```
+
+Numbers from a machine other than CI's runner class (`ubuntu-24.04`, 4 vCPU) are for comparing two
+builds on that machine, not for the budgets.
+
 ## Adding a language
 
 A language joins the bench and the gate with one row in the bench's `LANGUAGES` table: its id,
