@@ -102,6 +102,8 @@ pub struct CrowdstrikeDetails {
     /// `Informational`, `Low`, `Medium`, `High`, or `Critical`. Deploy uses
     /// `response.alert_severity` when omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[from_node(with = "crate::objects::platform::optional_severity")]
+    #[garde(custom(crate::objects::platform::garde_optional_severity))]
     pub severity: Option<String>,
     /// Falcon tactic. Sent as given.
     #[serde(default, skip_serializing_if = "Option::is_none")]

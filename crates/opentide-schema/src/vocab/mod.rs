@@ -20,7 +20,10 @@
 
 pub mod attack;
 pub mod bundled;
+pub(crate) mod bundled_offers;
 mod document;
+mod error;
+pub mod offer;
 pub mod sentinel;
 #[cfg(test)]
 mod split;
@@ -31,76 +34,21 @@ use std::sync::{Arc, OnceLock};
 
 use opentide_core::suggest::Candidates;
 
+// What `offer` reads of the Markdown clean-up (the build script has its own copy of them).
+use crate::generate::annotate::{first_sentence, plain_text};
+
 use indexmap::{IndexMap, IndexSet};
 
+pub use bundled_offers::bundled_offer;
 pub use document::{
     Description, Descriptions, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary,
 };
+pub use error::VocabError;
 pub use version::{Contract, Version, VocabRef};
 
 /// The object families whose workspace objects form vocabularies of their
 /// own, keyed by UUID (`CORE_OBJECT_TYPES`).
 pub const OBJECT_TYPES: [&str; 3] = ["threat", "objective", "rule"];
-
-/// A vocabulary that cannot be read.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum VocabError {
-    /// A file name without the `.vocab.toml` suffix.
-    #[error("not a vocabulary file: {0}")]
-    NotAVocabularyFile(String),
-    /// The document is not TOML.
-    #[error("could not read vocabulary TOML {file}: {message}")]
-    Toml {
-        /// The file.
-        file: String,
-        /// The parser's message.
-        message: String,
-    },
-    /// A required top-level key is missing.
-    #[error("missing required key {key:?} in vocabulary document: {file}")]
-    MissingKey {
-        /// The file.
-        file: String,
-        /// The key.
-        key: String,
-    },
-    /// A top-level key has the wrong type or value.
-    #[error("invalid {key:?} in vocabulary document {file}: {why}")]
-    InvalidKey {
-        /// The file.
-        file: String,
-        /// The key.
-        key: String,
-        /// What is wrong with it.
-        why: String,
-    },
-    /// The document's `field` is not its file name's stem.
-    #[error("vocabulary field {field:?} does not match filename {expected:?} in {file}")]
-    FieldMismatch {
-        /// The file.
-        file: String,
-        /// The `field` the document declares.
-        field: String,
-        /// The file name's stem.
-        expected: String,
-    },
-    /// Two entries share a key.
-    #[error("duplicate entry key {key:?} in vocabulary {file} at index {index}")]
-    DuplicateKey {
-        /// The file.
-        file: String,
-        /// The key.
-        key: String,
-        /// The second entry's index.
-        index: usize,
-    },
-    /// A version that is not `M.m`.
-    #[error("invalid vocabulary version: {0:?}")]
-    InvalidVersion(String),
-    /// A contract that is not `field::M.m`.
-    #[error("invalid vocabulary contract: {0:?}")]
-    InvalidContract(String),
-}
 
 /// The vocabularies a workspace resolves values against.
 #[derive(Debug, Clone)]
@@ -204,6 +152,12 @@ impl Vocabularies {
             );
         }
         value
+    }
+
+    /// Whether `field` is the bundled vocabulary of that name: a set of
+    /// bundled vocabularies that no document of its own replaces.
+    pub fn uses_bundled(&self, field: &str) -> bool {
+        self.bundled && !self.own.contains_key(field) && bundled::fields().any(|name| name == field)
     }
 
     /// The vocabulary `field`.

@@ -125,3 +125,9 @@ Five defects, fixed conservatively (the narrowed path is taken only where its as
 3. Kept lint stems are forgotten, and every object checked again, when a changed path holds a source that is not an object (no UUID, a displaced duplicate, a parse error), before or after the edit.
 4. A path that is in one index and not the other (a rename) is a change of identity.
 5. The findings, and their stamps, of a changed file are kept by its resolved path; the narrowed selection keeps the index's path. Test: `kept_findings_follow_a_symbolic_link_to_an_object_file` (unix).
+
+## The offers as build-time data (#1755)
+
+What `models::build` still spent on the bundled vocabularies' offers (the dropdown and plain text of each entry, for every field that names the vocabulary) is now read from data `opentide-schema`'s build script made once ([`docs/internal/datasets.md`](datasets.md)). A field that names one vocabulary also keeps the keywords it writes (`enum`, the Markdown and plain descriptions) once per reference.
+
+`fields_catalog` for the bundled configuration, 1,133,476 bytes of JSON, release build, this machine (4 vCPU), 12 alternating runs of each build: **cold** (the first build of a process) 259 to 144 ms (median, best 230 to 135), **warm** (the next ones) 139 to 130 ms (best 127 to 104). The language server's first catalog (`OPENTIDE_LSP_TIMING=1`, 1,200 objects, 5 runs each) 283 to 199 ms. What remains warm is the rows read back and dropped (`clean_enum`, `array_enum`), not the offers. `lsp_editor_typing_latency` (7 runs, twice each) 34 and 36 ms before, 39 and 30 ms after: no change. Cold start to the first diagnostics (`scripts/perf/lsp-bench.mjs`, 8 runs, three times each) 113, 113 and 101 ms before, 106, 106 and 104 ms after: the catalog is built off the request loop, so no change. Memory, resident after the first pull: 196 to 191 MiB. Binary: `opentide-lsp` +583 KB (117.49 to 118.07 MB, release with line tables).

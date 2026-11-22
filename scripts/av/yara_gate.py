@@ -23,7 +23,10 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10, which opentide's tests also run on
+    import tomli as tomllib  # the dev group's tomli there
 from markers import is_source_member
 
 #: signature-base's rules read these externals.
