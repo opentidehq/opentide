@@ -39,7 +39,7 @@ cargo run -p opentide --example deploy_plan -- path/to/workspace PREVIEW
 | `compile` | yes | `Workspace::deploy_plan` |
 | `queries` | yes | The offline query engines behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::{main, run_json}` and the `opentide` binary (`cargo install opentide --features cli`) |
-| `cli-core` | no | `opentide::cli::{main, run_json}` without the terminal UI and prompts (what the Python package is built with) |
+| `cli-core` | no | `opentide::cli::{main, run_json}` without the terminal UI and prompts |
 | `lsp` | no | The language server (`opentide::lsp`) |
 | `connectors` | no | Tenant operations (`opentide::connectors`): a query run, a live query check and a rule deploy on a workspace's tenants; async, on tokio |
 | `plugins` | no | The platform plugin host a binding embeds to add platforms (`opentide::plugins`); implies `connectors` |

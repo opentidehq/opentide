@@ -12,8 +12,6 @@ opentide tui
 opentide --repo path/to/detections tui
 ```
 
-The terminal UI is in the standalone `opentide` binary (the GitHub Release, `cargo install opentide --features cli`), not in the Python package: the wheel is built without it (the facade's `cli-core` feature), and there `opentide tui` and the `setup` wizard's questions refuse as they do under WASI (`setup` still takes every choice as an option and `--yes`). Leaving the terminal UI out drops `crossterm`, whose Windows key translation imports `GetForegroundWindow`, `GetKeyboardLayout` and `ToUnicodeEx`, which antivirus heuristics read as a keylogger's ([#1743](https://github.com/opentidehq/opentide/issues/1743)).
-
 It reads the same registry as every other command and runs the same service functions as `opentide validate`, `opentide generate` and `opentide deploy --dry-run`, so what it shows is what those commands print.
 
 ## Layout

@@ -6,9 +6,9 @@ name: AV gate
 #   - `markers`: no marker string (`moneropool`, `sekurlsa`, `Login Data`,
 #     `Invoke-Mimikatz`, `jndi:ldap`) in plain text in any artifact, archives
 #     opened (scripts/av/markers.py); every artifact within its size budget
-#     (scripts/av/sizes.py, tests/bench/sizes.toml); and no key-translation
-#     import (GetForegroundWindow, ToUnicodeEx, ...) in the extension module or
-#     the language server (scripts/av/pe_imports.py);
+#     (scripts/av/sizes.py, tests/bench/sizes.toml); and the Windows
+#     imports listed, none of the key translation (GetForegroundWindow,
+#     ToUnicodeEx, ...) in the language server (scripts/av/pe_imports.py);
 #   - `clamav`: ClamAV's signatures, freshly fetched (`freshclam`), with archive
 #     scanning (`clamscan --scan-archive`), on the artifacts and on their
 #     extracted files;
@@ -76,12 +76,13 @@ jobs:
         run: |
           set -o pipefail
           python3 scripts/av/sizes.py av-artifacts | tee "${RUNNER_TEMP}/sizes.txt"
-      # The Python extension module is built without the terminal UI, and the
-      # language server never had it: neither imports user32's key translation
-      # (GetForegroundWindow, GetKeyboardLayout, ToUnicodeEx), which antivirus
-      # heuristics read as a keylogger's. The import tables of every Windows
-      # binary are listed (scripts/av/pe_imports.py).
-      - name: Windows imports (no key translation in the extension module or the language server)
+      # The terminal UI's binaries (the command line, the extension module, the Node.js
+      # addon) import user32's key translation (GetForegroundWindow,
+      # GetKeyboardLayout, ToUnicodeEx), as every Rust terminal UI on Windows does:
+      # listed, not failed (the experiment run 44981495486 found them clean). The
+      # language server never had the terminal UI, and may not import them. The import
+      # tables of every Windows binary are listed (scripts/av/pe_imports.py).
+      - name: Windows imports (listed; none of the key translation in the language server)
         run: |
           set -o pipefail
           python3 -m pip install --quiet pefile==2024.8.26

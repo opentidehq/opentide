@@ -106,9 +106,7 @@ queries = ["workspace", "analysis", "opentide-analysis/queries"]
 cli = ["cli-core", "opentide-cli/terminal"]
 # The command line without its terminal UI and prompts (`opentide tui` and the
 # `setup` wizard's questions refuse, as they do under WASI): the same
-# `opentide::cli` module, and no `crossterm`, whose Windows key translation
-# imports `GetForegroundWindow`, `GetKeyboardLayout` and `ToUnicodeEx` from
-# user32 (#1743). The Python package's `_native` is built with this one.
+# `opentide::cli` module, and no `crossterm`.
 cli-core = ["compile", "queries", "dep:opentide-cli"]
 # The language server (`opentide::lsp`): stdio, or one message at a time.
 lsp = ["workspace", "dep:opentide-lsp"]

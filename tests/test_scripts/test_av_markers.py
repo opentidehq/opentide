@@ -129,47 +129,17 @@ sys.modules["av_pe_imports"] = pe_imports
 _pe_spec.loader.exec_module(pe_imports)
 
 
-def test_the_extension_module_and_the_language_server_may_not_import_key_translation() -> None:
+def test_only_the_language_server_may_not_import_key_translation() -> None:
+    """The terminal UI's binaries (the command line, the extension module, the Node.js addon) have
+    crossterm's key translation and are listed; the language server never had it."""
     keys = ["GetForegroundWindow", "ToUnicodeEx", "MessageBoxW"]
-    assert pe_imports.forbidden("_native.pyd", keys) == {"GetForegroundWindow", "ToUnicodeEx"}
-    assert pe_imports.forbidden("opentide-lsp-v1.0.0-x86_64-pc-windows-msvc.exe", keys)
-    assert pe_imports.forbidden("opentide-v1.0.0-x86_64-pc-windows-msvc.exe", keys) == set()
-    assert pe_imports.forbidden("_native.pyd", ["MessageBoxW"]) == set()
-
-
-@pytest.mark.skipif(shutil.which("cargo") is None, reason="no cargo")
-@pytest.mark.parametrize("package", ["opentide-native", "opentide-lsp"])
-def test_the_windows_extension_module_and_language_server_do_not_build_the_terminal_ui(
-    package: str,
-) -> None:
-    """crossterm's Windows key translation imports GetForegroundWindow, GetKeyboardLayout and
-    ToUnicodeEx.
-
-    It is reached through `inquire` and `ratatui` (opentide-cli's `terminal` feature). The Python
-    extension
-    module is built with the facade's `cli-core`, which leaves them out, so neither package has
-    crossterm in its
-    Windows dependency graph. The standalone `opentide` binary (`cli`) keeps the terminal UI.
-    """
-    result = subprocess.run(
-        [
-            "cargo",
-            "tree",
-            "-p",
-            package,
-            "--target",
-            "x86_64-pc-windows-msvc",
-            "--invert",
-            "crossterm",
-            "--locked",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode != 0, f"crossterm is in {package}'s Windows build:\n{result.stdout}"
-    assert "did not match any packages" in result.stderr, result.stderr
+    assert pe_imports.forbidden("opentide-lsp-v1.0.0-x86_64-pc-windows-msvc.exe", keys) == {
+        "GetForegroundWindow",
+        "ToUnicodeEx",
+    }
+    for name in ("_native.pyd", "opentide.win32-x64-msvc.node", "opentide-v1.0.0-x.exe"):
+        assert pe_imports.forbidden(name, keys) == set(), name
+    assert pe_imports.forbidden("opentide-lsp-v1.0.0-x.exe", ["MessageBoxW"]) == set()
 
 
 def test_the_yara_gate_skips_the_text_sources_of_a_source_distribution(tmp_path: Path) -> None:

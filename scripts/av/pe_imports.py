@@ -7,13 +7,16 @@ PATH is a file or a directory searched recursively (the extracted artifacts: ext
 file (`.exe`, `.dll`, `.pyd`, `.node`) is parsed with pefile and its user32 imports are printed.
 
 The foreground-window, keyboard-layout and `ToUnicodeEx` imports are crossterm's Windows key
-translation, which the terminal UI (`opentide tui`, the `setup` wizard's prompts) reads keys with,
-and which antivirus heuristics read as a keylogger's. The Python extension module (`_native.pyd`) is
-built without the terminal UI (the facade's `cli-core` feature) and the language server never had
-it, so neither may import them. The `opentide` command line's binary and the Node.js addon keep the
-terminal UI and are only listed. Exit status: 0 policy met, 1 a forbidden import, 2 no PE found
-(`--allow-none`: 0, for a set of artifacts that ships no Windows binary, the GitHub Release's since
-the standalone Windows executables were dropped).
+translation, which the terminal UI (`opentide tui`, the `setup` wizard's prompts) reads keys with.
+Every Rust terminal UI on Windows has them, and they are only listed for the binaries that carry
+the terminal UI: the `opentide` command line, the extension module (`_native.pyd`) and the Node.js
+addon. Run 44981495486 of the experiment workflow put a module built with them through ClamAV,
+YARA and Microsoft Defender (exclusions removed, signatures updated, a canary detected) and found
+nothing; its cloud-delivered protection was off, so a cloud verdict is untested (docs/internal/av-
+false-positives-2026-11-21.md). The language server never had the terminal UI, and may not import
+them. Exit status: 0 policy met, 1 a forbidden import, 2 no PE found (`--allow-none`: 0, for a set
+of artifacts that ships no Windows binary, the GitHub Release's since the standalone Windows
+executables were dropped).
 """
 
 from __future__ import annotations
@@ -30,9 +33,8 @@ PE_SUFFIXES = (".exe", ".dll", ".pyd", ".node")
 
 
 def must_be_free(name: str) -> bool:
-    """Whether the binary `name` may not import the key-translation set."""
-    lowered = name.lower()
-    return lowered.endswith(".pyd") or "opentide-lsp" in lowered
+    """Whether the binary `name` may not import the key-translation set: the language server's."""
+    return "opentide-lsp" in name.lower()
 
 
 def forbidden(name: str, imports: Iterable[str]) -> set[str]:

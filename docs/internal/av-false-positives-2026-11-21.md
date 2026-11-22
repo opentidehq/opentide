@@ -473,6 +473,28 @@ imports (`termina` and `crossterm` have the same key-translation code; the exten
 Open items: the exact Defender detection name and hash from the owner; a run against Defender itself, which
 only the owner can do.
 
+## 10. The terminal UI experiment
+
+#1743 first removed the terminal UI from the Python extension module (the facade's `cli-core` feature), to take
+crossterm's user32 key-translation imports (`GetForegroundWindow`, `GetKeyboardLayout`, `GetWindowThreadProcessId`,
+`ToUnicodeEx`) out of the `.pyd` that Microsoft Defender flagged. Before keeping that, the release gate's engines were
+put on a module that has them (run 44981495486, a manual workflow that built and scanned and shipped nothing):
+
+- **What was scanned:** the `win_amd64` and `win_arm64` `_native` built with the terminal UI (`cli`) on the compressed
+  datasets, and the eight Node.js addons (win32, darwin and linux), which keep the terminal UI.
+- **Defender:** `windows-latest`, engine 1.1.26100.4, signatures 1.463.409.0 (11/21/2026 20:10 UTC), with the image's
+  path exclusions (`C:\; D:\`) removed, signatures updated and an EICAR canary that had to be detected (it was). Every file
+  was clean: both modules, all eight addons, 63 files in the tree.
+- **ClamAV and YARA** (signature-base and protections-artifacts at their pinned commits, canary rule matching): no hit.
+- **Caveat: cloud-delivered protection was off** on the runner image (`MAPSReporting 0`, real-time, behaviour and
+  IOAV protection off, `SubmitSamplesConsent` set to never-send). The in-box engine and signatures do not reproduce a cloud
+  machine-learning verdict, which is the likeliest source of the RedLine-family detection. A clean result here is
+  not a clean result there; nothing was submitted.
+- **Decision (the owner's): the terminal UI stays in every build,** the Python wheel included. Every Rust terminal UI on
+  Windows has the same imports (`crossterm` 0.29 and `termina` 0.3.3 share `get_char_for_key`); the compressed datasets,
+  not the imports, are what #1743 changes. If a cloud verdict persists on a release, dropping the terminal UI from the
+  Windows wheel and the Windows npm package is the next lever (the `cli-core` feature stays for that, and for WASI).
+
 ## Appendix: commands
 
 ```bash

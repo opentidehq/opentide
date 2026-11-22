@@ -27,13 +27,9 @@ crate-type = ["cdylib"]
 pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
 # The facade, and only the facade (ADR 0005, UC-5.1 #836): this crate wraps it
 # and nothing else from the workspace.
-#   `cli-core`   the command line the `opentide` console script runs in process
+#   `cli`        the command line the `opentide` console script runs in process
 #                (`cli_main`, from `opentide._cli`), and `opentide::cli::main_with_version`,
-#                without its terminal UI and prompts (`opentide tui`, the `setup`
-#                wizard's questions): crossterm's Windows key translation imports
-#                `GetForegroundWindow`, `GetKeyboardLayout` and `ToUnicodeEx`, which
-#                antivirus heuristics read as a keylogger's (#1743). The standalone
-#                `opentide` binary keeps the terminal UI.
+#                with its terminal UI and the `setup` wizard's questions on every OS.
 #   `analysis`   `opentide.analysis`: check one query and highlight a text.
 #   `python`     the Tide models as Python classes, opentide._native.models (UC-1.9, #815).
 #   `connectors` the tenant operations the SDK (`opentide._native.sdk`,
@@ -42,7 +38,7 @@ pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
 #   `plugins`    the platform plugin host (UC-4.5 #835): plugins behind the
 #                connectors' traits, their query rows in the compiler's ordered JSON.
 opentide = { path = "../../crates/opentide", features = [
-    "cli-core",
+    "cli",
     "analysis",
     "python",
     "connectors",

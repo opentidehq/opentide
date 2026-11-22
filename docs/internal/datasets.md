@@ -54,7 +54,7 @@ One machine (4 vCPU Intel Xeon @ 2.10 GHz, 15 GiB, Linux 6.18), release builds w
 |---|---:|---:|---:|
 | `opentide` | 51,816,976 | 41,222,368 | -10,594,608 (-20%) |
 | `opentide-lsp` | 29,413,552 | 18,695,136 | -10,718,416 (-36%) |
-| `_native` (the Python extension module) | 56,659,664 | 44,818,808 | -11,840,856 (-21%) |
+| `_native` (the Python extension module; measured before the terminal UI came back to it) | 56,659,664 | 44,818,808 | -11,840,856 (-21%) |
 | `opentide_wasm.wasm` (browser) | 24,627,305 | 13,809,876 | -10,817,429 (-44%) |
 | `opentide-lsp.wasm` (WASI) | 24,714,988 | 14,551,975 | -10,163,013 (-41%) |
 
