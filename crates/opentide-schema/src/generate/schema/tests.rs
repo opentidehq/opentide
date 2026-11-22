@@ -539,7 +539,11 @@ fn the_build_makes_the_offers_the_catalog_asks_for() {
         config: Arc::new(resolved.tree),
         vocabularies: Arc::new(Vocabularies::bundled()),
     };
+    // Both phases that resolve vocabularies: the language server's field catalog
+    // and `generate schemas` (each registered revision's editor schema).
     let _ = crate::generate::catalog::fields_catalog("test", &sources);
+    let schemas = crate::generate::workspace::schema_artifacts(&sources);
+    assert!(!schemas.is_empty());
     let mut asked: Vec<(String, bool)> = ASKED.with(|asked| asked.borrow().clone());
     asked.sort();
     asked.dedup();
@@ -575,10 +579,16 @@ fn what_the_build_made_is_what_is_worked_out_at_run_time() {
             Some(&worked_out),
             "{reference} (scoped: {scoped})"
         );
-        // And through the lookup the schemas use.
+        // And through the lookup the schemas use, against the same lookup for a
+        // vocabulary the workspace brings (a copy of the bundled document), which
+        // is worked out and never read from what the build made.
+        let mut brought = Vocabularies::bundled();
+        brought.insert((*bundled::get(&vocab.field).unwrap()).clone());
+        assert!(!brought.uses_bundled(&vocab.field));
+        assert!(vocabularies.uses_bundled(&vocab.field));
         assert_eq!(
             vocabulary_offer(&vocabularies, reference, options),
-            worked_out,
+            vocabulary_offer(&brought, reference, options),
             "{reference} (scoped: {scoped})"
         );
         checked += 1;
