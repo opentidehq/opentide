@@ -134,6 +134,25 @@ class LegalFilesTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             release.copy_legal(self.root / "pkg")
 
+    def test_the_bundle_holds_each_cited_file_under_its_path(self) -> None:
+        target = self.root / "bundle.txt"
+        self.assertEqual(
+            release.legal_bundle(target),
+            ["data/catalogs/ecs/LICENSE.txt", "data/catalogs/ecs/NOTICE"],
+        )
+        self.assertEqual(
+            target.read_text(encoding="utf-8"),
+            "==> data/catalogs/ecs/LICENSE.txt <==\n\napache\n\n"
+            "==> data/catalogs/ecs/NOTICE <==\n\nelastic\n\n",
+        )
+
+    def test_the_release_builds_and_checks_the_bundle(self) -> None:
+        jobs = workflow_jobs(BUILD)
+        bundle = "release.py legal-bundle dist/THIRD-PARTY-DATA-LICENSES.txt"
+        self.assertIn(bundle, jobs["licences"])
+        self.assertIn("release.py legal pkg", jobs["wasm"])
+        self.assertIn(release.DATA_LICENSES, release.FIXED_ASSETS)
+
     def test_the_repository_ships_every_file_its_notice_cites(self) -> None:
         patcher = mock.patch.object(release, "ROOT", Path(__file__).resolve().parents[2])
         patcher.start()
@@ -699,9 +718,10 @@ V0_11_0_ASSETS = [
     "opentide-wasm-web-v0.11.0.zip",
 ]
 
-# What the release train adds: the `opentide` binaries, their installer, and
-# the SBOMs scripts/engine/sbom.py writes.
+# What the release train adds: the `opentide` binaries, their installer, the
+# licence files NOTICE cites (#1753), and the SBOMs scripts/engine/sbom.py writes.
 PRODUCT_ASSETS = [
+    "THIRD-PARTY-DATA-LICENSES.txt",
     "opentide-v0.11.0-aarch64-apple-darwin",
     "opentide-v0.11.0-aarch64-unknown-linux-gnu",
     "opentide-v0.11.0-x86_64-apple-darwin",

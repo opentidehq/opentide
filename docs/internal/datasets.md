@@ -126,7 +126,7 @@ The WASI module's own start under wasmtime (`opentide-lsp.wasm help`): 153 ms, 1
 
 ## Licences
 
-Every dataset compiled in is redistributed in every binary, wheel, crate, npm package and WebAssembly build, so each needs a licence that allows it and the attribution that licence asks for. [`NOTICE`](../../NOTICE) holds the attribution; the licence and notice files it cites ship beside it at the paths it names: in the wheel through `license-files` (`pyproject.toml`, held by `tests/test_package/test_layout.py`), in each crate and each npm package of `@opentide/opentide` through `scripts/engine/release.py` (`vendor`, `legal`; `build-packages.yml` checks every tarball). Audited for [#1753](https://github.com/opentidehq/opentide/issues/1753) (2026-11), from each upstream's licence file or terms page:
+Every dataset compiled in is redistributed in every binary, wheel, crate, npm package and WebAssembly build, so each needs a licence that allows it and the attribution that licence asks for. [`NOTICE`](../../NOTICE) holds the attribution; the licence and notice files it cites ship beside it at the paths it names: in the wheel through `license-files` (`pyproject.toml`, held by `tests/test_package/test_layout.py`), in each crate, each npm package of `@opentide/opentide` and the browser zip through `scripts/engine/release.py` (`vendor`, `legal`; `build-packages.yml` checks every tarball); for the standalone binaries, the GitHub Release attaches them one after another as `THIRD-PARTY-DATA-LICENSES.txt` (`legal-bundle`, an asset `check-assets` requires). Audited for [#1753](https://github.com/opentidehq/opentide/issues/1753) (2026-11), from each upstream's licence file or terms page:
 
 | Dataset | Upstream | Licence | Attribution required | Status |
 |---|---|---|---|---|
@@ -148,8 +148,6 @@ Every dataset compiled in is redistributed in every binary, wheel, crate, npm pa
 | Bitdefender, Carbon Black (`bitdefender/`, `carbon_black/`) | Vendor pages and MIT repositories, facts only | — (no text copied) | — | In `NOTICE` and each `NOTICE` |
 | Time zones (`tz/`) | IANA tzdata | Public domain | — | In `NOTICE`, `tz/NOTICE` |
 | Tide field catalog, schemas, templates, explain pages, the other vocabularies | opentide and opentidehq/specifications | opentide's own (EUPL-1.2); the specifications' as that repository states | — | Not re-audited here |
-
-The standalone binaries and the browser zip on the GitHub Release carry `NOTICE` but not yet the licence files it cites.
 
 ## Checks
 

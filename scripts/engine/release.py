@@ -18,7 +18,10 @@
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets,
                                     and the legal files into each crate
     release.py legal DIR...         copy LICENSE, NOTICE and the licence files NOTICE cites
-                                    into each DIR (an npm package), at the paths NOTICE names
+                                    into each DIR (an npm package, the web zip), at the
+                                    paths NOTICE names
+    release.py legal-bundle FILE    write the files NOTICE cites into FILE, one after another
+                                    (the release's THIRD-PARTY-DATA-LICENSES.txt)
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py crate-patch DIR OUT  unpack DIR's .crate files into OUT, with a cargo config
@@ -140,6 +143,10 @@ LEGAL = ["LICENSE", "NOTICE"]
 # package of @opentide/opentide). tests/test_package/test_layout.py holds the wheel's.
 NOTICE_CITES = re.compile(r"data/catalogs/[\w/-]+/(?:LICENSE[\w.-]*|NOTICE)\b")
 SUMS = "SHA256SUMS"
+# The release asset that carries, one after another, every licence and notice file
+# NOTICE cites (`legal-bundle`): the standalone binaries embed the same data the
+# packages do, and a GitHub Release has no directories to put them at their paths.
+DATA_LICENSES = "THIRD-PARTY-DATA-LICENSES.txt"
 TAG = re.compile(r"v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
 # The targets the release builds its native packages for: the wheels and the
 # npm packages of @opentide/opentide (build-packages.yml, job `npm-native`). No
@@ -172,6 +179,7 @@ FIXED_ASSETS = [
     "NOTICE",
     "THIRD-PARTY-LICENSES.html",
     "WASI-LIBC-LICENSES.txt",
+    DATA_LICENSES,
     "opentide-lsp-wasm32-wasip1.wasm",
     "opentide-installer.sh",
     SUMS,
@@ -464,6 +472,20 @@ def copy_legal(directory: Path) -> list[str]:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
     return files
+
+
+def legal_bundle(target: Path) -> list[str]:
+    """Write every file NOTICE cites (not LICENSE or NOTICE) to TARGET, each under a
+    `==> path <==` header, the format of WASI-LIBC-LICENSES.txt; return the paths."""
+    cited = [rel for rel in legal_files() if rel not in LEGAL]
+    parts = []
+    for rel in cited:
+        src = ROOT / rel
+        if not src.is_file():
+            sys.exit(f"NOTICE cites {rel}, which does not exist")
+        parts.append(f"==> {rel} <==\n\n{src.read_text(encoding='utf-8')}\n")
+    target.write_text("".join(parts), encoding="utf-8", newline="\n")
+    return cited
 
 
 def remove_legal(directory: Path) -> None:
@@ -907,6 +929,9 @@ def main(argv: list[str]) -> None:
             vendor(clean=False)
         case ["vendor", "--clean"]:
             vendor(clean=True)
+        case ["legal-bundle", target]:
+            cited = legal_bundle(Path(target))
+            print(f"wrote {target}: {len(cited)} licence and notice files")
         case ["legal", *directories] if directories:
             for directory in directories:
                 files = copy_legal(Path(directory))
