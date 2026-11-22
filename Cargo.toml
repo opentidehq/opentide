@@ -272,9 +272,11 @@ items_after_statements = "allow" # a OnceLock cache sits next to its one use
 single_match_else = "allow" # style, at 10 sites
 assert_is_empty = "allow" # new in clippy 1.99: 196 test sites of `assert!(v.is_empty())`, whose rewrite `assert_eq!(v, [] as [T; 0])` names each element type
 
+# EXPERIMENT (draft, not for merge as is): thin LTO with the default codegen-units, to measure
+# the release build's time, the artifacts' sizes against tests/bench/sizes.toml, the AV gate and the
+# throughput budgets against fat LTO with one codegen unit (docs/internal/ci-review-2026-11.md).
 [profile.release]
-lto = true
-codegen-units = 1
+lto = "thin"
 strip = "symbols"
 
 # The WASI build of the language server (`scripts/engine/build-wasm.sh wasi`, the release's
