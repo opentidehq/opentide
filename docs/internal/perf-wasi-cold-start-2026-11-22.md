@@ -108,12 +108,12 @@ one on the same machine (WASI built with `--profile wasi-lsp`, 12 runs; Node sma
 The machine is noisier than for the first table (the #1768 build measured 201 / 389 under wasmtime then): read
 the changes, not the milliseconds. The module is 11.93 MB (11.86 MB).
 
-## The command line's WASI module stays at opt-level `z`
+## The command line's WASI module is built at opt-level `s` (#1774)
 
 The VS Code extension runs the language server from the command line's WASI module (`opentide lsp start`,
 `opentide.wasm`, `build-wasm.sh cli`), not from `opentide-lsp.wasm`, so #1768's `wasi-lsp` profile (opt-level `s`)
-does not reach it. That module is already size-optimised: `[profile.wasi]` is opt-level `z`, the smallest of the
-three. Asked whether `s` (or `3`) would serve it better, the same module was built at each level
+does not reach it. That module was already size-optimised, at opt-level `z`, the smallest of the three. Asked whether `s` (or `3`)
+would serve it better, the same module was built at each level
 (`CARGO_PROFILE_WASI_OPT_LEVEL`, wasi-sdk 25 with `-Oz`, `-Os` and `-O3` for `ring`, the cargo output, without the
 release's `wasm-opt` step) and measured on one machine, alternating the builds, medians in ms (wasmtime 38 with its
 compiled-module cache warm; Node 22's WASI, which compiles the module on every start, as the extension host does):
@@ -129,10 +129,17 @@ one; `validate` is `opentide validate --json` on the 1,000-object workspace; 6 t
 under about 10% are noise.)
 
 `z` is the smallest and has the quickest `--version` and small-workspace start; `s` is 17% larger and 14 to 18%
-slower to `--version`, and its gain is in code that runs long: `validate` is 17 to 25% faster and the large
-workspace's first diagnostics 6 to 15% sooner. The module a user waits for on every extension start is the
-one to keep small, and `validate` is not what the extension runs, so the profile stays. The `.vsix` budget
-(15 MiB gzip, `build-wasm.sh`) is not close under any of them. Not measured: a per-package split (engine
-crates at `s`, the rest at `z`), which would keep most of `s`'s size cost; and the release's `wasm-opt -Oz` step
-on top. A CLI run from the extension for a validate-heavy task would be the case for revisiting it.
+slower to `--version`, and wins in code that runs longer: `validate` is 17 to 25% faster and the large
+workspace's first diagnostics 6 to 15% sooner (Node, the extension's host: 438 to 372 ms, which is the gap #1767
+left for a thousand-object workspace). The module's real users are the extension's language server and MCP, not
+`--version`, which a start pays once, so **`[profile.wasi]` is opt-level `s`** (and `ring`'s C is built with
+`-Os`): +1 MB gzipped in the `.vsix` (8.35 to 9.32 MB, the budget being 15 MiB), a small workspace's start the same
+within noise, `3` larger and slower to start still.
 
+`wasm-opt` does not help it: on the `s` module `-Oz` takes 22.1 to 19.6 MB (`-Os` 19.8 MB) and `validate` goes
+from 788 to about 1,075 ms under Node (+36%), so `build-wasm.sh`'s optional step stays off. Not measured: a
+per-package split (engine crates at `s`, the rest at `z`).
+
+The command line's WASI module is not a release asset today (`engine-release-build.yml` ships
+`opentide-lsp-wasm32-wasip1.wasm` and the browser build; the extension builds the module from the repository), so
+no release size budget in `tests/bench/sizes.toml` covers it: `build-wasm.sh cli`'s 15 MiB gzip check does.

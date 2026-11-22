@@ -290,11 +290,17 @@ opt-level = "s"
 
 # The WASI build of the command line (`scripts/engine/build-wasm.sh cli`), the
 # one module the VS Code extension runs (ADR 0007's amendment): optimised for
-# size, as the `.vsix` is held to 15 MiB. Unwinding stays: the crash handler
-# catches a panic and reports it.
+# size, as the `.vsix` is held to 15 MiB, and `s`, not `z`, because the extension's
+# language server and MCP run from it and `s` runs them faster: against `z` it
+# is 17% larger (18.9 to 22.1 MB, 8.35 to 9.32 MB gzipped) and `--version` is
+# 14 ms slower under Node's WASI, but a 1,000-object workspace's first
+# diagnostics come 15% sooner (438 to 372 ms) and `validate` 25% sooner (851 to
+# 635 ms); opt-level 3 is larger still and no faster to start (#1774,
+# docs/internal/perf-wasi-cold-start-2026-11-22.md). Unwinding stays: the crash
+# handler catches a panic and reports it.
 [profile.wasi]
 inherits = "release"
-opt-level = "z"
+opt-level = "s"
 
 # What an editable install of opentide (`uv sync`, `maturin develop --profile
 # develop`) builds for development: optimised, so the engine runs at full speed in the Python test

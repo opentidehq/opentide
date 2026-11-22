@@ -85,14 +85,18 @@ for target in "${targets[@]}"; do
       OPENTIDE_BUILD_VERSION="${OPENTIDE_BUILD_VERSION:-0.1.dev0+wasi}" \
       CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
-      CFLAGS_wasm32_wasip1="--sysroot=$sysroot -Oz" \
+      CFLAGS_wasm32_wasip1="--sysroot=$sysroot -Os" \
         cargo build --locked --profile wasi -p opentide-cli --bin opentide-cli \
           --no-default-features --target wasm32-wasip1
       built="$target_dir/wasm32-wasip1/wasi/opentide-cli.wasm"
       out="$target_dir/wasm32-wasip1/wasi/opentide.wasm"
       # OPENTIDE_WASM_OPT=1: binaryen's wasm-opt as well. Measured on this
       # module it saves about 2% of the gzip size (6.85 to 6.70 MB) for
-      # minutes of CPU, so it is the release's step, not every CI run's.
+      # minutes of CPU, so it is the release's step, not every CI run's. On
+      # the opt-level `s` module (Cargo.toml's [profile.wasi]) it takes 11% off
+      # the raw size (22.1 to 19.6 MB with -Oz) and makes `opentide validate`
+      # 36% slower under Node's WASI (#1774): leave it off for a module that
+      # serves a language server and checks.
       # binaryen is pinned; npm's build of it needs no install. The
       # stripped module has no target_features section, so the features are
       # named: those rustc enables for wasm32-wasip1 by default.
