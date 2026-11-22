@@ -38,6 +38,7 @@ mod cst;
 mod syntax;
 
 pub mod catalog;
+mod catalog_model;
 pub mod compile;
 pub mod exceptions;
 pub mod parser;

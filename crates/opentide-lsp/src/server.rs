@@ -71,6 +71,20 @@ fn warm_up() {
             crate::models::default_catalog();
             crate::models::configuration_schemas();
         });
+    // The KQL catalogs (the Azure Monitor tables, parsed from TOML on first
+    // use: about a quarter of what a first diagnostic costs) on a thread of
+    // their own, alongside the models above. A KQL query is what a rule
+    // opened first most often carries.
+    let _ = std::thread::Builder::new()
+        .name("opentide-lsp-warm-up-kql".to_owned())
+        .spawn(|| {
+            let _ = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+                language: opentide_core::LanguageId::Kql,
+                platform: Some("sentinel".to_owned()),
+                stack: None,
+                text: "SecurityEvent | take 1".to_owned(),
+            });
+        });
 }
 
 /// Fails: `--listen` needs sockets, which wasm32-wasip1 does not have.
@@ -239,6 +253,7 @@ pub fn validate_file(root: &Path, file: &Path, text: &str) -> Vec<opentide_core:
         crate::checks::Buffers::default(),
         vec![file.clone()],
         0,
+        0,
     );
     found
         .get(&checks.resolve(&file))
@@ -265,7 +280,7 @@ pub fn validate_standalone(file: &Path, text: &str) -> Vec<opentide_core::Diagno
         return Vec::new();
     };
     buffers.files.insert(placed.clone(), text.to_string());
-    let found = checks.findings(&root, buffers, vec![placed.clone()], 0);
+    let found = checks.findings(&root, buffers, vec![placed.clone()], 0, 0);
     found
         .get(&checks.resolve(&placed))
         .map(|findings| {
@@ -291,7 +306,7 @@ impl ObjectFindings {
     /// does not resolve gives no finding (`validate` stops there).
     pub fn validate(root: &Path) -> Self {
         let mut checks = crate::checks::RootChecks::default();
-        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0);
+        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0, 0);
         Self { checks, found }
     }
 

@@ -192,10 +192,9 @@ impl FieldRow {
 }
 
 /// The catalogue the crate compiles in.
-pub const SOURCE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/bitdefender/criteria.toml"
-));
+pub fn source() -> &'static str {
+    opentide_dataset::text!("data/catalogs/bitdefender/criteria.toml")
+}
 
 /// The bundled catalogue, parsed once per process. The file is checked by
 /// this crate's tests, so it parses; were it not to, every check would read
@@ -203,7 +202,7 @@ pub const SOURCE: &str = include_str!(concat!(
 pub fn criteria() -> &'static Criteria {
     static CATALOG: OnceLock<Criteria> = OnceLock::new();
     CATALOG.get_or_init(|| {
-        toml::from_str(SOURCE).unwrap_or_else(|_| Criteria {
+        toml::from_str(source()).unwrap_or_else(|_| Criteria {
             source: String::new(),
             fetched: String::new(),
             registry_hives: BTreeMap::new(),
@@ -226,7 +225,7 @@ mod tests {
 
     #[test]
     fn the_bundled_catalogue_parses() {
-        let parsed: Criteria = toml::from_str(SOURCE).expect("criteria.toml parses");
+        let parsed: Criteria = toml::from_str(source()).expect("criteria.toml parses");
         assert_eq!(parsed.alert.field, "detection");
         assert_eq!(parsed.targets.len(), 25);
         assert!(parsed.fields.len() > 250);

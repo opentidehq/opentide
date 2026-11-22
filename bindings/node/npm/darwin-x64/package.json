@@ -6,7 +6,11 @@
   ],
   "main": "opentide.darwin-x64.node",
   "files": [
-    "opentide.darwin-x64.node"
+    "opentide.darwin-x64.node",
+    "LICENSE",
+    "NOTICE",
+    "data/catalogs/**/LICENSE*",
+    "data/catalogs/**/NOTICE"
   ],
   "description": "opentide for Node.js: the SDK and the opentide command line. Spec-driven development for agentic detection engineering.",
   "keywords": [

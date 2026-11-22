@@ -389,6 +389,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "cobs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -767,6 +776,18 @@ name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
+
+[[package]]
+name = "embedded-io"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
+
+[[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "encoding_rs"
@@ -2700,6 +2721,7 @@ dependencies = [
  "opentide-compile",
  "opentide-connectors",
  "opentide-core",
+ "opentide-dataset",
  "opentide-lsp",
  "opentide-schema",
  "opentide-workspace",
@@ -2836,10 +2858,23 @@ version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "opentide-parse",
  "rowan",
  "serde",
+ "toml",
+]
+
+[[package]]
+name = "opentide-dataset"
+version = "1.0.0"
+dependencies = [
+ "postcard",
+ "ruzstd",
+ "serde",
+ "thiserror 2.0.21",
+ "zstd",
 ]
 
 [[package]]
@@ -2847,6 +2882,7 @@ name = "opentide-ecs"
 version = "1.0.0"
 dependencies = [
  "opentide-core",
+ "opentide-dataset",
  "serde",
  "serde_json",
  "strsim",
@@ -2858,6 +2894,7 @@ version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
@@ -2872,12 +2909,14 @@ version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2886,12 +2925,14 @@ version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "opentide-parse",
  "regex",
  "regex-syntax",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2900,11 +2941,13 @@ version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "opentide-parse",
  "regex",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -2926,6 +2969,7 @@ name = "opentide-highlight"
 version = "1.0.0"
 dependencies = [
  "opentide-core",
+ "opentide-dataset",
  "regex",
  "serde",
  "serde_json",
@@ -2941,12 +2985,14 @@ dependencies = [
  "hashbrown 0.17.1",
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "opentide-parse",
  "regex",
  "rowan",
  "serde",
  "strsim",
+ "toml",
 ]
 
 [[package]]
@@ -2989,6 +3035,7 @@ name = "opentide-lucene"
 version = "1.0.0"
 dependencies = [
  "opentide-core",
+ "opentide-dataset",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-kuery",
@@ -3015,6 +3062,7 @@ dependencies = [
  "indexmap",
  "jiff",
  "opentide-core",
+ "opentide-dataset",
  "opentide-schema-derive",
  "regex",
  "regex-syntax",
@@ -3044,11 +3092,13 @@ dependencies = [
  "foldhash",
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "opentide-parse",
  "rowan",
  "serde",
  "strsim",
+ "toml",
 ]
 
 [[package]]
@@ -3057,6 +3107,7 @@ version = "1.0.0"
 dependencies = [
  "opentide-core",
  "opentide-cql",
+ "opentide-dataset",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -3107,8 +3158,10 @@ version = "1.0.0"
 dependencies = [
  "foldhash",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "serde",
+ "toml",
  "yara-x-fmt",
  "yara-x-parser",
 ]
@@ -3119,11 +3172,13 @@ version = "1.0.0"
 dependencies = [
  "logos",
  "opentide-core",
+ "opentide-dataset",
  "opentide-highlight",
  "opentide-parse",
  "regex-syntax",
  "rowan",
  "serde",
+ "toml",
 ]
 
 [[package]]
@@ -3352,6 +3407,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
+name = "pkg-config"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
+
+[[package]]
 name = "portable-atomic"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3364,6 +3425,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10ab3eb7f3becc3a1cbc4f2c6f20267996cfc1a6467a873763411b136a122715"
 dependencies = [
  "portable-atomic",
+]
+
+[[package]]
+name = "postcard"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5431b3dcfdf6d1985c87d11f267a171c0dec0a8cd544c6727b747d36365f1fca"
+dependencies = [
+ "cobs",
+ "embedded-io 0.4.0",
+ "embedded-io 0.6.1",
+ "serde",
 ]
 
 [[package]]
@@ -3839,6 +3912,12 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
 
 [[package]]
 name = "ryu"
@@ -5355,3 +5434,31 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zstd"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad5020ab8f27bfc0024ad0a07aed6bf022a16208f479686fbed4fdd0c85eb0b3"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "8.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a9ea9cc2576c2fcc104e9cec04f46e3ede564f4fbc206831e4ef7e859a4140d"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.3+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f729a06d0257428fd9d997ac8db7e1407bd0262ab016b085b36bc52957c0052d"
+dependencies = [
+ "cc",
+ "pkg-config",
+]

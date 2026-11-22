@@ -107,16 +107,24 @@ checked before the next pull request builds on it.
 each build and smoke test exists once): `packages` ([`build-packages.yml`](workflows/build-packages.yml):
 every wheel, built by maturin (PyO3/maturin-action), each installed and run on its own platform
 (`wheel-smoke`), and every npm tarball, one `npm-packages` artifact), `engine-assets`
-([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary, installer,
-WebAssembly build, SBOM and SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
+([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary (Linux and macOS:
+no standalone Windows executable ships), the installer, every WebAssembly build, SBOM and
+SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
 `crate-packages` (every crate packaged and built as crates.io builds it, and the licence scan),
 at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
 ([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
 then one `smoke` matrix running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
-the installer and `npm install` from a throwaway local registry on each of the six platforms
-(Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64), a build from the sdist with the
+the binary installer on Linux and macOS, and `npm install` from a throwaway local registry on
+each of the six platforms (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64), a build from the sdist with the
 runner's stable Rust after the PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist),
-and `cargo install opentide --features cli` from the crate packages. Also `publish-dry-run`
+and `cargo install opentide --features cli` from the crate packages. In a release pull request or
+`scope: release` run (not the nightly), the **antivirus gate** ([`av-gate.yml`](workflows/av-gate.yml),
+#1743) scans every artifact with ClamAV, YARA (signature-base and protections-artifacts at pinned
+commits, a reviewed allow-list) and Microsoft Defender (`windows-latest`), checks that no marker
+string sits in plain text in any of them, and holds each to its size budget: `release-build.yml`'s
+`av-gate` job the wheels, npm packages, sdist and crates, `engine-release-build.yml`'s the Release's
+assets ([`docs/internal/publishing.md`](../docs/internal/publishing.md#the-antivirus-gate)). It
+is off for every other pull request. Also `publish-dry-run`
 ([`publish-dry-run.yml`](workflows/publish-dry-run.yml): the registry placeholders) and `docs`.
 
 **Python 3.10 to 3.13 and the full E2E set** (a release pull request and the nightly):
@@ -131,7 +139,8 @@ run: `engine-test-os` (the workspace's tests on macOS and Windows, built there),
 through `validate` and the language server, ~4 min of debug binary, so not in `build`), `clients`
 (informational), `coverage`
 ([`coverage.yml`](workflows/coverage.yml)), `benchmarks` ([`bench.yml`](workflows/bench.yml), the
-budgeted Rust benchmarks), `oracle` ([`oracle.yml`](workflows/oracle.yml): the vendor-parser
+budgeted Rust benchmarks and the language server's cold start, native and WASI, held to
+`tests/bench/lsp-cold-start.toml`), `oracle` ([`oracle.yml`](workflows/oracle.yml): the vendor-parser
 oracles, with the Carbon Black Cloud tenant: `secrets: inherit` on both calls) and `fuzz`
 ([`engine-fuzz.yml`](workflows/engine-fuzz.yml): every target for ten minutes, the nightly's one
 fuzz pass). ci.yml keeps the two nightly jobs that need this run's `release`: `cli-windows-smoke`
@@ -274,6 +283,10 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   demand. The PyPI dist's shape is `release-build.yml`'s (`smoke_release.sh sdist`).
 - [`release-build.yml`](workflows/release-build.yml): every artifact a release ships, built and
   smoke-tested once; ci.yml's `release` and publish.yml's `build` call it (above).
+- [`av-gate.yml`](workflows/av-gate.yml): the antivirus gate (ClamAV, YARA, Microsoft Defender, the
+  marker and size checks), a reusable workflow that `release-build.yml` and
+  `engine-release-build.yml` call with `av-gate: true` from the release tier and the release train
+  (its scripts are [`scripts/av/`](../scripts/av/)). It holds no token and uploads nothing to a scanner.
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
   and `golden-preview.yml` (their `cargo xtask golden` commands were deleted too, #1142).
 - [`codeql.yml`](workflows/codeql.yml) (below) and [`vocab-upstream.yml`](workflows/vocab-upstream.yml)
@@ -299,7 +312,8 @@ Run workflow on `development` with no inputs. It checks (every crate built from 
 licence scan), builds (the wheels and npm packages of
 [`build-packages.yml`](workflows/build-packages.yml), the sdist, the binaries and engine assets of
 [`engine-release-build.yml`](workflows/engine-release-build.yml)), smoke-tests each artifact as a
-user installs it, attests every artifact, tags `vX.Y.Z` with the GitHub Release, verifies the
+user installs it, scans every artifact with the antivirus gate ([`av-gate.yml`](workflows/av-gate.yml)),
+attests every artifact, tags `vX.Y.Z` with the GitHub Release, verifies the
 published assets, and publishes to PyPI, crates.io and npm with trusted publishing, so a cloud
 session can release. **Release candidates are internal**: `internal_candidate: N`, from
 `integration/unified-core` or `development`, builds and smoke-tests everything the same way,

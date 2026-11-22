@@ -11,6 +11,8 @@
 //! models (0.23.0) no field is deprecated, so no object gets the warning;
 //! the walk is ready for the first marker.
 
+use std::borrow::Cow;
+
 use serde_json::{Map, Value};
 
 use crate::keys;
@@ -38,44 +40,69 @@ pub fn deprecated_fields(object: &Node, schema: &Value) -> Vec<Deprecated> {
 }
 
 /// A schema with its `$ref` to the root's `$defs` followed, the reference's
-/// own keywords over the definition's.
-fn resolved(schema: &Value, root: &Value) -> Value {
+/// own keywords over the definition's. Borrowed unless the reference has
+/// keywords of its own to lay over a definition: the walk visits every field
+/// of every object, and a copy of each definition made it the dearest part of
+/// checking an object.
+fn resolved<'a>(schema: &'a Value, root: &'a Value) -> Cow<'a, Value> {
     let Some(reference) = schema.get("$ref").and_then(Value::as_str) else {
-        return schema.clone();
+        return Cow::Borrowed(schema);
     };
     let Some(name) = reference.strip_prefix("#/$defs/") else {
-        return schema.clone();
+        return Cow::Borrowed(schema);
     };
-    let Some(Value::Object(definition)) = root.get("$defs").and_then(|defs| defs.get(name)) else {
-        return schema.clone();
+    let Some(definition) = root.get("$defs").and_then(|defs| defs.get(name)) else {
+        return Cow::Borrowed(schema);
     };
-    let mut merged: Map<String, Value> = definition.clone();
-    if let Value::Object(own) = schema {
-        for (key, value) in own {
-            if key != "$ref" {
-                merged.insert(key.clone(), value.clone());
-            }
+    let Value::Object(definition_keys) = definition else {
+        return Cow::Borrowed(schema);
+    };
+    let Value::Object(own) = schema else {
+        return Cow::Borrowed(definition);
+    };
+    if own.keys().all(|key| key == "$ref") {
+        return Cow::Borrowed(definition);
+    }
+    let mut merged: Map<String, Value> = definition_keys.clone();
+    for (key, value) in own {
+        if key != "$ref" {
+            merged.insert(key.clone(), value.clone());
         }
     }
-    Value::Object(merged)
+    Cow::Owned(Value::Object(merged))
 }
 
 /// The object schema of a field: itself, or the one non-null member of an
 /// optional (`anyOf: [X, null]`), references followed.
-fn object_schema(schema: &Value, root: &Value) -> Value {
+fn object_schema<'a>(schema: &'a Value, root: &'a Value) -> Cow<'a, Value> {
     let schema = resolved(schema, root);
     if schema.get("properties").is_some() {
         return schema;
     }
-    if let Some(Value::Array(members)) = schema.get("anyOf") {
-        for member in members {
-            let member = resolved(member, root);
-            if member.get("properties").is_some() {
-                return member;
+    match schema {
+        Cow::Borrowed(schema) => {
+            if let Some(Value::Array(members)) = schema.get("anyOf") {
+                for member in members {
+                    let member = resolved(member, root);
+                    if member.get("properties").is_some() {
+                        return member;
+                    }
+                }
             }
+            Cow::Borrowed(schema)
+        }
+        Cow::Owned(schema) => {
+            let found = match schema.get("anyOf") {
+                Some(Value::Array(members)) => members
+                    .iter()
+                    .map(|member| resolved(member, root))
+                    .find(|member| member.get("properties").is_some())
+                    .map(Cow::into_owned),
+                _ => None,
+            };
+            Cow::Owned(found.unwrap_or(schema))
         }
     }
-    schema
 }
 
 fn walk(

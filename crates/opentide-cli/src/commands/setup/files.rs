@@ -730,39 +730,19 @@ pub fn repo(stage: &mut Stage, target: &Path, options: &RepoOptions) -> Result<S
 // ---------------------------------------------------------------- mcp
 
 /// An MCP host: its command-line value, the file it reads, its template.
-pub const MCP_HOSTS: [(&str, &str, &str); 4] = [
-    (
-        "vscode",
-        ".vscode/mcp.json",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/setup/mcp/vscode.json"
-        )),
-    ),
-    (
-        "cursor",
-        ".cursor/mcp.json",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/setup/mcp/cursor.json"
-        )),
-    ),
-    (
-        "claude-code",
-        ".mcp.json",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/setup/mcp/claude-code.json"
-        )),
-    ),
-    (
-        "generic",
-        "opentide.mcp.json",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/setup/mcp/generic.json"
-        )),
-    ),
+pub const MCP_HOSTS: [(&str, &str, opentide_dataset::TextFn); 4] = [
+    ("vscode", ".vscode/mcp.json", || {
+        opentide_dataset::text!("src/opentide/data/setup/mcp/vscode.json")
+    }),
+    ("cursor", ".cursor/mcp.json", || {
+        opentide_dataset::text!("src/opentide/data/setup/mcp/cursor.json")
+    }),
+    ("claude-code", ".mcp.json", || {
+        opentide_dataset::text!("src/opentide/data/setup/mcp/claude-code.json")
+    }),
+    ("generic", "opentide.mcp.json", || {
+        opentide_dataset::text!("src/opentide/data/setup/mcp/generic.json")
+    }),
 ];
 
 /// The opentide VS Code extension.
@@ -801,7 +781,7 @@ pub fn write_mcp_config(
     let Some((_, relative, template)) = MCP_HOSTS.iter().find(|(name, _, _)| *name == host) else {
         return Err(format!("unknown MCP host {host}"));
     };
-    let template = Json::parse(template).unwrap_or(Json::Null);
+    let template = Json::parse(template()).unwrap_or(Json::Null);
     let dest = target.join(relative);
     let mut warning = None;
     let text = if stage.is_file(&dest) {

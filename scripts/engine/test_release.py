@@ -102,6 +102,75 @@ class Sha256SumsTest(unittest.TestCase):
         self.assertTrue((self.dir / "SHA256SUMS").is_file())
 
 
+class LegalFilesTest(unittest.TestCase):
+    """Every package that carries the engine ships NOTICE and the licence files it
+    cites, at the paths it names (#1753)."""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+        for rel, text in {
+            "LICENSE": "eupl\n",
+            "NOTICE": "ECS (data/catalogs/ecs/LICENSE.txt,\ndata/catalogs/ecs/NOTICE)\n",
+            "data/catalogs/ecs/LICENSE.txt": "apache\n",
+            "data/catalogs/ecs/NOTICE": "elastic\n",
+        }.items():
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_text(text, encoding="utf-8")
+        patcher = mock.patch.object(release, "ROOT", self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_cited_files_follow_license_and_notice(self) -> None:
+        self.assertEqual(
+            release.legal_files(),
+            ["LICENSE", "NOTICE", "data/catalogs/ecs/LICENSE.txt", "data/catalogs/ecs/NOTICE"],
+        )
+
+    def test_copy_then_remove_leaves_the_directory_as_it_was(self) -> None:
+        package = self.root / "pkg"
+        package.mkdir()
+        (package / "index.js").write_text("", encoding="utf-8")
+        release.copy_legal(package)
+        self.assertEqual(
+            (package / "data/catalogs/ecs/LICENSE.txt").read_text(encoding="utf-8"), "apache\n"
+        )
+        release.remove_legal(package)
+        self.assertEqual(sorted(p.name for p in package.iterdir()), ["index.js"])
+
+    def test_a_cited_file_that_does_not_exist_stops_the_copy(self) -> None:
+        (self.root / "data/catalogs/ecs/NOTICE").unlink()
+        with self.assertRaises(SystemExit):
+            release.copy_legal(self.root / "pkg")
+
+    def test_the_bundle_holds_each_cited_file_under_its_path(self) -> None:
+        target = self.root / "bundle.txt"
+        self.assertEqual(
+            release.legal_bundle(target),
+            ["data/catalogs/ecs/LICENSE.txt", "data/catalogs/ecs/NOTICE"],
+        )
+        self.assertEqual(
+            target.read_text(encoding="utf-8"),
+            "==> data/catalogs/ecs/LICENSE.txt <==\n\napache\n\n"
+            "==> data/catalogs/ecs/NOTICE <==\n\nelastic\n\n",
+        )
+
+    def test_the_release_builds_and_checks_the_bundle(self) -> None:
+        jobs = workflow_jobs(BUILD)
+        bundle = "release.py legal-bundle dist/THIRD-PARTY-DATA-LICENSES.txt"
+        self.assertIn(bundle, jobs["licences"])
+        self.assertIn("release.py legal pkg", jobs["wasm"])
+        self.assertIn(release.DATA_LICENSES, release.FIXED_ASSETS)
+
+    def test_the_repository_ships_every_file_its_notice_cites(self) -> None:
+        patcher = mock.patch.object(release, "ROOT", Path(__file__).resolve().parents[2])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        files = release.legal_files()
+        self.assertIn("data/catalogs/carbon_black/NOTICE", files)
+        self.assertTrue(all((release.ROOT / rel).is_file() for rel in files), files)
+
+
 class VerifySumsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp())
@@ -641,7 +710,8 @@ def workflow_header(path: Path = WORKFLOW) -> str:
 
 
 # language-server v0.11.0's GitHub Release (its SHA256SUMS, and SHA256SUMS),
-# without the musl binaries: no musl build ships (the maintainer's decision).
+# without the musl binaries (no musl build ships) and without the Windows
+# binaries (no standalone Windows executable ships: the maintainer's decisions).
 V0_11_0_ASSETS = [
     "LICENSE",
     "NOTICE",
@@ -650,29 +720,25 @@ V0_11_0_ASSETS = [
     "WASI-LIBC-LICENSES.txt",
     "highlights-v0.11.0.zip",
     "opentide-lsp-v0.11.0-aarch64-apple-darwin",
-    "opentide-lsp-v0.11.0-aarch64-pc-windows-msvc.exe",
     "opentide-lsp-v0.11.0-aarch64-unknown-linux-gnu",
     "opentide-lsp-v0.11.0-x86_64-apple-darwin",
-    "opentide-lsp-v0.11.0-x86_64-pc-windows-msvc.exe",
     "opentide-lsp-v0.11.0-x86_64-unknown-linux-gnu",
     "opentide-lsp-wasm32-wasip1.wasm",
     "opentide-wasm-web-v0.11.0.zip",
 ]
 
-# What the release train adds: the `opentide` binaries, their installers, the
+# What the release train adds: the `opentide` binaries, their installer, the
 # command line's WASI module (one for every platform, named without a version:
-# the VS Code extension pins this exact name) and the SBOMs
-# scripts/engine/sbom.py writes.
+# the VS Code extension pins this exact name), the licence files NOTICE cites
+# (#1753), and the SBOMs scripts/engine/sbom.py writes.
 PRODUCT_ASSETS = [
     "opentide-wasm32-wasip1.wasm",
+    "THIRD-PARTY-DATA-LICENSES.txt",
     "opentide-v0.11.0-aarch64-apple-darwin",
-    "opentide-v0.11.0-aarch64-pc-windows-msvc.exe",
     "opentide-v0.11.0-aarch64-unknown-linux-gnu",
     "opentide-v0.11.0-x86_64-apple-darwin",
-    "opentide-v0.11.0-x86_64-pc-windows-msvc.exe",
     "opentide-v0.11.0-x86_64-unknown-linux-gnu",
     "opentide-installer.sh",
-    "opentide-installer.ps1",
 ]
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
@@ -709,13 +775,15 @@ class TagTest(unittest.TestCase):
 
     def test_the_asset_set_is_language_servers_last_with_the_trains_additions(self) -> None:
         # language-server's assets keep their names (editors pin them); the
-        # musl binaries are gone, the `opentide` binaries, installers and
+        # musl binaries are gone, the `opentide` binaries, installer and
         # SBOMs (#843) are new.
         names = V0_11_0_ASSETS + PRODUCT_ASSETS + SBOM_ASSETS
         self.assertEqual(sorted(release.expected_assets("v0.11.0")), sorted(names))
         rc = release.expected_assets("v0.11.1-rc.1")
         self.assertEqual(sorted(rc), sorted(a.replace("v0.11.0", "v0.11.1-rc.1") for a in names))
         self.assertFalse([a for a in rc if "musl" in a])
+        # No standalone Windows executable, and no PowerShell installer.
+        self.assertFalse([a for a in rc if "windows" in a or a.endswith((".exe", ".ps1"))])
 
     def test_check_assets_names_what_is_missing_or_extra(self) -> None:
         tmp = Path(tempfile.mkdtemp())
@@ -784,7 +852,8 @@ class TagTest(unittest.TestCase):
     def test_the_native_matrix_builds_every_target(self) -> None:
         native = workflow_jobs(BUILD)["native"]
         built = re.findall(r"^\s+target: (\S+)$", native, re.MULTILINE)
-        self.assertEqual(built, release.TARGETS)
+        self.assertEqual(built, release.BINARY_TARGETS)
+        self.assertFalse([t for t in built if "windows" in t])
         npm = workflow_jobs(PACKAGES)["npm-native"]
         self.assertEqual(
             sorted(re.findall(r"^\s+target: (\S+)$", npm, re.MULTILINE)), sorted(release.TARGETS)
@@ -1010,7 +1079,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         assert needs is not None
         self.assertEqual(
             set(needs.group(1).split(", ")) - {"release-versions"},
-            set(built) - {"release-versions", "smoke"},
+            set(built) - {"release-versions", "smoke", "av-gate-packages"},
+        )
+        # The antivirus gate scans the same builds, and fails the workflow (so `build`) itself.
+        gate = re.search(r"^    needs: \[(.*)\]$", built["av-gate-packages"], re.MULTILINE)
+        assert gate is not None
+        self.assertEqual(
+            set(gate.group(1).split(", ")) - {"release-versions"},
+            {"packages", "sdist", "crate-packages"},
         )
         # Each of the six platforms, the sdist and the crate packages.
         kinds = re.findall(r"kind: (\w+) \}", built["smoke"])
@@ -1041,10 +1117,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # and cannot mint the token npm's trusted publishing needs.
         self.assertNotRegex(smoke, r"\bnpm (?:publish|pu)\b")
         self.assertNotIn("id-token", smoke)
-        # Every native package ships the licence, which the pack checks.
+        # Every package that carries the engine ships the licence, NOTICE and the
+        # licence files NOTICE cites (#1753), which the pack checks.
         pack = workflow_jobs(PACKAGES)["npm-pack"]
-        self.assertIn('cp bindings/node/LICENSE "${dir}"', pack)
-        self.assertIn("grep -qx 'package/LICENSE'", pack)
+        self.assertIn("release.py legal bindings/node bindings/node/npm/*/", pack)
+        self.assertIn("release.legal_files()", pack)
+        self.assertIn("npm/1-native/*.tgz npm/2-package/*.tgz", pack)
         # ci.yml runs this smoke on the release tier and the nightly: its
         # `release` job is this build, so no job of its own repeats the test.
         ci = workflow_jobs(WORKFLOWS / "ci.yml")

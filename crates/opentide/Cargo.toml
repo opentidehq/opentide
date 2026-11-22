@@ -103,7 +103,11 @@ queries = ["workspace", "analysis", "opentide-analysis/queries"]
 # and the `opentide` binary (`cargo install opentide --features cli`). The
 # only feature that brings the command line's terminal UI and prompts
 # (opentide-cli's `terminal`).
-cli = ["compile", "queries", "dep:opentide-cli", "opentide-cli/terminal"]
+cli = ["cli-core", "opentide-cli/terminal"]
+# The command line without its terminal UI and prompts (`opentide tui` and the
+# `setup` wizard's questions refuse, as they do under WASI): the same
+# `opentide::cli` module, and no `crossterm`.
+cli-core = ["compile", "queries", "dep:opentide-cli"]
 # The language server (`opentide::lsp`): stdio, or one message at a time.
 lsp = ["workspace", "dep:opentide-lsp"]
 # Tenant operations (`opentide::connectors`): a query run, a live query check

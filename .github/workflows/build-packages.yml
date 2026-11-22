@@ -408,9 +408,10 @@ jobs:
           for dir in bindings/node/npm/*/; do
             platform="$(basename "${dir}")"
             cp "native/npm-native-${platform}/opentide.${platform}.node" "${dir}"
-            # The licence ships with every package (npm packs LICENSE whatever `files` says).
-            cp bindings/node/LICENSE "${dir}"
           done
+          # Every package that carries the engine ships the licence, NOTICE (the
+          # third-party data the engine embeds) and the licence files NOTICE cites.
+          python3 scripts/engine/release.py legal bindings/node bindings/node/npm/*/
           # The loader and declarations napi-rs wrote at this version.
           cp native/npm-native-linux-x64-gnu/index.js native/npm-native-linux-x64-gnu/index.d.ts bindings/node/
           node scripts/engine/check-npm-packs.mjs
@@ -426,10 +427,20 @@ jobs:
           for p in lsp-client lsp-worker wasi-host; do
             (cd "packages/$p" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/4-lsp")
           done
-          # Each native package holds its addon and the licence.
+          # Each native package holds its addon and the licence; it and the package
+          # hold NOTICE and every licence file NOTICE cites.
+          # Each listing is read whole first: `tar | grep -q` stops reading at the
+          # first match, and under pipefail tar's broken pipe fails the step.
           for tarball in npm/1-native/*.tgz; do
-            tar -tzf "${tarball}" | grep -q '^package/opentide\..*\.node$'
-            tar -tzf "${tarball}" | grep -qx 'package/LICENSE'
+            listing="$(tar -tzf "${tarball}")"
+            grep -q '^package/opentide\..*\.node$' <<<"${listing}"
+          done
+          legal="$(python3 -c 'import sys; sys.path.insert(0, "scripts/engine"); import release; print("\n".join(release.legal_files()))')"
+          for tarball in npm/1-native/*.tgz npm/2-package/*.tgz; do
+            listing="$(tar -tzf "${tarball}")"
+            while IFS= read -r file; do
+              grep -qxF "package/${file}" <<<"${listing}" || { echo "::error::${tarball} has no ${file}"; exit 1; }
+            done <<<"${legal}"
           done
           ls -lR npm
       # The language server's packages are engine assets; @opentide/opentide

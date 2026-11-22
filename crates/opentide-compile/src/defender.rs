@@ -295,4 +295,14 @@ mod tests {
             "Defender for Endpoint cannot compile this rule: \"Severe\""
         );
     }
+
+    #[test]
+    fn every_severity_the_model_accepts_compiles() {
+        // #1751: `validate` takes these five for `alert.severity`, and
+        // deploy must map each; one the model refuses is refused here too.
+        for name in opentide_schema::objects::platform::SEVERITIES {
+            assert!(severity(name).is_ok(), "{name}");
+            assert!(severity(&name.to_lowercase()).is_err(), "{name}");
+        }
+    }
 }

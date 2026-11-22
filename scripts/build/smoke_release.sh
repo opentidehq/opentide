@@ -2,11 +2,14 @@
 # The release's smoke tests (.github/workflows/release-build.yml, `smoke`):
 # each artifact installed the way a user installs it, on its own platform.
 #
-#   scripts/build/smoke_release.sh platform   the binary installer against the
-#       release assets (opentide-installer.sh, or .ps1 on Windows), then
+#   scripts/build/smoke_release.sh platform   on Linux and macOS, the binary
+#       installer against the release assets (opentide-installer.sh), then
 #       `opentide --version` (the release's version) and `opentide-lsp
-#       --version`; then every npm tarball published to a throwaway local
-#       registry and `npm install @opentide/opentide` in a clean project
+#       --version` (no standalone binary ships for Windows: it installs from
+#       PyPI or npm; on Windows, the check that no Windows binary or
+#       installer is an asset); then, on every platform, every npm tarball
+#       published to a throwaway local registry and `npm install
+#       @opentide/opentide` in a clean project
 #       (scripts/engine/npm-local-registry/test.mjs: npm chooses exactly this
 #       platform's native package; npx, the SDK, runJson, tsc).
 #   scripts/build/smoke_release.sh sdist      the PyPI dist's shape (one
@@ -33,18 +36,20 @@ case "${kind}" in
     assets="${artifacts}/release-assets"
     bin="${tmp}/bin"
     if [[ "${OS:-}" == "Windows_NT" ]]; then
-      OPENTIDE_DOWNLOAD_URL="$(cygpath -w "${assets}")" OPENTIDE_INSTALL_DIR="$(cygpath -w "${bin}")" \
-        pwsh -NoProfile -NonInteractive -File "$(cygpath -w "${assets}/opentide-installer.ps1")"
-      ext=".exe"
+      # No Windows binary or installer is a release asset: the release ships
+      # none (scripts/engine/release.py BINARY_TARGETS).
+      if compgen -G "${assets}/*.exe" >/dev/null || [[ -e "${assets}/opentide-installer.ps1" ]]; then
+        echo "a Windows binary or installer is among the release assets" >&2
+        exit 1
+      fi
     else
       OPENTIDE_DOWNLOAD_URL="file://${assets}" OPENTIDE_INSTALL_DIR="${bin}" \
         sh "${assets}/opentide-installer.sh"
-      ext=""
+      out="$("${bin}/opentide" --version)"
+      echo "${out}"
+      grep -qF "${VERSION}" <<<"${out}" || { echo "opentide --version printed ${out}, not ${VERSION}" >&2; exit 1; }
+      "${bin}/opentide-lsp" --version
     fi
-    out="$("${bin}/opentide${ext}" --version)"
-    echo "${out}"
-    grep -qF "${VERSION}" <<<"${out}" || { echo "opentide --version printed ${out}, not ${VERSION}" >&2; exit 1; }
-    "${bin}/opentide-lsp${ext}" --version
     node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --tarballs "${artifacts}/npm"
     ;;
   sdist)

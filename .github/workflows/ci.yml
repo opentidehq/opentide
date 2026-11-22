@@ -286,6 +286,12 @@ jobs:
         if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
 
+      # A build without the terminal prompts (the wheel's, the WASI module's) at a terminal
+      # behaves as with none: it asks nothing and refuses nothing for want of prompts (#1743).
+      - name: the build without the terminal feature, at a terminal
+        if: needs.changes.outputs.rust == 'true'
+        run: cargo test --package opentide-cli --no-default-features --test no_terminal_prompts --locked
+
       # The code only wasm32 compiles (opentide-wasm's, the wasip1 paths of
       # opentide-lsp and opentide-cli), which the native clippy never sees:
       # when the `wasm` job runs (wasi-sdk only for the command line's ring).
@@ -1354,13 +1360,13 @@ jobs:
 
   # Everything a release ships, built and smoke-tested as publish.yml builds
   # it (release-build.yml, which publish.yml calls too): the wheels (each run
-  # on its own OS), the npm packages, the GitHub Release's assets (binaries,
-  # installers, WebAssembly, SBOMs), the sdist and the crate packages, at a
+  # on its own OS), the npm packages, the GitHub Release's assets (binaries
+  # for Linux and macOS, the installer, WebAssembly, SBOMs), the sdist and the crate packages, at a
   # development version of the workspace's (PyPI X.Y.Z.devN, npm
   # X.Y.Z-dev.N), kept 14 days as this run's artifacts
   # (docs/internal/publishing.md, "Testing a build without publishing"); then
-  # one smoke matrix: the installer and `npm install` on each of the six
-  # platforms, a build from the sdist and `cargo install` from the crates.
+  # one smoke matrix: the installer on Linux and macOS, `npm install` on each
+  # of the six platforms, a build from the sdist and `cargo install` from the crates.
   release:
     name: Release build
     needs: changes
@@ -1372,6 +1378,10 @@ jobs:
       revision: ${{ github.sha }}
       dry-run: true
       retention-days: 14
+      # The antivirus gate (av-gate.yml: ClamAV, YARA, Microsoft Defender, the marker and size
+      # checks) is the release tier's: a release pull request, the `release` label, Run
+      # workflow with scope `release`; not an ordinary pull request, and not the nightly.
+      av-gate: ${{ needs.changes.outputs.release == 'true' }}
 
   # Every publish this repository makes, rehearsed with --dry-run and no
   # token (publish-dry-run.yml).

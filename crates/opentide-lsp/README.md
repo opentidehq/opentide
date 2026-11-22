@@ -20,7 +20,7 @@ cargo install opentide-lsp          # or build it from crates.io
 opentide-lsp --version
 ```
 
-Each opentide [GitHub Release](https://github.com/opentidehq/opentide/releases) (tagged `vX.Y.Z` since the release train; the engine's own `engine-vX.Y.Z` releases came before it, and releases up to 0.12.0 are [language-server's](https://github.com/opentidehq/language-server/releases)) also carries a prebuilt binary per target (`opentide-lsp-vX.Y.Z-<target>`, glibc Linux, macOS and Windows; no musl build), the browser WASM build, and the highlights zip. `opentide-installer.sh` and `opentide-installer.ps1` on the same release install it with the `opentide` command line. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
+Each opentide [GitHub Release](https://github.com/opentidehq/opentide/releases) (tagged `vX.Y.Z` since the release train; the engine's own `engine-vX.Y.Z` releases came before it, and releases up to 0.12.0 are [language-server's](https://github.com/opentidehq/language-server/releases)) also carries a prebuilt binary per target (`opentide-lsp-vX.Y.Z-<target>`, glibc Linux and macOS; no musl or Windows build), the browser WASM build, and the highlights zip. `opentide-installer.sh` on the same release installs it with the `opentide` command line. On Windows, install the `opentide` package (`uv tool install opentide`, pip, pipx or npm) and run `opentide lsp start`. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
 
 ## Releases
 

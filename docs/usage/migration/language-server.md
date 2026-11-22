@@ -12,7 +12,7 @@ The opentide language server used to be released from its own repository, openti
 | You run | Get it from | Editor command |
 |---------|-------------|----------------|
 | `opentide lsp start`, with the `opentide` command line | `pip install opentide`: the server is compiled into the package, with nothing else to install | `opentide lsp start` |
-| `opentide-lsp` on its own, without Python | The `opentide-lsp-vX.Y.Z-<target>` asset of an opentide [GitHub Release](https://github.com/opentidehq/opentide/releases), `opentide-installer.sh` or `opentide-installer.ps1` from the same release (which install `opentide` too), `cargo binstall opentide-lsp`, or `cargo install opentide-lsp` | `opentide-lsp --stdio` |
+| `opentide-lsp` on its own, without Python | The `opentide-lsp-vX.Y.Z-<target>` asset of an opentide [GitHub Release](https://github.com/opentidehq/opentide/releases), `opentide-installer.sh` from the same release (which installs `opentide` too), `cargo binstall opentide-lsp`, or `cargo install opentide-lsp`; Linux and macOS (no Windows binary ships: on Windows, use `opentide lsp start`) | `opentide-lsp --stdio` |
 
 Both are the same server. Use `opentide lsp start` when opentide is installed, so the editor and `opentide validate` always come from one version. See [opentide lsp start and opentide-lsp](../../cli/lsp.md#opentide-lsp-start-and-opentide-lsp).
 

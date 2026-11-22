@@ -28,10 +28,9 @@ pub use check::{
     with_declared_fields,
 };
 
-const FIELDS_JSON: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/ecs/fields.json"
-));
+fn fields_json() -> &'static str {
+    opentide_dataset::text!("data/catalogs/ecs/fields.json")
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct EcsField {
@@ -68,7 +67,7 @@ struct Catalog {
 fn catalog() -> &'static Catalog {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
     CATALOG
-        .get_or_init(|| serde_json::from_str(FIELDS_JSON).expect("data/catalogs/ecs/fields.json"))
+        .get_or_init(|| serde_json::from_str(fields_json()).expect("data/catalogs/ecs/fields.json"))
 }
 
 /// Every field, sorted by name.

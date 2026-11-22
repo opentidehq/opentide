@@ -59,7 +59,7 @@ fn vocab_misp(field: &str) -> &'static BTreeMap<String, String> {
         else {
             return mapping;
         };
-        let Ok(document) = opentide_schema::configuration::toml::parse(text) else {
+        let Ok(document) = opentide_schema::configuration::toml::parse(text()) else {
             return mapping;
         };
         if let Some(Value::Seq(keys)) = document.get("keys").map(|keys| &keys.value) {

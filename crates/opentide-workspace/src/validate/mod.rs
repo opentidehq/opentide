@@ -1489,16 +1489,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
     }
 
     if has(Check::Schema) && scope.is_full() {
-        for error in states::scan(fs, &root) {
-            let shard = error
-                .path
-                .as_ref()
-                .map(|path| path.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let mut diagnostic = Diagnostic::error(error.code, error.message).with("shard", shard);
-            diagnostic.file_path = error.path;
-            issues.push(diagnostic);
-        }
+        issues.extend(state_issues(fs, &root));
     }
 
     issues.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
@@ -1757,10 +1748,42 @@ fn status(report: &Report, check: Check) -> &'static str {
     if failed { "failed" } else { "passed" }
 }
 
+/// The `deployment_state_*` findings on the shards under
+/// `.opentide/states/deployment/` of `root`, each on its shard, before
+/// [`annotate`](annotate::annotate) places them.
+fn state_issues(fs: &dyn FileSystem, root: &Path) -> Vec<Diagnostic> {
+    states::scan(fs, root)
+        .into_iter()
+        .map(|error| {
+            let shard = error
+                .path
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let mut diagnostic = Diagnostic::error(error.code, error.message).with("shard", shard);
+            diagnostic.file_path = error.path;
+            diagnostic
+        })
+        .collect()
+}
+
 impl Workspace {
     /// Runs `validate` ([`validate`]).
     pub fn validate(&self, options: &Options<'_>) -> Validation {
         validate(self, options)
+    }
+
+    /// The `deployment_state_*` findings a full `validate` run reports on the
+    /// deployment state shards, as it reports them (sorted, placed): what an
+    /// editor shows again when a shard changes, without checking every object.
+    pub fn deployment_state_findings(&self) -> Vec<Diagnostic> {
+        let fs = self.fs().as_ref();
+        let root = self.root().to_path_buf();
+        let mut issues = state_issues(fs, &root);
+        issues.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
+        let mut sources = annotate::Sources::new(fs, self.index());
+        annotate::annotate(&mut issues, &mut sources, &root);
+        issues
     }
 }
 

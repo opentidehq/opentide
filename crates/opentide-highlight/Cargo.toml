@@ -14,8 +14,9 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+opentide-dataset.workspace = true
 opentide-core.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
 toml.workspace = true
 thiserror.workspace = true
@@ -23,3 +24,9 @@ regex.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+# The Tide field catalog is parsed once at build time (`build.rs`, #1743).
+serde = { workspace = true, features = ["rc"] }
+serde_json.workspace = true

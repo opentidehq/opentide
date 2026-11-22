@@ -567,3 +567,16 @@ fn a_refusal_reason_does_not_quote_the_bearer() {
     ));
     assert_eq!(refusal_reason(&answer), "invalid_grant: bad ***");
 }
+
+#[test]
+fn names_are_googles() {
+    assert_eq!(
+        super::credentials_variable(),
+        "GOOGLE_APPLICATION_CREDENTIALS"
+    );
+    assert_eq!(
+        super::name::well_known_file(),
+        "application_default_credentials.json"
+    );
+    assert_eq!(super::name::roaming_profile_variable(), "APPDATA");
+}

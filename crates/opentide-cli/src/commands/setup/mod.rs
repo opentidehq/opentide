@@ -287,7 +287,7 @@ pub(crate) fn promotion_defaults() -> toml::Table {
     opentide_schema::configuration::bundled::FILES
         .iter()
         .find(|(path, _)| *path == "deployment.toml")
-        .and_then(|(_, text)| text.parse::<toml::Table>().ok())
+        .and_then(|(_, text)| text().parse::<toml::Table>().ok())
         .and_then(|table| {
             table
                 .get("promotion")

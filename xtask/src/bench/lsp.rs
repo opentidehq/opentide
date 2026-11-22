@@ -108,6 +108,60 @@ fn first_diagnostics_with(
     inject: Option<Duration>,
     before_spawn: impl FnOnce(),
 ) -> Result<FirstDiagnostics> {
+    let (outcome, peak_rss_bytes) = run_server(
+        program,
+        args,
+        run,
+        document,
+        before_spawn,
+        |stdin, messages, session| {
+            drive(
+                stdin,
+                messages,
+                &session.root_uri,
+                &session.uri,
+                &session.text,
+                session.start,
+                inject,
+            )
+        },
+    )?;
+    let (elapsed, diagnostics) = outcome;
+    Ok(FirstDiagnostics {
+        sample: Sample {
+            wall_s: elapsed.as_secs_f64(),
+            peak_rss_bytes,
+        },
+        diagnostics,
+    })
+}
+
+/// What a session's driver is given about the run.
+struct SessionInfo {
+    root_uri: String,
+    uri: String,
+    text: String,
+    /// When the server was spawned.
+    start: Instant,
+}
+
+/// Spawns `program args` in `run.workspace`, runs `drive` against its stdio
+/// (it must end the session with `shutdown` and `exit`), reaps the server
+/// and returns what `drive` returned with the server's peak RSS. A server
+/// that does not exit within [`EXIT_TIMEOUT`], exits with a status other
+/// than 0, or whose peak RSS does not exceed xtask's own fails the run.
+fn run_server<T>(
+    program: &Path,
+    args: &[OsString],
+    run: &RunDir,
+    document: &Path,
+    before_spawn: impl FnOnce(),
+    drive: impl FnOnce(
+        &mut ChildStdin,
+        &mpsc::Receiver<Result<Option<Value>>>,
+        &SessionInfo,
+    ) -> Result<T>,
+) -> Result<(T, u64)> {
     let mut command = measure::command(program, args, run)?;
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     let root = run
@@ -145,7 +199,13 @@ fn first_diagnostics_with(
         }
     });
 
-    let session = drive(&mut stdin, &messages, &root_uri, &uri, &text, start, inject);
+    let info = SessionInfo {
+        root_uri,
+        uri,
+        text,
+        start,
+    };
+    let session = drive(&mut stdin, &messages, &info);
     drop(stdin);
     let outcome = match session {
         Ok(found) => Ok(found),
@@ -166,7 +226,7 @@ fn first_diagnostics_with(
             program.display()
         )
     })?;
-    let (elapsed, diagnostics) = outcome.with_context(|| {
+    let found = outcome.with_context(|| {
         format!(
             "{} (stderr: {})",
             program.display(),
@@ -181,13 +241,7 @@ fn first_diagnostics_with(
     }
     // Last: a server that failed says why above, not that its RSS was small.
     measure::distinct_from_own(peak_rss_bytes, floor)?;
-    Ok(FirstDiagnostics {
-        sample: Sample {
-            wall_s: elapsed.as_secs_f64(),
-            peak_rss_bytes,
-        },
-        diagnostics,
-    })
+    Ok((found, peak_rss_bytes))
 }
 
 /// The session: returns the time to the first diagnostics for `uri` and
@@ -300,6 +354,264 @@ fn wait_for(
             )?;
         }
     }
+}
+
+/// How many times the editor pulls the workspace while it completes, in
+/// [`editor_latency`].
+pub const EDITOR_CYCLES: i64 = 10;
+
+/// The pulls after the first that [`editor_latency`] leaves unmeasured.
+const SETTLE_PULLS: i64 = 2;
+
+/// What one run of [`editor_latency`] measured.
+#[derive(Clone, Copy, Debug)]
+pub struct EditorLatency {
+    /// The longest a completion waited, over [`EDITOR_CYCLES`] of them (each
+    /// sent just after a workspace pull that nothing has changed since), and
+    /// the server's peak RSS.
+    pub sample: Sample,
+    /// The first workspace pull, when nothing is cached.
+    pub first_pull: Duration,
+    /// The median of the later pulls.
+    pub repeat_pull: Duration,
+}
+
+/// The editor's steady state: the client (vscode-languageclient) pulls the
+/// workspace's diagnostics again two seconds after every answer, for as long
+/// as it runs, and the user presses Ctrl+Space between two pulls or during
+/// one. The run opens `document` in the heavy workspace, pulls its
+/// diagnostics and the workspace's three times, then [`EDITOR_CYCLES`] times pulls
+/// the workspace again and, 2 ms later, asks for a completion: the time that
+/// completion waits is what a server that runs the pull to its end first
+/// makes the user wait for.
+///
+/// With `typing`, each cycle starts with a keystroke in the open document
+/// (`didChange`) and the pull of that document's diagnostics beside the
+/// workspace's: what an editor sends when the user types and then presses
+/// Ctrl+Space. The server then validates the workspace again before it can
+/// answer the pulls, so that is what a completion waits for.
+pub fn editor_latency(
+    program: &Path,
+    args: &[OsString],
+    run: &RunDir,
+    document: &Path,
+    typing: bool,
+) -> Result<EditorLatency> {
+    let ((worst, first_pull, repeat_pull), peak_rss_bytes) = run_server(
+        program,
+        args,
+        run,
+        document,
+        || {},
+        |stdin, messages, session| drive_editor(stdin, messages, session, typing),
+    )?;
+    Ok(EditorLatency {
+        sample: Sample {
+            wall_s: worst.as_secs_f64(),
+            peak_rss_bytes,
+        },
+        first_pull,
+        repeat_pull,
+    })
+}
+
+/// `initialize` as VS Code's client sends it (pull diagnostics, refresh and
+/// file watching), `initialized`, and `didOpen` of the document.
+fn start_editor(
+    stdin: &mut ChildStdin,
+    messages: &mpsc::Receiver<Result<Option<Value>>>,
+    session: &SessionInfo,
+) -> Result<()> {
+    let name = Path::new(&session.root_uri).file_name().map_or_else(
+        || "workspace".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    write_message(
+        stdin,
+        &json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "processId": std::process::id(),
+                "rootUri": session.root_uri,
+                "workspaceFolders": [{ "uri": session.root_uri, "name": name }],
+                "capabilities": {
+                    "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+                    "workspace": {
+                        "workspaceFolders": true,
+                        "configuration": true,
+                        "diagnostics": { "refreshSupport": true },
+                        "didChangeWatchedFiles": { "dynamicRegistration": true }
+                    }
+                }
+            }
+        }),
+    )?;
+    wait_for(stdin, messages, session.start, |m| {
+        m.get("id") == Some(&json!(1)) && m.get("method").is_none()
+    })?;
+    write_message(
+        stdin,
+        &json!({ "jsonrpc": "2.0", "method": "initialized", "params": {} }),
+    )?;
+    write_message(
+        stdin,
+        &json!({
+            "jsonrpc": "2.0", "method": "textDocument/didOpen",
+            "params": { "textDocument": {
+                "uri": session.uri, "languageId": "yaml", "version": 1, "text": session.text
+            } }
+        }),
+    )?;
+    Ok(())
+}
+
+fn drive_editor(
+    stdin: &mut ChildStdin,
+    messages: &mpsc::Receiver<Result<Option<Value>>>,
+    session: &SessionInfo,
+    typing: bool,
+) -> Result<(Duration, Duration, Duration)> {
+    start_editor(stdin, messages, session)?;
+    let request = |stdin: &mut ChildStdin, id: i64, method: &str, params: Value| {
+        write_message(
+            stdin,
+            &json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
+        )
+    };
+    request(
+        stdin,
+        2,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": session.uri } }),
+    )?;
+    wait_for_all(stdin, messages, session.start, &[2])?;
+
+    let pull = json!({ "previousResultIds": [] });
+    let began = Instant::now();
+    request(stdin, 3, "workspace/diagnostic", pull.clone())?;
+    let arrived = wait_for_all(stdin, messages, session.start, &[3])?;
+    let first_pull = arrived[0].1.duration_since(began);
+
+    // Two more pulls, unmeasured: the catalogs the server generates for the
+    // workspace's own configuration arrive after the first one and make the
+    // next analyse every file again, once, at start-up. The steady state
+    // is what the user spends the day in.
+    for settle in 0..SETTLE_PULLS {
+        request(stdin, 4 + settle, "workspace/diagnostic", pull.clone())?;
+        wait_for_all(stdin, messages, session.start, &[4 + settle])?;
+    }
+
+    let mut worst = Duration::ZERO;
+    let mut pulls = Vec::new();
+    for cycle in 0..EDITOR_CYCLES {
+        let (pull_id, completion_id, document_id) =
+            (10 + 3 * cycle, 11 + 3 * cycle, 12 + 3 * cycle);
+        if typing {
+            // A keystroke, then the pull of the document it changed.
+            let text = if cycle % 2 == 0 {
+                format!("{}\n# typed\n", session.text)
+            } else {
+                session.text.clone()
+            };
+            write_message(
+                stdin,
+                &json!({
+                    "jsonrpc": "2.0", "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": { "uri": session.uri, "version": 2 + cycle },
+                        "contentChanges": [{ "text": text }]
+                    }
+                }),
+            )?;
+            request(
+                stdin,
+                document_id,
+                "textDocument/diagnostic",
+                json!({ "textDocument": { "uri": session.uri } }),
+            )?;
+        }
+        let pull_sent = Instant::now();
+        request(stdin, pull_id, "workspace/diagnostic", pull.clone())?;
+        // The server has the pull by now, as it has two seconds after the
+        // client's last answer.
+        std::thread::sleep(Duration::from_millis(2));
+        let completion_sent = Instant::now();
+        request(
+            stdin,
+            completion_id,
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": session.uri },
+                "position": { "line": 1, "character": 0 },
+                "context": { "triggerKind": 1 }
+            }),
+        )?;
+        let mut waiting = vec![pull_id, completion_id];
+        if typing {
+            waiting.push(document_id);
+        }
+        for (id, at) in wait_for_all(stdin, messages, session.start, &waiting)? {
+            if id == completion_id {
+                worst = worst.max(at.duration_since(completion_sent));
+            } else if id == pull_id {
+                pulls.push(at.duration_since(pull_sent));
+            }
+        }
+    }
+    pulls.sort();
+    let repeat_pull = pulls.get(pulls.len() / 2).copied().unwrap_or_default();
+
+    write_message(
+        stdin,
+        &json!({ "jsonrpc": "2.0", "id": 2_000_000, "method": "shutdown" }),
+    )?;
+    wait_for(stdin, messages, session.start, |m| {
+        m.get("id") == Some(&json!(2_000_000)) && m.get("method").is_none()
+    })?;
+    write_message(stdin, &json!({ "jsonrpc": "2.0", "method": "exit" }))?;
+    Ok((worst, first_pull, repeat_pull))
+}
+
+/// Reads messages until a response to each of `ids` arrived, answering the
+/// server's requests with `null` on the way; each id with the instant its
+/// response was read.
+fn wait_for_all(
+    stdin: &mut ChildStdin,
+    messages: &mpsc::Receiver<Result<Option<Value>>>,
+    start: Instant,
+    ids: &[i64],
+) -> Result<Vec<(i64, Instant)>> {
+    let mut left: Vec<i64> = ids.to_vec();
+    let mut arrived = Vec::with_capacity(ids.len());
+    while !left.is_empty() {
+        let remaining = TIMEOUT
+            .checked_sub(start.elapsed())
+            .context("the language server did not answer in time")?;
+        let message = match messages.recv_timeout(remaining) {
+            Ok(message) => message?,
+            Err(_) => bail!("the language server did not answer within {TIMEOUT:?}"),
+        };
+        let Some(message) = message else {
+            bail!("the language server closed its output");
+        };
+        let at = Instant::now();
+        if message.get("method").is_none()
+            && let Some(id) = message.get("id").and_then(Value::as_i64)
+            && let Some(index) = left.iter().position(|wanted| *wanted == id)
+        {
+            if let Some(error) = message.get("error") {
+                bail!("the language server answered {id} with an error: {error}");
+            }
+            left.swap_remove(index);
+            arrived.push((id, at));
+        } else if let (Some(id), Some(_)) = (message.get("id"), message.get("method")) {
+            write_message(
+                stdin,
+                &json!({ "jsonrpc": "2.0", "id": id, "result": null }),
+            )?;
+        }
+    }
+    Ok(arrived)
 }
 
 #[cfg(test)]

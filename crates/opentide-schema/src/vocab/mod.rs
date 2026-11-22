@@ -20,8 +20,13 @@
 
 pub mod attack;
 pub mod bundled;
+pub(crate) mod bundled_offers;
 mod document;
+mod error;
+pub mod offer;
 pub mod sentinel;
+#[cfg(test)]
+mod split;
 mod version;
 
 use std::collections::BTreeSet;
@@ -29,80 +34,42 @@ use std::sync::{Arc, OnceLock};
 
 use opentide_core::suggest::Candidates;
 
+// What `offer` reads of the Markdown clean-up (the build script has its own copy of them).
+use crate::generate::annotate::{first_sentence, plain_text};
+
 use indexmap::{IndexMap, IndexSet};
 
-pub use document::{Description, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary};
+pub use bundled_offers::bundled_offer;
+pub use document::{
+    Description, Descriptions, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary,
+};
+pub use error::VocabError;
 pub use version::{Contract, Version, VocabRef};
 
 /// The object families whose workspace objects form vocabularies of their
 /// own, keyed by UUID (`CORE_OBJECT_TYPES`).
 pub const OBJECT_TYPES: [&str; 3] = ["threat", "objective", "rule"];
 
-/// A vocabulary that cannot be read.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum VocabError {
-    /// A file name without the `.vocab.toml` suffix.
-    #[error("not a vocabulary file: {0}")]
-    NotAVocabularyFile(String),
-    /// The document is not TOML.
-    #[error("could not read vocabulary TOML {file}: {message}")]
-    Toml {
-        /// The file.
-        file: String,
-        /// The parser's message.
-        message: String,
-    },
-    /// A required top-level key is missing.
-    #[error("missing required key {key:?} in vocabulary document: {file}")]
-    MissingKey {
-        /// The file.
-        file: String,
-        /// The key.
-        key: String,
-    },
-    /// A top-level key has the wrong type or value.
-    #[error("invalid {key:?} in vocabulary document {file}: {why}")]
-    InvalidKey {
-        /// The file.
-        file: String,
-        /// The key.
-        key: String,
-        /// What is wrong with it.
-        why: String,
-    },
-    /// The document's `field` is not its file name's stem.
-    #[error("vocabulary field {field:?} does not match filename {expected:?} in {file}")]
-    FieldMismatch {
-        /// The file.
-        file: String,
-        /// The `field` the document declares.
-        field: String,
-        /// The file name's stem.
-        expected: String,
-    },
-    /// Two entries share a key.
-    #[error("duplicate entry key {key:?} in vocabulary {file} at index {index}")]
-    DuplicateKey {
-        /// The file.
-        file: String,
-        /// The key.
-        key: String,
-        /// The second entry's index.
-        index: usize,
-    },
-    /// A version that is not `M.m`.
-    #[error("invalid vocabulary version: {0:?}")]
-    InvalidVersion(String),
-    /// A contract that is not `field::M.m`.
-    #[error("invalid vocabulary contract: {0:?}")]
-    InvalidContract(String),
-}
-
 /// The vocabularies a workspace resolves values against.
 #[derive(Debug, Clone)]
 pub struct Vocabularies {
     own: IndexMap<String, Arc<Vocabulary>>,
     bundled: bool,
+    /// What was made from these vocabularies and kept ([`memoized`](Self::memoized)).
+    memo: Memo,
+}
+
+/// Values made from a set of vocabularies, by the key they were asked for
+/// with. A clone shares it, until either adds a vocabulary.
+#[derive(Clone, Default)]
+struct Memo(
+    Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<dyn std::any::Any + Send + Sync>>>>,
+);
+
+impl std::fmt::Debug for Memo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Memo").finish_non_exhaustive()
+    }
 }
 
 impl Default for Vocabularies {
@@ -118,6 +85,7 @@ impl Vocabularies {
         Self {
             own: IndexMap::new(),
             bundled: true,
+            memo: Memo::default(),
         }
     }
 
@@ -131,6 +99,7 @@ impl Vocabularies {
         let mut set = Self {
             own: IndexMap::new(),
             bundled: false,
+            memo: Memo::default(),
         };
         let mut errors = Vec::new();
         for (name, text) in files {
@@ -152,7 +121,43 @@ impl Vocabularies {
     pub fn insert(&mut self, vocabulary: Vocabulary) -> &mut Self {
         self.own
             .insert(vocabulary.field().to_owned(), Arc::new(vocabulary));
+        // What was made from the vocabularies as they were is not theirs now.
+        self.memo = Memo::default();
         self
+    }
+
+    /// A value `make` builds from these vocabularies, made once for each
+    /// `key` and kept until a vocabulary is added: the catalog of every
+    /// revision of every object asks for the same few hundred ATT&CK values
+    /// again.
+    pub fn memoized<T: std::any::Any + Send + Sync>(
+        &self,
+        key: &str,
+        make: impl FnOnce() -> T,
+    ) -> Arc<T> {
+        let kept = self
+            .memo
+            .0
+            .lock()
+            .ok()
+            .and_then(|held| held.get(key).cloned());
+        if let Some(found) = kept.and_then(|found| found.downcast::<T>().ok()) {
+            return found;
+        }
+        let value = Arc::new(make());
+        if let Ok(mut held) = self.memo.0.lock() {
+            held.insert(
+                key.to_owned(),
+                Arc::clone(&value) as Arc<dyn std::any::Any + Send + Sync>,
+            );
+        }
+        value
+    }
+
+    /// Whether `field` is the bundled vocabulary of that name: a set of
+    /// bundled vocabularies that no document of its own replaces.
+    pub fn uses_bundled(&self, field: &str) -> bool {
+        self.bundled && !self.own.contains_key(field) && bundled::fields().any(|name| name == field)
     }
 
     /// The vocabulary `field`.

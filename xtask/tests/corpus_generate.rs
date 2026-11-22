@@ -24,16 +24,16 @@ fn small(seed: u64, layout: Layout) -> Options {
 #[test]
 fn recorded_digests() {
     let cases = [
-        (small(1, Layout::Explicit), "033ea64985f8d121"),
-        (small(1, Layout::Standard), "2187b33654363b09"),
-        (Options::new(20_261_107), "80e20a47f99737e3"),
+        (small(1, Layout::Explicit), "c93ce1615ebf2b01"),
+        (small(1, Layout::Standard), "e5390476ea507ba9"),
+        (Options::new(20_261_107), "d90b9a7ee6e57fc3"),
         (
             Options {
                 counts: Counts::scaled(0.1).unwrap(),
                 layout: Layout::Custom,
                 ..Options::new(20_261_107)
             },
-            "626f15aed7c6fc65",
+            "5ac4cb639b181bc5",
         ),
         // The benchmarks' workspace: the platforms their 0.23.0 oracle knows,
         // the corpus their baselines were measured on (tests/bench/budgets.toml).
@@ -42,7 +42,7 @@ fn recorded_digests() {
                 platforms: xtask::bench::oracle::ORACLE_PLATFORMS,
                 ..Options::new(20_261_107)
             },
-            "aa03d09a58068a06",
+            "3b65f46efbfcf566",
         ),
     ];
     for (options, digest) in cases {
@@ -228,4 +228,74 @@ fn file_names_are_slugs_of_the_names() {
             .trim_end_matches(".yaml");
         assert_eq!(stem, generate::slugify(name));
     }
+}
+
+/// The benchmarks' workspace deploys as generated: `deploy --dry-run --all
+/// --strategy PREVIEW` (the `deploy_dry_run` scenario) compiles every
+/// platform block it plans and ends 0. A block deploy refuses fails the
+/// benchmark run (#1751: CrowdStrike's `details.severity` written in lower
+/// case, "Invalid Severity" for each of its rules). A dry run contacts no
+/// tenant; the proxies here are dead all the same.
+#[test]
+fn the_benchmark_workspace_dry_runs_deploy_clean() {
+    let workspace = generate::generate(&Options {
+        platforms: xtask::bench::oracle::ORACLE_PLATFORMS,
+        ..Options::new(20_261_107)
+    });
+    let scratch = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    xtask::corpus::cli::write_workspace(&workspace, &ws).unwrap();
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let log: opentide_cli::logging::Sink =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let host = opentide_cli::Host {
+        version: "1.0.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: log,
+        cwd: Some(ws),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = [
+        "--json",
+        "deploy",
+        "--dry-run",
+        "--all",
+        "--strategy",
+        "PREVIEW",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    let dead = "http://127.0.0.1:9";
+    let env = opentide_cli::env::Env::from_pairs([
+        ("HOME", home.display().to_string()),
+        ("HTTPS_PROXY", dead.to_owned()),
+        ("HTTP_PROXY", dead.to_owned()),
+        ("NO_PROXY", String::new()),
+    ]);
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = opentide_cli::run(&argv, &env, &host, &mut out, &mut err);
+    let document: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    let refused: Vec<&serde_json::Value> = document["diagnostics"]
+        .as_array()
+        .map(|found| {
+            found
+                .iter()
+                .filter(|finding| finding["severity"] == "error")
+                .take(3)
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(code, 0, "{:?}: {refused:?}", document["error"]);
+    assert_eq!(document["dry_run"], true);
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(
+        document["plan"]["crowdstrike"]
+            .as_array()
+            .is_some_and(|planned| !planned.is_empty()),
+        "the workspace plans CrowdStrike rules"
+    );
 }

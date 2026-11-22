@@ -676,8 +676,8 @@ pub fn declared_datasets() -> std::sync::Arc<DeclaredDatasets> {
 /// version aside, the same models generate the same text.
 pub fn bundled_catalog() -> Catalog {
     Catalog {
-        fields: Some(opentide_highlight::TIDE_FIELDS_JSON.to_string()),
-        deprecations: Some(opentide_tide::DEPRECATIONS_JSON.to_string()),
+        fields: Some(opentide_highlight::tide_fields_json().to_string()),
+        deprecations: Some(opentide_tide::deprecations_json().to_string()),
         visibility: None,
     }
 }

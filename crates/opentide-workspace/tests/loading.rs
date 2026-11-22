@@ -635,6 +635,96 @@ mod loading {
         assert!(format!("{workspace:?}").contains("Workspace"));
     }
 
+    #[test]
+    fn invalidation_says_what_other_objects_read_of_the_files_that_changed() {
+        let fs = sample();
+        let mut workspace = open(&fs);
+        let r2 = PathBuf::from("/ws/objects/rules/r2.yml");
+        fs.write(
+            "/ws/objects/rules/r2.yml",
+            "name: n\nmetadata:\n  uuid: r-2\n".to_owned(),
+        );
+        workspace
+            .invalidate(&[Change::changed("/ws/objects/rules/r2.yml")])
+            .unwrap();
+        let on = |fs: &Arc<MemoryFs>, workspace: &mut Workspace, path: &str, text: &str| {
+            fs.write(path, text.to_owned());
+            workspace.invalidate(&[Change::changed(path)]).unwrap()
+        };
+
+        // A line typed in a file: it is the file that changed, and nothing
+        // the other objects' checks read.
+        let done = on(
+            &fs,
+            &mut workspace,
+            "/ws/objects/rules/r2.yml",
+            "name: n\nmetadata:\n  uuid: r-2\n# typed\n",
+        );
+        assert_eq!(done.changed, std::slice::from_ref(&r2));
+        assert!(!done.identity_changed && !done.cross_changed, "{done:?}");
+
+        // A name is read by the others' suggestions and file names.
+        let done = on(
+            &fs,
+            &mut workspace,
+            "/ws/objects/rules/r2.yml",
+            "name: other\nmetadata:\n  uuid: r-2\n",
+        );
+        assert!(done.identity_changed && !done.cross_changed, "{done:?}");
+
+        // A UUID too, and a file that stops loading takes its object with it.
+        let done = on(
+            &fs,
+            &mut workspace,
+            "/ws/objects/rules/r2.yml",
+            "name: other\nmetadata:\n  uuid: r-9\n",
+        );
+        assert!(done.identity_changed, "{done:?}");
+        let done = on(
+            &fs,
+            &mut workspace,
+            "/ws/objects/rules/r2.yml",
+            "metadata: [unclosed\n",
+        );
+        assert!(done.identity_changed, "{done:?}");
+
+        // A platform block the cross-rule checks compare is read by the
+        // other rules' findings.
+        let block = |name: &str| {
+            format!(
+                "name: n\nmetadata:\n  uuid: r-2\nconfigurations:\n  google_secops:\n    name: {name}\n"
+            )
+        };
+        let done = on(&fs, &mut workspace, "/ws/objects/rules/r2.yml", &block("a"));
+        assert!(done.identity_changed, "the object is back: {done:?}");
+        let done = on(
+            &fs,
+            &mut workspace,
+            "/ws/objects/rules/r2.yml",
+            &block("a\n"),
+        );
+        assert!(!done.identity_changed && !done.cross_changed, "{done:?}");
+        let done = on(&fs, &mut workspace, "/ws/objects/rules/r2.yml", &block("b"));
+        assert!(!done.identity_changed && done.cross_changed, "{done:?}");
+
+        // A file that came or went changes what the others see; the
+        // configuration and a path outside the workspace change everything.
+        fs.write("/ws/objects/rules/new.yaml", object("r-7"));
+        let done = workspace
+            .invalidate(&[Change::created("/ws/objects/rules/new.yaml")])
+            .unwrap();
+        assert!(done.identity_changed, "{done:?}");
+        assert_eq!(done.changed, [PathBuf::from("/ws/objects/rules/new.yaml")]);
+        fs.write(
+            "/ws/.opentide/configurations/lint.toml",
+            "[filenames]\n".to_owned(),
+        );
+        let done = workspace
+            .invalidate(&[Change::changed("/ws/.opentide/configurations/lint.toml")])
+            .unwrap();
+        assert!(done.identity_changed && done.cross_changed, "{done:?}");
+    }
+
     #[expect(
         clippy::unwrap_used,
         reason = "a test helper: every workspace it opens resolves"

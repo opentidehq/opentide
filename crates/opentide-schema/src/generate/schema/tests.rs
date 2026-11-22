@@ -1,7 +1,8 @@
 use super::*;
 
 use crate::configuration::toml::parse;
-use crate::vocab::Vocabulary;
+use crate::vocab::offer::{dropdown, search_hint, summary_in};
+use crate::vocab::{Entry, Vocabulary};
 
 fn sources(config: &str, objects: &[Vocabulary]) -> Sources {
     let mut vocabularies = Vocabularies::bundled();
@@ -519,4 +520,130 @@ fn a_description_summary_is_kept_by_its_text_and_bounded() {
     let kept = cache.lock().unwrap();
     assert_eq!(kept.len(), 1);
     assert!(kept.contains_key("Fourth `x`."));
+}
+
+/// The offers `build.rs` makes (`OFFERED` there) are the bundled offers the
+/// schemas and the field catalog ask for, no fewer and no more.
+#[test]
+fn the_build_makes_the_offers_the_catalog_asks_for() {
+    use crate::configuration::resolve::{Instance, resolve};
+    use crate::vocab::bundled_offers;
+
+    ASKED.with(|asked| asked.borrow_mut().clear());
+    let resolved = resolve(&Instance {
+        skip_parent: true,
+        ..Instance::default()
+    })
+    .unwrap();
+    let sources = Sources {
+        config: Arc::new(resolved.tree),
+        vocabularies: Arc::new(Vocabularies::bundled()),
+    };
+    // Both phases that resolve vocabularies: the language server's field catalog
+    // and `generate schemas` (each registered revision's editor schema).
+    let _ = crate::generate::catalog::fields_catalog("test", &sources);
+    let schemas = crate::generate::workspace::schema_artifacts(&sources);
+    assert!(!schemas.is_empty());
+    let mut asked: Vec<(String, bool)> = ASKED.with(|asked| asked.borrow().clone());
+    asked.sort();
+    asked.dedup();
+    let mut made: Vec<(String, bool)> = bundled_offers::offered()
+        .map(|(field, scoped)| (field.to_owned(), scoped))
+        .collect();
+    made.sort();
+    assert_eq!(
+        asked, made,
+        "an offer the build does not make, or makes for nothing"
+    );
+}
+
+/// The offer read from what the build made is the offer worked out at run
+/// time from the bundled document, for every reference the build makes one of
+/// (the bytes of the field catalog, in `tests/catalog.rs`, hold the rest).
+#[test]
+fn what_the_build_made_is_what_is_worked_out_at_run_time() {
+    use crate::vocab::{VocabRef, bundled, bundled_offers};
+
+    let vocabularies = Vocabularies::bundled();
+    let mut checked = 0;
+    for (reference, scoped) in bundled_offers::offered() {
+        let options = VocabOptions {
+            scoped,
+            no_wrap: false,
+        };
+        let vocab: VocabRef = reference.parse().unwrap();
+        let worked_out = offer_of(&bundled::get(&vocab.field).unwrap(), &vocab, options);
+        assert!(!worked_out.values.is_empty(), "{reference}");
+        assert_eq!(
+            bundled_offer(reference, scoped),
+            Some(&worked_out),
+            "{reference} (scoped: {scoped})"
+        );
+        // And through the lookup the schemas use, against the same lookup for a
+        // vocabulary the workspace brings (a copy of the bundled document), which
+        // is worked out and never read from what the build made.
+        let mut brought = Vocabularies::bundled();
+        brought.insert((*bundled::get(&vocab.field).unwrap()).clone());
+        assert!(!brought.uses_bundled(&vocab.field));
+        assert!(vocabularies.uses_bundled(&vocab.field));
+        assert_eq!(
+            vocabulary_offer(&vocabularies, reference, options),
+            vocabulary_offer(&brought, reference, options),
+            "{reference} (scoped: {scoped})"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 16);
+}
+
+/// A vocabulary the workspace brings, a data root's vocabularies, a field that
+/// asks for unwrapped hints and a reference the build made nothing of are
+/// worked out from the vocabularies the workspace has.
+#[test]
+fn a_vocabulary_of_the_workspace_is_worked_out_not_read() {
+    use crate::vocab::bundled_offers;
+
+    let mut replaced = toml::Table::new();
+    replaced.insert("name".to_owned(), "Traffic Light Protocol".into());
+    replaced.insert("field".to_owned(), "tlp".into());
+    replaced.insert("key".to_owned(), "name".into());
+    let mut entry = toml::Table::new();
+    entry.insert("name".to_owned(), "mine".into());
+    replaced.insert("keys".to_owned(), toml::Value::Array(vec![entry.into()]));
+    let own = Vocabulary::from_table(replaced, "tlp").unwrap();
+    let options = VocabOptions {
+        scoped: false,
+        no_wrap: false,
+    };
+    assert!(bundled_offers::offered().any(|offered| offered == ("tlp::1.0", false)));
+    let bundled_only = vocabulary_offer(&Vocabularies::bundled(), "tlp::1.0", options);
+    assert_eq!(
+        bundled_only.values,
+        ["clear", "green", "amber", "amber+strict", "red"]
+    );
+    // A document of the workspace replaces the bundled one.
+    let mut vocabularies = Vocabularies::bundled();
+    vocabularies.insert(own);
+    assert_eq!(
+        vocabulary_offer(&vocabularies, "tlp::1.0", options).values,
+        ["mine"]
+    );
+    // A data root's vocabularies are not the bundled ones.
+    let (rooted, _) = Vocabularies::from_files([]);
+    assert_eq!(vocabulary_offer(&rooted, "tlp::1.0", options).values, [""]);
+    // A reference the build made nothing of, and unwrapped hints, are worked out.
+    let pin = vocabulary_offer(&Vocabularies::bundled(), "tlp::0.1", options);
+    assert_eq!(pin.values, [""]);
+    let unwrapped = vocabulary_offer(
+        &Vocabularies::bundled(),
+        "att&ck::1.2",
+        VocabOptions {
+            scoped: false,
+            no_wrap: true,
+        },
+    );
+    assert_ne!(
+        unwrapped,
+        vocabulary_offer(&Vocabularies::bundled(), "att&ck::1.2", options)
+    );
 }

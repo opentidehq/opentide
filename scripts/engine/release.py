@@ -15,7 +15,13 @@
     release.py bump X.Y.Z[-rc.N]    set the workspace version and the internal pins
     release.py pypi-version VERSION write VERSION (PEP 440: X.Y.Z, X.Y.ZrcN, or a CI
                                     build's X.Y.Z.devN) into the Python package's crate
-    release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
+    release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets,
+                                    and the legal files into each crate
+    release.py legal DIR...         copy LICENSE, NOTICE and the licence files NOTICE cites
+                                    into each DIR (an npm package, the web zip), at the
+                                    paths NOTICE names
+    release.py legal-bundle FILE    write the files NOTICE cites into FILE, one after another
+                                    (the release's THIRD-PARTY-DATA-LICENSES.txt)
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py crate-patch DIR OUT  unpack DIR's .crate files into OUT, with a cargo config
@@ -123,16 +129,30 @@ PYTHON_BINDING = ROOT / "bindings" / "python" / "Cargo.toml"
 LOCK = ROOT / "Cargo.lock"
 # Cargo workspaces of their own, under ROOT, whose locks pin the workspace crates.
 NESTED_WORKSPACES = ("fuzz",)
-ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
+# A path a crate compiles in: `opentide_dataset::text!("<path>")` (#1743), or the older
+# `include_str!(concat!(env!("OPENTIDE_ASSETS"), "/<path>"))` (a test's fixture).
+ASSET_INCLUDE = re.compile(
+    r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"'
+    r'|opentide_dataset::text!\(\s*"([A-Za-z0-9_./&+ -]+)"'
+)
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
+# The licence and notice files NOTICE cites for the data the engine embeds (Apache-2.0
+# 4(a) and 4(d), BSD-3-Clause 2): they ship beside NOTICE, at the path it names, in every
+# package that compiles the engine in (the wheel's license-files, each crate, each npm
+# package of @opentide/opentide). tests/test_package/test_layout.py holds the wheel's.
+NOTICE_CITES = re.compile(r"data/catalogs/[\w/-]+/(?:LICENSE[\w.-]*|NOTICE)\b")
 SUMS = "SHA256SUMS"
+# The release asset that carries, one after another, every licence and notice file
+# NOTICE cites (`legal-bundle`): the standalone binaries embed the same data the
+# packages do, and a GitHub Release has no directories to put them at their paths.
+DATA_LICENSES = "THIRD-PARTY-DATA-LICENSES.txt"
 TAG = re.compile(r"v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
-# The targets the release builds its binaries for (engine-release-build.yml, job
-# `native`): one `opentide` and one `opentide-lsp` each, `.exe` on Windows. No musl
-# target: the maintainer decided against musl builds (docs/internal/publishing.md,
-# "The release train"), so neither the binaries, the wheels (no musllinux) nor the
-# npm packages ship one.
+# The targets the release builds its native packages for: the wheels and the
+# npm packages of @opentide/opentide (build-packages.yml, job `npm-native`). No
+# musl target: the maintainer decided against musl builds (docs/internal/
+# publishing.md, "The release train"), so neither the binaries, the wheels (no
+# musllinux) nor the npm packages ship one.
 TARGETS = [
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
@@ -141,6 +161,13 @@ TARGETS = [
     "x86_64-pc-windows-msvc",
     "aarch64-pc-windows-msvc",
 ]
+# The targets of the standalone binaries on the GitHub Release
+# (engine-release-build.yml, job `native`): one `opentide` and one
+# `opentide-lsp` each. No Windows target: a downloaded Windows executable
+# would need Authenticode signing, so Windows installs opentide from PyPI
+# (`uv tool install opentide`, pip, pipx) or npm, and runs the language server
+# as `opentide lsp start` (docs/internal/publishing.md, "The release train").
+BINARY_TARGETS = [target for target in TARGETS if "windows" not in target]
 # The standalone binaries, each built for every target: the command line
 # (`cargo install opentide --features cli`) and the language server.
 BINARIES = ["opentide", "opentide-lsp"]
@@ -153,16 +180,17 @@ BINARIES = ["opentide", "opentide-lsp"]
 CLI_WASM_ASSET = "opentide-wasm32-wasip1.wasm"
 # Every release carries these besides the binaries and the versioned zips: the
 # licences, the WASI builds (the language server's and the command line's), the
-# installers of the binaries (scripts/install/), and SHA256SUMS.
+# installer of the binaries (publishing/installers/, Linux and macOS), and
+# SHA256SUMS.
 FIXED_ASSETS = [
     "LICENSE",
     "NOTICE",
     "THIRD-PARTY-LICENSES.html",
     "WASI-LIBC-LICENSES.txt",
+    DATA_LICENSES,
     "opentide-lsp-wasm32-wasip1.wasm",
     CLI_WASM_ASSET,
     "opentide-installer.sh",
-    "opentide-installer.ps1",
     SUMS,
 ]
 # The CycloneDX SBOMs scripts/engine/sbom.py writes, one per artifact (#843):
@@ -242,19 +270,18 @@ def asset_version(tag: str) -> str:
 
 def binary_asset(binary: str, tag: str, target: str) -> str:
     """The asset name of `binary` built for `target`: `opentide-lsp-v0.24.0-<target>`."""
-    ext = ".exe" if "windows" in target else ""
-    return f"{binary}-{asset_version(tag)}-{target}{ext}"
+    return f"{binary}-{asset_version(tag)}-{target}"
 
 
 def expected_assets(tag: str) -> list[str]:
     """Every asset of the tag's GitHub Release, sorted: what language-server's
-    releases carried (but the musl binaries), with this tag's version in the
-    versioned names, the `opentide` binaries and their installers, and the
-    SBOMs."""
+    releases carried (but the musl and Windows binaries), with this tag's
+    version in the versioned names, the `opentide` binaries and their
+    installer, and the SBOMs."""
     v = asset_version(tag)
     names = [*FIXED_ASSETS, *SBOM_ASSETS, f"highlights-{v}.zip", f"opentide-wasm-web-{v}.zip"]
     for binary in BINARIES:
-        names.extend(binary_asset(binary, tag, target) for target in TARGETS)
+        names.extend(binary_asset(binary, tag, target) for target in BINARY_TARGETS)
     return sorted(names)
 
 
@@ -433,10 +460,54 @@ def crate_assets(package: dict) -> list[str]:
     crate = Path(package["manifest_path"]).parent
     found = set()
     for source in crate.glob("src/**/*.rs"):
-        found.update(ASSET_INCLUDE.findall(source.read_text()))
+        found.update(a or b for a, b in ASSET_INCLUDE.findall(source.read_text()))
     meta = (package.get("metadata") or {}).get("opentide") or {}
     found.update(meta.get("assets", []))
     return sorted(found)
+
+
+def legal_files() -> list[str]:
+    """LICENSE, NOTICE and every licence or notice file NOTICE cites, repository-relative."""
+    notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+    return [*LEGAL, *sorted(set(NOTICE_CITES.findall(notice)))]
+
+
+def copy_legal(directory: Path) -> list[str]:
+    """Copy the legal files into DIRECTORY at the paths NOTICE names; return them."""
+    files = legal_files()
+    for rel in files:
+        src = ROOT / rel
+        if not src.is_file():
+            sys.exit(f"NOTICE cites {rel}, which does not exist")
+        dest = directory / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+    return files
+
+
+def legal_bundle(target: Path) -> list[str]:
+    """Write every file NOTICE cites (not LICENSE or NOTICE) to TARGET, each under a
+    `==> path <==` header, the format of WASI-LIBC-LICENSES.txt; return the paths."""
+    cited = [rel for rel in legal_files() if rel not in LEGAL]
+    parts = []
+    for rel in cited:
+        src = ROOT / rel
+        if not src.is_file():
+            sys.exit(f"NOTICE cites {rel}, which does not exist")
+        parts.append(f"==> {rel} <==\n\n{src.read_text(encoding='utf-8')}\n")
+    target.write_text("".join(parts), encoding="utf-8", newline="\n")
+    return cited
+
+
+def remove_legal(directory: Path) -> None:
+    """Undo copy_legal: the copied files, then the directories it left empty."""
+    for rel in legal_files():
+        dest = directory / rel
+        dest.unlink(missing_ok=True)
+        parent = dest.parent
+        while parent != directory and parent.is_dir() and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
 
 
 def vendor(clean: bool) -> None:
@@ -444,12 +515,10 @@ def vendor(clean: bool) -> None:
         crate = Path(package["manifest_path"]).parent
         target = crate / "assets"
         shutil.rmtree(target, ignore_errors=True)
-        for name in LEGAL:
-            (crate / name).unlink(missing_ok=True)
+        remove_legal(crate)
         if clean:
             continue
-        for name in LEGAL:
-            shutil.copy2(ROOT / name, crate / name)
+        copy_legal(crate)
         assets = crate_assets(package)
         for rel in assets:
             src = ROOT / rel
@@ -871,6 +940,13 @@ def main(argv: list[str]) -> None:
             vendor(clean=False)
         case ["vendor", "--clean"]:
             vendor(clean=True)
+        case ["legal-bundle", target]:
+            cited = legal_bundle(Path(target))
+            print(f"wrote {target}: {len(cited)} licence and notice files")
+        case ["legal", *directories] if directories:
+            for directory in directories:
+                files = copy_legal(Path(directory))
+                print(f"{directory}: {len(files)} licence and notice files")
         case ["publish"]:
             publish()
         case ["crate-patch", packages, out]:

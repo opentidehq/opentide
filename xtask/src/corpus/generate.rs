@@ -1053,7 +1053,7 @@ fn crowdstrike(rng: &mut Rng, process: &str, name: &str) -> Vec<(String, Yaml)> 
                 ("trigger", Yaml::s("verbose")),
                 ("outcome", Yaml::s("detection")),
                 ("name", Yaml::s(name)),
-                ("severity", Yaml::s(rng.pick(&["low", "medium", "high"]))),
+                ("severity", Yaml::s(rng.pick(&["Low", "Medium", "High"]))),
             ]),
         ),
         (

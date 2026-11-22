@@ -37,6 +37,9 @@ assets = ["src/opentide/data/diagnostics"]
 [lints]
 workspace = true
 
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+
 [lib]
 name = "opentide_cli"
 path = "src/lib.rs"
@@ -53,6 +56,7 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+opentide-dataset.workspace = true
 clap = { workspace = true, features = ["env", "string"] }
 # The renderers' styles (render::text) and the console streams they reach.
 anstyle.workspace = true

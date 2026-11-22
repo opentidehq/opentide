@@ -5,7 +5,7 @@
 //! (P1.5).
 
 use crate::server::{host_info, path_to_uri_value};
-use crate::session::{Document, Root, Session, path_key};
+use crate::session::{Document, Root, ScopeKind, Session, path_key};
 use crate::uri::{path_to_uri, uri_to_path};
 use lsp_server::{ErrorCode, Request, Response};
 use lsp_types as lsp;
@@ -19,8 +19,9 @@ use opentide_core::{ByteSpan, LanguageId, LineIndex, Position, Range, span_to_ra
 use opentide_highlight::encode_lsp_semantic_tokens;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Where the diagnostics reference lives: `#<code>` is each code's section.
 pub const DIAGNOSTICS_DOCS: &str = "https://opentide.org/docs/cli/diagnostics/";
@@ -30,6 +31,15 @@ pub const DIAGNOSTICS_DOCS: &str = "https://opentide.org/docs/cli/diagnostics/";
 const TRIGGERS: &[&str] = &["|", " ", ":", ".", "(", ",", "`", "="];
 
 /// The `opentide/*` requests, and the test-only ones of debug builds.
+/// `textDocument/completion` with the result as a JSON value: the response
+/// may carry `itemDefaults`, which `lsp-types` has no field for.
+enum CompletionList {}
+impl lsp::request::Request for CompletionList {
+    type Params = lsp::CompletionParams;
+    type Result = Option<Value>;
+    const METHOD: &'static str = <lsp::request::Completion as lsp::request::Request>::METHOD;
+}
+
 pub mod custom {
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
@@ -323,8 +333,20 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             let loading = s.workspace_stats();
             json!({
                 "analyses": s.analyses.get(),
+                "closedAnalyses": s.closed_analyses.get(),
+                "workspaceReportHits": s.workspace_report_hits.get(),
+                "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),
+                "roots": s
+                    .workspace_stats_by_root()
+                    .iter()
+                    .map(|stats| json!({
+                        "fileReads": stats.file_reads,
+                        "parses": stats.parses,
+                        "configResolutions": stats.config_resolutions,
+                    }))
+                    .collect::<Vec<_>>(),
                 "workspace": {
                     "fileReads": loading.file_reads,
                     "parses": loading.parses,
@@ -337,7 +359,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<Initialize>(|s, p| initialize(s, p, raw.as_ref().unwrap_or(&Value::Null)))
         .on::<Shutdown>(|_, ()| ())
         .on::<HoverRequest>(handle_hover)
-        .on::<Completion>(handle_completion)
+        .on::<CompletionList>(handle_completion)
         .on::<ResolveCompletionItem>(handle_resolve)
         .on::<SignatureHelpRequest>(handle_signature_help)
         .on::<GotoDefinition>(handle_definition)
@@ -413,6 +435,15 @@ fn plaintext_only(formats: Option<&Vec<lsp::MarkupKind>>) -> bool {
     formats.is_some_and(|f| !f.is_empty() && !f.contains(&lsp::MarkupKind::Markdown))
 }
 
+/// Whether the client resolves `property` of a completion item
+/// (`completionItem.resolveSupport.properties`).
+fn resolves(text: Option<&lsp::TextDocumentClientCapabilities>, property: &str) -> bool {
+    text.and_then(|t| t.completion.as_ref())
+        .and_then(|c| c.completion_item.as_ref())
+        .and_then(|i| i.resolve_support.as_ref())
+        .is_some_and(|support| support.properties.iter().any(|name| name == property))
+}
+
 fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::ClientCaps {
     let text = caps.text_document.as_ref();
     let workspace = caps.workspace.as_ref();
@@ -430,11 +461,28 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
             .and_then(|w| w.did_change_watched_files.as_ref())
             .and_then(|w| w.dynamic_registration)
             .unwrap_or(false),
+        relative_watch_patterns: workspace
+            .and_then(|w| w.did_change_watched_files.as_ref())
+            .and_then(|w| w.relative_pattern_support)
+            .unwrap_or(false),
         pull_diagnostics: text.and_then(|t| t.diagnostic.as_ref()).is_some() && diagnostic_refresh,
         plaintext_hover: plaintext_only(
             text.and_then(|t| t.hover.as_ref())
                 .and_then(|h| h.content_format.as_ref()),
         ),
+        resolve_completion_documentation: resolves(text, "documentation"),
+        resolve_completion_detail: resolves(text, "detail"),
+        completion_item_defaults: {
+            let defaults = text
+                .and_then(|t| t.completion.as_ref())
+                .and_then(|c| c.completion_list.as_ref())
+                .and_then(|list| list.item_defaults.as_ref());
+            defaults.is_some_and(|names| {
+                ["data", "editRange"]
+                    .iter()
+                    .all(|wanted| names.iter().any(|name| name == wanted))
+            })
+        },
         plaintext_completion: plaintext_only(
             text.and_then(|t| t.completion.as_ref())
                 .and_then(|c| c.completion_item.as_ref())
@@ -600,6 +648,7 @@ fn initialize(
 /// `visibility.toml`). The field catalogs are generated from the models
 /// (#926): `.opentide/lsp/catalogs/generated/` is not read.
 fn initialized(session: &mut Session) {
+    session.client_initialized.set(true);
     if !session.caps.watch_files {
         return;
     }
@@ -607,6 +656,13 @@ fn initialized(session: &mut Session) {
         "**/objects".to_string(),
         "**/objects/**".to_string(),
         "**/.opentide/configurations/**/*.toml".to_string(),
+        // The deployment state shards `validate` checks, at any depth: it
+        // reports a shard in a folder below `deployment/` too.
+        "**/.opentide/states/deployment/**".to_string(),
+        // The folders themselves: a client reports a deleted folder as one
+        // event, for the folder (a branch switch).
+        "**/.opentide/states".to_string(),
+        "**/.opentide/states/deployment".to_string(),
     ]
     .into_iter()
     .map(|glob| lsp::FileSystemWatcher {
@@ -706,7 +762,11 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
     let Some(closed) = session.docs.remove(uri) else {
         return;
     };
-    session.touch();
+    if closed.language == LanguageId::TideYaml {
+        session.touch_object();
+    } else {
+        session.touch();
+    }
     if closed.language == LanguageId::TideYaml {
         // The file on disk is the object again, as last saved.
         let path = uri_to_path(uri);
@@ -738,7 +798,11 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
 /// referenced by the others, so those re-check every open document. Anything
 /// else re-checks itself.
 fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root: Option<usize>) {
-    session.touch();
+    if language == LanguageId::TideYaml {
+        session.touch_object();
+    } else {
+        session.touch();
+    }
     session.mark(uri);
     if language == LanguageId::TideYaml {
         session.invalidate_index(root);
@@ -813,7 +877,7 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
         if let Some(root) = session.object_root(&path) {
             if !session.docs.contains_key(uri) {
                 session.roots[root].refresh_object(&path);
-                session.touch();
+                session.touch_object();
                 everything = true;
             }
         } else if let Some(root) = session.folder_root(&path) {
@@ -821,30 +885,93 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.touch();
                 everything = true;
             }
-        } else if Session::is_visibility(uri) {
-            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
-                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
-            }
-            let open = session
-                .root_for(&path)
-                .and_then(|i| session.roots.get(i))
-                .is_some_and(|r| r.visibility.is_some());
+        } else if let Some(index) = session.visibility_root(&path) {
+            // A root's own `visibility.toml` (a parent's, layered in from
+            // above, is a configuration file like any other: below).
+            session.roots[index]
+                .checks
+                .borrow_mut()
+                .changed([PathBuf::from(&path)]);
             // While the file is open the editor's buffer is the truth.
-            if !open {
+            if session.roots[index].visibility.is_none() {
                 session.reactivate();
                 everything = true;
             }
-        } else if normalized.contains(".opentide/configurations/") {
-            session.touch();
-            // The workspace resolves its configuration again.
+            // A root nested below this one layers this folder in: its
+            // configuration reads the file too.
+            if layered_roots_changed(session, &path, &[index]) {
+                everything = true;
+            }
+        } else if let Some(scoped) = session.scoped_roots(&path) {
+            // A folder `paths.toml` moved the objects to, or one layered in
+            // from outside the root: the workspace reads it, the object index
+            // does not.
+            let mut notified = Vec::new();
+            for (root, kind) in scoped {
+                session.roots[root]
+                    .checks
+                    .borrow_mut()
+                    .changed([PathBuf::from(&path)]);
+                notified.push(root);
+                match kind {
+                    ScopeKind::Objects => session.touch_object(),
+                    ScopeKind::Configuration => session.touch(),
+                }
+            }
+            // A folder that is one root's layer can be another root's own
+            // configuration folder (nested roots): that root, and no other,
+            // is told too.
+            if let Some(owner) = session.own_configuration_root(&path) {
+                if !notified.contains(&owner) {
+                    session.roots[owner]
+                        .checks
+                        .borrow_mut()
+                        .changed([PathBuf::from(&path)]);
+                }
+                session.touch();
+            }
+            everything = true;
+        } else if crate::checks::is_state_shard(&normalized) {
+            // Only `validate` reads a deployment state shard: the findings
+            // it keeps are out of date, no analysis is.
             if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
                 root.checks.borrow_mut().changed([PathBuf::from(&path)]);
             }
+            session.touch_object();
+            everything = true;
+        } else if normalized.contains(".opentide/configurations/") {
+            configuration_changed(session, &path);
             everything = true;
         }
     }
     if everything {
         session.mark_all();
+    }
+}
+
+/// The roots other than `skip` that layer the folder holding the file at
+/// `path` in from above are told it changed. Whether there were any.
+fn layered_roots_changed(session: &Session, path: &str, skip: &[usize]) -> bool {
+    let mut any = false;
+    for (root, kind) in session.scoped_roots(path).unwrap_or_default() {
+        if kind == ScopeKind::Configuration && !skip.contains(&root) {
+            session.roots[root]
+                .checks
+                .borrow_mut()
+                .changed([PathBuf::from(path)]);
+            session.touch();
+            any = true;
+        }
+    }
+    any
+}
+
+/// A configuration file changed: the workspace of the root it belongs to
+/// resolves its configuration again.
+fn configuration_changed(session: &Session, path: &str) {
+    session.touch();
+    if let Some(root) = session.root_for(path).and_then(|i| session.roots.get(i)) {
+        root.checks.borrow_mut().changed([PathBuf::from(path)]);
     }
 }
 
@@ -1030,7 +1157,19 @@ fn duplicates(
 /// An open document's diagnostics, from its cached analysis.
 pub(crate) fn diagnostics_for(session: &Session, uri: &str) -> Vec<lsp::Diagnostic> {
     let Some(analysis) = session.analysis(uri) else {
-        return Vec::new();
+        // A deployment state shard is no document the server reads, but a
+        // client that pulls it open is shown what the workspace pull shows.
+        let path = uri_to_path(uri);
+        return session
+            .shard_diagnostics(&path)
+            .map(|found| {
+                let root = session.root_for(&path);
+                found
+                    .iter()
+                    .map(|d| lsp_diagnostic(session, root, &path, d))
+                    .collect()
+            })
+            .unwrap_or_default();
     };
     let root = session.docs.get(uri).and_then(|d| d.root);
     let path = uri_to_path(uri);
@@ -1088,60 +1227,145 @@ fn handle_workspace_diagnostics(
         .into_iter()
         .map(|p| (p.uri.as_str().to_string(), p.value))
         .collect();
-    let open: BTreeSet<String> = session
-        .docs
-        .keys()
-        .map(|uri| crate::session::path_key(&uri_to_path(uri)))
-        .collect();
-    let mut items = Vec::new();
+    // `host` first: it reads the disk again for a client that does not watch
+    // it, and installs the catalogs, either of which moves the state key.
     for root in 0..session.roots.len() {
-        let host = session.host(Some(root));
-        for (path, text) in session.closed_objects(root) {
-            if open.contains(&crate::session::path_key(&path)) {
-                continue;
+        let _span = crate::timing::Span::new("workspace/diagnostic: host");
+        let _ = session.host(Some(root));
+    }
+    let key = session.state_key();
+    // A client that does not watch files is told nothing of what changes on
+    // disk (the configuration is resolved again with each batch, and no
+    // counter moves for it): nothing is kept for it, and each pull reads the
+    // disk as it did before reports were kept.
+    let keeps = session.caps.watch_files;
+    let cached = session
+        .workspace_report
+        .borrow()
+        .as_ref()
+        .filter(|(at, _)| keeps && *at == key)
+        .map(|(_, entries)| Arc::clone(entries));
+    let entries = match cached {
+        Some(entries) => {
+            session
+                .workspace_report_hits
+                .set(session.workspace_report_hits.get() + 1);
+            entries
+        }
+        None => {
+            let entries = Arc::new(workspace_report(session));
+            if keeps {
+                *session.workspace_report.borrow_mut() = Some((key, Arc::clone(&entries)));
             }
-            let Some(uri) = file_uri(&path) else {
-                continue;
-            };
-            let mut diagnostics = session.closed_findings(root, &path, &text);
-            let response = opentide_analysis::analyze(
-                &host,
-                opentide_analysis::AnalyzeRequest {
-                    uri: path.clone(),
-                    language: LanguageId::TideYaml,
-                    text,
-                },
-            );
-            diagnostics.extend(response.diagnostics);
-            let found: Vec<lsp::Diagnostic> = diagnostics
-                .iter()
-                .map(|d| lsp_diagnostic(session, Some(root), &path, d))
-                .collect();
-            let id = result_id(&found);
-            items.push(if previous.get(uri.as_str()) == Some(&id) {
+            entries
+        }
+    };
+    let mut items: Vec<lsp::WorkspaceDocumentDiagnosticReport> = entries
+        .iter()
+        .map(|entry| {
+            let (uri, id, found) = &**entry;
+            if previous.get(uri.as_str()) == Some(id) {
                 lsp::WorkspaceDocumentDiagnosticReport::Unchanged(
                     lsp::WorkspaceUnchangedDocumentDiagnosticReport {
-                        uri,
+                        uri: uri.clone(),
                         version: None,
                         unchanged_document_diagnostic_report:
-                            lsp::UnchangedDocumentDiagnosticReport { result_id: id },
+                            lsp::UnchangedDocumentDiagnosticReport {
+                                result_id: id.clone(),
+                            },
                     },
                 )
             } else {
                 lsp::WorkspaceDocumentDiagnosticReport::Full(
                     lsp::WorkspaceFullDocumentDiagnosticReport {
-                        uri,
+                        uri: uri.clone(),
                         version: None,
                         full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
-                            result_id: Some(id),
-                            items: found,
+                            result_id: Some(id.clone()),
+                            items: found.clone(),
                         },
                     },
                 )
-            });
-        }
-    }
+            }
+        })
+        .collect();
+    items.extend(cleared_shards(session, &previous, &entries));
     lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport { items })
+}
+
+/// An empty report for each deployment state shard the client holds a report
+/// of (`previousResultIds`) that this pull has no entry for: its findings
+/// were fixed, or it is gone. A client keeps what a workspace pull reported
+/// on a file until a later pull reports that file again (VS Code does), so
+/// leaving the shard out would leave its findings on screen.
+fn cleared_shards(
+    session: &Session,
+    previous: &HashMap<String, String>,
+    entries: &[crate::session::ReportEntry],
+) -> Vec<lsp::WorkspaceDocumentDiagnosticReport> {
+    // Compared as paths: the client may spell a URI another way (VS Code
+    // escapes a drive's `:`) than the server does.
+    let key = |uri: &str| crate::session::path_key(&uri_to_path(uri));
+    let reported: HashSet<String> = entries.iter().map(|entry| key(entry.0.as_str())).collect();
+    let empty = result_id(&[]);
+    let mut cleared: Vec<lsp::WorkspaceDocumentDiagnosticReport> = previous
+        .iter()
+        .filter(|(uri, id)| {
+            **id != empty
+                && !reported.contains(&key(uri))
+                && !session.docs.contains_key(uri.as_str())
+                && crate::checks::is_state_shard(&uri_to_path(uri).replace('\\', "/"))
+        })
+        .filter_map(|(uri, _)| {
+            Some(lsp::WorkspaceDocumentDiagnosticReport::Full(
+                lsp::WorkspaceFullDocumentDiagnosticReport {
+                    uri: uri.parse().ok()?,
+                    version: None,
+                    full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
+                        result_id: Some(empty.clone()),
+                        items: Vec::new(),
+                    },
+                },
+            ))
+        })
+        .collect();
+    cleared.sort_by(|a, b| report_uri(a).cmp(report_uri(b)));
+    cleared
+}
+
+fn report_uri(report: &lsp::WorkspaceDocumentDiagnosticReport) -> &str {
+    match report {
+        lsp::WorkspaceDocumentDiagnosticReport::Full(full) => full.uri.as_str(),
+        lsp::WorkspaceDocumentDiagnosticReport::Unchanged(unchanged) => unchanged.uri.as_str(),
+    }
+}
+
+/// What the pull reports for each closed object file, in the order of the
+/// roots and their files: the workspace's findings and the engine's analysis,
+/// as the client takes them.
+fn workspace_report(session: &Session) -> Vec<crate::session::ReportEntry> {
+    let open: BTreeSet<String> = session
+        .docs
+        .keys()
+        .map(|uri| crate::session::path_key(&uri_to_path(uri)))
+        .collect();
+    let mut entries = Vec::new();
+    for root in 0..session.roots.len() {
+        // Each root's own catalogs and datasets are the ones installed while
+        // its files are analysed.
+        let host = session.host(Some(root));
+        let build = |path: &str, diagnostics: Vec<opentide_core::Diagnostic>| {
+            let uri = file_uri(path)?;
+            let found: Vec<lsp::Diagnostic> = diagnostics
+                .iter()
+                .map(|d| lsp_diagnostic(session, Some(root), path, d))
+                .collect();
+            let id = result_id(&found);
+            Some(Arc::new((uri, id, found)))
+        };
+        entries.extend(session.closed_entries(root, &open, &host, &build));
+    }
+    entries
 }
 
 // ---------------------------------------------------------------------------
@@ -1195,10 +1419,7 @@ struct ItemData {
     clippy::cast_possible_truncation,
     reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
 )]
-fn handle_completion(
-    session: &mut Session,
-    params: lsp::CompletionParams,
-) -> Option<lsp::CompletionResponse> {
+fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Option<Value> {
     let (uri, doc, offset) = at(session, &params.text_document_position)?;
     let typed_space = params.context.as_ref().is_some_and(|c| {
         c.trigger_kind == lsp::CompletionTriggerKind::TRIGGER_CHARACTER
@@ -1253,11 +1474,26 @@ fn handle_completion(
                 schema: field.map(|(schema, _)| schema.to_string()),
                 field_path: field.map(|(_, path)| path.to_string()),
             };
+            // A value of a Tide field is documented, and its detail made, from
+            // the schema and field its `data` names (`completionItem/resolve`):
+            // for a client that resolves them, the list holds labels, a few
+            // hundred of them for the ATT&CK techniques.
+            // Only where resolving gives back exactly what the list would
+            // say: a value that is not a field of the Tide models (an ECS
+            // value, a Bitdefender target, `configurations.elastic.type`,
+            // whose documentation is made elsewhere) keeps its own.
+            let resolvable = session.caps.resolve_completion_documentation
+                && field.is_some_and(|(schema, path)| {
+                    opentide_highlight::tide_field_at(schema, path).is_some()
+                        && own_documentation(schema, path, &c.label) == c.documentation
+                });
+            let detail_resolved = resolvable && session.caps.resolve_completion_detail;
             lsp::CompletionItem {
                 kind: Some(completion_kind(&c.kind)),
-                detail: c.detail.clone(),
+                detail: c.detail.clone().filter(|_| !detail_resolved),
                 documentation: c
                     .documentation
+                    .filter(|_| !resolvable)
                     .map(|d| lsp::Documentation::MarkupContent(markup(plain, d))),
                 insert_text: Some(c.label.clone()),
                 filter_text: dotted_edit.then(|| c.label.clone()),
@@ -1273,7 +1509,57 @@ fn handle_completion(
             }
         })
         .collect();
-    Some(lsp::CompletionResponse::Array(items))
+    Some(completion_response(session, items))
+}
+
+/// The list as the client takes it: an array of items, or, for a client that
+/// reads `itemDefaults`, a list that says once what each item would say again
+/// when they all say the same (the `data` that `completionItem/resolve` reads,
+/// and the range every item replaces).
+fn completion_response(session: &Session, items: Vec<lsp::CompletionItem>) -> Value {
+    let range_of = |item: &lsp::CompletionItem| match &item.text_edit {
+        Some(lsp::CompletionTextEdit::Edit(edit)) => Some(edit.range),
+        _ => None,
+    };
+    let shared = items.first().and_then(|first| {
+        let range = range_of(first)?;
+        items
+            .iter()
+            .all(|item| range_of(item) == Some(range) && item.data == first.data)
+            .then(|| (range, first.data.clone()))
+    });
+    let Some((range, data)) = shared.filter(|_| session.caps.completion_item_defaults) else {
+        return serde_json::to_value(lsp::CompletionResponse::Array(items)).unwrap_or(Value::Null);
+    };
+    let items: Vec<Value> = items
+        .into_iter()
+        .map(|item| {
+            let label = item.label.clone();
+            let new_text = match &item.text_edit {
+                Some(lsp::CompletionTextEdit::Edit(edit)) => Some(edit.new_text.clone()),
+                _ => None,
+            };
+            let mut value = serde_json::to_value(item).unwrap_or(Value::Null);
+            if let Some(object) = value.as_object_mut() {
+                for key in ["data", "textEdit", "insertText"] {
+                    object.remove(key);
+                }
+                if object.get("filterText").and_then(Value::as_str) == Some(label.as_str()) {
+                    object.remove("filterText");
+                }
+                // The text an item inserts is its label unless it says otherwise.
+                if let Some(text) = new_text.filter(|text| *text != label) {
+                    object.insert("textEditText".into(), Value::String(text));
+                }
+            }
+            value
+        })
+        .collect();
+    json!({
+        "isIncomplete": false,
+        "itemDefaults": { "data": data, "editRange": range },
+        "items": items,
+    })
 }
 
 /// The client's item with documentation (and a detail) added: its edit and
@@ -1285,23 +1571,21 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         .clone()
         .and_then(|d| serde_json::from_value(d).ok())
         .unwrap_or_default();
-    let kind = match item.kind {
-        Some(lsp::CompletionItemKind::FIELD) => "property",
-        Some(lsp::CompletionItemKind::ENUM) => "enum",
-        Some(lsp::CompletionItemKind::REFERENCE) => "reference",
-        _ => "property",
-    };
-    let mut engine = opentide_core::CompletionItem::new(item.label.clone(), kind);
-    let field_detail = match (&data.schema, &data.field_path) {
-        (Some(schema), Some(path)) => Some(format!("{schema} {path}")),
-        _ => item.detail.clone(),
-    };
-    if let Some(detail) = field_detail {
-        engine = engine.with_detail(detail);
-    }
-    let resolved = opentide_tide::resolve_completion(engine);
+    // An item that names a field of the Tide models is documented from that
+    // field's own documentation of the value and from no other field (a
+    // value two fields share, `High`, is not documented as the other one's);
+    // one that names no such field, a query language's item among them, is
+    // left as the list made it.
+    let named = data
+        .schema
+        .as_deref()
+        .zip(data.field_path.as_deref())
+        .filter(|(schema, path)| opentide_highlight::tide_field_at(schema, path).is_some());
+    let resolved_documentation =
+        named.and_then(|(schema, path)| own_documentation(schema, path, &item.label));
+    let resolved_detail = named.map(|(schema, path)| format!("{schema} {path}"));
     if item.documentation.is_none()
-        && let Some(docs) = resolved.documentation
+        && let Some(docs) = resolved_documentation
     {
         item.documentation = Some(lsp::Documentation::MarkupContent(markup(
             session.caps.plaintext_completion,
@@ -1309,9 +1593,19 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         )));
     }
     if item.detail.is_none() {
-        item.detail = resolved.detail;
+        item.detail = resolved_detail;
     }
     item
+}
+
+/// The documentation of the value `label` of the Tide field `path` of
+/// `schema`, from that field alone (as the list makes it for the field's
+/// values); `None` when there is no such field or it says nothing of the value.
+fn own_documentation(schema: &str, path: &str, label: &str) -> Option<String> {
+    let field = opentide_highlight::tide_field_at(schema, path)?;
+    let index = field.enum_values.iter().position(|value| value == label)?;
+    let doc = field.enum_docs.get(index).filter(|doc| !doc.is_empty())?;
+    Some(format!("**{label}**\n\n{doc}"))
 }
 
 fn handle_signature_help(

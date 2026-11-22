@@ -27,6 +27,11 @@ mod outline;
 mod placeholder;
 mod refs;
 mod sysdig;
+#[expect(
+    dead_code,
+    reason = "build.rs includes this file and calls `parse_vocab`; the crate itself reads the pre-parsed blob"
+)]
+mod vocab_model;
 mod vocabs;
 mod yaml;
 mod yaml_path;
@@ -64,18 +69,15 @@ pub use yaml_path::{
     YamlCursor, document_schema_id, key_span, key_span_in, uuid_span, yaml_cursor,
 };
 
-const RULE_TEMPLATE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/tide/templates/rule.1.0.template.yaml"
-));
-const OBJECTIVE_TEMPLATE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/tide/templates/objective.1.0.template.yaml"
-));
-const THREAT_TEMPLATE: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/tide/templates/threat.1.0.template.yaml"
-));
+fn rule_template() -> &'static str {
+    opentide_dataset::text!("data/catalogs/tide/templates/rule.1.0.template.yaml")
+}
+fn objective_template() -> &'static str {
+    opentide_dataset::text!("data/catalogs/tide/templates/objective.1.0.template.yaml")
+}
+fn threat_template() -> &'static str {
+    opentide_dataset::text!("data/catalogs/tide/templates/threat.1.0.template.yaml")
+}
 
 /// Map a `configurations` field path to an injected query language.
 /// CrowdStrike Next-Gen SIEM correlation rules are CQL. Elastic is not a
@@ -1415,10 +1417,9 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
 }
 
 /// The bundled `deprecations.json`, as compiled into the engine.
-pub const DEPRECATIONS_JSON: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/tide/generated/deprecations.json"
-));
+pub fn deprecations_json() -> &'static str {
+    opentide_dataset::text!("data/catalogs/tide/generated/deprecations.json")
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FieldDeprecation {
@@ -1515,9 +1516,9 @@ fn document_symbols(source: &str, object: &TideObject, object_type: &str) -> Vec
 
 pub fn snippet(kind: &str) -> Option<&'static str> {
     match kind {
-        "rule" => Some(RULE_TEMPLATE),
-        "objective" => Some(OBJECTIVE_TEMPLATE),
-        "threat" => Some(THREAT_TEMPLATE),
+        "rule" => Some(rule_template()),
+        "objective" => Some(objective_template()),
+        "threat" => Some(threat_template()),
         _ => None,
     }
 }
