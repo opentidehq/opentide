@@ -304,14 +304,6 @@ exit: 0
       "title": "Leverage"
     },
     {
-      "entries": 368,
-      "latest_revision": "1.0",
-      "name": "malapi",
-      "removed": 0,
-      "staged": true,
-      "title": "Malicious Window API"
-    },
-    {
       "entries": 9,
       "latest_revision": "1.0",
       "name": "maturity",

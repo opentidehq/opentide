@@ -10,6 +10,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Upgrade
 
+- If a script or an agent reads the `malapi` vocabulary (`opentide info vocab --json`, the MCP resource `opentide://vocabularies/malapi`), stop: it is removed and no field takes its values. Objects need no change.
 - If a script reads `opentide deploy --json` after a tenant failed before any rule (its credentials or its connection), read the tenant's entry in `failures` and its rules' `not_attempted` rows: no rule is `failed`, and `failure.code` is `command_failed`, not `issues_found`.
 - If a rule's query is a folded block (`>` or `>-`) with a `//` line, run `opentide validate --check queries` and rewrite each query it flags with `query_folded_comment` as a literal block (`|-`), or drop its `//` line; until then, `--queries warn` reports it as a warning.
 - Run `opentide validate`. Write each `metadata.created` or `modified` it names as a date (`YYYY-MM-DD`), and fix each `threat.chaining` key it names (`vector`, `relation`) or link that points at its own threat.
@@ -376,6 +377,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Removed
 
+- **The `malapi` vocabulary is removed** ([#1753](https://github.com/opentidehq/opentide/issues/1753)). No licence for malapi.io's content could be found and the site is down, so opentide no longer embeds it, and `cargo xtask vocab malapi`, which scraped it, is gone. No object field validated against it: every object validates as before. `opentide info vocab` no longer lists it, and `opentide://vocabularies/malapi` and the editor's hover and completion no longer find it.
 - **The `stakeholders` vocabulary is removed** ([opentidehq/specifications#96](https://github.com/opentidehq/specifications/pull/96)). No object field used it, so nothing validated against it; `opentide info vocab` no longer lists it.
 - **`OPENTIDE_CACHE_DIR` is no longer read** ([#1684](https://github.com/opentidehq/opentide/issues/1684)). `opentide lsp start`, `opentide-lsp` and `opentide tui` generate the language server's catalog in memory each time they start, and cache nothing, so the variable has nothing to point at; `opentide commands` and the `lsp_catalog` page no longer name it. `opentide doctor`'s `lsp_catalog` warning no longer says editors read a committed `.opentide/lsp/catalogs/generated/`: no program does.
 

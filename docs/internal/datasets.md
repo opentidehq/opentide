@@ -5,7 +5,7 @@ description: How opentide compiles its vocabularies, catalogs and templates into
 
 # Embedded datasets
 
-Every binary carries data: the ATT&CK and actors vocabularies, `malapi`, the Falco, KQL, SPL, ES|QL, EQL, CQL, Exabeam, YARA and YARA-L catalogs, the Tide field catalog, the setup templates, the explain pages, the pins. Before [#1743](https://github.com/opentidehq/opentide/issues/1743) they were `include_str!`d as plain text, 11 MB of security vocabulary in the `.rdata` of every executable. Antivirus engines read it as the binary's own: ClamAV `Win.Coinminer.Generic-7150608-0` on the Falco miner-domain lists, hunting rules on the ATT&CK text (`sekurlsa::`, `InjectDLL`), a cloud verdict on a large unsigned executable full of stealer, miner and injection vocabulary ([the investigation](av-false-positives-2026-11-21.md)).
+Every binary carries data: the ATT&CK and actors vocabularies, the Falco, KQL, SPL, ES|QL, EQL, CQL, Exabeam, YARA and YARA-L catalogs, the Tide field catalog, the setup templates, the explain pages, the pins. Before [#1743](https://github.com/opentidehq/opentide/issues/1743) they were `include_str!`d as plain text, 11 MB of security vocabulary in the `.rdata` of every executable. Antivirus engines read it as the binary's own: ClamAV `Win.Coinminer.Generic-7150608-0` on the Falco miner-domain lists, hunting rules on the ATT&CK text (`sekurlsa::`, `InjectDLL`), a cloud verdict on a large unsigned executable full of stealer, miner and injection vocabulary ([the investigation](av-false-positives-2026-11-21.md)).
 
 They are now **compressed at build time and decoded once per process, on first use**. This is compression, not obfuscation: no XOR (a byte XOR trips another rule, `SUSP_XORed_Mozilla_Oct19`), no key, no encryption, no packer. Code is not compressed: section entropy stays well below the 7.0 "packed" threshold ([measured below](#measurements)).
 
@@ -35,7 +35,7 @@ A parse at run time is what a dataset costs most. Where a model is plain data, t
 
 | Dataset | Pre-parsed model | Why |
 |---------|------------------|-----|
-| The Tide vocabularies (`src/opentide/data/vocabulary/*.vocab.toml`, thirty-four files) | `opentide-tide`'s `Vocab` list (`vocab_model.rs`) | The editor's hover and completion on a technique, an actor or a TLP level read them, all thirty-four at once, with a whole-document TOML parse of each |
+| The Tide vocabularies (`src/opentide/data/vocabulary/*.vocab.toml`, thirty-three files) | `opentide-tide`'s `Vocab` list (`vocab_model.rs`) | The editor's hover and completion on a technique, an actor or a TLP level read them, all thirty-four at once, with a whole-document TOML parse of each |
 | The Azure Monitor Logs table reference (3.4 MB) and the ASIM schemas and parsers | `opentide-kql`'s `tables_model.rs` | The first KQL query of a Sentinel or Defender workspace read them |
 | The Tide field catalog (`data/catalogs/tide/generated/fields.json`, 1.1 MB) | `opentide-highlight`'s `tide_model.rs`: every string once, the fields by place in that table, and the lists of enum values (440 KB of the file, repeated for each revision of each schema that has them) as a blob of their own, decoded when a field's list is first read | The first Tide document of a process parsed all of it |
 | The CQL, Falco, Exabeam, ES\|QL, SPL, YARA and YARA-L catalogs (`data/catalogs/<language>/*.toml`) | Each crate's `catalog_model.rs` | The first query or rule of the language read them item by item (ADR 0013), the larger part of its first answer |
@@ -90,7 +90,7 @@ The code sections and every whole file stay below 7.0 (the gate fails above it).
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | vocab-attack | 6.2 | 6.2 | +0% | 29.3 M | 29.3 M | -0% | 4676 | 4052 |
 | vocab-actors | 8.2 | 9.0 | +10% | 41.1 M | 43.9 M | +7% | 4564 | 4636 |
-| vocab-malapi | 2.0 | 2.2 | +10% | 9.8 M | 10.4 M | +6% | 2376 | 2988 |
+| vocab-malapi (removed since, #1753) | 2.0 | 2.2 | +10% | 9.8 M | 10.4 M | +6% | 2376 | 2988 |
 | vocab-all | 23.9 | 24.0 | +0% | 117.3 M | 123.9 M | +6% | 10240 | 8652 |
 | tide-vocab-attack | 34.3 | 15.5 | -55% | 145.9 M | 85.4 M | -41% | 10668 | 6780 |
 | kql-sentinel | 116.8 | 39.7 | -66% | 621.2 M | 169.4 M | -73% | 20024 | 17108 |
@@ -132,7 +132,7 @@ Every dataset compiled in is redistributed in every binary, wheel, crate, npm pa
 |---|---|---|---|---|
 | ATT&CK vocabularies (`att&ck*`, `mitigations`, `datasources`, the ATT&CK groups of `actors`) | MITRE ATT&CK STIX data | ATT&CK Terms of Use: "a non-exclusive, royalty-free license to use ATT&CK® for research, development, and commercial purposes" | Reproduce "© 2026 The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation." and the licence in any copy | In `NOTICE`, verbatim |
 | `actors` (MISP actors) | MISP/misp-galaxy `clusters/threat-actor.json` | CC0 1.0 or BSD-2-Clause (dual, `LICENSE.md`) | None under CC0; credited | In `NOTICE` |
-| `malapi` | malapi.io | **None found**: no licence or terms of use found, no public source repository | Unknown | **Open, owner's decision** (#1753): names are facts, descriptions are the site's text |
+| `malapi` (removed) | malapi.io | **None found**: no licence or terms of use found, no public source repository | — | **Removed** ([#1753](https://github.com/opentidehq/opentide/issues/1753)): the owner decided opentide has no dependency on it; `vocab sync` skips it |
 | Falco catalog (`data/catalogs/falco/`) | falcosecurity/libs, falco, plugins, rules | Apache-2.0; the driver's event table MIT or GPL-2.0-only (used under MIT) | Licence text and upstream NOTICE | In `NOTICE`, `LICENSE.txt`, `LICENSE-MIT.txt`, `NOTICE` |
 | ECS fields (`data/catalogs/ecs/`) | elastic/ecs | Apache-2.0 | Licence text and upstream NOTICE | Shipped |
 | Azure Monitor tables (`kql/azure-monitor/`) | MicrosoftDocs/azure-monitor-docs | CC BY 4.0 | Credit, licence link, changes indicated | In `NOTICE` |

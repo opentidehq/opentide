@@ -43,7 +43,7 @@ fn the_editor_reads_every_bundled_vocabulary() {
     // differently (`att&ck.groups` is the field `actors`' companion): every
     // file is compiled in, and every vocabulary comes from a file.
     let files = on_disk();
-    assert_eq!(files.len(), 34, "{files:?}");
+    assert_eq!(files.len(), 33, "{files:?}");
     assert_eq!(compiled.len(), files.len(), "{compiled:?} vs {files:?}");
     for field in &compiled {
         assert!(files.contains(field), "{field} is in no bundled file");

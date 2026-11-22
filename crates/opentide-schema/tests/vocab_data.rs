@@ -76,6 +76,40 @@ fn the_stakeholders_vocabulary_is_retired() {
     assert!(!file.exists(), "{} is still bundled", file.display());
 }
 
+/// `malapi` is removed (#1753): no licence for malapi.io's content was found
+/// and opentide is to have no dependency on the site. Neither the
+/// compiled-in set nor the bundled folder carries it, and no compiled-in
+/// vocabulary, decoded, holds its text: its descriptions and the `Library :`
+/// line each of its 368 entries ended with.
+#[test]
+fn the_malapi_vocabulary_is_removed() {
+    assert!(
+        !bundled::FILES.iter().any(|(field, _)| *field == "malapi"),
+        "malapi is still compiled in"
+    );
+    assert!(
+        !bundled::DESCRIPTIONS
+            .iter()
+            .any(|(field, _)| *field == "malapi"),
+        "malapi's descriptions are still compiled in"
+    );
+    let file = std::path::Path::new(DATA).join(format!("vocabulary/malapi{SUFFIX}"));
+    assert!(!file.exists(), "{} is still bundled", file.display());
+    const MALAPI_TEXT: [&str; 5] = [
+        "MalAPI.io maps Windows APIs",
+        "Library : `",
+        "AttachThreadInput is used to attach the input processing",
+        "NtDelayExecution is used to suspend execution, similiar to",
+        "Spyware sometimes uses this function to capture screenshots",
+    ];
+    for (field, text) in bundled::FILES.iter().chain(bundled::DESCRIPTIONS) {
+        let text = text();
+        for marker in MALAPI_TEXT {
+            assert!(!text.contains(marker), "{field} holds MalAPI text: {marker}");
+        }
+    }
+}
+
 /// The bundled document of `field` as the repository holds it.
 fn on_disk(field: &str) -> String {
     let path = format!("{DATA}/vocabulary/{field}{SUFFIX}");
