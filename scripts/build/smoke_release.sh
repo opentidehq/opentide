@@ -12,10 +12,12 @@
 #       @opentide/opentide` in a clean project
 #       (scripts/engine/npm-local-registry/test.mjs: npm chooses exactly this
 #       platform's native package; npx, the SDK, runJson, tsc).
-#   scripts/build/smoke_release.sh sdist      the PyPI dist's shape (one
-#       version, the six cp310-abi3 wheels, one sdist), then `pip install` from
-#       the sdist with the machine's Rust (the sdist leaves rust-toolchain.toml
-#       out), as on a platform without a wheel, and scripts/build/smoke_package.py.
+#   scripts/build/smoke_release.sh shape      the PyPI dist's shape: one
+#       version, the six cp310-abi3 wheels, one sdist.
+#   scripts/build/smoke_release.sh sdist      `pip install` from the sdist
+#       with the machine's Rust (the sdist leaves rust-toolchain.toml out), as
+#       on a platform without a wheel, and scripts/build/smoke_package.py. It
+#       needs the sdist alone, so it starts before the wheels are built.
 #   scripts/build/smoke_release.sh cargo      `cargo install opentide --features
 #       cli` from the crate packages, before crates.io has this version (a patch
 #       resolves each to its package: release.py crate-patch).
@@ -26,7 +28,7 @@
 # build-packages.yml's `wheel-smoke`.
 set -euo pipefail
 
-kind="${1:?platform, sdist or cargo}"
+kind="${1:?platform, shape, sdist or cargo}"
 artifacts="${SMOKE_ARTIFACTS:?}"
 tmp="${RUNNER_TEMP:-$(mktemp -d)}"
 
@@ -52,7 +54,7 @@ case "${kind}" in
     fi
     node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --tarballs "${artifacts}/npm"
     ;;
-  sdist)
+  shape)
     : "${PYPI_VERSION:?}"
     dist="${artifacts}/dist"
     ls -l "${dist}"
@@ -90,6 +92,11 @@ for problem in problems:
     print(f"::error::{problem}")
 sys.exit(1 if problems else 0)
 PY
+    ;;
+  sdist)
+    : "${PYPI_VERSION:?}"
+    dist="${artifacts}/dist"
+    ls -l "${dist}"
     cargo --version
     python -m venv "${tmp}/venv"
     "${tmp}/venv/bin/python" -m pip install --quiet --no-binary opentide "${dist}"/opentide-*.tar.gz
@@ -105,7 +112,7 @@ PY
     grep -qF "${CRATES_VERSION}" <<<"${out}" || { echo "opentide --version printed ${out}, not ${CRATES_VERSION}" >&2; exit 1; }
     ;;
   *)
-    echo "smoke_release.sh: unknown kind ${kind} (platform, sdist or cargo)" >&2
+    echo "smoke_release.sh: unknown kind ${kind} (platform, shape, sdist or cargo)" >&2
     exit 2
     ;;
 esac
