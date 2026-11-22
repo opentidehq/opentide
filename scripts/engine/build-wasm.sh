@@ -68,11 +68,11 @@ for target in "${targets[@]}"; do
       fi ;;
     wasi)
       rustup target add wasm32-wasip1 >/dev/null
-      cargo build --release -p opentide-lsp --target wasm32-wasip1
+      cargo build --profile wasi-lsp -p opentide-lsp --target wasm32-wasip1
       # Node 22's fast WASI calls (fd_write, path_open) can start a garbage
       # collection inside the call, which segfaults once the instance holds
       # enough memory; the lsp-client wasi transport documents the same flag.
-      node --no-turbo-fast-api-calls "$root/scripts/engine/wasm-smoke.mjs" wasi "$target_dir/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+      node --no-turbo-fast-api-calls "$root/scripts/engine/wasm-smoke.mjs" wasi "$target_dir/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm" ;;
     cli)
       # The command line under WASI (ADR 0007's amendment): no terminal UI, no
       # threads; requests to the network fail with network_unavailable.

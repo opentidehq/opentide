@@ -58,10 +58,6 @@ const CASES: &[Case] = &[
         run: || vocabulary("actors"),
     },
     Case {
-        name: "vocab-malapi",
-        run: || vocabulary("malapi"),
-    },
-    Case {
         name: "vocab-all",
         run: || {
             for field in opentide_schema::vocab::bundled::fields() {

@@ -33,7 +33,7 @@ echo "cargo $*" >> "$CALLS"
 out="${CARGO_TARGET_DIR:-target}"
 case "$*" in
   *opentide-wasm*) file="$out/wasm32-unknown-unknown/release/opentide_wasm.wasm" ;;
-  *opentide-lsp*) file="$out/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+  *opentide-lsp*) file="$out/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm" ;;
   *opentide-cli*) file="$out/wasm32-wasip1/wasi/opentide-cli.wasm" ;;
   *) exit 0 ;;
 esac
@@ -123,7 +123,7 @@ def test_the_wasi_server_is_read_from_the_pool(
 ) -> None:
     given, work, target = pool
     calls = _run(tmp_path, "wasi", given, work)
-    server = target / "wasm32-wasip1" / "release" / "opentide-lsp.wasm"
+    server = target / "wasm32-wasip1" / "wasi-lsp" / "opentide-lsp.wasm"
     assert _arguments(calls, "node")[0][-2:] == ["wasi", str(server)]
 
 

@@ -5,7 +5,7 @@ description: How opentide compiles its vocabularies, catalogs and templates into
 
 # Embedded datasets
 
-Every binary carries data: the ATT&CK and actors vocabularies, `malapi`, the Falco, KQL, SPL, ES|QL, EQL, CQL, Exabeam, YARA and YARA-L catalogs, the Tide field catalog, the setup templates, the explain pages, the pins. Before [#1743](https://github.com/opentidehq/opentide/issues/1743) they were `include_str!`d as plain text, 11 MB of security vocabulary in the `.rdata` of every executable. Antivirus engines read it as the binary's own: ClamAV `Win.Coinminer.Generic-7150608-0` on the Falco miner-domain lists, hunting rules on the ATT&CK text (`sekurlsa::`, `InjectDLL`), a cloud verdict on a large unsigned executable full of stealer, miner and injection vocabulary ([the investigation](av-false-positives-2026-11-21.md)).
+Every binary carries data: the ATT&CK and actors vocabularies, the Falco, KQL, SPL, ES|QL, EQL, CQL, Exabeam, YARA and YARA-L catalogs, the Tide field catalog, the setup templates, the explain pages, the pins. Before [#1743](https://github.com/opentidehq/opentide/issues/1743) they were `include_str!`d as plain text, 11 MB of security vocabulary in the `.rdata` of every executable. Antivirus engines read it as the binary's own: ClamAV `Win.Coinminer.Generic-7150608-0` on the Falco miner-domain lists, hunting rules on the ATT&CK text (`sekurlsa::`, `InjectDLL`), a cloud verdict on a large unsigned executable full of stealer, miner and injection vocabulary ([the investigation](av-false-positives-2026-11-21.md)).
 
 They are now **compressed at build time and decoded once per process, on first use**. This is compression, not obfuscation: no XOR (a byte XOR trips another rule, `SUSP_XORed_Mozilla_Oct19`), no key, no encryption, no packer. Code is not compressed: section entropy stays well below the 7.0 "packed" threshold ([measured below](#measurements)).
 
@@ -35,12 +35,15 @@ A parse at run time is what a dataset costs most. Where a model is plain data, t
 
 | Dataset | Pre-parsed model | Why |
 |---------|------------------|-----|
-| The Tide vocabularies (`src/opentide/data/vocabulary/*.vocab.toml`, thirty-four files) | `opentide-tide`'s `Vocab` list (`vocab_model.rs`) | The editor's hover and completion on a technique, an actor or a TLP level read them, all thirty-four at once, with a whole-document TOML parse of each |
+| The Tide vocabularies (`src/opentide/data/vocabulary/*.vocab.toml`, thirty-three files) | `opentide-tide`'s `Vocab` list (`vocab_model.rs`) | The editor's hover and completion on a technique, an actor or a TLP level read them, all thirty-four at once, with a whole-document TOML parse of each |
 | The Azure Monitor Logs table reference (3.4 MB) and the ASIM schemas and parsers | `opentide-kql`'s `tables_model.rs` | The first KQL query of a Sentinel or Defender workspace read them |
 | The Tide field catalog (`data/catalogs/tide/generated/fields.json`, 1.1 MB) | `opentide-highlight`'s `tide_model.rs`: every string once, the fields by place in that table, and the lists of enum values (440 KB of the file, repeated for each revision of each schema that has them) as a blob of their own, decoded when a field's list is first read | The first Tide document of a process parsed all of it |
+| The KQL catalogs' own rows (`data/catalogs/kql/core`, the hand-written `sentinel` and `defender` tables and columns: operators, functions, plugins, types, options) | `opentide-kql`'s `rows_model.rs` (#1767) | Building any query's catalog parsed about 40 KB of TOML for them, a third of the first KQL answer on a host with no threads |
 | The CQL, Falco, Exabeam, ES\|QL, SPL, YARA and YARA-L catalogs (`data/catalogs/<language>/*.toml`) | Each crate's `catalog_model.rs` | The first query or rule of the language read them item by item (ADR 0013), the larger part of its first answer |
 
 Not pre-parsed: the small catalogs read once and cheaply (EQL, Carbon Black's Lucene fields, the ECS fields), which are stored as compressed text.
+
+The offers of the bundled vocabularies (#1755) are pre-parsed too, but by the schema crate's own build script: what a field that names a vocabulary offers (its values, a Markdown dropdown and a plain description for each) is a function of the bundled document alone, and `models::build` made it again for every revision of every object that names the vocabulary. `crates/opentide-schema/build.rs` compiles the offer's own code (`src/vocab/offer.rs`, with the vocabulary documents and the Markdown clean-up it reads) and writes one blob for each reference the schemas ask for (`OFFERED`: sixteen, 580 KB compressed in all, the ATT&CK techniques and the actors most of it), decoded when a field first asks. A workspace's own vocabularies, a data root's, an unlisted reference and a field that asks for unwrapped hints are worked out at run time, as before (`Vocabularies::memoized`). `the_build_makes_the_offers_the_catalog_asks_for` fails when the schemas ask for an offer the build does not make, or the build makes one nothing asks for; `what_the_build_made_is_what_is_worked_out_at_run_time` compares each blob with a fresh run-time offer; the field catalog's bytes are held by `tests/catalog.rs`.
 
 The bundled vocabularies are stored as compressed text parsed by their loader, with their descriptions split off and decoded when one is asked for. Moving another dataset to a pre-parsed model is a change of its crate: put its model in a file that depends on `serde` and nothing else of the crate, `#[path]`-include it from `build.rs`, write it with `Datasets::value`, and measure with the bench below.
 
@@ -90,7 +93,7 @@ The code sections and every whole file stay below 7.0 (the gate fails above it).
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | vocab-attack | 6.2 | 6.2 | +0% | 29.3 M | 29.3 M | -0% | 4676 | 4052 |
 | vocab-actors | 8.2 | 9.0 | +10% | 41.1 M | 43.9 M | +7% | 4564 | 4636 |
-| vocab-malapi | 2.0 | 2.2 | +10% | 9.8 M | 10.4 M | +6% | 2376 | 2988 |
+| vocab-malapi (removed since, #1753) | 2.0 | 2.2 | +10% | 9.8 M | 10.4 M | +6% | 2376 | 2988 |
 | vocab-all | 23.9 | 24.0 | +0% | 117.3 M | 123.9 M | +6% | 10240 | 8652 |
 | tide-vocab-attack | 34.3 | 15.5 | -55% | 145.9 M | 85.4 M | -41% | 10668 | 6780 |
 | kql-sentinel | 116.8 | 39.7 | -66% | 621.2 M | 169.4 M | -73% | 20024 | 17108 |
@@ -123,6 +126,31 @@ The WASI module's own start under wasmtime (`opentide-lsp.wasm help`): 153 ms, 1
 
 `ruzstd` (pure Rust) decodes about 250 to 350 MB/s here: 4 to 7 ms for the 1.45 MB ATT&CK vocabulary, 7 ms for the 3.4 MB Azure Monitor reference. `lz4_flex` decodes 4 to 6 times faster (1 ms for ATT&CK) but its compressor leaves the datasets 2.7 times larger than zstd's level 19 (4.6 MB against 1.7 MB for the 16.9 MB of text the benchmark read), which the binaries and the wheels would carry: a pre-parsed or lazily decoded dataset made decode time a small part of a command, and size is what is paid by every download, so zstd is the format. `FrameDecoder::decode_all_to_vec` and the streaming decoder are within 5% of each other.
 
+
+## Licences
+
+Every dataset compiled in is redistributed in every binary, wheel, crate, npm package and WebAssembly build, so each needs a licence that allows it and the attribution that licence asks for. [`NOTICE`](../../NOTICE) holds the attribution; the licence and notice files it cites ship beside it at the paths it names: in the wheel through `license-files` (`pyproject.toml`, held by `tests/test_package/test_layout.py`), in each crate, each npm package of `@opentide/opentide` and the browser zip through `scripts/engine/release.py` (`vendor`, `legal`; `build-packages.yml` checks every tarball); for the standalone binaries, the GitHub Release attaches them one after another as `THIRD-PARTY-DATA-LICENSES.txt` (`legal-bundle`, an asset `check-assets` requires). Audited for [#1753](https://github.com/opentidehq/opentide/issues/1753) (2026-11), from each upstream's licence file or terms page:
+
+| Dataset | Upstream | Licence | Attribution required | Status |
+|---|---|---|---|---|
+| ATT&CK vocabularies (`att&ck*`, `mitigations`, `datasources`, the ATT&CK groups of `actors`) | MITRE ATT&CK STIX data | ATT&CK Terms of Use: "a non-exclusive, royalty-free license to use ATT&CK® for research, development, and commercial purposes" | Reproduce "© 2026 The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation." and the licence in any copy | In `NOTICE`, verbatim |
+| `actors` (MISP actors) | MISP/misp-galaxy `clusters/threat-actor.json` | CC0 1.0 or BSD-2-Clause (dual, `LICENSE.md`) | None under CC0; credited | In `NOTICE` |
+| `malapi` (removed) | malapi.io | **None found**: no licence or terms of use found, no public source repository | — | **Removed** ([#1753](https://github.com/opentidehq/opentide/issues/1753)): the owner decided opentide has no dependency on it; `vocab sync` skips it |
+| Falco catalog (`data/catalogs/falco/`) | falcosecurity/libs, falco, plugins, rules | Apache-2.0; the driver's event table MIT or GPL-2.0-only (used under MIT) | Licence text and upstream NOTICE | In `NOTICE`, `LICENSE.txt`, `LICENSE-MIT.txt`, `NOTICE` |
+| ECS fields (`data/catalogs/ecs/`) | elastic/ecs | Apache-2.0 | Licence text and upstream NOTICE | Shipped |
+| Azure Monitor tables (`kql/azure-monitor/`) | MicrosoftDocs/azure-monitor-docs | CC BY 4.0 | Credit, licence link, changes indicated | In `NOTICE` |
+| KQL core (`kql/core/`) | MicrosoftDocs/dataexplorer-docs | CC BY 4.0 (`LICENSE`; code samples MIT) | Credit, licence link, changes indicated | In `NOTICE` (added by #1753) |
+| ASIM (`kql/asim/`) | Azure/Azure-Sentinel | MIT | Copyright and licence | In `NOTICE` |
+| Defender and Sentinel tables (`kql/defender/`, `kql/sentinel/`) | Microsoft Learn pages, cited per entry | Not confirmed (names and types are facts) | — | Named in `NOTICE`; descriptions to be confirmed as written here |
+| SPL (`spl/`) | Splunk documentation, cited per entry; CIM data models from splunk/pytest-splunk-addon (Apache-2.0) | Splunk docs: not confirmed (names are facts); CIM: Apache-2.0 | CIM: licence text | Named in `NOTICE`; descriptions to be confirmed as written here |
+| ES\|QL, EQL (`esql/`, `eql/`) | elastic/elasticsearch documentation | AGPL-3.0, SSPL or Elastic License 2.0 (the repository's `LICENSE.txt`) | — (facts only; ES\|QL descriptions written here) | Named in `NOTICE`; EQL descriptions to be confirmed as written here |
+| CQL (`cql/`) | CrowdStrike reference (facts), logscale-community-content (Unlicense), others | Unlicense, MIT, Apache-2.0, LGPL-2.1 (names only) | Licence texts | Shipped |
+| Exabeam (`exabeam/`) | ExabeamLabs/CIMLibrary | Apache-2.0 | Licence text and NOTICE | Shipped |
+| YARA (`yara/`) | VirusTotal/yara-x, VirusTotal/yara | BSD-3-Clause | Copyright, conditions, disclaimer in binary distributions | Shipped |
+| YARA-L (`yaral/`) | Google Security Operations documentation | CC BY 4.0 | Credit, licence link | In `NOTICE`, `yaral/NOTICE` |
+| Bitdefender, Carbon Black (`bitdefender/`, `carbon_black/`) | Vendor pages and MIT repositories, facts only | — (no text copied) | — | In `NOTICE` and each `NOTICE` |
+| Time zones (`tz/`) | IANA tzdata | Public domain | — | In `NOTICE`, `tz/NOTICE` |
+| Tide field catalog, schemas, templates, explain pages, the other vocabularies | opentide and opentidehq/specifications | opentide's own (EUPL-1.2); the specifications' as that repository states | — | Not re-audited here |
 
 ## Checks
 

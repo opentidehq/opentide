@@ -58,9 +58,6 @@ pub const FILES: &[(&str, opentide_dataset::TextFn)] = &[
     ("leverage", || {
         opentide_dataset::text_blob!("vocab/lean/leverage")
     }),
-    ("malapi", || {
-        opentide_dataset::text_blob!("vocab/lean/malapi")
-    }),
     ("maturity", || {
         opentide_dataset::text_blob!("vocab/lean/maturity")
     }),
@@ -157,9 +154,6 @@ pub const DESCRIPTIONS: &[(&str, opentide_dataset::TextFn)] = &[
     }),
     ("leverage", || {
         opentide_dataset::text_blob!("vocab/descriptions/leverage")
-    }),
-    ("malapi", || {
-        opentide_dataset::text_blob!("vocab/descriptions/malapi")
     }),
     ("maturity", || {
         opentide_dataset::text_blob!("vocab/descriptions/maturity")

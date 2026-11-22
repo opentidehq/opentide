@@ -15,7 +15,13 @@
     release.py bump X.Y.Z[-rc.N]    set the workspace version and the internal pins
     release.py pypi-version VERSION write VERSION (PEP 440: X.Y.Z, X.Y.ZrcN, or a CI
                                     build's X.Y.Z.devN) into the Python package's crate
-    release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
+    release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets,
+                                    and the legal files into each crate
+    release.py legal DIR...         copy LICENSE, NOTICE and the licence files NOTICE cites
+                                    into each DIR (an npm package, the web zip), at the
+                                    paths NOTICE names
+    release.py legal-bundle FILE    write the files NOTICE cites into FILE, one after another
+                                    (the release's THIRD-PARTY-DATA-LICENSES.txt)
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py crate-patch DIR OUT  unpack DIR's .crate files into OUT, with a cargo config
@@ -131,7 +137,16 @@ ASSET_INCLUDE = re.compile(
 )
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
+# The licence and notice files NOTICE cites for the data the engine embeds (Apache-2.0
+# 4(a) and 4(d), BSD-3-Clause 2): they ship beside NOTICE, at the path it names, in every
+# package that compiles the engine in (the wheel's license-files, each crate, each npm
+# package of @opentide/opentide). tests/test_package/test_layout.py holds the wheel's.
+NOTICE_CITES = re.compile(r"data/catalogs/[\w/-]+/(?:LICENSE[\w.-]*|NOTICE)\b")
 SUMS = "SHA256SUMS"
+# The release asset that carries, one after another, every licence and notice file
+# NOTICE cites (`legal-bundle`): the standalone binaries embed the same data the
+# packages do, and a GitHub Release has no directories to put them at their paths.
+DATA_LICENSES = "THIRD-PARTY-DATA-LICENSES.txt"
 TAG = re.compile(r"v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
 # The targets the release builds its native packages for: the wheels and the
 # npm packages of @opentide/opentide (build-packages.yml, job `npm-native`). No
@@ -164,6 +179,7 @@ FIXED_ASSETS = [
     "NOTICE",
     "THIRD-PARTY-LICENSES.html",
     "WASI-LIBC-LICENSES.txt",
+    DATA_LICENSES,
     "opentide-lsp-wasm32-wasip1.wasm",
     "opentide-installer.sh",
     SUMS,
@@ -439,17 +455,59 @@ def crate_assets(package: dict) -> list[str]:
     return sorted(found)
 
 
+def legal_files() -> list[str]:
+    """LICENSE, NOTICE and every licence or notice file NOTICE cites, repository-relative."""
+    notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+    return [*LEGAL, *sorted(set(NOTICE_CITES.findall(notice)))]
+
+
+def copy_legal(directory: Path) -> list[str]:
+    """Copy the legal files into DIRECTORY at the paths NOTICE names; return them."""
+    files = legal_files()
+    for rel in files:
+        src = ROOT / rel
+        if not src.is_file():
+            sys.exit(f"NOTICE cites {rel}, which does not exist")
+        dest = directory / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+    return files
+
+
+def legal_bundle(target: Path) -> list[str]:
+    """Write every file NOTICE cites (not LICENSE or NOTICE) to TARGET, each under a
+    `==> path <==` header, the format of WASI-LIBC-LICENSES.txt; return the paths."""
+    cited = [rel for rel in legal_files() if rel not in LEGAL]
+    parts = []
+    for rel in cited:
+        src = ROOT / rel
+        if not src.is_file():
+            sys.exit(f"NOTICE cites {rel}, which does not exist")
+        parts.append(f"==> {rel} <==\n\n{src.read_text(encoding='utf-8')}\n")
+    target.write_text("".join(parts), encoding="utf-8", newline="\n")
+    return cited
+
+
+def remove_legal(directory: Path) -> None:
+    """Undo copy_legal: the copied files, then the directories it left empty."""
+    for rel in legal_files():
+        dest = directory / rel
+        dest.unlink(missing_ok=True)
+        parent = dest.parent
+        while parent != directory and parent.is_dir() and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
+
+
 def vendor(clean: bool) -> None:
     for package in publishable_crates():
         crate = Path(package["manifest_path"]).parent
         target = crate / "assets"
         shutil.rmtree(target, ignore_errors=True)
-        for name in LEGAL:
-            (crate / name).unlink(missing_ok=True)
+        remove_legal(crate)
         if clean:
             continue
-        for name in LEGAL:
-            shutil.copy2(ROOT / name, crate / name)
+        copy_legal(crate)
         assets = crate_assets(package)
         for rel in assets:
             src = ROOT / rel
@@ -871,6 +929,13 @@ def main(argv: list[str]) -> None:
             vendor(clean=False)
         case ["vendor", "--clean"]:
             vendor(clean=True)
+        case ["legal-bundle", target]:
+            cited = legal_bundle(Path(target))
+            print(f"wrote {target}: {len(cited)} licence and notice files")
+        case ["legal", *directories] if directories:
+            for directory in directories:
+                files = copy_legal(Path(directory))
+                print(f"{directory}: {len(files)} licence and notice files")
         case ["publish"]:
             publish()
         case ["crate-patch", packages, out]:

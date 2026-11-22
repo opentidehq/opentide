@@ -56,6 +56,33 @@ exit: 1
     "issues": [
       {
         "code": "schema_validation",
+        "column": 17,
+        "context": {
+          "expected": "Informational, Low, Medium, High or Critical"
+        },
+        "end_column": 23,
+        "end_line": 33,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "alert",
+          "severity"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "fix": null,
+        "help": "write Informational, Low, Medium, High or Critical",
+        "line": 33,
+        "message": "deploy takes Informational, Low, Medium, High or Critical (exact case), not \"Severe\"",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000002",
+        "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 32
+      },
+      {
+        "code": "schema_validation",
         "column": 24,
         "context": {
           "expected": "false, \"Malicious\" or \"Suspicious\""
@@ -107,6 +134,33 @@ exit: 1
         "severity": "error",
         "suggestion": null,
         "yaml_line": 28
+      },
+      {
+        "code": "schema_validation",
+        "column": 17,
+        "context": {
+          "expected": "Informational, Low, Medium, High or Critical"
+        },
+        "end_column": 20,
+        "end_line": 31,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "crowdstrike",
+          "details",
+          "severity"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+        "fix": null,
+        "help": "write Informational, Low, Medium, High or Critical",
+        "line": 31,
+        "message": "deploy takes Informational, Low, Medium, High or Critical (exact case), not \"low\"; did you mean \"Low\"?",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000006",
+        "path": "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 30
       }
     ],
     "ok": false,
@@ -124,8 +178,8 @@ exit: 1
   "schema_version": 1,
   "status": "failed",
   "summary": {
-    "errors": 2,
-    "files": 2,
+    "errors": 4,
+    "files": 3,
     "fixable": 0,
     "objects": 12,
     "queries": 8,

@@ -8,6 +8,11 @@ import { MANIFEST, PACKAGE } from './corpus.mjs'
 
 const read = (path) => JSON.parse(readFileSync(join(PACKAGE, path), 'utf8'))
 
+/** What every package that carries the engine ships besides its code: the licence,
+ * NOTICE (the third-party data the engine embeds) and the licence and notice files
+ * NOTICE cites, which `release.py legal` copies in at the paths NOTICE names. */
+const LEGAL = ['LICENSE', 'NOTICE', 'data/catalogs/**/LICENSE*', 'data/catalogs/**/NOTICE']
+
 /** The npm platform name of each Rust target, as napi-rs names them. No musl:
  * the maintainer decided against musl builds (docs/internal/publishing.md). */
 const PLATFORMS = {
@@ -30,7 +35,7 @@ test('the six targets each have a native package, an optional dependency', () =>
     assert.equal(native.name, name)
     assert.equal(native.version, MANIFEST.version)
     assert.equal(native.main, `opentide.${platform}.node`)
-    assert.deepEqual(native.files, [native.main])
+    assert.deepEqual(native.files, [native.main, ...LEGAL])
     assert.equal(native.license, MANIFEST.license)
     optional[name] = MANIFEST.version
   }
@@ -48,7 +53,7 @@ test('the alias depends on the package at its own version and has its bin', () =
 })
 
 test('the packages ship only what they need', () => {
-  assert.deepEqual(MANIFEST.files.sort(), ['LICENSE', 'README.md', 'cli.js', 'index.d.ts', 'index.js'])
+  assert.deepEqual(MANIFEST.files.sort(), [...LEGAL, 'README.md', 'cli.js', 'index.d.ts', 'index.js'].sort())
   assert.equal(MANIFEST.private, undefined)
   assert.deepEqual(MANIFEST.publishConfig, { access: 'public', provenance: true })
 })

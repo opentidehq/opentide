@@ -28,6 +28,12 @@ pub const BASELINE_SHA: &str = "baseline-bundled-state";
 /// Lockfile keys that record provenance only: `--check` ignores them.
 const PROVENANCE_KEYS: [&str; 1] = ["specifications_git_sha"];
 
+/// The specifications' vocabularies opentide does not bundle: a sync neither
+/// copies them nor reports them missing. `malapi` was removed (#1753): no
+/// licence for malapi.io's content was found, no object field validated
+/// against it, and opentide is to have no dependency on the site.
+pub const NOT_BUNDLED: [&str; 1] = ["malapi.vocab.toml"];
+
 /// `[schema::M.m]` → field path → `vocabulary::M.m`.
 pub type PinTables = BTreeMap<String, BTreeMap<String, String>>;
 
@@ -397,7 +403,8 @@ fn read_lock(path: &Path) -> Result<Option<Value>> {
 /// Runs the sync, or with `check` the check, printing what it finds into
 /// `out`. Whether it passed.
 pub fn run(paths: &Paths, check: bool, out: &mut String) -> Result<bool> {
-    let source = list(&paths.source_vocabularies, ".vocab.toml")?;
+    let mut source = list(&paths.source_vocabularies, ".vocab.toml")?;
+    source.retain(|name, _| !NOT_BUNDLED.contains(&name.as_str()));
     let target = list(&paths.target_vocabularies, ".vocab.toml")?;
     let target_pins = list(&paths.target_pins, ".toml")?;
     let current = read_lock(&paths.lockfile)?;
@@ -607,6 +614,34 @@ mod tests {
         let mut out = String::new();
         assert!(!run(&paths, true, &mut out).unwrap());
         assert!(out.contains("Lockfile drift"), "{out}");
+    }
+
+    #[test]
+    fn a_vocabulary_opentide_does_not_bundle_is_neither_copied_nor_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        let spec = dir.path().join("specifications");
+        write(
+            &spec.join("vocabularies/tlp.vocab.toml"),
+            "name = \"TLP\"\n",
+        );
+        write(
+            &spec.join("vocabularies/malapi.vocab.toml"),
+            "name = \"MalAPI\"\n",
+        );
+        write(
+            &spec.join("schemas/pins/rule.toml"),
+            "[\"rule::1.0\"]\nseverity = \"alert_severity::1.0\"\n",
+        );
+        let paths = Paths::new(&repo, &spec);
+        let mut out = String::new();
+        assert!(run(&paths, false, &mut out).unwrap(), "{out}");
+        let bundled = repo.join("src/opentide/data/vocabulary");
+        assert!(bundled.join("tlp.vocab.toml").is_file());
+        assert!(!bundled.join("malapi.vocab.toml").exists());
+        let mut out = String::new();
+        assert!(run(&paths, true, &mut out).unwrap(), "{out}");
+        assert!(!out.contains("malapi"), "{out}");
     }
 
     #[test]

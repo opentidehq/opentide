@@ -1,6 +1,6 @@
 {
   "bundled_pins_sha256": "ef5f2b4e92b997c7b08c752d7d8bd64d5d7fdf70a3ec79d986daa736ae1464e0",
-  "bundled_vocabulary_sha256": "9605ec03537579f30491dd0ce76d30082806cee84cfc68631463bdc9e2c4475a",
+  "bundled_vocabulary_sha256": "798b4fa778ba26ea23483da4abadcec9223028e8af1eb12bdc598e51a317451b",
   "lock_version": 2,
   "managed_files": [
     "actors.vocab.toml",
@@ -20,7 +20,6 @@
     "killchain.vocab.toml",
     "level.vocab.toml",
     "leverage.vocab.toml",
-    "malapi.vocab.toml",
     "maturity.vocab.toml",
     "mitigations.vocab.toml",
     "objectives.vocab.toml",
