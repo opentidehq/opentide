@@ -281,7 +281,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp target/wasm32-wasip1/release/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
+          cp target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
           wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/opentide_wasm.wasm
           # LICENSE, NOTICE and every licence file NOTICE cites, at the paths it names.
           python3 scripts/engine/release.py legal pkg
