@@ -19,7 +19,11 @@ use opentide_schema::platforms::{PLATFORMS, Platform};
 
 fn read(relative: &str) -> String {
     let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/..")).join(relative);
-    std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()))
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+    // A Windows checkout (`core.autocrlf`, the runners' default) ends these
+    // pages' lines with CRLF: the headings and rows are the same text.
+    text.replace("\r\n", "\n")
 }
 
 /// The text of `page` from the line that is `heading` to the next heading,

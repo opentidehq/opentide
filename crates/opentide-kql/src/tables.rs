@@ -6,11 +6,11 @@
 #[cfg(test)]
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 pub use crate::tables_model::{
-    AsimColumn, AsimParam, AsimParser, AsimSchema, AzureMonitorColumn, AzureMonitorTable,
-    kusto_type,
+    AsimColumn, AsimParam, AsimParser, AsimSchema, AzureMonitorColumn, AzureMonitorHead,
+    AzureMonitorTable, ColumnsAt, kusto_type,
 };
 
 /// The catalogs as the tests read them: the TOML itself, to compare with what a build
@@ -31,17 +31,60 @@ struct AzureMonitorFile {
     tables: Vec<AzureMonitorTable>,
 }
 
-/// The Azure Monitor Logs tables, by name: pre-parsed by `build.rs` (#1743), decoded on first use.
+/// What decodes a shard of the Azure Monitor Logs tables' columns (`vocab_offers`-style table,
+/// written by `build.rs`).
+type ShardFn = fn() -> &'static Vec<Vec<AzureMonitorColumn>>;
+
+// `SHARDS`: the decoder of each shard of columns the build script wrote.
+include!(concat!(env!("OUT_DIR"), "/kql_azure_shards.rs"));
+
+/// The Azure Monitor Logs tables in name order, without their columns: pre-parsed by `build.rs`
+/// (#1743), decoded on first use. A table's columns are read when asked for
+/// ([`azure_monitor_columns`], #1767).
+pub fn azure_monitor_heads() -> &'static [AzureMonitorHead] {
+    static HEADS: OnceLock<Vec<AzureMonitorHead>> = OnceLock::new();
+    HEADS.get_or_init(|| {
+        opentide_dataset::compiled_value::<Vec<AzureMonitorHead>>(
+            "kql-azure-monitor-heads",
+            opentide_dataset::blob!("kql-azure-monitor-heads"),
+        )
+    })
+}
+
+/// The columns of the table whose head says they are at `at`: its shard decoded, once, the first
+/// time one of its tables is asked for.
+///
+/// # Panics
+///
+/// `at` is not one a head of this build holds.
+#[expect(
+    clippy::indexing_slicing,
+    reason = "`at` comes from a head the same build script wrote with its shard: a test reads every one"
+)]
+pub fn azure_monitor_columns(at: ColumnsAt) -> &'static [AzureMonitorColumn] {
+    &SHARDS[usize::from(at.shard)]()[usize::from(at.slot)]
+}
+
+/// The Azure Monitor Logs tables, by name, with their columns: every shard decoded (the catalog
+/// reads only those it needs; this is for tools and the tests).
 pub fn azure_monitor() -> &'static BTreeMap<String, AzureMonitorTable> {
     static TABLES: OnceLock<BTreeMap<String, AzureMonitorTable>> = OnceLock::new();
     TABLES.get_or_init(|| {
-        opentide_dataset::compiled_value::<Vec<AzureMonitorTable>>(
-            "kql-azure-monitor-tables",
-            opentide_dataset::blob!("kql-azure-monitor-tables"),
-        )
-        .into_iter()
-        .map(|t| (t.name.clone(), t))
-        .collect()
+        azure_monitor_heads()
+            .iter()
+            .map(|head| {
+                (
+                    head.name.clone(),
+                    AzureMonitorTable {
+                        name: head.name.clone(),
+                        docs: head.docs.clone(),
+                        categories: head.categories.clone(),
+                        citation: Arc::clone(&head.citation),
+                        columns: head.columns.map(|at| azure_monitor_columns(at).to_vec()),
+                    },
+                )
+            })
+            .collect()
     })
 }
 

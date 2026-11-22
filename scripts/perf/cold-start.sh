@@ -6,8 +6,8 @@
 #
 #   scripts/perf/cold-start.sh OUT NATIVE_SERVER WASI_MODULE
 #
-# NATIVE_SERVER: opentide-lsp built --release; WASI_MODULE: opentide-lsp.wasm built --release for
-# wasm32-wasip1, run under wasmtime, the host the budgets were measured with (`wasmtime` on PATH).
+# NATIVE_SERVER: opentide-lsp built --release; WASI_MODULE: opentide-lsp.wasm built with
+# `--profile wasi-lsp` (what scripts/engine/build-wasm.sh wasi ships) for wasm32-wasip1, run under wasmtime, the host the budgets were measured with (`wasmtime` on PATH).
 # WASI_HOST=node runs it under Node's WASI instead (scripts/engine/wasi-run.mjs), for comparing two
 # builds on one machine: Node's own start and its compile of the module add about 100 ms, so those
 # numbers are not the budgets'. RUNS (default 10) must match the budgets file's `runs`. Each run is
