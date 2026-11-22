@@ -12,8 +12,23 @@ above the limit.
 
 The datasets are compressed (opentide-dataset), so a read-only data section (`.rodata`, `.rdata`,
 the wasm `data` section) now holds blobs at 8 bits per byte beside tables and strings: its entropy
-is reported, flagged `data above the limit`, and does not fail the gate. Exit status: 0 no code
-section and not the whole file at or above the limit, 1 one is, 2 nothing read.
+is reported, flagged `data above the limit`, and does not fail the gate.
+
+The whole-file figure the gate holds to the limit leaves out opentide's own dataset blobs, and
+only those. Entropy is a proxy for a packer: the real scanners (ClamAV, YARA, Defender) decide, and
+a file near 8 bits per byte is what a packer or an encrypted payload looks like. Our blobs are
+known, and identified exactly: each starts with the container header of
+`crates/opentide-dataset/src/lib.rs` (`OTD`, version 1, a kind of 0 or 1, the raw length as a
+little-endian u32) followed at once by a zstd frame. Its extent is not in the header, which holds
+the decoded length: it is found by walking the frame's block headers (nothing is decompressed), and
+the frame's own content size must equal the header's raw length. A blob is left out only when all of
+that holds and it ends inside the file; a bad header, a frame that is not well formed, a content
+size that disagrees with the header or a length that runs past the end of the file is not left out,
+and its bytes count in full. Every code section is held to the limit as it is, blobs or not. The
+output gives, per file, the figure with and without the blobs and how many bytes were left out.
+
+Exit status: 0 no code section and not the whole file (without its blobs) at or above the limit, 1
+one is, 2 nothing read.
 """
 
 from __future__ import annotations
@@ -29,6 +44,16 @@ CODE_SECTIONS = {".text", "code", ".code", "__text", "CODE"}
 #: Sections smaller than this are neither printed nor held to the limit (a wasm `element` table).
 MIN_SECTION = 16 * 1024
 
+#: opentide-dataset's container: "OTD", version, kind, raw length (u32 little endian), then a zstd
+#: frame (crates/opentide-dataset/src/lib.rs: MAGIC, VERSION, Kind, HEADER_LEN).
+OTD_PREFIX = b"OTD\x01"
+OTD_KINDS = {0, 1}
+OTD_HEADER = 9
+#: The most a blob may decode to: the crate reserves at most 16 MiB and its largest dataset is
+#: 3.4 MB; a header that claims more is not one of ours.
+OTD_MAX_RAW = 64 * 1024 * 1024
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
 
 def entropy(data: bytes) -> float:
     """Shannon entropy of `data` in bits per byte."""
@@ -37,6 +62,79 @@ def entropy(data: bytes) -> float:
     counts = Counter(data)
     total = len(data)
     return -sum(n / total * math.log2(n / total) for n in counts.values())
+
+
+def zstd_frame(data: bytes, start: int) -> tuple[int, int | None] | None:
+    """The zstd frame at `data[start:]`: (its length in bytes, its content size or None when it
+    states none), found by walking its block headers; None when it is not a well-formed frame or
+    runs past the end of `data`. Nothing is decompressed."""
+    if data[start : start + 4] != ZSTD_MAGIC or start + 5 > len(data):
+        return None
+    descriptor = data[start + 4]
+    if descriptor & 0x08:  # reserved bit
+        return None
+    single = (descriptor >> 5) & 1
+    checksum = (descriptor >> 2) & 1
+    position = start + 5 + (0 if single else 1)  # the window descriptor
+    position += (0, 1, 2, 4)[descriptor & 3]  # the dictionary id
+    size_field = (1 if single else 0, 2, 4, 8)[descriptor >> 6]
+    if position + size_field > len(data):
+        return None
+    content = None
+    if size_field:
+        content = int.from_bytes(data[position : position + size_field], "little")
+        if size_field == 2:
+            content += 256
+    position += size_field
+    while True:
+        if position + 3 > len(data):
+            return None
+        header = int.from_bytes(data[position : position + 3], "little")
+        kind, size = (header >> 1) & 3, header >> 3
+        if kind == 3:  # reserved
+            return None
+        position += 3 + (1 if kind == 1 else size)
+        if position > len(data):
+            return None
+        if header & 1:
+            break
+    position += 4 if checksum else 0
+    if position > len(data):
+        return None
+    return position - start, content
+
+
+def dataset_blobs(data: bytes) -> list[tuple[int, int]]:
+    """The (start, end) of each opentide dataset blob in `data`, in order and not overlapping:
+    the container header, then a zstd frame whose content size is the header's raw length."""
+    found = []
+    position = 0
+    while (at := data.find(OTD_PREFIX, position)) != -1:
+        position = at + 1
+        header = data[at : at + OTD_HEADER]
+        if len(header) < OTD_HEADER or header[4] not in OTD_KINDS:
+            continue
+        raw = int.from_bytes(header[5:9], "little")
+        frame = zstd_frame(data, at + OTD_HEADER)
+        if frame is None or raw > OTD_MAX_RAW:
+            continue
+        length, content = frame
+        if content is not None and content != raw:
+            continue
+        found.append((at, at + OTD_HEADER + length))
+        position = at + OTD_HEADER + length
+    return found
+
+
+def without_blobs(data: bytes, blobs: list[tuple[int, int]]) -> bytes:
+    """`data` with each of `blobs` cut out."""
+    pieces = []
+    position = 0
+    for start, end in blobs:
+        pieces.append(data[position:start])
+        position = end
+    pieces.append(data[position:])
+    return b"".join(pieces)
 
 
 def elf_sections(data: bytes) -> list[tuple[str, bytes]]:
@@ -134,10 +232,17 @@ def main(argv: list[str]) -> int:
         if not sections:
             continue
         read += 1
-        whole = entropy(file.read_bytes())
-        flag = "  <-- AT OR ABOVE THE LIMIT" if whole >= limit else ""
-        over += whole >= limit
-        print(f"{file.name}: whole file {whole:.2f}{flag}")
+        data = file.read_bytes()
+        whole = entropy(data)
+        blobs = dataset_blobs(data)
+        left = len(data) - sum(end - start for start, end in blobs)
+        rest = entropy(without_blobs(data, blobs)) if blobs else whole
+        flag = "  <-- AT OR ABOVE THE LIMIT" if rest >= limit else ""
+        over += rest >= limit
+        print(
+            f"{file.name}: whole file {whole:.2f}, without its {len(blobs)} dataset blobs "
+            f"({len(data) - left} bytes) {rest:.2f}{flag}"
+        )
         for name, data in sections:
             if len(data) < MIN_SECTION:
                 continue
