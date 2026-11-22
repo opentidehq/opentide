@@ -281,8 +281,10 @@ pub(crate) enum Sighting {
 /// glob reads (`[`, `*`, `?`) as one-character classes, which match only
 /// themselves. A brace cannot be escaped in an LSP glob: the folder is
 /// then its nearest ancestor with none (`true`), and the glob matches
-/// everything under that.
-fn glob_path(folder: &str) -> (String, bool) {
+/// everything under that, provided that ancestor is a `floor` or below one:
+/// a workspace never has a glob reach the top of a filesystem or a drive.
+/// `None` when it would.
+fn glob_path(folder: &str, floors: &[PathBuf]) -> Option<(String, bool)> {
     let folder = folder.replace('\\', "/");
     let mut kept: Vec<&str> = Vec::new();
     let mut coarse = false;
@@ -292,6 +294,14 @@ fn glob_path(folder: &str) -> (String, bool) {
             break;
         }
         kept.push(part);
+    }
+    let ancestor = kept.join("/");
+    if coarse
+        && !floors
+            .iter()
+            .any(|floor| Path::new(&ancestor).starts_with(floor))
+    {
+        return None;
     }
     let mut escaped = String::new();
     for (i, part) in kept.iter().enumerate() {
@@ -309,7 +319,7 @@ fn glob_path(folder: &str) -> (String, bool) {
             }
         }
     }
-    (escaped, coarse)
+    Some((escaped, coarse))
 }
 
 /// The catalog each root (`None`: a document outside every root) last had
@@ -627,11 +637,30 @@ pub(crate) enum ScopeKind {
     Configuration,
 }
 
+/// The folders of one root a fixed glob does not name.
+#[derive(Default)]
+struct ExtraFolders {
+    /// Object folders `paths.toml` put outside `objects/`, as the editor
+    /// spells the root.
+    objects: Vec<PathBuf>,
+    /// The configuration folder layered in from above the root, as the
+    /// workspace names it.
+    layered: Vec<PathBuf>,
+    /// See [`WatchTarget::floors`].
+    floors: Vec<PathBuf>,
+    /// The root's own `.opentide/configurations/`, resolved.
+    own_configuration: PathBuf,
+}
+
 /// A folder the client is asked to watch, and the files under it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct WatchTarget {
     folder: PathBuf,
     pattern: &'static str,
+    /// The folders above which a glob that cannot name `folder` (a brace in
+    /// its path) may not reach: the root's parent, as the editor spells it and
+    /// as the workspace does.
+    floors: Vec<PathBuf>,
 }
 
 /// The registration that watches the loaded workspaces' own folders.
@@ -1096,9 +1125,9 @@ impl Session {
     /// needs no workspace to load: a configuration that does not resolve (it
     /// is being mended) does not drop the watch on it, and nor does the last
     /// folders `paths.toml` named, which are kept across it.
-    fn extra_folders(&self, index: usize) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    fn extra_folders(&self, index: usize) -> ExtraFolders {
         let Some(root) = self.roots.get(index) else {
-            return (Vec::new(), Vec::new());
+            return ExtraFolders::default();
         };
         let (scope, resolved_root) = root.checks.try_borrow().map_or_else(
             |_| (crate::checks::WatchScope::default(), root.path.clone()),
@@ -1115,27 +1144,51 @@ impl Session {
             .filter(|folder| !folder.starts_with(&own_objects))
             .map(in_editor_spelling)
             .collect();
-        let layered = root
-            .path
+        // The workspace layers the folder above the root it resolved, which a
+        // symbolic link, a mapped drive or a short name may spell otherwise
+        // than the editor's root: that folder lies outside the root, and stays
+        // as the workspace names it.
+        let layered = resolved_root
             .parent()
             .map(|parent| parent.join(".opentide").join("configurations"))
             .into_iter()
             .collect();
-        (objects, layered)
+        let floors = [root.path.parent(), resolved_root.parent()]
+            .into_iter()
+            .flatten()
+            // Not the top of a filesystem or of a drive.
+            .filter(|floor| floor.parent().is_some())
+            .map(Path::to_path_buf)
+            .collect();
+        ExtraFolders {
+            objects,
+            layered,
+            floors,
+            own_configuration: resolved_root.join(".opentide").join("configurations"),
+        }
     }
 
     fn watch_targets(&self) -> Vec<WatchTarget> {
         let mut targets = Vec::new();
-        for index in 0..self.roots.len() {
-            let (objects, configurations) = self.extra_folders(index);
-            targets.extend(objects.into_iter().map(|folder| WatchTarget {
+        let all: Vec<ExtraFolders> = (0..self.roots.len())
+            .map(|i| self.extra_folders(i))
+            .collect();
+        for folders in &all {
+            let target = |folder: PathBuf, pattern| WatchTarget {
                 folder,
-                pattern: "**",
-            }));
-            targets.extend(configurations.into_iter().map(|folder| WatchTarget {
-                folder,
-                pattern: "**/*.toml",
-            }));
+                pattern,
+                floors: folders.floors.clone(),
+            };
+            targets.extend(folders.objects.iter().cloned().map(|f| target(f, "**")));
+            targets.extend(
+                folders
+                    .layered
+                    .iter()
+                    // Another root's own folder is a fixed glob's already.
+                    .filter(|layered| !all.iter().any(|other| other.own_configuration == **layered))
+                    .cloned()
+                    .map(|f| target(f, "**/*.toml")),
+            );
         }
         targets.sort();
         targets.dedup();
@@ -1173,13 +1226,18 @@ impl Session {
         watched.serial += 1;
         let id = format!("opentide-watch-folders-{}", watched.serial);
         watched.id = Some(id.clone());
-        let watchers = targets
+        let watchers: Vec<lsp_types::FileSystemWatcher> = targets
             .iter()
-            .map(|target| lsp_types::FileSystemWatcher {
-                glob_pattern: self.watch_glob(target),
+            .filter_map(|target| self.watch_glob(target))
+            .map(|glob_pattern| lsp_types::FileSystemWatcher {
+                glob_pattern,
                 kind: None,
             })
             .collect();
+        if watchers.is_empty() {
+            watched.id = None;
+            return;
+        }
         self.send_request::<lsp_types::request::RegisterCapability>(
             lsp_types::RegistrationParams {
                 registrations: vec![lsp_types::Registration {
@@ -1195,31 +1253,37 @@ impl Session {
     }
 
     /// `target` as a watcher: a pattern under its folder, or, for a client
-    /// that has no such pattern, a glob on the folder's whole path.
-    fn watch_glob(&self, target: &WatchTarget) -> lsp_types::GlobPattern {
+    /// that has no such pattern, a glob on the folder's whole path. `None`
+    /// when the folder cannot be named by a glob and no folder above it may
+    /// stand for it (see [`glob_path`]).
+    fn watch_glob(&self, target: &WatchTarget) -> Option<lsp_types::GlobPattern> {
         let folder = target.folder.display().to_string();
         let uri = crate::uri::path_to_uri(&folder)
             .parse::<lsp_types::Uri>()
             .ok();
-        match uri {
-            Some(uri) if self.caps.relative_watch_patterns => {
-                lsp_types::GlobPattern::Relative(lsp_types::RelativePattern {
+        if let Some(uri) = uri.filter(|_| self.caps.relative_watch_patterns) {
+            return Some(lsp_types::GlobPattern::Relative(
+                lsp_types::RelativePattern {
                     base_uri: lsp_types::OneOf::Right(uri),
                     pattern: target.pattern.to_string(),
-                })
-            }
-            _ => {
-                let (path, coarse) = glob_path(&folder);
-                if coarse {
-                    self.log_warning(&format!(
-                        "opentide-lsp: {folder} has a brace in its name, which a glob cannot \
-                         escape: the client is asked to watch {path} and everything under it"
-                    ));
-                }
-                let pattern = if coarse { "**" } else { target.pattern };
-                lsp_types::GlobPattern::String(format!("{path}/{pattern}"))
-            }
+                },
+            ));
         }
+        let Some((path, coarse)) = glob_path(&folder, &target.floors) else {
+            self.log_warning(&format!(
+                "opentide-lsp: {folder} has a brace in its name, which a glob cannot escape, \
+                 and no folder above it that is the workspace's to watch: it is not watched"
+            ));
+            return None;
+        };
+        if coarse {
+            self.log_warning(&format!(
+                "opentide-lsp: {folder} has a brace in its name, which a glob cannot escape: \
+                 the client is asked to watch {path} and everything under it"
+            ));
+        }
+        let pattern = if coarse { "**" } else { target.pattern };
+        Some(lsp_types::GlobPattern::String(format!("{path}/{pattern}")))
     }
 
     /// The roots whose workspace reads the folder `path` is in, for a
@@ -1229,7 +1293,7 @@ impl Session {
     pub(crate) fn scoped_roots(&self, path: &str) -> Option<Vec<(usize, ScopeKind)>> {
         let mut found = Vec::new();
         for (index, root) in self.roots.iter().enumerate() {
-            let (objects, configurations) = self.extra_folders(index);
+            let folders = self.extra_folders(index);
             let resolved = root.checks.try_borrow().map_or_else(
                 |_| PathBuf::from(path),
                 |checks| checks.resolve(Path::new(path)),
@@ -1237,13 +1301,25 @@ impl Session {
             let inside = |folder: &PathBuf| {
                 Path::new(path).starts_with(folder) || resolved.starts_with(folder)
             };
-            if objects.iter().any(inside) {
+            if folders.objects.iter().any(inside) {
                 found.push((index, ScopeKind::Objects));
-            } else if configurations.iter().any(inside) {
+            } else if folders.layered.iter().any(inside) {
                 found.push((index, ScopeKind::Configuration));
             }
         }
         (!found.is_empty()).then_some(found)
+    }
+
+    /// The root whose own `visibility.toml` is the file at `path`.
+    pub(crate) fn visibility_root(&self, path: &str) -> Option<usize> {
+        self.roots.iter().position(|root| {
+            let own = root.visibility_path();
+            Path::new(path) == own
+                || root
+                    .checks
+                    .try_borrow()
+                    .is_ok_and(|checks| checks.resolve(Path::new(path)) == checks.resolve(&own))
+        })
     }
 
     /// Something an analysis reads changed.
@@ -2196,15 +2272,31 @@ mod tests {
 
     #[test]
     fn a_folder_is_a_glob_that_matches_it_and_nothing_else() {
+        let floors = [std::path::PathBuf::from("/w")];
         assert_eq!(
-            glob_path("/w/det [prod]"),
-            ("/w/det [[]prod]".into(), false)
+            glob_path("/w/det [prod]", &floors),
+            Some(("/w/det [[]prod]".into(), false))
         );
-        assert_eq!(glob_path("/w/a*b?c"), ("/w/a[*]b[?]c".into(), false));
-        assert_eq!(glob_path("C:\\w\\x\\"), ("C:/w/x".into(), false));
-        // A brace cannot be escaped: the folder above it.
-        assert_eq!(glob_path("/w/{team}/rules"), ("/w".into(), true));
-        assert_eq!(glob_path("/w/a}"), ("/w".into(), true));
+        assert_eq!(
+            glob_path("/w/a*b?c", &floors),
+            Some(("/w/a[*]b[?]c".into(), false))
+        );
+        assert_eq!(
+            glob_path("C:\\w\\x\\", &floors),
+            Some(("C:/w/x".into(), false))
+        );
+        // A brace cannot be escaped: the folder above it, if that is the
+        // workspace's to watch.
+        assert_eq!(
+            glob_path("/w/{team}/rules", &floors),
+            Some(("/w".into(), true))
+        );
+        assert_eq!(glob_path("/w/a}", &floors), Some(("/w".into(), true)));
+        // Never the filesystem root, or anything above the floors.
+        assert_eq!(glob_path("/{team}/rules", &floors), None);
+        assert_eq!(glob_path("/x/{team}/rules", &floors), None);
+        assert_eq!(glob_path("C:\\{team}\\rules", &floors), None);
+        assert_eq!(glob_path("/w/{team}", &[]), None);
     }
 
     #[test]

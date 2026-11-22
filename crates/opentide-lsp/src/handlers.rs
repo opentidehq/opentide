@@ -843,16 +843,15 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.touch();
                 everything = true;
             }
-        } else if Session::is_visibility(uri) {
-            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
-                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
-            }
-            let open = session
-                .root_for(&path)
-                .and_then(|i| session.roots.get(i))
-                .is_some_and(|r| r.visibility.is_some());
+        } else if let Some(index) = session.visibility_root(&path) {
+            // A root's own `visibility.toml` (a parent's, layered in from
+            // above, is a configuration file like any other: below).
+            session.roots[index]
+                .checks
+                .borrow_mut()
+                .changed([PathBuf::from(&path)]);
             // While the file is open the editor's buffer is the truth.
-            if !open {
+            if session.roots[index].visibility.is_none() {
                 session.reactivate();
                 everything = true;
             }
@@ -870,6 +869,11 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                     ScopeKind::Configuration => session.touch(),
                 }
             }
+            // A folder that is one root's layer can be another root's own
+            // configuration folder (nested roots): that root is told too.
+            if normalized.contains(".opentide/configurations/") {
+                configuration_changed(session, &path);
+            }
             everything = true;
         } else if is_state_shard(&normalized) {
             // Only `validate` reads a deployment state shard: the findings
@@ -880,16 +884,21 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
             session.touch_object();
             everything = true;
         } else if normalized.contains(".opentide/configurations/") {
-            session.touch();
-            // The workspace resolves its configuration again.
-            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
-                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
-            }
+            configuration_changed(session, &path);
             everything = true;
         }
     }
     if everything {
         session.mark_all();
+    }
+}
+
+/// A configuration file changed: the workspace of the root it belongs to
+/// resolves its configuration again.
+fn configuration_changed(session: &Session, path: &str) {
+    session.touch();
+    if let Some(root) = session.root_for(path).and_then(|i| session.roots.get(i)) {
+        root.checks.borrow_mut().changed([PathBuf::from(path)]);
     }
 }
 

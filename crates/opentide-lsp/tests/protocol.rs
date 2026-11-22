@@ -1411,6 +1411,21 @@ fn a_moved_object_folders_file_changed_on_disk_is_followed_by_the_next_pull() {
     );
 }
 
+/// Every message the server sent the client since the last call (requests and
+/// notifications), gathered as [`server_requests`] does.
+fn server_messages(lsp: &mut Lsp) -> Vec<Value> {
+    let mut seen = Vec::new();
+    for id in [7000, 7001] {
+        send(lsp, id, "opentide/__stats", Value::Null);
+        seen.extend(
+            until_response(lsp, id)
+                .into_iter()
+                .filter(|m| !(m["id"] == id && m.get("method").is_none())),
+        );
+    }
+    seen
+}
+
 /// Every request the server sent the client since the last call: a request
 /// the test sends in between is answered after them.
 fn server_requests(lsp: &mut Lsp) -> Vec<Value> {
@@ -1844,11 +1859,14 @@ fn the_layered_configuration_stays_watched_while_it_does_not_resolve() {
     assert!(workspace_pull_codes(&mut lsp).contains(&unknown));
 }
 
-/// Two workspace folders with a layered configuration each, the second one's
-/// broken at first: what mends it is followed for the second folder, not the
-/// first (the root a path under neither falls back to). This holds the
-/// routing; that the broken layer stays watched is
-/// `the_layered_configuration_stays_watched_while_it_does_not_resolve`.
+/// A status the rule's block has, so the layer resolves and the rule has no
+/// `config_enum_unknown`; [`DESIGN_ONLY`] without it is the layer that has.
+const DESIGN_AND_STAGING: &str = "[[statuses]]\nname = \"DESIGN\"\ndescription = \"d\"\nstrategy = \"INERT\"\n\n[[statuses]]\nname = \"STAGING\"\ndescription = \"s\"\nstrategy = \"INERT\"\n";
+
+/// Two workspace folders, each with a configuration layered in from its
+/// parent, both resolving: a change to the second's makes its rule's findings
+/// change, and only that (the first's layer is not the file that changed).
+/// A path under neither root used to be handed to the first.
 #[test]
 fn a_parents_configuration_change_goes_to_the_root_it_is_layered_into() {
     let scratch = workspace("workspace-watch-two-parents", false);
@@ -1857,27 +1875,31 @@ fn a_parents_configuration_change_goes_to_the_root_it_is_layered_into() {
         let root = scratch.0.join(name).join("child");
         std::fs::create_dir_all(root.join("objects/rules")).unwrap();
         std::fs::write(root.join("objects/rules/rule-1.0.yaml"), &rule).unwrap();
-        std::fs::create_dir_all(root.parent().unwrap().join(".opentide/configurations")).unwrap();
+        let layer = root.parent().unwrap().join(".opentide/configurations");
+        std::fs::create_dir_all(&layer).unwrap();
+        std::fs::write(layer.join("deployment.toml"), DESIGN_AND_STAGING).unwrap();
         root
     };
     let (first, second) = (child("one"), child("two"));
-    // The second root's layered configuration does not resolve at first: its
-    // workspace has none to name the folder, and the path is under no root.
-    std::fs::write(
-        second
-            .parent()
-            .unwrap()
-            .join(".opentide/configurations/deployment.toml"),
-        "[[statuses\n",
-    )
-    .unwrap();
     let folder =
         |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
     let (mut lsp, _) = start(json!({
         "capabilities": watching_relative(),
         "workspaceFolders": [folder(&first, "one"), folder(&second, "two")]
     }));
-    workspace_pull_items(&mut lsp);
+    let unknown = "config_enum_unknown".to_string();
+    let by_root = |items: &[(String, Vec<String>)], root: &std::path::Path| {
+        let rule = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+        items
+            .iter()
+            .find(|(uri, _)| *uri == rule)
+            .map(|(_, codes)| codes.clone())
+            .unwrap_or_else(|| panic!("no report for {rule}: {items:?}"))
+    };
+    let items = workspace_pull_items(&mut lsp);
+    assert!(!by_root(&items, &first).contains(&unknown), "{items:?}");
+    assert!(!by_root(&items, &second).contains(&unknown), "{items:?}");
+
     let deployment = second
         .parent()
         .unwrap()
@@ -1885,21 +1907,255 @@ fn a_parents_configuration_change_goes_to_the_root_it_is_layered_into() {
     std::fs::write(&deployment, DESIGN_ONLY).unwrap();
     lsp.notify(
         "workspace/didChangeWatchedFiles",
-        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 1 }] }),
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
     );
-    let unknown = "config_enum_unknown".to_string();
-    let by_root = |items: &[(String, Vec<String>)], root: &std::path::Path| {
-        items
-            .iter()
-            .find(|(uri, _)| uri.starts_with(&file_uri(root)))
-            .map(|(_, codes)| codes.clone())
-            .unwrap_or_else(|| panic!("no report under {}: {items:?}", root.display()))
-    };
     let items = workspace_pull_items(&mut lsp);
     assert!(by_root(&items, &second).contains(&unknown), "{items:?}");
     assert!(
         !by_root(&items, &first).contains(&unknown),
         "the first root's findings changed with the second's parent: {items:?}"
+    );
+}
+
+/// The workspace's folders `/w` and `/w/child`: the child's parent is `/w`,
+/// whose configuration folder is also `/w`'s own. A change there is the outer
+/// root's configuration as much as the child's layer: both are told, and the
+/// client is not asked to watch the folder twice.
+#[test]
+fn a_nested_root_does_not_take_the_outer_roots_configuration_event() {
+    let scratch = workspace("workspace-watch-nested", false);
+    let outer = &scratch.0;
+    let inner = outer.join("child");
+    std::fs::create_dir_all(inner.join("objects/rules")).unwrap();
+    std::fs::write(inner.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let layer = outer.join(".opentide/configurations");
+    std::fs::create_dir_all(&layer).unwrap();
+    std::fs::write(layer.join("deployment.toml"), DESIGN_AND_STAGING).unwrap();
+    let folder =
+        |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "workspaceFolders": [folder(outer, "outer"), folder(&inner, "inner")]
+    }));
+    let mut sent = Vec::new();
+    all_server_requests(&mut lsp, &mut sent);
+    let unknown = "config_enum_unknown".to_string();
+    let codes_of_rule = |items: &[(String, Vec<String>)], root: &std::path::Path| {
+        let rule = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+        items
+            .iter()
+            .find(|(uri, _)| *uri == rule)
+            .map(|(_, codes)| codes.clone())
+            .unwrap_or_else(|| panic!("no report for {rule}: {items:?}"))
+    };
+    let items = workspace_pull_items(&mut lsp);
+    assert!(
+        !codes_of_rule(&items, outer).contains(&unknown),
+        "{items:?}"
+    );
+    assert!(
+        !codes_of_rule(&items, &inner).contains(&unknown),
+        "{items:?}"
+    );
+    all_server_requests(&mut lsp, &mut sent);
+    let twice = watchers_in_force(&sent)
+        .into_iter()
+        .filter(|(base, _)| *base == file_uri(&layer))
+        .count();
+    assert_eq!(twice, 0, "the outer root's own folder was registered again");
+
+    let deployment = layer.join("deployment.toml");
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
+    );
+    let items = workspace_pull_items(&mut lsp);
+    assert!(
+        codes_of_rule(&items, outer).contains(&unknown),
+        "the outer root was not told of its own configuration: {items:?}"
+    );
+    assert!(
+        codes_of_rule(&items, &inner).contains(&unknown),
+        "{items:?}"
+    );
+}
+
+/// A root named through a symbolic link to a folder whose parent differs from
+/// the link's: the configuration the workspace layers in is the resolved
+/// root's parent's, and that is the folder watched and followed.
+#[cfg(unix)]
+#[test]
+fn the_layered_folder_is_the_resolved_roots_parents() {
+    let scratch = workspace("workspace-watch-link-parent", false);
+    let real = scratch.0.join("real").join("child");
+    std::fs::create_dir_all(real.join("objects/rules")).unwrap();
+    std::fs::write(real.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let layer = scratch.0.join("real/.opentide/configurations");
+    std::fs::create_dir_all(&layer).unwrap();
+    std::fs::write(layer.join("deployment.toml"), DESIGN_AND_STAGING).unwrap();
+    let elsewhere = scratch.0.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let link = elsewhere.join("child");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(&link) }));
+    let mut sent = Vec::new();
+    all_server_requests(&mut lsp, &mut sent);
+    let unknown = "config_enum_unknown".to_string();
+    assert!(!workspace_pull_codes(&mut lsp).contains(&unknown));
+    all_server_requests(&mut lsp, &mut sent);
+    let watchers = watchers_in_force(&sent);
+    assert!(
+        watchers.contains(&(file_uri(&layer), "**/*.toml".to_string())),
+        "the resolved parent's configuration is not watched: {watchers:?}"
+    );
+    assert!(
+        !watchers
+            .iter()
+            .any(|(base, _)| *base == file_uri(&elsewhere.join(".opentide/configurations"))),
+        "the link's parent was watched: {watchers:?}"
+    );
+
+    let deployment = layer.join("deployment.toml");
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
+    );
+    assert!(
+        workspace_pull_codes(&mut lsp).contains(&unknown),
+        "the layered configuration was not followed"
+    );
+}
+
+/// A brace cannot be escaped in a glob, so a folder with one is watched by
+/// the folder above it; when that is above the workspace (here, a brace in
+/// the name of the root's parent) the folder is not watched, never the
+/// filesystem's root or a drive, and the log says so.
+#[test]
+fn a_brace_above_the_workspace_is_never_watched_by_a_folder_above_it() {
+    let scratch = workspace("workspace-watch-brace-above", false);
+    let root = scratch.0.join("{team}").join("child");
+    std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+    std::fs::write(root.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let layer = root.parent().unwrap().join(".opentide/configurations");
+    std::fs::create_dir_all(&layer).unwrap();
+    std::fs::write(layer.join("deployment.toml"), DESIGN_ONLY).unwrap();
+    // A client that watches by path glob, without relative patterns.
+    let (mut lsp, _) = start(json!({ "capabilities": {
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true }, "didChangeWatchedFiles": { "dynamicRegistration": true } }
+    }, "rootUri": file_uri(&root) }));
+    let mut seen = server_messages(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    seen.extend(server_messages(&mut lsp));
+    let requests: Vec<Value> = seen
+        .iter()
+        .filter(|m| m.get("id").is_some() && m.get("method").is_some())
+        .cloned()
+        .collect();
+    let above = scratch.0.display().to_string().replace('\\', "/");
+    for (_, glob) in registered_watchers(&requests) {
+        assert!(
+            glob.starts_with("**") || glob.starts_with(&format!("{above}/{{team}}")),
+            "a glob above the workspace was registered: {glob}"
+        );
+    }
+    let warned = seen.iter().any(|m| {
+        m["method"] == "window/logMessage"
+            && m["params"]["type"] == 2
+            && m["params"]["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("brace"))
+    });
+    assert!(warned, "no warning was logged: {seen:?}");
+}
+
+/// A parent's `visibility.toml` is a layered configuration file, not the
+/// root's own datasets: its event makes the workspace's findings be made
+/// again, even while the root's own `visibility.toml` is open (an open buffer
+/// is what the datasets' branch leaves alone).
+#[test]
+fn a_parents_visibility_toml_is_a_layered_configuration_file() {
+    let scratch = workspace("workspace-watch-parent-visibility", true);
+    let root = scratch.0.join("child");
+    std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+    std::fs::write(root.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let layer = scratch.0.join(".opentide/configurations");
+    std::fs::create_dir_all(&layer).unwrap();
+    let own = root.join(".opentide/configurations/visibility.toml");
+    std::fs::create_dir_all(own.parent().unwrap()).unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(&root) }));
+    open(&mut lsp, &file_uri(&own), "toml", "");
+    let hits = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["workspaceReportHits"]
+            .as_u64()
+            .unwrap()
+    };
+    workspace_pull_codes(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    let before = hits(&mut lsp);
+    assert_eq!(before, 1);
+
+    let visibility = layer.join("visibility.toml");
+    std::fs::write(
+        &visibility,
+        "[[logsources]]\nname = \"NTANetAnalytics\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
+    )
+    .unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&visibility), "type": 1 }] }),
+    );
+    workspace_pull_codes(&mut lsp);
+    assert_eq!(
+        hits(&mut lsp),
+        before,
+        "the pull after a layered visibility.toml came from the old report"
+    );
+}
+
+/// Nothing is asked of the client before it has said `initialized`: what the
+/// workspace reads is registered by the first batch after it, not by one that
+/// came before.
+#[test]
+fn no_watcher_is_registered_before_the_client_is_initialized() {
+    let scratch = workspace("workspace-watch-initialized", false);
+    let moved = move_objectives(&scratch.0, "objectives-moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    std::fs::write(moved.join("objective-1.0.yaml"), fixture(OBJECTIVE)).unwrap();
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request(
+        "initialize",
+        json!({ "capabilities": watching_relative(), "rootUri": file_uri(&scratch.0) }),
+    );
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    // A batch before `initialized`: the workspace loads and the folders are known.
+    workspace_pull_codes(&mut lsp);
+    let mut early = server_messages(&mut lsp);
+    early.extend(server_messages(&mut lsp));
+    assert!(
+        !early
+            .iter()
+            .any(|m| m["method"] == "client/registerCapability"),
+        "a watcher was registered before `initialized`: {early:?}"
+    );
+
+    lsp.notify("initialized", json!({}));
+    let mut late = server_messages(&mut lsp);
+    workspace_pull_codes(&mut lsp);
+    late.extend(server_messages(&mut lsp));
+    let requests: Vec<Value> = late
+        .iter()
+        .filter(|m| m.get("id").is_some() && m.get("method").is_some())
+        .cloned()
+        .collect();
+    let watchers = registered_watchers(&requests);
+    assert!(
+        watchers.iter().any(|(base, _)| *base == file_uri(&moved)),
+        "the moved folder was not registered after `initialized`: {watchers:?}"
     );
 }
 
