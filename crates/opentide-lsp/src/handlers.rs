@@ -264,6 +264,34 @@ impl Dispatcher<'_> {
         self
     }
 
+    /// [`Dispatcher::on`] for a handler that cannot answer yet: its message
+    /// goes back as `ServerCancelled` with `retriggerRequest`, which a client
+    /// answers by asking again, where an empty answer is one it keeps.
+    fn on_retriggered<R: lsp_types::request::Request>(
+        mut self,
+        handler: impl FnOnce(&mut Session, R::Params) -> Result<R::Result, String>,
+    ) -> Self {
+        let Some(request) = self.request.take() else {
+            return self;
+        };
+        if request.method != R::METHOD {
+            self.request = Some(request);
+            return self;
+        }
+        self.response = Some(match serde_json::from_value::<R::Params>(request.params) {
+            Ok(params) => match handler(self.session, params) {
+                Ok(result) => Response::new_ok(request.id, result),
+                Err(message) => server_cancelled(request.id, message),
+            },
+            Err(err) => Response::new_err(
+                request.id,
+                ErrorCode::InvalidParams as i32,
+                format!("invalid params for {}: {err}", R::METHOD),
+            ),
+        });
+        self
+    }
+
     /// [`Dispatcher::on`] for a handler that checks its params further than
     /// they deserialize (an unknown `language`): its refusal is
     /// `InvalidParams`, as params that do not parse are.
@@ -367,7 +395,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<DocumentSymbolRequest>(handle_document_symbol)
         .on::<WorkspaceSymbolRequest>(handle_workspace_symbol)
         .on::<SemanticTokensFullRequest>(handle_semantic_tokens)
-        .on::<DocumentDiagnosticRequest>(handle_pull_diagnostics)
+        .on_retriggered::<DocumentDiagnosticRequest>(handle_pull_diagnostics)
         .on::<WorkspaceDiagnosticRequest>(handle_workspace_diagnostics)
         .on::<CodeActionRequest>(handle_code_action)
         .on::<FoldingRangeRequest>(handle_folding)
@@ -710,6 +738,7 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
         },
     );
     document_changed(session, uri, language, root);
+    session.opened(uri);
 }
 
 fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
@@ -1191,12 +1220,82 @@ fn result_id(items: &[lsp::Diagnostic]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+/// `ServerCancelled` (LSP 3.17) with `retriggerRequest`: the client asks the
+/// same question again, unlike an answer, which it keeps until the document
+/// changes.
+fn server_cancelled(id: lsp_server::RequestId, message: String) -> Response {
+    Response {
+        id,
+        response_result: Err(lsp_server::ResponseError {
+            code: ErrorCode::ServerCancelled as i32,
+            message,
+            data: Some(serde_json::json!({ "retriggerRequest": true })),
+        }),
+    }
+}
+
+/// A document's pulled diagnostics: an open document's, from its analysis; a
+/// deployment state shard's; and a file the editor has not opened (a pull
+/// that overtook its `didOpen`, as a client's replay of its open documents
+/// does) as the pull of the workspace reports it, from the file on disk.
+/// What the server cannot answer (a file under no folder of the workspace, or
+/// one the workspace does not hold) is refused, for the client to ask again:
+/// an empty report is one the client keeps, and shows no finding until the
+/// document is edited.
+fn pulled_diagnostics(
+    session: &Session,
+    uri: &str,
+) -> Result<(Vec<lsp::Diagnostic>, Option<String>), String> {
+    let path = uri_to_path(uri);
+    if session.docs.contains_key(uri) || session.shard_diagnostics(&path).is_some() {
+        return Ok((diagnostics_for(session, uri), None));
+    }
+    let key = crate::session::path_key(&path);
+    let open: BTreeSet<String> = session
+        .docs
+        .keys()
+        .map(|open| crate::session::path_key(&uri_to_path(open)))
+        .collect();
+    let Some(root) = session
+        .root_containing(&path)
+        .filter(|_| !open.contains(&key))
+    else {
+        return Err(format!(
+            "{uri} is not open and is under no workspace folder: ask again once it is"
+        ));
+    };
+    let host = session.host(Some(root));
+    let build = |path: &str, diagnostics: Vec<opentide_core::Diagnostic>| {
+        let found: Vec<lsp::Diagnostic> = diagnostics
+            .iter()
+            .map(|d| lsp_diagnostic(session, Some(root), path, d))
+            .collect();
+        let id = result_id(&found);
+        Some(Arc::new((file_uri(path)?, id, found)))
+    };
+    let entries = session.closed_entries(root, &open, &host, &build, Some(&key));
+    let Some(entry) = entries.first() else {
+        return Err(format!(
+            "{uri} is not open and is no object file the workspace holds (yet): ask again"
+        ));
+    };
+    let (_, id, found) = &**entry;
+    Ok((found.clone(), Some(id.clone())))
+}
+
 fn handle_pull_diagnostics(
     session: &mut Session,
     params: lsp::DocumentDiagnosticParams,
-) -> lsp::DocumentDiagnosticReportResult {
-    let items = diagnostics_for(session, params.text_document.uri.as_str());
-    let id = result_id(&items);
+) -> Result<lsp::DocumentDiagnosticReportResult, String> {
+    let uri = params.text_document.uri.as_str();
+    let answer = pulled_diagnostics(session, uri);
+    if !session.docs.contains_key(uri) && session.shard_diagnostics(&uri_to_path(uri)).is_none() {
+        // Answered (or refused) without the text the document is opened with:
+        // its `didOpen` is to have the client pull it again.
+        session.pulled_unopened(uri);
+    }
+    let (items, kept_id) = answer?;
+    let id = kept_id.unwrap_or_else(|| result_id(&items));
     let report = if params.previous_result_id.as_deref() == Some(id.as_str()) {
         lsp::DocumentDiagnosticReport::Unchanged(lsp::RelatedUnchangedDocumentDiagnosticReport {
             related_documents: None,
@@ -1213,7 +1312,7 @@ fn handle_pull_diagnostics(
             },
         })
     };
-    lsp::DocumentDiagnosticReportResult::Report(report)
+    Ok(lsp::DocumentDiagnosticReportResult::Report(report))
 }
 
 /// The object files no editor has open, with what their analysis finds:
@@ -1363,7 +1462,7 @@ fn workspace_report(session: &Session) -> Vec<crate::session::ReportEntry> {
             let id = result_id(&found);
             Some(Arc::new((uri, id, found)))
         };
-        entries.extend(session.closed_entries(root, &open, &host, &build));
+        entries.extend(session.closed_entries(root, &open, &host, &build, None));
     }
     entries
 }
@@ -2842,6 +2941,23 @@ fn handle_custom_highlight(params: custom::TextParams) -> Result<Value, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A pull the server cannot answer is `ServerCancelled` (-32802) with
+    /// `data.retriggerRequest`: a client that reads either asks again, and
+    /// keeps nothing.
+    #[test]
+    fn a_cancelled_pull_names_the_code_and_asks_to_be_retriggered() {
+        let response = server_cancelled(lsp_server::RequestId::from(7), "not yet".to_string());
+        let Err(error) = response.response_result else {
+            panic!("a refusal answered: {response:?}");
+        };
+        assert_eq!(error.code, -32802);
+        assert_eq!(error.message, "not yet");
+        assert_eq!(
+            error.data,
+            Some(serde_json::json!({ "retriggerRequest": true }))
+        );
+    }
 
     fn change(
         sl: u32,

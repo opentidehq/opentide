@@ -749,6 +749,14 @@ pub(crate) struct Session {
     pending: RefCell<BTreeSet<String>>,
     everything: Cell<bool>,
     open_documents: Cell<bool>,
+    /// A client that pulls is asked to pull again at the end of the batch: a
+    /// document it pulled before it was opened (the pull overtook its
+    /// `didOpen`, as a client's replay of its open documents does) was
+    /// answered without the text it opens with, which may not be the file's.
+    refresh_pulls: Cell<bool>,
+    /// The documents a pull was answered for (or refused) before the server
+    /// had seen them opened: the next `didOpen` of one asks for that pull again.
+    pulled_unopened: RefCell<HashSet<String>>,
     outbox: RefCell<Vec<Message>>,
     requests: RefCell<ReqQueue<(), &'static str>>,
     /// The broken-file warning was shown (once per session).
@@ -1618,12 +1626,17 @@ impl Session {
     /// with its file, for the epoch and the stamp of the findings it was made
     /// from, and used again while both are the same: the pull repeats every
     /// two seconds, and an edit changes the findings of one file.
+    ///
+    /// `only` names one file (its [`path_key`]): the entry of that file alone,
+    /// made as the pull of the whole workspace makes it (a document pull of a
+    /// file the editor has not opened), and no deployment state shard's.
     pub(crate) fn closed_entries(
         &self,
         root: usize,
         open: &BTreeSet<String>,
         host: &dyn WorkspaceHost,
         build: &dyn Fn(&str, Vec<opentide_core::Diagnostic>) -> Option<ReportEntry>,
+        only: Option<&str>,
     ) -> Vec<ReportEntry> {
         let Some(r) = self.roots.get(root) else {
             return Vec::new();
@@ -1653,7 +1666,7 @@ impl Session {
                 continue;
             };
             let path = object.path.as_str();
-            if open.contains(&path_key(path)) {
+            if open.contains(&path_key(path)) || only.is_some_and(|only| path_key(path) != only) {
                 continue;
             }
             let key = file.resolved.get_or_init(|| {
@@ -1711,6 +1724,9 @@ impl Session {
             entries.push(entry);
         }
         drop(disk);
+        if only.is_some() {
+            return entries;
+        }
         // The deployment state shards `validate` reports on (#1750): no
         // object file holds their findings, so each shard with some has an
         // entry of its own.
@@ -1965,6 +1981,15 @@ impl Session {
         best.or(if self.roots.is_empty() { None } else { Some(0) })
     }
 
+    /// The root whose folder holds `path`: [`Session::root_for`] answers the
+    /// first root for a path under none of them, which an open document
+    /// outside every folder is served under, and a file nobody opened is not.
+    pub(crate) fn root_containing(&self, path: &str) -> Option<usize> {
+        let index = self.root_for(path)?;
+        let root = self.roots.get(index)?;
+        Path::new(path).starts_with(&root.path).then_some(index)
+    }
+
     /// Make sure a root exists for a document opened outside every
     /// workspace folder: its `.opentide/` or `objects/` ancestor
     /// ([`workspace_root`]).
@@ -2199,6 +2224,20 @@ impl Session {
         self.open_documents.set(true);
     }
 
+    /// A pull was answered, or refused, for a document that was not open: its
+    /// `didOpen` is to ask the client to pull it again ([`Session::opened`]).
+    pub(crate) fn pulled_unopened(&self, uri: &str) {
+        self.pulled_unopened.borrow_mut().insert(uri.to_string());
+    }
+
+    /// A document was opened: when a pull was answered for it before, the
+    /// client is asked to pull again, once.
+    pub(crate) fn opened(&self, uri: &str) {
+        if self.pulled_unopened.borrow_mut().remove(uri) {
+            self.refresh_pulls.set(true);
+        }
+    }
+
     /// The catalog state of a root (`None`: outside every root).
     fn catalog_state(&self, root: Option<usize>) -> Option<&CatalogState> {
         match root {
@@ -2327,9 +2366,10 @@ impl Session {
         self.flush_catalog_changes();
         let everything = self.everything.replace(false);
         let tide_documents = self.open_documents.replace(false);
+        let refresh_pulls = self.refresh_pulls.replace(false);
         let pending = std::mem::take(&mut *self.pending.borrow_mut());
         if self.caps.pull_diagnostics {
-            if everything {
+            if everything || refresh_pulls {
                 self.send_request::<lsp_types::request::WorkspaceDiagnosticRefresh>(());
             }
         } else {
@@ -2383,6 +2423,7 @@ impl Session {
     pub(crate) fn discard_publishes(&mut self) {
         self.everything.set(false);
         self.open_documents.set(false);
+        self.refresh_pulls.set(false);
         self.pending.borrow_mut().clear();
     }
 
