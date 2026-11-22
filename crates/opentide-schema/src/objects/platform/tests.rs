@@ -132,6 +132,52 @@ fn crowdstrike_trigger_and_outcome_take_what_deploy_takes() {
 }
 
 #[test]
+fn a_block_severity_takes_what_deploy_maps() {
+    // #1751: CrowdStrike's `details.severity: low` and Defender's
+    // `alert.severity: medium` passed `validate`, and the deploy (and its
+    // dry run) refused them ("Invalid Severity", "\"medium\"").
+    let crowdstrike = |severity: Json| {
+        json!({"status": "S", "query": "x",
+               "details": {"trigger": "verbose", "outcome": "detection", "severity": severity},
+               "schedule": {"frequency": "1h", "lookback": "1h"}})
+    };
+    let defender = |severity: Json| {
+        json!({"status": "S", "query": "x", "scheduling": "1H", "impacted_entities": {},
+               "alert": {"category": "Execution", "severity": severity}})
+    };
+    let expected = "deploy takes Informational, Low, Medium, High or Critical (exact case)";
+    assert_eq!(
+        errors("crowdstrike", &crowdstrike(json!("low"))),
+        format!("details.severity: {expected}, not \"low\"; did you mean \"Low\"?")
+    );
+    assert_eq!(
+        errors("defender_for_endpoint", &defender(json!("Severe"))),
+        format!("alert.severity: {expected}, not \"Severe\"")
+    );
+    // The five names, `null` and an empty string (deploy reads both as
+    // unset: the rule's `response.alert_severity`) pass.
+    let mut accepted: Vec<Json> = SEVERITIES.iter().map(|name| json!(name)).collect();
+    accepted.extend([json!(null), json!("")]);
+    for severity in accepted {
+        assert_eq!(
+            errors("crowdstrike", &crowdstrike(severity.clone())),
+            "",
+            "{severity}"
+        );
+        assert_eq!(
+            errors("defender_for_endpoint", &defender(severity.clone())),
+            "",
+            "{severity}"
+        );
+    }
+    // garde says the same of a model built another way.
+    let pins = Pins::default();
+    assert!(garde_optional_severity(&Some("HIGH".into()), &pins).is_err());
+    assert!(garde_optional_severity(&Some("High".into()), &pins).is_ok());
+    assert!(garde_optional_severity(&None, &pins).is_ok());
+}
+
+#[test]
 fn every_query_text_refuses_a_blank_query() {
     for (platform, block) in [
         ("splunk", json!({"status": "S"})),
