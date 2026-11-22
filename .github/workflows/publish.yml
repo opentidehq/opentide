@@ -12,7 +12,7 @@
 #     and macOS with their installer (no Windows binary: Windows installs from
 #     PyPI or npm), the engine assets editors pin
 #     (highlights-<v>.zip, the WebAssembly builds, THIRD-PARTY-LICENSES.html,
-#     NOTICE, WASI-LIBC-LICENSES.txt), the CycloneDX SBOMs and SHA256SUMS
+#     NOTICE, WASI-LIBC-LICENSES.txt, THIRD-PARTY-DATA-LICENSES.txt), the CycloneDX SBOMs and SHA256SUMS
 #     (engine-release-build.yml), with the notes the notes PR wrote.
 #
 # Run workflow on development (Actions > Publish > Run workflow, or

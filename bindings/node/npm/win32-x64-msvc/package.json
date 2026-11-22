@@ -6,7 +6,11 @@
   ],
   "main": "opentide.win32-x64-msvc.node",
   "files": [
-    "opentide.win32-x64-msvc.node"
+    "opentide.win32-x64-msvc.node",
+    "LICENSE",
+    "NOTICE",
+    "data/catalogs/**/LICENSE*",
+    "data/catalogs/**/NOTICE"
   ],
   "description": "opentide for Node.js: the SDK and the opentide command line. Spec-driven development for agentic detection engineering.",
   "keywords": [
