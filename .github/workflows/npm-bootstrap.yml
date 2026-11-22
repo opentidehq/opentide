@@ -49,7 +49,7 @@ jobs:
           set -u
           for p in $PACKAGES; do
             echo "== $p"
-            npm trust github "$p" --repo opentidehq/opentide --file publish.yml --yes 2>&1 || echo "::warning::npm trust failed for $p"
+            npm trust github "$p" --repo opentidehq/opentide --file publish.yml --allow-publish --yes 2>&1 || echo "::warning::npm trust failed for $p"
           done
       - name: verify
         if: always()
