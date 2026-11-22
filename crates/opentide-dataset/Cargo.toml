@@ -26,6 +26,10 @@ thiserror.workspace = true
 # never for the wasm targets), so it never reaches a shipped artifact.
 zstd = { version = "0.14", default-features = false, optional = true }
 
+[dev-dependencies]
+# The tests write their own blobs, damaged and whole, as `build::encode` does.
+zstd = { version = "0.14", default-features = false }
+
 [features]
 # `opentide_dataset::build`: for a crate's build.rs, as a build dependency only.
 encode = ["dep:zstd"]

@@ -121,7 +121,7 @@ scenarios, 10 runs each, every run a fresh server (`scripts/perf/cold-start.sh`)
 |---|---|---|---:|---:|---:|
 | `native_small` | `opentide-lsp`, `--release` | the Tide corpus | 62 ms | 42.5 ms | 55.8 ms |
 | `native_large` | `opentide-lsp`, `--release` | 1,000 object files | 127 ms | 66.5 ms | 90.6 ms |
-| `wasi_small` | `opentide-lsp.wasm` (`wasm32-wasip1`, `--release`) under wasmtime | the Tide corpus | 192 ms, waived | 192.6 ms | 240.2 ms |
+| `wasi_small` | `opentide-lsp.wasm` (`wasm32-wasip1`, `--profile wasi-lsp`) under wasmtime | the Tide corpus | 192 ms, waived | 192.6 ms | 240.2 ms |
 | `wasi_large` | the same | 1,000 object files | 350 ms, waived | 419.4 ms | 522.3 ms |
 
 The workspaces are `scripts/perf/make_workspace.py`'s: the Tide corpus as the CLI E2E suite lays it
@@ -155,9 +155,9 @@ To measure locally:
 
 ```bash
 cargo build --release -p opentide-lsp
-cargo build --release -p opentide-lsp --target wasm32-wasip1
+cargo build --profile wasi-lsp -p opentide-lsp --target wasm32-wasip1
 scripts/perf/cold-start.sh /tmp/cold-start target/release/opentide-lsp \
-  target/wasm32-wasip1/release/opentide-lsp.wasm
+  target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm
 python3 scripts/perf/check_cold_start.py tests/bench/lsp-cold-start.toml /tmp/cold-start
 ```
 

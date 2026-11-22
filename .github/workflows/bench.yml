@@ -183,7 +183,8 @@ jobs:
   # scripts/perf/lsp-bench.mjs (scripts/perf/cold-start.sh). Each scenario's p50 is
   # held to tests/bench/lsp-cold-start.toml with budgets.toml's headroom
   # (scripts/perf/check_cold_start.py; docs/engine/THROUGHPUT.md). The servers are
-  # built --release, with LTO, as they ship; no tenant, no network.
+  # built as they ship (native --release with LTO, WASI with the `wasi-lsp` profile); no tenant,
+  # no network.
   lsp-cold-start:
     name: Benchmarks (language server cold start)
     concurrency:
@@ -211,12 +212,13 @@ jobs:
       - name: Build the language server, native and WASI
         run: |
           cargo build --locked --release -p opentide-lsp
-          cargo build --locked --release -p opentide-lsp --target wasm32-wasip1
+          # The WASI module as the release ships it (scripts/engine/build-wasm.sh wasi): opt-level s.
+          cargo build --locked --profile wasi-lsp -p opentide-lsp --target wasm32-wasip1
 
       - name: Measure the cold start
         run: >-
           scripts/perf/cold-start.sh cold-start target/release/opentide-lsp
-          target/wasm32-wasip1/release/opentide-lsp.wasm
+          target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm
 
       - name: Check against the budgets
         run: >-

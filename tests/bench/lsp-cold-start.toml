@@ -39,13 +39,12 @@ target_ms = 127
 id = "wasi_small"
 label = "WASI, small workspace"
 target_ms = 192
-target_waiver = "#1767, the runner class measures 193 to 240 ms under wasmtime 38, above #1746's machine"
 
 [[scenario]]
 id = "wasi_large"
 label = "WASI, large workspace"
 target_ms = 350
-target_waiver = "#1767, the runner class measures 419 to 522 ms under wasmtime 38, above #1746's machine"
+target_waiver = "#1767, an EPYC 7763 of the runner class measures 493 ms under wasmtime 38 (an EPYC 9V45: 304 to 330 ms), above #1746's machine"
 
 [[cpu_baseline]]
 cpu_model = "AMD EPYC 9V74 80-Core Processor"
@@ -59,10 +58,20 @@ wasi_large = 419.4
 
 [[cpu_baseline]]
 cpu_model = "AMD EPYC 7763 64-Core Processor"
-source = "https://github.com/opentidehq/opentide/actions/runs/44995501466/attempts/2"
+source = "https://github.com/opentidehq/opentide/actions/runs/45016268023"
 
 [cpu_baseline.p50_ms]
-native_small = 55.8
-native_large = 90.6
-wasi_small = 240.2
-wasi_large = 522.3
+native_small = 40.2
+native_large = 79.9
+wasi_small = 177.4
+wasi_large = 492.9
+
+[[cpu_baseline]]
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/45016264888"
+
+[cpu_baseline.p50_ms]
+native_small = 26.2
+native_large = 46.2
+wasi_small = 113.2
+wasi_large = 330.2
