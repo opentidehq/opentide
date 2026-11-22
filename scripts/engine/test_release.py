@@ -984,7 +984,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             for job, body in jobs.items()
             if re.search(
                 r"\bcargo (?:build|run|install|package|publish)\b|build-wasm\.sh|build\.mjs"
-                r"|release\.py (?:vendor|publish)|smoke_release\.sh",
+                r"|release\.py (?:vendor|publish)|kind: cargo\b",
                 body,
             )
         )
@@ -998,9 +998,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 "native",
                 "npm-native",
                 "sbom",
-                # `cargo install` from the crate packages (smoke_release.sh cargo).
-                "smoke",
                 "smoke-registries",
+                # `cargo install` from the crate packages (smoke_release.sh cargo).
+                "smoke-sources",
                 "wasm",
             ],
         )
@@ -1075,12 +1075,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertIn("build", needs.group(1).split(", "), job)
         self.assertIn("uses: ./.github/workflows/release-build.yml", jobs["build"])
         built = workflow_jobs(RELEASE_BUILD)
-        needs = re.search(r"^    needs: \[(.*)\]$", built["smoke"], re.MULTILINE)
-        assert needs is not None
-        self.assertEqual(
-            set(needs.group(1).split(", ")) - {"release-versions"},
-            set(built) - {"release-versions", "smoke", "av-gate-packages"},
-        )
+        smokes = ("smoke", "smoke-sources")
+        needed: set[str] = set()
+        for job in smokes:
+            needs = re.search(r"^    needs: \[(.*)\]$", built[job], re.MULTILINE)
+            assert needs is not None
+            needed |= set(needs.group(1).split(", ")) - {"release-versions"}
+        # Between them the two smoke jobs wait for every build.
+        self.assertEqual(needed, set(built) - {"release-versions", *smokes, "av-gate-packages"})
         # The antivirus gate scans the same builds, and fails the workflow (so `build`) itself.
         gate = re.search(r"^    needs: \[(.*)\]$", built["av-gate-packages"], re.MULTILINE)
         assert gate is not None
@@ -1088,9 +1090,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
             set(gate.group(1).split(", ")) - {"release-versions"},
             {"packages", "sdist", "crate-packages"},
         )
-        # Each of the six platforms, the sdist and the crate packages.
+        # Each of the six platforms and the PyPI dist's shape; then the sdist
+        # and the crate packages, built from source.
         kinds = re.findall(r"kind: (\w+) \}", built["smoke"])
-        self.assertEqual(kinds, ["platform"] * 6 + ["sdist", "cargo"])
+        self.assertEqual(kinds, ["platform"] * 6 + ["shape"])
+        sources = re.findall(r"kind: (\w+) \}", built["smoke-sources"])
+        self.assertEqual(sources, ["sdist", "cargo"])
         # The wheels are smoke-tested on their own OS in build-packages.yml.
         smoke = workflow_jobs(PACKAGES)["wheel-smoke"]
         self.assertIn("needs: [versions, wheels]", smoke)
@@ -1207,7 +1212,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("VERSION: ${{ needs.release-versions.outputs.crates }}", package)
         self.assertLess(package.index(bump), package.index("release.py vendor"))
         self.assertIn(
-            "CRATES_VERSION: ${{ needs.release-versions.outputs.crates }}", built["smoke"]
+            "CRATES_VERSION: ${{ needs.release-versions.outputs.crates }}", built["smoke-sources"]
         )
         script = (Path(__file__).resolve().parents[1] / "build" / "smoke_release.sh").read_text(
             encoding="utf-8"

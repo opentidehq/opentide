@@ -93,7 +93,9 @@ env:
 #   stubs           `stubs`: the extension with PyO3's introspection, xtask
 #   throughput      `throughput`: the throughput bench (bench profile), xtask
 #   wiring          `wiring`: xtask's language_wiring test
-#   engine-check    `engine-lint`: clippy (native and wasm32) and rustdoc
+#   engine-check    `engine-lint`: the workspace's clippy and rustdoc
+#   engine-variants `engine-lint-variants`: clippy without `terminal`, on
+#                   wasm32 and on opentide-schema's `stubs`
 #   wasm            `wasm`: the browser module, the WASI server and command line
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
 #                   `conformance` saves it, by the nightly and on pushes to
@@ -244,9 +246,10 @@ jobs:
   engine-lint:
     name: Engine lint (fmt, clippy, doc)
     needs: changes
-    # The wasm32 clippy alone when only build-wasm.sh or what the `wasm` job
-    # reads changed (`wasm` without `rust`).
-    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
+    # The workspace's lints. The feature and target variants are
+    # engine-lint-variants', which runs beside it (this job was the PR gate's
+    # longest, 10 to 13.5 min, with both in it).
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -273,15 +276,61 @@ jobs:
           cache: engine-check
 
       - name: rustfmt
-        if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --all --check
 
       - name: clippy
-        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # Broken intra-doc links and the like fail the build.
+      - name: rustdoc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --no-deps --workspace --locked
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  engine-lint-variants:
+    name: Engine lint (features, WebAssembly targets)
+    needs: changes
+    # What engine-lint's workspace-wide run cannot see: opentide-cli without
+    # its `terminal` feature, the WebAssembly targets and opentide-schema's
+    # `stubs` feature and wasm32 build. Its own job and compiler cache family
+    # (`engine-variants`), beside engine-lint. The wasm32 clippy alone when
+    # only build-wasm.sh or what the `wasm` job reads changed (`wasm` without
+    # `rust`).
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: engine-variants
+
       # opentide-cli as xtask and the WASI build compile it, without its
-      # `terminal` feature: the workspace-wide run above unifies it on.
+      # `terminal` feature: engine-lint's workspace-wide run unifies it on.
       - name: clippy without the terminal feature
         if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
@@ -310,13 +359,6 @@ jobs:
           rustup target add wasm32-unknown-unknown
           cargo clippy --locked -p opentide-schema --all-targets --features stubs -- -D warnings
           cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown -- -D warnings
-
-      # Broken intra-doc links and the like fail the build.
-      - name: rustdoc
-        if: needs.changes.outputs.rust == 'true'
-        env:
-          RUSTDOCFLAGS: "-D warnings"
-        run: cargo doc --no-deps --workspace --locked
 
       - name: Save the compiler cache
         if: ${{ !cancelled() }}
@@ -1197,7 +1239,7 @@ jobs:
   # client's tests against the native, worker and WASI servers, only when
   # packages/ or the browser module change (`ts_packages`) and on every push and nightly: they check
   # the client, not the parser. The WebAssembly targets' clippy is
-  # `engine-lint`'s.
+  # `engine-lint-variants`'s.
   wasm:
     name: WebAssembly (browser, WASI, npm packages)
     needs: changes
@@ -1624,6 +1666,7 @@ jobs:
       - changes
       - lint
       - engine-lint
+      - engine-lint-variants
       - native
       - build
       - python
