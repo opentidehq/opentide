@@ -13,11 +13,18 @@
 name: AV terminal UI experiment
 
 on:
+  # A workflow that is new on a branch cannot be dispatched until it is on the default branch: this
+  # one also runs when it is pushed to the branch of #1746 (and nowhere else), with the dry run
+  # named below. It is deleted once the question is answered.
+  push:
+    branches: [fix/av-compressed-datasets]
+    paths: [.github/workflows/av-tui-experiment.yml]
   workflow_dispatch:
     inputs:
       npm_run_id:
         description: "The run whose `npm-packages` artifact holds the win32 .node files (a publish.yml dry run)."
-        required: true
+        required: false
+        default: "44952938167"
         type: string
 
 permissions:
@@ -94,7 +101,7 @@ jobs:
         with:
           name: npm-packages
           path: npm
-          run-id: ${{ inputs.npm_run_id }}
+          run-id: ${{ inputs.npm_run_id || '44952938167' }}
           github-token: ${{ github.token }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
