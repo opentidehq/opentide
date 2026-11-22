@@ -23,6 +23,13 @@ max_bytes = 20_710_000
 glob = "opentide-lsp-wasm32-wasip1.wasm"
 max_bytes = 15_900_000
 
+# The command line's WASI module, which the VS Code extension pins (docs/internal/vscode-wasi.md):
+# 22,134,512 bytes as `build-wasm.sh cli` builds it at opt-level `s` (#1774; 9.3 MB at gzip -9, held
+# to the .vsix's 15 MiB by the script; 18,952,428 at `z`, before), +3%.
+[[artifact]]
+glob = "opentide-wasm32-wasip1.wasm"
+max_bytes = 22_800_000
+
 [[artifact]]
 glob = "opentide-wasm-web-v*.zip"
 max_bytes = 5_800_000

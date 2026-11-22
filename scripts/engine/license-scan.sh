@@ -7,7 +7,8 @@
 # Usage: license-scan.sh [--product] <file-or-dir>...  (zips, tarballs and .crate files are unpacked)
 #
 # --product scans what carries opentide's own package data (the `opentide`
-# binaries, the opentide-cli crate and @opentide/opentide, as the PyPI wheel
+# binaries and their WASI module `opentide-wasm32-wasip1.wasm`, the opentide-cli
+# crate and @opentide/opentide, as the PyPI wheel
 # always has): its `platform_sdk` explain page
 # (src/opentide/data/diagnostics/platform_sdk.md, still shipped though the Rust
 # `doctor` has no such check since UC-6.2) names `splunklib`, the Python module

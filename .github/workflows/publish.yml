@@ -7,7 +7,8 @@
 #     `opentide` facade with them;
 #   - the npm packages: @opentide/opentide, its native packages (napi-rs), the
 #     `opentide` alias, @opentide/lsp-client, @opentide/lsp-worker and @opentide/wasi-host, with
-#     provenance;
+#     provenance: a release under the dist-tag `latest`, a public candidate
+#     (X.Y.Z-rc.N) under `next`, never `latest`;
 #   - the GitHub Release: the `opentide` and `opentide-lsp` binaries for Linux
 #     and macOS with their installer (no Windows binary: Windows installs from
 #     PyPI or npm), the engine assets editors pin
@@ -35,7 +36,10 @@
 #     verify-assets, registry or smoke-registries job runs. It cannot be
 #     combined with release_candidate, dry_run or checkout_ref.
 #   - release_candidate: N, a PUBLIC release candidate (pre-releases on GitHub,
-#     PyPI as X.Y.ZrcN and crates.io as X.Y.Z-rc.N, nothing on npm). Enabled
+#     PyPI as X.Y.ZrcN, crates.io as X.Y.Z-rc.N and npm as X.Y.Z-rc.N under the
+#     dist-tag `next`). Every npm package must already exist on npm, which the
+#     guard checks before anything is built, let alone published
+#     (docs/internal/publishing.md, "npm", step 10.5). Enabled
 #     for 1.0.0-rc.N (`public_candidates=true` in the guard); set it to false
 #     to refuse public candidates again (a dry run aside) and keep only the
 #     internal channel.
@@ -63,7 +67,7 @@
 # (GitHub artifact attestations of every artifact), `release` (the tag and the
 # GitHub Release, created with GITHUB_TOKEN, which starts no other workflow),
 # `verify-assets` (the published assets, their sums and attestations), the
-# registries (`pypi`, `crates`, and for a release `npm`) and
+# registries (`pypi`, `crates` and `npm`) and
 # `smoke-registries` (installs what they now serve).
 #
 # Only attest, pypi, crates and npm may mint an OIDC token: crates.io and npm
@@ -85,7 +89,7 @@ on:
         default: ""
         type: string
       release_candidate:
-        description: "Public release candidate number N: vX.Y.Z-rc.N as pre-releases on PyPI and crates.io (from integration/unified-core or development). Empty: a release."
+        description: "Public release candidate number N: vX.Y.Z-rc.N as pre-releases on PyPI, crates.io and npm (dist-tag next, never latest), from integration/unified-core or development. Every npm package must exist on npm first. Empty: a release."
         required: false
         default: ""
         type: string
@@ -204,6 +208,12 @@ jobs:
                 echo "::error::public release candidates are disabled while the internal channel exists: ${tag} cannot be resumed to the registries." >&2
                 exit 1
               fi
+              # A resumed candidate publishes to npm under `next`: one older than
+              # the first npm candidate (v1.0.0-rc.3) would move `next` backwards.
+              if python3 -c 'import re,sys; m = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)-rc\.(\d+)", sys.argv[1]); sys.exit(0 if m and tuple(map(int, m.groups())) < (1, 0, 0, 3) else 1)' "${tag}"; then
+                echo "::error::${tag} is older than v1.0.0-rc.3, the first candidate that publishes to npm: resuming it would publish an old version under npm's next tag. Cut the next candidate instead." >&2
+                exit 1
+              fi
               channel=rc
             else
               channel=release
@@ -269,6 +279,98 @@ jobs:
             echo "create_release=${create_release}"
           } >> "$GITHUB_OUTPUT"
           echo "### ${tag} (${channel})" >> "$GITHUB_STEP_SUMMARY"
+
+      # npm cannot create a package through trusted publishing, and PyPI and
+      # crates.io are permanent: so before anything is built, let alone
+      # published, every npm package of the train must exist on npm (the
+      # maintainer publishes each once by hand and registers publish.yml on it:
+      # docs/internal/publishing.md, step 10.5). Without this, a run would
+      # publish PyPI and crates.io and then fail on npm. A dry run reports
+      # what is missing as a warning; an internal candidate publishes nothing
+      # and does not look. What no request without a token can see, whether
+      # `publish.yml` is registered as each package's trusted publisher
+      # (npm's package settings, or `npm trust list <package>`, which needs
+      # the maintainer's login), is not checked: a missing one fails the
+      # `npm` job with E404 or ENEEDAUTH after PyPI and crates.io, and the run
+      # is resumed (checkout_ref) once it is registered.
+      #
+      # Inline, like the PyPI check: a resumed run checks out an older tag,
+      # which would not contain a helper added after it. The packages are the
+      # ones this checkout's tree holds.
+      - name: Every npm package exists on npm
+        if: steps.version.outputs.channel == 'release' || steps.version.outputs.channel == 'rc' || steps.version.outputs.channel == 'dry-run'
+        env:
+          CHANNEL: ${{ steps.version.outputs.channel }}
+          NPM_REGISTRY: https://registry.npmjs.org
+        run: |
+          python3 - <<'PY'
+          import glob
+          import http.client
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          # Every package of the train, as release.py npm_packages() lists them.
+          manifests = [
+              "bindings/node/package.json",
+              *sorted(glob.glob("bindings/node/npm/*/package.json")),
+              "bindings/node/alias/package.json",
+              "packages/lsp-client/package.json",
+              "packages/lsp-worker/package.json",
+              "packages/wasi-host/package.json",
+          ]
+          names = []
+          for path in manifests:
+              with open(path, encoding="utf-8") as handle:
+                  names.append(json.load(handle)["name"])
+          registry = os.environ["NPM_REGISTRY"].rstrip("/")
+          missing = []
+          unreachable = []
+          for name in names:
+              # The registry's package document: @scope%2fname, no authentication.
+              url = f"{registry}/{urllib.parse.quote(name, safe='@')}"
+              request = urllib.request.Request(url, headers={"Accept": "application/vnd.npm.install-v1+json"})
+              status = None
+              for attempt in range(1, 4):
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          status = response.status
+                  except urllib.error.HTTPError as error:
+                      status = error.code
+                  except (OSError, http.client.HTTPException) as error:
+                      # A refused or reset connection, a server that hangs up
+                      # (RemoteDisconnected), a short body (IncompleteRead), a timeout.
+                      status = f"{type(error).__name__}: {error}"
+                  if status == 200 or status == 404:
+                      break
+                  time.sleep(float(os.environ.get("NPM_RETRY_SECONDS", "5")) * attempt)
+              print(f"{name}: {status}")
+              if status == 404:
+                  missing.append(name)
+              elif status != 200:
+                  # An outage is not "missing": say so, and still stop.
+                  unreachable.append(f"{name} ({status})")
+          level = "warning" if os.environ["CHANNEL"] == "dry-run" else "error"
+          print(
+              "Not checked (it needs the maintainer's npm login): publish.yml registered as "
+              "each package's trusted publisher; npm trust list <package> shows it."
+          )
+          if unreachable:
+              print(f"::{level}::Could not read {', '.join(unreachable)} from {registry}: not checked, so not released.")
+          if missing:
+              print(
+                  f"::{level}::These npm packages do not exist on npm yet: {', '.join(missing)}. "
+                  "npm trusted publishing cannot create a package. Publish each once by hand, "
+                  "then register publish.yml as its trusted publisher "
+                  "(docs/internal/publishing.md, step 10.5: npm), before this run. "
+                  "Nothing was built or published."
+              )
+          sys.exit(1 if (missing or unreachable) and level == "error" else 0)
+          PY
 
   # Everything this run ships, built and smoke-tested from the guard's commit
   # (release-build.yml, which ci.yml also runs on a release pull request and
@@ -841,18 +943,22 @@ jobs:
 
   # npm, with trusted publishing (the workflow's OIDC identity, no token) and
   # provenance: the tarballs build-packages.yml packed and release-build.yml's smoke installed, in
-  # order. A release only: a candidate publishes nothing to npm (ci.yml's
-  # `packages` artifacts carry the tarballs to test). A version npm has is
+  # order. A release goes under the dist-tag `latest`; a public candidate
+  # (X.Y.Z-rc.N) under `next`, never `latest`: the tag is chosen from the
+  # channel and checked against the version of each tarball. The guard has
+  # already checked that every package exists on npm. A version npm has is
   # skipped, so a resumed run picks up where it stopped. Trusted publishing
   # needs npm 11.5.1 or later on Node 22.14.0 or later.
   npm:
     name: Publish to npm
     needs: [guard, verify-assets]
-    if: needs.guard.outputs.channel == 'release'
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+    env:
+      CHANNEL: ${{ needs.guard.outputs.channel }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -866,29 +972,147 @@ jobs:
         with:
           name: npm-packages
           path: npm
+      # A candidate never moves `next` backwards (a resumed older candidate, a
+      # run of an older branch): `next` of @opentide/opentide, read from the
+      # registry without a login, must not be a newer SemVer than this version.
+      # A release does not look: it publishes `latest`.
+      - name: next never moves backwards
+        if: env.CHANNEL == 'rc'
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+          NPM_REGISTRY: https://registry.npmjs.org
+        run: |
+          python3 - <<'PY'
+          import http.client
+          import json
+          import os
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          def key(version):
+              """SemVer order for X.Y.Z and X.Y.Z-rc.N: a release is above its candidates."""
+              match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?", version)
+              if match is None:
+                  sys.exit(f"::error::{version} is not X.Y.Z or X.Y.Z-rc.N: cannot compare it with next.")
+              major, minor, patch, rc = match.groups()
+              return (int(major), int(minor), int(patch), float("inf") if rc is None else int(rc))
+
+          version = os.environ["VERSION"]
+          url = os.environ["NPM_REGISTRY"].rstrip("/") + "/@opentide%2Fopentide"
+          request = urllib.request.Request(url, headers={"Accept": "application/vnd.npm.install-v1+json"})
+          document = None
+          for attempt in range(1, 4):
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      document = json.load(response)
+                  break
+              except (OSError, http.client.HTTPException, ValueError) as error:
+                  print(f"@opentide/opentide: {type(error).__name__}: {error}")
+                  time.sleep(float(os.environ.get("NPM_RETRY_SECONDS", "5")) * attempt)
+          if document is None:
+              sys.exit(f"::error::Could not read @opentide/opentide's dist-tags from {url}: not checked, so not published.")
+          current = document.get("dist-tags", {}).get("next")
+          print(f"next is {current}; this run publishes {version}")
+          if current is not None and key(current) > key(version):
+              sys.exit(
+                  f"::error::npm's next is already {current}, newer than {version}: publishing "
+                  f"{version} under next would move it backwards. Nothing was published to npm."
+              )
+          PY
+      # Every tarball is checked against the channel before the first publish, so
+      # a version that does not fit leaves nothing half published.
       - name: publish
         run: |
           set -euo pipefail
+          # A candidate is a SemVer pre-release and goes under `next`; a release
+          # under `latest`. A candidate never publishes under `latest`, and a
+          # release never carries a pre-release version.
+          dist_tag=latest
+          if [ "${CHANNEL}" = "rc" ]; then dist_tag=next; fi
+          tarballs=()
+          names=()
+          versions=()
           # The directories sort in publishing order: native, package, alias, lsp.
           for tarball in npm/*/*.tgz; do
             manifest="$(tar -xzOf "${tarball}" package/package.json)"
             name="$(node -p 'JSON.parse(process.argv[1]).name' "${manifest}")"
             version="$(node -p 'JSON.parse(process.argv[1]).version' "${manifest}")"
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
-              echo "${name}@${version} is already published"
+            if [ "${dist_tag}" = "next" ] && [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then
+              echo "::error::${name}@${version} is not a release candidate version: refusing to publish it under next." >&2
+              exit 1
+            fi
+            if [ "${dist_tag}" = "latest" ] && [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::${name}@${version} is a pre-release: refusing to publish it under latest." >&2
+              exit 1
+            fi
+            tarballs+=("${tarball}")
+            names+=("${name}")
+            versions+=("${version}")
+          done
+          for i in "${!tarballs[@]}"; do
+            if npm view "${names[i]}@${versions[i]}" version >/dev/null 2>&1; then
+              echo "${names[i]}@${versions[i]} is already published"
               continue
             fi
-            npm publish "${tarball}" --provenance --access public --tag latest
+            npm publish "${tarballs[i]}" --provenance --access public --tag "${dist_tag}"
           done
+      # What the registry now says about every package, not only the first:
+      # a candidate is each package's `next` and never its `latest`; a release is
+      # each package's `latest`. After a release `next` must not trail `latest`:
+      # npm's trusted publishing covers `npm publish` only, so moving `next` is
+      # the maintainer's `npm dist-tag add` (docs/internal/publishing.md, "After
+      # the final release"), and this step names the packages that need it.
+      - name: dist-tags of every package
+        run: |
+          set -euo pipefail
+          lagging=()
+          for tarball in npm/*/*.tgz; do
+            manifest="$(tar -xzOf "${tarball}" package/package.json)"
+            name="$(node -p 'JSON.parse(process.argv[1]).name' "${manifest}")"
+            version="$(node -p 'JSON.parse(process.argv[1]).version' "${manifest}")"
+            tags='{}'
+            for attempt in $(seq 1 20); do
+              if tags="$(npm view "${name}" dist-tags --json)"; then
+                if [ "${CHANNEL}" = "rc" ]; then
+                  wanted="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+                else
+                  wanted="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
+                fi
+                if [ "${wanted}" = "${version}" ]; then break; fi
+              fi
+              if [ "${attempt}" = 20 ]; then
+                echo "::error::${name}: the registry's dist-tags are ${tags}, not ${CHANNEL} ${version}." >&2
+                exit 1
+              fi
+              sleep 15
+            done
+            latest="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
+            next="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+            echo "${name}: latest ${latest}, next ${next}"
+            if [ "${CHANNEL}" = "rc" ] && [ "${latest}" = "${version}" ]; then
+              echo "::error::${name}@${version} is also latest: a candidate must not be." >&2
+              exit 1
+            fi
+            if [ "${CHANNEL}" = "release" ] && [ "${next}" != "${version}" ]; then
+              lagging+=("${name}@${version}")
+            fi
+          done
+          if [ "${#lagging[@]}" -gt 0 ]; then
+            echo "::warning::next trails latest for ${#lagging[@]} packages. Trusted publishing cannot move a dist-tag: as a maintainer, signed in to npm, run: for p in ${lagging[*]}; do npm dist-tag add \"\$p\" next; done (docs/internal/publishing.md, After the final release)."
+          fi
 
   # What the registries now serve installs and runs: pip from PyPI (a
   # candidate's pre-release by its exact version, which pip installs without
-  # --pre), `cargo install opentide --features cli` from crates.io, and for a
-  # release npx from npm. Each waits out the registry's cache.
+  # --pre), `cargo install opentide --features cli` from crates.io, and npx
+  # from npm (a candidate by its exact version too; the dist-tags of every
+  # package are the npm job's). Each waits out the registry's cache.
   smoke-registries:
     name: Smoke the registries
     needs: [guard, pypi, npm, crates]
-    if: ${{ !cancelled() && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc') && needs.pypi.result == 'success' && needs.crates.result == 'success' && (needs.npm.result == 'success' || (needs.npm.result == 'skipped' && needs.guard.outputs.channel == 'rc')) }}
+    if: ${{ !cancelled() && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc') && needs.pypi.result == 'success' && needs.crates.result == 'success' && needs.npm.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -928,8 +1152,10 @@ jobs:
           grep -qF "${PYPI_VERSION}" <<< "${out}"
           # --version checks nothing (#1072): a command proves the engine loads.
           "${RUNNER_TEMP}/venv/bin/opentide" --json explain yaml_parse > /dev/null
+      # A candidate by its exact version (npx @opentide/opentide@1.0.0-rc.N):
+      # a version range or the bare name would resolve `latest`, which a
+      # candidate never takes.
       - name: npx @opentide/opentide --version
-        if: env.CHANNEL == 'release'
         run: |
           set -euo pipefail
           for attempt in $(seq 1 20); do

@@ -171,9 +171,17 @@ BINARY_TARGETS = [target for target in TARGETS if "windows" not in target]
 # The standalone binaries, each built for every target: the command line
 # (`cargo install opentide --features cli`) and the language server.
 BINARIES = ["opentide", "opentide-lsp"]
+# The opentide command line compiled to wasm32-wasip1 (`build-wasm.sh cli`):
+# one module for every platform, which the VS Code extension pins by this name
+# and its SHA-256 (docs/internal/vscode-wasi.md). The name carries no version,
+# like the language server's WASI build: the release it is in is the version
+# (the module itself reports it, OPENTIDE_BUILD_VERSION). The name is fixed:
+# the extension's pins.json depends on it.
+CLI_WASM_ASSET = "opentide-wasm32-wasip1.wasm"
 # Every release carries these besides the binaries and the versioned zips: the
-# licences, the WASI build, the installer of the binaries (publishing/installers/,
-# Linux and macOS), and SHA256SUMS.
+# licences, the WASI builds (the language server's and the command line's), the
+# installer of the binaries (publishing/installers/, Linux and macOS), and
+# SHA256SUMS.
 FIXED_ASSETS = [
     "LICENSE",
     "NOTICE",
@@ -181,14 +189,17 @@ FIXED_ASSETS = [
     "WASI-LIBC-LICENSES.txt",
     DATA_LICENSES,
     "opentide-lsp-wasm32-wasip1.wasm",
+    CLI_WASM_ASSET,
     "opentide-installer.sh",
     SUMS,
 ]
 # The CycloneDX SBOMs scripts/engine/sbom.py writes, one per artifact (#843):
 # the opentide-lsp binaries and WASI build, the browser build, the three npm
 # packages built from packages/ (the language server's two and the WASI
-# host), the `opentide` binaries and crate, the @opentide/opentide npm
-# package, and the PyPI wheel.
+# host), the `opentide` binaries and crate (`opentide.cdx.json`, which also
+# covers the command line's WASI module: the same opentide-cli crate, its
+# dependency set a superset of the module's, which builds without the terminal
+# UI), the @opentide/opentide npm package, and the PyPI wheel.
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
     "opentide-wasm.cdx.json",
