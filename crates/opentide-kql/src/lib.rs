@@ -436,10 +436,16 @@ impl Catalog {
         // One allocation each, shared by the table's columns (#1071).
         let table: Arc<str> = Arc::from(row.name.as_str());
         let profile_shared: Arc<str> = Arc::from(profile_name);
-        let mut rows: Vec<ColumnRow> = Vec::new();
-        let mut at: HashMap<Arc<str>, usize> = HashMap::new();
-        if let Some((columns_at, citation)) = &lazy.at {
-            for column in tables::azure_monitor_columns(*columns_at) {
+        let listed: &[tables::AzureMonitorColumn] =
+            lazy.at.as_ref().map_or(&[], |(columns_at, _)| {
+                tables::azure_monitor_columns(*columns_at)
+            });
+        // Sized once: a table's rows and its names grow by doubling otherwise, which is most of
+        // the allocator calls of building them.
+        let mut rows: Vec<ColumnRow> = Vec::with_capacity(listed.len() + 1);
+        let mut at: HashMap<Arc<str>, usize> = HashMap::with_capacity(listed.len());
+        if let Some((_, citation)) = &lazy.at {
+            for column in listed {
                 if hand.contains(&*column.name) {
                     continue;
                 }
