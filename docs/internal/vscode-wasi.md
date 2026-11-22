@@ -33,9 +33,12 @@ it, how to launch it, and what it does and does not do. The decision is [ADR 000
   The `release.py` asset list, `SHA256SUMS` and the release's attestations cover it like every other
   asset. The first candidate to ship it is the one cut after this asset's change (`1.0.0-rc.3`);
   `1.0.0-rc.2` has `opentide-lsp-wasm32-wasip1.wasm` and the browser zip, not this module.
-- **Size:** 19.0 MB, 8.3 MB at `gzip -9` (measured 2026-11-22, with the datasets compressed at build time). The build fails above 15 MiB gzipped, which is also the
-  budget of the whole `.vsix` (plan §11): a `.vsix` is a zip, so the module costs about its gzipped
-  size there. `OPENTIDE_WASM_OPT=1` runs `wasm-opt` too, which saves about 2% and is off by default; the release does not set it.
+- **Size:** 22.1 MB, 9.3 MB at `gzip -9` (opt-level `s`, [`[profile.wasi]`](../../Cargo.toml); `z` was 18.9 MB,
+  8.35 MB, and 1,000-object workspaces start and validate faster at `s`: see
+  [the WASI cold-start note](./perf-wasi-cold-start-2026-11-22.md#the-command-lines-wasi-module-is-built-at-opt-level-s-1774)).
+  The build fails above 15 MiB gzipped, which is also the budget of the whole `.vsix` (plan §11): a `.vsix` is a
+  zip, so the module costs about its gzipped size there. `OPENTIDE_WASM_OPT=1` runs `wasm-opt` too, which saves
+  about 2% of the gzip size, makes `validate` 36% slower on the `s` module, and is off by default.
 - **No threads, no processes, no sockets.** Work that runs in parallel natively runs in sequence;
   `doctor --offline` says git was found but its version not checked; `setup hooks` prints the
   `chmod +x` line to run, since WASI preview 1 has no file permissions; the terminal UI refuses, as
