@@ -1,0 +1,60 @@
+# One-off: create the eleven npm packages (0.0.0 placeholders) and register
+# opentidehq/opentide's publish.yml as each one's trusted publisher, so that
+# 1.0.0-rc.3 can publish them with OIDC. Runs only on a push to this branch.
+# The branch is deleted afterwards, and the NPM_BOOTSTRAP_TOKEN secret with it.
+name: npm bootstrap (one-off)
+on:
+  push:
+    branches: [chore/npm-bootstrap]
+permissions:
+  contents: read
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+      PACKAGES: >-
+        @opentide/opentide opentide
+        @opentide/opentide-linux-x64-gnu @opentide/opentide-linux-arm64-gnu
+        @opentide/opentide-darwin-x64 @opentide/opentide-darwin-arm64
+        @opentide/opentide-win32-x64-msvc @opentide/opentide-win32-arm64-msvc
+        @opentide/lsp-client @opentide/lsp-worker @opentide/wasi-host
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - run: npm install --global npm@11.21.1
+      - name: who am I
+        run: npm whoami
+      - name: publish a 0.0.0 placeholder of each package that does not exist yet
+        run: |
+          set -u
+          failed=""
+          for p in $PACKAGES; do
+            if npm view "$p" name >/dev/null 2>&1; then echo "exists: $p"; continue; fi
+            dir="$(mktemp -d)"
+            case "$p" in @opentide/lsp-client|@opentide/lsp-worker|@opentide/wasi-host) lic=MIT ;; *) lic=EUPL-1.2 ;; esac
+            cat > "$dir/package.json" <<JSON
+          {"name":"$p","version":"0.0.0","description":"Placeholder for opentide's $p; the first real version is published by opentidehq/opentide's release workflow.","license":"$lic","repository":{"type":"git","url":"git+https://github.com/opentidehq/opentide.git"},"homepage":"https://opentide.org","files":["README.md"]}
+          JSON
+            printf '# %s\n\nPlaceholder. Install a release candidate with `npm install %s@next`.\n' "$p" "$p" > "$dir/README.md"
+            if (cd "$dir" && npm publish --provenance=false --access public); then echo "published: $p"; else echo "::error::could not publish $p"; failed="$failed $p"; fi
+          done
+          [ -z "$failed" ] || { echo "::error::not published:$failed"; exit 1; }
+      - name: register publish.yml as each package's trusted publisher
+        if: always()
+        run: |
+          set -u
+          for p in $PACKAGES; do
+            echo "== $p"
+            npm trust github "$p" --repo opentidehq/opentide --file publish.yml --yes 2>&1 || echo "::warning::npm trust failed for $p"
+          done
+      - name: verify
+        if: always()
+        run: |
+          for p in $PACKAGES; do
+            printf '%s: ' "$p"; npm view "$p" name version 2>&1 | tr '\n' ' '; echo
+            npm trust list "$p" 2>&1 | sed 's/^/    /'
+          done
