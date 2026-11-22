@@ -117,29 +117,41 @@ The time from spawning the language server to the first diagnostics of a rule it
 `scripts/perf/lsp-bench.mjs` (VS Code's recorded capabilities, pull diagnostics) measures four
 scenarios, 10 runs each, every run a fresh server (`scripts/perf/cold-start.sh`):
 
-| Scenario | Server | Workspace | Budget, p50 | Fails above |
-|---|---|---|---:|---:|
-| `native_small` | `opentide-lsp`, `--release` | the Tide corpus | 62 ms | 82 ms |
-| `native_large` | `opentide-lsp`, `--release` | 1,000 object files | 127 ms | 147 ms |
-| `wasi_small` | `opentide-lsp.wasm` (`wasm32-wasip1`, `--release`) under wasmtime | the Tide corpus | 192 ms | 212 ms |
-| `wasi_large` | the same | 1,000 object files | 350 ms | 385 ms |
+| Scenario | Server | Workspace | Target (#1746) | EPYC 9V74 | EPYC 7763 |
+|---|---|---|---:|---:|---:|
+| `native_small` | `opentide-lsp`, `--release` | the Tide corpus | 62 ms | 42.5 ms | 55.8 ms |
+| `native_large` | `opentide-lsp`, `--release` | 1,000 object files | 127 ms | 66.5 ms | 90.6 ms |
+| `wasi_small` | `opentide-lsp.wasm` (`wasm32-wasip1`, `--release`) under wasmtime | the Tide corpus | 192 ms, waived | 192.6 ms | 240.2 ms |
+| `wasi_large` | the same | 1,000 object files | 350 ms, waived | 419.4 ms | 522.3 ms |
 
 The workspaces are `scripts/perf/make_workspace.py`'s: the Tide corpus as the CLI E2E suite lays it
 out, and the corpus's rules copied up to 1,000 object files. The WASI module runs under wasmtime
 (`wasmtime run --dir / -S inherit-env`, the version bench.yml installs), the host #1746 measured
 with. `WASI_HOST=node` runs it under Node's WASI (`scripts/engine/wasi-run.mjs`) for comparing two
 builds on one machine; Node's own start and its compile of the module add about 100 ms, so those
-numbers are not held to the budgets (on a 4-vCPU Xeon: 276 and 395 ms where wasmtime's budgets are
-192 and 350).
+numbers are not comparable with the budgets (on a 4-vCPU Xeon: 276 and 395 ms where #1746 measured
+192 and 350 under wasmtime).
 
 `scripts/perf/check_cold_start.py` holds each p50 to `tests/bench/lsp-cold-start.toml` with the
-headroom of every other benchmark budget, `tests/bench/budgets.toml`'s `[policy]`, which it reads:
-a p50 fails when it is more than `regression` (10%) above its budget and the difference is also
-above `noise_floor_s` (20 ms). A scenario with no report, a report with failed runs or another run
-count, and a report no scenario budgets fail too. The budgets are the p50s #1746 measured after
-its fix ([docs/internal/datasets.md](../internal/datasets.md), "Language server"); re-record them
-only from a CI run of the job, in a change of its own that says why. The reports, every sample
-kept, are the run's `bench-lsp-cold-start` artifact. To measure locally:
+rules of every other benchmark budget, `tests/bench/budgets.toml`'s `[policy]`, which it reads:
+
+- **The target.** The p50s #1746 measured after its fix on one 4-vCPU Xeon
+  ([docs/internal/datasets.md](../internal/datasets.md), "Language server") are the targets. A p50
+  more than `regression` (10%) above its target fails, when the difference is also above
+  `noise_floor_s` (20 ms). The runner class measures WASI above #1746's figures, so those two
+  targets carry a `target_waiver`, as `budgets.toml` waives a target the runners miss. The summary
+  still shows them.
+- **The CPU's own figure.** Each p50 is also held to the one recorded on the report's CPU model
+  (`[[cpu_baseline]]`, from CI runs of the job: the table's last two columns) + `regression`. On a
+  CPU model recorded nowhere, it is held to the slowest recorded + `cross_cpu_regression` (20%).
+  GitHub's runners of one class come on several CPUs: the 7763 measured 1.25 to 1.36 times the
+  9V74 here.
+
+A scenario with no report or no reference, a report with failed runs or another run count, and a
+report no scenario budgets fail too. Re-record the figures only from a CI run of the job, in a
+change of its own that says why. Add a `[[cpu_baseline]]` when a run's summary names an
+unrecorded CPU. The reports, every sample kept, are the run's `bench-lsp-cold-start` artifact.
+To measure locally:
 
 ```bash
 cargo build --release -p opentide-lsp
