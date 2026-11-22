@@ -1,4 +1,4 @@
-//! The offers of the bundled vocabularies, made by `build.rs` ([`offer_of`] on
+//! The offers of the bundled vocabularies, made by `build.rs` ([`offer_of`](super::offer::offer_of) on
 //! each bundled document, which is all an offer depends on) and decoded the
 //! first time a field asks for one.
 

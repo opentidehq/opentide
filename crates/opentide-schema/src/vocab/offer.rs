@@ -5,7 +5,7 @@
 //! The offer of a bundled vocabulary is a function of the bundled document
 //! alone, so `build.rs` makes it once for each field (this file is compiled
 //! into the build script as well) and the crate reads it from the compiled-in
-//! data ([`bundled_offer`]); a workspace's own vocabularies, a data root's, a
+//! data ([`bundled_offer`](super::bundled_offer)); a workspace's own vocabularies, a data root's, a
 //! pin, and a field that asks for unwrapped hints are worked out at run time
 //! by [`offer_of`] and kept by `Vocabularies::memoized`.
 
@@ -56,7 +56,7 @@ const HINT_ABBREVIATIONS: [(&str, &str); 10] = [
 const HINT_WRAP: usize = 60;
 
 /// The values, dropdowns and plain descriptions of one vocabulary reference
-/// (`field` or `field::M.m`). The values are [`Vocabularies::allowed`]'s;
+/// (`field` or `field::M.m`). The values are [`Vocabularies::allowed`](super::Vocabularies::allowed)'s;
 /// a model vocabulary (keyed by id, or a workspace's objects) also offers a
 /// search hint per value (`T1059 #Command and Scripting Interpreter`),
 /// unless its document turns them off. A vocabulary that gives no value
