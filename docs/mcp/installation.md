@@ -11,7 +11,7 @@ The server ships in the base package:
 
 ```bash
 pip install --pre opentide              # the newest 1.0 release candidate
-pip install 'opentide==1.0.0rc2'        # or pin it
+pip install 'opentide==1.0.0rc3'        # or pin it
 ```
 
 These pages describe 1.0, a release candidate until it is final: pip skips it unless asked, and `pip install opentide` installs 0.28.1. See [release candidates](../usage/installation.md#release-candidates).
