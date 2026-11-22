@@ -1710,7 +1710,78 @@ impl Session {
             }
             entries.push(entry);
         }
+        drop(disk);
+        // The deployment state shards `validate` reports on (#1750): no
+        // object file holds their findings, so each shard with some has an
+        // entry of its own.
+        for (path, diagnostics) in self.shard_findings(r, &found) {
+            if open.contains(&path_key(&path)) {
+                continue;
+            }
+            if let Some(entry) = build(&path, diagnostics) {
+                entries.push(entry);
+            }
+        }
         entries
+    }
+
+    /// The `deployment_state_*` findings of each shard of the root `r` that
+    /// has some, in `found` (the root's findings of every object), placed
+    /// in the shard's text: by the shard's path as the editor names it
+    /// (under the root's own path), in the order of the paths.
+    fn shard_findings(
+        &self,
+        r: &Root,
+        found: &crate::checks::Findings,
+    ) -> Vec<(String, Vec<opentide_core::Diagnostic>)> {
+        let Ok(checks) = r.checks.try_borrow() else {
+            return Vec::new();
+        };
+        let resolved = checks.resolve(&r.path);
+        let states = resolved.join(".opentide").join("states");
+        let mut shards: Vec<(String, Vec<opentide_core::Diagnostic>)> = found
+            .iter()
+            .filter(|(key, findings)| key.starts_with(&states) && !findings.is_empty())
+            .map(|(key, findings)| {
+                let path = key
+                    .strip_prefix(&resolved)
+                    .map_or_else(|_| key.clone(), |relative| r.path.join(relative));
+                let text = checks.read_text(key).unwrap_or_default();
+                let diagnostics = findings
+                    .iter()
+                    .map(|finding| engine_diagnostic(&text, finding))
+                    .collect();
+                (path.display().to_string(), diagnostics)
+            })
+            .collect();
+        shards.sort_by(|a, b| a.0.cmp(&b.0));
+        shards
+    }
+
+    /// The `deployment_state_*` findings of the shard at `path` (a document
+    /// pull for a shard the editor has open), `None` for a file that is not a
+    /// shard of a root.
+    pub(crate) fn shard_diagnostics(&self, path: &str) -> Option<Vec<opentide_core::Diagnostic>> {
+        if !crate::checks::is_state_shard(&path.replace('\\', "/")) {
+            return None;
+        }
+        let index = self.root_for(path)?;
+        let r = self.roots.get(index)?;
+        let (generation, epoch) = self.state_key();
+        let found = {
+            let buffers = self.buffers(Some(index));
+            r.checks
+                .borrow_mut()
+                .all_findings(&r.path, buffers, generation, epoch)
+        };
+        let key = path_key(path);
+        Some(
+            self.shard_findings(r, &found)
+                .into_iter()
+                .find(|(shard, _)| path_key(shard) == key)
+                .map(|(_, diagnostics)| diagnostics)
+                .unwrap_or_default(),
+        )
     }
 
     /// How many object files on disk the editor's index holds an entry

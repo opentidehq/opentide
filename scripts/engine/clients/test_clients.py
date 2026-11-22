@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
+import tempfile
 
 import pytest
 import pytest_lsp
@@ -106,6 +108,59 @@ async def test_quick_fix_names_its_diagnostic(client: LanguageClient):
     fix = next(a for a in actions if a.title == "Apply suggestion: where")
     assert fix.is_preferred
     assert fix.diagnostics and fix.diagnostics[0].code == "kql_unknown_operator"
+
+
+SHARD_UUID = "00000000-0000-4000-8003-000000000001"
+
+
+def _workspace_with_a_broken_shard() -> pathlib.Path:
+    root = pathlib.Path(tempfile.mkdtemp(prefix="opentide-clients-"))
+    (root / "objects" / "rules").mkdir(parents=True)
+    shards = root / ".opentide" / "states" / "deployment"
+    shards.mkdir(parents=True)
+    (shards / f"{SHARD_UUID}.json").write_text("[]", encoding="utf-8")
+    return root
+
+
+@pytest_lsp.fixture(config=ClientServerConfig(server_command=[BIN, "--stdio"]))
+async def vscode_with_a_shard(lsp_client: LanguageClient):
+    # The capabilities VS Code records: it pulls the workspace's diagnostics.
+    for method in (
+        types.CLIENT_REGISTER_CAPABILITY,
+        types.WORKSPACE_SEMANTIC_TOKENS_REFRESH,
+        types.WORKSPACE_INLAY_HINT_REFRESH,
+        types.WORKSPACE_CODE_LENS_REFRESH,
+        types.WORKSPACE_DIAGNOSTIC_REFRESH,
+    ):
+        if method not in lsp_client.protocol.fm.features:
+            lsp_client.feature(method)(lambda params: None)
+    root = _workspace_with_a_broken_shard()
+    await lsp_client.initialize_session(
+        types.InitializeParams(
+            capabilities=client_capabilities("visual_studio_code"),
+            root_uri=root.as_uri(),
+        )
+    )
+    yield
+    await lsp_client.shutdown_session()
+    shutil.rmtree(root, ignore_errors=True)
+
+
+async def test_a_broken_deployment_state_shard_is_in_the_workspace_pull(
+    vscode_with_a_shard: LanguageClient,
+):
+    # #1750: the shard is no document VS Code opens with the server, so the
+    # workspace pull is where its finding reaches the Problems panel.
+    report = await vscode_with_a_shard.workspace_diagnostic_async(
+        types.WorkspaceDiagnosticParams(previous_result_ids=[])
+    )
+    shards = [
+        item
+        for item in report.items
+        if item.uri.endswith(f"/.opentide/states/deployment/{SHARD_UUID}.json")
+    ]
+    assert len(shards) == 1, report.items
+    assert [d.code for d in shards[0].items] == ["deployment_state_shape"]
 
 
 @pytest.mark.parametrize("unused", [None])

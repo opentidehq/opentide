@@ -36,8 +36,7 @@
 //! descriptions, key order, `type` arrays where Pydantic writes `anyOf` with
 //! `null`) is schemars'.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::Transform;
@@ -54,9 +53,10 @@ use crate::objects::platform::{PLATFORM_CONFIG_MODELS, Registered};
 use crate::objects::rule::{RuleV1_0, RuleV1_1};
 use crate::objects::threat::ThreatVectorV1_0;
 use crate::pins::{PinTable, Pins};
-use crate::vocab::{Entry, KeyKind, OBJECT_TYPES, VocabRef, Vocabularies, Vocabulary};
+use crate::vocab::offer::{Offer, VocabOptions, offer_of};
+use crate::vocab::{VocabRef, Vocabularies, bundled_offer};
 
-use super::annotate::{annotate_editor_schema, first_sentence, plain_text};
+use super::annotate::annotate_editor_schema;
 use super::json::Json;
 use super::workspace::enabled_platforms;
 
@@ -602,20 +602,18 @@ fn resolve_node(node: &mut Value, key: Option<&str>, sources: &Sources) {
     }
 }
 
-/// The values, Markdown dropdowns and plain descriptions a field offers.
-#[derive(Debug, Default, Clone, PartialEq)]
-struct Offer {
-    values: Vec<Value>,
-    markdown: Vec<String>,
-    plain: Vec<String>,
-}
-
 impl Offer {
     /// The keywords to write: `enum`, `markdownEnumDescriptions`, and
     /// `enumDescriptions` when there is one per value.
     fn keywords(&self, plain: bool) -> Map<String, Value> {
         let mut map = Map::new();
-        map.insert("enum".to_owned(), Value::Array(self.values.clone()));
+        map.insert(
+            "enum".to_owned(),
+            self.values
+                .iter()
+                .map(|value| Value::from(value.as_str()))
+                .collect(),
+        );
         map.insert(
             "markdownEnumDescriptions".to_owned(),
             self.markdown
@@ -684,20 +682,28 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
     }
     let scoped = flag(map.get(keys::VOCAB_SCOPED));
     let no_wrap = flag(map.get(keys::VOCAB_HINTS_NO_WRAP));
+    let options = VocabOptions { scoped, no_wrap };
+    // The same reference is offered by every revision of every object that
+    // names it: made once.
+    let offered = |reference: &str| {
+        sources.vocabularies.memoized(
+            &format!("offer\u{0}{reference}\u{0}{scoped}\u{0}{no_wrap}"),
+            || vocabulary_offer(&sources.vocabularies, reference, options),
+        )
+    };
+    if let [reference] = references.as_slice() {
+        // A field that names one vocabulary, which is nearly every field: the
+        // keywords it writes are made once too.
+        let keywords = sources.vocabularies.memoized(
+            &format!("keywords\u{0}{reference}\u{0}{scoped}\u{0}{no_wrap}"),
+            || offered(reference).keywords(true),
+        );
+        apply_enum(map, &keywords);
+        return;
+    }
     let mut offer = Offer::default();
     for reference in &references {
-        // The same reference is offered by every revision of every object
-        // that names it: made once.
-        let one = sources.vocabularies.memoized(
-            &format!("offer\u{0}{reference}\u{0}{scoped}\u{0}{no_wrap}"),
-            || {
-                vocabulary_offer(
-                    &sources.vocabularies,
-                    reference,
-                    &VocabOptions { scoped, no_wrap },
-                )
-            },
-        );
+        let one = offered(reference);
         offer.values.extend(one.values.iter().cloned());
         offer.markdown.extend(one.markdown.iter().cloned());
         offer.plain.extend(one.plain.iter().cloned());
@@ -783,296 +789,41 @@ fn apply_enum(field: &mut Map<String, Value>, keywords: &Map<String, Value>) {
 
 // --- vocabularies -------------------------------------------------------------------------
 
-/// How a field asks for a vocabulary.
-struct VocabOptions {
-    scoped: bool,
-    no_wrap: bool,
+// The bundled offers asked for on this thread: `(reference, scoped)`, for the test that says which
+// offers `build.rs` makes.
+#[cfg(test)]
+thread_local! {
+    static ASKED: std::cell::RefCell<Vec<(String, bool)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// The longest stage description a dropdown quotes, in characters.
-const STAGE_DESCRIPTION_LIMIT: usize = 300;
-
-/// The abbreviations that shorten a search hint longer than
-/// [`HINT_WRAP`] characters, in order.
-const HINT_ABBREVIATIONS: [(&str, &str); 10] = [
-    (" and ", " & "),
-    (" without ", " w/o "),
-    (" with ", " w/ "),
-    (" to ", " "),
-    (" of ", " "),
-    (" a ", " "),
-    (" an ", " "),
-    ("Use", " "),
-    ("used", " "),
-    ("Using", " "),
-];
-
-/// The length past which a search hint is abbreviated.
-const HINT_WRAP: usize = 60;
-
-/// The values, dropdowns and plain descriptions of one vocabulary reference
-/// (`field` or `field::M.m`). The values are [`Vocabularies::allowed`]'s;
-/// a model vocabulary (keyed by id, or a workspace's objects) also offers a
-/// search hint per value (`T1059 #Command and Scripting Interpreter`),
-/// unless its document turns them off. A vocabulary that gives no value
-/// offers the empty string, so the field is never left without an `enum`.
-fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: &VocabOptions) -> Offer {
-    let mut offer = Offer::default();
+/// What a field that names the vocabulary `reference` (`field` or `field::M.m`)
+/// offers. A bundled vocabulary that no document of the workspace replaces,
+/// asked for with wrapped hints, is read from what the build made of it ([`bundled_offer`]); every other is worked out
+/// ([`offer_of`]). A vocabulary that gives no value offers the empty string,
+/// so the field is never left without an `enum`.
+fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: VocabOptions) -> Offer {
+    let empty = || Offer {
+        values: vec![String::new()],
+        ..Offer::default()
+    };
     let Ok(vocab) = reference.parse::<VocabRef>() else {
-        offer.values.push("".into());
-        return offer;
+        return empty();
     };
-    let vocabulary = vocabularies.get(&vocab.field);
-    let Some(vocabulary) = vocabulary else {
-        offer.values.push("".into());
-        return offer;
-    };
-    let model =
-        vocabulary.metadata.key == KeyKind::Id || OBJECT_TYPES.contains(&vocab.field.as_str());
-    let hints = model && vocabulary.search_hints();
-    let mut hint_offer = Offer::default();
-    // The values offered so far: a lookup, not a scan of `offer.values` that
-    // builds a JSON string per comparison (quadratic in a vocabulary's size).
-    let mut offered: HashSet<String> = HashSet::new();
-    let active = vocabulary
-        .entries
-        .values()
-        .filter(|entry| vocab.pin.is_none_or(|pin| entry.active_at(pin)));
-    for entry in active {
-        let mut emit = |offer: &mut Offer, value: String, stages: &[String]| -> bool {
-            if !offered.insert(value.clone()) {
-                return false;
-            }
-            offer.markdown.push(dropdown(&vocabulary, entry, stages));
-            offer.plain.push(plain(&value, entry));
-            offer.values.push(value.into());
-            true
-        };
-        if model {
-            let value = match entry.stages.first() {
-                Some(stage) if options.scoped => format!("{stage}::{}", entry.key),
-                _ => entry.key.clone(),
-            };
-            if emit(&mut offer, value.clone(), &entry.stages) && hints {
-                hint_offer
-                    .values
-                    .push(search_hint(&value, entry, options.no_wrap).into());
-                hint_offer.markdown.extend(offer.markdown.last().cloned());
-                hint_offer.plain.extend(offer.plain.last().cloned());
-            }
-            continue;
-        }
-        if options.scoped {
-            for stage in &entry.stages {
-                emit(
-                    &mut offer,
-                    format!("{stage}::{}", entry.key),
-                    std::slice::from_ref(stage),
-                );
-            }
-        } else {
-            emit(&mut offer, entry.key.clone(), &entry.stages);
-        }
-    }
-    if offer.values.is_empty() {
-        offer.values.push("".into());
-    }
-    offer.values.extend(hint_offer.values);
-    offer.markdown.extend(hint_offer.markdown);
-    offer.plain.extend(hint_offer.plain);
-    offer
-}
-
-/// A string from an entry's other keys.
-fn extra<'e>(entry: &'e Entry, key: &str) -> Option<&'e str> {
-    entry
-        .extra
-        .get(key)
-        .and_then(toml::Value::as_str)
-        .filter(|text| !text.is_empty())
-}
-
-/// The text an editor searches: the value, then `#` and the entry's name
-/// and aliases, abbreviated past [`HINT_WRAP`] characters unless the field
-/// says not to wrap.
-fn search_hint(value: &str, entry: &Entry, no_wrap: bool) -> String {
-    let mut tips = entry.name.clone();
-    if let Some(toml::Value::Array(aliases)) = entry.extra.get("alias")
-        && !aliases.is_empty()
-    {
-        let aliases: Vec<String> = aliases
-            .iter()
-            .map(|alias| {
-                alias
-                    .as_str()
-                    .map_or_else(|| alias.to_string(), str::to_owned)
-            })
-            .collect();
-        tips.push_str(", ");
-        tips.push_str(&aliases.join(", "));
-    }
-    let mut hint = format!("{value} #{}", tips.trim());
-    if !no_wrap && hint.chars().count() > HINT_WRAP {
-        for (long, short) in HINT_ABBREVIATIONS {
-            hint = hint.replace(long, short);
-        }
-    }
-    hint
-}
-
-/// Plain hover text: the entry's name (unless the value ends with it), then
-/// the first sentence of its description.
-fn plain(value: &str, entry: &Entry) -> String {
-    let display = if entry.name.is_empty() {
-        entry.key.trim()
-    } else {
-        entry.name.trim()
-    };
-    let description = summary(&entry.description);
-    if !display.is_empty() && !value.ends_with(display) {
-        if description.is_empty() {
-            display.to_owned()
-        } else {
-            format!("{display}: {description}")
-        }
-    } else {
-        description
-    }
-}
-
-/// The first sentence of `description` as plain text, worked out once per
-/// distinct description. One `generate schemas` offers a vocabulary in many
-/// fields of every schema and in the field catalog, and the Markdown
-/// clean-up of its descriptions was most of the phase's time (each
-/// `opentide new` that generates the schemas first paid it again per
-/// field). Keyed by the text itself, so an edited description is a miss,
-/// never a stale answer.
-fn summary(description: &str) -> String {
-    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
-    summary_in(
-        CACHE.get_or_init(Mutex::default),
-        SUMMARY_LIMIT,
-        description,
-    )
-}
-
-/// How many descriptions [`summary`] keeps before it starts over: more
-/// than every bundled vocabulary holds, so a long-running process (the
-/// language server) that sees many workspaces stays bounded.
-const SUMMARY_LIMIT: usize = 1 << 16;
-
-/// [`summary`] with its cache and bound given.
-fn summary_in(cache: &Mutex<HashMap<String, String>>, limit: usize, description: &str) -> String {
-    if let Some(found) = cache
-        .lock()
-        .ok()
-        .and_then(|cache| cache.get(description).cloned())
-    {
-        return found;
-    }
-    let computed = first_sentence(&plain_text(description, true));
-    if let Ok(mut cache) = cache.lock() {
-        if cache.len() >= limit {
-            cache.clear();
-        }
-        cache.insert(description.to_owned(), computed.clone());
-    }
-    computed
-}
-
-/// The Markdown an editor shows for an entry in a dropdown: its name, its
-/// identifier and vocabulary, its level and TLP (an object), its stages, its
-/// link and its description; empty parts are left out.
-fn dropdown(vocabulary: &Vocabulary, entry: &Entry, stages: &[String]) -> String {
-    let identifier = extra(entry, "id").unwrap_or(&entry.key);
-    let mut display = if entry.name.is_empty() {
-        entry.key.clone()
-    } else {
-        entry.name.clone()
-    };
-    // An all-lower-case name is title-cased by English rules (the
-    // `titlecase` crate: `command and control` is `Command and Control`).
-    if display.chars().any(char::is_alphabetic) && !display.chars().any(char::is_uppercase) {
-        display = titlecase::titlecase(&display);
-    }
-    let mut parts = vec![
-        format!("### {display}"),
-        format!("**Identifier**: `{identifier}`"),
-        format!("_Vocabulary_ : `{}`", vocabulary.metadata.name),
-    ];
-    let mut level = String::new();
-    if OBJECT_TYPES.contains(&vocabulary.field()) {
-        level = ["criticality", "priority", "severity"]
-            .iter()
-            .zip(["Criticality", "Priority", "Severity"])
-            .find_map(|(key, label)| {
-                entry
-                    .extra
-                    .get(*key)
-                    .map(|value| {
-                        value
-                            .as_str()
-                            .map_or_else(|| value.to_string(), str::to_owned)
-                    })
-                    .filter(|value| !value.is_empty())
-                    .map(|value| format!("**{label}**: {value}"))
-            })
-            .unwrap_or_else(|| "**Criticality**: No Criticality Assigned".to_owned());
-    }
-    if let Some(tlp) = extra(entry, "tlp") {
-        let tlp = format!("**TLP:{}**", tlp.to_uppercase());
-        level = if level.is_empty() {
-            tlp
-        } else {
-            format!("{level} | {tlp}")
-        };
-    }
-    if !level.is_empty() {
-        parts.push(level);
-    }
-    if !stages.is_empty() {
-        let documented = stage_doc(vocabulary, stages);
-        parts.push(if documented.is_empty() {
-            format!("`{}`", stages.join(", "))
-        } else {
-            documented
+    if !options.no_wrap && vocabularies.uses_bundled(&vocab.field) {
+        #[cfg(test)]
+        ASKED.with(|asked| {
+            asked
+                .borrow_mut()
+                .push((reference.to_owned(), options.scoped));
         });
-    }
-    if !entry.link.is_empty() {
-        parts.push(entry.link.clone());
-    }
-    parts.push("---".to_owned());
-    if !entry.description.is_empty() {
-        parts.push(entry.description.to_string());
-    }
-    let mut text = parts.join("\n\n");
-    text.push('\n');
-    text
-}
-
-/// Each stage's name and description, from the vocabulary's stages.
-fn stage_doc(vocabulary: &Vocabulary, stages: &[String]) -> String {
-    let mut parts = Vec::new();
-    for stage in stages {
-        let Some(found) = vocabulary.metadata.stages.iter().find(|candidate| {
-            candidate.id.as_deref().or(candidate.name.as_deref()) == Some(stage.as_str())
-        }) else {
-            continue;
-        };
-        let name = found.name.as_deref().unwrap_or(stage);
-        let mut description = found
-            .description
-            .as_deref()
-            .unwrap_or_default()
-            .trim()
-            .to_owned();
-        if description.chars().count() > STAGE_DESCRIPTION_LIMIT {
-            description = description.chars().take(STAGE_DESCRIPTION_LIMIT).collect();
-            description.push_str("...");
+        if let Some(offer) = bundled_offer(reference, options.scoped) {
+            return offer.clone();
         }
-        parts.push(format!("**{name}**: _{description}_"));
     }
-    parts.join("\n\n")
+    let Some(vocabulary) = vocabularies.get(&vocab.field) else {
+        return empty();
+    };
+    offer_of(&vocabulary, &vocab, options)
 }
 
 // --- configured values --------------------------------------------------------------------
@@ -1137,7 +888,7 @@ fn tenants(config: &Node, platform: &str) -> Offer {
         let Some(name) = tenant.get("name") else {
             continue;
         };
-        offer.values.push(name.value.to_string().into());
+        offer.values.push(name.value.to_string());
         offer.markdown.push(
             text(tenant.get("description"))
                 .unwrap_or("No Description")
@@ -1219,7 +970,7 @@ fn logsources(config: &Node) -> Option<Offer> {
                 description.push('\n');
             }
         }
-        let bare = Value::from(name.as_str());
+        let bare = name.clone();
         if let Some(index) = offer.values.iter().position(|known| *known == bare) {
             offer.markdown[index].push_str(&format!("---\n\n{description}"));
         } else {
@@ -1232,7 +983,6 @@ fn logsources(config: &Node) -> Option<Offer> {
         }
     }
     for (value, description) in qualified {
-        let value = Value::from(value);
         if !offer.values.contains(&value) {
             offer.values.push(value);
             offer.markdown.push(description);
