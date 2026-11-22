@@ -18,6 +18,7 @@ use opentide_core::{
 };
 use opentide_highlight::HighlightToken;
 mod perf;
+mod rows_model;
 pub mod schema;
 pub mod tables;
 mod tables_model;
@@ -48,39 +49,86 @@ pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[doc(hidden)]
 pub mod inspect;
 
+#[cfg(test)]
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
+use rows_model::TypeRow;
+pub use rows_model::{
+    ColumnRow, FunctionRow, OperatorOption, OperatorRow, ParamRow, PluginRow, ScalarOperatorRow,
+    TableRow,
+};
+
+#[cfg(test)]
 fn operators_toml() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/core/operators.toml")
 }
+#[cfg(test)]
 fn functions_toml() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/core/functions.toml")
 }
+#[cfg(test)]
 fn types_toml() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/core/types.toml")
 }
+#[cfg(test)]
 fn scalar_operators_toml() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/core/operators-scalar.toml")
 }
+#[cfg(test)]
 fn plugins_toml() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/core/evaluate-plugins.toml")
 }
+#[cfg(test)]
 fn sentinel_tables() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/sentinel/tables.toml")
 }
+#[cfg(test)]
 fn defender_tables() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/defender/tables.toml")
 }
+#[cfg(test)]
 fn sentinel_columns() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/sentinel/columns.toml")
 }
+#[cfg(test)]
 fn defender_columns() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/defender/columns.toml")
 }
+#[cfg(test)]
 fn operator_options() -> &'static str {
     opentide_dataset::text!("data/catalogs/kql/core/operator-options.toml")
+}
+
+/// The rows of `core/*.toml`: operators, functions, scalar operators, plugins, types and operator
+/// options, pre-parsed by the build script (`build.rs`) and decoded here (#1743).
+type CoreRows = (
+    Vec<OperatorRow>,
+    Vec<FunctionRow>,
+    Vec<ScalarOperatorRow>,
+    Vec<PluginRow>,
+    Vec<TypeRow>,
+    Vec<OperatorOption>,
+);
+
+fn core_rows() -> CoreRows {
+    opentide_dataset::compiled_value("kql-core-rows", opentide_dataset::blob!("kql-core-rows"))
+}
+
+/// The hand-written tables and columns of a profile's `tables.toml` and `columns.toml`, as the
+/// build script pre-parsed them.
+fn hand_written_rows(profile: Profile) -> (Vec<TableRow>, Vec<ColumnRow>) {
+    match profile {
+        Profile::Defender => opentide_dataset::compiled_value(
+            "kql-defender-rows",
+            opentide_dataset::blob!("kql-defender-rows"),
+        ),
+        _ => opentide_dataset::compiled_value(
+            "kql-sentinel-rows",
+            opentide_dataset::blob!("kql-sentinel-rows"),
+        ),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,48 +145,11 @@ struct OperatorsFile {
     operators: Vec<OperatorRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ParamRow {
-    pub name: String,
-    #[serde(default)]
-    pub docs: Option<String>,
-    #[serde(default)]
-    pub required: bool,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct OperatorRow {
-    pub name: String,
-    pub kind: String,
-    pub docs: Option<String>,
-    pub warning: Option<String>,
-    pub citation: Option<String>,
-    pub signature: Option<String>,
-    #[serde(default)]
-    pub parameters: Vec<ParamRow>,
-    #[serde(default)]
-    pub alias_of: Option<String>,
-}
-
 /// The whole file, as the test reads it to compare (ADR 0013).
 #[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct FunctionsFile {
     functions: Vec<FunctionRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct FunctionRow {
-    pub name: String,
-    pub signature: Option<String>,
-    pub docs: Option<String>,
-    pub kind: Option<String>,
-    pub citation: Option<String>,
-    #[serde(default)]
-    pub parameters: Vec<ParamRow>,
-    /// The function that replaces this deprecated alias.
-    #[serde(default)]
-    pub deprecated: Option<String>,
 }
 
 /// The whole file, as the test reads it to compare (ADR 0013).
@@ -148,32 +159,11 @@ struct ScalarOperatorsFile {
     scalar_operators: Vec<ScalarOperatorRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ScalarOperatorRow {
-    pub name: String,
-    pub docs: Option<String>,
-    pub citation: Option<String>,
-    /// The operator that replaces this legacy spelling (`containscs` → `contains_cs`).
-    #[serde(default)]
-    pub deprecated: Option<String>,
-}
-
 /// The whole file, as the test reads it to compare (ADR 0013).
 #[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct PluginsFile {
     plugins: Vec<PluginRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PluginRow {
-    pub name: String,
-    pub docs: Option<String>,
-    pub citation: Option<String>,
-    pub warning: Option<String>,
-    pub signature: Option<String>,
-    #[serde(default)]
-    pub parameters: Vec<ParamRow>,
 }
 
 /// The whole file, as the test reads it to compare (ADR 0013).
@@ -183,33 +173,11 @@ struct TypesFile {
     types: Vec<TypeRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct TypeRow {
-    name: String,
-}
-
 /// The whole file, as the test reads it to compare (ADR 0013).
 #[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct TablesFile {
     tables: Vec<TableRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct TableRow {
-    pub name: String,
-    pub profile: Option<String>,
-    pub category: Option<String>,
-    pub docs: Option<String>,
-    pub citation: Option<String>,
-    /// The catalog lists the table's documented columns (the Azure Monitor
-    /// Logs reference has the table). A near miss of one is a typo.
-    #[serde(default)]
-    pub documented: bool,
-    /// The workspace declares the table with its columns in
-    /// `visibility.toml` ([`Catalog::for_workspace`]).
-    #[serde(skip)]
-    pub declared: bool,
 }
 
 /// The whole file, as the test reads it to compare (ADR 0013).
@@ -219,37 +187,11 @@ struct ColumnsFile {
     columns: Vec<ColumnRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ColumnRow {
-    /// The table's name, one allocation shared by its columns (#1071).
-    pub table: Arc<str>,
-    /// `sentinel` or `defender`, shared by the profile's columns.
-    pub profile: Option<Arc<str>>,
-    /// The column's name, shared with the reference's column it comes from.
-    pub name: Arc<str>,
-    /// Its Kusto type, shared by every column of that type
-    /// ([`tables::kusto_type`]).
-    #[serde(
-        default,
-        rename = "type",
-        deserialize_with = "tables::interned_optional_type"
-    )]
-    pub type_name: Option<Arc<str>>,
-    /// The column's description (Markdown): hand-written, or the first
-    /// sentence of the Azure Monitor Logs reference's, shared with the
-    /// reference ([`tables::azure_monitor`]) and every profile (#1071).
-    pub docs: Option<Arc<str>>,
-    /// The table's reference page, shared by its columns.
-    pub citation: Option<Arc<str>>,
-    /// Added from the Azure Monitor Logs reference
-    /// (`data/catalogs/kql/azure-monitor/tables.toml`), not the hand-written catalog.
-    #[serde(skip)]
-    pub from_reference: bool,
-    /// Listed in `visibility.toml` (`[[logsources.columns]]`): a column the
-    /// catalog lacks, or one whose type and description the workspace
-    /// replaces ([`Catalog::for_workspace`]).
-    #[serde(skip)]
-    pub declared: bool,
+/// The whole file, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+#[derive(Debug, Deserialize)]
+struct OptionsFile {
+    options: Vec<OperatorOption>,
 }
 
 impl ColumnRow {
@@ -258,33 +200,6 @@ impl ColumnRow {
     fn hand_written(&self) -> bool {
         !self.from_reference && !self.declared && self.docs.is_some()
     }
-}
-
-/// The whole file, as the test reads it to compare (ADR 0013).
-#[cfg(test)]
-#[derive(Debug, Deserialize)]
-struct OptionsFile {
-    options: Vec<OperatorOption>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct OperatorOption {
-    pub operator: String,
-    pub name: String,
-    pub kind: Option<String>,
-    #[serde(default)]
-    pub values: Vec<String>,
-    pub docs: Option<String>,
-    pub citation: Option<String>,
-    pub signature: Option<String>,
-    /// Where the option is typed: `equals` (`name=`), `value` (bare enum),
-    /// `token` (bare keyword in the operator prefix), `alongside` (offered with
-    /// ordinary completions for the rest of the clause).
-    #[serde(default)]
-    pub place: Option<String>,
-    /// When set, values complete inside `operator(` at this zero-based argument.
-    #[serde(default)]
-    pub parameter_index: Option<u32>,
 }
 
 /// A profile's KQL catalog: operators, functions, plugins, types, tables and
@@ -373,7 +288,9 @@ impl std::ops::Deref for CatalogRef {
 }
 
 /// The items of the array `key` of the compiled-in catalog `text`
-/// (`data/catalogs/kql/<file>`), read item by item (ADR 0013).
+/// (`data/catalogs/kql/<file>`), read item by item (ADR 0013): what the tests compare the
+/// pre-parsed rows with.
+#[cfg(test)]
 fn rows<T: serde::de::DeserializeOwned>(file: &str, text: &str, key: &str) -> Vec<T> {
     opentide_core::catalog::compiled_in(
         &format!("data/catalogs/kql/{file}"),
@@ -383,21 +300,17 @@ fn rows<T: serde::de::DeserializeOwned>(file: &str, text: &str, key: &str) -> Ve
 
 impl Catalog {
     pub fn core() -> Self {
-        let types: Vec<TypeRow> = rows("core/types.toml", types_toml(), "types");
+        let (operators, functions, scalar_operators, plugins, types, options) = core_rows();
         Self {
             profile: Profile::Core,
-            operators: rows("core/operators.toml", operators_toml(), "operators"),
-            functions: rows("core/functions.toml", functions_toml(), "functions"),
-            scalar_operators: rows(
-                "core/operators-scalar.toml",
-                scalar_operators_toml(),
-                "scalar_operators",
-            ),
-            plugins: rows("core/evaluate-plugins.toml", plugins_toml(), "plugins"),
+            operators,
+            functions,
+            scalar_operators,
+            plugins,
             types: types.into_iter().map(|t| t.name).collect(),
             tables: Vec::new(),
             columns: Vec::new(),
-            options: rows("core/operator-options.toml", operator_options(), "options"),
+            options,
             table_index: HashMap::new(),
             column_index: HashMap::new(),
             memo: Memo::default(),
@@ -420,22 +333,13 @@ impl Catalog {
             return self;
         }
         self.profile = profile;
-        let defender: Vec<TableRow> = rows("defender/tables.toml", defender_tables(), "tables");
-        let defender_columns: Vec<ColumnRow> =
-            rows("defender/columns.toml", defender_columns(), "columns");
+        let (defender, defender_columns) = hand_written_rows(Profile::Defender);
         let mut tables = Vec::new();
         let mut columns = Vec::new();
         if profile == Profile::Sentinel {
-            tables.extend(rows::<TableRow>(
-                "sentinel/tables.toml",
-                sentinel_tables(),
-                "tables",
-            ));
-            columns.extend(rows::<ColumnRow>(
-                "sentinel/columns.toml",
-                sentinel_columns(),
-                "columns",
-            ));
+            let (sentinel_tables, sentinel_columns) = hand_written_rows(Profile::Sentinel);
+            tables.extend(sentinel_tables);
+            columns.extend(sentinel_columns);
         }
         for table in defender {
             if !tables.iter().any(|t: &TableRow| t.name == table.name) {
@@ -2120,6 +2024,65 @@ mod tests {
             .collect();
         assert!(Arc::ptr_eq(strings[0], strings[1]), "the type");
         assert!(Arc::ptr_eq(strings[0], &tables::kusto_type("string")));
+    }
+
+    /// What the build pre-parsed (`build.rs`, #1767) is what reading the TOML files item by item
+    /// gives: the core rows and the hand-written rows of each profile.
+    #[test]
+    fn the_pre_parsed_rows_are_the_rows_read_from_the_toml() {
+        fn same<T: std::fmt::Debug>(pre_parsed: &[T], read: &[T], file: &str) {
+            assert!(!read.is_empty(), "{file}");
+            assert_eq!(format!("{pre_parsed:?}"), format!("{read:?}"), "{file}");
+        }
+        let (operators, functions, scalar, plugins, types, options) = core_rows();
+        same(
+            &operators,
+            &rows::<OperatorRow>("", operators_toml(), "operators"),
+            "operators",
+        );
+        same(
+            &functions,
+            &rows::<FunctionRow>("", functions_toml(), "functions"),
+            "functions",
+        );
+        same(
+            &scalar,
+            &rows::<ScalarOperatorRow>("", scalar_operators_toml(), "scalar_operators"),
+            "scalar operators",
+        );
+        same(
+            &plugins,
+            &rows::<PluginRow>("", plugins_toml(), "plugins"),
+            "plugins",
+        );
+        same(&types, &rows::<TypeRow>("", types_toml(), "types"), "types");
+        same(
+            &options,
+            &rows::<OperatorOption>("", operator_options(), "options"),
+            "options",
+        );
+        let (tables, columns) = hand_written_rows(Profile::Sentinel);
+        same(
+            &tables,
+            &rows::<TableRow>("", sentinel_tables(), "tables"),
+            "sentinel tables",
+        );
+        same(
+            &columns,
+            &rows::<ColumnRow>("", sentinel_columns(), "columns"),
+            "sentinel columns",
+        );
+        let (tables, columns) = hand_written_rows(Profile::Defender);
+        same(
+            &tables,
+            &rows::<TableRow>("", defender_tables(), "tables"),
+            "defender tables",
+        );
+        same(
+            &columns,
+            &rows::<ColumnRow>("", defender_columns(), "columns"),
+            "defender columns",
+        );
     }
 
     /// The core and profile catalogs read item by item are field for field
