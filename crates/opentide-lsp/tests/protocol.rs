@@ -3384,3 +3384,207 @@ fn a_folder_event_under_objects_reaches_the_findings() {
     let codes = pulled(&mut lsp, &rule_uri);
     assert!(!codes.contains(&invalid), "{codes:?}");
 }
+
+/// What a pull answers for a document, as the client reads it: the report's
+/// kind, its id and the codes of its items. A report `unchanged` has no items.
+fn pulled_report(lsp: &mut Lsp, uri: &str) -> (String, Option<String>, Vec<String>) {
+    let reply = lsp.request(
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    assert!(reply.get("error").is_none(), "{reply}");
+    let result = &reply["result"];
+    let kind = result["kind"].as_str().unwrap_or_default().to_string();
+    let id = result["resultId"].as_str().map(str::to_string);
+    let items = result["items"].as_array().cloned().unwrap_or_default();
+    (kind, id, codes_of(&items))
+}
+
+/// The server's next request, and nothing else in front of it.
+fn next_server_request(lsp: &mut Lsp) -> Value {
+    let message = lsp.read();
+    assert!(
+        message.get("method").is_some() && message.get("id").is_some(),
+        "expected a request from the server: {message}"
+    );
+    message
+}
+
+/// A pull that overtook its `didOpen` (a client that restarts replays its
+/// open documents, and the pull is sent first) is for a file the server has
+/// not seen opened: it is answered from the closed file, as the workspace pull
+/// answers it, and not with an empty `full` report that the client keeps.
+#[test]
+fn a_pull_before_the_didopen_is_answered_from_the_file_on_disk() {
+    let scratch = workspace("pull-before-open", false);
+    let root = &scratch.0;
+    let rule = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let deployment = file_uri(&root.join(".opentide/configurations/deployment.toml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(root) }));
+    // The workspace pull's answer for the closed rule is what the document
+    // pull must give: the finding is the missing objective.
+    open(&mut lsp, &deployment, "toml", DESIGN_ONLY);
+    let workspace_codes = workspace_pull_codes(&mut lsp);
+    let invalid = "invalid_ref".to_string();
+    assert!(workspace_codes.contains(&invalid), "{workspace_codes:?}");
+
+    // initialize, initialized, didOpen(A), pull(B), didOpen(B): B is not open
+    // when it is pulled.
+    let (kind, id, codes) = pulled_report(&mut lsp, &rule);
+    assert_eq!(kind, "full");
+    assert!(id.is_some());
+    assert_eq!(codes, workspace_codes, "a pull of a closed file is empty");
+
+    // Its id is the workspace pull's for the file: a client that pulls again
+    // with it is told `unchanged`.
+    let again = lsp.request(
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": rule }, "previousResultId": id }),
+    );
+    assert_eq!(again["result"]["kind"], "unchanged", "{again}");
+}
+
+/// The bug as the extension's trace has it, from the first message: a pull
+/// of a rule on disk before its `didOpen` shows the rule's finding, and the
+/// `didOpen` that follows (the same text) leaves the client holding a report
+/// that is right, and the server asking for a pull of what it answered
+/// without the open text.
+#[test]
+fn the_extensions_pull_before_open_sequence_shows_the_finding() {
+    let scratch = workspace("pull-before-open-sequence", false);
+    let root = &scratch.0;
+    let rule = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let notes = file_uri(&root.join(".opentide/configurations/deployment.toml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(root) }));
+    open(&mut lsp, &notes, "toml", DESIGN_ONLY);
+    let (_, _, codes) = pulled_report(&mut lsp, &rule);
+    let invalid = "invalid_ref".to_string();
+    assert!(
+        codes.contains(&invalid),
+        "the finding was not shown: {codes:?}"
+    );
+
+    open(&mut lsp, &rule, "opentide-yaml", &fixture(RULE));
+    let refresh = next_server_request(&mut lsp);
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    let (_, _, opened) = pulled_report(&mut lsp, &rule);
+    assert_eq!(opened, codes, "the open document's findings are the file's");
+}
+
+/// The text the editor opens is not the file's: the report the server gave
+/// for the closed file is stale, the server asks for a pull, and the pull is
+/// of the open text.
+#[test]
+fn a_didopen_with_other_text_than_the_pulled_file_is_followed_by_a_refresh() {
+    let scratch = workspace("pull-before-open-other-text", true);
+    let root = &scratch.0;
+    let rule = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let objective = file_uri(&root.join("objects/objectives/objective-1.0.yaml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(root) }));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    let (_, _, closed) = pulled_report(&mut lsp, &rule);
+    // The unsaved text is not the rule on disk: it is not an object at all.
+    open(&mut lsp, &rule, "opentide-yaml", "not: a rule\n");
+    let refresh = next_server_request(&mut lsp);
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    let (_, _, opened) = pulled_report(&mut lsp, &rule);
+    assert_ne!(opened, closed, "the pull still answered the file on disk");
+}
+
+/// A document opened without having been pulled needs no refresh, and one
+/// that was pulled is refreshed once: a second `didOpen` of it (a close and a
+/// reopen) asks for nothing.
+#[test]
+fn only_a_document_pulled_before_it_was_opened_is_refreshed_and_once() {
+    let scratch = workspace("pull-before-open-once", true);
+    let root = &scratch.0;
+    let rule = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let objective = file_uri(&root.join("objects/objectives/objective-1.0.yaml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(root) }));
+    // Never pulled while closed: opening it asks for no refresh.
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    let _ = pulled_report(&mut lsp, &objective);
+    let stats = lsp.request("opentide/__stats", Value::Null);
+    assert!(stats.get("error").is_none(), "{stats}");
+
+    let _ = pulled_report(&mut lsp, &rule);
+    open(&mut lsp, &rule, "opentide-yaml", &fixture(RULE));
+    let refresh = next_server_request(&mut lsp);
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": rule } }),
+    );
+    open(&mut lsp, &rule, "opentide-yaml", &fixture(RULE));
+    // The next thing the server says is the answer to this request: a second
+    // refresh would come first.
+    let id = lsp.next_id;
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": id, "method": "opentide/__stats" }));
+    lsp.next_id += 1;
+    let next = lsp.read();
+    assert_eq!(next["id"], id, "an unexpected message: {next}");
+    assert!(next.get("method").is_none(), "{next}");
+}
+
+/// A pull the server cannot answer is `ServerCancelled` with
+/// `retriggerRequest`, so that the client asks again, and not an empty report
+/// that it keeps. It is refused once: `vscode-languageclient` asks again at
+/// once, with no delay, for as long as it is refused, and a document that
+/// never opens (another YAML, which `didOpen` leaves alone) would be a loop.
+/// The second pull is answered, and a `didOpen` that comes after still has the
+/// client pull again.
+#[test]
+fn a_pull_the_server_cannot_answer_is_refused_once_for_the_client_to_retry() {
+    let scratch = workspace("pull-cancelled", true);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": workspace_pulling(), "rootUri": file_uri(root) }));
+    let outside = file_uri(
+        &std::env::temp_dir().join("opentide-pull-cancelled-elsewhere/objects/rules/rule.yaml"),
+    );
+    // A file under the root that the workspace does not know (yet).
+    let unknown = file_uri(&root.join("objects/rules/rule-9.9.yaml"));
+    for uri in [&outside, &unknown] {
+        let reply = lsp.request(
+            "textDocument/diagnostic",
+            json!({ "textDocument": { "uri": uri } }),
+        );
+        assert_eq!(reply["error"]["code"], -32802, "{uri}: {reply}");
+        assert_eq!(reply["error"]["data"]["retriggerRequest"], true, "{reply}");
+        assert!(reply.get("result").is_none(), "{reply}");
+        // Asked again, at once: answered, not refused in a loop.
+        let (kind, id, codes) = pulled_report(&mut lsp, uri);
+        assert_eq!(kind, "full", "{uri}");
+        assert!(id.is_some(), "{uri}");
+        assert!(codes.is_empty(), "{uri}: {codes:?}");
+        // And not refused again, however often it is asked.
+        let (kind, _, _) = pulled_report(&mut lsp, uri);
+        assert!(kind == "full" || kind == "unchanged", "{uri}: {kind}");
+    }
+    // The document that was answered empty opens after all: the client is
+    // asked to pull again, and the pull is of the open text.
+    open(&mut lsp, &unknown, "opentide-yaml", &fixture(RULE));
+    let refresh = next_server_request(&mut lsp);
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    let (_, _, codes) = pulled_report(&mut lsp, &unknown);
+    assert!(
+        !codes.is_empty(),
+        "the open document shows nothing: {codes:?}"
+    );
+}
