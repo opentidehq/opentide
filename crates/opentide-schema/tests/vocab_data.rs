@@ -105,7 +105,10 @@ fn the_malapi_vocabulary_is_removed() {
     for (field, text) in bundled::FILES.iter().chain(bundled::DESCRIPTIONS) {
         let text = text();
         for marker in MALAPI_TEXT {
-            assert!(!text.contains(marker), "{field} holds MalAPI text: {marker}");
+            assert!(
+                !text.contains(marker),
+                "{field} holds MalAPI text: {marker}"
+            );
         }
     }
 }

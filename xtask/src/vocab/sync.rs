@@ -621,8 +621,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
         let spec = dir.path().join("specifications");
-        write(&spec.join("vocabularies/tlp.vocab.toml"), "name = \"TLP\"\n");
-        write(&spec.join("vocabularies/malapi.vocab.toml"), "name = \"MalAPI\"\n");
+        write(
+            &spec.join("vocabularies/tlp.vocab.toml"),
+            "name = \"TLP\"\n",
+        );
+        write(
+            &spec.join("vocabularies/malapi.vocab.toml"),
+            "name = \"MalAPI\"\n",
+        );
         write(
             &spec.join("schemas/pins/rule.toml"),
             "[\"rule::1.0\"]\nseverity = \"alert_severity::1.0\"\n",
