@@ -2417,7 +2417,13 @@ mod tests {
                 declared("Device*Events", &[("Pattern2_CF", None, Some("again"))]),
             ];
             let names = ["Contoso_CL".to_owned(), "SigninLogs".to_owned()];
-            let lazy_declared = lazy.with_declared_columns(&sources, &names);
+            // From a catalog nothing has read a table of yet, as production's is when a workspace's
+            // declarations are applied to a clone of the cached one: `lazy` above has every table's
+            // rows built, which the clone would inherit, and the declarations would never meet a
+            // table whose rows are built after them.
+            let lazy_declared = Catalog::core()
+                .with_profile(profile)
+                .with_declared_columns(&sources, &names);
             let mut eager_declared = eager.clone();
             let exact: Vec<&DeclaredSource> =
                 sources.iter().filter(|s| !s.name.contains('*')).collect();
