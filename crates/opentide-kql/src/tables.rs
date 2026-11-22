@@ -6,38 +6,12 @@
 #[cfg(test)]
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 pub use crate::tables_model::{
     AsimColumn, AsimParam, AsimParser, AsimSchema, AzureMonitorColumn, AzureMonitorTable,
     kusto_type,
 };
-
-/// An optional [`TypeName`].
-struct OptionalTypeName;
-
-impl<'de> serde::de::Visitor<'de> for OptionalTypeName {
-    type Value = Option<Arc<str>>;
-
-    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("a Kusto type name")
-    }
-
-    fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-        Ok(None)
-    }
-
-    fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
-        d.deserialize_str(crate::tables_model::TypeName).map(Some)
-    }
-}
-
-/// An optional Kusto type name, interned ([`kusto_type`]).
-pub(crate) fn interned_optional_type<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<Arc<str>>, D::Error> {
-    deserializer.deserialize_option(OptionalTypeName)
-}
 
 /// The catalogs as the tests read them: the TOML itself, to compare with what a build
 /// pre-parsed (`build.rs`, #1743).

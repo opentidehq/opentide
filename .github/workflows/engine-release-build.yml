@@ -318,7 +318,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist product
-          cp target/wasm32-wasip1/release/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
+          cp target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
           # The command line carries opentide's own package data: a product
           # asset, scanned as the `opentide` binaries are (the assets job).
           cp target/wasm32-wasip1/wasi/opentide.wasm "product/opentide-wasm32-wasip1.wasm"

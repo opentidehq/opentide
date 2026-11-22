@@ -118,3 +118,29 @@ pub struct AsimParser {
     #[serde(default)]
     pub unifying: bool,
 }
+
+/// An optional [`TypeName`].
+struct OptionalTypeName;
+
+impl<'de> serde::de::Visitor<'de> for OptionalTypeName {
+    type Value = Option<Arc<str>>;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a Kusto type name")
+    }
+
+    fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        d.deserialize_str(TypeName).map(Some)
+    }
+}
+
+/// An optional Kusto type name, interned ([`kusto_type`]).
+pub(crate) fn interned_optional_type<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Arc<str>>, D::Error> {
+    deserializer.deserialize_option(OptionalTypeName)
+}

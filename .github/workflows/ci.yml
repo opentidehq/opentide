@@ -1280,7 +1280,7 @@ jobs:
         if: needs.changes.outputs.ts_packages == 'true'
         env:
           OPENTIDE_LSP_BIN: target/debug/opentide-lsp
-          OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
+          OPENTIDE_WASI_BIN: target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm
           OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
         run: >-
           node --no-turbo-fast-api-calls --experimental-strip-types
