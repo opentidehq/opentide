@@ -93,7 +93,11 @@ warmup = 1
 # refuses, one word in each of its CrowdStrike rules. The medians below were measured on
 # 5978a2ab7c093587 and stand: the oracle's model reads `trigger` as any string (0.23.0's
 # CrowdstrikeDetails.trigger: str). Re-record them only from a CI run, in a change of its own.
-digest = "aa03d09a58068a06"
+# #1751 moved it from aa03d09a58068a06: the generator writes CrowdStrike's `details.severity`
+# as `Low`, `Medium` or `High` where it wrote them in lower case, which deploy (and so the dry
+# run) refuses as "Invalid Severity" (the model's five names, `map_severity`). The same holds
+# for the medians: 0.23.0 reads `severity` as any string.
+digest = "3b65f46efbfcf566"
 # The platforms the heavy workspace holds: the ones opentide 0.23.0 knows, in the connector
 # order (xtask's bench::oracle::ORACLE_PLATFORMS). Bitdefender, Graylog, Exabeam and Google
 # SecOps join when the oracle pin moves past 0.28.
