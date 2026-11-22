@@ -19,7 +19,7 @@ use opentide_core::{ByteSpan, LanguageId, LineIndex, Position, Range, span_to_ra
 use opentide_highlight::encode_lsp_semantic_tokens;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -930,7 +930,7 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 session.touch();
             }
             everything = true;
-        } else if is_state_shard(&normalized) {
+        } else if crate::checks::is_state_shard(&normalized) {
             // Only `validate` reads a deployment state shard: the findings
             // it keeps are out of date, no analysis is.
             if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
@@ -972,19 +972,6 @@ fn configuration_changed(session: &Session, path: &str) {
     if let Some(root) = session.root_for(path).and_then(|i| session.roots.get(i)) {
         root.checks.borrow_mut().changed([PathBuf::from(path)]);
     }
-}
-
-/// Whether `path` (with `/` separators) is a deployment state shard, or a
-/// folder that holds them: a client reports a deleted folder as one event for
-/// the folder, not for each file in it.
-fn is_state_shard(path: &str) -> bool {
-    let path = path.trim_end_matches('/');
-    path.ends_with("/.opentide/states")
-        || path.ends_with("/.opentide/states/deployment")
-        || (path.contains("/.opentide/states/deployment/")
-            && std::path::Path::new(path)
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")))
 }
 
 /// `opentide/didChangeWorkspace`: merge the change into the supplied
@@ -1169,7 +1156,19 @@ fn duplicates(
 /// An open document's diagnostics, from its cached analysis.
 pub(crate) fn diagnostics_for(session: &Session, uri: &str) -> Vec<lsp::Diagnostic> {
     let Some(analysis) = session.analysis(uri) else {
-        return Vec::new();
+        // A deployment state shard is no document the server reads, but a
+        // client that pulls it open is shown what the workspace pull shows.
+        let path = uri_to_path(uri);
+        return session
+            .shard_diagnostics(&path)
+            .map(|found| {
+                let root = session.root_for(&path);
+                found
+                    .iter()
+                    .map(|d| lsp_diagnostic(session, root, &path, d))
+                    .collect()
+            })
+            .unwrap_or_default();
     };
     let root = session.docs.get(uri).and_then(|d| d.root);
     let path = uri_to_path(uri);
@@ -1260,7 +1259,7 @@ fn handle_workspace_diagnostics(
             entries
         }
     };
-    let items = entries
+    let mut items: Vec<lsp::WorkspaceDocumentDiagnosticReport> = entries
         .iter()
         .map(|entry| {
             let (uri, id, found) = &**entry;
@@ -1289,7 +1288,55 @@ fn handle_workspace_diagnostics(
             }
         })
         .collect();
+    items.extend(cleared_shards(session, &previous, &entries));
     lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport { items })
+}
+
+/// An empty report for each deployment state shard the client holds a report
+/// of (`previousResultIds`) that this pull has no entry for: its findings
+/// were fixed, or it is gone. A client keeps what a workspace pull reported
+/// on a file until a later pull reports that file again (VS Code does), so
+/// leaving the shard out would leave its findings on screen.
+fn cleared_shards(
+    session: &Session,
+    previous: &HashMap<String, String>,
+    entries: &[crate::session::ReportEntry],
+) -> Vec<lsp::WorkspaceDocumentDiagnosticReport> {
+    // Compared as paths: the client may spell a URI another way (VS Code
+    // escapes a drive's `:`) than the server does.
+    let key = |uri: &str| crate::session::path_key(&uri_to_path(uri));
+    let reported: HashSet<String> = entries.iter().map(|entry| key(entry.0.as_str())).collect();
+    let empty = result_id(&[]);
+    let mut cleared: Vec<lsp::WorkspaceDocumentDiagnosticReport> = previous
+        .iter()
+        .filter(|(uri, id)| {
+            **id != empty
+                && !reported.contains(&key(uri))
+                && !session.docs.contains_key(uri.as_str())
+                && crate::checks::is_state_shard(&uri_to_path(uri).replace('\\', "/"))
+        })
+        .filter_map(|(uri, _)| {
+            Some(lsp::WorkspaceDocumentDiagnosticReport::Full(
+                lsp::WorkspaceFullDocumentDiagnosticReport {
+                    uri: uri.parse().ok()?,
+                    version: None,
+                    full_document_diagnostic_report: lsp::FullDocumentDiagnosticReport {
+                        result_id: Some(empty.clone()),
+                        items: Vec::new(),
+                    },
+                },
+            ))
+        })
+        .collect();
+    cleared.sort_by(|a, b| report_uri(a).cmp(report_uri(b)));
+    cleared
+}
+
+fn report_uri(report: &lsp::WorkspaceDocumentDiagnosticReport) -> &str {
+    match report {
+        lsp::WorkspaceDocumentDiagnosticReport::Full(full) => full.uri.as_str(),
+        lsp::WorkspaceDocumentDiagnosticReport::Unchanged(unchanged) => unchanged.uri.as_str(),
+    }
 }
 
 /// What the pull reports for each closed object file, in the order of the

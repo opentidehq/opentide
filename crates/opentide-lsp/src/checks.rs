@@ -157,6 +157,9 @@ pub(crate) struct RootChecks {
     /// What other objects' checks read changed since: every object is
     /// checked again.
     stale: bool,
+    /// A deployment state shard changed since [`all`](Self::all) was last
+    /// made current: the shards are scanned again.
+    states_changed: bool,
     /// How many times every object was checked, and how many times only the
     /// files that changed were (the tests' counters, `opentide/__stats`).
     pub(crate) validations: (u64, u64),
@@ -188,6 +191,7 @@ impl Default for RootChecks {
             all: None,
             dirty: std::collections::BTreeSet::new(),
             stale: false,
+            states_changed: false,
             validations: (0, 0),
             revision: 0,
             base_stamp: 0,
@@ -245,7 +249,20 @@ impl RootChecks {
             .into_iter()
             .map(|path| Change::changed(self.resolve(&path)))
             .collect();
+        // Nothing the workspace parses reads a shard: `validate` scans them
+        // on a full run only, so the kept findings scan them again.
+        self.states_changed |= changes
+            .iter()
+            .any(|change| is_state_shard(&change.path.to_string_lossy().replace('\\', "/")));
         self.pending.extend(changes);
+    }
+
+    /// The text of `path` as the workspace reads it (an open buffer, else the
+    /// disk), when it is UTF-8 text: where a shard's findings are placed.
+    pub(crate) fn read_text(&self, path: &Path) -> Option<String> {
+        let bytes = self.fs.read(path).ok()?;
+        let text = String::from_utf8(bytes).ok()?;
+        Some(opentide_core::strip_bom(&text).to_string())
     }
 
     /// Put `buffers` in place of their files: the ones that changed, came or
@@ -391,6 +408,7 @@ impl RootChecks {
             if self.all.is_none() {
                 self.dirty.clear();
                 self.stale = false;
+                self.states_changed = false;
             }
         }
     }
@@ -596,6 +614,7 @@ impl RootChecks {
             self.all = None;
             self.dirty.clear();
             self.stale = true;
+            self.states_changed = false;
         }
         self.refresh_all(generation, epoch).unwrap_or_default()
     }
@@ -614,8 +633,14 @@ impl RootChecks {
     fn refresh_all(&mut self, generation: u64, epoch: u64) -> Option<Findings> {
         let workspace = self.workspace.as_ref()?;
         let kept = self.all.take().filter(|_| !self.stale);
+        let states_changed = std::mem::take(&mut self.states_changed) && kept.is_some();
         let found = match kept {
-            Some(Kept { found, .. }) if self.dirty.is_empty() => found,
+            Some(Kept { found, .. }) if self.dirty.is_empty() && !states_changed => found,
+            Some(Kept { found, .. }) if self.dirty.is_empty() => {
+                let mut found = found;
+                self.rescan_states(Arc::make_mut(&mut found));
+                found
+            }
             Some(Kept { mut found, .. }) => {
                 let map = Arc::make_mut(&mut found);
                 // The findings are kept by the file's resolved path (a
@@ -658,6 +683,9 @@ impl RootChecks {
                         .filter(|(key, _)| keys.contains(key)),
                 );
                 self.validations.1 += 1;
+                if states_changed {
+                    self.rescan_states(map);
+                }
                 found
             }
             None => {
@@ -685,6 +713,67 @@ impl RootChecks {
         });
         Some(found)
     }
+}
+
+impl RootChecks {
+    /// Put the `deployment_state_*` findings of the shards as they are now in
+    /// place of the ones `found` holds: each shard whose findings came, went
+    /// or changed gets a new stamp, so the workspace pull reports it again.
+    fn rescan_states(&mut self, found: &mut HashMap<PathBuf, Vec<Diagnostic>>) {
+        let Some(workspace) = self.workspace.as_ref() else {
+            return;
+        };
+        let _span = crate::timing::Span::new("validate: the deployment state shards");
+        let states = workspace.root().join(".opentide").join("states");
+        let mut fresh: HashMap<PathBuf, Vec<Diagnostic>> = HashMap::new();
+        let fs = workspace.fs();
+        for finding in workspace.deployment_state_findings() {
+            if let Some(file) = finding.file_path.as_deref() {
+                fresh.entry(fs.resolve(file)).or_default().push(finding);
+            }
+        }
+        // The shards' entries: a key under the states folder holds only what
+        // the scan finds (no object lives there).
+        let old: Vec<PathBuf> = found
+            .keys()
+            .filter(|key| key.starts_with(&states) || fresh.contains_key(*key))
+            .cloned()
+            .collect();
+        let mut touched: Vec<PathBuf> = Vec::new();
+        for key in old {
+            let before = found.remove(&key);
+            let after = fresh.remove(&key);
+            if before != after {
+                touched.push(key.clone());
+            }
+            if let Some(after) = after {
+                found.insert(key, after);
+            }
+        }
+        for (key, after) in fresh {
+            touched.push(key.clone());
+            found.insert(key, after);
+        }
+        if !touched.is_empty() {
+            self.revision += 1;
+            for key in touched {
+                self.stamps.insert(key, self.revision);
+            }
+        }
+    }
+}
+
+/// Whether `path` (with `/` separators) is a deployment state shard, or a
+/// folder that holds them: a client reports a deleted folder as one event for
+/// the folder, not for each file in it.
+pub(crate) fn is_state_shard(path: &str) -> bool {
+    let path = path.trim_end_matches('/');
+    path.ends_with("/.opentide/states")
+        || path.ends_with("/.opentide/states/deployment")
+        || (path.contains("/.opentide/states/deployment/")
+            && Path::new(path)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")))
 }
 
 /// A run's findings by file, resolved, and lint's file name and metadata
