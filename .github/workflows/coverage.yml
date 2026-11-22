@@ -146,11 +146,16 @@ jobs:
 
       # The report reads the profiles where show-env pointed them (target/,
       # not cargo-llvm-cov's own target/llvm-cov-target): the same exports.
+      # `--target` the host's triple: napi-rs builds the Node addon with
+      # `--target` (target/<triple>/debug), and the report maps profiles to
+      # the objects it finds, there and in target/debug only when it is given
+      # the triple; without it the Node tests' counters matched no object.
       - name: Coverage reports
         run: |
           eval "$(cargo llvm-cov show-env --sh)"
-          cargo llvm-cov report --json --summary-only --output-path target/coverage.json
-          cargo llvm-cov report --lcov --output-path target/lcov.info
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          cargo llvm-cov report --target "$host" --json --summary-only --output-path target/coverage.json
+          cargo llvm-cov report --target "$host" --lcov --output-path target/lcov.info
 
       # One row per crate in the job summary; fails when a crate is below its
       # gate, when the policy loosens one, or when a member measured nothing.
