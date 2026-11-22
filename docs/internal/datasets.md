@@ -124,6 +124,33 @@ The WASI module's own start under wasmtime (`opentide-lsp.wasm help`): 153 ms, 1
 `ruzstd` (pure Rust) decodes about 250 to 350 MB/s here: 4 to 7 ms for the 1.45 MB ATT&CK vocabulary, 7 ms for the 3.4 MB Azure Monitor reference. `lz4_flex` decodes 4 to 6 times faster (1 ms for ATT&CK) but its compressor leaves the datasets 2.7 times larger than zstd's level 19 (4.6 MB against 1.7 MB for the 16.9 MB of text the benchmark read), which the binaries and the wheels would carry: a pre-parsed or lazily decoded dataset made decode time a small part of a command, and size is what is paid by every download, so zstd is the format. `FrameDecoder::decode_all_to_vec` and the streaming decoder are within 5% of each other.
 
 
+## Licences
+
+Every dataset compiled in is redistributed in every binary, wheel, crate, npm package and WebAssembly build, so each needs a licence that allows it and the attribution that licence asks for. [`NOTICE`](../../NOTICE) holds the attribution; the licence and notice files it cites ship beside it at the paths it names: in the wheel through `license-files` (`pyproject.toml`, held by `tests/test_package/test_layout.py`), in each crate and each npm package of `@opentide/opentide` through `scripts/engine/release.py` (`vendor`, `legal`; `build-packages.yml` checks every tarball). Audited for [#1753](https://github.com/opentidehq/opentide/issues/1753) (2026-11), from each upstream's licence file or terms page:
+
+| Dataset | Upstream | Licence | Attribution required | Status |
+|---|---|---|---|---|
+| ATT&CK vocabularies (`att&ck*`, `mitigations`, `datasources`, the ATT&CK groups of `actors`) | MITRE ATT&CK STIX data | ATT&CK Terms of Use: "a non-exclusive, royalty-free license to use ATT&CK® for research, development, and commercial purposes" | Reproduce "© 2026 The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation." and the licence in any copy | In `NOTICE`, verbatim |
+| `actors` (MISP actors) | MISP/misp-galaxy `clusters/threat-actor.json` | CC0 1.0 or BSD-2-Clause (dual, `LICENSE.md`) | None under CC0; credited | In `NOTICE` |
+| `malapi` | malapi.io | **None found**: no licence or terms of use found, no public source repository | Unknown | **Open, owner's decision** (#1753): names are facts, descriptions are the site's text |
+| Falco catalog (`data/catalogs/falco/`) | falcosecurity/libs, falco, plugins, rules | Apache-2.0; the driver's event table MIT or GPL-2.0-only (used under MIT) | Licence text and upstream NOTICE | In `NOTICE`, `LICENSE.txt`, `LICENSE-MIT.txt`, `NOTICE` |
+| ECS fields (`data/catalogs/ecs/`) | elastic/ecs | Apache-2.0 | Licence text and upstream NOTICE | Shipped |
+| Azure Monitor tables (`kql/azure-monitor/`) | MicrosoftDocs/azure-monitor-docs | CC BY 4.0 | Credit, licence link, changes indicated | In `NOTICE` |
+| KQL core (`kql/core/`) | MicrosoftDocs/dataexplorer-docs | CC BY 4.0 (`LICENSE`; code samples MIT) | Credit, licence link, changes indicated | In `NOTICE` (added by #1753) |
+| ASIM (`kql/asim/`) | Azure/Azure-Sentinel | MIT | Copyright and licence | In `NOTICE` |
+| Defender and Sentinel tables (`kql/defender/`, `kql/sentinel/`) | Microsoft Learn pages, cited per entry | Not confirmed (names and types are facts) | — | Named in `NOTICE`; descriptions to be confirmed as written here |
+| SPL (`spl/`) | Splunk documentation, cited per entry; CIM data models from splunk/pytest-splunk-addon (Apache-2.0) | Splunk docs: not confirmed (names are facts); CIM: Apache-2.0 | CIM: licence text | Named in `NOTICE`; descriptions to be confirmed as written here |
+| ES\|QL, EQL (`esql/`, `eql/`) | elastic/elasticsearch documentation | AGPL-3.0, SSPL or Elastic License 2.0 (the repository's `LICENSE.txt`) | — (facts only; ES\|QL descriptions written here) | Named in `NOTICE`; EQL descriptions to be confirmed as written here |
+| CQL (`cql/`) | CrowdStrike reference (facts), logscale-community-content (Unlicense), others | Unlicense, MIT, Apache-2.0, LGPL-2.1 (names only) | Licence texts | Shipped |
+| Exabeam (`exabeam/`) | ExabeamLabs/CIMLibrary | Apache-2.0 | Licence text and NOTICE | Shipped |
+| YARA (`yara/`) | VirusTotal/yara-x, VirusTotal/yara | BSD-3-Clause | Copyright, conditions, disclaimer in binary distributions | Shipped |
+| YARA-L (`yaral/`) | Google Security Operations documentation | CC BY 4.0 | Credit, licence link | In `NOTICE`, `yaral/NOTICE` |
+| Bitdefender, Carbon Black (`bitdefender/`, `carbon_black/`) | Vendor pages and MIT repositories, facts only | — (no text copied) | — | In `NOTICE` and each `NOTICE` |
+| Time zones (`tz/`) | IANA tzdata | Public domain | — | In `NOTICE`, `tz/NOTICE` |
+| Tide field catalog, schemas, templates, explain pages, the other vocabularies | opentide and opentidehq/specifications | opentide's own (EUPL-1.2); the specifications' as that repository states | — | Not re-audited here |
+
+The standalone binaries and the browser zip on the GitHub Release carry `NOTICE` but not yet the licence files it cites.
+
 ## Checks
 
 - `scripts/av/markers.py` (pytest, `tests/test_scripts/test_av_markers.py`, and [the release gate](publishing.md#the-antivirus-gate)): none of `moneropool`, `sekurlsa`, `Login Data`, `Invoke-Mimikatz`, `jndi:ldap` in plain text, ASCII case folded and as UTF-16, in any artifact, archives opened. A source distribution (the sdist, a `.crate`) keeps the datasets as the TOML sources the build compresses, and the tests' sources name the techniques they detect: the text source files of a `.tar.gz` or `.crate` (and its `data`, `assets`, `tests` directories) are exempt from the markers, and the YARA gate skips them; every compiled artifact and every binary member is held to both.

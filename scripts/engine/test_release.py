@@ -93,6 +93,56 @@ class Sha256SumsTest(unittest.TestCase):
         self.assertTrue((self.dir / "SHA256SUMS").is_file())
 
 
+class LegalFilesTest(unittest.TestCase):
+    """Every package that carries the engine ships NOTICE and the licence files it
+    cites, at the paths it names (#1753)."""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+        for rel, text in {
+            "LICENSE": "eupl\n",
+            "NOTICE": "ECS (data/catalogs/ecs/LICENSE.txt,\ndata/catalogs/ecs/NOTICE)\n",
+            "data/catalogs/ecs/LICENSE.txt": "apache\n",
+            "data/catalogs/ecs/NOTICE": "elastic\n",
+        }.items():
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_text(text, encoding="utf-8")
+        patcher = mock.patch.object(release, "ROOT", self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_cited_files_follow_license_and_notice(self) -> None:
+        self.assertEqual(
+            release.legal_files(),
+            ["LICENSE", "NOTICE", "data/catalogs/ecs/LICENSE.txt", "data/catalogs/ecs/NOTICE"],
+        )
+
+    def test_copy_then_remove_leaves_the_directory_as_it_was(self) -> None:
+        package = self.root / "pkg"
+        package.mkdir()
+        (package / "index.js").write_text("", encoding="utf-8")
+        release.copy_legal(package)
+        self.assertEqual(
+            (package / "data/catalogs/ecs/LICENSE.txt").read_text(encoding="utf-8"), "apache\n"
+        )
+        release.remove_legal(package)
+        self.assertEqual(sorted(p.name for p in package.iterdir()), ["index.js"])
+
+    def test_a_cited_file_that_does_not_exist_stops_the_copy(self) -> None:
+        (self.root / "data/catalogs/ecs/NOTICE").unlink()
+        with self.assertRaises(SystemExit):
+            release.copy_legal(self.root / "pkg")
+
+    def test_the_repository_ships_every_file_its_notice_cites(self) -> None:
+        patcher = mock.patch.object(release, "ROOT", Path(__file__).resolve().parents[2])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        files = release.legal_files()
+        self.assertIn("data/catalogs/carbon_black/NOTICE", files)
+        self.assertTrue(all((release.ROOT / rel).is_file() for rel in files), files)
+
+
 class VerifySumsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp())
@@ -984,10 +1034,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # and cannot mint the token npm's trusted publishing needs.
         self.assertNotRegex(smoke, r"\bnpm (?:publish|pu)\b")
         self.assertNotIn("id-token", smoke)
-        # Every native package ships the licence, which the pack checks.
+        # Every package that carries the engine ships the licence, NOTICE and the
+        # licence files NOTICE cites (#1753), which the pack checks.
         pack = workflow_jobs(PACKAGES)["npm-pack"]
-        self.assertIn('cp bindings/node/LICENSE "${dir}"', pack)
-        self.assertIn("grep -qx 'package/LICENSE'", pack)
+        self.assertIn("release.py legal bindings/node bindings/node/npm/*/", pack)
+        self.assertIn("release.legal_files()", pack)
+        self.assertIn("npm/1-native/*.tgz npm/2-package/*.tgz", pack)
         # ci.yml runs this smoke on the release tier and the nightly: its
         # `release` job is this build, so no job of its own repeats the test.
         ci = workflow_jobs(WORKFLOWS / "ci.yml")

@@ -36,7 +36,10 @@
     "index.d.ts",
     "cli.js",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE",
+    "data/catalogs/**/LICENSE*",
+    "data/catalogs/**/NOTICE"
   ],
   "engines": {
     "node": ">= 18"
