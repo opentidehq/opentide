@@ -4197,6 +4197,16 @@ mod tests {
 
     #[test]
     fn a_repo_root_variable_naming_no_folder_is_a_usage_error() {
+        // `--json` prints a message as a JSON string, where a Windows path's
+        // `\` is escaped: the test reads the field rather than the bytes.
+        fn failure_message(stdout: &str) -> String {
+            let value: serde_json::Value =
+                serde_json::from_str(stdout).unwrap_or_else(|err| panic!("{err}: {stdout}"));
+            value["failure"]["message"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        }
         // A10 (smoke test): `OPENTIDE_REPO_ROOT=/nonexist opentide validate`
         // passed on an empty catalogue, where `--repo /nonexist` exits 2.
         let missing =
@@ -4212,15 +4222,8 @@ mod tests {
             );
             let said = format!("{}{}", ran.stdout, ran.stderr);
             let message = format!("OPENTIDE_REPO_ROOT={shown} does not exist");
-            // `--json` prints the message as a JSON string, where a Windows
-            // path's `\` is escaped: read the field rather than the bytes.
             let printed = if line.starts_with("--json") {
-                let value: serde_json::Value = serde_json::from_str(&ran.stdout)
-                    .unwrap_or_else(|err| panic!("{line}: {err}: {said}"));
-                value["failure"]["message"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned()
+                failure_message(&ran.stdout)
             } else {
                 said.clone()
             };
@@ -4249,7 +4252,7 @@ mod tests {
         let ran = dispatched("--json validate", &split, false);
         assert_eq!(ran.code, USAGE_EXIT_CODE, "{}", ran.stdout);
         assert!(
-            ran.stdout
+            failure_message(&ran.stdout)
                 .contains(&format!("OPENTIDE_TIDE_WORKSPACE={shown} does not exist")),
             "{}",
             ran.stdout
