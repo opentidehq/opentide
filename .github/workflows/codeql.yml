@@ -150,6 +150,19 @@ jobs:
           # cargo build (CodeQL 2.23.3+, GA), Python and Actions as before.
           build-mode: none
           queries: security-extended
+          # Analyse what ships, not what tests it: about 86% of the files under
+          # crates/ are tests and test data. Excluding them is GitHub's first
+          # advice for a slow analysis ("Analysis takes too long"); for
+          # build-mode none, paths-ignore applies to every language here.
+          config: |
+            paths-ignore:
+              - crates/testdata/**
+              - "**/tests/**"
+              - "**/benches/**"
+              - fuzz/**
+              - xtask/**
+              - vendor/**
+              - tests/**
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         if: steps.scope.outputs.analyse == 'true' && matrix.language == 'python'
