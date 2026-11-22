@@ -1790,18 +1790,24 @@ impl Workspace {
     /// (`validate --file`) files on each rule among them for its own shard,
     /// placed: what an editor that keeps a full run's findings (which file
     /// them on the shards) adds for the rules it has open, without checking
-    /// them again. `files` are compared resolved.
+    /// them again. A rule is matched by its path as the index names it,
+    /// against each of `files` as given and resolved: only `files` are
+    /// resolved, never every rule (an editor asks on each keystroke). It
+    /// assumes the default checks (`schema` on), as the editor runs them.
     pub fn rule_shard_findings(&self, files: &[PathBuf]) -> Vec<Diagnostic> {
         let fs = self.fs().as_ref();
         let root = self.root().to_path_buf();
-        let wanted: BTreeSet<PathBuf> = files.iter().map(|file| fs.resolve(file)).collect();
+        let wanted: BTreeSet<PathBuf> = files
+            .iter()
+            .flat_map(|file| [file.clone(), fs.resolve(file)])
+            .collect();
         let mut issues: Vec<Diagnostic> = self
             .index()
             .objects
             .get("rule")
             .into_iter()
             .flat_map(|objects| objects.values())
-            .filter(|object| wanted.contains(&fs.resolve(&object.path)))
+            .filter(|object| wanted.contains(&object.path))
             .filter_map(|object| {
                 let subject = Subject {
                     uuid: &object.uuid,
