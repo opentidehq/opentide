@@ -4198,7 +4198,7 @@ mod tests {
     #[test]
     fn a_repo_root_variable_naming_no_folder_is_a_usage_error() {
         // `--json` prints a message as a JSON string, where a Windows path's
-        // `\` is escaped: the test reads the field rather than the bytes.
+        // `\` is escaped: the test reads the fields rather than the bytes.
         fn failure_message(stdout: &str) -> String {
             let value: serde_json::Value =
                 serde_json::from_str(stdout).unwrap_or_else(|err| panic!("{err}: {stdout}"));
@@ -4286,10 +4286,17 @@ mod tests {
         // `doctor` reports it as its failed workspace check instead.
         let doctor = dispatched("--json doctor --offline", &pairs, false);
         assert_ne!(doctor.code, USAGE_EXIT_CODE, "{}", doctor.stdout);
+        let value: serde_json::Value = serde_json::from_str(&doctor.stdout)
+            .unwrap_or_else(|err| panic!("{err}: {}", doctor.stdout));
+        let workspace = value["checks"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|check| check["code"] == "workspace")
+            .and_then(|check| check["message"].as_str())
+            .unwrap_or_default();
         assert!(
-            doctor
-                .stdout
-                .contains(&format!("Workspace {shown} does not exist")),
+            workspace.contains(&format!("Workspace {shown} does not exist")),
             "{}{}",
             doctor.stdout,
             doctor.stderr

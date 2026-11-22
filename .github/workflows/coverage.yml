@@ -109,7 +109,18 @@ jobs:
       #   opentide.analysis and the CLI), so Rust tests alone measure a
       #   fraction of opentide-native. Only the GitLab lint tests are left out:
       #   they need binaries this job does not install, and reach no Rust.
+      #
+      # One profile per binary, merged online, not one per process: show-env's
+      # default name has `%p`, and every process that loads an instrumented
+      # object writes a whole profile of it (13 MB for the CLI's `--version`).
+      # The Python suite starts thousands (xdist workers, the E2E suite's
+      # console scripts, all loading `_native`), and the runner's disk filled
+      # (#1751). `%4m` is LLVM's pool of four files per binary, which the
+      # profiler runtime merges into under a file lock; the report merges
+      # every target/*.profraw whatever its name.
       - name: Instrumented tests (Rust, and Python through the binding)
+        env:
+          LLVM_PROFILE_FILE_NAME: opentide-%4m.profraw
         run: |
           eval "$(cargo llvm-cov show-env --sh)"
           cargo llvm-cov clean --workspace
