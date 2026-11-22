@@ -2006,8 +2006,21 @@ fn the_layered_folder_is_the_resolved_roots_parents() {
     assert!(!workspace_pull_codes(&mut lsp).contains(&unknown));
     all_server_requests(&mut lsp, &mut sent);
     let watchers = watchers_in_force(&sent);
+    // The workspace names the folder resolved (macOS's `/var` is `/private/var`).
+    let spelled = |folder: &std::path::Path| {
+        [
+            file_uri(folder),
+            file_uri(
+                &folder
+                    .canonicalize()
+                    .unwrap_or_else(|_| folder.to_path_buf()),
+            ),
+        ]
+    };
     assert!(
-        watchers.contains(&(file_uri(&layer), "**/*.toml".to_string())),
+        spelled(&layer)
+            .iter()
+            .any(|base| watchers.contains(&(base.clone(), "**/*.toml".to_string()))),
         "the resolved parent's configuration is not watched: {watchers:?}"
     );
     assert!(

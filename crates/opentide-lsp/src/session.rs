@@ -643,9 +643,12 @@ struct ExtraFolders {
     /// Object folders `paths.toml` put outside `objects/`, as the editor
     /// spells the root.
     objects: Vec<PathBuf>,
-    /// The configuration folder layered in from above the root, as the
+    /// The configuration folder layered in from above the root: as the editor
+    /// spells the root's parent where that is the same folder, else as the
     /// workspace names it.
     layered: Vec<PathBuf>,
+    /// The same folders, as the workspace names them.
+    layered_resolved: Vec<PathBuf>,
     /// See [`WatchTarget::floors`].
     floors: Vec<PathBuf>,
     /// The root's own `.opentide/configurations/`, resolved.
@@ -1144,15 +1147,27 @@ impl Session {
             .filter(|folder| !folder.starts_with(&own_objects))
             .map(in_editor_spelling)
             .collect();
-        // The workspace layers the folder above the root it resolved, which a
-        // symbolic link, a mapped drive or a short name may spell otherwise
-        // than the editor's root: that folder lies outside the root, and stays
-        // as the workspace names it.
-        let layered = resolved_root
+        // The workspace layers the folder above the root it resolved. Where
+        // that is the editor's root's parent spelled otherwise (macOS's
+        // `/var`, a Windows short name), the editor's spelling is kept; where
+        // the root is named through a symbolic link or a mapped drive the
+        // folder is another one, and stays as the workspace names it.
+        let layered_resolved: Vec<PathBuf> = resolved_root
             .parent()
             .map(|parent| parent.join(".opentide").join("configurations"))
             .into_iter()
             .collect();
+        let layered = match (root.path.parent(), resolved_root.parent()) {
+            (Some(editor), Some(resolved))
+                if root
+                    .checks
+                    .try_borrow()
+                    .is_ok_and(|checks| checks.resolve(editor) == resolved) =>
+            {
+                vec![editor.join(".opentide").join("configurations")]
+            }
+            _ => layered_resolved.clone(),
+        };
         let floors = [root.path.parent(), resolved_root.parent()]
             .into_iter()
             .flatten()
@@ -1163,6 +1178,7 @@ impl Session {
         ExtraFolders {
             objects,
             layered,
+            layered_resolved,
             floors,
             own_configuration: resolved_root.join(".opentide").join("configurations"),
         }
@@ -1185,9 +1201,12 @@ impl Session {
                     .layered
                     .iter()
                     // Another root's own folder is a fixed glob's already.
-                    .filter(|layered| !all.iter().any(|other| other.own_configuration == **layered))
-                    .cloned()
-                    .map(|f| target(f, "**/*.toml")),
+                    .zip(&folders.layered_resolved)
+                    .filter(|(_, resolved)| {
+                        !all.iter()
+                            .any(|other| other.own_configuration == **resolved)
+                    })
+                    .map(|(f, _)| target(f.clone(), "**/*.toml")),
             );
         }
         targets.sort();
@@ -1299,7 +1318,12 @@ impl Session {
                 |checks| checks.resolve(Path::new(path)),
             );
             let inside = |folder: &PathBuf| {
-                Path::new(path).starts_with(folder) || resolved.starts_with(folder)
+                Path::new(path).starts_with(folder)
+                    || resolved.starts_with(folder)
+                    || root
+                        .checks
+                        .try_borrow()
+                        .is_ok_and(|checks| resolved.starts_with(checks.resolve(folder)))
             };
             if folders.objects.iter().any(inside) {
                 found.push((index, ScopeKind::Objects));
