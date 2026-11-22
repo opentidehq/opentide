@@ -8,10 +8,9 @@ use opentide_core::{CompletionItem, Diagnostic, codes};
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/carbon_black/fields.toml"
-));
+fn fields_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/carbon_black/fields.toml")
+}
 
 /// One process search field.
 #[derive(Debug, Clone, Deserialize)]
@@ -39,7 +38,7 @@ fn read_fields() -> Vec<Field> {
     use opentide_core::catalog::{array_items, compiled_in};
     compiled_in(
         "data/catalogs/carbon_black/fields.toml",
-        array_items(FIELDS_TOML, "field"),
+        array_items(fields_toml(), "field"),
     )
 }
 
@@ -143,7 +142,7 @@ mod tests {
     /// The item-by-item read is field for field the whole-file parse (ADR 0013).
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        let whole: Catalog = toml::from_str(FIELDS_TOML).unwrap();
+        let whole: Catalog = toml::from_str(fields_toml()).unwrap();
         assert_eq!(format!("{:?}", read_fields()), format!("{:?}", whole.field));
     }
 

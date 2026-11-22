@@ -412,7 +412,7 @@ pub fn platform_secret_names(options: &Options, platform: &str) -> Vec<String> {
     let mut names: Vec<String> = opentide_schema::configuration::bundled::FILES
         .iter()
         .filter(|(path, _)| *path == bundled)
-        .flat_map(|(_, text)| references(text))
+        .flat_map(|(_, text)| references(text()))
         .collect();
     names.extend(
         options

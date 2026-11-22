@@ -10,18 +10,10 @@
 //! `exabeam_unknown_value`.
 
 use opentide_core::suggest::{self, Candidates};
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/exabeam/fields.toml"
-));
-const VALUES_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/exabeam/values.toml"
-));
+pub use crate::catalog_model::{ActivityType, Field, Prefix, Subject};
 
 /// The CIM data type of a field, as far as the checks need it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,20 +24,6 @@ pub enum FieldKind {
     Datetime,
     Ip,
     Other,
-}
-
-/// One field (`src_ip`, `activity_type`, `approxLogTime`).
-#[derive(Debug, Clone, Deserialize)]
-pub struct Field {
-    pub name: String,
-    /// The CIM type: `string`, `integer`, `number`, `boolean`, `datetime`,
-    /// `ipv4/ipv6`, `array`, `hexadecimal`, `email`, `json`.
-    #[serde(rename = "type")]
-    pub ty: String,
-    pub description: String,
-    /// A platform field the CIM table does not list.
-    #[serde(default)]
-    pub platform: bool,
 }
 
 impl Field {
@@ -61,52 +39,6 @@ impl Field {
     }
 }
 
-/// A field-name prefix that is never unknown (`c_`, `m_`).
-#[derive(Debug, Clone, Deserialize)]
-pub struct Prefix {
-    pub prefix: String,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Subject {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-}
-
-/// An activity type, `<subject>-<activity>` (`process-create`).
-#[derive(Debug, Clone, Deserialize)]
-pub struct ActivityType {
-    pub name: String,
-    pub subject: String,
-    pub activity: String,
-    #[serde(default)]
-    pub pretty_name: String,
-    #[serde(default)]
-    pub outcomes: Vec<String>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
-struct FieldsFile {
-    #[cfg_attr(test, serde(default))]
-    prefixes: Vec<Prefix>,
-    #[cfg_attr(test, serde(default))]
-    fields: Vec<Field>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(Deserialize), serde(deny_unknown_fields))]
-struct ValuesFile {
-    #[cfg_attr(test, serde(default))]
-    outcomes: Vec<String>,
-    #[cfg_attr(test, serde(default))]
-    subjects: Vec<Subject>,
-    #[cfg_attr(test, serde(default))]
-    activity_types: Vec<ActivityType>,
-}
-
 #[derive(Debug)]
 pub struct Catalog {
     pub fields: Vec<Field>,
@@ -119,50 +51,43 @@ pub struct Catalog {
     names: Candidates,
 }
 
-/// `values.toml`'s preamble: the outcomes.
-#[derive(Deserialize)]
-struct ValuesPreamble {
-    #[serde(default)]
-    outcomes: Vec<String>,
-}
+/// What `build.rs` stores (#1743), parsed once at build time: the prefixes, the fields, the
+/// outcomes, the subjects and the activity types.
+type Model = (
+    Vec<Prefix>,
+    Vec<Field>,
+    Vec<String>,
+    Vec<Subject>,
+    Vec<ActivityType>,
+);
 
-/// Reads the compiled-in files item by item ([`opentide_core::catalog`]).
-fn files() -> (FieldsFile, ValuesFile) {
-    use opentide_core::catalog::{array_items, compiled_in, preamble};
-    const FIELDS: &str = "data/catalogs/exabeam/fields.toml";
-    const VALUES: &str = "data/catalogs/exabeam/values.toml";
-    let fields = FieldsFile {
-        prefixes: compiled_in(FIELDS, array_items(FIELDS_TOML, "prefixes")),
-        fields: compiled_in(FIELDS, array_items(FIELDS_TOML, "fields")),
-    };
-    let values = ValuesFile {
-        outcomes: compiled_in(VALUES, preamble::<ValuesPreamble>(VALUES_TOML)).outcomes,
-        subjects: compiled_in(VALUES, array_items(VALUES_TOML, "subjects")),
-        activity_types: compiled_in(VALUES, array_items(VALUES_TOML, "activity_types")),
-    };
-    (fields, values)
+/// The catalogue, pre-parsed by `build.rs` and decoded on first use.
+fn model() -> Model {
+    opentide_dataset::compiled_value(
+        "exabeam-catalog",
+        opentide_dataset::blob!("exabeam-catalog"),
+    )
 }
 
 impl Catalog {
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let (fields, values) = files();
+            let (prefixes, fields, outcomes, subjects, activity_types) = model();
             let by_name = fields
-                .fields
                 .iter()
                 .enumerate()
                 .map(|(i, f)| (f.name.to_lowercase(), i))
                 .collect();
-            let names = Candidates::new(fields.fields.iter().map(|f| f.name.as_str()));
+            let names = Candidates::new(fields.iter().map(|f| f.name.as_str()));
             Catalog {
-                names,
-                fields: fields.fields,
-                prefixes: fields.prefixes,
-                subjects: values.subjects,
-                activity_types: values.activity_types,
-                outcomes: values.outcomes,
+                fields,
+                prefixes,
+                subjects,
+                activity_types,
+                outcomes,
                 by_name,
+                names,
             }
         })
     }
@@ -312,15 +237,49 @@ fn suggestion_limit(text: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
 
-    /// The item-by-item read is field for field the whole-file parse (ADR 0013).
+    fn fields_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/exabeam/fields.toml")
+    }
+    fn values_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/exabeam/values.toml")
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct FieldsFile {
+        #[serde(default)]
+        prefixes: Vec<Prefix>,
+        #[serde(default)]
+        fields: Vec<Field>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct ValuesFile {
+        #[serde(default)]
+        outcomes: Vec<String>,
+        #[serde(default)]
+        subjects: Vec<Subject>,
+        #[serde(default)]
+        activity_types: Vec<ActivityType>,
+    }
+
+    /// What the build stored is the whole-file parse, field for field (#1743).
     #[test]
-    fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        let (fields, values) = files();
-        let whole: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
-        assert_eq!(format!("{fields:?}"), format!("{whole:?}"));
-        let whole: ValuesFile = toml::from_str(VALUES_TOML).unwrap();
-        assert_eq!(format!("{values:?}"), format!("{whole:?}"));
+    fn the_stored_catalogue_is_the_whole_files() {
+        let (prefixes, fields, outcomes, subjects, activity_types) = model();
+        let whole: FieldsFile = toml::from_str(fields_toml()).unwrap();
+        assert_eq!(format!("{prefixes:?}"), format!("{:?}", whole.prefixes));
+        assert_eq!(format!("{fields:?}"), format!("{:?}", whole.fields));
+        let whole: ValuesFile = toml::from_str(values_toml()).unwrap();
+        assert_eq!(outcomes, whole.outcomes);
+        assert_eq!(format!("{subjects:?}"), format!("{:?}", whole.subjects));
+        assert_eq!(
+            format!("{activity_types:?}"),
+            format!("{:?}", whole.activity_types)
+        );
     }
 
     #[test]

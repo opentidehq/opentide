@@ -20,6 +20,7 @@
 )]
 pub mod assist;
 pub mod catalog;
+mod catalog_model;
 pub mod check;
 mod highlight;
 mod lexer;

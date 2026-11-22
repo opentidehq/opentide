@@ -69,6 +69,10 @@
 #   asks `opentide_kuery::parses`; the KQL engine takes the Lucene verdict as
 #   an argument of `analyze`, which opentide-analysis and opentide-tide pass.
 #   ES|QL and EQL (Lucene's regular expressions) sit above it.
+# - opentide-dataset (#1743) is foundation tier 0: the embedded datasets'
+#   container and its pure-Rust decoder depend on no workspace crate; every
+#   crate that compiles a dataset in uses it (at run time, and its encoder in
+#   build.rs), and none of them may be below it.
 # - opentide-parse (ADR 0012, #1221) is foundation tier 1, where
 #   opentide-syntax (tree-sitter, deleted in #1231) stood: the pure-Rust
 #   parsers' toolkit (logos, rowan) depends on no workspace crate, and every
@@ -77,7 +81,7 @@
 [[layer]]
 name = "foundation"
 tiers = [
-    ["opentide-core", "opentide-schema-derive", "opentide-cassette"],
+    ["opentide-core", "opentide-dataset", "opentide-schema-derive", "opentide-cassette"],
     ["opentide-parse", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-falco", "opentide-cql",
      "opentide-yara", "opentide-yaral", "opentide-exabeam"],

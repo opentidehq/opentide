@@ -395,9 +395,10 @@ impl Prober for GoogleSecops {
                         CREDENTIALS_UNAVAILABLE,
                         format!(
                             "{PLATFORM} tenant '{}' names no credentials and none are set up \
-                             (no GOOGLE_APPLICATION_CREDENTIALS, no gcloud credentials file, \
+                             (no {}, no gcloud credentials file, \
                              and the metadata server did not answer)",
-                            cx.tenant.label.tenant
+                            cx.tenant.label.tenant,
+                            auth::credentials_variable()
                         ),
                     )))
                 }

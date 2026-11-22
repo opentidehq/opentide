@@ -210,6 +210,10 @@ python3 scripts/engine/release.py lockstep 0.x.y      # the crates are at the ve
 
 ---
 
+### Step 1a — The antivirus gate
+
+Every build of the train (`publish.yml`'s `build`, which a candidate, a dry run and a release all run) ends with the antivirus gate, [`av-gate.yml`](../../../.github/workflows/av-gate.yml): ClamAV (fresh signatures, archives scanned), YARA (signature-base and protections-artifacts at pinned commits, with the reviewed allow-list `scripts/av/yara-allowlist.toml`), Microsoft Defender on `windows-latest` (`MpCmdRun -SignatureUpdate`, then `-Scan -ScanType 3 -File ... -DisableRemediation`), the marker-string check (no `moneropool`, `sekurlsa`, `Login Data`, `Invoke-Mimikatz`, `jndi:ldap` in plain text in any artifact) and the size budgets (`tests/bench/sizes.toml`). It runs before anything is tagged, attested or published, and also on a release pull request (the `release` label) and a `scope: release` Run workflow, never on an ordinary pull request. Nothing is uploaded to an external scanner: never upload an artifact to VirusTotal to "check" it. A detection fails the build: read the job's log, fix the cause (a dataset stored loose again shows as a marker), or report a false positive to the vendor with the file's hash and, for a YARA hunting rule that matches noise, add it to the allow-list with its reason in a reviewed pull request. [`docs/internal/publishing.md`](../../../docs/internal/publishing.md#the-antivirus-gate) has the details.
+
 ### Step 1b — CI must actually be green
 
 Before merge/release:
@@ -363,6 +367,7 @@ Link that pull request from the tracking issue in Step 4.
 | `internal-release`: `two assets are named …` | Two artifacts carry one file name; fix the build, rerun (delete the draft and tag first if they were created) |
 | Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
 | A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
+| `AV gate` failed (markers, sizes, ClamAV, YARA or Defender) | Nothing was tagged or published. The job's log names the engine, the signature or rule and the file ([Step 1a](#step-1a--the-antivirus-gate)); fix the build, or report a false positive to the vendor and add a reviewed YARA allow-list entry. Never upload the artifact to a public scanner |
 | A registry job failed after the **GitHub Release** job created the tag | Run workflow with `checkout_ref=v0.x.y`, on `integration/unified-core` while `development`'s `publish.yml` is the stub, else on `development` (cloud: `actions_run_trigger` with `ref` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
 | `Verify the published assets` failed | It is the published assets that failed (sums, set, attestation): fix the cause, then resume with `checkout_ref`, or cut a patch release |
 | 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (a candidate's too). Re-run; do not retag |

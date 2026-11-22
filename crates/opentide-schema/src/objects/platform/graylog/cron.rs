@@ -119,12 +119,12 @@ pub fn cron_ok(cron: &str) -> bool {
 /// The IANA zone and link names.
 fn zones() -> &'static BTreeSet<&'static str> {
     static ZONES: OnceLock<BTreeSet<&'static str>> = OnceLock::new();
-    const TEXT: &str = include_str!(concat!(
-        env!("OPENTIDE_ASSETS"),
-        "/data/catalogs/tz/zones.txt"
-    ));
+    fn text() -> &'static str {
+        opentide_dataset::text!("data/catalogs/tz/zones.txt")
+    }
     ZONES.get_or_init(|| {
-        TEXT.lines()
+        text()
+            .lines()
             .filter(|line| !line.is_empty() && !line.starts_with('#'))
             .collect()
     })

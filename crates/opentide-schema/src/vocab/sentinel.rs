@@ -20,10 +20,9 @@ use serde::{Deserialize, Serialize};
 pub const VERSION: &str = "18";
 
 /// The bundled list's text.
-pub const DOCUMENT: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/src/opentide/data/sentinel/attack-v18.json"
-));
+pub fn document() -> &'static str {
+    opentide_dataset::text!("src/opentide/data/sentinel/attack-v18.json")
+}
 
 /// The list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,7 +84,7 @@ impl SentinelAttack {
     pub fn bundled() -> &'static Self {
         static LIST: OnceLock<SentinelAttack> = OnceLock::new();
         LIST.get_or_init(|| {
-            serde_json::from_str(DOCUMENT).expect("attack-v18.json is a Sentinel ATT&CK list")
+            serde_json::from_str(document()).expect("attack-v18.json is a Sentinel ATT&CK list")
         })
     }
 

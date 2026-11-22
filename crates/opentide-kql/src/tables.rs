@@ -3,54 +3,15 @@
 //! and the ASIM schemas and parsers (`data/catalogs/kql/asim/asim.toml`,
 //! `scripts/engine/sync_asim_schemas.py`), parsed once per process.
 
-use opentide_core::catalog::array_items;
+#[cfg(test)]
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 
-const AZURE_MONITOR_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/azure-monitor/tables.toml"
-));
-const ASIM_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/kql/asim/asim.toml"
-));
-
-/// The Kusto scalar types a catalog column has, each made once: tens of
-/// thousands of reference columns name one of these, and a `String` each
-/// was an allocation each (#1071).
-const KUSTO_TYPES: [&str; 10] = [
-    "bool", "datetime", "decimal", "dynamic", "guid", "int", "long", "real", "string", "timespan",
-];
-
-/// The Kusto type `name`, shared with every column of that type when it is
-/// one of the ten Kusto scalar types; any other is made for its column.
-pub fn kusto_type(name: &str) -> Arc<str> {
-    static SHARED: OnceLock<Vec<Arc<str>>> = OnceLock::new();
-    let shared = SHARED.get_or_init(|| KUSTO_TYPES.iter().map(|&t| Arc::from(t)).collect());
-    KUSTO_TYPES
-        .iter()
-        .position(|&t| t == name)
-        .and_then(|i| shared.get(i))
-        .map_or_else(|| Arc::from(name), Arc::clone)
-}
-
-/// Reads a type name straight into [`kusto_type`]: through `visit_str`, so
-/// no `String` is made for it first.
-struct TypeName;
-
-impl serde::de::Visitor<'_> for TypeName {
-    type Value = Arc<str>;
-
-    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("a Kusto type name")
-    }
-
-    fn visit_str<E: serde::de::Error>(self, name: &str) -> Result<Arc<str>, E> {
-        Ok(kusto_type(name))
-    }
-}
+pub use crate::tables_model::{
+    AsimColumn, AsimParam, AsimParser, AsimSchema, AzureMonitorColumn, AzureMonitorTable,
+    kusto_type,
+};
 
 /// An optional [`TypeName`].
 struct OptionalTypeName;
@@ -67,50 +28,26 @@ impl<'de> serde::de::Visitor<'de> for OptionalTypeName {
     }
 
     fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
-        d.deserialize_str(TypeName).map(Some)
+        d.deserialize_str(crate::tables_model::TypeName).map(Some)
     }
 }
 
-fn interned_type<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Arc<str>, D::Error> {
-    deserializer.deserialize_str(TypeName)
-}
-
+/// An optional Kusto type name, interned ([`kusto_type`]).
 pub(crate) fn interned_optional_type<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Arc<str>>, D::Error> {
     deserializer.deserialize_option(OptionalTypeName)
 }
 
-/// One table of the Azure Monitor Logs reference.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AzureMonitorTable {
-    pub name: String,
-    #[serde(default)]
-    pub docs: String,
-    #[serde(default)]
-    pub categories: Vec<String>,
-    /// The reference page, shared by the columns of each profile (#1071).
-    pub citation: Arc<str>,
-    /// Every column; `None` for a table whose columns depend on what writes
-    /// to it (AzureDiagnostics).
-    #[serde(default)]
-    pub columns: Option<Vec<AzureMonitorColumn>>,
+/// The catalogs as the tests read them: the TOML itself, to compare with what a build
+/// pre-parsed (`build.rs`, #1743).
+#[cfg(test)]
+fn azure_monitor_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/azure-monitor/tables.toml")
 }
-
-/// One column of an Azure Monitor Logs table.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AzureMonitorColumn {
-    /// Shared with the column rows each profile builds from it (#1071).
-    pub name: Arc<str>,
-    /// The Kusto scalar type, one of a handful shared by every column
-    /// ([`kusto_type`]).
-    #[serde(rename = "type", deserialize_with = "interned_type")]
-    pub type_name: Arc<str>,
-    /// The first sentence of the reference's description (Markdown); `None`
-    /// where the reference has none or the column comes from Azure-Sentinel's
-    /// validation schemas.
-    #[serde(default)]
-    pub description: Option<Arc<str>>,
+#[cfg(test)]
+fn asim_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/asim/asim.toml")
 }
 
 /// The whole file, as the test reads it to compare.
@@ -120,17 +57,17 @@ struct AzureMonitorFile {
     tables: Vec<AzureMonitorTable>,
 }
 
-/// The Azure Monitor Logs tables, by name.
-#[expect(
-    clippy::expect_used,
-    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-)]
+/// The Azure Monitor Logs tables, by name: pre-parsed by `build.rs` (#1743), decoded on first use.
 pub fn azure_monitor() -> &'static BTreeMap<String, AzureMonitorTable> {
     static TABLES: OnceLock<BTreeMap<String, AzureMonitorTable>> = OnceLock::new();
     TABLES.get_or_init(|| {
-        let tables: Vec<AzureMonitorTable> =
-            array_items(AZURE_MONITOR_TOML, "tables").expect("azure-monitor/tables.toml");
-        tables.into_iter().map(|t| (t.name.clone(), t)).collect()
+        opentide_dataset::compiled_value::<Vec<AzureMonitorTable>>(
+            "kql-azure-monitor-tables",
+            opentide_dataset::blob!("kql-azure-monitor-tables"),
+        )
+        .into_iter()
+        .map(|t| (t.name.clone(), t))
+        .collect()
     })
 }
 
@@ -155,46 +92,6 @@ pub fn is_custom_column(name: &str) -> bool {
     name.ends_with("_CF")
 }
 
-/// One ASIM schema column.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AsimColumn {
-    pub name: String,
-    /// The Kusto scalar type ([`kusto_type`]).
-    #[serde(rename = "type", deserialize_with = "interned_type")]
-    pub type_name: Arc<str>,
-    /// `Mandatory`, `Recommended`, `Optional`, `Conditional` or `Alias`.
-    pub class: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AsimSchema {
-    pub name: String,
-    pub columns: Vec<AsimColumn>,
-    #[serde(default)]
-    pub citation: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AsimParam {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub type_name: String,
-    #[serde(default)]
-    pub default: Option<String>,
-}
-
-/// An ASIM parser: a function that returns rows in one schema.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AsimParser {
-    pub name: String,
-    pub schema: String,
-    #[serde(default)]
-    pub params: Vec<AsimParam>,
-    /// Unions the source parsers of its schema (`_Im_NetworkSession`).
-    #[serde(default)]
-    pub unifying: bool,
-}
-
 /// The whole file, as the test reads it to compare.
 #[cfg(test)]
 #[derive(Debug, Deserialize)]
@@ -208,17 +105,14 @@ pub struct Asim {
     pub parsers: BTreeMap<String, AsimParser>,
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-)]
+/// The ASIM schemas and parsers: pre-parsed by `build.rs` (#1743), decoded on first use.
 pub fn asim() -> &'static Asim {
     static ASIM: OnceLock<Asim> = OnceLock::new();
     ASIM.get_or_init(|| {
-        let schemas: Vec<AsimSchema> =
-            array_items(ASIM_TOML, "schemas").expect("asim/asim.toml schemas");
-        let parsers: Vec<AsimParser> =
-            array_items(ASIM_TOML, "parsers").expect("asim/asim.toml parsers");
+        let (schemas, parsers) = opentide_dataset::compiled_value::<(
+            Vec<AsimSchema>,
+            Vec<AsimParser>,
+        )>("kql-asim", opentide_dataset::blob!("kql-asim"));
         Asim {
             schemas: schemas.into_iter().map(|s| (s.name.clone(), s)).collect(),
             parsers: parsers.into_iter().map(|p| (p.name.clone(), p)).collect(),
@@ -252,15 +146,29 @@ mod tests {
     /// are what `toml` reads from the whole files, item for item (#1071).
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        let whole: AzureMonitorFile = toml::from_str(AZURE_MONITOR_TOML).unwrap();
-        let items: Vec<AzureMonitorTable> = array_items(AZURE_MONITOR_TOML, "tables").unwrap();
+        use opentide_core::catalog::array_items;
+        let whole: AzureMonitorFile = toml::from_str(azure_monitor_toml()).unwrap();
+        let items: Vec<AzureMonitorTable> = array_items(azure_monitor_toml(), "tables").unwrap();
         assert_eq!(format!("{items:?}"), format!("{:?}", whole.tables));
         assert!(items.len() > 900);
-        let whole: AsimFile = toml::from_str(ASIM_TOML).unwrap();
-        let schemas: Vec<AsimSchema> = array_items(ASIM_TOML, "schemas").unwrap();
-        let parsers: Vec<AsimParser> = array_items(ASIM_TOML, "parsers").unwrap();
+        // What the build pre-parsed (`build.rs`) is what the whole file holds, item for item.
+        let pre_parsed: Vec<&AzureMonitorTable> = azure_monitor().values().collect();
+        let mut whole_sorted: Vec<&AzureMonitorTable> = whole.tables.iter().collect();
+        whole_sorted.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(format!("{pre_parsed:?}"), format!("{whole_sorted:?}"));
+        let whole: AsimFile = toml::from_str(asim_toml()).unwrap();
+        let schemas: Vec<AsimSchema> = array_items(asim_toml(), "schemas").unwrap();
+        let parsers: Vec<AsimParser> = array_items(asim_toml(), "parsers").unwrap();
         assert_eq!(format!("{schemas:?}"), format!("{:?}", whole.schemas));
         assert_eq!(format!("{parsers:?}"), format!("{:?}", whole.parsers));
+        let pre_parsed: Vec<&AsimSchema> = asim().schemas.values().collect();
+        let mut whole_sorted: Vec<&AsimSchema> = whole.schemas.iter().collect();
+        whole_sorted.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(format!("{pre_parsed:?}"), format!("{whole_sorted:?}"));
+        let pre_parsed: Vec<&AsimParser> = asim().parsers.values().collect();
+        let mut whole_sorted: Vec<&AsimParser> = whole.parsers.iter().collect();
+        whole_sorted.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(format!("{pre_parsed:?}"), format!("{whole_sorted:?}"));
         assert!(schemas.len() > 10 && parsers.len() > 1000);
     }
 

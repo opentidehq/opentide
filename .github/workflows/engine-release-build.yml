@@ -43,6 +43,10 @@ on:
         description: "Built for a pull request or a push: a Rust cache may be restored"
         type: boolean
         default: false
+      av-gate:
+        description: "Scan the assets (markers, sizes, ClamAV, YARA, Microsoft Defender: av-gate.yml) before the caller may publish them; the release tier and the release train set it"
+        type: boolean
+        default: false
     outputs:
       version:
         description: "The version the binaries report (`opentide --version`): the tag without its v."
@@ -488,3 +492,20 @@ jobs:
           name: release-assets
           path: dist/*
           if-no-files-found: error
+
+  # The antivirus gate over every asset (#1743): ClamAV, YARA, Microsoft
+  # Defender and the marker and size checks (av-gate.yml). Only for the release
+  # tier and the release train; a failure fails this workflow's caller, so
+  # nothing downstream of it (the internal release, the attestations, the
+  # registries) runs.
+  av-gate-assets:
+    name: AV gate (release assets)
+    needs: assets
+    if: inputs.av-gate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/av-gate.yml
+    with:
+      artifacts: release-assets
+      # No standalone Windows executable ships (#1747): nothing here to read imports from.
+      windows-binaries: false

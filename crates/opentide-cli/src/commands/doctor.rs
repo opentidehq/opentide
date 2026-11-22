@@ -966,9 +966,11 @@ impl Doctor<'_> {
                         "warn",
                         format!(
                             "{subject}: no credentials: the tenant names none, \
-                             GOOGLE_APPLICATION_CREDENTIALS is unset and there is no gcloud \
+                             {} is unset and there is no gcloud \
                              credentials file (a Google Cloud host's metadata server may still \
-                             supply them)"
+                             supply them)",
+                            // Assembled where the connector assembles it (#1743).
+                            opentide_connectors::google_secops::auth::credentials_variable()
                         ),
                     )
                     .fix(

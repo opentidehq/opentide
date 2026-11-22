@@ -467,7 +467,7 @@ fn configuration_bundled_files_are_valid_on_their_own() {
     for (path, text) in bundled::FILES {
         let found = checks::text_issues(
             &format!("/w/.opentide/configurations/{path}"),
-            text,
+            text(),
             &Layers {
                 earlier: Some(Vec::new()),
                 ..Layers::default()
@@ -502,7 +502,7 @@ fn the_retired_debug_keys_are_unknown_keys() {
     assert!(empty.is_empty(), "{empty:?}");
     for (path, text) in bundled::FILES {
         assert!(
-            !text.contains("mdr_test_uuids") && !text.contains("ssl_enabled"),
+            !text().contains("mdr_test_uuids") && !text().contains("ssl_enabled"),
             "{path} still writes a retired [debug] key"
         );
     }

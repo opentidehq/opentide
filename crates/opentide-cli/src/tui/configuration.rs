@@ -521,7 +521,7 @@ fn bundled_text(file_key: &str) -> Option<&'static str> {
     opentide_schema::configuration::bundled::FILES
         .iter()
         .find(|(path, _)| *path == file_key)
-        .map(|(_, text)| *text)
+        .map(|(_, text)| text())
 }
 
 // -- the redaction -------------------------------------------------------------

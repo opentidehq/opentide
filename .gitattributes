@@ -82,3 +82,11 @@ tests/fixtures/harfanglab/** -text
 # generated file byte for byte, so a Windows checkout holds the LF bytes too.
 *.ungram -text
 **/generated/ast.rs -text
+
+# The engine catalogs, the highlight data and the package data are compiled into every
+# binary through the dataset blobs (opentide-dataset, #1743): the bytes a build compresses
+# must be the committed (LF) bytes on every OS. Before this rule a Windows checkout
+# (core.autocrlf) embedded them with CRLF, so one source gave a different binary per OS.
+data/catalogs/** -text
+highlights/** -text
+src/opentide/data/** -text

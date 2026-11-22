@@ -52,14 +52,12 @@ use syntax::SyntaxKind as K;
 #[doc(hidden)]
 pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 
-const FUNCTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/eql/functions.toml"
-));
-const PIPES_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/eql/pipes.toml"
-));
+fn functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/eql/functions.toml")
+}
+fn pipes_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/eql/pipes.toml")
+}
 
 const SYNTAX_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/eql/eql-syntax";
 
@@ -147,13 +145,13 @@ fn files() -> (FunctionsFile, PipesFile) {
     let functions = FunctionsFile {
         functions: compiled_in(
             "data/catalogs/eql/functions.toml",
-            array_items(FUNCTIONS_TOML, "functions"),
+            array_items(functions_toml(), "functions"),
         ),
     };
     let pipes = PipesFile {
         pipes: compiled_in(
             "data/catalogs/eql/pipes.toml",
-            array_items(PIPES_TOML, "pipes"),
+            array_items(pipes_toml(), "pipes"),
         ),
     };
     (functions, pipes)
@@ -930,9 +928,9 @@ mod tests {
     #[test]
     fn the_catalogs_read_item_by_item_are_the_whole_files() {
         let (functions, pipes) = files();
-        let whole: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
+        let whole: FunctionsFile = toml::from_str(functions_toml()).unwrap();
         assert_eq!(format!("{functions:?}"), format!("{whole:?}"));
-        let whole: PipesFile = toml::from_str(PIPES_TOML).unwrap();
+        let whole: PipesFile = toml::from_str(pipes_toml()).unwrap();
         assert_eq!(format!("{pipes:?}"), format!("{whole:?}"));
     }
 

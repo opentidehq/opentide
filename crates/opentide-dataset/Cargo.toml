@@ -1,0 +1,31 @@
+[package]
+name = "opentide-dataset"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: the embedded datasets, compressed at build time and decoded once per process (I/O-free, pure Rust). Internal: depend on the opentide crate."
+readme = "../COMPONENT.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+# The decoder: pure Rust, so wasm32-unknown-unknown and wasm32-wasip1 build it
+# with no C toolchain (the encoder below runs in build scripts, on the host).
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+# A pre-parsed dataset: a model's serde form, compact and not self-describing.
+postcard = { version = "1", default-features = false, features = ["use-std"] }
+serde.workspace = true
+thiserror.workspace = true
+# The encoder (`build`): libzstd, at a level a decoder-only crate cannot reach.
+# Only a build script turns it on (a build dependency is compiled for the host,
+# never for the wasm targets), so it never reaches a shipped artifact.
+zstd = { version = "0.14", default-features = false, optional = true }
+
+[features]
+# `opentide_dataset::build`: for a crate's build.rs, as a build dependency only.
+encode = ["dep:zstd"]

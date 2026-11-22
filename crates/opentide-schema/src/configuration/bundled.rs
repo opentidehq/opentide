@@ -5,154 +5,77 @@
 /// Every bundled `.toml` file, by its path relative to the folder, in the
 /// order the oracle reads them (sorted by name, the `platforms/` folder in
 /// its place).
-pub const FILES: [(&str, &str); 20] = [
-    (
-        "deployment.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/deployment.toml"
-        )),
-    ),
-    (
-        "documentation.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/documentation.toml"
-        )),
-    ),
-    (
-        "lint.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/lint.toml"
-        )),
-    ),
-    (
-        "paths.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/paths.toml"
-        )),
-    ),
-    (
-        "platforms/bitdefender.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/bitdefender.toml"
-        )),
-    ),
-    (
-        "platforms/carbon_black_cloud.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/carbon_black_cloud.toml"
-        )),
-    ),
-    (
-        "platforms/crowdstrike.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/crowdstrike.toml"
-        )),
-    ),
-    (
-        "platforms/defender_for_endpoint.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/defender_for_endpoint.toml"
-        )),
-    ),
-    (
-        "platforms/elastic.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/elastic.toml"
-        )),
-    ),
-    (
-        "platforms/exabeam.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/exabeam.toml"
-        )),
-    ),
-    (
-        "platforms/google_secops.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/google_secops.toml"
-        )),
-    ),
-    (
-        "platforms/graylog.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/graylog.toml"
-        )),
-    ),
-    (
-        "platforms/harfanglab.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/harfanglab.toml"
-        )),
-    ),
-    (
-        "platforms/sentinel.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/sentinel.toml"
-        )),
-    ),
-    (
-        "platforms/sentinel_one.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/sentinel_one.toml"
-        )),
-    ),
-    (
-        "platforms/splunk.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/splunk.toml"
-        )),
-    ),
-    (
-        "platforms/sysdig.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/sysdig.toml"
-        )),
-    ),
-    (
-        "resources.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/resources.toml"
-        )),
-    ),
-    (
-        "sharing.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/sharing.toml"
-        )),
-    ),
-    (
-        "visibility.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/visibility.toml"
-        )),
-    ),
+pub const FILES: [(&str, opentide_dataset::TextFn); 20] = [
+    ("deployment.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/deployment.toml")
+    }),
+    ("documentation.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/documentation.toml")
+    }),
+    ("lint.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/lint.toml")
+    }),
+    ("paths.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/paths.toml")
+    }),
+    ("platforms/bitdefender.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/bitdefender.toml")
+    }),
+    ("platforms/carbon_black_cloud.toml", || {
+        opentide_dataset::text!(
+            "src/opentide/data/configurations/platforms/carbon_black_cloud.toml"
+        )
+    }),
+    ("platforms/crowdstrike.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/crowdstrike.toml")
+    }),
+    ("platforms/defender_for_endpoint.toml", || {
+        opentide_dataset::text!(
+            "src/opentide/data/configurations/platforms/defender_for_endpoint.toml"
+        )
+    }),
+    ("platforms/elastic.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/elastic.toml")
+    }),
+    ("platforms/exabeam.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/exabeam.toml")
+    }),
+    ("platforms/google_secops.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/google_secops.toml")
+    }),
+    ("platforms/graylog.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/graylog.toml")
+    }),
+    ("platforms/harfanglab.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/harfanglab.toml")
+    }),
+    ("platforms/sentinel.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/sentinel.toml")
+    }),
+    ("platforms/sentinel_one.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/sentinel_one.toml")
+    }),
+    ("platforms/splunk.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/splunk.toml")
+    }),
+    ("platforms/sysdig.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/sysdig.toml")
+    }),
+    ("resources.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/resources.toml")
+    }),
+    ("sharing.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/sharing.toml")
+    }),
+    ("visibility.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/visibility.toml")
+    }),
 ];
 
 /// The bundled `tlp` vocabulary, whose names `max_tlp` must be.
-pub const TLP_VOCABULARY: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/src/opentide/data/vocabulary/tlp.vocab.toml"
-));
+pub fn tlp_vocabulary() -> &'static str {
+    opentide_dataset::text!("src/opentide/data/vocabulary/tlp.vocab.toml")
+}
 
 /// The text of the bundled file at `relative` (`deployment.toml`,
 /// `platforms/splunk.toml`), if one ships.
@@ -160,7 +83,7 @@ pub fn text(relative: &str) -> Option<&'static str> {
     FILES
         .iter()
         .find(|(path, _)| *path == relative)
-        .map(|(_, text)| *text)
+        .map(|(_, text)| text())
 }
 
 /// The bundled document for a router key (`platforms/*.toml` has none), or
@@ -177,7 +100,7 @@ pub fn layer(file_key: &str) -> crate::node::Node {
 /// The `tlp` names of the bundled vocabulary, in its order; the `TlpName`
 /// values when it holds none (`_tlp_names`).
 pub fn tlp_names() -> Vec<String> {
-    let names: Vec<String> = super::toml::parse(TLP_VOCABULARY)
+    let names: Vec<String> = super::toml::parse(tlp_vocabulary())
         .ok()
         .and_then(|document| {
             let crate::node::Value::Seq(keys) = &document.get("keys")?.value else {
