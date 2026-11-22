@@ -551,14 +551,16 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
             .unwrap()
             .is_empty()
     );
+    // Closed, it is a file the workspace holds no object of: a pull is not
+    // answered with a report (an empty one is what a client keeps, and a
+    // finding would be a stale one) but refused for the client to ask again.
     let pull = lsp.request(
         "textDocument/diagnostic",
         json!({ "textDocument": { "uri": uri } }),
     );
-    assert!(
-        pull["result"]["items"].as_array().unwrap().is_empty(),
-        "{pull}"
-    );
+    assert!(pull.get("result").is_none(), "{pull}");
+    assert_eq!(pull["error"]["code"], -32802, "{pull}");
+    assert_eq!(pull["error"]["data"]["retriggerRequest"], true, "{pull}");
 }
 
 #[test]
