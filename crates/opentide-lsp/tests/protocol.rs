@@ -1918,13 +1918,27 @@ configurations:
     status: STAGING
     type: ";
     let kuery = "event.category : ";
-    let sites: [(&str, &str, String, usize, usize); 3] = [
+    let secops = "name: Google SecOps rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000097
+  schema: rule::1.0
+  version: 1
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    severity: ";
+    // `(language, uri, text, line, character, documented)`: whether any item
+    // of the site is documented by the list.
+    let sites: [(&str, &str, String, usize, usize, bool); 4] = [
         (
             "opentide-yaml",
             "file:///tmp/objects/rules/bitdefender.yaml",
             bitdefender.clone(),
             bitdefender.lines().count() - 1,
             "      target: reg".len(),
+            true,
         ),
         (
             "opentide-yaml",
@@ -1932,6 +1946,7 @@ configurations:
             elastic.to_string(),
             elastic.lines().count() - 1,
             "    type: ".len(),
+            true,
         ),
         (
             "kuery",
@@ -1939,16 +1954,43 @@ configurations:
             kuery.to_string(),
             0,
             kuery.len(),
+            true,
+        ),
+        // `Low`, `Medium` and `High` are values of other fields too, which
+        // document them (the objective's severity SLAs): this field says
+        // nothing of them, and resolving does not take theirs.
+        (
+            "opentide-yaml",
+            "file:///tmp/objects/rules/secops.yaml",
+            secops.to_string(),
+            secops.lines().count() - 1,
+            "    severity: ".len(),
+            false,
         ),
     ];
-    for (language, uri, text, line, character) in sites {
+    for (language, uri, text, line, character, documented) in sites {
         let (resolved, plain) = resolved_and_plain(language, uri, &text, line, character);
         assert!(!plain.is_empty(), "no completion at {uri}");
-        assert!(
+        assert_eq!(
             plain.iter().any(|(_, docs, _)| !docs.is_null()),
-            "nothing is documented at {uri}: {plain:?}"
+            documented,
+            "what the list documents at {uri}: {plain:?}"
         );
         assert_eq!(resolved, plain, "resolving changed an item at {uri}");
+    }
+    // An item that names no field is documented from none, by its label.
+    let (mut lsp, _) = start(json!({ "capabilities": {} }));
+    for label in ["High", "query", "description"] {
+        let bare = lsp.request(
+            "completionItem/resolve",
+            json!({ "label": label, "kind": 20 }),
+        );
+        assert!(
+            bare["result"]
+                .get("documentation")
+                .is_none_or(Value::is_null),
+            "{label} was documented by its label: {bare}"
+        );
     }
 }
 

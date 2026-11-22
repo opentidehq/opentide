@@ -1437,8 +1437,7 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
             let resolvable = session.caps.resolve_completion_documentation
                 && field.is_some_and(|(schema, path)| {
                     opentide_highlight::tide_field_at(schema, path).is_some()
-                        && resolved_documentation(&c.label, "enum", &format!("{schema} {path}"))
-                            == c.documentation
+                        && own_documentation(schema, path, &c.label) == c.documentation
                 });
             let detail_resolved = resolvable && session.caps.resolve_completion_detail;
             lsp::CompletionItem {
@@ -1524,29 +1523,21 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         .clone()
         .and_then(|d| serde_json::from_value(d).ok())
         .unwrap_or_default();
-    let kind = match item.kind {
-        Some(lsp::CompletionItemKind::FIELD) => "property",
-        Some(lsp::CompletionItemKind::ENUM) => "enum",
-        Some(lsp::CompletionItemKind::REFERENCE) => "reference",
-        _ => "property",
-    };
     // An item that names a field of the Tide models is documented from that
-    // field and no other; one that names a field the models do not have is
+    // field's own documentation of the value and from no other field (a
+    // value two fields share, `High`, is not documented as the other one's);
+    // one that names no such field, a query language's item among them, is
     // left as the list made it.
-    let named = data.schema.as_deref().zip(data.field_path.as_deref());
-    let resolved = match named {
-        Some((schema, path)) if opentide_highlight::tide_field_at(schema, path).is_none() => {
-            let mut left = opentide_core::CompletionItem::new(item.label.clone(), kind);
-            if let Some(detail) = item.detail.clone() {
-                left = left.with_detail(detail);
-            }
-            left
-        }
-        Some((schema, path)) => resolve_item(&item.label, kind, Some(format!("{schema} {path}"))),
-        None => resolve_item(&item.label, kind, item.detail.clone()),
-    };
+    let named = data
+        .schema
+        .as_deref()
+        .zip(data.field_path.as_deref())
+        .filter(|(schema, path)| opentide_highlight::tide_field_at(schema, path).is_some());
+    let resolved_documentation =
+        named.and_then(|(schema, path)| own_documentation(schema, path, &item.label));
+    let resolved_detail = named.map(|(schema, path)| format!("{schema} {path}"));
     if item.documentation.is_none()
-        && let Some(docs) = resolved.documentation
+        && let Some(docs) = resolved_documentation
     {
         item.documentation = Some(lsp::Documentation::MarkupContent(markup(
             session.caps.plaintext_completion,
@@ -1554,24 +1545,19 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         )));
     }
     if item.detail.is_none() {
-        item.detail = resolved.detail;
+        item.detail = resolved_detail;
     }
     item
 }
 
-/// What `completionItem/resolve` makes of an item: the engine's own resolve,
-/// from the label and, where the item names a field, that field.
-fn resolve_item(label: &str, kind: &str, detail: Option<String>) -> opentide_core::CompletionItem {
-    let mut engine = opentide_core::CompletionItem::new(label.to_string(), kind);
-    if let Some(detail) = detail {
-        engine = engine.with_detail(detail);
-    }
-    opentide_tide::resolve_completion(engine)
-}
-
-/// The documentation resolving the item of `label` and `detail` gives.
-fn resolved_documentation(label: &str, kind: &str, detail: &str) -> Option<String> {
-    resolve_item(label, kind, Some(detail.to_string())).documentation
+/// The documentation of the value `label` of the Tide field `path` of
+/// `schema`, from that field alone (as the list makes it for the field's
+/// values); `None` when there is no such field or it says nothing of the value.
+fn own_documentation(schema: &str, path: &str, label: &str) -> Option<String> {
+    let field = opentide_highlight::tide_field_at(schema, path)?;
+    let index = field.enum_values.iter().position(|value| value == label)?;
+    let doc = field.enum_docs.get(index).filter(|doc| !doc.is_empty())?;
+    Some(format!("**{label}**\n\n{doc}"))
 }
 
 fn handle_signature_help(
