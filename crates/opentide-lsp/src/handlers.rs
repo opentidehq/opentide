@@ -1239,9 +1239,9 @@ fn server_cancelled(id: lsp_server::RequestId, message: String) -> Response {
 /// that overtook its `didOpen`, as a client's replay of its open documents
 /// does) as the pull of the workspace reports it, from the file on disk.
 /// What the server cannot answer (a file under no folder of the workspace, or
-/// one the workspace does not hold) is refused, for the client to ask again:
-/// an empty report is one the client keeps, and shows no finding until the
-/// document is edited.
+/// one the workspace does not hold) is refused, for the client to ask again
+/// (once: see [`Session::retrigger_once`]): an empty report is one the client
+/// keeps, and shows no finding until the document is edited.
 fn pulled_diagnostics(
     session: &Session,
     uri: &str,
@@ -1294,7 +1294,21 @@ fn handle_pull_diagnostics(
         // its `didOpen` is to have the client pull it again.
         session.pulled_unopened(uri);
     }
-    let (items, kept_id) = answer?;
+    let (items, kept_id) = match answer {
+        Ok(found) => found,
+        // Refused once already since it was last opened: a client retriggers
+        // at once and again for as long as it is refused (`vscode-languageclient`
+        // reschedules the pull with no delay), and a document that never opens
+        // (another YAML, which `didOpen` leaves alone) would be a loop. It is
+        // answered, with nothing to say; the `didOpen` that may still come asks
+        // the client to pull again.
+        Err(message) => {
+            if session.retrigger_once(uri) {
+                return Err(message);
+            }
+            (Vec::new(), None)
+        }
+    };
     let id = kept_id.unwrap_or_else(|| result_id(&items));
     let report = if params.previous_result_id.as_deref() == Some(id.as_str()) {
         lsp::DocumentDiagnosticReport::Unchanged(lsp::RelatedUnchangedDocumentDiagnosticReport {

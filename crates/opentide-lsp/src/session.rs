@@ -757,6 +757,12 @@ pub(crate) struct Session {
     /// The documents a pull was answered for (or refused) before the server
     /// had seen them opened: the next `didOpen` of one asks for that pull again.
     pulled_unopened: RefCell<HashSet<String>>,
+    /// The documents a pull was refused for (`ServerCancelled` with
+    /// `retriggerRequest`) since they were last opened. The client asks again
+    /// at once, with no delay, for as long as the answer is a refusal: a
+    /// document that never opens (some other YAML, which `didOpen` leaves
+    /// alone) would be asked about in a loop. The second pull is answered.
+    retriggered: RefCell<HashSet<String>>,
     outbox: RefCell<Vec<Message>>,
     requests: RefCell<ReqQueue<(), &'static str>>,
     /// The broken-file warning was shown (once per session).
@@ -2233,9 +2239,17 @@ impl Session {
     /// A document was opened: when a pull was answered for it before, the
     /// client is asked to pull again, once.
     pub(crate) fn opened(&self, uri: &str) {
+        self.retriggered.borrow_mut().remove(uri);
         if self.pulled_unopened.borrow_mut().remove(uri) {
             self.refresh_pulls.set(true);
         }
+    }
+
+    /// Whether a refused pull of `uri` is the first since it was last opened:
+    /// the client is asked to retry once, which is the pull that overtook its
+    /// `didOpen` being asked again after it.
+    pub(crate) fn retrigger_once(&self, uri: &str) -> bool {
+        self.retriggered.borrow_mut().insert(uri.to_string())
     }
 
     /// The catalog state of a root (`None`: outside every root).

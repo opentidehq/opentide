@@ -3539,11 +3539,15 @@ fn only_a_document_pulled_before_it_was_opened_is_refreshed_and_once() {
     assert!(next.get("method").is_none(), "{next}");
 }
 
-/// A pull for a document the server cannot answer from a file under a folder
-/// of the workspace is `ServerCancelled` with `retriggerRequest`, so that the
-/// client asks again, and not an empty report that it keeps.
+/// A pull the server cannot answer is `ServerCancelled` with
+/// `retriggerRequest`, so that the client asks again, and not an empty report
+/// that it keeps. It is refused once: `vscode-languageclient` asks again at
+/// once, with no delay, for as long as it is refused, and a document that
+/// never opens (another YAML, which `didOpen` leaves alone) would be a loop.
+/// The second pull is answered, and a `didOpen` that comes after still has the
+/// client pull again.
 #[test]
-fn a_pull_the_server_cannot_answer_is_cancelled_for_the_client_to_retry() {
+fn a_pull_the_server_cannot_answer_is_refused_once_for_the_client_to_retry() {
     let scratch = workspace("pull-cancelled", true);
     let root = &scratch.0;
     let (mut lsp, _) =
@@ -3553,7 +3557,7 @@ fn a_pull_the_server_cannot_answer_is_cancelled_for_the_client_to_retry() {
     );
     // A file under the root that the workspace does not know (yet).
     let unknown = file_uri(&root.join("objects/rules/rule-9.9.yaml"));
-    for uri in [outside, unknown] {
+    for uri in [&outside, &unknown] {
         let reply = lsp.request(
             "textDocument/diagnostic",
             json!({ "textDocument": { "uri": uri } }),
@@ -3561,5 +3565,26 @@ fn a_pull_the_server_cannot_answer_is_cancelled_for_the_client_to_retry() {
         assert_eq!(reply["error"]["code"], -32802, "{uri}: {reply}");
         assert_eq!(reply["error"]["data"]["retriggerRequest"], true, "{reply}");
         assert!(reply.get("result").is_none(), "{reply}");
+        // Asked again, at once: answered, not refused in a loop.
+        let (kind, id, codes) = pulled_report(&mut lsp, uri);
+        assert_eq!(kind, "full", "{uri}");
+        assert!(id.is_some(), "{uri}");
+        assert!(codes.is_empty(), "{uri}: {codes:?}");
+        // And not refused again, however often it is asked.
+        let (kind, _, _) = pulled_report(&mut lsp, uri);
+        assert!(kind == "full" || kind == "unchanged", "{uri}: {kind}");
     }
+    // The document that was answered empty opens after all: the client is
+    // asked to pull again, and the pull is of the open text.
+    open(&mut lsp, &unknown, "opentide-yaml", &fixture(RULE));
+    let refresh = next_server_request(&mut lsp);
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    let (_, _, codes) = pulled_report(&mut lsp, &unknown);
+    assert!(
+        !codes.is_empty(),
+        "the open document shows nothing: {codes:?}"
+    );
 }
