@@ -119,6 +119,15 @@ pub(crate) struct WatchScope {
     pub object_folders: Vec<PathBuf>,
 }
 
+/// The findings of every object, and what they were made in.
+struct Kept {
+    generation: u64,
+    /// The server's environment epoch (`Session::env_epoch`): what an analysis
+    /// reads besides the objects.
+    epoch: u64,
+    found: Findings,
+}
+
 /// A root's workspace, loaded once and kept current: what changed since
 /// (an edit, a watcher's event, a file the host supplied) is handed to
 /// [`Workspace::invalidate`] before the next check.
@@ -139,9 +148,25 @@ pub(crate) struct RootChecks {
     /// The findings of the last run, by file, for the buffers and generation
     /// they were computed for.
     findings: Option<(u64, Vec<PathBuf>, Findings)>,
-    /// The findings of the last run over every object, for the generation
-    /// it ran in.
-    all: Option<(u64, Findings)>,
+    /// The findings of every object, kept up to date across edits
+    /// ([`refresh_all`](Self::refresh_all)).
+    all: Option<Kept>,
+    /// The object files whose parse changed since [`all`](Self::all) was
+    /// last made current.
+    dirty: std::collections::BTreeSet<PathBuf>,
+    /// What other objects' checks read changed since: every object is
+    /// checked again.
+    stale: bool,
+    /// How many times every object was checked, and how many times only the
+    /// files that changed were (the tests' counters, `opentide/__stats`).
+    pub(crate) validations: (u64, u64),
+    /// Counts the changes to [`all`](Self::all): its entry for a file is
+    /// the one made at the revision [`stamp_of`](Self::stamp_of) says.
+    revision: u64,
+    /// The revision of the last run over every object.
+    base_stamp: u64,
+    /// The revision of the last change to a file's findings since.
+    stamps: HashMap<PathBuf, u64>,
     /// Why the configuration does not resolve, when it does not.
     pub failure: Option<String>,
     /// The folders the last workspace that loaded read.
@@ -161,6 +186,12 @@ impl Default for RootChecks {
             pending: Vec::new(),
             findings: None,
             all: None,
+            dirty: std::collections::BTreeSet::new(),
+            stale: false,
+            validations: (0, 0),
+            revision: 0,
+            base_stamp: 0,
+            stamps: HashMap::new(),
             failure: None,
             scope: WatchScope::default(),
             catalog: crate::models::FieldCatalog::default(),
@@ -328,10 +359,21 @@ impl RootChecks {
         if !current {
             let changes = std::mem::take(&mut self.pending);
             self.findings = None;
-            self.all = None;
             let result = match self.workspace.as_mut() {
-                Some(workspace) => workspace.invalidate(&changes).map(|_| ()),
-                None => self.load(root, changes),
+                Some(workspace) => workspace.invalidate(&changes).map(|invalidation| {
+                    // What the kept findings of every object need: the files
+                    // that changed, and whether the others' checks read
+                    // something that did.
+                    self.stale |= invalidation.full
+                        || invalidation.configuration
+                        || invalidation.identity_changed
+                        || invalidation.cross_changed;
+                    self.dirty.extend(invalidation.changed);
+                }),
+                None => {
+                    self.all = None;
+                    self.load(root, changes)
+                }
             };
             match result {
                 Ok(()) => {
@@ -343,7 +385,12 @@ impl RootChecks {
                     // checked until it resolves again.
                     self.failure = Some(error.to_string());
                     self.workspace = None;
+                    self.all = None;
                 }
+            }
+            if self.all.is_none() {
+                self.dirty.clear();
+                self.stale = false;
             }
         }
     }
@@ -370,13 +417,16 @@ impl RootChecks {
     }
 
     /// What `validate` reports for `files` (the open Tide documents of the
-    /// root), by file: run once per `generation` and set of files.
+    /// root), by file: run once per `generation` and set of files. Read from
+    /// the findings of every object when those are kept up to date
+    /// ([`all_findings`](Self::all_findings)) and hold every one of `files`.
     pub(crate) fn findings(
         &mut self,
         root: &Path,
         buffers: Buffers,
         files: Vec<PathBuf>,
         generation: u64,
+        epoch: u64,
     ) -> Findings {
         let files: Vec<PathBuf> = files.iter().map(|file| self.resolve(file)).collect();
         let cached = self.findings.as_ref().filter(|(at, wanted, _)| {
@@ -387,9 +437,35 @@ impl RootChecks {
         {
             return Arc::clone(found);
         }
-        let Some(workspace) = self.workspace(root, buffers) else {
+        if self.workspace(root, buffers.clone()).is_none() {
+            return Arc::default();
+        }
+        if self.all.as_ref().is_some_and(|kept| kept.epoch == epoch)
+            && let Some(kept) = self.refresh_all(generation, epoch)
+        {
+            let holds = self.workspace.as_ref().is_some_and(|workspace| {
+                files.iter().all(|file| {
+                    workspace
+                        .index()
+                        .sources
+                        .iter()
+                        .any(|source| source.path == *file)
+                })
+            });
+            if holds {
+                let found: HashMap<PathBuf, Vec<Diagnostic>> = files
+                    .iter()
+                    .filter_map(|file| Some((file.clone(), kept.get(file)?.clone())))
+                    .collect();
+                let found = Arc::new(found);
+                self.findings = Some((generation, files, Arc::clone(&found)));
+                return found;
+            }
+        }
+        let Some(workspace) = self.workspace.as_ref() else {
             return Arc::default();
         };
+        let _span = crate::timing::Span::new("validate: the open files");
         let found = Arc::new(validate_files(workspace, &files));
         self.findings = Some((generation, files, Arc::clone(&found)));
         found
@@ -495,34 +571,119 @@ impl RootChecks {
 }
 
 impl RootChecks {
-    /// What `validate` reports on every object of the root, by file: run
-    /// once per `generation` (a client that pulls the workspace's
-    /// diagnostics).
+    /// What `validate` reports on every object of the root, by file: made once
+    /// for the whole workspace, then kept up to date across edits by checking
+    /// again only the files that changed (an editor pulls the workspace's
+    /// diagnostics every two seconds, and an edit changes one file).
     pub(crate) fn all_findings(
         &mut self,
         root: &Path,
         buffers: Buffers,
         generation: u64,
+        epoch: u64,
     ) -> Findings {
-        if let Some((at, found)) = &self.all
-            && *at == generation
+        if let Some(kept) = &self.all
+            && kept.generation == generation
+            && kept.epoch == epoch
             && self.pending.is_empty()
         {
-            return Arc::clone(found);
+            return Arc::clone(&kept.found);
         }
-        let Some(workspace) = self.workspace(root, buffers) else {
+        if self.workspace(root, buffers).is_none() {
             return Arc::default();
+        }
+        if self.all.as_ref().is_none_or(|kept| kept.epoch != epoch) {
+            self.all = None;
+            self.dirty.clear();
+            self.stale = true;
+        }
+        self.refresh_all(generation, epoch).unwrap_or_default()
+    }
+
+    /// What identifies `file`'s entry of [`all_findings`](Self::all_findings):
+    /// the same number for as long as the findings of that file are the same.
+    pub(crate) fn stamp_of(&self, file: &Path) -> u64 {
+        self.stamps.get(file).copied().unwrap_or(self.base_stamp)
+    }
+
+    /// The findings of every object, current for the workspace as it is: the
+    /// kept ones with the files that changed checked again; every object
+    /// checked again when none are kept, or something other objects' checks
+    /// read changed (an object's UUID or name, a platform block the cross-rule
+    /// checks compare, the configuration).
+    fn refresh_all(&mut self, generation: u64, epoch: u64) -> Option<Findings> {
+        let workspace = self.workspace.as_ref()?;
+        let kept = self.all.take().filter(|_| !self.stale);
+        let found = match kept {
+            Some(Kept { found, .. }) if self.dirty.is_empty() => found,
+            Some(Kept { mut found, .. }) => {
+                let map = Arc::make_mut(&mut found);
+                // The findings are kept by the file's resolved path (a
+                // symbolic link's target), the files that changed are named as
+                // the index names them.
+                let keys: Vec<PathBuf> = self.dirty.iter().map(|file| self.resolve(file)).collect();
+                for key in &keys {
+                    map.remove(key);
+                }
+                let present: std::collections::HashSet<&Path> = workspace
+                    .index()
+                    .sources
+                    .iter()
+                    .map(|source| source.path.as_path())
+                    .chain(
+                        workspace
+                            .index()
+                            .load_errors
+                            .iter()
+                            .map(|error| error.path.as_path()),
+                    )
+                    .collect();
+                let files: Vec<PathBuf> = self
+                    .dirty
+                    .iter()
+                    .filter(|file| present.contains(file.as_path()))
+                    .cloned()
+                    .collect();
+                let _span = crate::timing::Span::new("validate: the files that changed");
+                self.revision += 1;
+                for key in &keys {
+                    self.stamps.insert(key.clone(), self.revision);
+                }
+                // Only the files that changed take what the narrowed run
+                // found: it may put a finding on another file (a duplicate's
+                // later file), whose own entry is the kept one.
+                map.extend(
+                    validate_changed(workspace, &files)
+                        .into_iter()
+                        .filter(|(key, _)| keys.contains(key)),
+                );
+                self.validations.1 += 1;
+                found
+            }
+            None => {
+                let _span = crate::timing::Span::new("validate: every object");
+                self.revision += 1;
+                self.base_stamp = self.revision;
+                self.stamps.clear();
+                self.validations.0 += 1;
+                Arc::new(by_file(
+                    workspace,
+                    workspace.validate(&ValidateOptions {
+                        queries: QueriesMode::Off,
+                        ..ValidateOptions::default()
+                    }),
+                    None,
+                ))
+            }
         };
-        let found = Arc::new(by_file(
-            workspace,
-            workspace.validate(&ValidateOptions {
-                queries: QueriesMode::Off,
-                ..ValidateOptions::default()
-            }),
-            None,
-        ));
-        self.all = Some((generation, Arc::clone(&found)));
-        found
+        self.dirty.clear();
+        self.stale = false;
+        self.all = Some(Kept {
+            generation,
+            epoch,
+            found: Arc::clone(&found),
+        });
+        Some(found)
     }
 }
 
@@ -587,6 +748,35 @@ pub(crate) fn validate_files(
         ..ValidateOptions::default()
     });
     by_file(workspace, run, Some(files))
+}
+
+/// [`validate_files`] for the files an edit changed, which hold every finding
+/// the workspace has about them: those `validate` makes of the objects in
+/// them, and lint's of the ones lint reads (a file in a folder `paths.toml`
+/// moved has none, and does not keep lint from the others).
+fn validate_changed(workspace: &Workspace, files: &[PathBuf]) -> HashMap<PathBuf, Vec<Diagnostic>> {
+    if files.is_empty() {
+        return HashMap::new();
+    }
+    let selection = Selection {
+        files: files.iter().map(|f| f.display().to_string()).collect(),
+        ..Selection::default()
+    };
+    let run = {
+        let _span = crate::timing::Span::new("validate: the narrowed run");
+        workspace.validate(&ValidateOptions {
+            selection: Some(&selection),
+            queries: QueriesMode::Off,
+            ..ValidateOptions::default()
+        })
+    };
+    let linted: Vec<PathBuf> = files
+        .iter()
+        .filter(|file| lint::is_lint_candidate(workspace.root(), file))
+        .cloned()
+        .collect();
+    let _span = crate::timing::Span::new("validate: lint and placing");
+    by_file(workspace, run, Some(&linted))
 }
 
 /// The UTF-16 column of the code-point column `column` (from 0) of `line`,
@@ -885,5 +1075,401 @@ mod tests {
         }
         assert_eq!(family_of("name: R\n"), None);
         assert_eq!(family_of("name: R\nmetadata:\n  schema: 12\n"), None);
+    }
+
+    /// What an edit leaves to check: the kept findings of every object, with
+    /// the files that changed checked again, are the findings a fresh run over
+    /// the workspace makes, after each kind of edit, and an edit that only
+    /// changes a file's own text checks that file alone.
+    #[test]
+    #[expect(clippy::too_many_lines, reason = "one table of edits")]
+    fn kept_findings_equal_a_fresh_run_after_each_kind_of_edit() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/objects");
+        let root = std::env::temp_dir().join(format!("opentide-kept-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for folder in ["rules", "objectives", "threats"] {
+            std::fs::create_dir_all(root.join("objects").join(folder)).unwrap();
+        }
+        let rule = root.join("objects/rules/rule-1.0.yaml");
+        let objective = root.join("objects/objectives/objective-1.0.yaml");
+        let threat = root.join("objects/threats/threat-1.0.yaml");
+        std::fs::copy(source.join("rules/rule-1.0.yaml"), &rule).unwrap();
+        std::fs::copy(source.join("objective-1.0.yaml"), &objective).unwrap();
+        std::fs::copy(source.join("threat-1.0.yaml"), &threat).unwrap();
+        let rule_text = std::fs::read_to_string(&rule).unwrap();
+        let objective_text = std::fs::read_to_string(&objective).unwrap();
+        let copy = root.join("objects/rules/rule-copy.yaml");
+        let renamed = root.join("objects/rules/some-other-name.yaml");
+        // Two more rules whose Google SecOps blocks may share a name: a
+        // finding on each, whichever is edited.
+        let second = root.join("objects/rules/rule-2.yaml");
+        let third = root.join("objects/rules/rule-3.yaml");
+        let nameless = root.join("objects/rules/no-uuid.yaml");
+        let no_uuid = |name: &str| {
+            rule_text
+                .replace("  uuid: 00000000-0000-4000-8003-000000000001\n", "")
+                .replace("name: Sentinel KQL Rule", &format!("name: {name}"))
+        };
+        let with_block = |number: &str, name: &str| {
+            rule_text
+                .replace("8003-000000000001", &format!("8003-00000000000{number}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule {number}"))
+                .replacen(
+                    "configurations:\n",
+                    &format!(
+                        "configurations:\n  google_secops:\n    enabled: true\n    name: {name}\n    \
+                         status: X\n    events: $e.metadata.event_type = \"X\"\n    condition: $e\n"
+                    ),
+                    1,
+                )
+        };
+
+        type Edit<'a> = Box<dyn Fn() -> Vec<PathBuf> + 'a>;
+        let write = |path: &Path, text: String| {
+            let path = path.to_path_buf();
+            move || {
+                std::fs::write(&path, &text).unwrap();
+                vec![path.clone()]
+            }
+        };
+        let remove = |path: &Path| {
+            let path = path.to_path_buf();
+            move || {
+                let _ = std::fs::remove_file(&path);
+                vec![path.clone()]
+            }
+        };
+        let steps: Vec<(&str, bool, Edit<'_>)> = vec![
+            ("nothing changed", true, Box::new(Vec::new)),
+            (
+                "a typed line in the rule",
+                true,
+                Box::new(write(&rule, format!("{rule_text}\n# typed\n"))),
+            ),
+            (
+                "a typed line in the objective",
+                true,
+                Box::new(write(&objective, format!("{objective_text}\n# typed\n"))),
+            ),
+            (
+                "the rule's severity",
+                true,
+                Box::new(write(
+                    &rule,
+                    rule_text.replace("severity: High", "severity: Nope"),
+                )),
+            ),
+            (
+                "the rule names an objective that is not there",
+                true,
+                Box::new(write(
+                    &rule,
+                    rule_text.replace("8002-000000000001", "8002-0000000000ff"),
+                )),
+            ),
+            (
+                "the rule as it was",
+                true,
+                Box::new(write(&rule, rule_text.clone())),
+            ),
+            (
+                "the rule's name",
+                false,
+                Box::new(write(
+                    &rule,
+                    rule_text.replacen("name: Sentinel KQL Rule", "name: Another rule", 1),
+                )),
+            ),
+            (
+                "the rule's name as it was",
+                false,
+                Box::new(write(&rule, rule_text.clone())),
+            ),
+            ("the objective deleted", false, Box::new(remove(&objective))),
+            (
+                "the objective again",
+                false,
+                Box::new(write(&objective, objective_text.clone())),
+            ),
+            (
+                "the rule's UUID written by a second file",
+                false,
+                Box::new(write(&copy, rule_text.clone())),
+            ),
+            (
+                "the rule's severity while a copy has its UUID",
+                false,
+                Box::new(write(
+                    &rule,
+                    rule_text.replace("severity: High", "severity: Nope"),
+                )),
+            ),
+            (
+                "a typed line in the copy",
+                false,
+                Box::new(write(&copy, format!("{rule_text}\n# typed\n"))),
+            ),
+            (
+                "the copy's severity",
+                false,
+                Box::new(write(
+                    &copy,
+                    rule_text.replace("severity: High", "severity: Nope"),
+                )),
+            ),
+            (
+                "a typed line in the rule, which the copy duplicates",
+                false,
+                Box::new(write(
+                    &rule,
+                    format!(
+                        "{}\n# typed\n",
+                        rule_text.replace("severity: High", "severity: Nope")
+                    ),
+                )),
+            ),
+            (
+                "the rule mended",
+                false,
+                Box::new(write(&rule, rule_text.clone())),
+            ),
+            ("the second file deleted", false, Box::new(remove(&copy))),
+            (
+                "a rule with no UUID",
+                false,
+                Box::new(write(&nameless, no_uuid("A rule with no UUID"))),
+            ),
+            (
+                "its name changed",
+                false,
+                Box::new(write(&nameless, no_uuid("Another rule with no UUID"))),
+            ),
+            (
+                "its name is the first rule's",
+                false,
+                Box::new(write(&nameless, no_uuid("Sentinel KQL Rule"))),
+            ),
+            (
+                "its name is its own again",
+                false,
+                Box::new(write(&nameless, no_uuid("A rule with no UUID"))),
+            ),
+            (
+                "the rule with no UUID deleted",
+                false,
+                Box::new(remove(&nameless)),
+            ),
+            (
+                "the rule's file renamed",
+                false,
+                Box::new({
+                    let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
+                    move || {
+                        let _ = std::fs::remove_file(&from);
+                        std::fs::write(&to, &text).unwrap();
+                        vec![from.clone(), to.clone()]
+                    }
+                }),
+            ),
+            (
+                "the rule's file renamed back",
+                false,
+                Box::new({
+                    let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
+                    move || {
+                        let _ = std::fs::remove_file(&to);
+                        std::fs::write(&from, &text).unwrap();
+                        vec![from.clone(), to.clone()]
+                    }
+                }),
+            ),
+            (
+                "the rule's YAML broken",
+                false,
+                Box::new(write(&rule, format!("{rule_text}\n\tbroken: [\n"))),
+            ),
+            (
+                "the rule's YAML mended",
+                false,
+                Box::new(write(&rule, rule_text.clone())),
+            ),
+            (
+                "a second rule with a Google SecOps name",
+                false,
+                Box::new(write(&second, with_block("2", "shared_name"))),
+            ),
+            (
+                "a third rule with another",
+                false,
+                Box::new(write(&third, with_block("3", "other_name"))),
+            ),
+            (
+                "the third rule takes the second's name",
+                false,
+                Box::new(write(&third, with_block("3", "SHARED_NAME"))),
+            ),
+            (
+                "the third rule's own text",
+                true,
+                Box::new(write(
+                    &third,
+                    with_block("3", "SHARED_NAME").replace(
+                        "Minimal valid detection rule",
+                        "A different description of the rule",
+                    ),
+                )),
+            ),
+            (
+                "the third rule names another again",
+                false,
+                Box::new(write(&third, with_block("3", "other_name"))),
+            ),
+            (
+                "the third rule is named as the first (a file name both want)",
+                false,
+                Box::new(write(
+                    &third,
+                    with_block("3", "other_name")
+                        .replace("name: Rule 3", "name: Sentinel KQL Rule"),
+                )),
+            ),
+            (
+                "a typed line in the third rule, which shares a name",
+                true,
+                Box::new(write(
+                    &third,
+                    format!(
+                        "{}\n# typed\n",
+                        with_block("3", "other_name")
+                            .replace("name: Rule 3", "name: Sentinel KQL Rule")
+                    ),
+                )),
+            ),
+            (
+                "the first rule's file renamed while the third has its name",
+                false,
+                Box::new({
+                    let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
+                    move || {
+                        let _ = std::fs::remove_file(&from);
+                        std::fs::write(&to, &text).unwrap();
+                        vec![from.clone(), to.clone()]
+                    }
+                }),
+            ),
+            (
+                "and renamed back",
+                false,
+                Box::new({
+                    let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
+                    move || {
+                        let _ = std::fs::remove_file(&to);
+                        std::fs::write(&from, &text).unwrap();
+                        vec![from.clone(), to.clone()]
+                    }
+                }),
+            ),
+            (
+                "the third rule's name as it was",
+                false,
+                Box::new(write(&third, with_block("3", "other_name"))),
+            ),
+        ];
+
+        let fresh =
+            |root: &Path| RootChecks::default().all_findings(root, Buffers::default(), 0, 0);
+        let mut kept = RootChecks::default();
+        let first = kept.all_findings(&root, Buffers::default(), 0, 0);
+        assert_eq!(first, fresh(&root), "the first run");
+        for (generation, (what, partial, edit)) in (1..).zip(&steps) {
+            let (full_before, partial_before) = kept.validations;
+            let changed = edit();
+            kept.changed(changed);
+            let found = kept.all_findings(&root, Buffers::default(), generation, 0);
+            let expected = fresh(&root);
+            let mut keys: Vec<_> = found.keys().collect();
+            keys.sort();
+            let mut want: Vec<_> = expected.keys().collect();
+            want.sort();
+            assert_eq!(keys, want, "{what}: the files with findings");
+            for (file, findings) in expected.iter() {
+                assert_eq!(
+                    found.get(file),
+                    Some(findings),
+                    "{what}: {}",
+                    file.display()
+                );
+            }
+            let (full_after, partial_after) = kept.validations;
+            if *what == "nothing changed" {
+                assert_eq!((full_after, partial_after), (full_before, partial_before));
+            } else if *partial {
+                assert_eq!(
+                    (full_after, partial_after),
+                    (full_before, partial_before + 1),
+                    "{what}: only the files that changed are checked"
+                );
+            } else {
+                assert_eq!(
+                    (full_after, partial_after),
+                    (full_before + 1, partial_before),
+                    "{what}: every object is checked again"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An object file that is a symbolic link: its findings are kept by the
+    /// file it points to, and mending it replaces them, as a fresh run does,
+    /// with the entry's stamp bumped.
+    #[cfg(unix)]
+    #[test]
+    fn kept_findings_follow_a_symbolic_link_to_an_object_file() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/objects");
+        let root = std::env::temp_dir().join(format!("opentide-kept-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::create_dir_all(root.join("elsewhere")).unwrap();
+        let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+        let target = root.join("elsewhere/rule.yaml");
+        let link = root.join("objects/rules/linked.yaml");
+        std::fs::write(
+            &target,
+            rule_text.replace("severity: High", "severity: Nope"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let fresh =
+            |root: &Path| RootChecks::default().all_findings(root, Buffers::default(), 0, 0);
+        let mut kept = RootChecks::default();
+        let first = kept.all_findings(&root, Buffers::default(), 0, 0);
+        assert_eq!(first, fresh(&root), "the first run");
+        assert!(
+            first.values().any(|findings| !findings.is_empty()),
+            "the broken severity is a finding: {first:?}"
+        );
+        let key = kept.resolve(&link);
+        let stamp = kept.stamp_of(&key);
+        for (generation, (what, text)) in (1..).zip([
+            ("mended", rule_text.clone()),
+            (
+                "broken again",
+                rule_text.replace("severity: High", "severity: Nope"),
+            ),
+        ]) {
+            std::fs::write(&target, text).unwrap();
+            kept.changed([link.clone()]);
+            let found = kept.all_findings(&root, Buffers::default(), generation, 0);
+            assert_eq!(found, fresh(&root), "{what}");
+            assert_ne!(kept.stamp_of(&key), stamp, "{what}: the entry's stamp");
+        }
+        // Changed through the file it points to.
+        std::fs::write(&target, rule_text).unwrap();
+        kept.changed([target.clone()]);
+        let found = kept.all_findings(&root, Buffers::default(), 9, 0);
+        assert_eq!(found, fresh(&root), "mended through the target");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

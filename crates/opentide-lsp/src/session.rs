@@ -49,6 +49,14 @@ pub(crate) struct ClientCaps {
     /// Hover and completion documentation as plain text, not Markdown.
     pub plaintext_hover: bool,
     pub plaintext_completion: bool,
+    /// The client asks `completionItem/resolve` for an item's documentation,
+    /// and for its detail (`completionItem.resolveSupport`): a list of a few
+    /// hundred values need not carry either.
+    pub resolve_completion_documentation: bool,
+    pub resolve_completion_detail: bool,
+    /// The client takes the `data` and the edit range of a completion list's
+    /// items from its `itemDefaults` (`completionList.itemDefaults`).
+    pub completion_item_defaults: bool,
     /// A workspace edit may create a file (`documentChanges` with the
     /// `create` resource operation).
     pub create_files: bool,
@@ -330,23 +338,27 @@ fn glob_path(folder: &str, floors: &[PathBuf]) -> Option<(String, bool)> {
 pub(crate) struct CatalogSightings(HashMap<Option<usize>, Arc<opentide_analysis::Catalog>>);
 
 impl CatalogSightings {
+    /// `installed` is what the engine has installed (what the analyses made
+    /// so far read): a root whose catalog is that is not a root whose
+    /// analyses change, however it is the first the session sees of it.
     pub(crate) fn saw(
         &mut self,
         root: Option<usize>,
         catalog: &Arc<opentide_analysis::Catalog>,
+        installed: Option<&Arc<opentide_analysis::Catalog>>,
     ) -> Sighting {
+        let same = |known: &Arc<opentide_analysis::Catalog>| {
+            Arc::ptr_eq(known, catalog)
+                || (known.fields == catalog.fields && known.deprecations == catalog.deprecations)
+        };
         match self.0.get(&root) {
-            Some(known)
-                if Arc::ptr_eq(known, catalog)
-                    || (known.fields == catalog.fields
-                        && known.deprecations == catalog.deprecations) =>
-            {
-                Sighting::Same
-            }
+            Some(known) if same(known) => Sighting::Same,
             known => {
                 let first = known.is_none();
                 self.0.insert(root, Arc::clone(catalog));
-                if first {
+                if first && installed.is_some_and(same) {
+                    Sighting::Same
+                } else if first {
                     Sighting::First
                 } else {
                     Sighting::Changed
@@ -358,7 +370,7 @@ impl CatalogSightings {
 
 /// One closed file's entry of a workspace pull: its URI, the id of its
 /// diagnostics and the diagnostics.
-pub(crate) type ReportEntry = (lsp_types::Uri, String, Vec<lsp_types::Diagnostic>);
+pub(crate) type ReportEntry = Arc<(lsp_types::Uri, String, Vec<lsp_types::Diagnostic>)>;
 
 /// A workspace pull's report, and the [`Session::state_key`] it was made in.
 pub(crate) type CachedReport = ((u64, u64), Arc<Vec<ReportEntry>>);
@@ -375,6 +387,12 @@ struct DiskFile {
     /// repeats every two seconds for as long as the editor runs, and an
     /// analysis reads nothing but the text and the epoch's catalogs.
     analysis: Mutex<Option<(u64, Arc<Vec<opentide_core::Diagnostic>>)>>,
+    /// This file's entry of the last workspace pull that held it, with the
+    /// epoch and the stamp of the workspace's findings it was made from
+    /// ([`RootChecks::stamp_of`]): an edit elsewhere leaves it as it was.
+    reported: Mutex<Option<(u64, u64, ReportEntry)>>,
+    /// The path as the workspace names the file ([`RootChecks::resolve`]).
+    resolved: OnceLock<PathBuf>,
 }
 
 impl DiskFile {
@@ -384,6 +402,8 @@ impl DiskFile {
             text,
             indexed: OnceLock::new(),
             analysis: Mutex::new(None),
+            reported: Mutex::new(None),
+            resolved: OnceLock::new(),
         }
     }
 
@@ -1064,7 +1084,11 @@ impl Session {
         };
         // What an analysis reads changes when a root's own catalog does, not
         // when the catalog installed is another root's.
-        match self.sightings.borrow_mut().saw(root, &catalog) {
+        match self.sightings.borrow_mut().saw(
+            root,
+            &catalog,
+            self.installed_catalog.borrow().as_ref(),
+        ) {
             Sighting::Same => {}
             Sighting::First => self.env_epoch.set(self.env_epoch.get() + 1),
             Sighting::Changed => self.touch(),
@@ -1454,9 +1478,9 @@ impl Session {
             files
         };
         let buffers = self.buffers(doc.root);
-        let generation = self.generation.get();
+        let (generation, epoch) = self.state_key();
         let run = |root: &Path, checks: &mut RootChecks| {
-            let found = checks.findings(root, buffers, files, generation);
+            let found = checks.findings(root, buffers, files, generation, epoch);
             (found, checks.resolve(&path), checks.failure.clone())
         };
         let (found, key, failure, root) = match doc.root.and_then(|i| self.roots.get(i)) {
@@ -1588,32 +1612,105 @@ impl Session {
             .unwrap_or_default()
     }
 
-    /// What `validate` reports on a closed object file of `root`, placed in
-    /// `text` (a client that pulls the workspace's diagnostics).
-    pub(crate) fn closed_findings(
+    /// What a workspace pull reports for each closed object file of `root`
+    /// (the files the editor has not open): the workspace's findings and the
+    /// engine's analysis, built into an entry by `build`. An entry is kept
+    /// with its file, for the epoch and the stamp of the findings it was made
+    /// from, and used again while both are the same: the pull repeats every
+    /// two seconds, and an edit changes the findings of one file.
+    pub(crate) fn closed_entries(
         &self,
         root: usize,
-        path: &str,
-        text: &str,
-    ) -> Vec<opentide_core::Diagnostic> {
+        open: &BTreeSet<String>,
+        host: &dyn WorkspaceHost,
+        build: &dyn Fn(&str, Vec<opentide_core::Diagnostic>) -> Option<ReportEntry>,
+    ) -> Vec<ReportEntry> {
         let Some(r) = self.roots.get(root) else {
             return Vec::new();
         };
-        let buffers = self.buffers(Some(root));
-        let mut checks = r.checks.borrow_mut();
-        let _span = crate::timing::Span::new("closed findings (every object, once per generation)");
-        let found = checks.all_findings(&r.path, buffers, self.generation.get());
-        let key = checks.resolve(Path::new(path));
-        drop(checks);
-        found
-            .get(&key)
-            .map(|findings| {
-                findings
+        let (generation, epoch) = self.state_key();
+        let found = {
+            let buffers = self.buffers(Some(root));
+            let _span = crate::timing::Span::new("workspace/diagnostic: findings of every object");
+            r.checks
+                .borrow_mut()
+                .all_findings(&r.path, buffers, generation, epoch)
+        };
+        // A client that does not watch files is not told what changed on
+        // disk: nothing is kept for it.
+        let keeps = self.caps.watch_files;
+        let parses = || {
+            r.checks
+                .try_borrow()
+                .map(|checks| checks.parses_under(&r.path))
+                .unwrap_or_default()
+        };
+        let disk = r.disk.borrow();
+        let _span = crate::timing::Span::new("workspace/diagnostic: files");
+        let mut entries = Vec::new();
+        for file in disk.index_pending(&parses).values() {
+            let Some(object) = file.entry() else {
+                continue;
+            };
+            let path = object.path.as_str();
+            if open.contains(&path_key(path)) {
+                continue;
+            }
+            let key = file.resolved.get_or_init(|| {
+                r.checks.try_borrow().map_or_else(
+                    |_| PathBuf::from(path),
+                    |checks| checks.resolve(Path::new(path)),
+                )
+            });
+            let stamp = r
+                .checks
+                .try_borrow()
+                .map_or(0, |checks| checks.stamp_of(key));
+            let kept = keeps
+                .then(|| {
+                    file.reported
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .as_ref()
+                        .filter(|(at, from, _)| *at == epoch && *from == stamp)
+                        .map(|(_, _, entry)| Arc::clone(entry))
+                })
+                .flatten();
+            if let Some(entry) = kept {
+                entries.push(entry);
+                continue;
+            }
+            let mut diagnostics: Vec<opentide_core::Diagnostic> = found
+                .get(key)
+                .map(|findings| {
+                    findings
+                        .iter()
+                        .map(|finding| engine_diagnostic(&file.text, finding))
+                        .collect()
+                })
+                .unwrap_or_default();
+            diagnostics.extend(
+                self.closed_analysis(root, path, &file.text, host)
                     .iter()
-                    .map(|finding| engine_diagnostic(text, finding))
-                    .collect()
-            })
-            .unwrap_or_default()
+                    .cloned(),
+            );
+            // A duplicate's finding points at the other file's lines: not kept.
+            let stable = !diagnostics
+                .iter()
+                .any(|d| d.code == opentide_analysis::codes::DUPLICATE_ID);
+            let Some(entry) = build(path, diagnostics) else {
+                continue;
+            };
+            if keeps && stable {
+                *file
+                    .reported
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some((epoch, stamp, Arc::clone(&entry)));
+            }
+            entries.push(entry);
+        }
+        entries
     }
 
     /// How many object files on disk the editor's index holds an entry
@@ -1656,6 +1753,27 @@ impl Session {
             }
         }
         sum
+    }
+
+    /// What each root's workspace has loaded, by root (the debug `__stats`).
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn workspace_stats_by_root(&self) -> Vec<opentide_workspace::Stats> {
+        self.roots
+            .iter()
+            .map(|r| r.checks.borrow().stats().unwrap_or_default())
+            .collect()
+    }
+
+    /// How many times the roots' objects were all checked, and how many
+    /// times only the files that changed were, summed.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn validation_runs(&self) -> (u64, u64) {
+        self.roots
+            .iter()
+            .map(|r| r.checks.borrow().validations)
+            .fold((0, 0), |sum, (full, partial)| {
+                (sum.0 + full, sum.1 + partial)
+            })
     }
 
     /// The files the editor and the host hold for a root's workspace: the
@@ -1747,6 +1865,19 @@ impl Session {
             .filter(|(_, r)| path.starts_with(&r.path))
             .max_by_key(|(_, r)| r.path.components().count())
             .map(|(i, _)| i)
+    }
+
+    /// The root whose own `.opentide/configurations/` holds the file at
+    /// `path`: unlike [`root_for`](Self::root_for), none when no root does.
+    pub(crate) fn own_configuration_root(&self, path: &str) -> Option<usize> {
+        self.owning_root(path).filter(|&index| {
+            Path::new(path).starts_with(
+                self.roots[index]
+                    .path
+                    .join(".opentide")
+                    .join("configurations"),
+            )
+        })
     }
 
     /// The root a file belongs to: the deepest workspace folder holding it,
@@ -1853,25 +1984,6 @@ impl Session {
         if !self.docs.is_empty() {
             self.mark_all();
         }
-    }
-
-    /// A root's object files on disk, as last read.
-    pub(crate) fn closed_objects(&self, root: usize) -> Vec<(String, String)> {
-        let Some(r) = self.roots.get(root) else {
-            return Vec::new();
-        };
-        let parses = || {
-            r.checks
-                .try_borrow()
-                .map(|checks| checks.parses_under(&r.path))
-                .unwrap_or_default()
-        };
-        r.disk
-            .borrow()
-            .index_pending(&parses)
-            .values()
-            .filter_map(|file| Some((file.entry()?.path.clone(), file.text.clone())))
-            .collect()
     }
 
     /// What the engine's analysis finds in the object file at `path` of
@@ -2333,23 +2445,52 @@ mod tests {
         };
         let (a, b) = (catalog("a"), catalog("b"));
         let mut seen = CatalogSightings::default();
-        assert_eq!(seen.saw(Some(0), &a), Sighting::First);
-        assert_eq!(seen.saw(Some(1), &b), Sighting::First);
+        assert_eq!(seen.saw(Some(0), &a, None), Sighting::First);
+        assert_eq!(seen.saw(Some(1), &b, None), Sighting::First);
         // Requests alternate between the roots: each installs its own
         // catalog, which is the one it had.
         for _ in 0..3 {
-            assert_eq!(seen.saw(Some(0), &a), Sighting::Same);
-            assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+            assert_eq!(seen.saw(Some(0), &a, None), Sighting::Same);
+            assert_eq!(seen.saw(Some(1), &b, None), Sighting::Same);
         }
         // The same text in another allocation is the same catalog.
-        assert_eq!(seen.saw(Some(0), &catalog("a")), Sighting::Same);
+        assert_eq!(seen.saw(Some(0), &catalog("a"), None), Sighting::Same);
         // A root's own catalog arriving, or being generated again, changes it
         // for that root alone.
-        assert_eq!(seen.saw(Some(0), &catalog("a2")), Sighting::Changed);
-        assert_eq!(seen.saw(Some(1), &b), Sighting::Same);
+        assert_eq!(seen.saw(Some(0), &catalog("a2"), None), Sighting::Changed);
+        assert_eq!(seen.saw(Some(1), &b, None), Sighting::Same);
         // A document outside every root has its own.
-        assert_eq!(seen.saw(None, &a), Sighting::First);
-        assert_eq!(seen.saw(None, &a), Sighting::Same);
+        assert_eq!(seen.saw(None, &a, None), Sighting::First);
+        assert_eq!(seen.saw(None, &a, None), Sighting::Same);
+    }
+
+    /// A root whose own catalog is the one the engine has installed already
+    /// (what its analyses have read) changes none of them by arriving: its
+    /// workspace's configuration says what the bundled one does about
+    /// statuses and responders, which is most of them.
+    #[test]
+    fn a_catalog_the_engine_has_installed_is_not_one_that_arrives() {
+        let catalog = |text: &str| {
+            Arc::new(opentide_analysis::Catalog {
+                fields: Some(text.to_string()),
+                ..opentide_analysis::Catalog::default()
+            })
+        };
+        let installed = catalog("a");
+        let mut seen = CatalogSightings::default();
+        assert_eq!(
+            seen.saw(Some(0), &catalog("a"), Some(&installed)),
+            Sighting::Same
+        );
+        // It was seen: a catalog that differs later is a change.
+        assert_eq!(
+            seen.saw(Some(0), &catalog("b"), Some(&installed)),
+            Sighting::Changed
+        );
+        assert_eq!(
+            seen.saw(Some(1), &catalog("b"), Some(&installed)),
+            Sighting::First
+        );
     }
 
     /// #914: reading a root's object files indexes none of them; the first

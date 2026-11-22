@@ -204,6 +204,25 @@ pub fn fields_catalog(version: &str, sources: &Sources) -> Json {
 /// added (`RootExtras`), which is where the editor schema's `required`
 /// differs from the model's; the vocabularies play no part.
 pub fn recommended_fields(identifier: &str) -> Vec<String> {
+    // A pure function of a revision's model, and an editor asks for it on
+    // every keystroke: made once for each identifier.
+    static KNOWN: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Vec<String>>>,
+    > = std::sync::OnceLock::new();
+    let known = KNOWN.get_or_init(Default::default);
+    if let Ok(known) = known.lock()
+        && let Some(found) = known.get(identifier)
+    {
+        return found.clone();
+    }
+    let found = recommended_fields_of(identifier);
+    if let Ok(mut known) = known.lock() {
+        known.insert(identifier.to_owned(), found.clone());
+    }
+    found
+}
+
+fn recommended_fields_of(identifier: &str) -> Vec<String> {
     use schemars::transform::Transform as _;
     let Some(mut schema) = revision_model_schema(identifier) else {
         return Vec::new();

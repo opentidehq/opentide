@@ -287,14 +287,15 @@ target_s = 0.05
 [commands.lsp_editor_typing_latency]
 label = "language server, the longest completion after a keystroke and its pulls"
 # The same, with a keystroke before each pull: the editor then pulls the edited
-# document's diagnostics and the workspace's, and the server validates and lints
-# the whole workspace again before it answers either (opentide-workspace, the
-# per-edit cost the report leaves as its next item). Measured on the heavy workspace
-# (500 rules): 0.63 s before the fixes, 0.24 s after (median of 7 runs, 4 vCPU Xeon
-# 2.10GHz). The target is twice what it measures here, which the slowest recorded CPU
-# class (1.8 times slower) stays under, and under what it measured before the fixes.
-# An incremental validate lowers it. The oracle (0.23.0) is not measured.
-target_s = 0.5
+# document's diagnostics and the workspace's, and the server checks what the
+# keystroke changed before it answers either (opentide-workspace's invalidate, a
+# narrowed validate and lint of that file). Measured on the heavy workspace (500
+# rules): 0.63 s before the first fixes, 0.24 s after them (the per-edit validate of
+# the whole workspace, twice), 0.022 s once an edit checks the files it changed and a
+# pull keeps each closed file's entry (median of 7 runs, 4 vCPU Xeon 2.10GHz). The
+# target is twice what it measures here, which the slowest recorded CPU class (1.8
+# times slower) stays under. The oracle (0.23.0) is not measured.
+target_s = 0.05
 
 # The medians on more CPU models of the runner class, from CI runs of the workflow
 # (same oracle, workspace and run count as [baseline]). Two runners with the same CPU

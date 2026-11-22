@@ -1686,6 +1686,272 @@ fn a_state_shard_written_on_disk_makes_the_next_pull_be_made_again() {
     );
 }
 
+/// Typing in an object checks that object, not every object of the workspace
+/// again: the findings of every object are made once, and an edit that leaves
+/// what other objects' checks read as it was (a UUID, a name) checks the file
+/// it changed alone; one that changes a name checks them all again, as the
+/// other objects may now be told of it.
+#[test]
+fn a_keystroke_checks_the_file_it_changed_not_every_object() {
+    let scratch = workspace("workspace-pull-incremental", true);
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "rootUri": file_uri(&scratch.0)
+    }));
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let text = fixture(OBJECTIVE);
+    open(&mut lsp, &objective, "opentide-yaml", &text);
+    let validations = |lsp: &mut Lsp| {
+        let stats = lsp.request("opentide/__stats", Value::Null);
+        (
+            stats["result"]["validations"]["full"].as_u64().unwrap(),
+            stats["result"]["validations"]["partial"].as_u64().unwrap(),
+        )
+    };
+    let edit = |lsp: &mut Lsp, version: i32, text: &str| {
+        lsp.notify(
+            "textDocument/didChange",
+            json!({ "textDocument": { "uri": objective, "version": version },
+                    "contentChanges": [{ "text": text }] }),
+        );
+        workspace_pull_codes(lsp)
+    };
+    workspace_pull_codes(&mut lsp);
+    assert_eq!(
+        validations(&mut lsp),
+        (1, 0),
+        "the first pull checks everything"
+    );
+
+    edit(&mut lsp, 2, &format!("{text}\n# typed\n"));
+    assert_eq!(
+        validations(&mut lsp),
+        (1, 1),
+        "a typed line checked every object again"
+    );
+    edit(&mut lsp, 3, &format!("{text}\n# typed again\n"));
+    assert_eq!(validations(&mut lsp), (1, 2));
+
+    let renamed = text.replacen("name: ", "name: Renamed ", 1);
+    assert_ne!(renamed, text, "the fixture has a name");
+    edit(&mut lsp, 4, &renamed);
+    assert_eq!(
+        validations(&mut lsp),
+        (2, 2),
+        "a new name did not check every object again"
+    );
+}
+
+/// A client that resolves a completion item's detail and reads `itemDefaults`
+/// is sent the list of a Tide field's values (the ATT&CK techniques) as
+/// labels: what every item would say again (the data `completionItem/resolve`
+/// reads, the range each replaces) is said once. Applied as the client
+/// applies them, the items are what a client that reads neither gets.
+#[test]
+fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
+    let text = fixture(RULE).replacen("  - T1059\n", "  - T10\n", 1);
+    let line = text.lines().position(|l| l == "  - T10").unwrap();
+    let uri = "file:///tmp/objects/rules/techniques.yaml";
+    let complete = |capabilities: Value| {
+        let (mut lsp, _) = start(json!({ "capabilities": capabilities }));
+        open(&mut lsp, uri, "opentide-yaml", &text);
+        let list = lsp.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": 7 }
+            }),
+        );
+        (lsp, list["result"].clone())
+    };
+    let (mut plain, whole) = complete(json!({}));
+    let whole = whole
+        .as_array()
+        .expect("an array for a client with no defaults");
+    let (mut lsp, list) = complete(json!({ "textDocument": { "completion": {
+        "completionItem": { "resolveSupport": { "properties": ["documentation", "detail"] } },
+        "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
+    } } }));
+    let items = list["items"]
+        .as_array()
+        .expect("a list for a client with defaults");
+    assert!(whole.len() > 300, "the ATT&CK list: {}", whole.len());
+    assert_eq!(items.len(), whole.len());
+    assert_eq!(list["isIncomplete"], false);
+    let size = |value: &Value| serde_json::to_string(value).unwrap().len();
+    // A label, a kind and, where it differs, the text: 51 bytes an item here,
+    // 383 when each item says its data and its range again.
+    assert!(
+        size(&list) < items.len() * 64,
+        "labels: {} bytes for {} items, whole: {} bytes",
+        size(&list),
+        items.len(),
+        size(&Value::Array(whole.clone()))
+    );
+    let defaults = &list["itemDefaults"];
+    for (item, held) in items.iter().zip(whole).take(60) {
+        // What the client makes of the item and the defaults.
+        assert_eq!(item["label"], held["label"]);
+        for key in ["data", "textEdit", "detail", "documentation"] {
+            assert!(
+                item.get(key).is_none(),
+                "{key} is said once or resolved: {item}"
+            );
+        }
+        let text = item.get("textEditText").unwrap_or(&item["label"]);
+        assert_eq!(*text, held["textEdit"]["newText"]);
+        assert_eq!(defaults["editRange"], held["textEdit"]["range"]);
+        assert_eq!(defaults["data"], held["data"]);
+        // And what resolving it gives, as a client sends it back.
+        let mut sent = item.clone();
+        sent["data"] = defaults["data"].clone();
+        let resolved = lsp.request("completionItem/resolve", sent);
+        let expected = plain.request("completionItem/resolve", held.clone());
+        assert_eq!(
+            resolved["result"]["documentation"],
+            expected["result"]["documentation"]
+        );
+        assert_eq!(resolved["result"]["detail"], expected["result"]["detail"]);
+        assert!(resolved["result"]["detail"].is_string(), "{resolved}");
+    }
+}
+
+/// Each item's `(label, documentation, detail)`.
+type Items = Vec<(String, Value, Value)>;
+
+/// What a client that resolves documentation makes of each item at `line` and
+/// `character` of `text` (the item, then resolved as the client sends it back)
+/// is what a client that does not gets: `(label, documentation, detail)`.
+fn resolved_and_plain(
+    language: &str,
+    uri: &str,
+    text: &str,
+    line: usize,
+    character: usize,
+) -> (Items, Items) {
+    let complete = |capabilities: Value| {
+        let (mut lsp, _) = start(json!({ "capabilities": capabilities }));
+        open(&mut lsp, uri, language, text);
+        let list = lsp.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        );
+        let result = list["result"].clone();
+        let defaults = result["itemDefaults"].clone();
+        let items = result
+            .as_array()
+            .or_else(|| result["items"].as_array())
+            .unwrap_or_else(|| panic!("{result}"))
+            .clone();
+        (lsp, items, defaults)
+    };
+    let (_plain_lsp, plain, _) = complete(json!({}));
+    let (mut lsp, items, defaults) = complete(json!({ "textDocument": { "completion": {
+        "completionItem": { "resolveSupport": { "properties": ["documentation", "detail"] } },
+        "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
+    } } }));
+    let resolved = items
+        .iter()
+        .map(|item| {
+            let mut sent = item.clone();
+            if sent.get("data").is_none() {
+                sent["data"] = defaults["data"].clone();
+            }
+            let answer = lsp.request("completionItem/resolve", sent);
+            let result = &answer["result"];
+            (
+                result["label"].as_str().unwrap().to_string(),
+                result["documentation"].clone(),
+                result["detail"].clone(),
+            )
+        })
+        .collect();
+    let plain = plain
+        .iter()
+        .map(|item| {
+            (
+                item["label"].as_str().unwrap().to_string(),
+                item["documentation"].clone(),
+                item["detail"].clone(),
+            )
+        })
+        .collect();
+    (resolved, plain)
+}
+
+/// A value that is not a field of the Tide models (an ECS value, a Bitdefender
+/// target, `configurations.elastic.type`) keeps the documentation and the
+/// detail the list gave it when the client resolves them: resolving gives it
+/// no other field's.
+#[test]
+fn values_outside_the_tide_models_keep_their_documentation_when_resolved() {
+    let head = "name: GravityZone rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000098
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A GravityZone rule.
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+";
+    let bitdefender = format!("{head}    detection:\n      target: reg\n");
+    let elastic = "name: Elastic rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: rule::1.0
+  version: 1
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: ";
+    let kuery = "event.category : ";
+    let sites: [(&str, &str, String, usize, usize); 3] = [
+        (
+            "opentide-yaml",
+            "file:///tmp/objects/rules/bitdefender.yaml",
+            bitdefender.clone(),
+            bitdefender.lines().count() - 1,
+            "      target: reg".len(),
+        ),
+        (
+            "opentide-yaml",
+            "file:///tmp/objects/rules/elastic.yaml",
+            elastic.to_string(),
+            elastic.lines().count() - 1,
+            "    type: ".len(),
+        ),
+        (
+            "kuery",
+            "file:///tmp/ecs.kuery",
+            kuery.to_string(),
+            0,
+            kuery.len(),
+        ),
+    ];
+    for (language, uri, text, line, character) in sites {
+        let (resolved, plain) = resolved_and_plain(language, uri, &text, line, character);
+        assert!(!plain.is_empty(), "no completion at {uri}");
+        assert!(
+            plain.iter().any(|(_, docs, _)| !docs.is_null()),
+            "nothing is documented at {uri}: {plain:?}"
+        );
+        assert_eq!(resolved, plain, "resolving changed an item at {uri}");
+    }
+}
+
 /// The watchers in force after `requests`, in the order the server sent them:
 /// each registration's, less those unregistered.
 fn watchers_in_force(requests: &[Value]) -> Vec<(String, String)> {
@@ -1978,6 +2244,116 @@ fn a_nested_root_does_not_take_the_outer_roots_configuration_event() {
     assert!(
         codes_of_rule(&items, &inner).contains(&unknown),
         "{items:?}"
+    );
+}
+
+/// What each root's workspace has loaded so far, by root, as `(file reads,
+/// parses, configuration resolutions)`.
+fn loads_by_root(lsp: &mut Lsp) -> Vec<(u64, u64, u64)> {
+    lsp.request("opentide/__stats", Value::Null)["result"]["roots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|root| {
+            (
+                root["fileReads"].as_u64().unwrap(),
+                root["parses"].as_u64().unwrap(),
+                root["configResolutions"].as_u64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+/// A change to one root's layered configuration costs the others nothing:
+/// the other folder's workspace is not opened again (which re-reads every
+/// object) for a path that is not under it.
+#[test]
+fn a_layered_configuration_change_does_not_reload_the_other_roots() {
+    let scratch = workspace("workspace-watch-reload", false);
+    let rule = fixture(RULE);
+    let child = |name: &str| {
+        let root = scratch.0.join(name).join("child");
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::write(root.join("objects/rules/rule-1.0.yaml"), &rule).unwrap();
+        let layer = root.parent().unwrap().join(".opentide/configurations");
+        std::fs::create_dir_all(&layer).unwrap();
+        std::fs::write(layer.join("deployment.toml"), DESIGN_AND_STAGING).unwrap();
+        root
+    };
+    let (first, second) = (child("one"), child("two"));
+    let folder =
+        |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "workspaceFolders": [folder(&first, "one"), folder(&second, "two")]
+    }));
+    workspace_pull_items(&mut lsp);
+    let before = loads_by_root(&mut lsp);
+    assert_eq!(before.len(), 2);
+
+    let deployment = second
+        .parent()
+        .unwrap()
+        .join(".opentide/configurations/deployment.toml");
+    std::fs::write(&deployment, DESIGN_ONLY).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&deployment), "type": 2 }] }),
+    );
+    let items = workspace_pull_items(&mut lsp);
+    assert!(
+        items
+            .iter()
+            .any(|(_, codes)| codes.contains(&"config_enum_unknown".to_string())),
+        "the change was not followed: {items:?}"
+    );
+    let after = loads_by_root(&mut lsp);
+    assert_eq!(
+        after[0], before[0],
+        "the first root's workspace was loaded again for the second's configuration"
+    );
+    assert!(
+        after[1].2 > before[1].2,
+        "the second root's configuration was not resolved again: {before:?} {after:?}"
+    );
+}
+
+/// `visibility.toml` of the outer one of two nested roots is also read by the
+/// inner one, which layers the outer's configuration folder in: its
+/// configuration is resolved again.
+#[test]
+fn a_nested_roots_layered_visibility_toml_is_followed() {
+    let scratch = workspace("workspace-watch-nested-visibility", false);
+    let outer = &scratch.0;
+    let inner = outer.join("child");
+    std::fs::create_dir_all(inner.join("objects/rules")).unwrap();
+    std::fs::write(inner.join("objects/rules/rule-1.0.yaml"), fixture(RULE)).unwrap();
+    let layer = outer.join(".opentide/configurations");
+    std::fs::create_dir_all(&layer).unwrap();
+    let folder =
+        |root: &std::path::Path, name: &str| json!({ "uri": file_uri(root), "name": name });
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "workspaceFolders": [folder(outer, "outer"), folder(&inner, "inner")]
+    }));
+    workspace_pull_items(&mut lsp);
+    let before = loads_by_root(&mut lsp);
+
+    let visibility = layer.join("visibility.toml");
+    std::fs::write(
+        &visibility,
+        "[[logsources]]\nname = \"NTANetAnalytics\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
+    )
+    .unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&visibility), "type": 1 }] }),
+    );
+    workspace_pull_items(&mut lsp);
+    let after = loads_by_root(&mut lsp);
+    assert!(
+        after[1].2 > before[1].2,
+        "the inner root's configuration was not resolved again: {before:?} {after:?}"
     );
 }
 

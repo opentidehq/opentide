@@ -280,6 +280,7 @@ pub fn rust_lint(dir: &Path, command: &[String]) -> Result<Vec<Json>> {
             changed: None,
             cwd: dir.to_path_buf(),
             query_check: Some(&queries),
+            selected: None,
         },
     );
     let document = json!({"findings": serde_json::to_value(&report.findings)?});
