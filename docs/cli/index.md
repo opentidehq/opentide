@@ -10,7 +10,7 @@ The `opentide` command is opentide's Rust core, compiled into the package and ru
 
 ```bash
 pip install --pre opentide              # the newest 1.0 release candidate
-pip install 'opentide==1.0.0rc2'        # or pin it
+pip install 'opentide==1.0.0rc3'        # or pin it
 ```
 
 This reference describes 1.0, a release candidate until it is final: pip skips it unless asked, and `pip install opentide` installs 0.28.1. See [release candidates](../usage/installation.md#release-candidates).
