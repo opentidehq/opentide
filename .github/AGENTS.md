@@ -113,11 +113,12 @@ SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
 `crate-packages` (every crate packaged and built as crates.io builds it, and the licence scan),
 at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
 ([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
-then one `smoke` matrix running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
-the binary installer on Linux and macOS, and `npm install` from a throwaway local registry on
-each of the six platforms (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64), a build from the sdist with the
-runner's stable Rust after the PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist),
-and `cargo install opentide --features cli` from the crate packages. In a release pull request or
+then two smoke jobs running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
+`smoke`, the binary installer on Linux and macOS, `npm install` from a throwaway local registry on
+each of the six platforms (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) and the
+PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist); and `smoke-sources`, which starts
+as soon as its packages exist (not after the slowest binary): a build from the sdist with the
+runner's stable Rust, and `cargo install opentide --features cli` from the crate packages. In a release pull request or
 `scope: release` run (not the nightly), the **antivirus gate** ([`av-gate.yml`](workflows/av-gate.yml),
 #1743) scans every artifact with ClamAV, YARA (signature-base and protections-artifacts at pinned
 commits, a reviewed allow-list) and Microsoft Defender (`windows-latest`), checks that no marker
