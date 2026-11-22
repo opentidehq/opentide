@@ -39,13 +39,13 @@ target_ms = 127
 id = "wasi_small"
 label = "WASI, small workspace"
 target_ms = 192
-target_waiver = "#1754, the runner class measures 193 to 240 ms under wasmtime 38, above #1746's machine"
+target_waiver = "#1767, the runner class measures 193 to 240 ms under wasmtime 38, above #1746's machine"
 
 [[scenario]]
 id = "wasi_large"
 label = "WASI, large workspace"
 target_ms = 350
-target_waiver = "#1754, the runner class measures 419 to 522 ms under wasmtime 38, above #1746's machine"
+target_waiver = "#1767, the runner class measures 419 to 522 ms under wasmtime 38, above #1746's machine"
 
 [[cpu_baseline]]
 cpu_model = "AMD EPYC 9V74 80-Core Processor"
