@@ -175,3 +175,58 @@ jobs:
           path: bench.json
           if-no-files-found: ignore
           retention-days: 90
+
+  # The language server's cold start (#1754): spawn to the first diagnostics of a
+  # rule it was asked to open, native and WASI (under wasmtime, the host the
+  # budgets were measured with), on the small workspace (the Tide corpus) and the
+  # large one (1,000 object files), by the scripted client of
+  # scripts/perf/lsp-bench.mjs (scripts/perf/cold-start.sh). Each scenario's p50 is
+  # held to tests/bench/lsp-cold-start.toml with budgets.toml's headroom
+  # (scripts/perf/check_cold_start.py; docs/engine/THROUGHPUT.md). The servers are
+  # built --release, with LTO, as they ship; no tenant, no network.
+  lsp-cold-start:
+    name: Benchmarks (language server cold start)
+    concurrency:
+      group: bench-${{ github.run_id }}-lsp-cold-start
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+        with:
+          targets: wasm32-wasip1
+          tools: wasmtime@38.0.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Build the language server, native and WASI
+        run: |
+          cargo build --locked --release -p opentide-lsp
+          cargo build --locked --release -p opentide-lsp --target wasm32-wasip1
+
+      - name: Measure the cold start
+        run: >-
+          scripts/perf/cold-start.sh cold-start target/release/opentide-lsp
+          target/wasm32-wasip1/release/opentide-lsp.wasm
+
+      - name: Check against the budgets
+        run: >-
+          python3 scripts/perf/check_cold_start.py tests/bench/lsp-cold-start.toml cold-start
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: bench-lsp-cold-start
+          path: cold-start
+          if-no-files-found: ignore
+          retention-days: 90
