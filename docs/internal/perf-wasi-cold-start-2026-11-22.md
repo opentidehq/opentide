@@ -65,11 +65,8 @@ large one reaches about 400 / 497 ms: still above its 350 ms target, which stays
 
 - **Large workspace**: the first request spends 135 ms loading a thousand objects on one thread and 106 ms in the
   first validation (the graph over every object, for one file), which no data change removes.
-- **The KQL catalog is still about 40% of the first request** (179M instructions): the Azure Monitor tables'
-  decode (99M) and the 40,000 column rows built from it (65M). Only the tables a query names are read:
-  decoding the reference per table and building a table's columns the first time something asks for them would
-  take most of it away. It reaches into `Catalog::columns`, which `apply_declared` and the completions read
-  directly, so it is a change of its own.
+- **The KQL catalog's reference, once a query names a table**: the table's columns are decoded and turned into
+  rows (below); a query that names a table of a big family decodes its shard of 32 tables, 20 KB at most.
 - **Compiling the module, for the extension** (a separate repository; a recommendation to measure there): under
   Node's WASI the module is compiled by V8 (30 ms for this module here, Liftoff first, each function again at
   its first call, which is most of the 40 ms the first request spends over wasmtime's). Node 22 has no
@@ -79,3 +76,34 @@ large one reaches about 400 / 497 ms: still above its 350 ms target, which stays
   instantiate it for each server start, so that no start but the first compiles at all and the first does it
   while VS Code is still loading the workspace. Starting the server itself on activation moves the module load
   and the workspace load off the first document's wait the same way.
+
+## The KQL catalog reads a table's columns when asked for (follow-up to #1767)
+
+The first KQL request still decoded all 943 Azure Monitor tables (27,237 columns) and built about 40,000 column
+rows from them: 99M and 65M instructions of the 393M the request took natively, for a query that names one or
+two tables. The build script (`crates/opentide-kql/build.rs`) now writes the tables' heads (name, docs,
+categories, citation: 35 KB) as one blob and their columns in 30 shards of 32 tables (299 KB in all, 22 KB the
+largest); a head says where its table's columns are (`ColumnsAt`). `Catalog` keeps the profile's hand-written
+rows, settled at build time (`rows_model::profile_rows`), and for each table a `OnceLock` that builds the
+reference's rows (the ones the hand-written rows do not repeat, a column the reference lists twice with two types
+untyped, an advanced hunting table's `Timestamp`) the first time `Catalog::columns_for_table` asks for them,
+which decodes the table's shard once. `apply_declared` builds a table's rows before it edits them in place, so a
+workspace's declared columns find the same column the eager build found. Completion with no table named reads the
+hand-written columns only, as it did.
+
+A test keeps the old algorithm as an oracle and holds every table's columns, built lazily, equal to the eager
+build for both profiles, with and without a workspace's declarations (a column the reference lists, one it does
+not, one a hand-written row has, a table with no reference columns, a table the workspace invents, a pattern, a
+column two sources declare).
+
+Start to first diagnostics, medians (ms), small / large workspace, alternating the build of #1768 and this
+one on the same machine (WASI built with `--profile wasi-lsp`, 12 runs; Node small 25 runs, wasmtime 38):
+
+| Host | #1768 | This change | Change |
+|---|---:|---:|---:|
+| wasmtime 38 | 209 / 423 | 189 / 382 | -10% / -10% |
+| Node 22 WASI | 266 / 446 | 243 / 436 | -9% / -2% |
+| native (no regression) | 64 / 94 | 49 / 81 | -23% / -14% |
+
+The machine is noisier than for the first table (the #1768 build measured 201 / 389 under wasmtime then): read
+the changes, not the milliseconds. The module is 11.93 MB (11.86 MB).

@@ -63,6 +63,76 @@ pub struct AzureMonitorTable {
     pub columns: Option<Vec<AzureMonitorColumn>>,
 }
 
+/// Where the build script stored the columns of an Azure Monitor Logs table: its shard, and its
+/// place in the shard (#1767). A shard is a blob of its own, decoded when the first of its tables'
+/// columns is asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColumnsAt {
+    pub shard: u16,
+    pub slot: u16,
+}
+
+/// An Azure Monitor Logs table without its columns, which are read on demand ([`ColumnsAt`]): all
+/// the catalog needs of a table until something asks for its columns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AzureMonitorHead {
+    pub name: String,
+    pub docs: String,
+    pub categories: Vec<String>,
+    pub citation: Arc<str>,
+    /// Where its columns are; `None` for a table whose columns depend on what writes to it
+    /// (AzureDiagnostics).
+    pub columns: Option<ColumnsAt>,
+}
+
+/// The tables of the reference in name order, split as the build script stores them: each table's
+/// head, and its columns in `SHARDS` blobs of about [`TABLES_PER_SHARD`] tables.
+#[must_use]
+#[allow(
+    dead_code,
+    reason = "the crate's build script calls it; the crate reads what it wrote"
+)]
+pub fn split_azure_monitor(
+    mut tables: Vec<AzureMonitorTable>,
+) -> (Vec<AzureMonitorHead>, Vec<Vec<Vec<AzureMonitorColumn>>>) {
+    tables.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut heads = Vec::with_capacity(tables.len());
+    let mut shards: Vec<Vec<Vec<AzureMonitorColumn>>> = Vec::new();
+    for table in tables {
+        let columns = table.columns.map(|columns| {
+            if shards
+                .last()
+                .is_none_or(|shard| shard.len() >= TABLES_PER_SHARD)
+            {
+                shards.push(Vec::new());
+            }
+            let shard = shards.len() - 1;
+            let slot = shards[shard].len();
+            shards[shard].push(columns);
+            ColumnsAt {
+                shard: u16::try_from(shard).unwrap_or(u16::MAX),
+                slot: u16::try_from(slot).unwrap_or(u16::MAX),
+            }
+        });
+        heads.push(AzureMonitorHead {
+            name: table.name,
+            docs: table.docs,
+            categories: table.categories,
+            citation: table.citation,
+            columns,
+        });
+    }
+    (heads, shards)
+}
+
+/// How many tables' columns a shard holds: small enough that the first table a query names costs
+/// a fraction of the reference to decode, large enough that each shard still compresses well.
+#[allow(
+    dead_code,
+    reason = "used by split_azure_monitor, which only the build script calls"
+)]
+pub const TABLES_PER_SHARD: usize = 32;
+
 /// One column of an Azure Monitor Logs table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AzureMonitorColumn {

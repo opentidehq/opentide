@@ -7,7 +7,8 @@
 # of the run matches is reported and passes (the assets and the wheels are separate downloads).
 #
 # Linux and WebAssembly: what `cargo build --release` made on the change (51.8 MB, 29.4 MB, 24.6 MB,
-# 24.7 MB before), +3%. The wheels: what the publish.yml dry run built (`opentide-1.0.0rc3`), +3%, measured again on 2026-11-22 (run 45007567075) after the NOTICE and licence files, the editor's deployment-state findings and the severity checks landed: every wheel but the Windows x64 one had grown 0.2 to 0.8% past its budget. The
+# 24.7 MB before; the WASI language server is built with `--profile wasi-lsp` since #1768, as
+# `scripts/engine/build-wasm.sh wasi` does, so its budget is read from that build), +3%. The wheels: what the publish.yml dry run built (`opentide-1.0.0rc3`), +3%, measured again on 2026-11-22 (run 45007567075) after the NOTICE and licence files, the editor's deployment-state findings and the severity checks landed: every wheel but the Windows x64 one had grown 0.2 to 0.8% past its budget. The
 # macOS binaries are not shipped as a budgeted file here: their wheels carry the same code.
 
 [[artifact]]

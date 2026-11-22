@@ -141,3 +141,52 @@ pub struct OperatorOption {
     #[serde(default)]
     pub parameter_index: Option<u32>,
 }
+
+/// A profile's hand-written tables and columns: [`Catalog::with_profile`](super::Catalog::with_profile)
+/// starts from them (`Sentinel` has the Sentinel rows and the Defender rows, `Defender` the
+/// Defender ones), and the lazily read reference columns come after.
+///
+/// Where a hand-written column's type disagrees with the reference's for the same column of the
+/// same table, neither is trusted for type checks: its type is dropped. The reference's types are
+/// what `reference_type(table, column)` says, `None` for a table the reference lists no columns of
+/// or a column it does not have. Settled here, once, because it reads the reference's columns of
+/// every table that has a hand-written one, which a catalog no longer reads in full (#1767). A
+/// column written twice settles its last row, the one a lookup by `(table, name)` finds.
+#[allow(
+    dead_code,
+    reason = "the crate's build script calls it and the crate's tests; the crate itself reads the rows it wrote"
+)]
+pub fn profile_rows(
+    sentinel: bool,
+    sentinel_rows: (Vec<TableRow>, Vec<ColumnRow>),
+    defender_rows: (Vec<TableRow>, Vec<ColumnRow>),
+    reference_type: impl Fn(&str, &str) -> Option<Arc<str>>,
+) -> (Vec<TableRow>, Vec<ColumnRow>) {
+    let mut tables = Vec::new();
+    let mut columns = Vec::new();
+    if sentinel {
+        tables.extend(sentinel_rows.0);
+        columns.extend(sentinel_rows.1);
+    }
+    let (defender_tables, defender_columns) = defender_rows;
+    for table in defender_tables {
+        if !tables.iter().any(|t: &TableRow| t.name == table.name) {
+            tables.push(table);
+        }
+    }
+    columns.extend(defender_columns);
+    let mut last: std::collections::HashMap<(Arc<str>, Arc<str>), usize> =
+        std::collections::HashMap::new();
+    for (i, column) in columns.iter().enumerate() {
+        last.insert((Arc::clone(&column.table), Arc::clone(&column.name)), i);
+    }
+    for ((table, name), i) in last {
+        if let Some(listed) = reference_type(&table, &name)
+            && let Some(column) = columns.get_mut(i)
+            && column.type_name.as_deref() != Some(&*listed)
+        {
+            column.type_name = None;
+        }
+    }
+    (tables, columns)
+}
