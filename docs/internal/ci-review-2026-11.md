@@ -168,7 +168,7 @@ nightly. No scheduled ci.yml run exists on `integration/unified-core`: the sched
 |---|---|---|
 | Three version jobs in a row (`release-versions`, `packages/versions`, `engine-assets/meta`) recompute the same versions and re-check the revision | release-build.yml, build-packages.yml, engine-release-build.yml | merge into `release-versions` and pass the values down; ~20–30 s off the critical path, −2 jobs (P3) |
 | `wheel-smoke` (6 jobs) and `smoke` platform cells (6 jobs) run on the same six OSes | build-packages.yml, release-build.yml | merge the wheel install into the platform smoke cells: −6 jobs, ~1 min of runner start each, 2 macOS and 2 Windows (P2) |
-| ClamAV scans every package twice, as archives (`--scan-archive`) and extracted | av-gate.yml | keep both: the gate's design (#1743), and the archive scan sees what the extractor might skip. Instead, run the two scans in parallel or with more threads (P3) |
+| ClamAV scans every package twice, as archives (`--scan-archive`) and extracted, on one core | av-gate.yml | keep both scans: the gate's design (#1743), and the archive scan sees what the extractor might skip. Run them on every core: **#1785** |
 | `wasm` builds the native language server and command line (2.6 min) that `build` also builds | ci.yml | different profile and features; only on `ts_packages` and pushes. Leave |
 | The binaries' `native` job built lsp then CLI in series | engine-release-build.yml | **#1781** |
 | The smoke matrix's single `needs` held the sdist build to the end | release-build.yml | **#1780** |
@@ -185,17 +185,17 @@ nightly. No scheduled ci.yml run exists on `integration/unified-core`: the sched
 | 1 | Smoke the sdist and crate builds as soon as their packages exist | ~6 min off every release build (32 → ~26) | low | **#1780** |
 | 2 | Build `opentide-lsp` and `opentide` in parallel per target | macOS binary cells ~21 → ~12–14 min; wall clock only once the wheels' path is faster too | low; +4 jobs (2 macOS) | **#1781** |
 | 3 | Split `engine-lint` into the workspace lint and the variants | ~3–5 min off a Rust PR's gate (engine-lint was its longest job) | low; one more cache family | **#1783** |
-| 4 | Thin LTO, default codegen-units | to measure: the LTO tail of every release build (wheels, npm addons, binaries) | medium: sizes, the AV gate's entropy, throughput budgets | **#1782** (draft, measure only) |
+| 4 | Thin LTO, default codegen-units | −48% build time locally | **fails**: binaries +18–21% over their budgets, throughput up to +11% | **#1782**: measured, not proposed |
 | 5 | Merge `wheel-smoke` into the platform smoke cells | −6 jobs per release build | low–medium (the contract tests pin `wheel-smoke`) | proposed |
 | 6 | One version job for the release build | −2 jobs, ~20–30 s | low | proposed |
-| 7 | Build the Windows arm64 wheel on `windows-11-arm` natively instead of cross-compiling on windows-latest | the wheels' path (19.9 min) is the next floor | medium (maturin-action on Windows Arm, the image's Python) | proposed: measure first |
-| 8 | ClamAV over the packages: parallel archive and extracted scans, or `--multiscan` | ~2–3 min off the packages' AV gate | low | proposed |
+| 7 | The Windows wheels: 15–20 min each, the native x64 build as much as the arm64 cross-compile (19.4–19.8 min for windows-x64 in two runs). Profile one (`--timings`, the MSVC link of the fat-LTO module) before choosing: a native `windows-11-arm` build for arm64, a larger runner, or `lld-link` | the release build's next floor | medium | proposed: measure first |
+| 8 | ClamAV over the packages on every core (one `--file-list` per core) | ~3–4 min off the release build's tail once #1780 lands | low | **#1785** |
 | 9 | `build`: the full tier misses its 10 min budget (18.3). Partition nextest (two jobs on the same build's archive), or restate the budget | ~4–5 min off every push | medium (#1141 measured the archive's cost: 1.5 GB) | proposed: revisit only with a smaller archive |
 | 10 | `facade`: four builds in series (10–13 min); semver-checks (3.4) could run beside the feature builds | ~3 min off a facade PR | low | proposed |
 | 11 | `engine-release-consumers`: bump the vscode-extension `ref:` to the commit after its #82, #83 and #95. In `check-vscode-extension.mjs`, add `THIRD-PARTY-DATA-LICENSES.txt` to `pinsFor().wasi` and print the extension's key, `licences`. Then have the job run the extension's own WASI checks on the module (if its checkout carries them; not verified here) instead of only printing the pins it would read | restores a nightly signal that now fails for a stale reason; the WASI check catches a module the extension would refuse before a release ships it | low (nightly only, never gates) | waits for vscode-extension's merges |
 
-After #1780, #1781 and #4, the release build's floor is the windows-arm64 wheel plus the packages' AV
-gate. Items 7 and 8 are the next levers.
+After #1780, #1781 and #1785, the release build's floor is the slowest wheel (windows-x64 or
+windows-arm64, 15 to 20 min from run to run): item 7 is the next lever.
 
 ## Measurements of the changes
 
@@ -203,7 +203,8 @@ Each change PR carries its own dry run or CI run. The numbers are filled in here
 
 | Change | Before | After | Run |
 |---|---|---|---|
-| #1780 smoke split | 32.4 min (45034649508) | pending | publish.yml dry run, `release_candidate=3` |
-| #1781 binaries split | aarch64-apple-darwin 21.1, x86_64-apple-darwin 18.5 | pending | publish.yml dry run |
-| #1783 engine-lint split | 13.5 (PR), 12.7 (push) | pending | the PR's own CI |
-| #1782 thin LTO | see the PR | pending | publish.yml dry run, bench.yml, throughput |
+| #1780 smoke split | build stage 32.4 min (45034649508) | **28.3 min** (45052093550): `Smoke (sdist)` runs from minute 7.3 to 15.7; the tail is now the packages' ClamAV (7.0 min that run) | publish.yml dry run, `release_candidate=3`, passed |
+| #1781 binaries split | binaries done at 21.7 min; aarch64-apple-darwin 21.1, x86_64-apple-darwin 18.5 | binaries done at **15.2 min** (45052100493): `opentide` aarch64-apple-darwin 14.7, x86_64-apple-darwin 10.9; `opentide-lsp` 3.8–7.8. The stage still ends at 30.0 there (the sdist smoke, without #1780); the wheels (windows-x64 19.4) are the next floor | publish.yml dry run, passed |
+| #1783 engine-lint split | 13.5 (PR), 12.7 (push) | **4.5 and 5.0 side by side**, warm (re-run of 45052276806); 4.1 and 14.4 on the first, cold run of the new family | the PR's CI, gate green |
+| #1785 ClamAV on every core | packages' ClamAV 4.3–7.0 min (clamscan 269–392 s) | pending | ci.yml `scope: release` on the branch |
+| #1782 thin LTO | fat, cgu 1: both binaries 920 s locally (4 vCPU); `opentide` 41.8 MB, `opentide-lsp` 19.3 MB | thin: 483 s (−48%); 50.7 MB (+21%) and 22.8 MB (+18%), **both over** `sizes.toml`; throughput +0.8 to +11.0% instructions (**fails**, 3% tolerance); bench.yml absolute budgets pass, no base comparison. Fat with cgu 16: 916 s, 44.2 MB (over) and 20.3 MB. **Not proposed** | local builds, the PR's throughput job, bench.yml 45052113448, publish.yml dry run 45055868566 |
