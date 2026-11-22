@@ -269,3 +269,110 @@ macro_rules! blob {
         include_bytes!(concat!(env!("OUT_DIR"), "/", $name, ".otd")).as_slice()
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DatasetError, HEADER_LEN, Kind, MAGIC, VERSION, decode, raw_len, text, value};
+
+    /// A blob of `kind` stating `len` raw bytes, around a zstd frame of `bytes`.
+    fn blob(kind: u8, len: u32, bytes: &[u8]) -> Vec<u8> {
+        let mut out = MAGIC.to_vec();
+        out.push(VERSION);
+        out.push(kind);
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend(zstd::encode_all(bytes, 3).unwrap());
+        out
+    }
+
+    fn whole(kind: Kind, bytes: &[u8]) -> Vec<u8> {
+        blob(kind.byte(), u32::try_from(bytes.len()).unwrap(), bytes)
+    }
+
+    #[test]
+    fn a_text_and_a_model_read_back() {
+        let words = whole(Kind::Text, "mimikatz\nlsass\n".as_bytes());
+        assert_eq!(raw_len(&words), Ok(15));
+        assert_eq!(text(&words).unwrap(), "mimikatz\nlsass\n");
+        let model = postcard::to_stdvec(&(7_u32, "seven".to_owned())).unwrap();
+        let model = whole(Kind::Postcard, &model);
+        assert_eq!(
+            value::<(u32, String)>(&model).unwrap(),
+            (7, "seven".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_blob_with_a_damaged_header_is_refused() {
+        let good = whole(Kind::Text, b"x");
+        assert_eq!(
+            raw_len(&good[..HEADER_LEN - 1]),
+            Err(DatasetError::NotABlob)
+        );
+        let mut magic = good.clone();
+        magic[0] = b'X';
+        assert_eq!(raw_len(&magic), Err(DatasetError::NotABlob));
+        let mut version = good.clone();
+        version[3] = VERSION + 1;
+        assert_eq!(raw_len(&version), Err(DatasetError::Version(VERSION + 1)));
+        let mut kind = good;
+        kind[4] = 9;
+        assert_eq!(raw_len(&kind), Err(DatasetError::UnknownKind(9)));
+    }
+
+    #[test]
+    fn a_blob_of_another_kind_is_refused() {
+        let words = whole(Kind::Text, b"x");
+        assert_eq!(
+            decode(&words, Kind::Postcard),
+            Err(DatasetError::WrongKind {
+                wanted: Kind::Postcard,
+                found: Kind::Text,
+            })
+        );
+    }
+
+    #[test]
+    fn a_frame_shorter_or_longer_than_its_header_is_refused() {
+        // A crafted length is not trusted either way: the decoder reads one
+        // byte past it at most, and the lengths must agree.
+        assert_eq!(
+            decode(&blob(0, 5, b"abc"), Kind::Text),
+            Err(DatasetError::Length {
+                expected: 5,
+                actual: 3
+            })
+        );
+        assert_eq!(
+            decode(&blob(0, 2, b"abc"), Kind::Text),
+            Err(DatasetError::Length {
+                expected: 2,
+                actual: 3
+            })
+        );
+        assert_eq!(
+            decode(&blob(0, u32::MAX, b"abc"), Kind::Text),
+            Err(DatasetError::Length {
+                expected: u32::MAX as usize,
+                actual: 3
+            })
+        );
+    }
+
+    #[test]
+    fn a_damaged_frame_or_text_is_refused() {
+        let mut frame = whole(Kind::Text, b"abc");
+        frame.truncate(HEADER_LEN + 2);
+        assert!(matches!(
+            decode(&frame, Kind::Text),
+            Err(DatasetError::Frame(_))
+        ));
+        assert_eq!(
+            text(&whole(Kind::Text, &[0xff, 0xfe])),
+            Err(DatasetError::Utf8)
+        );
+        assert!(matches!(
+            value::<String>(&whole(Kind::Postcard, &[0xff])),
+            Err(DatasetError::Postcard(_))
+        ));
+    }
+}
