@@ -141,7 +141,8 @@ jobs:
           cargo nextest run --workspace --locked --profile ci
           uv run --no-sync pytest tests/ -q --no-cov -p no:cacheprovider -n 4 \
             -m "not gitlab_ci_lint"
-          export OPENTIDE_BUILD_VERSION="$(python3 scripts/engine/release.py version)"
+          OPENTIDE_BUILD_VERSION="$(python3 scripts/engine/release.py version)"
+          export OPENTIDE_BUILD_VERSION
           (cd bindings/node && npm ci && node build.mjs && node --test test/*.test.mjs)
 
       # The report reads the profiles where show-env pointed them (target/,
