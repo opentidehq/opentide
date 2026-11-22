@@ -10,8 +10,8 @@ repositories.
 `src/opentide/data/vocabulary/` and schema pins from
 `specifications/schemas/pins/*.toml` into `src/opentide/data/pins/`, then
 refreshes `data/specifications.lock.json`.
-The ingests (`cargo xtask vocab ingest --apply` and `cargo xtask vocab malapi --apply`,
-[`scripts/vocabulary/README.md`](../vocabulary/README.md)) run this sync step
+The ingest (`cargo xtask vocab ingest --apply`,
+[`scripts/vocabulary/README.md`](../vocabulary/README.md)) runs this sync step
 after writing canonical vocabularies.
 
 Vocabularies must match byte for byte. Pins are compared table by table, the

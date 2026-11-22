@@ -5,7 +5,7 @@
 //! - The Tide vocabularies (`src/opentide/data/vocabulary/*.vocab.toml`, the
 //!   editor's hover and completion data) are parsed here, once, into
 //!   [`vocab_model::Vocab`]s and stored as one pre-parsed blob, `vocabularies`:
-//!   the editor used to parse all thirty-four files, ATT&CK's included, the first
+//!   the editor used to parse all thirty-three files, ATT&CK's included, the first
 //!   time it needed one.
 //!
 //! The files are read from the workspace root in a checkout, or else from the

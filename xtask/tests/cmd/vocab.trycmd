@@ -45,35 +45,9 @@ $ xtask vocab ingest --bogus
 error: unexpected argument '--bogus' found
 ...
 
-$ xtask vocab malapi --check --apply
+$ xtask vocab malapi --check
 ? 2
-error: the argument '--check' cannot be used with '--apply'
-
-Usage: cargo xtask vocab malapi --check
-
-For more information, try '--help'.
-
-$ xtask vocab malapi --delay soon
-? 2
-error: invalid value 'soon' for '--delay <SECS>': `soon` is not a number of seconds
-
-For more information, try '--help'.
-
-$ xtask vocab malapi --delay -1
-? 2
-error: invalid value '-1' for '--delay <SECS>': `-1` is not a number of seconds
-
-For more information, try '--help'.
-
-$ xtask vocab malapi --html-dir
-? 2
-error: a value is required for '--html-dir <DIR>' but none was supplied
-
-For more information, try '--help'.
-
-$ xtask vocab malapi --bogus
-? 2
-error: unexpected argument '--bogus' found
+error: unrecognized subcommand 'malapi'
 ...
 
 ```

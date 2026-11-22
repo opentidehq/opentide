@@ -244,7 +244,7 @@ const CURL: [&str; 9] = [
 /// Downloads `url` with curl (HTTPS only, redirects followed, TLS 1.2 or
 /// later, failing on an HTTP error; then `options`, such as `--max-time
 /// 120`), into `output` when given, else returning the bytes. `vocab
-/// ingest` and `vocab malapi` fetch through it.
+/// ingest` fetches through it.
 pub fn curl(url: &str, options: &[&str], output: Option<&Path>) -> Result<Vec<u8>> {
     let mut command = Command::new("curl");
     command.args(CURL).args(options);

@@ -67,7 +67,8 @@ mod tests {
     #[test]
     fn loads_all_vocab_files() {
         let v = bundled_vocabs();
-        assert_eq!(v.len(), 34, "expected 34 vocabs, got {}", v.len());
+        assert_eq!(v.len(), 33, "expected 33 vocabs, got {}", v.len());
+        assert!(!v.contains_key("malapi"));
         assert!(!v.contains_key("stakeholders"));
         assert!(v.contains_key("tlp"));
         assert!(v.contains_key("att&ck"));

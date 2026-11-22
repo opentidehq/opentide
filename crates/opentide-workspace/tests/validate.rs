@@ -791,6 +791,27 @@ mod validate {
         );
     }
 
+    /// The `malapi` vocabulary is removed (#1753). No model field took its
+    /// values, so a rule that names Windows APIs it listed validates as before:
+    /// no error, no warning, and no finding that names the vocabulary.
+    #[test]
+    fn a_rule_that_names_former_malapi_apis_still_validates() {
+        let fs = workspace();
+        fs.write(
+            "/ws/.opentide/configurations/platforms/splunk.toml",
+            "[platform]\nenabled = true\n",
+        );
+        let text = splunk_rule(U1).replace(
+            "  A rule.",
+            "  VirtualAllocEx, WriteProcessMemory and CreateRemoteThread into another process.",
+        );
+        fs.write("/ws/objects/rules/a.yaml", text);
+        let validation = run(&fs, &Options::default());
+        let found = all(&validation);
+        assert!(found.is_empty(), "{found:#?}");
+        assert_eq!(status(&validation, Check::Schema), "passed");
+    }
+
     #[test]
     fn a_vocabulary_typo_has_a_safe_fix_only_when_it_is_the_same_word() {
         let fs = workspace();

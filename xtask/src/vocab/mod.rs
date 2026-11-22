@@ -7,11 +7,8 @@
 //!   ATT&CK v18 list from MITRE's STIX bundles.
 //! - `ingest [--check|--apply]` ([`ingest`]): the weekly ATT&CK and MISP
 //!   ingest into the specifications' vocabularies.
-//! - `malapi [--check|--apply]` ([`malapi`]): the MalAPI vocabulary scraped
-//!   from malapi.io, by hand.
 
 pub mod ingest;
-pub mod malapi;
 pub mod sentinel;
 pub mod sync;
 
@@ -56,13 +53,6 @@ pub enum Cmd {
     /// per-key versions; --apply writes them and syncs the bundle, otherwise it
     /// exits 1 when they would change. Schema pins never move
     Ingest(ingest::Options),
-    /// Scrape malapi.io's attack categories and API pages (or read saved
-    /// pages) and merge them into the specifications checkout's malapi
-    /// vocabulary with per-key versions; --apply writes it and syncs the
-    /// bundle, otherwise it exits 1 when it would change. A run the site stops
-    /// part-way keeps the keys it did not reach; --apply writes it, unsynced,
-    /// and exits 1
-    Malapi(malapi::Options),
 }
 
 /// Runs `cargo xtask vocab <command>`.
@@ -74,7 +64,6 @@ pub fn main(command: &Cmd) -> ExitCode {
         } => run_sync(*check, specifications.clone()),
         Cmd::SentinelAttack { check, stix_dir } => run_sentinel(*check, stix_dir.as_deref()),
         Cmd::Ingest(options) => repo_root().and_then(|root| ingest::run(&root, options)),
-        Cmd::Malapi(options) => repo_root().and_then(|root| malapi::run(&root, options)),
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,
@@ -147,9 +136,8 @@ mod tests {
             &["ingest", "--check", "--apply"],
             &["ingest", "--frobnicate"],
             &["ingest", "--misp-url"],
-            &["malapi", "--check", "--apply"],
-            &["malapi", "--delay", "soon"],
-            &["malapi", "--html-dir"],
+            // The MalAPI scrape was removed with the vocabulary (#1753).
+            &["malapi", "--check"],
         ] {
             assert_eq!(exit(args), usage, "{args:?}");
         }

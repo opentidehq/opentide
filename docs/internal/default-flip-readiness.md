@@ -74,6 +74,6 @@ wheel. The recordings, the recorded MCP sessions and the commands above were ret
 | What | Why | Where it runs now |
 |------|-----|-------------------|
 | The vocabulary ingest (ATT&CK STIX, MISP actors: `opentide.vocabulary`, `scripts/vocabulary/`) | Ported in UC-6.3: `cargo xtask vocab ingest`, the same data as the Python ingest's files, laid out by the `toml` crate | `.github/workflows/vocab-upstream.yml` ([`scripts/vocabulary/README.md`](https://github.com/opentidehq/opentide/blob/development/scripts/vocabulary/README.md)) |
-| The MalAPI scrape (`generate_malapi.py`) | Run by hand, never in CI | Ported: `cargo xtask vocab malapi`, by hand ([`scripts/vocabulary/README.md`](https://github.com/opentidehq/opentide/blob/development/scripts/vocabulary/README.md), "MalAPI") |
+| The MalAPI scrape (`generate_malapi.py`) | Run by hand, never in CI | Ported as `cargo xtask vocab malapi`, then removed with the `malapi` vocabulary ([#1753](https://github.com/opentidehq/opentide/issues/1753)) |
 | The check of the model field docstrings against the specifications' field tables | It read the Pydantic models' docstrings | Ported in UC-6.3: `cargo xtask spec-fields` reads the Rust models' descriptions; ci.yml's `lint` job |
 | The 48-case matrix of GitLab pipelines the Python renderer was linted on | The renderer is Rust's; the lint job now lints what `opentide setup ci gitlab` writes on the tide corpus, with and without platforms | `gitlab-ci-lint` |
