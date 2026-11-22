@@ -330,7 +330,7 @@ opentide validate --strict
 - **`opentide --json info` lists each platform's tenants.** Each has its `name`, `description`, `strategies`, `manual` and every `$VAR` its setup references, with whether it is set; a value is never printed ([#754](https://github.com/opentidehq/opentide/issues/754)).
 - **`OPENTIDE_PROGRESS=json` writes progress events on stderr.** `generate`, `validate`, `validate query`, `deploy --dry-run` and `query` write one ASCII JSON object per line as they go, and stdout still holds one document ([#756](https://github.com/opentidehq/opentide/issues/756)).
 - **Every `validate`, `validate query` and `lint` finding carries `end_line`.** SARIF regions carry `endLine` ([#755](https://github.com/opentidehq/opentide/issues/755)).
-- **Windows on Arm installs a wheel.** It has the engine compiled in, and replaces a build from the sdist, which needs Rust ([#748](https://github.com/opentidehq/opentide/issues/748)). Use CPython 3.11 or later and `pip install --only-binary cryptography opentide` ([Installation](./installation.md#windows-and-powershell)).
+- **Windows on Arm installs a wheel.** It has the engine compiled in, and replaces a build from the sdist, which needs Rust ([#748](https://github.com/opentidehq/opentide/issues/748)). Use CPython 3.11 or later and `pip install --only-binary cryptography opentide` ([Installation](./installation.md#windows)).
 
 **Changed**
 

@@ -193,7 +193,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 
 ## opentide lsp start and opentide-lsp
 
-The engine is also published on its own, as the `opentide-lsp` binary: each opentide [GitHub Release](https://github.com/opentidehq/opentide/releases) carries it for glibc Linux, macOS and Windows (`opentide-installer.sh` and `opentide-installer.ps1` install it with `opentide`), and crates.io has it (`cargo binstall opentide-lsp`, or `cargo install opentide-lsp`). It has the version of the opentide release it ships with. `opentide lsp start` runs the same server, with what only opentide can add:
+The engine is also published on its own, as the `opentide-lsp` binary: each opentide [GitHub Release](https://github.com/opentidehq/opentide/releases) carries it for glibc Linux and macOS (`opentide-installer.sh` installs it with `opentide`), and crates.io has it (`cargo binstall opentide-lsp`, or `cargo install opentide-lsp`). No Windows binary ships: on Windows, install opentide with `uv tool install opentide` (or pip, pipx, npm) and point the editor at `opentide lsp start` ([Installation](../usage/installation.md#windows)). It has the version of the opentide release it ships with. `opentide lsp start` runs the same server, with what only opentide can add:
 
 | | `opentide lsp start` | `opentide-lsp --stdio` |
 |---|---|---|

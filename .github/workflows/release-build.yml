@@ -17,15 +17,15 @@
 #     installed and run on its own OS (`wheel-smoke`), the six npm addons and
 #     every npm tarball (`npm-packages`);
 #   - `engine-assets` (engine-release-build.yml): the GitHub Release's assets,
-#     `release-assets` (the binaries per target, the installers, the
-#     WebAssembly builds, the SBOMs, SHA256SUMS);
+#     `release-assets` (the binaries per Linux and macOS target, the
+#     installer, the WebAssembly builds, the SBOMs, SHA256SUMS);
 #   - `sdist`: the sdist, at the wheels' version, with twine's check;
 #   - `crate-packages`: every publishable crate built from its package and the
 #     licence scan (`crates`);
 #   - `smoke`: one matrix, one script (scripts/build/smoke_release.sh): on
-#     each of the six platforms the binary installer against `release-assets`
-#     and `npm install` from a throwaway local registry of `npm-packages`;
-#     on Linux x64 a build from the sdist (with the PyPI dist's shape: one
+#     Linux and macOS the binary installer against `release-assets`, on each
+#     of the six platforms `npm install` from a throwaway local registry of
+#     `npm-packages`; on Linux x64 a build from the sdist (with the PyPI dist's shape: one
 #     version, six cp310-abi3 wheels, one sdist) and `cargo install` from the
 #     crate packages. The wheels' own smoke is build-packages.yml's.
 #

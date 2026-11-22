@@ -92,7 +92,7 @@ Cargo needs the version spelled out for a pre-release. The same crate is the [Ru
 
 **GitHub Release binaries**
 
-The `v1.0.0-rc.2` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0-rc.2) is marked a pre-release. It carries the `opentide` and `opentide-lsp` binaries for glibc Linux, macOS and Windows, and an installer that installs both:
+The `v1.0.0-rc.2` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0-rc.2) is marked a pre-release. It carries the `opentide` and `opentide-lsp` binaries for glibc Linux and macOS, and an installer that installs both. (1.0.0-rc.1 and 1.0.0-rc.2 also carried Windows binaries and a PowerShell installer; later releases do not: on Windows, install from PyPI or npm, as [Windows](#windows) describes.)
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSfLO \
@@ -102,7 +102,7 @@ opentide --version                       # opentide 1.0.0-rc.2
 opentide-lsp --version                   # opentide-lsp 1.0.0-rc.2
 ```
 
-On Windows, `opentide-installer.ps1` from the same release does the same. The installer checks each binary against the release's `SHA256SUMS` before it installs it. To check what you downloaded yourself, and where it was built:
+The installer checks each binary against the release's `SHA256SUMS` before it installs it. To check what you downloaded yourself, and where it was built:
 
 ```bash
 BASE=https://github.com/opentidehq/opentide/releases/download/v1.0.0-rc.2
@@ -141,13 +141,24 @@ pip install opentide
 
 The build takes several minutes. `opentide doctor` reports it (`analysis_engine`); see [`opentide lsp`](../cli/lsp.md) to set up an editor.
 
-### Windows and PowerShell
+### Windows
+
+On Windows, install opentide from PyPI or npm. There is no standalone `opentide.exe` or `opentide-lsp.exe` to download and no PowerShell installer: 1.0.0-rc.1 and 1.0.0-rc.2 carried them, and later releases do not, so that no unsigned executable is downloaded on its own. The recommended install is a uv tool, which puts `opentide` on `PATH` in an environment of its own:
+
+```powershell
+uv tool install opentide                 # or: uv tool install 'opentide==1.0.0rc2' for the candidate
+opentide --version
+```
+
+`pipx install opentide`, `pip install opentide` in a virtual environment, or `npm i -g @opentide/opentide` (the npm package, from 1.0.0) give you the same `opentide` command: a launcher that uv, pip or pipx writes, or Node.js. Each ships wheels or native packages for Windows x64 and Arm, with the engine compiled in.
+
+**The language server** on Windows is the command line's: point Neovim, Helix, Zed or any other LSP client at `opentide lsp start` (stdio) where it would run `opentide-lsp` ([`opentide lsp`](../cli/lsp.md)). The VS Code extension runs its own WebAssembly build and needs nothing installed.
 
 On Windows on Arm, `pip install opentide` installs opentide's own Arm wheel and nothing else: the package has no Python dependencies. Only the `plugins` extra adds one, pydantic, whose pydantic-core publishes Windows on Arm wheels from CPython 3.11, so on CPython 3.10 pip compiles it, which needs a Rust toolchain and the MSVC build tools.
 
-`pip` and `uv` create the `opentide` console launcher in the active environment's `Scripts` directory. Ensure that directory is on `PATH`, then run the package directly:
+If `opentide` is not found, the launcher's directory is not on `PATH` (`uv tool update-shell` adds uv's; pip puts it in the active environment's `Scripts` directory):
 
-1. Find the path of opentide binaries:
+1. Find the path of the `opentide` launcher:
 
 ```powershell
 Get-Command opentide -All
@@ -156,19 +167,19 @@ where.exe opentide
 
 opentide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
 
-2. check the path is on:
+2. Check that its directory is on `PATH`:
 
 ```powershell
 Get-ChildItem Env:PATH    # via the Env: drive
 ```
 
-3. use the binary
+3. Run it:
 
 ```powershell
 opentide --help
 ```
 
-in constrained environment you may create a PS function
+In a constrained environment you may define a PowerShell function instead:
 
 ```powershell
 function opentide { python -m opentide @args }

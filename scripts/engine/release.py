@@ -128,11 +128,11 @@ ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 LEGAL = ["LICENSE", "NOTICE"]
 SUMS = "SHA256SUMS"
 TAG = re.compile(r"v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
-# The targets the release builds its binaries for (engine-release-build.yml, job
-# `native`): one `opentide` and one `opentide-lsp` each, `.exe` on Windows. No musl
-# target: the maintainer decided against musl builds (docs/internal/publishing.md,
-# "The release train"), so neither the binaries, the wheels (no musllinux) nor the
-# npm packages ship one.
+# The targets the release builds its native packages for: the wheels and the
+# npm packages of @opentide/opentide (build-packages.yml, job `npm-native`). No
+# musl target: the maintainer decided against musl builds (docs/internal/
+# publishing.md, "The release train"), so neither the binaries, the wheels (no
+# musllinux) nor the npm packages ship one.
 TARGETS = [
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
@@ -141,12 +141,19 @@ TARGETS = [
     "x86_64-pc-windows-msvc",
     "aarch64-pc-windows-msvc",
 ]
+# The targets of the standalone binaries on the GitHub Release
+# (engine-release-build.yml, job `native`): one `opentide` and one
+# `opentide-lsp` each. No Windows target: a downloaded Windows executable
+# would need Authenticode signing, so Windows installs opentide from PyPI
+# (`uv tool install opentide`, pip, pipx) or npm, and runs the language server
+# as `opentide lsp start` (docs/internal/publishing.md, "The release train").
+BINARY_TARGETS = [target for target in TARGETS if "windows" not in target]
 # The standalone binaries, each built for every target: the command line
 # (`cargo install opentide --features cli`) and the language server.
 BINARIES = ["opentide", "opentide-lsp"]
 # Every release carries these besides the binaries and the versioned zips: the
-# licences, the WASI build, the installers of the binaries (scripts/install/),
-# and SHA256SUMS.
+# licences, the WASI build, the installer of the binaries (publishing/installers/,
+# Linux and macOS), and SHA256SUMS.
 FIXED_ASSETS = [
     "LICENSE",
     "NOTICE",
@@ -154,7 +161,6 @@ FIXED_ASSETS = [
     "WASI-LIBC-LICENSES.txt",
     "opentide-lsp-wasm32-wasip1.wasm",
     "opentide-installer.sh",
-    "opentide-installer.ps1",
     SUMS,
 ]
 # The CycloneDX SBOMs scripts/engine/sbom.py writes, one per artifact (#843):
@@ -232,19 +238,18 @@ def asset_version(tag: str) -> str:
 
 def binary_asset(binary: str, tag: str, target: str) -> str:
     """The asset name of `binary` built for `target`: `opentide-lsp-v0.24.0-<target>`."""
-    ext = ".exe" if "windows" in target else ""
-    return f"{binary}-{asset_version(tag)}-{target}{ext}"
+    return f"{binary}-{asset_version(tag)}-{target}"
 
 
 def expected_assets(tag: str) -> list[str]:
     """Every asset of the tag's GitHub Release, sorted: what language-server's
-    releases carried (but the musl binaries), with this tag's version in the
-    versioned names, the `opentide` binaries and their installers, and the
-    SBOMs."""
+    releases carried (but the musl and Windows binaries), with this tag's
+    version in the versioned names, the `opentide` binaries and their
+    installer, and the SBOMs."""
     v = asset_version(tag)
     names = [*FIXED_ASSETS, *SBOM_ASSETS, f"highlights-{v}.zip", f"opentide-wasm-web-{v}.zip"]
     for binary in BINARIES:
-        names.extend(binary_asset(binary, tag, target) for target in TARGETS)
+        names.extend(binary_asset(binary, tag, target) for target in BINARY_TARGETS)
     return sorted(names)
 
 

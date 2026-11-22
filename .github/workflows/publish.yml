@@ -8,8 +8,9 @@
 #   - the npm packages: @opentide/opentide, its native packages (napi-rs), the
 #     `opentide` alias, @opentide/lsp-client, @opentide/lsp-worker and @opentide/wasi-host, with
 #     provenance;
-#   - the GitHub Release: the `opentide` and `opentide-lsp` binaries for each
-#     target with their installers, the engine assets editors pin
+#   - the GitHub Release: the `opentide` and `opentide-lsp` binaries for Linux
+#     and macOS with their installer (no Windows binary: Windows installs from
+#     PyPI or npm), the engine assets editors pin
 #     (highlights-<v>.zip, the WebAssembly builds, THIRD-PARTY-LICENSES.html,
 #     NOTICE, WASI-LIBC-LICENSES.txt), the CycloneDX SBOMs and SHA256SUMS
 #     (engine-release-build.yml), with the notes the notes PR wrote.
@@ -271,13 +272,14 @@ jobs:
   # Everything this run ships, built and smoke-tested from the guard's commit
   # (release-build.yml, which ci.yml also runs on a release pull request and
   # the nightly): the crate packages and the licence scan; the GitHub
-  # Release's assets (engine-release-build.yml: the binaries, installers,
+  # Release's assets (engine-release-build.yml: the binaries, the installer,
   # WebAssembly builds, SBOMs, SHA256SUMS); the wheels (one cp310-abi3 per
   # platform, manylinux_2_28, no musllinux: the maintainer's decision), each
   # run on its own OS; the npm packages; the sdist; then one smoke matrix
-  # (scripts/build/smoke_release.sh): the installer and `npm install` from a
-  # local registry on each of the six platforms, a build from the sdist with
-  # the PyPI dist's shape, and `cargo install` from the crate packages. No
+  # (scripts/build/smoke_release.sh): the installer on Linux and macOS,
+  # `npm install` from a local registry on each of the six platforms, a build
+  # from the sdist with the PyPI dist's shape, and `cargo install` from the
+  # crate packages. No
   # token, no cache: a release builds from nothing.
   build:
     name: Build and smoke-test
