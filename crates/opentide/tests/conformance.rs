@@ -78,6 +78,9 @@ fn tenant_error(error: &opentide::Error) -> Json {
             detail: Some(detail),
             ..
         } => Json::Str(detail.clone()),
+        // A failed deploy carries the tenant's words too (#1751): the
+        // bindings hand them back, and so must the reference.
+        opentide::Error::Deploy(failed) => failed.detail.clone().map_or(Json::Null, Json::Str),
         _ => Json::Null,
     };
     object(vec![(
@@ -672,6 +675,22 @@ fn the_rust_runner_writes_every_document() {
         assert_eq!(
             read("deploy-soc-create"),
             serde_json::json!({"remote_id": "1900000000000000001", "operation": "create"})
+        );
+        // A refused deploy carries the tenant's words, as the bindings'
+        // documents do (#1751).
+        let missing = read("deploy-soc-update-missing");
+        assert!(
+            missing["error"]["detail"]
+                .as_str()
+                .is_some_and(|detail| detail.contains("Rule 1900000000000000099 not found")),
+            "{missing}"
+        );
+        let refused = read("deploy-lab-refused");
+        assert!(
+            refused["error"]["detail"]
+                .as_str()
+                .is_some_and(|detail| detail.contains("detection.condition is missing")),
+            "{refused}"
         );
     }
 }
