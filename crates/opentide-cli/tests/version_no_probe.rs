@@ -1,7 +1,9 @@
 //! `opentide --version` checks nothing (#1072): it prints the version and
 //! touches no file and no network on the way. Held by tracing the binary's
-//! file and network system calls with `strace` where it is installed (Linux;
-//! elsewhere the test says it was skipped).
+//! file and network system calls with Linux's `strace` where it is installed
+//! (elsewhere the test says it was skipped: Git for Windows ships a Cygwin
+//! `strace` of the same name, which traces Win32 debug events and takes none
+//! of these options).
 
 use std::process::Command;
 
@@ -24,6 +26,27 @@ fn runtime_path(path: &str) -> bool {
         // `check_may_shrink_heap`, glibc 2.39): the allocator on a `free`,
         // not a file opentide reads (seen on CI's runners, #1591).
         || path == "/proc/sys/vm/overcommit_memory"
+}
+
+/// The LLVM profile a coverage build (`-C instrument-coverage`, which
+/// `cargo llvm-cov` sets with `LLVM_PROFILE_FILE`) writes when it exits:
+/// the profiler runtime's file, not one opentide reads. The child's
+/// environment is cleared, so the runtime falls back to its default name,
+/// `default_<signature>_<n>_<pid>.profraw` in the working directory.
+fn profile_output(path: &str, instrumented: bool) -> bool {
+    instrumented
+        && std::path::Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("default_") && name.ends_with(".profraw"))
+}
+
+/// Whether `strace` is Linux's: its version line is `strace -- version N`.
+fn linux_strace() -> bool {
+    Command::new("strace").arg("-V").output().is_ok_and(|out| {
+        out.status.success()
+            && String::from_utf8_lossy(&out.stdout).starts_with("strace -- version")
+    })
 }
 
 /// Each call in `probes` with its stack, from `strace -k` (where strace has
@@ -77,11 +100,11 @@ fn stacks(binary: &str, flag: &str, dir: &std::path::Path, probes: &[&str]) -> S
 
 #[test]
 fn the_version_touches_no_file_and_no_network() {
-    let strace = Command::new("strace").arg("-V").output();
-    if !strace.is_ok_and(|out| out.status.success()) {
-        eprintln!("skipped: strace is not installed");
+    if !linux_strace() {
+        eprintln!("skipped: Linux's strace is not installed");
         return;
     }
+    let instrumented = std::env::var_os("LLVM_PROFILE_FILE").is_some();
     let binary = env!("CARGO_BIN_EXE_opentide-cli");
     let dir = tempfile::tempdir().unwrap();
     // A workspace a probe would find, and a home it could read.
@@ -130,7 +153,11 @@ fn the_version_touches_no_file_and_no_network() {
                 let network = ["socket(", "connect(", "bind(", "sendto(", "getcwd("]
                     .iter()
                     .any(|call| line.contains(call));
-                network || !(quoted.is_empty() || runtime_path(quoted) || quoted == binary)
+                network
+                    || !(quoted.is_empty()
+                        || runtime_path(quoted)
+                        || profile_output(quoted, instrumented)
+                        || quoted == binary)
             })
             .collect();
         assert!(
@@ -139,4 +166,18 @@ fn the_version_touches_no_file_and_no_network() {
             stacks(binary, flag, dir.path(), &probes)
         );
     }
+}
+
+#[test]
+fn only_an_instrumented_runs_default_profile_is_the_profilers() {
+    // The file a coverage run's `--version` opened (#1751).
+    let profile = "default_4551761045566378340_0_31847.profraw";
+    assert!(profile_output(profile, true));
+    assert!(profile_output(&format!("/tmp/x/{profile}"), true));
+    assert!(!profile_output(profile, false));
+    assert!(!profile_output(
+        ".opentide/configurations/default.toml",
+        true
+    ));
+    assert!(!profile_output("custom.profraw", true));
 }

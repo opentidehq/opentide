@@ -4211,10 +4211,20 @@ mod tests {
                 ran.stdout, ran.stderr
             );
             let said = format!("{}{}", ran.stdout, ran.stderr);
-            assert!(
-                said.contains(&format!("OPENTIDE_REPO_ROOT={shown} does not exist")),
-                "{line}: {said}"
-            );
+            let message = format!("OPENTIDE_REPO_ROOT={shown} does not exist");
+            // `--json` prints the message as a JSON string, where a Windows
+            // path's `\` is escaped: read the field rather than the bytes.
+            let printed = if line.starts_with("--json") {
+                let value: serde_json::Value = serde_json::from_str(&ran.stdout)
+                    .unwrap_or_else(|err| panic!("{line}: {err}: {said}"));
+                value["failure"]["message"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned()
+            } else {
+                said.clone()
+            };
+            assert!(printed.contains(&message), "{line}: {said}");
         }
         let json = dispatched("--json validate", &pairs, false);
         assert!(json.stdout.contains("\"code\":\"usage_invalid_value\""));
