@@ -1306,6 +1306,37 @@ mod validate {
         assert!(with_code(&other, "deployment_state_shape").is_empty());
     }
 
+    /// `Workspace::rule_shard_findings` is what `validate --file` files on
+    /// each selected rule for its own shard, placed the same way: the editor
+    /// adds it to an open rule when it keeps a full run's findings (#1750).
+    #[test]
+    fn rule_shard_findings_are_what_validate_file_files_on_the_rule() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "B"));
+        fs.write(format!("/ws/.opentide/states/deployment/{U1}.json"), "[]");
+        let narrowed = narrowed(&fs, None, &files(&["/ws/objects/rules/a.yaml"]));
+        let want: Vec<&Diagnostic> = all(&narrowed)
+            .into_iter()
+            .filter(|d| d.code.starts_with("deployment_state_"))
+            .collect();
+        assert_eq!(want.len(), 1, "{want:?}");
+        assert_eq!(
+            want[0].file_path.as_deref(),
+            Some(Path::new("/ws/objects/rules/a.yaml"))
+        );
+        let ws = open(&fs);
+        let got = ws.rule_shard_findings(&[
+            PathBuf::from("/ws/objects/rules/a.yaml"),
+            PathBuf::from("/ws/objects/rules/b.yaml"),
+        ]);
+        assert_eq!(got.iter().collect::<Vec<_>>(), want);
+        assert!(
+            ws.rule_shard_findings(&[PathBuf::from("/ws/objects/rules/b.yaml")])
+                .is_empty()
+        );
+    }
+
     /// A query analysis that reports one finding per object at
     /// `configurations.splunk.query`, and records how it was called.
     struct StubQueries {

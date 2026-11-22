@@ -1831,12 +1831,14 @@ fn has_state_code(codes: &[String]) -> bool {
         .any(|code| code.starts_with("deployment_state_"))
 }
 
-/// A rule's shard finding is on the shard alone, as `validate` files it on a
-/// full run: the runs narrowed to the files an edit or a watched event
-/// changed check the rule's shard too, and filed what they found on the rule,
-/// where it showed twice and stayed once the shard was fixed.
+/// A closed rule's shard finding is on the shard alone, as `validate` files
+/// it on a full run: the runs narrowed to the files an edit or a watched
+/// event changed check the rule's shard too, and filed what they found on the
+/// rule, where it stayed once the shard was fixed. An open rule shows it, as
+/// `validate --file` on the rule does (the editor's diagnostics are
+/// `validate`'s, #678), and clears it once the shard is fixed.
 #[test]
-fn a_rules_shard_finding_is_on_the_shard_only_and_clears_everywhere() {
+fn a_rules_shard_finding_is_on_the_shard_and_the_open_rule_and_clears_everywhere() {
     let scratch = workspace("workspace-shard-not-on-rule", true);
     let root = &scratch.0;
     let shards = root.join(".opentide/states/deployment");
@@ -1879,7 +1881,10 @@ fn a_rules_shard_finding_is_on_the_shard_only_and_clears_everywhere() {
                 "contentChanges": [{ "text": format!("{text}\n\n") }] }),
     );
     let codes = pulled(&mut lsp, &rule);
-    assert!(!has_state_code(&codes), "the open rule: {codes:?}");
+    assert!(
+        codes.iter().any(|code| code == "deployment_state_shape"),
+        "the open rule: {codes:?}"
+    );
     assert_eq!(shard_reports(&mut lsp, &[]).len(), 1);
 
     // Fixed: gone from the shard, and on neither rule nor shard after.
@@ -1889,6 +1894,69 @@ fn a_rules_shard_finding_is_on_the_shard_only_and_clears_everywhere() {
         json!({ "changes": [{ "uri": file_uri(&shard), "type": 2 }] }),
     );
     assert!(shard_reports(&mut lsp, &[]).is_empty());
+    let codes = pulled(&mut lsp, &rule);
+    assert!(!has_state_code(&codes), "the open rule: {codes:?}");
+}
+
+/// An open rule whose shard is broken shows what `validate --file` on the
+/// rule reports, where it reports it (#1750): the shard's finding on the
+/// rule, over the first line. The language server's parity with `validate`
+/// (`cargo xtask lsp parity`, `deployment-state-*`) failed on it when the
+/// server dropped it. Before a workspace pull the open rule is checked on its
+/// own; after one it is read from the findings of every object, a full run's,
+/// which have the finding on the shard: the same finding is added.
+#[test]
+fn an_open_rule_shows_its_shard_finding_as_validate_file_does() {
+    let scratch = workspace("workspace-shard-open-rule", true);
+    let root = &scratch.0;
+    let shards = root.join(".opentide/states/deployment");
+    std::fs::create_dir_all(&shards).unwrap();
+    let shard = shards.join(format!("{SHARD_UUID}.json"));
+    std::fs::write(&shard, "[]").unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
+    let rule_path = root.join("objects/rules/rule-1.0.yaml");
+    let rule = file_uri(&rule_path);
+    let text = std::fs::read_to_string(&rule_path).unwrap();
+    open(&mut lsp, &rule, "opentide-yaml", &text);
+    let first = text.lines().next().unwrap_or("");
+    let over_the_first_line = json!({ "start": { "line": 0, "character": 0 },
+        "end": { "line": 0, "character": first.encode_utf16().count() } });
+    let state_of = |lsp: &mut Lsp| -> Vec<Value> {
+        let report = lsp.request(
+            "textDocument/diagnostic",
+            json!({ "textDocument": { "uri": rule } }),
+        );
+        report["result"]["items"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{report}"))
+            .iter()
+            .filter(|item| item["code"] == "deployment_state_shape")
+            .cloned()
+            .collect()
+    };
+    let state = state_of(&mut lsp);
+    assert_eq!(state.len(), 1, "{state:?}");
+    assert_eq!(state[0]["severity"], 1);
+    assert_eq!(state[0]["range"], over_the_first_line, "{state:?}");
+
+    // The findings of every object made, then the rule typed in.
+    assert_eq!(shard_reports(&mut lsp, &[]).len(), 1);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": rule, "version": 2 },
+                "contentChanges": [{ "text": format!("{text}\n") }] }),
+    );
+    let state = state_of(&mut lsp);
+    assert_eq!(state.len(), 1, "{state:?}");
+    assert_eq!(state[0]["range"], over_the_first_line, "{state:?}");
+
+    // Fixed on disk: the open rule clears.
+    std::fs::write(&shard, usable_shard()).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&shard), "type": 2 }] }),
+    );
     let codes = pulled(&mut lsp, &rule);
     assert!(!has_state_code(&codes), "the open rule: {codes:?}");
 }
