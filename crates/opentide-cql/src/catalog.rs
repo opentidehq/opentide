@@ -7,101 +7,11 @@
 //! LogScale is schemaless, so fields are hover and completion data, never a
 //! reason for a finding.
 
-use opentide_core::{catalog, suggest};
-use serde::Deserialize;
+use opentide_core::suggest;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const FUNCTIONS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/cql/functions.toml"
-));
-const EVENTS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/cql/events.toml"
-));
-const FIELDS_TOML: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/data/catalogs/cql/fields.toml"
-));
-
-/// One CQL function (`groupBy`, `array:filter`, `ioc:lookup`).
-#[derive(Debug, Clone, Deserialize)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the catalog's columns: one flag per fact of CrowdStrike's function reference"
-)]
-pub struct Function {
-    pub name: String,
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    #[serde(default)]
-    pub category: Vec<String>,
-    #[serde(default)]
-    pub kind: Vec<String>,
-    pub aggregate: bool,
-    pub signature: Option<String>,
-    pub docs: String,
-    pub citation: String,
-    #[serde(default)]
-    pub contexts: Vec<String>,
-    #[serde(default)]
-    pub incompatible: Vec<String>,
-    pub since: Option<String>,
-    #[serde(default)]
-    pub deprecated: bool,
-    pub deprecated_note: Option<String>,
-    #[serde(default)]
-    pub removed: bool,
-    pub removed_in: Option<String>,
-    pub replacement: Option<String>,
-    #[serde(default)]
-    pub experimental: bool,
-    pub feature_flag: Option<String>,
-    #[serde(default)]
-    pub ngsiem: bool,
-    /// `false` only for a Next-Gen SIEM-only function (`remoteTable`).
-    pub logscale: Option<bool>,
-    #[serde(default)]
-    pub unavailable: bool,
-    #[serde(default)]
-    pub parameters: Vec<Parameter>,
-}
-
-/// One parameter of a CQL function.
-#[derive(Debug, Clone, Deserialize)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the catalog's columns: one flag per fact of CrowdStrike's parameter tables"
-)]
-pub struct Parameter {
-    pub name: String,
-    /// The catalog's type vocabulary (`field`, `string`, `integer`, `enum`, ...).
-    #[serde(rename = "type")]
-    pub ty: String,
-    pub required: bool,
-    /// The parameter whose name may be left out (at most one per function).
-    pub unnamed: bool,
-    /// Accepts an array `[a, b]`.
-    pub multi: bool,
-    /// Takes a `{ ... }` subquery or a function call.
-    pub query: bool,
-    pub default: Option<String>,
-    #[serde(default)]
-    pub values: Vec<String>,
-    /// `values` are keywords and any number is also valid (`limit=max`).
-    #[serde(default)]
-    pub values_open: bool,
-    #[serde(default)]
-    pub deprecated_values: Vec<String>,
-    pub min: Option<i64>,
-    pub max: Option<i64>,
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    #[serde(default)]
-    pub deprecated: bool,
-    pub deprecated_since: Option<String>,
-}
+pub use crate::catalog_model::{Event, Field, Function, Parameter};
 
 impl Parameter {
     /// Whether `name` (case-insensitive) names this parameter or an alias.
@@ -147,69 +57,6 @@ impl Function {
     }
 }
 
-/// A Falcon sensor event (`#event_simpleName` value).
-#[derive(Debug, Clone, Deserialize)]
-pub struct Event {
-    pub name: String,
-    pub category: Option<String>,
-    #[serde(default)]
-    pub platforms: Vec<String>,
-    #[serde(default)]
-    pub fields: Vec<String>,
-    #[serde(default)]
-    pub sources: Vec<String>,
-    #[serde(default)]
-    pub mentions: i64,
-}
-
-/// A LogScale built-in, Falcon, or CPS (ECS-based) field or tag.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Field {
-    pub name: String,
-    /// `logscale`, `falcon` or `cps`.
-    pub layer: String,
-    /// `metadata` (`@...`), `tag` (`#...`), `field` or `namespace`.
-    pub kind: String,
-    #[serde(rename = "type")]
-    pub ty: String,
-    pub scope: Option<String>,
-    pub docs: Option<String>,
-    #[serde(default)]
-    pub ecs: bool,
-    #[serde(default)]
-    pub values: Vec<String>,
-    #[serde(default)]
-    pub sources: Vec<String>,
-}
-
-#[cfg_attr(test, derive(Debug, Deserialize))]
-struct FunctionsFile {
-    functions: Vec<Function>,
-}
-
-#[cfg_attr(test, derive(Debug, Deserialize))]
-struct EventsFile {
-    #[cfg_attr(test, serde(default))]
-    platforms: Vec<String>,
-    #[cfg_attr(test, serde(default))]
-    common_fields: Vec<String>,
-    events: Vec<Event>,
-}
-
-/// `events.toml`'s preamble.
-#[derive(Deserialize)]
-struct EventsPreamble {
-    #[serde(default)]
-    platforms: Vec<String>,
-    #[serde(default)]
-    common_fields: Vec<String>,
-}
-
-#[cfg_attr(test, derive(Debug, Deserialize))]
-struct FieldsFile {
-    fields: Vec<Field>,
-}
-
 /// Every CQL catalog, indexed.
 #[derive(Debug)]
 pub struct Catalog {
@@ -225,31 +72,19 @@ pub struct Catalog {
     by_field: HashMap<String, usize>,
 }
 
-/// The CQL catalog files compiled in, read item by item (ADR 0013).
-fn files() -> (FunctionsFile, EventsFile, FieldsFile) {
-    use catalog::{array_items, compiled_in, preamble};
-    let functions = FunctionsFile {
-        functions: compiled_in(
-            "data/catalogs/cql/functions.toml",
-            array_items(FUNCTIONS_TOML, "functions"),
-        ),
-    };
-    let first: EventsPreamble = compiled_in("data/catalogs/cql/events.toml", preamble(EVENTS_TOML));
-    let events = EventsFile {
-        platforms: first.platforms,
-        common_fields: first.common_fields,
-        events: compiled_in(
-            "data/catalogs/cql/events.toml",
-            array_items(EVENTS_TOML, "events"),
-        ),
-    };
-    let fields = FieldsFile {
-        fields: compiled_in(
-            "data/catalogs/cql/fields.toml",
-            array_items(FIELDS_TOML, "fields"),
-        ),
-    };
-    (functions, events, fields)
+/// What `build.rs` stores: functions, events, the `event_platform` values, the common fields, and
+/// fields, parsed once at build time (#1743).
+type Model = (
+    Vec<Function>,
+    Vec<Event>,
+    Vec<String>,
+    Vec<String>,
+    Vec<Field>,
+);
+
+/// The CQL catalogs, pre-parsed by `build.rs` and decoded on first use.
+fn model() -> Model {
+    opentide_dataset::compiled_value("cql-catalog", opentide_dataset::blob!("cql-catalog"))
 }
 
 impl Catalog {
@@ -257,32 +92,30 @@ impl Catalog {
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
-            let (functions, events, fields) = files();
+            let (functions, events, platforms, common_fields, fields) = model();
             let mut by_function = HashMap::new();
-            for (i, f) in functions.functions.iter().enumerate() {
+            for (i, f) in functions.iter().enumerate() {
                 by_function.insert(f.name.to_ascii_lowercase(), i);
                 for alias in &f.aliases {
                     by_function.insert(alias.to_ascii_lowercase(), i);
                 }
             }
             let by_event = events
-                .events
                 .iter()
                 .enumerate()
                 .map(|(i, e)| (e.name.clone(), i))
                 .collect();
             let by_field = fields
-                .fields
                 .iter()
                 .enumerate()
                 .map(|(i, f)| (f.name.clone(), i))
                 .collect();
             Catalog {
-                functions: functions.functions,
-                events: events.events,
-                fields: fields.fields,
-                platforms: events.platforms,
-                common_fields: events.common_fields,
+                functions,
+                events,
+                fields,
+                platforms,
+                common_fields,
                 by_function,
                 by_event,
                 by_field,
@@ -344,19 +177,53 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
 
-    /// ADR 0013: the files read item by item are what `toml` reads from the
-    /// whole files, field for field.
+    #[derive(Debug, Deserialize)]
+    struct FunctionsFile {
+        functions: Vec<Function>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct EventsFile {
+        #[serde(default)]
+        platforms: Vec<String>,
+        #[serde(default)]
+        common_fields: Vec<String>,
+        events: Vec<Event>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FieldsFile {
+        fields: Vec<Field>,
+    }
+
+    fn functions_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/cql/functions.toml")
+    }
+    fn events_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/cql/events.toml")
+    }
+    fn fields_toml() -> &'static str {
+        opentide_dataset::text!("data/catalogs/cql/fields.toml")
+    }
+
+    /// What the build stored is the catalog files, parsed whole, field for field (#1743).
     #[test]
-    fn the_catalogs_read_item_by_item_are_the_whole_files() {
-        let (functions, events, fields) = files();
-        let whole_functions: FunctionsFile = toml::from_str(FUNCTIONS_TOML).unwrap();
-        let whole_events: EventsFile = toml::from_str(EVENTS_TOML).unwrap();
-        let whole_fields: FieldsFile = toml::from_str(FIELDS_TOML).unwrap();
-        assert_eq!(format!("{functions:?}"), format!("{whole_functions:?}"));
-        assert_eq!(format!("{events:?}"), format!("{whole_events:?}"));
-        assert_eq!(format!("{fields:?}"), format!("{whole_fields:?}"));
-        assert!(functions.functions.len() > 100 && events.events.len() > 100);
+    fn the_stored_catalogs_are_the_whole_files() {
+        let (functions, events, platforms, common_fields, fields) = model();
+        let whole_functions: FunctionsFile = toml::from_str(functions_toml()).unwrap();
+        let whole_events: EventsFile = toml::from_str(events_toml()).unwrap();
+        let whole_fields: FieldsFile = toml::from_str(fields_toml()).unwrap();
+        assert_eq!(
+            format!("{functions:?}"),
+            format!("{:?}", whole_functions.functions)
+        );
+        assert_eq!(format!("{events:?}"), format!("{:?}", whole_events.events));
+        assert_eq!(platforms, whole_events.platforms);
+        assert_eq!(common_fields, whole_events.common_fields);
+        assert_eq!(format!("{fields:?}"), format!("{:?}", whole_fields.fields));
+        assert!(functions.len() > 100 && events.len() > 100);
     }
 
     #[test]

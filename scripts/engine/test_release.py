@@ -946,7 +946,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         assert needs is not None
         self.assertEqual(
             set(needs.group(1).split(", ")) - {"release-versions"},
-            set(built) - {"release-versions", "smoke"},
+            set(built) - {"release-versions", "smoke", "av-gate-packages"},
+        )
+        # The antivirus gate scans the same builds, and fails the workflow (so `build`) itself.
+        gate = re.search(r"^    needs: \[(.*)\]$", built["av-gate-packages"], re.MULTILINE)
+        assert gate is not None
+        self.assertEqual(
+            set(gate.group(1).split(", ")) - {"release-versions"},
+            {"packages", "sdist", "crate-packages"},
         )
         # Each of the six platforms, the sdist and the crate packages.
         kinds = re.findall(r"kind: (\w+) \}", built["smoke"])

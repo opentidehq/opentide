@@ -28,7 +28,8 @@ pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
 # The facade, and only the facade (ADR 0005, UC-5.1 #836): this crate wraps it
 # and nothing else from the workspace.
 #   `cli`        the command line the `opentide` console script runs in process
-#                (`cli_main`, from `opentide._cli`), and `opentide::cli::main_with_version`.
+#                (`cli_main`, from `opentide._cli`), and `opentide::cli::main_with_version`,
+#                with its terminal UI and the `setup` wizard's questions on every OS.
 #   `analysis`   `opentide.analysis`: check one query and highlight a text.
 #   `python`     the Tide models as Python classes, opentide._native.models (UC-1.9, #815).
 #   `connectors` the tenant operations the SDK (`opentide._native.sdk`,

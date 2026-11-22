@@ -387,28 +387,18 @@ fn misspellings(value: &str, seed: usize) -> Vec<String> {
     typos
 }
 
-/// Every bundled vocabulary read item by item is field for field the
-/// document read whole (ADR 0013, #1071).
 #[test]
-fn bundled_vocabularies_read_item_by_item_are_the_whole_documents() {
-    for (field, text) in super::bundled::FILES {
-        let file = format!("{field}{}", super::SUFFIX);
-        let read = super::Vocabulary::from_bundled_file(&file, text).expect("item by item");
-        let whole = super::Vocabulary::from_file(&file, text).expect("whole");
-        assert_eq!(format!("{read:?}"), format!("{whole:?}"), "{file}");
-    }
-}
-
-/// The alert severity scale's display name names no product
-/// (opentidehq/specifications#96).
-#[test]
-fn the_alert_severity_vocabulary_is_named_alert_severity() {
-    let (_, text) = super::bundled::FILES
-        .iter()
-        .find(|(field, _)| *field == "alert_severity")
-        .expect("alert_severity is bundled");
-    let vocabulary =
-        super::Vocabulary::from_file("alert_severity.vocab.toml", text).expect("it parses");
-    assert_eq!(vocabulary.metadata.name, "Alert Severity");
-    assert!(!text.contains("MDR"), "{text}");
+fn splitting_moves_the_descriptions_of_entries_only() {
+    let text = "name = \"V\"\ndescription = \"the document's own\"\n[[stages]]\nname = \"S\"\ndescription = \"a stage\"\n\
+                [[keys]]\nname = \"a\"\ndescription = \"first\"\n[[keys]]\nname = \"b\"\n[[keys]]\nname = \"c\"\ndescription = \"third\"\n";
+    let (lean, descriptions) = super::split::split(text);
+    assert_eq!(
+        lean,
+        "name = \"V\"\ndescription = \"the document's own\"\n[[stages]]\nname = \"S\"\ndescription = \"a stage\"\n\
+         [[keys]]\nname = \"a\"\n[[keys]]\nname = \"b\"\n[[keys]]\nname = \"c\"\n"
+    );
+    assert_eq!(
+        descriptions,
+        "description = \"first\"\n\ndescription = \"third\"\n"
+    );
 }

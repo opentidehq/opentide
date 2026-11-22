@@ -32,6 +32,7 @@
 )]
 mod analysis;
 pub mod catalog;
+mod catalog_model;
 pub mod editor;
 mod lexer;
 mod parser;

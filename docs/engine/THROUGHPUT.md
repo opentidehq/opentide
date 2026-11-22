@@ -57,7 +57,7 @@ How to read the table:
 
 ## Instructions: the gate
 
-`cargo xtask throughput --check` builds the same bench with its symbols kept, then counts each
+`cargo xtask throughput --check` also counts the first use of each embedded dataset, in the `datasets` bench (`crates/opentide-analysis/benches/datasets.rs`, held under `[datasets]`: [docs/internal/datasets.md](../internal/datasets.md)). It builds the same bench with its symbols kept, then counts each
 language's instructions with callgrind (valgrind required). For every language, mode and input set
 it runs the bench's `--count`: two warm-up passes, then one pass inside a function of its own,
 whose instructions callgrind alone counts (`--toggle-collect`). Each pass is counted three times (`--runs`), and

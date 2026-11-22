@@ -117,22 +117,28 @@ fn run(args: &ThroughputArgs) -> Result<bool> {
 /// Every pass of the languages asked for, counted `args.runs` times: the
 /// lowest for a check, the highest for a record.
 fn counts(args: &ThroughputArgs) -> Result<Vec<Count>> {
-    let binary = build()?;
+    let binary = build("throughput")?;
     let listed = output(Command::new(&binary).arg("--list"))?;
     let listed: Vec<&str> = listed.lines().collect();
-    if let Some(unknown) = args
-        .languages
-        .iter()
-        .find(|l| !listed.contains(&l.as_str()))
-    {
+    // `datasets` is not a language: the first use of each embedded dataset,
+    // counted by the `datasets` bench (below).
+    let wanted: Vec<&String> = args.languages.iter().filter(|l| *l != DATASETS).collect();
+    let datasets_wanted = args.languages.is_empty() || wanted.len() != args.languages.len();
+    if let Some(unknown) = wanted.iter().find(|l| !listed.contains(&l.as_str())) {
         bail!(
-            "unknown language {unknown:?}: the bench lists {}",
+            "unknown language {unknown:?}: the bench lists {}, and `{DATASETS}`",
             listed.join(", ")
         );
     }
     let languages: Vec<&str> = listed
         .into_iter()
-        .filter(|l| args.languages.is_empty() || args.languages.iter().any(|w| w == l))
+        .filter(|l| {
+            if args.languages.is_empty() {
+                true
+            } else {
+                wanted.iter().any(|w| w == l)
+            }
+        })
         .collect();
     let cases: Vec<(&str, &str, &str, usize)> = languages
         .iter()
@@ -157,10 +163,15 @@ fn counts(args: &ThroughputArgs) -> Result<Vec<Count>> {
     })
     .into_iter()
     .collect::<Result<Vec<_>>>()?;
+    let dataset_runs = if datasets_wanted {
+        dataset_counts(args, profiles)?
+    } else {
+        Vec::new()
+    };
     // Each pass's runs (its instructions, then its allocations, a run after
     // the other): the lowest for a check, the highest for a record.
     let mut counts: Vec<Count> = Vec::new();
-    for run in runs.into_iter().flatten() {
+    for run in runs.into_iter().flatten().chain(dataset_runs) {
         match counts
             .iter_mut()
             .find(|c| c.language == run.language && c.key == run.key)
@@ -233,7 +244,7 @@ fn check(args: &ThroughputArgs, counts: &[Count], environment: &str) -> Result<b
             Some(b) => (b.to_string(), judge(&c.key, c.instructions, b)),
         };
         #[expect(clippy::cast_precision_loss, reason = "a ratio for the report")]
-        let per_byte = if c.key.ends_with("_allocations") {
+        let per_byte = if c.key.ends_with("_allocations") || c.language == DATASETS {
             String::new()
         } else {
             format!("{:.0}", c.instructions as f64 / c.bytes.max(1) as f64)
@@ -387,7 +398,7 @@ fn change(key: &str, count: u64, budget: u64) -> String {
 
 /// Builds the bench binary, symbols kept (callgrind names `counted` by them),
 /// and returns its path.
-fn build() -> Result<PathBuf> {
+fn build(bench: &str) -> Result<PathBuf> {
     let text = output(
         Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
             .args([
@@ -396,17 +407,82 @@ fn build() -> Result<PathBuf> {
                 "--locked",
                 "-p",
                 "opentide-analysis",
+                "--features",
+                "queries",
                 "--bench",
-                "throughput",
+                bench,
                 "--message-format=json",
             ])
             .env("CARGO_PROFILE_BENCH_STRIP", "none"),
     )?;
     text.lines()
         .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-        .filter(|v| v["target"]["name"] == "throughput")
+        .filter(|v| v["target"]["name"] == bench)
         .find_map(|v| v["executable"].as_str().map(PathBuf::from))
-        .context("cargo built no `throughput` bench binary")
+        .with_context(|| format!("cargo built no `{bench}` bench binary"))
+}
+
+/// The budgets' table for the first use of each embedded dataset (#1743), and
+/// the name `--language` gives it.
+pub const DATASETS: &str = "datasets";
+
+/// Every case of the `datasets` bench, counted `args.runs` times: the first
+/// use of a dataset in a process, its decode (and, for the vocabularies the
+/// editor reads, the parse a build used to leave to run time) included.
+fn dataset_counts(args: &ThroughputArgs, scratch: &Path) -> Result<Vec<Count>> {
+    let binary = build(DATASETS)?;
+    let listed = output(Command::new(&binary).arg("--list"))?;
+    let cases: Vec<(&str, usize)> = listed
+        .lines()
+        .flat_map(|case| (0..args.runs).map(move |run| (case, run)))
+        .collect();
+    let runs = crate::parallel::in_order(&cases, |&(case, run)| {
+        count_dataset(&binary, scratch, case, run)
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>>>()?;
+    Ok(runs.into_iter().flatten().collect())
+}
+
+/// One dataset's first use under callgrind.
+fn count_dataset(binary: &Path, scratch: &Path, case: &str, run: usize) -> Result<[Count; 2]> {
+    let out = scratch.join(format!("{DATASETS}.{case}.{run}.callgrind"));
+    output(
+        Command::new("valgrind")
+            .arg("--tool=callgrind")
+            .arg("--toggle-collect=datasets::counted")
+            .args(["--dump-instr=yes", "--dump-line=no", "--compress-pos=no"])
+            .arg(format!("--callgrind-out-file={}", out.display()))
+            .arg(binary)
+            .args(["--count", case]),
+    )
+    .with_context(|| format!("valgrind on dataset {case} (is valgrind installed?)"))?;
+    let profile =
+        std::fs::read_to_string(&out).with_context(|| format!("reading {}", out.display()))?;
+    let Own {
+        instructions,
+        allocations,
+    } = own_cost(&profile, binary);
+    if instructions == 0 || allocations == 0 {
+        bail!(
+            "dataset {case}: callgrind counted no instruction or allocation of the bench in \
+             `datasets::counted` (were its symbols stripped?)"
+        );
+    }
+    Ok([
+        Count {
+            language: DATASETS.to_owned(),
+            key: case.to_owned(),
+            instructions,
+            bytes: 0,
+        },
+        Count {
+            language: DATASETS.to_owned(),
+            key: format!("{case}_allocations"),
+            instructions: allocations,
+            bytes: 0,
+        },
+    ])
 }
 
 /// One counted pass under callgrind (the bench stops on an empty input set).

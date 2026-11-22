@@ -9,6 +9,7 @@ resolver = "2"
 exclude = ["fuzz", "vendor"]
 members = [
     "crates/opentide-core",
+    "crates/opentide-dataset",
     "crates/opentide-highlight",
     "crates/opentide-parse",
     "crates/opentide-kql",
@@ -51,6 +52,7 @@ authors = ["opentide"]
 
 [workspace.dependencies]
 opentide-core = { path = "crates/opentide-core", version = "=1.0.0" }
+opentide-dataset = { path = "crates/opentide-dataset", version = "=1.0.0" }
 opentide-highlight = { path = "crates/opentide-highlight", version = "=1.0.0" }
 opentide-parse = { path = "crates/opentide-parse", version = "=1.0.0" }
 opentide-kql = { path = "crates/opentide-kql", version = "=1.0.0" }

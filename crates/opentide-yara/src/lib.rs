@@ -31,6 +31,9 @@
 )]
 mod atoms;
 pub mod catalog;
+mod catalog_model;
+
+pub use catalog_model::YaraXSyntax;
 mod check;
 mod cst;
 pub mod editor;
@@ -47,20 +50,6 @@ use opentide_core::{Diagnostic, LineIndex, Range, Severity, codes};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use yara_x_parser::Parser;
 use yara_x_parser::ast::AST;
-
-/// Whether the platform takes syntax only YARA-X has (`with`, digit
-/// separators, float meta values, `\"\"\"` strings, booleans in `of` tuples, hex or octal
-/// jump bounds, `.len()`). While `Refused`, using it is the error
-/// `yara_x_only_syntax`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum YaraXSyntax {
-    /// YARA-X's syntax is the language: a raw `.yar` file.
-    #[default]
-    Allowed,
-    /// The platform's engine is not known to take it: the profile's start.
-    Refused,
-}
 
 /// A platform's YARA profile (yara-1.0 "Platform profiles").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

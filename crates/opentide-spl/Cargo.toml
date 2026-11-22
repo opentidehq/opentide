@@ -14,6 +14,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+opentide-dataset.workspace = true
 opentide-core.workspace = true
 foldhash.workspace = true
 opentide-highlight.workspace = true
@@ -26,3 +27,9 @@ serde.workspace = true
 [dev-dependencies]
 toml.workspace = true
 insta.workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+# The catalogs are parsed once at build time (`build.rs`, #1743).
+serde.workspace = true
+toml.workspace = true
