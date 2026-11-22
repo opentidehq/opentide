@@ -1430,7 +1430,16 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
             // the schema and field its `data` names (`completionItem/resolve`):
             // for a client that resolves them, the list holds labels, a few
             // hundred of them for the ATT&CK techniques.
-            let resolvable = field.is_some() && session.caps.resolve_completion_documentation;
+            // Only where resolving gives back exactly what the list would
+            // say: a value that is not a field of the Tide models (an ECS
+            // value, a Bitdefender target, `configurations.elastic.type`,
+            // whose documentation is made elsewhere) keeps its own.
+            let resolvable = session.caps.resolve_completion_documentation
+                && field.is_some_and(|(schema, path)| {
+                    opentide_highlight::tide_field_at(schema, path).is_some()
+                        && resolved_documentation(&c.label, "enum", &format!("{schema} {path}"))
+                            == c.documentation
+                });
             let detail_resolved = resolvable && session.caps.resolve_completion_detail;
             lsp::CompletionItem {
                 kind: Some(completion_kind(&c.kind)),
@@ -1521,15 +1530,21 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         Some(lsp::CompletionItemKind::REFERENCE) => "reference",
         _ => "property",
     };
-    let mut engine = opentide_core::CompletionItem::new(item.label.clone(), kind);
-    let field_detail = match (&data.schema, &data.field_path) {
-        (Some(schema), Some(path)) => Some(format!("{schema} {path}")),
-        _ => item.detail.clone(),
+    // An item that names a field of the Tide models is documented from that
+    // field and no other; one that names a field the models do not have is
+    // left as the list made it.
+    let named = data.schema.as_deref().zip(data.field_path.as_deref());
+    let resolved = match named {
+        Some((schema, path)) if opentide_highlight::tide_field_at(schema, path).is_none() => {
+            let mut left = opentide_core::CompletionItem::new(item.label.clone(), kind);
+            if let Some(detail) = item.detail.clone() {
+                left = left.with_detail(detail);
+            }
+            left
+        }
+        Some((schema, path)) => resolve_item(&item.label, kind, Some(format!("{schema} {path}"))),
+        None => resolve_item(&item.label, kind, item.detail.clone()),
     };
-    if let Some(detail) = field_detail {
-        engine = engine.with_detail(detail);
-    }
-    let resolved = opentide_tide::resolve_completion(engine);
     if item.documentation.is_none()
         && let Some(docs) = resolved.documentation
     {
@@ -1542,6 +1557,21 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         item.detail = resolved.detail;
     }
     item
+}
+
+/// What `completionItem/resolve` makes of an item: the engine's own resolve,
+/// from the label and, where the item names a field, that field.
+fn resolve_item(label: &str, kind: &str, detail: Option<String>) -> opentide_core::CompletionItem {
+    let mut engine = opentide_core::CompletionItem::new(label.to_string(), kind);
+    if let Some(detail) = detail {
+        engine = engine.with_detail(detail);
+    }
+    opentide_tide::resolve_completion(engine)
+}
+
+/// The documentation resolving the item of `label` and `detail` gives.
+fn resolved_documentation(label: &str, kind: &str, detail: &str) -> Option<String> {
+    resolve_item(label, kind, Some(detail.to_string())).documentation
 }
 
 fn handle_signature_help(

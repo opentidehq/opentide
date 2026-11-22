@@ -1816,6 +1816,142 @@ fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
     }
 }
 
+/// Each item's `(label, documentation, detail)`.
+type Items = Vec<(String, Value, Value)>;
+
+/// What a client that resolves documentation makes of each item at `line` and
+/// `character` of `text` (the item, then resolved as the client sends it back)
+/// is what a client that does not gets: `(label, documentation, detail)`.
+fn resolved_and_plain(
+    language: &str,
+    uri: &str,
+    text: &str,
+    line: usize,
+    character: usize,
+) -> (Items, Items) {
+    let complete = |capabilities: Value| {
+        let (mut lsp, _) = start(json!({ "capabilities": capabilities }));
+        open(&mut lsp, uri, language, text);
+        let list = lsp.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        );
+        let result = list["result"].clone();
+        let defaults = result["itemDefaults"].clone();
+        let items = result
+            .as_array()
+            .or_else(|| result["items"].as_array())
+            .unwrap_or_else(|| panic!("{result}"))
+            .clone();
+        (lsp, items, defaults)
+    };
+    let (_plain_lsp, plain, _) = complete(json!({}));
+    let (mut lsp, items, defaults) = complete(json!({ "textDocument": { "completion": {
+        "completionItem": { "resolveSupport": { "properties": ["documentation", "detail"] } },
+        "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
+    } } }));
+    let resolved = items
+        .iter()
+        .map(|item| {
+            let mut sent = item.clone();
+            if sent.get("data").is_none() {
+                sent["data"] = defaults["data"].clone();
+            }
+            let answer = lsp.request("completionItem/resolve", sent);
+            let result = &answer["result"];
+            (
+                result["label"].as_str().unwrap().to_string(),
+                result["documentation"].clone(),
+                result["detail"].clone(),
+            )
+        })
+        .collect();
+    let plain = plain
+        .iter()
+        .map(|item| {
+            (
+                item["label"].as_str().unwrap().to_string(),
+                item["documentation"].clone(),
+                item["detail"].clone(),
+            )
+        })
+        .collect();
+    (resolved, plain)
+}
+
+/// A value that is not a field of the Tide models (an ECS value, a Bitdefender
+/// target, `configurations.elastic.type`) keeps the documentation and the
+/// detail the list gave it when the client resolves them: resolving gives it
+/// no other field's.
+#[test]
+fn values_outside_the_tide_models_keep_their_documentation_when_resolved() {
+    let head = "name: GravityZone rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000098
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A GravityZone rule.
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+";
+    let bitdefender = format!("{head}    detection:\n      target: reg\n");
+    let elastic = "name: Elastic rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: rule::1.0
+  version: 1
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: ";
+    let kuery = "event.category : ";
+    let sites: [(&str, &str, String, usize, usize); 3] = [
+        (
+            "opentide-yaml",
+            "file:///tmp/objects/rules/bitdefender.yaml",
+            bitdefender.clone(),
+            bitdefender.lines().count() - 1,
+            "      target: reg".len(),
+        ),
+        (
+            "opentide-yaml",
+            "file:///tmp/objects/rules/elastic.yaml",
+            elastic.to_string(),
+            elastic.lines().count() - 1,
+            "    type: ".len(),
+        ),
+        (
+            "kuery",
+            "file:///tmp/ecs.kuery",
+            kuery.to_string(),
+            0,
+            kuery.len(),
+        ),
+    ];
+    for (language, uri, text, line, character) in sites {
+        let (resolved, plain) = resolved_and_plain(language, uri, &text, line, character);
+        assert!(!plain.is_empty(), "no completion at {uri}");
+        assert!(
+            plain.iter().any(|(_, docs, _)| !docs.is_null()),
+            "nothing is documented at {uri}: {plain:?}"
+        );
+        assert_eq!(resolved, plain, "resolving changed an item at {uri}");
+    }
+}
+
 /// The watchers in force after `requests`, in the order the server sent them:
 /// each registration's, less those unregistered.
 fn watchers_in_force(requests: &[Value]) -> Vec<(String, String)> {

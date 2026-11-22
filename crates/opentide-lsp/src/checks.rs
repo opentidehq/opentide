@@ -618,8 +618,12 @@ impl RootChecks {
             Some(Kept { found, .. }) if self.dirty.is_empty() => found,
             Some(Kept { mut found, .. }) => {
                 let map = Arc::make_mut(&mut found);
-                for file in &self.dirty {
-                    map.remove(file);
+                // The findings are kept by the file's resolved path (a
+                // symbolic link's target), the files that changed are named as
+                // the index names them.
+                let keys: Vec<PathBuf> = self.dirty.iter().map(|file| self.resolve(file)).collect();
+                for key in &keys {
+                    map.remove(key);
                 }
                 let present: std::collections::HashSet<&Path> = workspace
                     .index()
@@ -642,10 +646,17 @@ impl RootChecks {
                     .collect();
                 let _span = crate::timing::Span::new("validate: the files that changed");
                 self.revision += 1;
-                for file in &self.dirty {
-                    self.stamps.insert(file.clone(), self.revision);
+                for key in &keys {
+                    self.stamps.insert(key.clone(), self.revision);
                 }
-                map.extend(validate_changed(workspace, &files));
+                // Only the files that changed take what the narrowed run
+                // found: it may put a finding on another file (a duplicate's
+                // later file), whose own entry is the kept one.
+                map.extend(
+                    validate_changed(workspace, &files)
+                        .into_iter()
+                        .filter(|(key, _)| keys.contains(key)),
+                );
                 self.validations.1 += 1;
                 found
             }
@@ -1093,6 +1104,12 @@ mod tests {
         // finding on each, whichever is edited.
         let second = root.join("objects/rules/rule-2.yaml");
         let third = root.join("objects/rules/rule-3.yaml");
+        let nameless = root.join("objects/rules/no-uuid.yaml");
+        let no_uuid = |name: &str| {
+            rule_text
+                .replace("  uuid: 00000000-0000-4000-8003-000000000001\n", "")
+                .replace("name: Sentinel KQL Rule", &format!("name: {name}"))
+        };
         let with_block = |number: &str, name: &str| {
             rule_text
                 .replace("8003-000000000001", &format!("8003-00000000000{number}"))
@@ -1179,10 +1196,72 @@ mod tests {
                 false,
                 Box::new(write(&copy, rule_text.clone())),
             ),
+            (
+                "the rule's severity while a copy has its UUID",
+                false,
+                Box::new(write(
+                    &rule,
+                    rule_text.replace("severity: High", "severity: Nope"),
+                )),
+            ),
+            (
+                "a typed line in the copy",
+                false,
+                Box::new(write(&copy, format!("{rule_text}\n# typed\n"))),
+            ),
+            (
+                "the copy's severity",
+                false,
+                Box::new(write(
+                    &copy,
+                    rule_text.replace("severity: High", "severity: Nope"),
+                )),
+            ),
+            (
+                "a typed line in the rule, which the copy duplicates",
+                false,
+                Box::new(write(
+                    &rule,
+                    format!(
+                        "{}\n# typed\n",
+                        rule_text.replace("severity: High", "severity: Nope")
+                    ),
+                )),
+            ),
+            (
+                "the rule mended",
+                false,
+                Box::new(write(&rule, rule_text.clone())),
+            ),
             ("the second file deleted", false, Box::new(remove(&copy))),
             (
+                "a rule with no UUID",
+                false,
+                Box::new(write(&nameless, no_uuid("A rule with no UUID"))),
+            ),
+            (
+                "its name changed",
+                false,
+                Box::new(write(&nameless, no_uuid("Another rule with no UUID"))),
+            ),
+            (
+                "its name is the first rule's",
+                false,
+                Box::new(write(&nameless, no_uuid("Sentinel KQL Rule"))),
+            ),
+            (
+                "its name is its own again",
+                false,
+                Box::new(write(&nameless, no_uuid("A rule with no UUID"))),
+            ),
+            (
+                "the rule with no UUID deleted",
+                false,
+                Box::new(remove(&nameless)),
+            ),
+            (
                 "the rule's file renamed",
-                true,
+                false,
                 Box::new({
                     let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
                     move || {
@@ -1194,7 +1273,7 @@ mod tests {
             ),
             (
                 "the rule's file renamed back",
-                true,
+                false,
                 Box::new({
                     let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
                     move || {
@@ -1267,6 +1346,30 @@ mod tests {
                 )),
             ),
             (
+                "the first rule's file renamed while the third has its name",
+                false,
+                Box::new({
+                    let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
+                    move || {
+                        let _ = std::fs::remove_file(&from);
+                        std::fs::write(&to, &text).unwrap();
+                        vec![from.clone(), to.clone()]
+                    }
+                }),
+            ),
+            (
+                "and renamed back",
+                false,
+                Box::new({
+                    let (from, to, text) = (rule.clone(), renamed.clone(), rule_text.clone());
+                    move || {
+                        let _ = std::fs::remove_file(&to);
+                        std::fs::write(&from, &text).unwrap();
+                        vec![from.clone(), to.clone()]
+                    }
+                }),
+            ),
+            (
                 "the third rule's name as it was",
                 false,
                 Box::new(write(&third, with_block("3", "other_name"))),
@@ -1314,6 +1417,59 @@ mod tests {
                 );
             }
         }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An object file that is a symbolic link: its findings are kept by the
+    /// file it points to, and mending it replaces them, as a fresh run does,
+    /// with the entry's stamp bumped.
+    #[cfg(unix)]
+    #[test]
+    fn kept_findings_follow_a_symbolic_link_to_an_object_file() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/objects");
+        let root = std::env::temp_dir().join(format!("opentide-kept-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::create_dir_all(root.join("elsewhere")).unwrap();
+        let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+        let target = root.join("elsewhere/rule.yaml");
+        let link = root.join("objects/rules/linked.yaml");
+        std::fs::write(
+            &target,
+            rule_text.replace("severity: High", "severity: Nope"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let fresh =
+            |root: &Path| RootChecks::default().all_findings(root, Buffers::default(), 0, 0);
+        let mut kept = RootChecks::default();
+        let first = kept.all_findings(&root, Buffers::default(), 0, 0);
+        assert_eq!(first, fresh(&root), "the first run");
+        assert!(
+            first.values().any(|findings| !findings.is_empty()),
+            "the broken severity is a finding: {first:?}"
+        );
+        let key = kept.resolve(&link);
+        let stamp = kept.stamp_of(&key);
+        for (generation, (what, text)) in (1..).zip([
+            ("mended", rule_text.clone()),
+            (
+                "broken again",
+                rule_text.replace("severity: High", "severity: Nope"),
+            ),
+        ]) {
+            std::fs::write(&target, text).unwrap();
+            kept.changed([link.clone()]);
+            let found = kept.all_findings(&root, Buffers::default(), generation, 0);
+            assert_eq!(found, fresh(&root), "{what}");
+            assert_ne!(kept.stamp_of(&key), stamp, "{what}: the entry's stamp");
+        }
+        // Changed through the file it points to.
+        std::fs::write(&target, rule_text).unwrap();
+        kept.changed([target.clone()]);
+        let found = kept.all_findings(&root, Buffers::default(), 9, 0);
+        assert_eq!(found, fresh(&root), "mended through the target");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

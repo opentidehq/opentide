@@ -480,6 +480,10 @@ impl Workspace {
         let mut reread: Vec<PathBuf> = paths.iter().cloned().collect();
         reread.sort();
         let (identity_changed, cross_changed) = what_others_read(&before, &self.index, &paths);
+        // What the facts above cannot say, taken as a change of identity: the
+        // checks of the other objects are made again, and the expected file
+        // names forgotten.
+        let identity_changed = identity_changed || needs_every_check(&before, &self.index, &paths);
         if identity_changed {
             self.lint_records.forget_stems();
         }
@@ -524,6 +528,37 @@ fn dump(node: &opentide_schema::node::Node, out: &mut String) {
         }
         other => out.push_str(&other.to_string()),
     }
+}
+
+/// Whether an edit of the files in `paths` is anything but an ordinary edit
+/// inside files that are, before and after it, objects the index holds, in a
+/// workspace with no UUID used twice. A file the index holds as a source but
+/// not as an object (no UUID, a UUID that is not text, a root that is not a
+/// mapping, a duplicate's displaced file) or that failed to load, one that is
+/// in one index and not the other (an added, deleted or renamed file), and
+/// any duplicate UUID make findings and expected file names of other files
+/// depend on it in ways the facts of [`what_others_read`] do not say: the
+/// whole workspace is checked again.
+fn needs_every_check(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> bool {
+    if !before.duplicates.is_empty() || !after.duplicates.is_empty() {
+        return true;
+    }
+    let holds_source = |index: &Index, path: &Path| {
+        index.sources.iter().any(|source| source.path == path)
+            || index.load_errors.iter().any(|error| error.path == path)
+    };
+    let holds_object = |index: &Index, path: &Path| {
+        index
+            .objects
+            .values()
+            .any(|objects| objects.values().any(|object| object.path == path))
+    };
+    paths.iter().any(|path| {
+        holds_source(before, path) != holds_source(after, path)
+            || [before, after]
+                .iter()
+                .any(|index| holds_source(index, path) && !holds_object(index, path))
+    })
 }
 
 /// What the other objects' checks read of the objects in `paths`, in each
