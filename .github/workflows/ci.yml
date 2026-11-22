@@ -1632,7 +1632,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opentidehq/vscode-extension
-          ref: 9888813d5484dffe663c9a57c07aad80a0897181
+          ref: 3c12cfa24e6a1f5526c563789f1f54ece12e4b55
           path: vscode-extension
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

@@ -7,20 +7,20 @@
 //   node scripts/engine/check-vscode-extension.mjs <vscode-extension checkout> <assets dir> <tag>
 //
 // It writes pins.json in that checkout (the URLs of <tag>'s release here, the digests of SHA256SUMS),
-// then runs `scripts/grammars.mjs --zip` (the grammars it bundles) and `prepareEngine` from
-// `scripts/engine-lib.mjs` (the engine it bundles) on the local files. Either refusing them fails.
-// It prints the pins.json sections the extension's pull request would carry, and the pin of the
-// WASI command line, `opentide-wasm32-wasip1.wasm` (docs/internal/vscode-wasi.md): the one module
-// for every platform that the extension runs under @vscode/wasm-wasi, pinned by URL and SHA-256
-// like the zips. Its section is printed, not written to pins.json, and its asset is checked to
-// be in SHA256SUMS and a WebAssembly module: the extension's pins.json format for it is its own.
-// ci.yml runs it on the nightly, on the engine release dry run's assets (job
-// engine-release-consumers).
+// then runs the extension's own checks on the local files: `scripts/grammars.mjs --zip` (the grammars
+// it bundles), `prepareEngine` from `scripts/engine-lib.mjs` (the engine it bundles) and
+// `prepareWasi` from `scripts/wasi-lib.mjs` (the WASI command line, `opentide-wasm32-wasip1.wasm`, and
+// its licence set: docs/internal/vscode-wasi.md), each served from the assets directory instead of
+// the release's URLs, so each file is checked against the digest pins.json names. Any refusal fails.
+// The licence set the extension requires (`WASI_LICENCES`) must be the one this script pins. It
+// prints the pins.json sections the extension's pull request would carry. ci.yml runs it on the
+// nightly, on the engine release dry run's assets (job engine-release-consumers), against the
+// extension commit that job pins.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REPOSITORY = "opentidehq/opentide";
@@ -29,6 +29,14 @@ const TAG = /^v(\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?)$/;
 // The opentide command line on wasm32-wasip1: scripts/engine/release.py CLI_WASM_ASSET. The name is
 // fixed, the extension pins it.
 export const WASI_CLI = "opentide-wasm32-wasip1.wasm";
+// The WASI module's licence set, release assets beside it (engine-release-build.yml's `licences`).
+export const WASI_LICENCE_FILES = [
+  "THIRD-PARTY-LICENSES.html",
+  "WASI-LIBC-LICENSES.txt",
+  "LICENSE",
+  "NOTICE",
+  "THIRD-PARTY-DATA-LICENSES.txt",
+];
 
 function fail(message) {
   console.error(`check-vscode-extension: ${message}`);
@@ -71,13 +79,12 @@ export function pinsFor(tag, digests) {
     },
     // One module for every platform, named without a version: the release is the version.
     // The module's third-party licences, shipped beside it: the Rust crates (about.toml names
-    // wasm32-wasip1), the C library it links, the licence and the embedded data's notice.
+    // wasm32-wasip1), the C library it links, the licence, the embedded data's notice and the
+    // licence files that notice cites. `licences`: the extension's key (its pins.json).
     wasi: {
       version,
       ...pin(WASI_CLI),
-      licenses: Object.fromEntries(
-        ["THIRD-PARTY-LICENSES.html", "WASI-LIBC-LICENSES.txt", "LICENSE", "NOTICE"].map((name) => [name, pin(name)]),
-      ),
+      licences: Object.fromEntries(WASI_LICENCE_FILES.map((name) => [name, pin(name)])),
     },
   };
 }
@@ -100,7 +107,7 @@ async function main() {
   if (wasi.length < 8 || !wasi.subarray(0, 8).equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))) {
     fail(`${WASI_CLI} is not a WebAssembly module`);
   }
-  for (const key of ["highlights", "engine"]) {
+  for (const key of ["highlights", "engine", "wasi"]) {
     if (!pins[key]) fail(`pins.json has no ${key}: the extension's format changed`);
     // Keep the extension's own fields ($comment); replace what names the release.
     pins[key] = { ...pins[key], ...sections[key] };
@@ -126,7 +133,27 @@ async function main() {
     if (!existsSync(join(dir, name))) fail(`prepareEngine left no ${name}`);
   }
 
-  console.log(`vscode-extension accepts ${tag}'s assets. Its pins.json would read (wasi: the command line module):`);
+  // The WASI command line: the extension's own checks (the pin complete, the module and each licence
+  // file against its digest, the module a WebAssembly binary), each URL served from the assets.
+  const { prepareWasi, WASI_LICENCES } = await import(pathToFileURL(join(ext, "scripts", "wasi-lib.mjs")).href);
+  const required = [...WASI_LICENCES].sort().join(", ");
+  const pinned = [...WASI_LICENCE_FILES].sort().join(", ");
+  if (required !== pinned) fail(`the extension's WASI licence set is ${required}; this script pins ${pinned}`);
+  const base = `https://github.com/${REPOSITORY}/releases/download/${tag}/`;
+  const local = async (url) => {
+    if (!String(url).startsWith(base)) fail(`prepareWasi asked for ${url}, not an asset of ${tag}`);
+    const file = join(assets, basename(new URL(url).pathname));
+    if (!existsSync(file)) return new Response(null, { status: 404 });
+    return new Response(readFileSync(file));
+  };
+  const prepared = await prepareWasi(mkdtempSync(join(tmpdir(), "vscode-extension-wasi-")), pins.wasi, {
+    modulePath: "",
+    licencesDir: "",
+    fetchImpl: local,
+  });
+  if (prepared.licences.size !== WASI_LICENCES.length) fail("prepareWasi did not return every licence file");
+
+  console.log(`vscode-extension accepts ${tag}'s assets. Its pins.json would read:`);
   console.log(JSON.stringify(sections, null, 2));
 }
 
