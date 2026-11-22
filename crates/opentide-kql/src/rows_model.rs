@@ -84,7 +84,7 @@ pub struct TableRow {
     #[serde(default)]
     pub documented: bool,
     /// The workspace declares the table with its columns in
-    /// `visibility.toml` ([`Catalog::for_workspace`]).
+    /// `visibility.toml` ([`Catalog::for_workspace`](super::Catalog::for_workspace)).
     #[serde(skip)]
     pub declared: bool,
 }
@@ -98,7 +98,7 @@ pub struct ColumnRow {
     /// The column's name, shared with the reference's column it comes from.
     pub name: Arc<str>,
     /// Its Kusto type, shared by every column of that type
-    /// ([`tables::kusto_type`]).
+    /// ([`tables::kusto_type`](super::tables::kusto_type)).
     #[serde(
         default,
         rename = "type",
@@ -107,7 +107,7 @@ pub struct ColumnRow {
     pub type_name: Option<Arc<str>>,
     /// The column's description (Markdown): hand-written, or the first
     /// sentence of the Azure Monitor Logs reference's, shared with the
-    /// reference ([`tables::azure_monitor`]) and every profile (#1071).
+    /// reference ([`tables::azure_monitor`](super::tables::azure_monitor)) and every profile (#1071).
     pub docs: Option<Arc<str>>,
     /// The table's reference page, shared by its columns.
     pub citation: Option<Arc<str>>,
@@ -117,7 +117,7 @@ pub struct ColumnRow {
     pub from_reference: bool,
     /// Listed in `visibility.toml` (`[[logsources.columns]]`): a column the
     /// catalog lacks, or one whose type and description the workspace
-    /// replaces ([`Catalog::for_workspace`]).
+    /// replaces ([`Catalog::for_workspace`](super::Catalog::for_workspace)).
     #[serde(skip)]
     pub declared: bool,
 }
