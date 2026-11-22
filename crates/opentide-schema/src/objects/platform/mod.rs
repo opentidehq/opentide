@@ -695,6 +695,63 @@ pub fn garde_optional_query_text(value: &Option<String>, pins: &crate::Pins) -> 
         .map_or(Ok(()), |value| garde_query_text(value, pins))
 }
 
+/// The severities a block's own `severity` takes where deploy maps it
+/// (CrowdStrike's `details.severity`, Defender for Endpoint's
+/// `alert.severity`): the `alert_severity` vocabulary's names, in this case.
+/// The compilers map these five and refuse anything else (`map_severity`,
+/// `SeverityMapping`), so a value outside them passed `validate` and failed
+/// the deploy with "Invalid Severity" (#1751).
+pub const SEVERITIES: [&str; 5] = ["Informational", "Low", "Medium", "High", "Critical"];
+
+/// A block's `severity` is one of [`SEVERITIES`], exactly; an empty string
+/// is unset, as deploy reads it (the rule's `response.alert_severity`
+/// then). The message names the five, and the one meant when only the case
+/// is wrong.
+pub fn check_severity(value: &str) -> Result<(), Violation> {
+    if value.is_empty() || SEVERITIES.contains(&value) {
+        return Ok(());
+    }
+    let expected = format!(
+        "{} or {}",
+        SEVERITIES[..SEVERITIES.len() - 1].join(", "),
+        SEVERITIES[SEVERITIES.len() - 1]
+    );
+    let meant = SEVERITIES
+        .iter()
+        .find(|severity| severity.eq_ignore_ascii_case(value))
+        .map(|severity| format!("; did you mean {}?", repr::quote(severity)))
+        .unwrap_or_default();
+    let mut violation = Violation::value_error(format!(
+        "deploy takes {expected} (exact case), not {}{meant}",
+        repr::quote(value)
+    ));
+    violation.context.push(("expected", expected));
+    Err(violation)
+}
+
+/// A block's optional `severity` in the conversion: `null`, or a string
+/// [`check_severity`] accepts.
+pub fn optional_severity(node: &Node, cx: &mut Context) -> Option<Option<String>> {
+    if matches!(node.value, Value::Null) {
+        return Some(None);
+    }
+    let value = String::from_node(node, cx)?;
+    match check_severity(&value) {
+        Ok(()) => Some(Some(value)),
+        Err(violation) => {
+            violation.report(node, cx);
+            None
+        }
+    }
+}
+
+/// garde: [`check_severity`] on a present value.
+pub fn garde_optional_severity(value: &Option<String>, _pins: &crate::Pins) -> garde::Result {
+    value.as_deref().map_or(Ok(()), |value| {
+        check_severity(value).map_err(Violation::into_garde)
+    })
+}
+
 /// `schema` names the block's registered revision, or is left out. Nothing
 /// reads the identifier at deploy, so an unregistered one (`splunk::2.1`,
 /// another platform's) validated and said nothing true about the block.

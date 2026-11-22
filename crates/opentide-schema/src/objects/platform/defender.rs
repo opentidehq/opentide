@@ -49,6 +49,8 @@ pub struct DefenderAlert {
     /// `Informational`, `Low`, `Medium`, `High`, or `Critical`. Deploy uses
     /// `response.alert_severity` when omitted. `Critical` is sent as `high`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[from_node(with = "crate::objects::platform::optional_severity")]
+    #[garde(custom(crate::objects::platform::garde_optional_severity))]
     pub severity: Option<String>,
     /// Recommended actions text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
