@@ -73,9 +73,13 @@ module it runs.
   which run built it.
 - **The key's name and shape are the extension's** (`pins.json` is its file). What
   [`scripts/engine/check-vscode-extension.mjs`](../../scripts/engine/check-vscode-extension.mjs)
-  prints under `wasi` is the section above for a release's assets: it checks that
-  `opentide-wasm32-wasip1.wasm` is in `SHA256SUMS`, with the right digest, and a WebAssembly module,
-  and leaves `pins.json` as the extension has it.
+  writes and prints under `wasi` is the section above for a release's assets, with the module's five
+  licence files under `licences` (the extension's key): `THIRD-PARTY-LICENSES.html`,
+  `WASI-LIBC-LICENSES.txt`, `LICENSE`, `NOTICE` and `THIRD-PARTY-DATA-LICENSES.txt`. It then runs the
+  extension's own `prepareWasi` (`scripts/wasi-lib.mjs`) on the local assets: the pin is complete, the
+  module and each licence file match their digests, and the module is WebAssembly. It fails when the
+  extension's licence set (`WASI_LICENCES`) and the script's differ. The nightly's
+  `engine-release-consumers` runs it against the extension commit it pins.
 - **A new release is a new pin**: the URL's tag and the digest change together, and nothing else
   about the module's name does.
 
