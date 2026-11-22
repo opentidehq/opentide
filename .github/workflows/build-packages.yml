@@ -429,8 +429,11 @@ jobs:
           done
           # Each native package holds its addon and the licence; it and the package
           # hold NOTICE and every licence file NOTICE cites.
+          # Each listing is read whole first: `tar | grep -q` stops reading at the
+          # first match, and under pipefail tar's broken pipe fails the step.
           for tarball in npm/1-native/*.tgz; do
-            tar -tzf "${tarball}" | grep -q '^package/opentide\..*\.node$'
+            listing="$(tar -tzf "${tarball}")"
+            grep -q '^package/opentide\..*\.node$' <<<"${listing}"
           done
           legal="$(python3 -c 'import sys; sys.path.insert(0, "scripts/engine"); import release; print("\n".join(release.legal_files()))')"
           for tarball in npm/1-native/*.tgz npm/2-package/*.tgz; do
