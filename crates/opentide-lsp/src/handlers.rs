@@ -656,8 +656,9 @@ fn initialized(session: &mut Session) {
         "**/objects".to_string(),
         "**/objects/**".to_string(),
         "**/.opentide/configurations/**/*.toml".to_string(),
-        // The deployment state shards `validate` checks.
-        "**/.opentide/states/deployment/*.json".to_string(),
+        // The deployment state shards `validate` checks, at any depth: it
+        // reports a shard in a folder below `deployment/` too.
+        "**/.opentide/states/deployment/**".to_string(),
         // The folders themselves: a client reports a deleted folder as one
         // event, for the folder (a branch switch).
         "**/.opentide/states".to_string(),

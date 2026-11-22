@@ -764,16 +764,26 @@ impl RootChecks {
 }
 
 /// Whether `path` (with `/` separators) is a deployment state shard, or a
-/// folder that holds them: a client reports a deleted folder as one event for
-/// the folder, not for each file in it.
+/// folder that holds them: anything under `.opentide/states/deployment/`,
+/// whose folders `validate` walks (it reports a shard in a folder below it),
+/// and the two folders themselves. A client reports a deleted folder as one
+/// event for the folder, not for each file in it.
 pub(crate) fn is_state_shard(path: &str) -> bool {
     let path = path.trim_end_matches('/');
     path.ends_with("/.opentide/states")
         || path.ends_with("/.opentide/states/deployment")
-        || (path.contains("/.opentide/states/deployment/")
-            && Path::new(path)
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")))
+        || path.contains("/.opentide/states/deployment/")
+}
+
+/// Whether `finding` is a `deployment_state_*` finding filed on a file other
+/// than a shard. A run narrowed to some objects checks each one's shard and
+/// files what it finds on the object (`validate --file`); a full run files it
+/// on the shard alone, where the editor shows it ([`RootChecks::all_findings`]
+/// keeps the shards' findings current): kept on the object, it would show
+/// twice, and stay there after the shard is fixed.
+fn is_shard_finding_on_an_object(finding: &Diagnostic, file: &Path) -> bool {
+    finding.code.starts_with("deployment_state_")
+        && !is_state_shard(&file.to_string_lossy().replace('\\', "/"))
 }
 
 /// A run's findings by file, resolved, and lint's file name and metadata
@@ -812,7 +822,11 @@ fn by_file(
         let Some(file) = finding.file_path.as_deref() else {
             continue;
         };
-        by_file.entry(fs.resolve(file)).or_default().push(finding);
+        let file = fs.resolve(file);
+        if is_shard_finding_on_an_object(&finding, &file) {
+            continue;
+        }
+        by_file.entry(file).or_default().push(finding);
     }
     by_file
 }

@@ -352,7 +352,7 @@ fn files_changed_on_disk_reach_the_open_documents() {
             "**/objects",
             "**/objects/**",
             "**/.opentide/configurations/**/*.toml",
-            "**/.opentide/states/deployment/*.json",
+            "**/.opentide/states/deployment/**",
             "**/.opentide/states",
             "**/.opentide/states/deployment",
         ]
@@ -1526,7 +1526,7 @@ fn the_folders_a_workspace_reads_are_watched_and_watched_again_when_they_move() 
     assert!(
         fixed
             .iter()
-            .any(|(_, glob)| glob == "**/.opentide/states/deployment/*.json"),
+            .any(|(_, glob)| glob == "**/.opentide/states/deployment/**"),
         "the state shards are not watched: {fixed:?}"
     );
     assert!(
@@ -1822,6 +1822,148 @@ fn a_state_shards_findings_are_in_the_workspace_pull_and_clear_when_fixed() {
         full,
         "a shard's change checked every object again"
     );
+}
+
+/// Whether any of `codes` is a `deployment_state_*` code.
+fn has_state_code(codes: &[String]) -> bool {
+    codes
+        .iter()
+        .any(|code| code.starts_with("deployment_state_"))
+}
+
+/// A rule's shard finding is on the shard alone, as `validate` files it on a
+/// full run: the runs narrowed to the files an edit or a watched event
+/// changed check the rule's shard too, and filed what they found on the rule,
+/// where it showed twice and stayed once the shard was fixed.
+#[test]
+fn a_rules_shard_finding_is_on_the_shard_only_and_clears_everywhere() {
+    let scratch = workspace("workspace-shard-not-on-rule", true);
+    let root = &scratch.0;
+    let shards = root.join(".opentide/states/deployment");
+    std::fs::create_dir_all(&shards).unwrap();
+    // The rule's own shard (the rule's UUID is `SHARD_UUID`), broken.
+    let shard = shards.join(format!("{SHARD_UUID}.json"));
+    std::fs::write(&shard, "[]").unwrap();
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
+    let rule_path = root.join("objects/rules/rule-1.0.yaml");
+    let rule = file_uri(&rule_path);
+    let rule_codes = |lsp: &mut Lsp| -> Vec<String> {
+        workspace_pull_items(lsp)
+            .into_iter()
+            .find(|(uri, _)| uri.ends_with("rule-1.0.yaml"))
+            .map(|(_, codes)| codes)
+            .unwrap_or_default()
+    };
+    assert!(!has_state_code(&rule_codes(&mut lsp)));
+    assert_eq!(shard_reports(&mut lsp, &[]).len(), 1);
+
+    // The closed rule written on disk: the narrowed run checks it again.
+    let text = fixture(RULE);
+    std::fs::write(&rule_path, format!("{text}\n")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": rule, "type": 2 }] }),
+    );
+    let codes = rule_codes(&mut lsp);
+    assert!(!has_state_code(&codes), "the closed rule: {codes:?}");
+    let reports = shard_reports(&mut lsp, &[]);
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    assert_eq!(reports[0].2, vec!["deployment_state_shape"]);
+
+    // The rule open, then typed in.
+    open(&mut lsp, &rule, "opentide-yaml", &text);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": rule, "version": 2 },
+                "contentChanges": [{ "text": format!("{text}\n\n") }] }),
+    );
+    let codes = pulled(&mut lsp, &rule);
+    assert!(!has_state_code(&codes), "the open rule: {codes:?}");
+    assert_eq!(shard_reports(&mut lsp, &[]).len(), 1);
+
+    // Fixed: gone from the shard, and on neither rule nor shard after.
+    std::fs::write(&shard, usable_shard()).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&shard), "type": 2 }] }),
+    );
+    assert!(shard_reports(&mut lsp, &[]).is_empty());
+    let codes = pulled(&mut lsp, &rule);
+    assert!(!has_state_code(&codes), "the open rule: {codes:?}");
+}
+
+/// `validate` walks the folders below `deployment/` and reports a shard in
+/// one (deploy never reads it): the watchers cover them, so such a shard is
+/// shown, and cleared when it is deleted.
+#[test]
+fn a_shard_in_a_folder_below_deployment_is_shown_and_cleared() {
+    let scratch = workspace("workspace-shard-subfolder", true);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": watching_relative(), "rootUri": file_uri(root) }));
+    let fixed = registered_watchers(&server_requests(&mut lsp));
+    assert!(
+        fixed
+            .iter()
+            .any(|(_, glob)| glob == "**/.opentide/states/deployment/**"),
+        "the folders below deployment/ are not watched: {fixed:?}"
+    );
+    let objective = file_uri(&root.join("objects/objectives/objective-1.0.yaml"));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    let nested_reports = |lsp: &mut Lsp, previous: Value| -> Vec<(String, Vec<String>)> {
+        let report = lsp.request(
+            "workspace/diagnostic",
+            json!({ "previousResultIds": previous }),
+        );
+        report["result"]["items"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{report}"))
+            .iter()
+            .filter(|item| {
+                item["uri"]
+                    .as_str()
+                    .is_some_and(|uri| uri.contains("/.opentide/states/deployment/old/"))
+            })
+            .map(|item| {
+                (
+                    item["resultId"].as_str().unwrap().to_string(),
+                    codes_of(item["items"].as_array().unwrap_or(&Vec::new())),
+                )
+            })
+            .collect()
+    };
+    assert!(nested_reports(&mut lsp, json!([])).is_empty());
+
+    let old = root.join(".opentide/states/deployment/old");
+    std::fs::create_dir_all(&old).unwrap();
+    let shard = old.join(format!("{SHARD_UUID}.json"));
+    std::fs::write(&shard, usable_shard()).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&shard), "type": 1 }] }),
+    );
+    let reports = nested_reports(&mut lsp, json!([]));
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    assert_eq!(reports[0].1, vec!["deployment_state_uuid_mismatch"]);
+    let held = reports[0].0.clone();
+
+    // The folder deleted: one event, for the folder.
+    std::fs::remove_dir_all(&old).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&old), "type": 3 }] }),
+    );
+    let reports = nested_reports(
+        &mut lsp,
+        json!([{ "uri": file_uri(&shard), "value": held }]),
+    );
+    assert_eq!(
+        reports.len(),
+        1,
+        "the deleted shard was not cleared: {reports:?}"
+    );
+    assert!(reports[0].1.is_empty(), "{reports:?}");
 }
 
 /// A shard broken before the server started is in the first workspace pull
