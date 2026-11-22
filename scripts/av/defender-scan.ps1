@@ -26,14 +26,22 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# Under ErrorActionPreference Stop, Write-Error throws before an `exit 2` after it is reached, and the
+# step ends with 1 (a detection): a scan that could not run says so here and exits 2.
+function Stop-Scan([string]$Message) {
+  Write-Host "::error::$Message"
+  [Console]::Error.WriteLine($Message)
+  exit 2
+}
+
 $mp = Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe'
 if (-not (Test-Path $mp)) {
   # A newer platform keeps MpCmdRun under ProgramData.
   $mp = Get-ChildItem (Join-Path $env:ProgramData 'Microsoft\Windows Defender\Platform') -Filter MpCmdRun.exe -Recurse -ErrorAction SilentlyContinue |
     Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
 }
-if (-not $mp) { Write-Error 'MpCmdRun.exe was not found: Microsoft Defender is not installed on this runner'; exit 2 }
-if (-not (Test-Path $Path)) { Write-Error "no such path: $Path"; exit 2 }
+if (-not $mp) { Stop-Scan 'MpCmdRun.exe was not found: Microsoft Defender is not installed on this runner' }
+if (-not (Test-Path $Path)) { Stop-Scan "no such path: $Path" }
 
 Write-Host "MpCmdRun: $mp"
 
@@ -67,7 +75,7 @@ if ($exclusions) { try { Remove-MpPreference -ExclusionExtension $exclusions } c
 $exclusions = (Get-MpPreference).ExclusionProcess
 if ($exclusions) { try { Remove-MpPreference -ExclusionProcess $exclusions } catch { Write-Host "could not remove the process exclusions: $_" } }
 Show-Preferences 'after the exclusions are removed'
-if ((Get-MpPreference).ExclusionPath) { Write-Error 'a path exclusion remains: the files would not be scanned'; exit 2 }
+if ((Get-MpPreference).ExclusionPath) { Stop-Scan 'a path exclusion remains: the files would not be scanned' }
 
 try { Update-MpSignature } catch { Write-Host "Update-MpSignature: $_" }
 & $mp -SignatureUpdate | Out-Host
@@ -75,26 +83,40 @@ try { Update-MpSignature } catch { Write-Host "Update-MpSignature: $_" }
 Get-MpComputerStatus | Select-Object AMProductVersion, AMEngineVersion, AntivirusSignatureVersion, AntivirusSignatureLastUpdated | Format-List | Out-Host
 
 # The canary: the EICAR test string, in a file of its own in a folder of its own, scanned as the
-# artifacts are. Real-time protection may remove it at once: that is a detection too.
+# artifacts are. Only Defender's own evidence counts as a detection (#1752): the scan's
+# `found N threats` with N at least 1, or the file gone because real-time protection removed it - and
+# "gone" only once the file is known to have been there (it existed after the write), or the write
+# itself was refused for a virus or threat. A write that failed for any other reason (a full disk, a
+# denied folder) leaves no file either, and is not a detection: it exits 2.
 $canaryDir = Join-Path ([System.IO.Path]::GetTempPath()) ('opentide-av-canary-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $canaryDir | Out-Null
 $canary = Join-Path $canaryDir 'canary.com'
 $eicar = 'X5O!P%@AP[4\PZX54(P^)7CC)7}$' + 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
-try { Set-Content -Path $canary -Value $eicar -NoNewline -Encoding ascii } catch { Write-Host "the canary could not be written (removed at once by real-time protection): $_" }
+$writeError = ''
+try { Set-Content -Path $canary -Value $eicar -NoNewline -Encoding ascii } catch { $writeError = "$($_.Exception.Message)" }
+$canaryWritten = Test-Path $canary
+# Windows' own words when Defender refuses the write: "Operation did not complete successfully because
+# the file contains a virus or potentially unwanted software."
+$writeBlocked = $writeError -match 'contains a virus|potentially unwanted software|\bthreat'
+if ($writeError) { Write-Host "the canary's write failed: $writeError" }
+Write-Host ('canary: {0}' -f $(if ($canaryWritten) { 'written' } elseif ($writeBlocked) { 'write refused by Defender' } else { 'not written' }))
 Start-Sleep -Seconds 2
 $canaryOut = & $mp -Scan -ScanType 3 -File $canaryDir -DisableRemediation 2>&1 | Out-String
+$canaryCount = if ($canaryOut -match 'found (\d+) threats?') { [int]$Matches[1] } else { 0 }
 $canaryGone = -not (Test-Path $canary)
-$canarySeen = ($canaryOut -match 'found (\d+) threats?') -or $canaryGone
-if (-not $canarySeen) {
+$canaryRemoved = $canaryGone -and ($canaryWritten -or $writeBlocked)
+if (-not (($canaryCount -ge 1) -or $canaryRemoved)) {
   $canaryOut | Out-Host
-  Write-Error 'Defender did not detect the EICAR canary: it is not scanning, and its "no threats" means nothing here'
-  exit 2
+  if (-not $canaryWritten -and -not $writeBlocked) {
+    Stop-Scan 'the EICAR canary could not be written, and not because Defender refused it: the scan cannot be checked'
+  }
+  Stop-Scan 'Defender did not detect the EICAR canary: it is not scanning, and its "no threats" means nothing here'
 }
-Write-Host ('canary: detected ({0})' -f $(if ($canaryGone) { 'removed by real-time protection' } else { 'found by the scan' }))
+Write-Host ('canary: detected ({0})' -f $(if ($canaryCount -ge 1) { "found by the scan: $canaryCount threat(s)" } elseif ($writeBlocked) { 'its write refused by real-time protection' } else { 'removed by real-time protection' }))
 Remove-Item -Recurse -Force $canaryDir -ErrorAction SilentlyContinue
 
 $all = if ((Get-Item $Path).PSIsContainer) { Get-ChildItem $Path -File -Recurse } else { Get-Item $Path }
-if (-not $all) { Write-Error "nothing to scan under $Path"; exit 2 }
+if (-not $all) { Stop-Scan "nothing to scan under $Path" }
 # Each binary is scanned on its own, so a verdict names the file; the whole tree is scanned once more
 # at the end (one MpCmdRun call per file of a wheel's several hundred would take hours).
 $binary = '.exe', '.dll', '.pyd', '.node', '.wasm', '.so', '.dylib', '.sys', '.msi', '.ps1', '.sh'
