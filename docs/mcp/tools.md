@@ -94,6 +94,7 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `uuid` | string | Threat, objective, or rule UUID; a signal UUID (`objective.signals[].uuid`) names its objective |
+| `depth` | integer, 0 or more | Optional. The hops from the object to follow, in each direction: threat ↔ objective ↔ rule, and `threat.chaining` links. `0` is the object alone. Omitted is the whole lineage |
 
 ```json
 // call — objective that lists a threat and is the detection_model of a rule
@@ -141,6 +142,8 @@ When this threat has `threat.chaining` entries, `graph` stays `{relation: [vecto
 A rule whose `detection_model` is a signal UUID belongs to the lineage of the objective that defines the signal, and an objective's `graph` lists such rules. Asking for a signal UUID returns its objective (`uuid`, `type: "objective"`) and adds `resolved_from: {"type": "signal", "uuid": "…"}`.
 
 The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository.
+
+`depth` counts hops over the references in either direction, so a lineage is walked up and down: depth 2 from a rule includes the other rules of its objective (rule → objective → rule), and depth 2 from an objective includes the objectives that cover the same threats. With `depth`, `lineage`, `graph` and `chaining_index` hold only the objects within that many hops of the object: each `chaining_index` entry lists only UUIDs that the response returns. `depth: 0` returns the object alone: `graph` is `{}`, `lineage` stays and holds only the object, and `chaining_index` has at most one entry (none when the object has neither a chaining relation nor a lineage); a depth at least as long as the longest path returns what an omitted `depth` does. A negative or non-integer `depth` fails the call (`isError: true`, `argument depth must be 0 or more, not -1`) and returns nothing.
 
 ## coverage
 
