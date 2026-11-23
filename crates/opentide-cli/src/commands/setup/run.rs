@@ -1139,6 +1139,8 @@ pub struct GroupArgs {
     pub lint_changed: bool,
     /// `--explorer-pages`.
     pub explorer_pages: bool,
+    /// `--variable-group`, in order.
+    pub variable_group: Vec<String>,
     /// `--promotion/--no-promotion`.
     pub promotion: Option<bool>,
     /// `--promotion-target`.
@@ -1188,6 +1190,9 @@ fn ignored_ci_flags(args: &GroupArgs) -> Vec<String> {
     }
     if args.explorer_pages {
         ignored.push("--explorer-pages");
+    }
+    if !args.variable_group.is_empty() {
+        ignored.push("--variable-group");
     }
     if args.python_version != "3.12" {
         ignored.push("--python-version");
@@ -1539,6 +1544,7 @@ fn base_ci_args(args: &GroupArgs) -> CiArgs {
         promotion_target: None,
         python_version: args.python_version.clone(),
         explorer_pages: args.explorer_pages,
+        variable_group: args.variable_group.clone(),
         default_branch: args.default_branch.clone(),
         plan: args.plan,
         yes: true,

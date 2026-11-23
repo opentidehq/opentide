@@ -577,6 +577,20 @@ fn references(index: &mut Index) {
 }
 
 impl Index {
+    /// The signal `uuid` names: an exact key first, else the one whose key
+    /// matches ignoring case (UUIDs compare case-insensitively, RFC 9562).
+    /// Its `owner` is the objective that defines it.
+    pub fn signal(&self, uuid: &str) -> Option<&Signal> {
+        let needle = uuid.trim();
+        self.signals.get(needle).or_else(|| {
+            let folded = needle.to_lowercase();
+            self.signals
+                .iter()
+                .find(|(key, _)| key.to_lowercase() == folded)
+                .map(|(_, signal)| signal)
+        })
+    }
+
     /// Puts `document`, read from `path`, in `family` as the object `uuid`,
     /// replacing the one indexed there (the inflight preview's overlay,
     /// `apply_inflight_overlay`). `false`, changing nothing, when the index

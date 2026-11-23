@@ -239,7 +239,7 @@ With `--strict` it fails, with exit `1` and `failure.code` `issues_found`, so a 
 ✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
 ```
 
-A run narrowed by `--check` is not an empty catalogue, and keeps exit `0`; one narrowed by `--file`, `--uuid` or `--type` that matches nothing fails with `scope_no_match`, with or without `--strict`. The failed run's next step is `opentide new rule`, or `opentide setup` where there is no workspace. `--watch --strict` shows such a pass as failed, and `--format` without `--output` prints the reason on stderr. A repository just scaffolded by `opentide setup` has no object yet. The commit hook setup writes runs `validate --strict --allow-empty`, so the scaffold commits; the CI pipelines it writes run `validate --strict`, so their validate jobs fail until the first object is added, which is the point: an empty workspace in CI is a misconfigured job. The SDKs' `validate(strict=True)` report findings only, and an empty workspace has none.
+A run narrowed by `--check` is not an empty catalogue, and keeps exit `0`; one narrowed by `--file`, `--uuid` or `--type` that matches nothing fails with `scope_no_match` (`file_not_found` for a `--file` path that does not exist), with or without `--strict`. The failed run's next step is `opentide new rule`, or `opentide setup` where there is no workspace. `--watch --strict` shows such a pass as failed, and `--format` without `--output` prints the reason on stderr. A repository just scaffolded by `opentide setup` has no object yet. The commit hook setup writes runs `validate --strict --allow-empty`, so the scaffold commits; the CI pipelines it writes run `validate --strict`, so their validate jobs fail until the first object is added, which is the point: an empty workspace in CI is a misconfigured job. The SDKs' `validate(strict=True)` report findings only, and an empty workspace has none.
 
 The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 
@@ -265,9 +265,9 @@ Move the file up into its object folder to make it an object. `--strict` fails o
 | Absolute path | That file only. |
 | Bare file name (`rule.yaml`) | Every object file with that name, in any object folder. |
 
-A path never falls back to its file name, and a path that names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
+A path never falls back to its file name. A path with no file on disk fails with `file_not_found` (the path is in `context.targets`); a path that exists but names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
 
-Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
+Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue (`file_not_found` when the path does not exist) naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
 
 Every issue reports the `file_path` of the object it concerns, so issues from two files that share a name stay apart when a bare file name selects both.
 

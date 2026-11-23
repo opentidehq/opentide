@@ -1039,6 +1039,7 @@ impl Run<'_> {
             promotion_target: pipeline.promotion_target.clone(),
             python_version: pipeline.python_version.clone(),
             explorer_pages: pipeline.explorer_pages,
+            variable_group: pipeline.variable_group.clone(),
             default_branch: pipeline.default_branch.clone(),
             plan: ci.confirm.plan || args.plan,
             yes: ci.confirm.yes || args.yes,
