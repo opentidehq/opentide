@@ -51,7 +51,7 @@ test('a large document reaches a pipe whole', () => {
   const ws = tideCorpus()
   const catalog = run(['--json', 'info', 'catalog'], { cwd: ws, maxBuffer: 1 << 26 })
   assert.equal(catalog.status, 0, catalog.stderr)
-  assert.equal(JSON.parse(catalog.stdout).counts.rules, 10)
+  assert.equal(JSON.parse(catalog.stdout).summary.rules, 10)
 })
 
 test('Ctrl-C ends a run with 130', { skip: process.platform === 'win32' && 'POSIX signals' }, async () => {
