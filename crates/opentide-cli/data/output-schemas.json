@@ -4348,7 +4348,7 @@
         "tenant",
         "status"
       ],
-      "title": "LiveRuleCheckModel",
+      "title": "LiveRejectionModel",
       "type": "object"
     },
     "MigrateStateError": {

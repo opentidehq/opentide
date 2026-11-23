@@ -2,7 +2,7 @@
 
 A tenant refused the check itself, not a query: its credentials, or the account's rights on it.
 
-Exit 1, as `failure.code` of `validate query --live`. No query is checked on that tenant, and the next tenant is checked; `refused_tenants` names every tenant that refused. Queries the tenant refused as invalid before that are still listed in `rejected`. A query refused as invalid is `query_rejected`.
+Exit 1, as `failure.code` of `validate query --live`. The run goes on: that tenant's remaining queries are not sent and the next tenant is checked; `refused_tenants` names every tenant that refused, and `rejected` lists every query any tenant refused as invalid. A query refused as invalid is `query_rejected`. Deploy failures, `doctor` and the SDKs use the same code for the same refusal.
 
 ## Example
 

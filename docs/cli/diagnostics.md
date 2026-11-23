@@ -563,7 +563,7 @@ Correct the asset name, or declare the asset under `[[assets]]`.
 
 A tenant refused the check itself, not a query: its credentials, or the account's rights on it.
 
-Exit 1, as `failure.code` of `validate query --live`. No query is checked on that tenant, and the next tenant is checked; `refused_tenants` names every tenant that refused. Queries the tenant refused as invalid before that are still listed in `rejected`. A query refused as invalid is `query_rejected`.
+Exit 1, as `failure.code` of `validate query --live`. The run goes on: that tenant's remaining queries are not sent and the next tenant is checked; `refused_tenants` names every tenant that refused, and `rejected` lists every query any tenant refused as invalid. A query refused as invalid is `query_rejected`. Deploy failures, `doctor` and the SDKs use the same code for the same refusal.
 
 ### Example
 
@@ -6536,7 +6536,7 @@ Or remove the comment.
 
 `validate query --live` failed because a tenant refused a rule's query as invalid.
 
-Exit 1. As `failure.code` when at least one query was rejected and the run did not fail only on timeouts. When a tenant also fails the run (`authentication_failed`, `tenant_unreachable`, `credential_unset`), the code is that tenant's, and `rejected` still lists the queries rejected before it. Each rejected check is an entry of `rejected` in `--json`, with the rule's `file` and the `line` of its query, the `platform`, the `tenant` and the platform's own `message`. In CI the same rejections are annotations on the rule file (`::error file=…,line=…::` on GitHub Actions) and rows of the job summary. A check that got no answer is not a rejection: see `query_check_timeout`.
+Exit 1. As `failure.code` when at least one query was rejected and the run did not fail only on timeouts. When a tenant also fails the run, the code is that tenant's. A tenant that refuses the check itself (`authentication_failed`) does not stop the run: its remaining queries are not sent, the next tenant is checked, and `rejected` lists every query any tenant refused as invalid. A tenant that cannot be reached (`tenant_unreachable`) or whose credential is unset (`credential_unset`) stops it, and `rejected` lists the queries refused before it. Each rejected check is an entry of `rejected` in `--json`, with the rule's `file` and the `line` of its query, the `platform`, the `tenant` and the platform's own `message`. In CI the same rejections are annotations on the rule file (`::error file=…,line=…::` on GitHub Actions) and rows of the job summary. A check that got no answer is not a rejection: see `query_check_timeout`.
 
 The other rules are still checked, so one run lists every rejected query.
 
@@ -7247,7 +7247,7 @@ Run `opentide generate templates`. When the warning names a `lint.toml` key, fix
 
 A tenant did not answer, so nothing was checked on it.
 
-Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check.
+Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check, and `rejected` lists the queries refused as invalid before it. Deploy failures, `doctor` and the SDKs use the same code for the same failure.
 
 ### Example
 

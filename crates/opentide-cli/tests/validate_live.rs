@@ -647,6 +647,38 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
     assert_eq!(value(&live, "tenant"), &Json::str("lab"));
 }
 
+/// A tenant that stops the check after a query it refused as invalid does
+/// not hide that query: it is in `rejected`, with its rule's file and line,
+/// and a finding for the CI annotations.
+#[test]
+fn a_tenant_that_stops_the_check_keeps_the_query_it_rejected() {
+    let ws = splunk_rules(2);
+    let live = scripted(
+        ws.path(),
+        vec![
+            Err(refused("Unknown search command 'bad'.", None)),
+            Err(ConnectorError::Unreachable {
+                platform: "splunk".into(),
+                tenant: "lab".into(),
+                address: "https://splunk.invalid:8089".into(),
+                reason: "connection refused".into(),
+            }),
+        ],
+    );
+    assert_eq!(
+        value(&live, "_failure_code"),
+        &Json::str("tenant_unreachable")
+    );
+    let Json::Array(rejected) = value(&live, "rejected") else {
+        panic!("rejected is a list")
+    };
+    assert_eq!(rejected.len(), 1);
+    assert!(rejected[0].get("file").and_then(Json::as_str).is_some());
+    assert!(rejected[0].get("line").and_then(Json::as_u64).is_some());
+    assert_eq!(live.findings.len(), 1);
+    assert_eq!(live.findings[0].code, "query_rejected");
+}
+
 #[test]
 fn usage_errors_and_skips_answer_before_any_check() {
     let ws = splunk_rules(1);

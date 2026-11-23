@@ -3775,7 +3775,7 @@ exit: 0
         "tenant",
         "status"
       ],
-      "title": "LiveRuleCheckModel",
+      "title": "LiveRejectionModel",
       "type": "object"
     },
     "LiveRuleCheckModel": {

@@ -2,7 +2,7 @@
 
 A tenant did not answer, so nothing was checked on it.
 
-Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check.
+Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check, and `rejected` lists the queries refused as invalid before it. Deploy failures, `doctor` and the SDKs use the same code for the same failure.
 
 ## Example
 
