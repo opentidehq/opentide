@@ -471,11 +471,13 @@ fn holds(held: &Json, sent: &Json) -> bool {
     }
 }
 
-fn number(value: &Json) -> Option<f64> {
+/// A number as text, `73.0` as `73`, so `73` and `73.0` are one value.
+fn number(value: &Json) -> Option<String> {
     match value {
-        Json::Int(n) => Some(*n as f64),
-        Json::UInt(n) => Some(*n as f64),
-        Json::Float(n) => Some(*n),
+        Json::Int(_) | Json::UInt(_) | Json::Float(_) => {
+            let text = value.to_compact();
+            Some(text.strip_suffix(".0").map_or(text.clone(), str::to_owned))
+        }
         _ => None,
     }
 }
