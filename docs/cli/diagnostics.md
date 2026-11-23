@@ -210,6 +210,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`falco_unknown_source`](#falco_unknown_source) | The event source is not one Falco or its published plugins define, so its fields are not checked. |
 | [`falco_unsafe_na_check`](#falco_unsafe_na_check) | A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text. |
 | [`falco_value_type`](#falco_value_type) | The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule. |
+| [`file_not_found`](#file_not_found) | A `--file` path names a file that does not exist, so it was not validated. |
 | [`filename_mismatch`](#filename_mismatch) | An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default. |
 | [`filename_pattern`](#filename_pattern) | An object file's name does not match the regular expression `lint.toml` sets for it. |
 | [`filename_slug`](#filename_slug) | Retired in opentide 0.24.0; `opentide lint` reports a file name that is not the object's as `filename_mismatch`. |
@@ -3873,6 +3874,22 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
 
+## file_not_found
+
+A `--file` path names a file that does not exist, so it was not validated.
+
+Severity: error. Reported by `opentide validate`, with the path in `context.targets`. It fails the `uuid-format`, `schema` and `queries` checks, as `scope_no_match` does; `scope_no_match` stays for a path that exists but matches no object.
+
+### Example
+
+```text
+opentide validate --file objects/rules/does-not-exist.yaml
+```
+
+### How to fix
+
+Fix the path: it is read relative to the working directory and to the workspace root, and whether its case matters depends on the filesystem. `--file` takes a path or a file name, not a glob: a quoted pattern such as `'objects/rules/*.yaml'` is reported here too, so let the shell expand it. Run `opentide validate` without `--file` to check every object.
+
 ## filename_mismatch
 
 An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
@@ -6095,7 +6112,7 @@ metadata:
 
 ### How to fix
 
-Add `metadata.uuid` with a fresh UUID v4 (`python -c "import uuid; print(uuid.uuid4())"`). Never reuse the UUID of another object: references and deployment state follow it.
+Add `metadata.uuid` with a fresh UUID v4 from any UUID v4 generator (`uuidgen`; PowerShell `[guid]::NewGuid()`). Never reuse the UUID of another object: references and deployment state follow it.
 
 ## name_invalid
 
@@ -6544,7 +6561,7 @@ Add the field when the rule is ready for it: `configurations` with a block per p
 
 `--objective` or `--threat` names a UUID that no object in the catalogue carries.
 
-Exit 2, as `failure.code`, with `failure.argument` naming the option. `opentide new` checks the reference before it writes anything; a malformed UUID is `usage_invalid_value` instead.
+Exit 2, as `failure.code`, with `failure.argument` naming the option. `opentide new` checks the reference before it writes anything; a malformed UUID is `usage_invalid_value` instead. `--objective` also accepts the UUID of a signal an objective defines (`objective.signals[].uuid`), and `detection_model` then names that signal.
 
 ### Example
 
@@ -6554,7 +6571,7 @@ opentide new rule --name "LSASS Access" --objective 00000000-0000-4000-8000-0000
 
 ### How to fix
 
-Copy the UUID from the object's `metadata.uuid`, or create that objective or threat first with `opentide new objective` or `opentide new threat`. `opentide info` lists the catalogue.
+Copy the UUID from the object's `metadata.uuid`, or the signal's `uuid` under `objective.signals`, or create that objective or threat first with `opentide new objective` or `opentide new threat`. `opentide info` lists the catalogue.
 
 ## retired_configuration_file
 
@@ -6698,7 +6715,7 @@ opentide validate --file objects/rules/sentinel-kql-rul.yaml
 
 ### How to fix
 
-Fix the path, file name or UUID. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
+Fix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
 
 ## share_failed
 
@@ -7259,7 +7276,7 @@ enabeld = false        # the key is enabled
 
 ### How to fix
 
-Remove the key or correct its spelling. The JSON Schema of each file (`python -m opentide.generation.configuration_schemas <dir>`) lists the keys it takes.
+Remove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows the keys of the platform files, and an editor on `opentide lsp start` offers each file's keys as you type.
 
 ## url_invalid
 

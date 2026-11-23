@@ -20,7 +20,7 @@ Options:
           [possible values: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
 
       --objective <OBJECTIVE>
-          UUID of the objective this rule implements (detection_model)
+          UUID of the objective or signal this rule implements (detection_model)
 
       --path <PATH>
           File to write, or a folder to write it in (default: the family's objects folder)

@@ -12,7 +12,7 @@
 //! | `sharing-config` | `sharing.toml`'s codes |
 //! | `queries` | the query engines' codes, from the host's [`QueryCheck`] (UC-2.5, #820) |
 //! | `schema`, once nothing else failed | `compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, `compile_invalid_rule`, `compile_failed`, from the host's [`CompileCheck`] |
-//! | every run | `nested_object_file` (warning), `scope_no_match` |
+//! | every run | `nested_object_file` (warning), `scope_no_match`, `file_not_found` |
 //!
 //! The online part of `cve` asks the host's [`CveCheck`] (UC-4.4, #834);
 //! without one it reports nothing. The compile check (#660; UC-2.2, #817)
@@ -125,7 +125,12 @@ impl Check {
                 "deployment_state_shape",
             ],
             Self::Cve => &["invalid_cve"],
-            Self::Queries => &["engine_unavailable", "yaml_parse", "scope_no_match"],
+            Self::Queries => &[
+                "engine_unavailable",
+                "yaml_parse",
+                "scope_no_match",
+                "file_not_found",
+            ],
             Self::SharingConfig => &[
                 "missing_field",
                 "duplicate_name",
@@ -153,7 +158,7 @@ impl Check {
 }
 
 /// Every code a `validate` finding can carry (`VALIDATION_CODES`): each
-/// check's issue and warning codes, `scope_no_match` and
+/// check's issue and warning codes, `scope_no_match`, `file_not_found` and
 /// `nested_object_file`, sorted. The engine's own query codes are not here.
 pub const VALIDATION_CODES: &[&str] = &[
     "api_key_literal",
@@ -171,6 +176,7 @@ pub const VALIDATION_CODES: &[&str] = &[
     "engine_unavailable",
     "external_id_in_rule",
     "external_id_shape",
+    "file_not_found",
     "google_secops_name_duplicate",
     "invalid_cve",
     "invalid_ref",
@@ -1259,15 +1265,23 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
 
     let object_checks = has(Check::UuidFormat) || has(Check::Schema);
     let scoped_checks = object_checks || has(Check::Queries);
+    let missing = if scoped_checks {
+        scope.missing_file_targets(fs)
+    } else {
+        Vec::new()
+    };
     if scope.has_filter() && scoped_checks && work.is_empty() && parse_issues.is_empty() {
-        issues.push(
-            Diagnostic::error(
-                "scope_no_match",
-                "No objects matched the validation scope (check --file, --uuid, --type)",
-            )
-            .with("targets", scope.targets())
-            .with("object_types", scope.object_types()),
-        );
+        issues.extend(missing.iter().map(|target| file_not_found(target)));
+        if scope.selects_beyond(&missing) {
+            issues.push(
+                Diagnostic::error(
+                    "scope_no_match",
+                    "No objects matched the validation scope (check --file, --uuid, --type)",
+                )
+                .with("targets", scope.targets())
+                .with("object_types", scope.object_types()),
+            );
+        }
     } else if scoped_checks && scope.has_file_targets() {
         let selected: Vec<&Path> = work
             .iter()
@@ -1279,6 +1293,10 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             )
             .collect();
         for target in scope.unmatched_file_targets(fs, &selected) {
+            if missing.contains(&target) {
+                issues.push(file_not_found(&target));
+                continue;
+            }
             issues.push(
                 Diagnostic::error(
                     "scope_no_match",
@@ -1725,6 +1743,19 @@ fn sharing_findings(ws: &Workspace) -> Vec<Finding> {
     configuration::checks::sharing_config_issues(&layers, &statuses)
 }
 
+/// `--file` names a path where nothing exists.
+fn file_not_found(target: &str) -> Diagnostic {
+    Diagnostic::error(
+        "file_not_found",
+        format!(
+            "--file {} does not exist, so it was not validated",
+            opentide_schema::vocab::quote(target)
+        ),
+    )
+    .with("targets", vec![target.to_owned()])
+    .with("object_types", Vec::<String>::new())
+}
+
 /// Whether a check's own findings fail it (`_status_for_check`).
 fn status(report: &Report, check: Check) -> &'static str {
     let failed = match check {
@@ -1741,7 +1772,7 @@ fn status(report: &Report, check: Check) -> &'static str {
             report.issues.iter().any(|issue| {
                 (codes.contains(&issue.code.as_str()) && issue.object_type != "configuration")
                     || (matches!(check, Check::UuidFormat | Check::Schema)
-                        && issue.code == "scope_no_match")
+                        && matches!(issue.code.as_str(), "scope_no_match" | "file_not_found"))
             })
         }
     };

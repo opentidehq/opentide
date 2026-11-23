@@ -81,6 +81,8 @@ pub struct CiArgs {
     pub python_version: String,
     /// `--explorer-pages/--no-explorer-pages`.
     pub explorer_pages: bool,
+    /// `--variable-group`, in order.
+    pub variable_group: Vec<String>,
     /// `--default-branch`; `None` detects it.
     pub default_branch: Option<String>,
     /// `--plan`, here or on the group.
@@ -625,10 +627,80 @@ fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
         .collect()
 }
 
+/// The Library variable groups the pipeline links: the `--variable-group`
+/// names, or, when none is given, the groups the existing Azure pipeline
+/// opentide wrote links (they hold the tenants' secrets), which `warnings`
+/// names. Only Azure has them.
+fn variable_groups(
+    args: &CiArgs,
+    pipeline: &str,
+    before: &Result<Option<String>, String>,
+    warnings: &mut Vec<String>,
+) -> Vec<String> {
+    if args.provider != Provider::Azure {
+        return Vec::new();
+    }
+    let given = group_names(&args.variable_group);
+    if !given.is_empty() {
+        return given;
+    }
+    let Ok(Some(old)) = before else {
+        return Vec::new();
+    };
+    if !generated(old) {
+        return Vec::new();
+    }
+    // A name read from the file gets the checks a flag value gets: one with a
+    // control character (a `\n` would break the header comment) is dropped.
+    let (kept, unusable): (Vec<String>, Vec<String>) = group_names(&ci::variable_groups(old))
+        .into_iter()
+        .partition(|name| is_valid_group_name(name));
+    if !unusable.is_empty() {
+        warnings.push(format!(
+            "dropping variable group {} from {pipeline}: not a name `--variable-group` accepts",
+            unusable
+                .iter()
+                .map(|name| repr(name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !kept.is_empty() {
+        let many = kept.len() > 1;
+        warnings.push(format!(
+            "keeping variable {} {} from {pipeline}; pass --variable-group to replace {}",
+            if many { "groups" } else { "group" },
+            kept.join(", "),
+            if many { "them" } else { "it" },
+        ));
+    }
+    kept
+}
+
+/// Whether `name` can be a `--variable-group`: something besides spaces,
+/// with no control character (the header comment holds it on one line).
+fn is_valid_group_name(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty() && !name.chars().any(char::is_control)
+}
+
+/// `--variable-group` names as the pipeline writes them: trimmed, each once,
+/// in the order given.
+fn group_names(given: &[String]) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for name in given.iter().map(|name| name.trim()) {
+        if !names.iter().any(|seen| seen == name) {
+            names.push(name.to_owned());
+        }
+    }
+    names
+}
+
 /// What `setup ci` writes at `pipeline`, which holds `before` (as
 /// `files::read_text` read it): `text`, or nothing when the file there is the
 /// user's own or cannot be read as text; `warnings` says which.
 fn pipeline_bytes(
+    provider: Provider,
     pipeline: &str,
     before: Result<Option<String>, String>,
     text: String,
@@ -655,6 +727,13 @@ fn pipeline_bytes(
             warnings.push(format!(
                 "{pipeline} differs from what this run generates; it is replaced, and any hand edits in it are replaced too (`git diff -- {pipeline}` shows them after the write)."
             ));
+            let dropped = ci::dropped_jobs(provider, &before, &text);
+            if !dropped.is_empty() {
+                warnings.push(format!(
+                    "replacing {pipeline} drops {} that this run does not generate",
+                    dropped.join("; ")
+                ));
+            }
             Some(text.into_bytes())
         }
         _ => Some(text.into_bytes()),
@@ -755,6 +834,12 @@ pub(crate) fn prepare(
             args.provider.name()
         ));
     }
+    if !args.variable_group.is_empty() && args.provider != Provider::Azure {
+        warnings.push(format!(
+            "--variable-group was ignored: only Azure Pipelines links Library variable groups, not {}",
+            args.provider.name()
+        ));
+    }
     let branch = match (&args.provider, &args.default_branch) {
         (Provider::GitLab, given) => {
             if given.is_some() {
@@ -773,7 +858,7 @@ pub(crate) fn prepare(
     };
     let (credentials, sharing_credentials) =
         pipeline_variables(stage, root, &platforms, args.sharing, &mut warnings);
-    let options = ci::Options {
+    let mut options = ci::Options {
         provider: args.provider,
         platforms: platforms.clone(),
         staging: args.staging,
@@ -788,14 +873,16 @@ pub(crate) fn prepare(
         rules_folder: rules_folder(root, cx),
         credentials,
         sharing_credentials,
+        variable_groups: Vec::new(),
     };
-    let text = ci::render(&options)
-        .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let pipeline = args.provider.path();
     let existing = root.join(pipeline);
     let before = files::read_text(stage, &existing);
+    options.variable_groups = variable_groups(args, pipeline, &before, &mut warnings);
+    let text = ci::render(&options)
+        .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let exists = existing.exists() || !matches!(before, Ok(None));
-    let bytes = pipeline_bytes(pipeline, before, text, &mut warnings);
+    let bytes = pipeline_bytes(args.provider, pipeline, before, text, &mut warnings);
     let mut files = vec![(pipeline.to_owned(), bytes, exists)];
     if let Some(promotion) = promotion
         && let Some(content) = promotion.content
@@ -838,6 +925,20 @@ pub(crate) fn check_pipeline_values(args: &CiArgs) -> Result<(), Box<Report>> {
             ),
             &["--default-branch"],
             Some("--default-branch"),
+        ));
+    }
+    if let Some(group) = args
+        .variable_group
+        .iter()
+        .find(|group| !is_valid_group_name(group))
+    {
+        return Err(bad_parameter(
+            &format!(
+                "{} is not a variable group name; give the Library group's name as it is in Azure DevOps",
+                repr(group)
+            ),
+            &["--variable-group"],
+            Some("--variable-group"),
         ));
     }
     if !is_supported_python(&args.python_version, args.provider) {
@@ -1220,6 +1321,70 @@ mod tests {
         }
     }
 
+    /// The groups an old Azure pipeline links get the checks a flag value
+    /// gets: trimmed, each once, and one that would break the header comment
+    /// is dropped with a warning; only plain `- group:` entries are read.
+    #[test]
+    fn groups_kept_from_the_old_file_are_checked_like_flag_values() {
+        let args = CiArgs {
+            provider: Provider::Azure,
+            path: None,
+            group_path: None,
+            staging: true,
+            inflight: true,
+            sharing: false,
+            lint_changed: false,
+            promotion: None,
+            promotion_target: None,
+            python_version: "3.12".into(),
+            explorer_pages: false,
+            variable_group: Vec::new(),
+            default_branch: None,
+            plan: false,
+            yes: true,
+            group_only: Vec::new(),
+        };
+        let old = "# Generated by opentide — regenerate with `opentide setup ci azure`\nvariables:\n  - group: \" a \"\n  - group: \"bad\\nname\"\n  - group: a\n  - group: \"  \"\n  - group: ok\n";
+        let mut warnings = Vec::new();
+        let kept = variable_groups(
+            &args,
+            "azure-pipelines.yml",
+            &Ok(Some(old.to_owned())),
+            &mut warnings,
+        );
+        assert_eq!(kept, ["a", "ok"]);
+        assert_eq!(
+            warnings,
+            [
+                "dropping variable group \"bad\\nname\", \"\" from azure-pipelines.yml: not a name `--variable-group` accepts",
+                "keeping variable groups a, ok from azure-pipelines.yml; pass --variable-group to replace them",
+            ]
+        );
+        // A flag replaces them; another provider has none.
+        let mut flagged = args.clone();
+        flagged.variable_group = vec!["x".into()];
+        assert_eq!(
+            variable_groups(
+                &flagged,
+                "azure-pipelines.yml",
+                &Ok(Some(old.to_owned())),
+                &mut Vec::new()
+            ),
+            ["x"]
+        );
+        let mut github = args;
+        github.provider = Provider::GitHub;
+        assert!(
+            variable_groups(
+                &github,
+                ".github/workflows/opentide.yml",
+                &Ok(Some(old.to_owned())),
+                &mut Vec::new()
+            )
+            .is_empty()
+        );
+    }
+
     #[test]
     fn a_promotion_flag_appends_the_table_deploy_reads() {
         let dir = tempfile::tempdir().unwrap();
@@ -1236,6 +1401,7 @@ mod tests {
             promotion_target: target.map(str::to_owned),
             python_version: "3.12".into(),
             explorer_pages: false,
+            variable_group: Vec::new(),
             default_branch: None,
             plan: false,
             yes: true,
@@ -1310,6 +1476,7 @@ mod tests {
             promotion_target: None,
             python_version: "3.12".into(),
             explorer_pages: false,
+            variable_group: Vec::new(),
             default_branch: None,
             plan: false,
             yes: true,

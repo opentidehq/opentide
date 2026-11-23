@@ -12,6 +12,7 @@ use crate::env::Env;
 const SENTINEL_RULE: &str = "00000000-0000-4000-8003-000000000001";
 const THREAT: &str = "00000000-0000-4000-8001-000000000001";
 const OBJECTIVE: &str = "00000000-0000-4000-8002-000000000001";
+const SIGNAL: &str = "00000000-0000-4000-8099-000000000001";
 
 fn copy_tree(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
@@ -114,6 +115,28 @@ fn every_catalogue_tool_answers_on_the_corpus() {
     );
     let chaining = call(&server, "get_chaining", json!({"uuid": THREAT}));
     assert_eq!(chaining["graph"]["objectives"][0], OBJECTIVE);
+    // A signal's UUID names its objective, and the answer holds only the
+    // returned graph's part of the chaining index.
+    let signal = call(&server, "get_chaining", json!({"uuid": SIGNAL}));
+    assert_eq!(signal["uuid"], OBJECTIVE, "{signal}");
+    assert_eq!(signal["type"], "objective");
+    assert_eq!(signal["resolved_from"]["uuid"], SIGNAL);
+    assert!(
+        !signal["graph"]["rules"].as_array().unwrap().is_empty(),
+        "{signal}"
+    );
+    let index = signal["chaining_index"].as_object().unwrap();
+    let members = signal["graph"]
+        .as_object()
+        .unwrap()
+        .values()
+        .flat_map(|ids| ids.as_array().unwrap())
+        .map(|id| id.as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    assert!(
+        index.keys().all(|key| members.contains(key)),
+        "{index:?} vs {members:?}"
+    );
     let coverage = call(&server, "coverage", json!({"technique": "T1059"}));
     assert_eq!(coverage["covered"], true);
     let status = call(&server, "deployment_status", json!({"uuid": SENTINEL_RULE}));

@@ -61,10 +61,12 @@ pub(crate) const DEFAULTS: &[(&str, &str, &str)] = &[
     ("setup", "promotion", "null"),
     ("setup", "mcp", "[]"),
     ("setup", "skills", "[]"),
+    ("setup", "variable_group", "[]"),
     ("setup repo", "platform", "[]"),
     ("setup ci", "staging", "true"),
     ("setup ci", "inflight", "true"),
     ("setup ci", "promotion", "null"),
+    ("setup ci", "variable_group", "[]"),
     ("setup hooks", "install", "true"),
     ("setup skills", "install", "[]"),
 ];

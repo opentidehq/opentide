@@ -11443,7 +11443,7 @@ exit: 0
           "flags": [
             "--objective"
           ],
-          "help": "UUID of the objective this rule implements (detection_model)",
+          "help": "UUID of the objective or signal this rule implements (detection_model)",
           "is_flag": false,
           "multiple": false,
           "name": "objective",
@@ -13371,6 +13371,21 @@ exit: 0
         },
         {
           "choices": null,
+          "default": [],
+          "envvars": [],
+          "flags": [
+            "--variable-group"
+          ],
+          "help": "Azure Pipelines: link this Library variable group in variables: (repeatable; ignored with a warning for github and gitlab)",
+          "is_flag": false,
+          "multiple": true,
+          "name": "variable_group",
+          "required": false,
+          "secondary_flags": [],
+          "type": "string"
+        },
+        {
+          "choices": null,
           "default": null,
           "envvars": [],
           "flags": [
@@ -14121,6 +14136,21 @@ exit: 0
             "--no-explorer-pages"
           ],
           "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": [],
+          "envvars": [],
+          "flags": [
+            "--variable-group"
+          ],
+          "help": "Azure Pipelines: link this Library variable group in variables: (repeatable; ignored with a warning for github and gitlab)",
+          "is_flag": false,
+          "multiple": true,
+          "name": "variable_group",
+          "required": false,
+          "secondary_flags": [],
+          "type": "string"
         },
         {
           "choices": null,

@@ -220,10 +220,10 @@ def test_cwd_is_where_file_paths_are_read_from(tmp_path: Path) -> None:
     found = from_parent.validate(check="uuid-format", files=[target], queries="off")
     assert [issue["code"] for issue in found.report["issues"]] == ["invalid_uuid"]
     assert from_parent.lint(files=[target]).status == "issues"
-    # From the workspace's own folder, the same path names no file.
+    # From the workspace's own folder, the same path names no file on disk.
     from_root = Workspace.open(repo)
     missed = from_root.validate(check="uuid-format", files=[target], queries="off")
-    assert [issue["code"] for issue in missed.report["issues"]] == ["scope_no_match"]
+    assert [issue["code"] for issue in missed.report["issues"]] == ["file_not_found"]
     assert from_root.lint(files=[target]).unmatched == [target]
 
 
