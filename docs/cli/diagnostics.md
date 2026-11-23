@@ -295,7 +295,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_control_command_unsupported`](#kql_control_command_unsupported) | A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it. |
 | [`kql_deprecated_function`](#kql_deprecated_function) | The KQL function is a deprecated alias; Microsoft Learn names its replacement. |
 | [`kql_deprecated_operator`](#kql_deprecated_operator) | The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs). |
-| [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | join or summarize runs before project, so it carries every column. |
+| [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | A `join` runs on the pipeline's own side while it still carries every column, and a `project` later in the same pipeline would have narrowed it. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
@@ -5360,19 +5360,39 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## kql_join_summarize_before_project
 
-join or summarize runs before project, so it carries every column.
+A `join` runs on the pipeline's own side while it still carries every column, and a `project` later in the same pipeline would have narrowed it.
 
-Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: warning, a cost hint and never an error. Reported by the analysis engine on a KQL query: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. The query is legal and returns the same rows: only the amount of data the join moves changes.
+
+The warning is about the **left** side of the join, the pipeline the `join` operator sits in. It does not look at the right side: a `let` or sub-query on the right that ends in `project`, `summarize` or `distinct` is narrow already, and making it narrower changes nothing here. The right side's shape does not matter; to clear the warning, narrow the left side before the `join`.
+
+It fires when the `join` comes before any `project`, `project-keep`, `project-away`, `summarize`, `distinct` or `count` in that pipeline, and a `project` comes after it. It stays quiet when no `project` follows the `join`, when the pipeline starts from a `let` (or a `union` of `let`s) that ends in one of those operators, and for `summarize` itself, which returns only the columns it names.
 
 ### Example
 
-```text
-opentide validate query
+```kusto
+let Admins = IdentityInfo
+| summarize by AccountUPN;               // the right side is already narrow
+AzureActivity                            // the left side carries every column
+| join kind=inner Admins on $left.Caller == $right.AccountUPN
+| project TimeGenerated, Caller, OperationNameValue
 ```
+
+The warning points at the `join`: `AzureActivity` carries every column into it, however small `Admins` is.
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+Project the columns the rest of the query needs on the left side, before the `join`:
+
+```kusto
+let Admins = IdentityInfo
+| summarize by AccountUPN;
+AzureActivity
+| project TimeGenerated, Caller, OperationNameValue
+| join kind=inner Admins on $left.Caller == $right.AccountUPN
+```
+
+Keep every column the `join` key and the later operators read. If the query needs all columns, for instance `arg_max(TimeGenerated, *)`, leave it: the warning is a hint about cost, and a rule can accept it.
 
 ## kql_parse_error
 
@@ -5428,7 +5448,7 @@ NTAIpDetails   // known to the engine, not declared for sentinel
 
 ### How to fix
 
-Correct the table name, or declare it: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Declare the table: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 
 ```toml
 [[logsources]]
@@ -5436,6 +5456,8 @@ name = "NTAIpDetails"
 description = "IP details from traffic analytics."
 system = "sentinel"
 ```
+
+opentide offers no rename for this code: the table is a real one, so a declared log source's name is never a correction. A declared name that is not a bare KQL identifier (a display name such as `Azure Activity`) is never suggested for any table.
 
 ## kql_type_mismatch
 

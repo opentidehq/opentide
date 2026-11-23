@@ -3,11 +3,16 @@
 //! (`opentide_core::suggest`), and a declared pattern (`*`) never is, since
 //! it is not a name a query can read.
 
-use opentide_analysis::{Catalog, LanguageId, QueryRequest, analyze_query, install_catalog};
+use opentide_analysis::{Catalog, LanguageId, QueryRequest, analyze_query, codes, install_catalog};
 
 const DECLARED: &str = r#"[[logsources]]
 name = "ContosoAuditTrail_CL"
 description = "A custom audit table."
+system = "sentinel"
+
+[[logsources]]
+name = "Azure Activity"
+description = "A display name, not a KQL identifier."
 system = "sentinel"
 
 [[logsources]]
@@ -53,6 +58,24 @@ fn declared_tables_are_suggested_and_patterns_are_not() {
     assert!(
         !proxy.iter().any(|s| s.contains('*')),
         "a declared pattern was suggested: {proxy:?}"
+    );
+    // A declared display name is not a KQL identifier: `Azure Activity` is
+    // never offered, so the quick fix cannot break the query. `AzureActivity`
+    // is a table the catalog knows: undeclared, not misspelt, so no rename.
+    let known = analyze_query(&QueryRequest {
+        language: LanguageId::Kql,
+        platform: Some("sentinel".into()),
+        stack: None,
+        text: "AzureActivity | take 1".into(),
+    });
+    assert_eq!(known.len(), 1, "{known:?}");
+    assert_eq!(known[0].code, codes::KQL_TABLE_NOT_DECLARED);
+    assert_eq!(known[0].suggestion, None, "{known:?}");
+    // An unknown near miss: no declared name that is not an identifier.
+    let near = suggestions("AzureActivty | take 1");
+    assert!(
+        !near.iter().any(|s| s.contains(' ')),
+        "a non-identifier was suggested: {near:?}"
     );
     install_catalog(&Catalog::default()).unwrap();
 }
