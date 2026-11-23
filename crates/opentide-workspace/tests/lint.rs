@@ -564,6 +564,7 @@ mod lint {
             (codes::FILENAME_PATTERN, LintCheck::Filenames),
             (codes::NESTED, LintCheck::Filenames),
             (codes::METADATA, LintCheck::Metadata),
+            (codes::REVIEWED_BEFORE_MODIFIED, LintCheck::Metadata),
             (codes::RECOMMENDED, LintCheck::Recommended),
             (codes::PLACEHOLDER, LintCheck::Placeholders),
         ];
@@ -1349,5 +1350,85 @@ mod lint {
         .unwrap();
         workspace.lint(None, &options);
         assert_eq!(sorted(&check), expected);
+    }
+
+    /// A rule whose `metadata` also holds `extra` (lines under `metadata:`).
+    fn dated_rule(extra: &str) -> String {
+        rule(U1, "Dated").replace("  author: me\n", &format!("  author: me\n{extra}"))
+    }
+
+    fn reviewed_findings(extra: &str, lint_toml: &str) -> Vec<LintFinding> {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/dated.yaml", dated_rule(extra));
+        run(&fs, &config(lint_toml), &options())
+            .findings
+            .into_iter()
+            .filter(|finding| finding.code() == "reviewed_before_modified")
+            .collect()
+    }
+
+    #[test]
+    fn reviewed_before_modified_warns_under_the_metadata_check() {
+        let found = reviewed_findings("  modified: 2026-11-20\n  reviewed: 2026-09-01\n", "");
+        assert_eq!(found.len(), 1);
+        let entry = serde_json::to_value(&found[0]).unwrap();
+        assert_eq!(entry["check"], "metadata");
+        assert_eq!(entry["severity"], "warning");
+        assert_eq!(entry["path"], "objects/rules/dated.yaml");
+        assert_eq!(
+            entry["message"],
+            "metadata.reviewed (2026-09-01) is before metadata.modified (2026-11-20)"
+        );
+        assert_eq!(
+            entry["field_path"],
+            serde_json::json!(["metadata", "reviewed"])
+        );
+        // A datetime counts by its day, as written.
+        let found = reviewed_findings(
+            "  modified: 2026-11-20 08:00:00\n  reviewed: 2026-11-19T23:00:00Z\n",
+            "",
+        );
+        assert_eq!(found.len(), 1);
+    }
+
+    #[test]
+    fn reviewed_on_or_after_modified_is_not_reported() {
+        for extra in [
+            "  modified: 2026-11-20\n  reviewed: 2026-11-20\n",
+            "  modified: 2026-11-20\n  reviewed: 2026-12-01\n",
+            "  modified: 2026-11-20T15:00:00Z\n  reviewed: 2026-11-20\n",
+        ] {
+            assert!(reviewed_findings(extra, "").is_empty(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn reviewed_before_modified_skips_a_missing_or_invalid_date() {
+        for extra in [
+            "  modified: 2026-11-20\n",
+            "  reviewed: 2026-09-01\n",
+            "  modified: 2026-11-20\n  reviewed: soon\n",
+            "  modified: 2026-13-45\n  reviewed: 2026-09-01\n",
+            "  modified: 2026-11-20\n  reviewed: 2026-09-01T10:00:00\n",
+        ] {
+            assert!(reviewed_findings(extra, "").is_empty(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn reviewed_before_modified_follows_lint_toml() {
+        let extra = "  modified: 2026-11-20\n  reviewed: 2026-09-01\n";
+        let off = "[metadata.codes]\nreviewed_before_modified = \"off\"\n";
+        assert!(reviewed_findings(extra, off).is_empty());
+        let info = "[metadata.codes]\nreviewed_before_modified = \"error\"\n";
+        assert_eq!(reviewed_findings(extra, info)[0].severity(), "error");
+        let check = "[metadata]\nseverity = \"info\"\n";
+        assert_eq!(reviewed_findings(extra, check)[0].severity(), "info");
+        // `required = []` stops the key demands, not this comparison.
+        assert_eq!(
+            reviewed_findings(extra, "[metadata]\nrequired = []\n").len(),
+            1
+        );
+        assert!(reviewed_findings(extra, "[metadata]\nenabled = false\n").is_empty());
     }
 }
