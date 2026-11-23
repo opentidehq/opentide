@@ -171,6 +171,22 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
     })
 }
 
+/// The block's `alert.techniques` as `mitreTechniques`: technique and
+/// sub-technique ids as written, without repeats. Graph reads the field back
+/// on the tenant, and `generate extract` imports it, so a redeploy that sent
+/// `[]` would wipe what the tenant holds.
+fn mitre_techniques(alert: Option<&Json>) -> Json {
+    let mut ids: Vec<Json> = Vec::new();
+    if let Some(Json::Array(items)) = alert.and_then(|alert| alert.get("techniques")) {
+        for id in items.iter().filter_map(Json::as_str) {
+            if !ids.iter().any(|known| known.as_str() == Some(id)) {
+                ids.push(id.into());
+            }
+        }
+    }
+    Json::Array(ids)
+}
+
 /// The detection rule body `rule` deploys to `tenant` (`DetectionRule`, as
 /// the client sends it: `@odata.type` for `odata_type`).
 pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
@@ -204,7 +220,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Compile
     );
     template.insert("severity".into(), severity.into());
     template.insert("category".into(), category.into());
-    template.insert("mitreTechniques".into(), Json::Array(Vec::new()));
+    template.insert("mitreTechniques".into(), mitre_techniques(alert));
     template.insert(
         "impactedAssets".into(),
         Json::Array(impacted_assets(block.get("impacted_entities"))),
@@ -284,6 +300,24 @@ mod tests {
         assert_eq!(lower_first("DeviceId"), "deviceId");
         assert_eq!(lower_first("SHA1"), "sHA1");
         assert_eq!(lower_first(""), "");
+    }
+
+    #[test]
+    fn alert_techniques_are_sent_as_mitre_techniques() {
+        let mut alert = Object::new();
+        alert.insert(
+            "techniques".into(),
+            Json::Array(vec!["T1528".into(), "T1059.001".into(), "T1528".into()]),
+        );
+        assert_eq!(
+            mitre_techniques(Some(&Json::Object(alert))).to_compact(),
+            r#"["T1528","T1059.001"]"#
+        );
+        assert_eq!(mitre_techniques(None).to_compact(), "[]");
+        assert_eq!(
+            mitre_techniques(Some(&Json::Object(Object::new()))).to_compact(),
+            "[]"
+        );
     }
 
     #[test]
