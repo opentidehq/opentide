@@ -1613,9 +1613,14 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
                 });
             let detail_resolved = resolvable && session.caps.resolve_completion_detail;
             let new_text = insert_text(&c.label, c.label_detail.as_deref());
+            // A client that shows no `labelDetails` reads the name as the detail.
+            let named_detail = c
+                .label_detail
+                .clone()
+                .filter(|_| !session.caps.completion_label_details);
             lsp::CompletionItem {
                 kind: Some(completion_kind(&c.kind)),
-                detail: c.detail.clone().filter(|_| !detail_resolved),
+                detail: named_detail.or_else(|| c.detail.clone().filter(|_| !detail_resolved)),
                 label_details: c
                     .label_detail
                     .clone()
@@ -1737,7 +1742,15 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         .filter(|(schema, path)| opentide_highlight::tide_field_at(schema, path).is_some());
     let resolved_documentation =
         named.and_then(|(schema, path)| own_documentation(schema, path, &item.label));
-    let resolved_detail = named.map(|(schema, path)| format!("{schema} {path}"));
+    // A vocabulary value's detail is its entry's name, as the list gives it
+    // to a client that shows no `labelDetails`.
+    let resolved_detail = named.map(|(schema, path)| {
+        opentide_highlight::tide_field_at(schema, path)
+            .and_then(|field| opentide_tide::vocab_value(field, &item.label))
+            .map(|entry| entry.name)
+            .filter(|name| !name.is_empty())
+            .map_or_else(|| format!("{schema} {path}"), str::to_owned)
+    });
     if item.documentation.is_none()
         && let Some(docs) = resolved_documentation
     {

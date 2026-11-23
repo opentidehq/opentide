@@ -2151,13 +2151,17 @@ fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
         .as_array()
         .expect("an array for a client with no defaults");
     let (mut lsp, list) = complete(json!({ "textDocument": { "completion": {
-        "completionItem": { "resolveSupport": { "properties": ["documentation", "detail"] } },
+        "completionItem": {
+            "labelDetailsSupport": true,
+            "resolveSupport": { "properties": ["documentation", "detail"] }
+        },
         "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
     } } }));
     let items = list["items"]
         .as_array()
         .expect("a list for a client with defaults");
-    // The techniques from T1000 to T1099 and their sub-techniques, each once.
+    // The techniques from T1000 to T1099 and their sub-techniques, each once
+    // (each was listed twice, with its search hint, before #1745).
     assert!(whole.len() > 150, "the ATT&CK list: {}", whole.len());
     assert_eq!(items.len(), whole.len());
     assert_eq!(list["isIncomplete"], false);
@@ -2166,19 +2170,12 @@ fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
     // (the label, the name and the aliases), and where it differs, the text:
     // about 64 bytes an item besides what it names, where each item that says
     // its data and its range again takes 330 more.
-    let named: usize = items
-        .iter()
-        .map(|item| {
-            let text = |key: &str| {
-                item.pointer(key)
-                    .and_then(Value::as_str)
-                    .map_or(0, str::len)
-            };
-            text("/labelDetails/description") + text("/filterText")
-        })
-        .sum();
+    // A label, a kind, the technique's name beside it (`labelDetails`) and the
+    // text it is found by (the value, the name and the aliases): 167 bytes an
+    // item here (30.8 KB for 185 techniques), where each item that says its
+    // data and its range again takes 360.
     assert!(
-        size(&list) < named + items.len() * 64,
+        size(&list) < items.len() * 180,
         "labels: {} bytes for {} items, whole: {} bytes",
         size(&list),
         items.len(),
@@ -3819,5 +3816,40 @@ fn a_threat_actor_is_offered_once_and_named() {
             .unwrap_or_default()
             .contains("Comment Crew"),
         "{apt1}"
+    );
+}
+
+/// A client that neither shows `labelDetails` nor resolves an item (a bare
+/// LSP client) reads a technique's name as the item's detail, and finds it by
+/// the name as well.
+#[test]
+fn a_client_without_label_details_reads_the_name_as_the_detail() {
+    let (mut lsp, _) = start(json!({ "capabilities": {} }));
+    let head = format!("{THREAT_HEAD}  mitre_attack:\n    - ");
+    let (items, _) = complete_at_end(&mut lsp, "file:///tmp/objects/threats/bare.yaml", &head);
+    labels_offered_once(&items);
+    let uac = items
+        .iter()
+        .find(|item| item["label"] == "T1548.002")
+        .expect("T1548.002");
+    assert!(uac.get("labelDetails").is_none_or(Value::is_null), "{uac}");
+    assert_eq!(
+        uac["detail"], "Abuse Elevation Control Mechanism: Bypass User Account Control",
+        "{uac}"
+    );
+    assert!(
+        uac["filterText"]
+            .as_str()
+            .is_some_and(|text| text.contains("Bypass User Account Control")),
+        "{uac}"
+    );
+    // Resolving it, as a client may still do, keeps the detail and documents it.
+    let resolved = lsp.request("completionItem/resolve", uac.clone())["result"].clone();
+    assert_eq!(resolved["detail"], uac["detail"], "{resolved}");
+    assert!(
+        resolved["documentation"]["value"]
+            .as_str()
+            .is_some_and(|docs| docs.contains("Adversaries may bypass UAC mechanisms")),
+        "{resolved}"
     );
 }

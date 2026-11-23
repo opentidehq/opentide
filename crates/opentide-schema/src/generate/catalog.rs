@@ -816,6 +816,9 @@ fn drop_search_hints(values: &mut Vec<String>, docs: &mut Vec<String>) {
             at += 1;
             keep[at - 1]
         });
+    } else {
+        // Docs that do not pair with the values cannot be kept beside them.
+        docs.clear();
     }
 }
 

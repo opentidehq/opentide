@@ -250,6 +250,15 @@ pub fn vocab_value(
     value: &str,
 ) -> Option<opentide_schema::vocab::OfferedValue<'static>> {
     let (references, scoped) = opentide_highlight::tide_field_vocab(field);
+    entry_in(references, scoped, value)
+}
+
+/// [`vocab_value`] for vocabularies already looked up.
+fn entry_in(
+    references: &[String],
+    scoped: bool,
+    value: &str,
+) -> Option<opentide_schema::vocab::OfferedValue<'static>> {
     references
         .iter()
         .find_map(|reference| opentide_schema::vocab::bundled_value(reference, scoped, value))
@@ -266,16 +275,15 @@ pub fn vocab_markdown(field: &TideField, value: &str) -> Option<&'static str> {
         .filter(|markdown| !markdown.is_empty())
 }
 
-/// Whether a word of `text` starts with `prefix`, ignoring case: typing
-/// `bypass` finds `Abuse Elevation Control Mechanism: Bypass User Account
-/// Control`.
-fn word_match(prefix: &str, text: &str) -> bool {
-    if prefix.is_empty() {
+/// Whether a word of `text` starts with `lowered` (a prefix already
+/// lower-cased), ignoring case: typing `bypass` finds `Abuse Elevation
+/// Control Mechanism: Bypass User Account Control`.
+fn word_match(lowered: &str, text: &str) -> bool {
+    if lowered.is_empty() {
         return true;
     }
-    let prefix = prefix.to_lowercase();
     let text = text.to_lowercase();
-    text.match_indices(&prefix).any(|(at, _)| {
+    text.match_indices(lowered).any(|(at, _)| {
         text[..at]
             .chars()
             .next_back()
@@ -302,11 +310,16 @@ fn complete_values(
         return Vec::new();
     }
     let prefix = value_prefix(cursor, Some(field));
+    let lowered = prefix.to_lowercase();
+    // Looked up once for the field: most fields name no vocabulary.
+    let (references, scoped) = opentide_highlight::tide_field_vocab(field);
     let mut items = Vec::new();
     for (index, value) in field.enum_values.iter().enumerate() {
-        let entry = vocab_value(field, value);
+        let entry = (!references.is_empty())
+            .then(|| entry_in(references, scoped, value))
+            .flatten();
         if !prefix_match(&prefix, value)
-            && !entry.is_some_and(|entry| word_match(&prefix, entry.search))
+            && !entry.is_some_and(|entry| word_match(&lowered, entry.search))
         {
             continue;
         }
@@ -473,6 +486,32 @@ pub fn extract_uuid(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A typed prefix finds a value by any word of its name or aliases, from
+    /// the word's start, in any case, across words and outside ASCII.
+    #[test]
+    fn a_prefix_matches_the_start_of_a_word_of_the_name() {
+        let search = "Abuse Elevation Control Mechanism: Bypass User Account Control";
+        for found in [
+            "",
+            "bypass",
+            "BYPASS u",
+            "control",
+            "mechanism: by",
+            "abuse",
+        ] {
+            assert!(word_match(&found.to_lowercase(), search), "{found}");
+        }
+        for missed in ["ypass", "account controls", "uac"] {
+            assert!(!word_match(&missed.to_lowercase(), search), "{missed}");
+        }
+        assert!(word_match(
+            "comment cr",
+            "APT1, Comment Crew, Comment Group"
+        ));
+        assert!(word_match("équipe", "Groupe Équipe Rouge"));
+        assert!(!word_match("quipe", "Groupe Équipe Rouge"));
+    }
 
     const RULE: &str = r#"name: Sentinel KQL Rule
 metadata:

@@ -45,14 +45,17 @@ pub struct OfferedValue<'a> {
     pub search: &'a str,
 }
 
-/// A value's place in a list of values, by the value: its first place (a
-/// search hint comes after the values).
+/// A value's place in a list of values, by the value.
 type Places = HashMap<&'static str, usize>;
 
 fn places(values: &'static [String]) -> Places {
     let mut places = HashMap::with_capacity(values.len());
+    // A search hint (`T1548 #Abuse Elevation Control Mechanism`) is no value
+    // of its own: a catalog that still lists one finds no entry for it.
     for (at, value) in values.iter().enumerate() {
-        places.entry(value.as_str()).or_insert(at);
+        if !value.contains(" #") {
+            places.entry(value.as_str()).or_insert(at);
+        }
     }
     places
 }

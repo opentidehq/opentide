@@ -641,11 +641,13 @@ impl CompletionItem {
         }
     }
 
+    /// The item with `label_detail` shown beside its label.
     pub fn with_label_detail(mut self, label_detail: impl Into<String>) -> Self {
         self.label_detail = Some(label_detail.into());
         self
     }
 
+    /// The item with `filter_text` to filter it by.
     pub fn with_filter_text(mut self, filter_text: impl Into<String>) -> Self {
         self.filter_text = Some(filter_text.into());
         self
