@@ -287,6 +287,11 @@ fn parse_error(tree: &Tree, err: &opentide_parse::SyntaxError, source: &str) -> 
             usize::from(r.end()).max(usize::from(r.start()) + 1),
         )
     });
+    // The nesting limit: the parser's own words, never the query it stopped on
+    // (the error node holds the rest of it).
+    if let opentide_parse::ErrorKind::TooDeep { .. } = err.kind {
+        return (format!("Lucene syntax error: {}", err.message), span);
+    }
     if let Some(unclosed) = unclosed_at(tree, source, span.start) {
         return unclosed;
     }
@@ -1588,6 +1593,27 @@ mod tests {
         // UTF-8: the range is the `\b`, after a two-byte character.
         let d = &only(r"x:/é\b/", codes::GRAYLOG_REGEX_UNSUPPORTED)[0];
         assert_eq!((d.range.start.character, d.range.end.character), (4, 6));
+    }
+
+    /// The nesting limit is worded like the other languages' (the parser's
+    /// message, one diagnostic) and never dumps the query it stopped on (#1706).
+    #[test]
+    fn nesting_past_the_limit_names_the_limit_not_the_query() {
+        let source = "(".repeat(6_000);
+        let found = analyze(&source).diagnostics;
+        let errors: Vec<_> = found
+            .iter()
+            .filter(|d| d.code == codes::LUCENE_PARSE_ERROR && d.severity == Severity::Error)
+            .filter(|d| d.message.contains("nesting"))
+            .collect();
+        assert_eq!(errors.len(), 1, "{found:?}");
+        let message = &errors[0].message;
+        assert!(
+            message.starts_with("Lucene syntax error: nesting deeper than ")
+                && message.ends_with(" levels"),
+            "{message}"
+        );
+        assert!(message.len() < 80, "{} chars", message.len());
     }
 
     #[test]
