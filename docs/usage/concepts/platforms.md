@@ -29,7 +29,7 @@ The offline check is the analysis engine that ships with `pip install opentide` 
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
-A Sentinel deploy reads each analytics rule (`GET` of the same ARM `alertRules` resource and `api-version` the `PUT` uses) before it writes it: a `404` is a create, a rule that already holds every field opentide sends is `unchanged` and is not written, and any other rule is replaced (an update). ARM's own members (`etag`, `lastModifiedUtc`, `id`, `name`, `type`, `systemData`) and defaults opentide does not send are not a difference. A read that fails fails the rule with ARM's reason; it is never followed by a write. A dry run sends nothing. See [`opentide deploy`](../../cli/deploy.md#unchanged-rules).
+A Sentinel deploy reads each analytics rule before it writes it, so a rule the workspace already holds reads `unchanged` and is not written; see [`opentide deploy`](../../cli/deploy.md#unchanged-rules).
 
 CrowdStrike stores a Next-Gen SIEM correlation rule, whose `query` is CrowdStrike Query Language (CQL, Falcon LogScale's language). The analysis engine checks it offline; opentide calls no CrowdStrike query check, so `validate query --platform crowdstrike --live` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as YARA-X 1.x compiles it (the HarfangLab profile also refuses syntax only YARA-X has), and Sigma is not; `--live` reports `supported: false`.
 

@@ -440,34 +440,85 @@ impl Sentinel {
     }
 }
 
-/// The `error.message` of a partial result, the request's credentials masked
-/// (the rows around it are data and stay as they came).
 /// The events of a deploy: what it did to the rule.
 pub const RULE_CREATED: &str = "sentinel_rule_created";
 /// See [`RULE_CREATED`].
 pub const RULE_UPDATED: &str = "sentinel_rule_updated";
 
-/// Server-populated members ARM adds to a rule; never compared.
-const SERVER_FIELDS: [&str; 6] = [
-    "etag",
-    "id",
-    "name",
-    "type",
-    "systemData",
-    "lastModifiedUtc",
+/// What ARM writes to a rule itself, never a difference: the members beside
+/// `properties` ...
+const SERVER_FIELDS: [&str; 5] = ["etag", "id", "name", "type", "systemData"];
+/// ... and the one inside it.
+const SERVER_PROPERTIES: [&str; 1] = ["lastModifiedUtc"];
+/// The members ARM answers in its own form of a duration (`PT1H` for the
+/// `PT01H00M00S` opentide sends), compared by their seconds.
+const DURATIONS: [&str; 4] = [
+    "queryFrequency",
+    "queryPeriod",
+    "suppressionDuration",
+    "lookbackDuration",
 ];
 
-/// Whether the workspace's rule *held* has every member *sent* has, equal:
-/// only what the request sends is compared (ARM's `etag`, `id`, `name`,
-/// `type`, `systemData`, `lastModifiedUtc` and any default it fills in are
-/// ignored).
+/// Whether the workspace's rule *held* is what a `PUT` of *sent* would leave:
+/// a `PUT` replaces the whole resource, so every member opentide sends has
+/// the same value on the workspace (`same`), and every other member the
+/// workspace has is one ARM writes itself ([`SERVER_FIELDS`],
+/// `lastModifiedUtc`) or is empty (`null`, `false`, `""`, `[]`, `{}`). A
+/// member opentide sent once and no longer sends keeps its value until a
+/// write replaces it: the rule is then not held, and is written.
 fn holds(held: &Json, sent: &Json) -> bool {
-    match (held.as_object(), sent.as_object()) {
-        (Some(held), Some(sent)) => sent
-            .iter()
-            .filter(|(key, _)| !SERVER_FIELDS.contains(&key.as_str()))
-            .all(|(key, value)| held.get(key).is_some_and(|have| holds_member(have, value))),
-        _ => false,
+    same_object(sent, held, &SERVER_FIELDS, Some("properties"))
+}
+
+/// *sent* and *held* as objects: each member sent is the same on the
+/// workspace (a missing one is a sent empty value), and each other member
+/// the workspace has is in *server* or empty. `inner` names the member whose
+/// own server-written members are [`SERVER_PROPERTIES`].
+fn same_object(sent: &Json, held: &Json, server: &[&str], inner: Option<&str>) -> bool {
+    let (Some(sent), Some(held)) = (sent.as_object(), held.as_object()) else {
+        return false;
+    };
+    sent.iter().all(|(key, value)| match held.get(key) {
+        Some(have) if inner == Some(key.as_str()) => {
+            same_object(value, have, &SERVER_PROPERTIES, None)
+        }
+        Some(have) => same(Some(key), value, have),
+        // `enabled` is always answered; a rule without it is not held.
+        None => key != "enabled" && is_empty(value),
+    }) && held.iter().all(|(key, have)| {
+        sent.contains_key(key) || server.contains(&key.as_str()) || is_empty(have)
+    })
+}
+
+/// Whether the value sent (under *key*) is the one the workspace holds: the
+/// same scalar (a number by its value, `5` and `5.0` alike, a duration by
+/// its seconds), the same items in the same order, an object as
+/// [`same_object`], or both empty.
+fn same(key: Option<&String>, sent: &Json, held: &Json) -> bool {
+    match (sent, held) {
+        (Json::Object(_), Json::Object(_)) => same_object(sent, held, &[], None),
+        (Json::Array(sent), Json::Array(held)) => {
+            sent.len() == held.len()
+                && sent
+                    .iter()
+                    .zip(held)
+                    .all(|(sent, held)| same(None, sent, held))
+        }
+        (Json::Str(sent), Json::Str(held))
+            if key.is_some_and(|key| DURATIONS.contains(&key.as_str())) =>
+        {
+            match (
+                opentide_compile::duration::sentinel_seconds(sent),
+                opentide_compile::duration::sentinel_seconds(held),
+            ) {
+                (Ok(sent), Ok(held)) => sent == held,
+                _ => sent == held,
+            }
+        }
+        _ => match (number(sent), number(held)) {
+            (Some(sent), Some(held)) => sent == held,
+            _ => sent == held || (is_empty(sent) && is_empty(held)),
+        },
     }
 }
 
@@ -482,25 +533,20 @@ fn number(value: &Json) -> Option<String> {
     }
 }
 
-fn holds_member(held: &Json, sent: &Json) -> bool {
-    if let (Some(held), Some(sent)) = (held.as_object(), sent.as_object()) {
-        return sent
-            .iter()
-            .all(|(key, value)| held.get(key).is_some_and(|have| holds_member(have, value)));
-    }
-    if let (Some(held), Some(sent)) = (held.as_array(), sent.as_array()) {
-        return held.len() == sent.len()
-            && held
-                .iter()
-                .zip(sent)
-                .all(|(have, want)| holds_member(have, want));
-    }
-    match (number(held), number(sent)) {
-        (Some(held), Some(sent)) => held == sent,
-        _ => held == sent,
+/// Whether a value is what ARM answers for a member nobody set: `null`,
+/// `false`, an empty string, list or object.
+fn is_empty(value: &Json) -> bool {
+    match value {
+        Json::Null | Json::Bool(false) => true,
+        Json::Str(text) => text.is_empty(),
+        Json::Array(items) => items.is_empty(),
+        Json::Object(members) => members.is_empty(),
+        _ => false,
     }
 }
 
+/// The `error.message` of a partial result, the request's credentials masked
+/// (the rows around it are data and stay as they came).
 fn partial_message(answer: &Answer, body: &Json) -> String {
     body.get("error")
         .and_then(|error| error.get("message"))

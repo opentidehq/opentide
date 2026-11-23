@@ -201,18 +201,18 @@ Deploy plan · strategy PREVIEW · 1 platform, 1 tenant
 Plan: 0 to create, 0 to update, 14 to create or update, 0 to disable, 0 to delete
 
 Deploying to sentinel / contoso · 14 rules
-  [ 1/14] ✓ deployed  Sentinel KQL Rule                           0.4s
-  [ 2/14] ✓ deployed  Staging Promote Rule                        0.4s
+  [ 1/14] ✓ created   Sentinel KQL Rule                           0.4s
+  [ 2/14] ✓ unchanged Staging Promote Rule                        0.3s
   [ 3/14] ✗ failed    Password spray from a single source IP      HTTP 400: Failed to parse query: syntax error near '|'
   [ 4/14] · skipped   New service installed on domain controller  not attempted after a failure
   ...
 ✗ sentinel · 2 deployed, 1 failed, 11 not attempted · 1.2s
-✗ Deployment failed · 2 created or updated, 1 failed, 11 not attempted · 1.2s
+✗ Deployment failed · 1 created, 1 unchanged · 1 failed, 11 not attempted · 1.2s
 ```
 
 | Line | Meaning |
 |------|---------|
-| `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. Elastic's word is what Kibana did (`created` or `updated`); a platform that keeps vendor ids shows the planned action; any other platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
+| `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. Elastic's and Sentinel's word is what the platform did (`created` or `updated`; Sentinel reads the rule first); a platform that keeps vendor ids shows the planned action; any other platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
 | `✓ unchanged` | The tenant already held the rule as this run would write it, so nothing was written (Elastic, Sentinel and Splunk, below) |
 | `✗ failed` | The platform, or planning, refused the rule. The line carries the platform's own message and its HTTP status when it has one, so the cause is readable without a traceback. A long message continues on the lines below it on a terminal and stays on one line in a log |
 | `· skipped` | The rule was not sent, with the reason: an `INERT` status, a Sigma rule on a YARA tenant, a retirement of a rule that never reached the tenant (`external_id_missing`) |
@@ -232,7 +232,7 @@ A tenant fails when it cannot be reached or signed in to (a refused or dropped c
 Every run ends with the platform's counts and one outcome line, passed or failed. The outcome line always counts `failed` and `not attempted` and ends with the elapsed time; it counts an action only when some rule had it:
 
 ```text illustrative
-✓ Deployed 91 rules to 1 tenant · 91 created or updated · 0 failed, 0 not attempted · 1m56s
+✓ Deployed 91 rules to 1 tenant · 60 created, 31 unchanged · 0 failed, 0 not attempted · 1m56s
 ```
 
 `--quiet` hides the lines of rules that were deployed or skipped, never a failure. With `--json`, stdout is still one document and nothing is printed for each rule: the document carries `results`, one entry for each rule and tenant of the plan, in the order they were sent, with the rules a failure never reached last, so a pipeline can post a job summary or retry only what failed:
@@ -244,7 +244,7 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 ```json illustrative
 {
   "status": "failed",
-  "message": "Deployment failed · 2 created or updated, 1 failed, 11 not attempted · 1.2s",
+  "message": "Deployment failed · 1 created, 1 unchanged · 1 failed, 11 not attempted · 1.2s",
   "error": "Deployment to sentinel failed on Password spray from a single source IP: HTTP 400: Failed to parse query: syntax error near '|'",
   "results": [
     {
@@ -252,7 +252,7 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
       "name": "Sentinel KQL Rule",
       "platform": "sentinel",
       "tenant": "contoso",
-      "action": "upsert",
+      "action": "create",
       "status": "deployed",
       "seconds": 0.412,
       "error": null,
@@ -299,10 +299,10 @@ A deploy does not rewrite a rule the tenant already holds as the run would write
 A field opentide sent before and no longer sends is handled as each platform's write handles it:
 
 - **Elastic.** A deploy replaces the whole rule, which drops such a field. While the tenant still holds a value in it, the rule is a change, and the replace removes the value.
-- **Sentinel.** A deploy sends the whole rule, which replaces it. While the workspace still holds a value in a member opentide no longer sends, the rule reads `unchanged` and the member keeps its value until the rule changes otherwise.
+- **Sentinel.** A deploy replaces the whole rule. A member the workspace still holds that opentide no longer sends (an alert title, a custom detail, an entity mapping, the trigger, the template link, a grouping or a sub-technique) is a change, and the replace removes it. Members ARM writes itself and members it answers empty are not a difference.
 - **Splunk.** An update writes only the settings opentide sends, and the others keep their value on the saved search: a setting removed from the block's `advanced` table stays on the tenant, and the rule reads `unchanged` when every setting opentide sends is the same. Clear such a setting in Splunk. A saved search 0.28.1 deployed has no `opentide rule` line and may hold responders in `alert.managedBy`, which opentide now sends empty: it reads as changed, and is rewritten once.
 
-A Sentinel rule is read with a `GET` before it is written. A `404` is a `create`, a rule that differs is an `update`, and a read ARM refuses (a `403`, a `5xx`) fails the rule with ARM's reason and writes nothing. A script that read `action: upsert` (`create or update` in the summary) for a Sentinel deploy now gets `create`, `update` or `unchanged`.
+A Sentinel rule is read with a `GET` before it is written. A `404` is a `create`, a rule that differs is an `update`, and a read ARM refuses (a `403`, or a `5xx` after retries) fails the rule with ARM's reason and writes nothing. A deployed Sentinel rule's `action` is what ARM did (`create`, `update` or `unchanged`) in place of `upsert`; a rule that failed or was not attempted keeps the plan's. A `disable` or `delete` keeps its action.
 
 The rename cleanup ([Splunk's renamed rules](#splunks-renamed-rules)) runs for an unchanged rule too, so a copy a failed delete left is found on the next deploy; the row reads `unchanged` and lists the copies it deleted under `removed`.
 

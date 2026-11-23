@@ -5946,7 +5946,7 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     );
     assert!(stderr.contains("unchanged"), "{stderr}");
 
-    // Held with another severity: an update.
+    // Held with another name: an update.
     let mut other = sent_body;
     other
         .get_mut("properties")
@@ -5958,4 +5958,68 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     let (sent, _) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
     assert_eq!(only_action(&sent), "update");
+}
+
+/// A `DISABLED` rule the workspace holds enabled is written, and the row
+/// keeps the plan's `disable` rather than an `update` (OT-3).
+#[test]
+fn sentinel_a_disabled_rule_held_enabled_is_written_and_stays_a_disable() {
+    let ws = fixture("deploy-tenants");
+    let file = ws.path().join("objects/rules/sentinel-a-create.yaml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains("status: STAGING"), "{text}");
+    std::fs::write(&file, text.replace("status: STAGING", "status: DISABLED")).unwrap();
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            "sentinel",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let sent_body = result
+        .get("payloads")
+        .and_then(|p| p.get("sentinel"))
+        .and_then(Json::as_array)
+        .unwrap()
+        .iter()
+        .find(|p| {
+            p.get("uuid").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+        })
+        .and_then(|p| p.get("api_request"))
+        .unwrap()
+        .clone();
+    assert_eq!(
+        sent_body.get("properties").and_then(|p| p.get("enabled")),
+        Some(&Json::Bool(false)),
+        "{}",
+        sent_body.to_compact()
+    );
+    let mut held = sent_body.clone();
+    held.get_mut("properties")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("enabled".into(), Json::Bool(true));
+    let (proxy, env, _ca) = sentinel_read_replay(&sent_body, 200, Some(&held), true);
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        all: true,
+        platform: Some("sentinel".to_owned()),
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let (sent, _) = deploy_with(ws.path(), &args, &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "disable");
 }

@@ -3039,15 +3039,19 @@ impl Sender<'_, '_> {
             result.action = Some(UNCHANGED.to_owned());
         } else if failed.is_none() && id == Some(PlatformId::Sentinel) && upsert {
             // Sentinel reads before it writes (OT-3): an `upsert` reads as
-            // what ARM did, a create or an update.
-            result.action = outcome
-                .events
-                .iter()
-                .find_map(|event| match event.name.as_str() {
-                    opentide_connectors::sentinel::RULE_CREATED => Some("create".to_owned()),
-                    opentide_connectors::sentinel::RULE_UPDATED => Some("update".to_owned()),
-                    _ => None,
-                });
+            // what ARM did, a create or an update; none found keeps the plan's.
+            if let Some(action) =
+                outcome
+                    .events
+                    .iter()
+                    .find_map(|event| match event.name.as_str() {
+                        opentide_connectors::sentinel::RULE_CREATED => Some("create"),
+                        opentide_connectors::sentinel::RULE_UPDATED => Some("update"),
+                        _ => None,
+                    })
+            {
+                result.action = Some(action.to_owned());
+            }
         }
         match failed {
             Some(failed) => Err(scoped(failed, |error| raised(&error))),
