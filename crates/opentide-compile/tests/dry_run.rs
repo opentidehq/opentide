@@ -146,6 +146,48 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
     );
 }
 
+const TWO_STRATEGIES: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"lab\"\n\
+    description = \"d\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nssl = true\n\
+    tenant_id = \"$X\"\nclient_id = \"c\"\n\n[[tenants]]\nname = \"prod\"\n\
+    description = \"d\"\nstrategies = [\"RELEASE\"]\n[tenants.setup]\nssl = true\n\
+    tenant_id = \"$Y\"\nclient_id = \"c\"\n";
+
+#[test]
+fn the_unset_variable_warning_counts_only_the_tenants_the_plan_reaches() {
+    let ws = workspace(&[
+        (
+            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            TWO_STRATEGIES,
+        ),
+        (
+            "objects/rules/a.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000a",
+                "defender_for_endpoint",
+                "STAGING",
+                "",
+            ),
+        ),
+    ]);
+    // A PREVIEW plan reaches `lab` only: `$Y` is prod's, not this run's.
+    let outcome = run(&ws, all(&["preview"]), &[]);
+    assert_eq!(
+        text(&outcome, "tenants"),
+        r#"{"defender_for_endpoint":{"lab":["00000000-0000-4000-8000-00000000000a"]}}"#
+    );
+    assert_eq!(
+        text(&outcome, "warnings"),
+        r#"["a real deploy would need $X, which is unset"]"#
+    );
+    // A plan that routes no rule needs no variable at all.
+    let empty = run(&ws, all(&["release"]), &[]);
+    assert!(
+        !text(&empty, "warnings").contains("a real deploy would need"),
+        "{}",
+        text(&empty, "warnings")
+    );
+}
+
 #[test]
 fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
     let ws = workspace(&[

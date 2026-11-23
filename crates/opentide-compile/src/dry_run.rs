@@ -784,7 +784,14 @@ pub fn run(
         &owned.statuses,
         workspace,
         &config,
-        &deployment.keys().map(String::as_str).collect::<Vec<_>>(),
+        &targets
+            .iter()
+            .flat_map(|(platform, tenants)| {
+                tenants
+                    .keys()
+                    .map(move |tenant| (platform.as_str(), tenant.as_str()))
+            })
+            .collect::<Vec<_>>(),
         is_set,
         &request.cwd,
     );
@@ -934,7 +941,7 @@ fn finish(
     statuses: &strategy::Statuses,
     workspace: &Workspace,
     config: &Json,
-    platforms: &[&str],
+    planned: &[(&str, &str)],
     is_set: &dyn Fn(&str) -> bool,
     cwd: &Path,
 ) {
@@ -949,12 +956,7 @@ fn finish(
             unread.join(", ")
         ));
     }
-    let with_tenants: Vec<&str> = platforms
-        .iter()
-        .copied()
-        .filter(|platform| !plan::tenants(config, platform).is_empty())
-        .collect();
-    let unset = plan::unset_variables(config, &with_tenants, is_set);
+    let unset = plan::unset_variables(config, planned, is_set);
     if !unset.is_empty() {
         plan_warnings.push(plan::unset_warning(&unset));
     }
