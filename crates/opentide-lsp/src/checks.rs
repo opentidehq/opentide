@@ -575,7 +575,7 @@ impl RootChecks {
             return Arc::default();
         }
         if self.all.as_ref().is_some_and(|kept| kept.epoch == epoch)
-            && let Ok(Some(kept)) = self.refresh_all(generation, epoch, &|| false)
+            && let Ok(Some(kept)) = self.refresh_all(generation, epoch, None)
         {
             let holds = self.workspace.as_ref().is_some_and(|workspace| {
                 files.iter().all(|file| {
@@ -726,21 +726,22 @@ impl RootChecks {
         generation: u64,
         epoch: u64,
     ) -> Findings {
-        self.all_findings_until(root, buffers, generation, epoch, &|| false)
+        self.all_findings_until(root, buffers, generation, epoch, None)
             .unwrap_or_default()
     }
 
-    /// [`all_findings`](Self::all_findings) that may stop, when `stop` says
-    /// so between two batches of objects: `None` then, with what was checked
-    /// kept for the next call, which reports what a run that never stopped
-    /// would.
+    /// [`all_findings`](Self::all_findings) that may stop, when `stop` (given
+    /// only where the run may) says so between two batches of objects: `None`
+    /// then, with what was checked kept for the next call, which reports what
+    /// a run that never stopped would. Without `stop` nothing is kept and the
+    /// objects are checked in one go.
     pub(crate) fn all_findings_until(
         &mut self,
         root: &Path,
         buffers: Buffers,
         generation: u64,
         epoch: u64,
-        stop: &dyn Fn() -> bool,
+        stop: Option<&dyn Fn() -> bool>,
     ) -> Option<Findings> {
         if let Some(kept) = &self.all
             && kept.generation == generation
@@ -785,7 +786,7 @@ impl RootChecks {
         &mut self,
         generation: u64,
         epoch: u64,
-        stop: &dyn Fn() -> bool,
+        stop: Option<&dyn Fn() -> bool>,
     ) -> Result<Option<Findings>, Stopped> {
         let Some(workspace) = self.workspace.as_ref() else {
             return Ok(None);
@@ -851,8 +852,8 @@ impl RootChecks {
                 let run = workspace
                     .validate_resumable(&ValidateOptions {
                         queries: QueriesMode::Off,
-                        memo: Some(&self.memo.1),
-                        stop: Some(stop),
+                        memo: stop.map(|_| &self.memo.1),
+                        stop,
                         ..ValidateOptions::default()
                     })
                     .ok_or(Stopped)?;
@@ -1880,39 +1881,43 @@ mod tests {
         assert!(fresh.values().any(|findings| !findings.is_empty()));
 
         let mut kept = RootChecks::default();
-        let asked = Cell::new(0_usize);
         let stops = Cell::new(0_usize);
-        // Stops at every other ask: each attempt checks at least one batch.
+        // Stops at every ask: each attempt checks one batch (a call is not
+        // asked before its first), so the run needs several.
         let stop = || {
-            asked.set(asked.get() + 1);
-            let stopping = asked.get() % 2 == 1;
-            stops.set(stops.get() + usize::from(stopping));
-            stopping
+            stops.set(stops.get() + 1);
+            true
         };
         let mut attempts = 0;
         let found = loop {
             attempts += 1;
             assert!(attempts < 50, "it never finishes");
-            if let Some(found) = kept.all_findings_until(&root, Buffers::default(), 0, 0, &stop) {
+            if let Some(found) =
+                kept.all_findings_until(&root, Buffers::default(), 0, 0, Some(&stop))
+            {
                 break found;
             }
         };
         assert!(stops.get() >= 2, "it stopped {} times", stops.get());
+        assert_eq!(kept.validate_stops, attempts - 1);
         assert_eq!(found, fresh, "resumed equals uninterrupted");
         assert_eq!(kept.validations, (1, 0), "every object is checked once");
 
         // An edit between two attempts: the objects checked before it are
-        // checked again.
+        // checked again. The first attempt checks the first batch, which holds
+        // `rule-0001`.
         let mut kept = RootChecks::default();
-        asked.set(0);
         assert!(
-            kept.all_findings_until(&root, Buffers::default(), 0, 0, &stop)
+            kept.all_findings_until(&root, Buffers::default(), 0, 0, Some(&stop))
                 .is_none()
         );
+        assert!(kept.memo.1.len() >= 32, "{} kept", kept.memo.1.len());
         let edited = write(1, &text.replace("severity: High", "severity: Nope"));
         kept.changed([edited]);
         let found = loop {
-            if let Some(found) = kept.all_findings_until(&root, Buffers::default(), 1, 0, &stop) {
+            if let Some(found) =
+                kept.all_findings_until(&root, Buffers::default(), 1, 0, Some(&stop))
+            {
                 break found;
             }
         };

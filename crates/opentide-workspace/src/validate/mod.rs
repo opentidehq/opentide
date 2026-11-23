@@ -1227,6 +1227,8 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         stop: None,
         ..*options
     };
+    // Only a stop hook makes a run return `None`, and `never` has none: the
+    // empty report is not reachable.
     validate_resumable(ws, &never).unwrap_or_else(|| Validation::empty(None))
 }
 
@@ -1632,7 +1634,8 @@ pub fn validate_resumable(ws: &Workspace, options: &Options<'_>) -> Option<Valid
 /// The findings of each of `work`'s objects, in order, checked in batches
 /// (each on the threads the host has) with `stop` asked before each; what is
 /// checked is kept in `memo`, and an object `memo` holds is not checked
-/// again. `None` when `stop` said to stop.
+/// again. `None` when `stop` said to stop, which it is never asked before the
+/// first batch with an object to check: each call makes progress.
 fn check_in_batches(
     work: &[Subject<'_>],
     memo: &ObjectMemo,
@@ -1642,9 +1645,10 @@ fn check_in_batches(
     fs: &dyn FileSystem,
     root: &Path,
 ) -> Option<Vec<objects::Found>> {
-    /// Objects checked between two asks of `stop`: a few milliseconds on a
-    /// host with one thread, enough to keep the others busy on a host with many.
-    const BATCH: usize = 32;
+    // Objects checked between two asks of `stop`: a few milliseconds on a
+    // host with one thread; more on a host with many, so that its threads
+    // are not joined every few objects.
+    let batch_len = 32.max(4 * rayon::current_num_threads());
     let key = |subject: &Subject<'_>| (subject.path.to_path_buf(), subject.uuid.to_string());
     let lock = || {
         memo.found
@@ -1652,7 +1656,10 @@ fn check_in_batches(
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     };
     let mut all = Vec::with_capacity(work.len());
-    for batch in work.chunks(BATCH) {
+    // A call checks one batch before it asks `stop`: a pull that input keeps
+    // interrupting still goes on, a batch at a time.
+    let mut checked = false;
+    for batch in work.chunks(batch_len) {
         let kept: Vec<Option<objects::Found>> = {
             let held = lock();
             batch
@@ -1660,9 +1667,11 @@ fn check_in_batches(
                 .map(|subject| held.get(&key(subject)).cloned())
                 .collect()
         };
-        if kept.iter().any(Option::is_none) && stop() {
+        let fresh_work = kept.iter().any(Option::is_none);
+        if fresh_work && checked && stop() {
             return None;
         }
+        checked |= fresh_work;
         let fresh: Vec<Option<objects::Found>> = batch
             .par_iter()
             .zip(kept)
