@@ -131,9 +131,82 @@ fn strings(value: Option<&Json>) -> Vec<String> {
     }
 }
 
+/// The code of the warning an objective technique newer than ATT&CK v18 earns.
+pub const TECHNIQUE_NEWER_CODE: &str = "technique_newer_than_sentinel_attack";
+
+/// A deploy's body and the `(code, message)` warnings it earned.
+pub type Compiled = (Json, Vec<(&'static str, String)>);
+
 /// The alert-rule body `rule` deploys to `tenant`.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
+    compile_with_warnings(cx, rule, tenant).map(|(body, _)| body)
+}
+
+/// The ids Sentinel takes for the objective's `resolved` ATT&CK ids: an id
+/// newer than v18 becomes the v18 id(s) it replaced, one with none is dropped,
+/// each with a warning naming the rule, the id and what replaced it.
+fn v18_techniques(
+    label: &str,
+    resolved: &[String],
+    warnings: &mut Vec<(&'static str, String)>,
+) -> Vec<String> {
+    let attack = SentinelAttack::bundled();
+    let mut out: Vec<String> = Vec::new();
+    let push = |id: &str, out: &mut Vec<String>| {
+        if !out.iter().any(|known| known == id) {
+            out.push(id.to_owned());
+        }
+    };
+    for id in resolved {
+        if attack.techniques.contains_key(id) {
+            push(id, &mut out);
+            continue;
+        }
+        let replacements: Vec<&String> = attack
+            .later
+            .techniques
+            .get(id)
+            .map(|newer| {
+                newer
+                    .replaces
+                    .iter()
+                    .filter(|old| attack.techniques.contains_key(*old))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let message = if replacements.is_empty() {
+            format!(
+                "{label}: dropping {id}, which is newer than ATT&CK v{} and has no \
+                 equivalent Sentinel accepts",
+                opentide_schema::vocab::sentinel::VERSION
+            )
+        } else {
+            for old in &replacements {
+                push(old, &mut out);
+            }
+            format!(
+                "{label}: sending {} in place of {id}, which is newer than ATT&CK v{}",
+                replacements
+                    .iter()
+                    .map(|old| old.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" and "),
+                opentide_schema::vocab::sentinel::VERSION
+            )
+        };
+        warnings.push((TECHNIQUE_NEWER_CODE, message));
+    }
+    out
+}
+
+/// [`compile`], with the warnings the body earned.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+pub fn compile_with_warnings(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: &str,
+) -> Result<Compiled, CompileError> {
+    let mut warnings: Vec<(&'static str, String)> = Vec::new();
     let Some(block) = rule.block("sentinel").filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
             "Rule {} ({}): configurations.sentinel is missing",
@@ -439,13 +512,13 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
             }
         }
         properties.insert("tactics".into(), tactics.into());
-        let (techniques, subs) = split_techniques(&resolved);
+        let sendable = v18_techniques(
+            &format!("Rule {} ({})", rule.uuid, rule.name),
+            &resolved,
+            &mut warnings,
+        );
+        let (techniques, subs) = split_techniques(&sendable);
         properties.insert("techniques".into(), techniques.into());
-        let known = &SentinelAttack::bundled().techniques;
-        let subs: Vec<String> = subs
-            .into_iter()
-            .filter(|id| known.contains_key(id))
-            .collect();
         properties.insert(
             "subTechniques".into(),
             if subs.is_empty() {
@@ -459,7 +532,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     let mut body = Object::new();
     body.insert("kind".into(), kind.into());
     body.insert("properties".into(), Json::Object(properties));
-    Ok(Json::Object(body))
+    Ok((Json::Object(body), warnings))
 }
 
 #[cfg(test)]
@@ -485,6 +558,42 @@ mod tests {
         let (techniques, subs) = split_techniques(&ids);
         assert_eq!(techniques, ["T1556", "T1059"]);
         assert_eq!(subs, ["T1556.009", "T1059.001"]);
+    }
+
+    #[test]
+    fn techniques_newer_than_v18_map_to_their_v18_ids() {
+        let ids: Vec<String> = ["T1562.008", "T1562.001", "T1685.002", "T1070.002"]
+            .iter()
+            .map(|id| (*id).to_owned())
+            .collect();
+        let mut warnings = Vec::new();
+        let sendable = v18_techniques("Rule r (n)", &ids, &mut warnings);
+        assert_eq!(sendable, ["T1562.008", "T1562.001", "T1070.002"]);
+        let (parents, subs) = split_techniques(&sendable);
+        assert_eq!(parents, ["T1562", "T1070"]);
+        assert_eq!(subs, ["T1562.008", "T1562.001", "T1070.002"]);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].0, TECHNIQUE_NEWER_CODE);
+        assert!(warnings[0].1.contains("Rule r (n)"), "{}", warnings[0].1);
+        assert!(warnings[0].1.contains("T1562.008 in place of T1685.002"));
+    }
+
+    #[test]
+    fn a_newer_parent_without_a_v18_equivalent_is_dropped_with_a_warning() {
+        let later = &SentinelAttack::bundled().later.techniques;
+        let orphan = later
+            .iter()
+            .find(|(_, newer)| newer.replaces.is_empty())
+            .map(|(id, _)| id.clone());
+        let Some(orphan) = orphan else { return };
+        let mut warnings = Vec::new();
+        let sendable = v18_techniques(
+            "Rule r (n)",
+            &[orphan.clone(), "T1059".into()],
+            &mut warnings,
+        );
+        assert_eq!(sendable, ["T1059"]);
+        assert!(warnings[0].1.contains(&format!("dropping {orphan}")));
     }
 
     #[test]

@@ -2793,8 +2793,12 @@ impl Sender<'_, '_> {
             );
             DeployRequest::delete(rule.uuid.clone())
         } else {
-            let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
-                .map_err(compile_error)?;
+            let (body, warnings) =
+                opentide_compile::sentinel::compile_with_warnings(self.compile, rule, tenant)
+                    .map_err(compile_error)?;
+            for (code, message) in warnings {
+                tracing::warn!(detail = message.as_str(), "{code}");
+            }
             DeployRequest::new(
                 rule.uuid.clone(),
                 Operation::Update,
