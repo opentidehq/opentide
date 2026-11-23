@@ -21,7 +21,8 @@ use super::{resources, tools};
 use crate::app::Interrupt;
 use crate::env::Env;
 
-/// What the Python server says of itself (`scripts/build/mcp_manifest.py`).
+/// What the server says of itself: `data/mcp/manifest.json`, hand-edited (the
+/// Python generator is gone).
 const MANIFEST: &str = include_str!("../../data/mcp/manifest.json");
 
 /// The manifest's parts, as rmcp types.
@@ -492,6 +493,28 @@ mod tests {
                 "opentide: Spec-driven development for agentic detection engineering."
             ),
             "{instructions}"
+        );
+        let chaining = manifest
+            .tools
+            .tools
+            .iter()
+            .find(|tool| tool.name == "get_chaining")
+            .expect("the manifest lists get_chaining");
+        let depth = &chaining.input_schema["properties"]["depth"];
+        assert_eq!(depth["type"], "integer", "{depth}");
+        assert_eq!(depth["minimum"], 0, "{depth}");
+        assert!(
+            chaining.input_schema["required"]
+                .as_array()
+                .is_some_and(|required| required.iter().all(|name| name != "depth")),
+            "depth is optional"
+        );
+        assert!(
+            chaining
+                .description
+                .as_deref()
+                .unwrap_or_default()
+                .contains("depth 2 from a rule includes the other\nrules of its objective")
         );
         let names: Vec<&str> = manifest
             .tools

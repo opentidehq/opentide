@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/tide-corpus/threats
+---
+args: opentide --json info threats
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "info",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "load_errors": 0,
+    "objectives": 1,
+    "rules": 10,
+    "threats": 1
+  },
+  "threats": [
+    "00000000-0000-4000-8001-000000000001"
+  ]
+}
+
+━━━ stderr · empty

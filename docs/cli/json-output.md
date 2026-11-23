@@ -18,7 +18,7 @@ The document is indented when stdout is a terminal, and one compact line otherwi
 
 ## The envelope
 
-Every document carries these keys next to the command's own. Keys that existed before keep their name, type and meaning; new information is only ever added under new keys.
+Every document carries these keys next to the command's own. From 1.0 on, the envelope's keys keep their name, type and meaning; new information is only ever added under new keys. A command's own keys follow the same promise from 1.0.
 
 | Key | Type | Meaning |
 |-----|------|---------|
