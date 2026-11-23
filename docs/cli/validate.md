@@ -514,6 +514,38 @@ configured tenant:
 
 A tenant that refuses the check itself fails as the tenant's failure, not as rejected queries: Elastic's `401` or `403` (or a missing preview privilege), Splunk's parser `401`, SentinelOne's PowerQuery `401`, Defender's `403` (the app registration lacks ThreatHunting.Read.All), Carbon Black Cloud's `401`, Exabeam's `401` or `403`, Graylog's `401`, a Google SecOps instance that refuses or cannot load the credentials, and a sign-in the platform refuses (Entra ID's, for Sentinel and Defender). Its other rules are not sent, and the platform's next tenant is still checked. `--json` names the first such `tenant` and its `host` (`refused_tenants` lists them all when there are several, and names them beside a later tenant that cannot be reached); `message` says `<platform> tenant '<name>' refused the check: <reason>`, and `advice` names the tenant's credentials in its configuration file. Every refusal is also logged on stderr as it comes. `queries_validated` and `queries_rejected` count every query checked, on any tenant (a refused tenant's queries before its refusal included), and are absent when none was; `check_timeout`, `timed_out` and `warnings` are reported as for a run every tenant answered. A refusal Log Analytics or Graylog answers with `403` still fails only that query, as `Queries rejected`: it can be scoped to one table or stream. Through 0.28.1 every refusal was reported as `Queries rejected`, with every query counted as checked.
 
+### Rejected queries
+
+A tenant that refuses a query as invalid (a Splunk parser error, a Log Analytics syntax error) fails that query's check, and the other rules are still checked. The reason is logged on stderr as `query_rejected`, and the run exits `1` with `failure.code` `query_rejected` ([`opentide explain query_rejected`](./diagnostics.md#query_rejected)). `--json` lists each rejected check under `rejected`: the `rule` uuid and `name`, the `platform` and `tenant`, the rule's `file` and the `line` of its `query` key (`null` when the rule has no file), and the platform's own `message` (`errors` holds the same text as a list). A check that got no answer is under `timed_out` instead, and when every failed check is one, `failure.code` is `query_check_timeout`.
+
+In CI each rejected query is also an annotation on its rule file, `::error file=rules/example.yaml,line=14::` on GitHub Actions and the equivalent on Azure Pipelines, and a row of the job summary (`Rule`, `Tenant`, `Reason`). The annotation carries the platform's message, not the tenant's name. The sample is illustrative:
+
+```json illustrative
+{
+  "platform": "splunk",
+  "mode": "live",
+  "status": "failed",
+  "message": "Queries rejected on splunk · 3 checked on 1 tenant",
+  "rejected": [
+    {
+      "rule": "00000000-0000-4000-8046-000000000002",
+      "name": "Splunk unknown command rule",
+      "tenant": "lab",
+      "platform": "splunk",
+      "file": "rules/unknown-command.yaml",
+      "line": 14,
+      "status": "failed",
+      "errors": ["Splunk refused the query: Unknown search command 'badcommand'."],
+      "warnings": [],
+      "message": "Splunk refused the query: Unknown search command 'badcommand'."
+    }
+  ],
+  "failure": { "code": "query_rejected" }
+}
+```
+
+A tenant whose credential variable is not set fails before any query is sent, with `failure.code` `credential_unset`; one that cannot be reached is `tenant_unreachable`, and one that refuses the check itself, `authentication_failed` (above). A run that stops on a tenant keeps the queries it rejected before: `rejected` lists them, with the tenant's code in `failure.code`. Through 1.0.0-rc.3 all of them were `command_failed`; that code remains for a setup that cannot be used, a cancelled run and a crash.
+
 A run whose tenants rejected a query, or that stopped on a tenant, ends its step without a tick: the checklist row is `✗`, never `✓`, above the `error:` line.
 
 ### Slow queries and timeouts

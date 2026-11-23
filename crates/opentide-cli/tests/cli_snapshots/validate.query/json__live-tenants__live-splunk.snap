@@ -13,7 +13,7 @@ exit: 1
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "command_failed",
+    "code": "query_rejected",
     "crash_log": null,
     "message": "Queries rejected on splunk · 3 checked on 1 tenant",
     "suggestion": null
@@ -27,6 +27,22 @@ exit: 1
     "lab": 3
   },
   "queries_validated": 3,
+  "rejected": [
+    {
+      "errors": [
+        "Splunk refused the query on lab: Unknown search command 'badcommand'."
+      ],
+      "file": "objects/rules/splunk-unknown-command.yaml",
+      "line": 15,
+      "message": "Splunk refused the query on lab: Unknown search command 'badcommand'.",
+      "name": "Splunk unknown command rule",
+      "platform": "splunk",
+      "rule": "00000000-0000-4000-8046-000000000002",
+      "status": "failed",
+      "tenant": "lab",
+      "warnings": []
+    }
+  ],
   "schema_version": 1,
   "status": "failed",
   "strategies": [

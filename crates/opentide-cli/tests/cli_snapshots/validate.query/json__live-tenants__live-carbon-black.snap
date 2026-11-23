@@ -13,7 +13,7 @@ exit: 1
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "command_failed",
+    "code": "query_rejected",
     "crash_log": null,
     "message": "Queries rejected on carbon_black_cloud · 2 checked on 1 tenant",
     "suggestion": null
@@ -27,6 +27,22 @@ exit: 1
     "lab": 2
   },
   "queries_validated": 2,
+  "rejected": [
+    {
+      "errors": [
+        "Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces"
+      ],
+      "file": "objects/rules/carbon-black-refused.yaml",
+      "line": 15,
+      "message": "Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces",
+      "name": "Carbon Black refused rule",
+      "platform": "carbon_black_cloud",
+      "rule": "00000000-0000-4000-8046-000000000005",
+      "status": "failed",
+      "tenant": "lab",
+      "warnings": []
+    }
+  ],
   "schema_version": 1,
   "status": "failed",
   "strategies": [
