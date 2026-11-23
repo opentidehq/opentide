@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::configuration::toml::parse;
-use crate::vocab::offer::{dropdown, search_hint, summary_in};
+use crate::vocab::offer::{HINT_ABBREVIATIONS, dropdown, search_hint, search_text, summary_in};
 use crate::vocab::{Entry, Vocabulary};
 
 fn sources(config: &str, objects: &[Vocabulary]) -> Sources {
@@ -219,10 +219,17 @@ fn long_hints_are_abbreviated_unless_the_field_says_not_to() {
         stages: Vec::new(),
         extra: toml::Table::new(),
     };
+    // Whole words only, and none dropped: `Use` and `to` stay.
     assert_eq!(
         search_hint("T1", &entry, false),
-        "T1 #  tool & agent w/ credentials escalate privileges"
+        "T1 #Use of a tool & an agent w/ credentials to escalate privileges"
     );
+    entry.name = "User Activity Based Checks used with Andromeda and Usenet sandboxes".to_owned();
+    assert_eq!(
+        search_hint("T1", &entry, false),
+        "T1 #User Activity Based Checks used w/ Andromeda & Usenet sandboxes"
+    );
+    entry.name = "Use of a tool and an agent with credentials to escalate privileges".to_owned();
     assert_eq!(
         search_hint("T1", &entry, true),
         "T1 #Use of a tool and an agent with credentials to escalate privileges"
@@ -232,6 +239,48 @@ fn long_hints_are_abbreviated_unless_the_field_says_not_to() {
         .extra
         .insert("alias".to_owned(), toml::Value::Array(vec!["S".into()]));
     assert_eq!(search_hint("T1", &entry, false), "T1 #Short, S");
+}
+
+/// Every search hint of the bundled ATT&CK and actor vocabularies says each
+/// word of the entry's name and aliases, whole or as one of
+/// [`HINT_ABBREVIATIONS`]: none loses letters (`Bypass User Account Control`
+/// once read `Bypass  r Account Control`) and none is dropped.
+#[test]
+fn no_search_hint_of_the_bundled_vocabularies_loses_letters_from_a_word() {
+    let mut checked = 0;
+    let mut abbreviated = 0;
+    for field in ["att&ck", "actors"] {
+        let vocabulary = crate::vocab::bundled::get(field).unwrap();
+        for entry in vocabulary.entries.values() {
+            let hint = search_hint(&entry.key, entry, false);
+            let (value, shown) = hint.split_once(" #").unwrap();
+            assert_eq!(value, entry.key, "{hint}");
+            let tips = search_text(entry);
+            let words: Vec<&str> = tips.split(' ').collect();
+            let shown: Vec<&str> = shown.split(' ').collect();
+            assert_eq!(
+                words.len(),
+                shown.len(),
+                "a word was dropped: {hint} ({tips})"
+            );
+            for (word, said) in words.iter().zip(&shown) {
+                assert!(
+                    word == said || HINT_ABBREVIATIONS.contains(&(*word, *said)),
+                    "`{word}` is shown as `{said}`: {hint}"
+                );
+            }
+            checked += 1;
+            abbreviated += usize::from(shown != words);
+        }
+    }
+    assert!(checked > 2000, "{checked} entries");
+    assert!(abbreviated > 0, "no hint was long enough to abbreviate");
+    let attack = crate::vocab::bundled::get("att&ck").unwrap();
+    let uac = &attack.entries["T1548.002"];
+    assert_eq!(
+        search_hint("T1548.002", uac, false),
+        "T1548.002 #Abuse Elevation Control Mechanism: Bypass User Account Control"
+    );
 }
 
 #[test]

@@ -57,6 +57,7 @@ pub use falco::falco_context;
 pub use injection::hunt_query_language;
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
+    vocab_markdown, vocab_value,
 };
 pub use outline::{
     LinkTarget, OutlineKind, OutlineNode, ReferenceLens, TideLink, attack_url, document_links,

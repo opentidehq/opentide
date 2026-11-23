@@ -567,3 +567,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+  # Your own jobs between the markers below survive `opentide setup ci github --yes`;
+  # opentide replaces everything else in this file.
+  # opentide:user-begin
+  # opentide:user-end

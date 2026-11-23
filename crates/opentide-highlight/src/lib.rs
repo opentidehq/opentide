@@ -191,6 +191,9 @@ impl StoredCatalog {
                     .checked_sub(1)
                     .map_or_else(Choices::default, |at| Choices(Repr::Bundled(at))),
                 enum_docs: f.enum_docs.iter().map(|&i| text(i)).collect(),
+                // Stored apart ([`tide_field_vocab`]).
+                vocab: Vec::new(),
+                vocab_scoped: false,
                 ref_kind: f.ref_kind.map(text),
                 const_value: f.const_value.map(text),
                 array: f.array,
@@ -477,6 +480,39 @@ pub fn tide_field_at(schema: &str, path: &str) -> Option<&'static TideField> {
     let key = catalog.resolve(schema)?;
     let index = *catalog.by_path.get(key)?.get(path)?;
     catalog.fields.get(index)
+}
+
+/// The bundled fields' vocabularies by schema and path: the references, and whether the values
+/// carry their stage.
+type BundledVocabs = BTreeMap<String, BTreeMap<String, (Vec<String>, bool)>>;
+
+/// The vocabularies `field`'s values come from (the references it names, `att&ck::1.2`) and
+/// whether its values carry their first stage: its own, as a catalog file gave them, or for a field
+/// of the bundled catalog, which stores them apart, those of the bundled field at its schema and
+/// path. Empty for a field that names none.
+pub fn tide_field_vocab(field: &TideField) -> (&[String], bool) {
+    if !field.vocab.is_empty() {
+        return (&field.vocab, field.vocab_scoped);
+    }
+    static BUNDLED: OnceLock<BundledVocabs> = OnceLock::new();
+    let bundled = BUNDLED.get_or_init(|| {
+        let mut map = BundledVocabs::new();
+        for vocab in opentide_dataset::compiled_value::<Vec<tide_model::StoredVocab>>(
+            "tide-vocabs",
+            opentide_dataset::blob!("tide-vocabs"),
+        ) {
+            map.entry(vocab.schema)
+                .or_default()
+                .insert(vocab.path, (vocab.references, vocab.scoped));
+        }
+        map
+    });
+    bundled
+        .get(&field.schema)
+        .and_then(|paths| paths.get(&field.path))
+        .map_or((&[], false), |(references, scoped)| {
+            (references.as_slice(), *scoped)
+        })
 }
 
 /// Every field of `schema`'s revision (see [`tide_field_at`]), in catalog order.
@@ -1230,11 +1266,27 @@ mod tests {
         assert_eq!(stored.fields.len(), whole.fields.len());
         for (a, b) in stored.fields.iter().zip(&whole.fields) {
             assert_eq!(&*a.enum_values, &*b.enum_values, "{}: {}", a.schema, a.path);
+            // The vocabularies, which the build stores apart from the fields.
+            assert_eq!(
+                super::tide_field_vocab(a),
+                super::tide_field_vocab(b),
+                "{}: {}",
+                a.schema,
+                a.path
+            );
             let (mut a, mut b) = (a.clone(), b.clone());
             a.enum_values = Choices::default();
             b.enum_values = Choices::default();
+            b.vocab.clear();
+            b.vocab_scoped = false;
             assert_eq!(format!("{a:?}"), format!("{b:?}"));
         }
+        assert!(
+            stored
+                .fields
+                .iter()
+                .any(|field| !super::tide_field_vocab(field).0.is_empty())
+        );
         assert_eq!(
             format!("{:?}", stored.schemas),
             format!("{:?}", whole.schemas)

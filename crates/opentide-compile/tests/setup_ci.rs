@@ -64,6 +64,10 @@ fn options(inputs: &toml::Table) -> Options {
         credentials,
         sharing_credentials: Vec::new(),
         variable_groups: inputs.get("variable_groups").map(list).unwrap_or_default(),
+        app_token: inputs
+            .get("app_token")
+            .is_some_and(|value| value.as_bool().unwrap()),
+        user_region: None,
     }
 }
 

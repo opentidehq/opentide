@@ -24,7 +24,7 @@
 mod tide_model;
 
 use std::collections::{BTreeMap, HashMap};
-use tide_model::{Repr, StoredCatalog, StoredField, TideFieldsFile};
+use tide_model::{Repr, StoredCatalog, StoredField, StoredVocab, TideFieldsFile};
 
 const FIELDS: &str = "data/catalogs/tide/generated/fields.json";
 
@@ -118,6 +118,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect::<Result<_, std::num::TryFromIntError>>()?,
         });
     }
+    let vocabs: Vec<StoredVocab> = file
+        .fields
+        .iter()
+        .filter(|f| !f.vocab.is_empty())
+        .map(|f| StoredVocab {
+            schema: f.schema.clone(),
+            path: f.path.clone(),
+            references: f.vocab.clone(),
+            scoped: f.vocab_scoped,
+        })
+        .collect();
+    datasets.value("tide-vocabs", &[FIELDS], &vocabs)?;
     datasets.value("tide-choices", &[FIELDS], &choices)?;
     datasets.value(
         "tide-fields",

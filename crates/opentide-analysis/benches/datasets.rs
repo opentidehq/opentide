@@ -89,6 +89,21 @@ const CASES: &[Case] = &[
         },
     },
     Case {
+        // The editor's first completion of an ATT&CK technique in a threat: the field catalog,
+        // the list of techniques and the name and aliases of each (cold LSP completion, #1745).
+        name: "complete-attack-technique",
+        run: || {
+            let text = "metadata:\n  schema: threat::1.0\nthreat:\n  mitre_attack:\n    - ";
+            let host = MemoryWorkspace::default();
+            std::hint::black_box(opentide_analysis::completions(
+                &host,
+                LanguageId::TideYaml,
+                text,
+                text.len(),
+            ));
+        },
+    },
+    Case {
         name: "kql-sentinel",
         run: || query(LanguageId::Kql, Some("sentinel"), "SecurityEvent | take 1"),
     },
