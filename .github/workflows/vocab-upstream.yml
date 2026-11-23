@@ -69,12 +69,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: development
+          ref: integration/unified-core
 
       - name: Generate GitHub App token
         id: app
         if: env.HAS_APP == 'true'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_KEY }}
@@ -200,7 +200,7 @@ jobs:
           # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
           open_count=$(gh pr list --head "$UPSTREAM_BRANCH" --state open --json number --jq 'length')
           if [[ "$open_count" -eq 0 ]]; then
-            gh pr create --base development --head "$UPSTREAM_BRANCH" \
+            gh pr create --base integration/unified-core --head "$UPSTREAM_BRANCH" \
               --title "chore(vocab): sync ATT&CK techniques and MISP actors" \
               --body "$(cat <<'EOF'
           Companion to the specifications ingest PR. Bundles the regenerated vocabularies and refreshes `data/specifications.lock.json`. Schema pins do not move: new keys open an unpinned contract that only a new schema revision adopts.

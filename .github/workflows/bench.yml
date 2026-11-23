@@ -96,7 +96,7 @@ jobs:
 
       # One uv release: the oracle's Python (ORACLE_PYTHON in xtask/src/bench/oracle.rs) is
       # a uv-managed download this release knows.
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: "0.11.32"
           enable-cache: false
