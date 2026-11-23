@@ -17,7 +17,14 @@
   "tools": [
     {
       "name": "search",
+      "title": "Search the catalogue",
       "description": "Find threats, objectives and rules. Start here when you have no UUID.\n\nquery: a UUID (exact, case-insensitive) or text matched against uuid, title,\nname and description; \"\" matches everything the filters allow.\nFilters: type (rule | threat | objective), platform (exact configuration key:\nsentinel never matches sentinel_one), status (a rule platform block status, exact), technique\n(ATT&CK id, case-insensitive), actor (att&ck::G0006 or G0006).\nReturns a list of {uuid, type, title, status}; [] when nothing matches.\nRead opentide://rules/{uuid} (threats/, objectives/) for the full object.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "query": {
@@ -76,7 +83,14 @@
     },
     {
       "name": "get_chaining",
+      "title": "Threat, objective and rule lineage",
       "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. chaining_index has an entry for each\nUUID of the returned lineage, not for the whole catalogue.\ndepth (an integer, 0 or more) limits the lineage to the objects within that\nmany hops of the object, in either direction (threat <-> objective <-> rule\nand threat chaining links); 0 is the object alone, omitted is the whole\nlineage. Hops run in either direction: depth 2 from a rule includes the other\nrules of its objective. graph, lineage and chaining_index then hold only those objects. A signal UUID\n(objective.signals[].uuid) returns its objective, with resolved_from:\n{type: \"signal\", uuid}; a rule whose detection_model is a signal is in that\nobjective's lineage. An unknown UUID returns only {uuid, found: false,\ngraph: {}}.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "uuid": {
@@ -99,7 +113,14 @@
     },
     {
       "name": "coverage",
+      "title": "ATT&CK coverage",
       "description": "ATT&CK coverage: which rules detect a technique, and where the gaps are.\n\ntechnique (T1059): {technique, covered, matched_techniques, rules}; a parent\ntechnique also matches its sub-techniques. Empty: {technique_count, matrix:\n{technique: [rule uuids]}, tactic_filter}. tactic is echoed, never filtered on.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "technique": {
@@ -119,7 +140,14 @@
     },
     {
       "name": "validate_rule",
+      "title": "Validate a rule",
       "description": "Validate one rule by UUID: schema, vocabularies and references.\n\nReturns {valid, errors, warnings, issues, next_actions}. errors and warnings\nare strings; issues are structured like validation_report's. Prefer\nvalidation_report, which also takes a file path and returns warnings as\nstructured entries.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "uuid": {
@@ -136,7 +164,14 @@
     },
     {
       "name": "validation_report",
+      "title": "Validation report",
       "description": "Validate objects and return every issue with its position and fix. Call after each edit.\n\nNarrow with file (repository-relative or absolute path; a bare file name\nmatches every object file of that name), uuid, or object_type (rule |\nthreat | objective). No argument validates the whole catalogue. Every\nrule query is checked offline: queries is error (a query the platform\nwould reject is an issue), warn (a warning) or off (not checked).\nReturns {ok, issues, warnings, stats, next_actions}. Each issue: code,\nseverity, message, object_uuid, field_path, path, line, column, end_column\n(1-based Unicode code points; end_column exclusive), help, fix ({safe,\nedits: [{line, column, end_line, end_column, replacement}]} or null),\nexplain. safe edits only respell the same word; check the others against\nhelp. yaml_line is 0-based and file_path absolute, kept for older clients.\nDone when ok is true.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "file": {
@@ -166,7 +201,14 @@
     },
     {
       "name": "explain",
+      "title": "Explain a diagnostic code",
       "description": "What a diagnostic code means, an example, and how to fix it.\n\ncode: an issue's code, such as vocab_unknown. Returns {found, code, meaning,\nmarkdown}. An unknown code returns found false and the closest code as\nsuggestion. Empty: {found, codes: [{code, meaning}]}, every code.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "code": {
@@ -181,7 +223,14 @@
     },
     {
       "name": "validate_query",
+      "title": "Validate a query",
       "description": "Check one query offline with the analysis engine, or the catalogue's rules on the tenant.\n\nlive false (default) parses query in its platform's language, with the\nplatform's profile (Defender tables for defender_for_endpoint, Carbon Black\nLucene for carbon_black_cloud, the correlation-rule checks for crowdstrike's\nCQL), and returns {valid, status, language, errors, warnings, diagnostics};\npositions are in the query (1-based, code points). Elastic takes language:\nesql, eql, kuery (default) or lucene, and stack (such as \"9.5\") for ES|QL.\nOffline: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig.\nlive true contacts the tenant with the configured credentials and validates\nthe catalogue rules for platform, not query; ask a person first.\nPlatforms: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk; others return\nsupported false.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
       "inputSchema": {
         "properties": {
           "query": {
@@ -218,7 +267,14 @@
     },
     {
       "name": "run_query",
+      "title": "Run a query on a tenant",
       "description": "Run a read-only query on a platform's tenants and return the rows (live true only).\n\nlive false refuses without contacting a tenant. live true sends query, or\nthe query of the rule whose UUID is rule, to the tenant named by tenant\n(comma-separated names, \"all\", or empty for the only one) over the last\nsince (15m, 24h, 7d) and returns {status, results: [{tenant, status,\ncolumns, rows, row_count, truncated, warnings, error}], row_count}, at\nmost limit rows per tenant. It uses the configured credentials: ask a\nperson first. language is Elastic's: esql, eql, lucene or kuery. index\nnames Elastic index patterns (comma-separated) or a CrowdStrike repository.\n",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
       "inputSchema": {
         "properties": {
           "query": {
@@ -275,7 +331,14 @@
     },
     {
       "name": "deploy_rule",
+      "title": "Deploy a rule",
       "description": "Preview one rule's deployment to a platform. dry_run false deploys it for real.\n\nplatform: optional when the rule has exactly one platform block; with several, name one.\nReturns {action: dry-run | deploy | error, rule_id, status, dry_run, platform,\nmessage}; a dry run also carries the deploy command's plan, changes and payloads, and a\nmessage saying why when nothing would deploy. When nothing was deployed, action is error and status is failed,\nerror (the rule has no block or status for the platform), not_found or\nunknown_platform; a dry run says what the real call would. Keep dry_run true unless a person asks for a\nreal deployment: people review, merge and deploy.\n",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
       "inputSchema": {
         "properties": {
           "uuid": {
@@ -302,7 +365,14 @@
     },
     {
       "name": "deployment_status",
+      "title": "Deployment status",
       "description": "Where a rule is deployed: vendor ids and tenants per platform.\n\nReturns {uuid, found, platforms: {name: {deployed, rule_id, external_ids,\ntenants}}}; state_error when the rule's deployment state cannot be read.\n",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
       "inputSchema": {
         "properties": {
           "uuid": {

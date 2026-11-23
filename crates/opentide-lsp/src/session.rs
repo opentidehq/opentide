@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// An open document.
 pub(crate) struct Document {
@@ -733,6 +734,21 @@ pub(crate) struct Session {
     /// How many workspace pulls were answered from [`workspace_report`](Self::workspace_report),
     /// for the tests (`opentide/__stats`).
     pub workspace_report_hits: Cell<u64>,
+    /// Whether the client sent more while a request runs, where the source
+    /// can tell ([`crate::protocol::InputProbe`]).
+    input_probe: Option<crate::protocol::InputProbe>,
+    /// While a workspace pull may yield ([`should_yield`](Self::should_yield)):
+    /// when it began, when the input was last asked about, and whether it
+    /// yielded.
+    pull_began: Cell<Option<Instant>>,
+    last_probe: Cell<Option<Instant>>,
+    yielded: Cell<bool>,
+    /// Whether the workspace pull being answered may yield at all
+    /// ([`begin_yieldable`](Self::begin_yieldable)).
+    may_yield: Cell<bool>,
+    /// How many times a workspace pull yielded, for the tests
+    /// (`opentide/__stats`).
+    pub pull_yields: Cell<u64>,
     /// The folders the client was last asked to watch beyond the fixed
     /// globs ([`sync_watchers`](Self::sync_watchers)).
     watched: RefCell<Watched>,
@@ -1421,6 +1437,98 @@ impl Session {
         self.touch_object();
     }
 
+    /// What tells whether the client sent more ([`crate::protocol::Source::probe`]).
+    pub(crate) fn set_input_probe(&mut self, probe: Option<crate::protocol::InputProbe>) {
+        self.input_probe = probe;
+    }
+
+    /// An attempt at a workspace pull begins that may yield
+    /// ([`should_yield`](Self::should_yield)); `first` is when its first
+    /// attempt began, if one did, and what is returned is to be passed for
+    /// the next. It may not yield when the client watches no files (nothing
+    /// it finds is kept from one batch to the next, so an attempt that yields
+    /// is lost), nor once its first attempt is [`YIELD_FOR`] old: work no
+    /// attempt can interrupt (the findings of every object, after an edit
+    /// they read) is done again by each, and the pull then runs to its end.
+    pub(crate) fn begin_yieldable(&self, first: Option<Instant>) -> Option<Instant> {
+        /// How long after its first attempt a workspace pull may still yield.
+        const YIELD_FOR: Duration = Duration::from_secs(1);
+        self.yielded.set(false);
+        self.last_probe.set(None);
+        self.may_yield.set(false);
+        self.pull_began.set(None);
+        // Read the clock only where the pull may yield: the browser's build
+        // has no clock, and no probe.
+        if self.input_probe.is_none() || !self.caps.watch_files {
+            return first;
+        }
+        let now = Instant::now();
+        let first = first.unwrap_or(now);
+        let may_yield = now.duration_since(first) < YIELD_FOR;
+        self.may_yield.set(may_yield);
+        self.pull_began.set(may_yield.then_some(now));
+        Some(first)
+    }
+
+    /// The workspace pull ended: whether it yielded.
+    pub(crate) fn end_yieldable(&self) -> bool {
+        self.pull_began.set(None);
+        self.may_yield.set(false);
+        let yielded = self.yielded.replace(false);
+        if yielded {
+            self.pull_yields.set(self.pull_yields.get() + 1);
+        }
+        yielded
+    }
+
+    /// Whether the workspace pull being answered stopped to let the messages
+    /// behind it go first ([`should_yield`](Self::should_yield)).
+    pub(crate) fn has_yielded(&self) -> bool {
+        self.yielded.get()
+    }
+
+    /// Whether the workspace pull being answered should stop and let the
+    /// messages the client sent meanwhile go first: a hover, the semantic
+    /// tokens of a document just opened, a keystroke (#1767). The pull is
+    /// carried to the end of the next batch, and goes on from what it kept
+    /// (the findings of every object, each file's analysis).
+    ///
+    /// Only once the pull ran [`MIN_RUN`] in this attempt, and asking the
+    /// input at most every [`PROBE_EVERY`]; an attempt that keeps yielding
+    /// before it reports a file (an edit the checks across objects read makes
+    /// each check every object again) is bounded by how long
+    /// [`begin_yieldable`](Self::begin_yieldable) lets a pull yield. Never outside a pull that may yield
+    /// ([`begin_yieldable`](Self::begin_yieldable)), nor where the source
+    /// cannot tell (the browser's host, a host's own streams).
+    pub(crate) fn should_yield(&self) -> bool {
+        /// How long a pull runs before it may yield.
+        const MIN_RUN: Duration = Duration::from_millis(20);
+        /// How often it asks whether input is waiting.
+        const PROBE_EVERY: Duration = Duration::from_millis(5);
+        if self.yielded.get() {
+            return true;
+        }
+        let (Some(probe), Some(began)) = (self.input_probe.as_ref(), self.pull_began.get()) else {
+            return false;
+        };
+        if !self.may_yield.get() {
+            return false;
+        }
+        let now = Instant::now();
+        if now.duration_since(began) < MIN_RUN
+            || self
+                .last_probe
+                .get()
+                .is_some_and(|last| now.duration_since(last) < PROBE_EVERY)
+        {
+            return false;
+        }
+        self.last_probe.set(Some(now));
+        let waiting = probe();
+        self.yielded.set(waiting);
+        waiting
+    }
+
     /// A new batch: without a file watcher the disk is read again, and an
     /// analysis is not reused across batches (a configuration file may have
     /// changed under it).
@@ -1688,6 +1796,12 @@ impl Session {
         let _span = crate::timing::Span::new("workspace/diagnostic: files");
         let mut entries = Vec::new();
         for file in disk.index_pending(&parses).values() {
+            // A workspace pull may stop before any file, and go on later
+            // from what is kept (the findings of every object, each file's
+            // analysis); a document's own pull (`only`) never stops.
+            if only.is_none() && self.should_yield() {
+                break;
+            }
             let Some(object) = file.entry() else {
                 continue;
             };

@@ -316,6 +316,25 @@ fn the_handshake_names_the_server_its_version_and_workflow() {
     for tool in tools.as_array().unwrap() {
         let words = tool["description"].as_str().unwrap().split_whitespace();
         assert!(words.count() >= 8, "{tool} describes itself");
+        assert!(
+            tool["title"]
+                .as_str()
+                .is_some_and(|title| !title.is_empty()),
+            "{tool} has a title"
+        );
+        let hints = &tool["annotations"];
+        for hint in [
+            "readOnlyHint",
+            "destructiveHint",
+            "idempotentHint",
+            "openWorldHint",
+        ] {
+            assert!(hints[hint].is_boolean(), "{tool} states {hint}");
+        }
+        if tool["name"] == "deploy_rule" {
+            assert_eq!(hints["destructiveHint"], true, "{tool}");
+            assert_eq!(hints["readOnlyHint"], false, "{tool}");
+        }
         names.push(tool["name"].as_str().unwrap());
     }
     names.sort_unstable();

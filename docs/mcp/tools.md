@@ -26,6 +26,25 @@ The server's `instructions`, sent with the `initialize` response, open with the 
 
 `tool` and `arguments` are the MCP call. `command` is the same step as an `opentide` command line, for an agent with a shell (the CLI's own `next_actions` are `{command, reason}`). The list is empty when there is nothing to do. Every other key of these payloads is unchanged.
 
+### Titles and annotations
+
+`tools/list` gives every tool a `title` and MCP's behaviour `annotations`, which hosts use to decide which calls need a person's approval. Each hint is true of every argument, so a tool that can write or contact a tenant under one argument says so for all of them.
+
+| Tool | Title | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
+|------|-------|:-:|:-:|:-:|:-:|
+| `search` | Search the catalogue | true | false | true | false |
+| `get_chaining` | Threat, objective and rule lineage | true | false | true | false |
+| `coverage` | ATT&CK coverage | true | false | true | false |
+| `validate_rule` | Validate a rule | true | false | true | false |
+| `validation_report` | Validation report | true | false | true | false |
+| `explain` | Explain a diagnostic code | true | false | true | false |
+| `validate_query` | Validate a query | true | false | true | true |
+| `run_query` | Run a query on a tenant | false | false | false | true |
+| `deploy_rule` | Deploy a rule | false | true | false | true |
+| `deployment_status` | Deployment status | true | false | true | false |
+
+`validate_query` reads only the workspace offline, but `live: true` contacts the tenant. `run_query` saves no search or rule, yet an Elastic `kuery` runs a rule preview that writes its alerts to the preview index, so it is not read-only. `deploy_rule` is marked for `dry_run: false`, which creates or replaces the rule on the tenant (a repeat can create it twice when no deployment state was recorded); with `dry_run: true`, the default, it only plans.
+
 ### Failures and `isError`
 
 A tool that ran and could not do what it was asked answers with MCP's tool-level error: `isError: true`, and the same JSON an answer has, so a client that reads the payload sees what it always did (`status`, `message`, `error`). A tool that answers with what it found does not:

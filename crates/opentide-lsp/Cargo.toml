@@ -56,5 +56,10 @@ url.workspace = true
 # Windows, the browser build), decoded and encoded.
 percent-encoding.workspace = true
 
+# WASI's stdin, asked whether the client sent more without waiting for it
+# (`src/stdin.rs`): `poll` and `fcntl` with safe signatures.
+[target.'cfg(target_os = "wasi")'.dependencies]
+rustix = { workspace = true, features = ["std", "event", "fs"] }
+
 [dev-dependencies]
 trycmd.workspace = true

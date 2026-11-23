@@ -483,6 +483,62 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_tool_has_a_title_and_annotations() {
+        let manifest = Manifest::load("1.2.3");
+        assert_eq!(manifest.tools.tools.len(), 10);
+        for tool in &manifest.tools.tools {
+            let name = &tool.name;
+            assert!(
+                tool.title.as_deref().is_some_and(|title| !title.is_empty()),
+                "{name} has a title"
+            );
+            let hints = tool
+                .annotations
+                .as_ref()
+                .unwrap_or_else(|| panic!("{name} has annotations"));
+            for (hint, value) in [
+                ("readOnlyHint", hints.read_only_hint),
+                ("destructiveHint", hints.destructive_hint),
+                ("idempotentHint", hints.idempotent_hint),
+                ("openWorldHint", hints.open_world_hint),
+            ] {
+                assert!(value.is_some(), "{name} states {hint}");
+            }
+        }
+        let hints_of = |name: &str| {
+            manifest
+                .tools
+                .tools
+                .iter()
+                .find(|tool| tool.name == name)
+                .and_then(|tool| tool.annotations.clone())
+                .unwrap_or_else(|| panic!("{name} has annotations"))
+        };
+        let deploy = hints_of("deploy_rule");
+        assert_eq!(deploy.destructive_hint, Some(true));
+        assert_eq!(deploy.read_only_hint, Some(false));
+        assert_eq!(deploy.idempotent_hint, Some(false));
+        assert_eq!(deploy.open_world_hint, Some(true));
+        let run = hints_of("run_query");
+        assert_eq!(run.open_world_hint, Some(true));
+        assert_eq!(run.destructive_hint, Some(false));
+        assert_eq!(hints_of("validate_query").open_world_hint, Some(true));
+        for name in [
+            "search",
+            "get_chaining",
+            "coverage",
+            "validate_rule",
+            "validation_report",
+            "explain",
+            "deployment_status",
+        ] {
+            let hints = hints_of(name);
+            assert_eq!(hints.read_only_hint, Some(true), "{name}");
+            assert_eq!(hints.open_world_hint, Some(false), "{name}");
+        }
+    }
+
+    #[test]
     fn the_manifest_reads_into_every_part() {
         let manifest = Manifest::load("1.2.3");
         assert_eq!(manifest.info.server_info.name, "opentide");
