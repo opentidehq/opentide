@@ -311,6 +311,66 @@ fn enabled_first(left: &toml_edit::Key, right: &toml_edit::Key) -> std::cmp::Ord
     (left.get() != "enabled").cmp(&(right.get() != "enabled"))
 }
 
+/// The dotted path of every key `table` sets, tables descended into. An
+/// array (of tables too) is one key's value, and an array of tables
+/// (`[[tenants]]`, `[[modifiers]]`) is the user's data, not part of the
+/// template's shape: it is left out.
+fn key_paths(table: &dyn toml_edit::TableLike, prefix: &str, out: &mut Vec<String>) {
+    for (key, item) in table.iter() {
+        let path = if prefix.is_empty() {
+            key.to_owned()
+        } else {
+            format!("{prefix}.{key}")
+        };
+        match item {
+            toml_edit::Item::ArrayOfTables(_) => {}
+            toml_edit::Item::Table(inner) => key_paths(inner, &path, out),
+            toml_edit::Item::Value(toml_edit::Value::InlineTable(inner)) => {
+                key_paths(inner, &path, out);
+            }
+            _ => out.push(path),
+        }
+    }
+}
+
+/// The warning for a platform file that has drifted from its bundled
+/// template: the keys the template has and the file does not (`added`) and
+/// the keys the file has and the template does not (`removed`), as dotted
+/// paths. `None` when the two have the same keys, or one is not TOML.
+fn platform_key_changes(relative: &str, current: &str, template: &str) -> Option<String> {
+    let paths = |text: &str| -> Option<Vec<String>> {
+        let document: toml_edit::DocumentMut = text.parse().ok()?;
+        let mut out = Vec::new();
+        key_paths(document.as_table(), "", &mut out);
+        Some(out)
+    };
+    let (have, want) = (paths(current)?, paths(template)?);
+    let added: Vec<&str> = want
+        .iter()
+        .filter(|path| !have.contains(path))
+        .map(String::as_str)
+        .collect();
+    let removed: Vec<&str> = have
+        .iter()
+        .filter(|path| !want.contains(path))
+        .map(String::as_str)
+        .collect();
+    if added.is_empty() && removed.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if !added.is_empty() {
+        parts.push(format!("the new template adds {}", added.join(", ")));
+    }
+    if !removed.is_empty() {
+        parts.push(format!("the new template removes {}", removed.join(", ")));
+    }
+    Some(format!(
+        "{relative} was kept with your values: {}. Add or delete those keys by hand.",
+        parts.join("; ")
+    ))
+}
+
 /// `setup platforms`: each platform's bundled configuration, enabled.
 ///
 /// # Errors
@@ -324,6 +384,7 @@ pub fn platforms(
     let dest = target.join(OPENTIDE_DIR).join("configurations/platforms");
     stage.mkdir(&dest);
     let (mut written, mut updated, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
+    let mut warnings: Vec<String> = Vec::new();
     for platform in chosen {
         let Some(file) = platform_file(platform) else {
             continue;
@@ -339,6 +400,7 @@ pub fn platforms(
         if let Some(current) = read_text(stage, &out)? {
             let enabled = enable_platform_toml(&current)
                 .map_err(|error| format!("{}: {error}", out.display()))?;
+            warnings.extend(platform_key_changes(&relative, &current, template));
             if enabled == current {
                 skipped.push(relative);
             } else {
@@ -379,6 +441,9 @@ pub fn platforms(
     }
     if !skipped.is_empty() {
         result.set("skipped", strings(&skipped));
+    }
+    if !warnings.is_empty() {
+        result.set("warnings", strings(&warnings));
     }
     Ok(result)
 }
@@ -1476,6 +1541,76 @@ mod tests {
 
     /// `setup platforms` adds what it enables to the README's platform
     /// list `setup repo` wrote (#1670, smoke B17), keeping its line endings.
+    /// Regenerating a platform file keeps the user's values and comments
+    /// (only `enabled` is touched), and names the keys the bundled template
+    /// adds and removes (OT-7).
+    #[test]
+    fn a_platform_file_keeps_its_values_and_names_the_key_changes() {
+        let relative = ".opentide/configurations/platforms/sentinel.toml";
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path();
+        let file = target.join(relative);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let chosen = ["sentinel".to_owned()];
+
+        // A file with the template's keys, edited: no warning, nothing lost.
+        let template =
+            opentide_schema::configuration::bundled::text("platforms/sentinel.toml").unwrap();
+        let edited = template
+            .replace("name = \"Microsoft Sentinel\"", "name = \"Mine\" # kept")
+            .replace("enabled = false", "enabled = true");
+        std::fs::write(&file, &edited).unwrap();
+        let mut stage = Stage::new();
+        let result = platforms(&mut stage, target, &chosen).unwrap();
+        assert!(result.strings("warnings").is_empty(), "{result:?}");
+        assert_eq!(
+            result.strings("skipped"),
+            [relative],
+            "unchanged: not written"
+        );
+
+        // A key the template does not have, a key it has that the file lacks,
+        // a user's tenant (array of tables, not the template's shape).
+        let old = "[platform]\nenabled = false # off for now\nname = \"Mine\" # kept\n\
+                   legacy_mode = true\n\n[[tenants]]\nname = \"t\"\n[tenants.setup]\nx = 1\n";
+        std::fs::write(&file, old).unwrap();
+        let mut stage = Stage::new();
+        let result = platforms(&mut stage, target, &chosen).unwrap();
+        let warnings = result.strings("warnings");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].starts_with(relative)
+                && warnings[0].contains("adds platform.description")
+                && warnings[0].contains("removes platform.legacy_mode")
+                && !warnings[0].contains("tenants"),
+            "{}",
+            warnings[0]
+        );
+        // The user's values and comments are kept; only `enabled` flips.
+        assert_eq!(
+            written(stage, &file),
+            old.replace("enabled = false", "enabled = true")
+        );
+
+        // Only an added key, only a removed key.
+        let only_added = "[platform]\nenabled = true\nname = \"x\"\n";
+        assert_eq!(
+            platform_key_changes(relative, only_added, template).unwrap(),
+            format!(
+                "{relative} was kept with your values: the new template adds platform.description. \
+                 Add or delete those keys by hand."
+            )
+        );
+        let only_removed = format!("{template}\n[extra]\nkey = 1\n");
+        let warning = platform_key_changes(relative, &only_removed, template).unwrap();
+        assert!(warning.contains("removes extra.key") && !warning.contains("adds"));
+        assert_eq!(platform_key_changes(relative, template, template), None);
+        assert_eq!(
+            platform_key_changes(relative, "not = [toml", template),
+            None
+        );
+    }
+
     #[test]
     fn enabling_platforms_lists_them_in_the_readme_setup_wrote() {
         let dir = tempfile::tempdir().unwrap();

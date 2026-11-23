@@ -145,6 +145,8 @@ opentide setup repo --yes --name SOC --platform sentinel
 
 Create and enable platform configuration templates under `.opentide/configurations/platforms/`. When `README.md` ends with the `## Platforms` list `setup repo` wrote (only `- <platform>` lines), the platforms it enables are added to that list, and `README.md` is listed under `updated`; a section you have edited is left alone.
 
+A platform file that already exists is kept: your values, comments and `[[tenants]]` stay, and only `enabled` is set to `true`. When the bundled template's keys have moved on, the step warns (in the text output, and in `--json` `warnings`) naming the keys the template adds and the keys it removes, as dotted paths (`platform.description`), for example `.opentide/configurations/platforms/sentinel.toml was kept with your values: the new template adds platform.description; the new template removes platform.legacy_mode. Add or delete those keys by hand.` Nothing is added or deleted for you. A file with the template's keys gets no warning. `[[tenants]]` and `[[modifiers]]` entries are your data and are not compared.
+
 ```bash
 opentide setup platforms --sentinel --defender-for-endpoint --yes
 ```
