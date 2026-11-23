@@ -865,24 +865,8 @@ pub(crate) struct Run {
     pub(crate) pipeline: String,
 }
 
-/// `run_ci_setup`: everything but the writing.
-pub(crate) fn prepare(
-    stage: &stage::Stage,
-    args: &CiArgs,
-    root: &Path,
-    cx: &Context<'_>,
-) -> Result<Run, Box<Report>> {
-    let promotion = promotion_override(
-        root,
-        args.promotion,
-        args.promotion_target.as_deref(),
-        || statuses(root, cx),
-    )?;
-    let platforms = enabled_platforms(stage, root);
-    let mut warnings = Vec::new();
-    if platforms.is_empty() {
-        warnings.push(NO_PLATFORMS_WARNING.to_owned());
-    }
+/// The provider-specific flags the provider does not have, each warned about.
+fn ignored_flag_warnings(args: &CiArgs, warnings: &mut Vec<String>) {
     if args.explorer_pages && args.provider != Provider::GitHub {
         warnings.push(format!(
             "Explorer pages were not written for {}",
@@ -901,6 +885,27 @@ pub(crate) fn prepare(
             args.provider.name()
         ));
     }
+}
+
+/// `run_ci_setup`: everything but the writing.
+pub(crate) fn prepare(
+    stage: &stage::Stage,
+    args: &CiArgs,
+    root: &Path,
+    cx: &Context<'_>,
+) -> Result<Run, Box<Report>> {
+    let promotion = promotion_override(
+        root,
+        args.promotion,
+        args.promotion_target.as_deref(),
+        || statuses(root, cx),
+    )?;
+    let platforms = enabled_platforms(stage, root);
+    let mut warnings = Vec::new();
+    if platforms.is_empty() {
+        warnings.push(NO_PLATFORMS_WARNING.to_owned());
+    }
+    ignored_flag_warnings(args, &mut warnings);
     let branch = match (&args.provider, &args.default_branch) {
         (Provider::GitLab, given) => {
             if given.is_some() {
