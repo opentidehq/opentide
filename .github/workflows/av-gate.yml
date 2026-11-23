@@ -10,8 +10,9 @@ name: AV gate
 #     imports listed, none of the key translation (GetForegroundWindow,
 #     ToUnicodeEx, ...) in the language server (scripts/av/pe_imports.py);
 #   - `clamav`: ClamAV's signatures, freshly fetched (`freshclam`), with archive
-#     scanning (`clamscan --scan-archive`), on the artifacts and on their
-#     extracted files;
+#     scanning, on the artifacts and on their extracted files: one clamd on
+#     every core (scripts/av/clamav-scan.sh), a canary first and a verdict for
+#     every file after;
 #   - `yara`: Neo23x0 signature-base and Elastic protections-artifacts at pinned
 #     commits (scripts/av/fetch-rules.sh); a hit fails the gate unless its rule is
 #     on the reviewed allow-list (scripts/av/yara-allowlist.toml);
@@ -128,10 +129,12 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq clamav clamav-freshclam
-          # freshclam runs as a service on a fresh image: stop it, and fetch the
-          # databases once, in the foreground.
-          sudo systemctl stop clamav-freshclam || true
+          sudo apt-get install -y -qq clamav clamav-freshclam clamav-daemon
+          # The packages run freshclam and clamd as services: stop both (the scan
+          # starts a clamd of its own, with its own config; the packaged one,
+          # started by freshclam's reload notice, would load a second copy of the
+          # databases beside it), and fetch the databases once, in the foreground.
+          sudo systemctl stop clamav-freshclam clamav-daemon.socket clamav-daemon || true
           sudo freshclam --quiet
           # The databases' versions and signature counts go to the log: a verdict is only
           # meaningful with them (a database that freshclam updated is main.cld, not main.cvd).
@@ -141,49 +144,24 @@ jobs:
           done
       - name: Extract the archives
         run: python3 scripts/av/extract.py av-artifacts av-extracted
-      # clamscan exits 0 clean, 1 a detection, 2 an error: the gate fails on
-      # either. Archives are scanned by the engine (`--scan-archive`, nested
-      # to a depth of 30) on the artifacts, and the extracted files one by one.
-      # clamscan uses one core: every file of both trees is dealt, largest
-      # first, into one list per core, and one clamscan reads each list
-      # (`--file-list`), so the packages' scan (4.5 to 6.5 min on one core,
-      # the release build's last job) runs on all of them. Every file is
-      # still scanned, with the same options; any one scan's failure fails
-      # the step.
-      - name: clamscan
-        run: |
-          set -euo pipefail
-          lists="${RUNNER_TEMP}/clamscan-lists"
-          mkdir -p "${lists}"
-          jobs="$(nproc)"
-          find av-artifacts av-extracted -type f -printf '%s\t%p\n' | sort -rn | cut -f2- \
-            | awk -v n="${jobs}" -v dir="${lists}" '{ print > (dir "/" (NR - 1) % n ".txt") }'
-          wc -l "${lists}"/*.txt
-          pids=()
-          for list in "${lists}"/*.txt; do
-            clamscan --scan-archive=yes --max-filesize=900M --max-scansize=4000M \
-              --max-recursion=30 --alert-exceeds-max=yes --infected \
-              --file-list="${list}" > "${list%.txt}.log" 2>&1 &
-            pids+=("$!")
-          done
-          status=0
-          for pid in "${pids[@]}"; do
-            wait "${pid}" || status=1
-          done
-          for log in "${lists}"/*.log; do
-            echo "::group::clamscan $(basename "${log}" .log)"
-            cat "${log}"
-            echo "::endgroup::"
-            cat "${log}" >> "${RUNNER_TEMP}/clamscan.txt"
-          done
-          exit "${status}"
+      # Both trees, as the gate was designed (#1743): archives opened by the
+      # engine on the artifacts, and the extracted files one by one. One clamd
+      # scans them on every core (`clamdscan --multiscan`), the databases loaded
+      # once, so what it has found clean is a cache hit when it comes again: the
+      # extracted copy of a wheel's member is not scanned a second time. One
+      # clamscan per core (#1785) scanned it again in each process that met it,
+      # each process with its own copy of the databases. Any detection, scan
+      # error, missed canary or file without a verdict fails the step
+      # (scripts/av/clamav-scan.sh).
+      - name: ClamAV scan
+        run: bash scripts/av/clamav-scan.sh "${RUNNER_TEMP}/clamav.txt" av-artifacts av-extracted
       - name: Summary
         if: always()
         run: |
           {
             echo "### AV gate: ClamAV"
             echo '```'
-            grep -E 'FOUND|Known viruses|Engine version|Infected files|Scanned files|Time' "${RUNNER_TEMP}/clamscan.txt" 2>/dev/null || echo "no result"
+            cat "${RUNNER_TEMP}/clamav.txt" 2>/dev/null || echo "no result"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
