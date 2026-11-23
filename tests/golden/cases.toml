@@ -33,7 +33,7 @@ timeout_secs = 180
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
-vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
+vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", signal = "00000000-0000-4000-8099-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
 [fixtures.tide-corpus-folders]
 kind = "tide-corpus"
@@ -1108,6 +1108,18 @@ fixtures = ["live-tenants"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-splunk"
 
+# A refused query in CI: the platform's reason is an `::error file=…,line=…::`
+# annotation on the rule file (plain mode; json mode has no sinks), and
+# `rejected` lists it in the json case above.
+[[case]]
+command = "validate query"
+variant = "live-splunk-ci-github"
+args = ["validate", "query", "--live", "--platform", "splunk"]
+modes = ["plain"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+cassette = "golden/validate-live-splunk"
+
 [[case]]
 command = "validate query"
 variant = "live-carbon-black-valid"
@@ -1701,6 +1713,21 @@ normalise = ["fresh-uuids"]
 command = "new rule"
 variant = "no-platform"
 args = ["new", "rule", "--name", "LSASS Access", "--objective", "{objective}"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+# `--objective` also takes the UUID of a signal an objective defines.
+[[case]]
+command = "new rule"
+variant = "signal-objective"
+args = ["new", "rule", "--name", "Logon Signal", "--objective", "{signal}"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "unknown-objective"
+args = ["new", "rule", "--name", "Orphan", "--objective", "00000000-0000-4000-8000-000000000000"]
 fixtures = ["tide-corpus"]
 normalise = ["fresh-uuids"]
 

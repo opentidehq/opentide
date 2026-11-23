@@ -214,9 +214,14 @@ impl Workspace {
             plugins: Vec::new(),
         };
         // A plan reads every rule file or a selection, never a git diff.
-        let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
-            Err("the facade plans every rule file or a selection".to_owned())
-        };
+        let changed =
+            |_: &Path,
+             _: &str|
+             -> Result<(Scope, Option<String>), opentide_compile::dry_run::ScopeError> {
+                Err("the facade plans every rule file or a selection"
+                    .to_owned()
+                    .into())
+            };
         let is_set = |name: &str| crate::workspace::is_set(options.environment.as_ref(), name);
         let outcome = dry_run::run(ws, &owned, &request, &changed, &is_set);
         let message = || {

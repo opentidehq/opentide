@@ -4240,6 +4240,117 @@
       "title": "LiveRuleCheckModel",
       "type": "object"
     },
+    "LiveRejectionModel": {
+      "additionalProperties": true,
+      "description": "One query a tenant refused as invalid (``validate query --live``): the check, with where the rule is written.",
+      "properties": {
+        "rule": {
+          "description": "The rule's UUID",
+          "title": "Rule",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "tenant": {
+          "title": "Tenant",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which of a rule's queries this is",
+          "title": "Label"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "query_check_timeout: the query got no answer within check_timeout",
+          "title": "Code"
+        },
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "platform": {
+          "description": "The platform's key",
+          "title": "Platform",
+          "type": "string"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The rule's file, workspace-relative",
+          "title": "File"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The 1-based line of the rule's query key in its file",
+          "title": "Line"
+        },
+        "message": {
+          "description": "What the platform said",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "name",
+        "tenant",
+        "status"
+      ],
+      "title": "LiveRejectionModel",
+      "type": "object"
+    },
     "MigrateStateError": {
       "additionalProperties": true,
       "properties": {
@@ -5955,6 +6066,14 @@
             "$ref": "#/$defs/LiveRuleCheckModel"
           },
           "title": "Timed Out",
+          "type": "array"
+        },
+        "rejected": {
+          "description": "Live: the queries a tenant refused as invalid, each with its rule's file and line",
+          "items": {
+            "$ref": "#/$defs/LiveRejectionModel"
+          },
+          "title": "Rejected",
           "type": "array"
         },
         "tenant": {

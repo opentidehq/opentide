@@ -494,7 +494,40 @@ pub fn query_summary(result: &Json, message: Option<&str>) -> String {
         let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
         lines.extend(table(&["Tenant", "Queries"], &shown, rows.len()));
     }
+    rejected_table(result, &mut lines);
     lines.join("\n") + "\n"
+}
+
+/// The queries a tenant rejected: the rule's file and line, the tenant and
+/// the platform's reason.
+fn rejected_table(result: &Json, lines: &mut Vec<String>) {
+    let Some(Json::Array(items)) = result.get("rejected") else {
+        return;
+    };
+    if items.is_empty() {
+        return;
+    }
+    let rows: Vec<Vec<String>> = items
+        .iter()
+        .map(|item| {
+            let field = |key: &str| item.get(key).and_then(Json::as_str).unwrap_or_default();
+            let place = match (field("file"), item.get("line").and_then(Json::as_u64)) {
+                ("", _) => field("name").to_owned(),
+                (file, Some(line)) => format!("{file}:{line}"),
+                (file, None) => file.to_owned(),
+            };
+            vec![
+                cell(&place),
+                cell(field("tenant")),
+                cell(&shorten(field("message"), 3, 300)),
+            ]
+        })
+        .collect();
+    lines.push(String::new());
+    lines.push("**Rejected queries**".to_owned());
+    lines.push(String::new());
+    let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
+    lines.extend(table(&["Rule", "Tenant", "Reason"], &shown, rows.len()));
 }
 
 #[cfg(test)]
@@ -641,6 +674,24 @@ mod tests {
             "### ✓ opentide validate query --platform splunk\n\n \n\n\
              | Tenant | Queries |\n|---|---|\n| prod | 2 |\n| &lt;dev&gt; | 1 |\n"
         );
+    }
+
+    #[test]
+    fn a_query_summary_lists_the_rejected_queries_with_their_place() {
+        let result = Json::parse(
+            r#"{"platform": "splunk", "status": "failed", "message": "Queries rejected",
+                "rejected": [{"name": "r", "tenant": "lab", "file": "rules/a.yaml", "line": 9,
+                              "message": "Unknown search command 'bad'."}]}"#,
+        )
+        .unwrap();
+        let markdown = query_summary(&result, None);
+        assert!(markdown.contains("**Rejected queries**"), "{markdown}");
+        assert!(
+            markdown.contains("rules/a.yaml:9") && markdown.contains("Unknown search command"),
+            "{markdown}"
+        );
+        let clean = Json::parse(r#"{"platform": "splunk", "status": "passed"}"#).unwrap();
+        assert!(!query_summary(&clean, None).contains("Rejected"));
     }
 
     #[test]

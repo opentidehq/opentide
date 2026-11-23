@@ -1301,6 +1301,20 @@ impl Run<'_> {
         );
         let mut report = live.report(self.env);
         report.ci_summary = Some(summary::query_summary(&live.result_json(), None));
+        if !live.findings.is_empty() {
+            // The refused queries as CI annotations on their rule files; the
+            // job summary above already lists them.
+            let terminal = self.terminal();
+            let provider = crate::render::ci::active_provider(terminal.mode, self.env);
+            let root = crate::render::ci::checkout_root(provider, self.env);
+            let lines =
+                crate::render::ci::annotation_lines(&live.findings, provider, root.as_deref());
+            if !lines.is_empty() {
+                report
+                    .body
+                    .push(crate::commands::Block::Raw(lines.join("\n") + "\n"));
+            }
+        }
         report
     }
 
@@ -1462,6 +1476,19 @@ impl Run<'_> {
         }
     }
 
+    /// The CI run's warning for a push whose diff starts at its last commit's
+    /// parent (Azure Pipelines names no earlier commit): a build-summary issue
+    /// on Azure beside the `warning:` line; none in the machine modes or
+    /// outside CI.
+    fn push_note_lines(&self, warnings: &[String]) -> Vec<String> {
+        let provider = crate::render::ci::active_provider(self.mode, self.env);
+        warnings
+            .iter()
+            .filter(|warning| warning.starts_with(opentide_compile::git::LAST_COMMIT_ONLY_PREFIX))
+            .filter_map(|warning| crate::render::ci::warning_line(provider, warning, None))
+            .collect()
+    }
+
     /// `opentide deploy`: a send, a dry run, or one of its subcommands.
     fn run_deploy(
         &self,
@@ -1516,6 +1543,11 @@ impl Run<'_> {
                     // A run over the workspace's platforms that matched no
                     // rule says so to the CI run as a whole (`emit_warning`).
                     self.no_rules_warning(&mut report);
+                }
+                for line in self.push_note_lines(&report.warnings).into_iter().rev() {
+                    report
+                        .body
+                        .insert(0, crate::commands::Block::Raw(format!("{line}\n")));
                 }
                 self.emit_report(&report, out, err)
             }
@@ -1592,6 +1624,9 @@ impl Run<'_> {
             for line in &written.stdout {
                 out.write_all(format!("{line}\n").as_bytes())?;
             }
+        }
+        for line in self.push_note_lines(&run.warnings) {
+            out.write_all(format!("{line}\n").as_bytes())?;
         }
         let view = ResultView {
             message: outcome.message.clone(),

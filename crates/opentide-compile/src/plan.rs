@@ -841,16 +841,20 @@ pub fn env_reference(value: &str) -> Option<&str> {
     Some(name)
 }
 
-/// The unset variables the tenants' `setup` of `platforms` name, in the order
-/// the oracle reads them, each once.
+/// The unset variables the `setup` of the planned `(platform, tenant)` pairs
+/// name, in the order the oracle reads them, each once. A tenant the plan
+/// sends nothing to (another strategy's, another platform's) needs none.
 pub fn unset_variables(
     config: &Json,
-    platforms: &[&str],
+    planned: &[(&str, &str)],
     is_set: &dyn Fn(&str) -> bool,
 ) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
-    for platform in platforms {
+    for (platform, name) in planned {
         for tenant in tenants(config, platform) {
+            if tenant.get("name").and_then(Json::as_str) != Some(*name) {
+                continue;
+            }
             let Some(Json::Object(setup)) = tenant.get("setup") else {
                 continue;
             };

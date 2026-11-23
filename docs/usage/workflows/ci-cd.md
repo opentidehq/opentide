@@ -348,6 +348,22 @@ steps:
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```
 
+### Which commits an Azure push deploys
+
+GitHub and GitLab name the commit a branch held before a push, so a push of several commits deploys the rules each of them changed. Azure Pipelines names none: a run on a push reads only its last commit, against that commit's first parent. A rule an earlier commit of the same push changed is not in the diff, so `opentide deploy`, `opentide validate query --changed` and `opentide lint --changed` skip it, and the run warns `This push's diff starts at its last commit's parent: …`. In the build summary the warning is an Azure issue (`##vso[task.logissue type=warning]`, from `deploy`); `--json` carries it in the document's warnings.
+
+The diff is exact for a push of one commit, and for a merge a pull request completed on the target branch (the merge commit's first parent is then the branch's previous tip). The run cannot tell those from a merge commit that is not (batched builds, a `git pull` merge then a direct push, a fast-forward to a branch that merged the target), so it warns for every Azure push. Build every commit (a branch policy, or batching off), or name the base.
+
+Name where a push's diff starts with `OPENTIDE_PUSH_BASE`, a commit that is an ancestor of `HEAD` (any provider reads it, on a push). A value that is not a commit of the checkout, or not an ancestor of `HEAD`, stops the run with exit `2` (the checkout is shallow when it says so: use `fetchDepth: 0`), and a run that reads it does not warn. Take it from the last successful build of the pipeline, with a full-history checkout:
+
+```yaml
+  - script: OPENTIDE_PUSH_BASE=`az pipelines runs list --pipeline-ids $(System.DefinitionId) --branch main --result succeeded --query-order FinishTimeDesc --top 1 --query '[0].sourceVersion' -o tsv` opentide deploy --strategy RELEASE
+    env:
+      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+```
+
+The generated pipeline does not set it. Without it, pass `--all` for a push that held several commits.
+
 ### Library variable groups
 
 A project that keeps its tenant secrets (`AZURE_CLIENT_ID` and the rest) in an Azure DevOps **Library** variable group links that group in `variables:`, and Azure accepts a `- group:` entry only in the list form of `variables:`, never beside map keys. Pass the group to `setup ci`, once per group:

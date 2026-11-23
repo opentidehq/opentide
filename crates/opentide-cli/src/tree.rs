@@ -1391,7 +1391,7 @@ pub struct NewRuleArgs {
     pub platform: Vec<Platform>,
     #[arg(
         long = "objective",
-        help = "UUID of the objective this rule implements (detection_model)"
+        help = "UUID of the objective or signal this rule implements (detection_model)"
     )]
     pub objective: Option<String>,
     #[arg(

@@ -749,7 +749,10 @@ mod lint {
             &fs,
             &LintConfig::default(),
             &LintOptions {
-                changed: Some(Changed::Failed("--changed needs a git checkout".to_owned())),
+                changed: Some(Changed::Failed {
+                    message: "--changed needs a git checkout".to_owned(),
+                    exit_code: 1,
+                }),
                 ..options()
             },
         );
@@ -758,7 +761,10 @@ mod lint {
             &fs,
             &LintConfig::default(),
             &LintOptions {
-                changed: Some(Changed::Failed(String::new())),
+                changed: Some(Changed::Failed {
+                    message: String::new(),
+                    exit_code: 1,
+                }),
                 files: vec!["a.yaml".to_owned()],
                 ..options()
             },

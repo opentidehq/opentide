@@ -677,7 +677,10 @@ fn deploy(
                 plan_warnings.extend(warning);
                 scope
             }
-            Err(message) => return failed(&message),
+            Err(error) if error.exit_code == 2 => {
+                return usage(&error.message, "usage_error", None);
+            }
+            Err(error) => return failed(&error.message),
         }
     };
     // Promotion rewrites the promoted rules' status on disk; the workspace

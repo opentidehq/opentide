@@ -32,7 +32,7 @@ A tool that ran and could not do what it was asked answers with MCP's tool-level
 
 | Tool | `isError: true` when | Still an answer (`isError: false`) |
 |------|----------------------|------------------------------------|
-| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check could not run (no tenant configured, the tenant refused the credential or could not be reached; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | a verdict, whichever it is: the query is invalid (`valid: false`, with its diagnostics) or valid; and a live check every tenant answered, which adds `valid` to the command's document (`valid: false` when a tenant rejected a query, `status: "failed"`). A check that got no answer is not a rejection: a read timeout, a gateway's 502, 503 or 504, or a search still running at the deadline is listed in `timed_out`, the document has no `valid`, and the call failed |
+| `validate_query` | nothing was checked: the platform is unsupported, there is no offline engine (SentinelOne), an argument is refused (an unknown `stack`), or a live check could not run (no tenant configured, the tenant refused the credential or could not be reached; on the WASI build without [`OPENTIDE_FETCH`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch), `network_unavailable`) | a verdict, whichever it is: the query is invalid (`valid: false`, with its diagnostics) or valid; and a live check every tenant answered, which adds `valid` to the command's document (`valid: false` when a tenant rejected a query, `status: "failed"`). The rejected queries are listed in `rejected`, each with the rule's `file` and `line`. A check that got no answer is not a rejection: a read timeout, a gateway's 502, 503 or 504, or a search still running at the deadline is listed in `timed_out`, the document has no `valid`, and the call failed |
 | `run_query` | the call did not run (not `live`, an unknown tenant, no query, an unknown platform) or `status` is `failed`: every tenant failed, or some did (the rows of the others are in the payload) | `status: "completed"` |
 | `deploy_rule` | `action` is `error`: the rule is missing, has no block for the platform, or could not be deployed (a tenant that refused the credential or could not be reached, a refused rule, `network_unavailable`) | a dry-run preview (including one that lists failing rules), a deploy that went through |
 | `validation_report` | `queries` is not one of the three (`{"ok": false, "error": ...}`) | the report, whatever it finds |
@@ -93,7 +93,7 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `uuid` | string | Threat, objective, or rule UUID |
+| `uuid` | string | Threat, objective, or rule UUID; a signal UUID (`objective.signals[].uuid`) names its objective |
 
 ```json
 // call — objective that lists a threat and is the detection_model of a rule
@@ -115,7 +115,17 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
     "rules": ["00000000-0000-4000-8003-000000000001"]
   },
   "chaining_index": {
+    "00000000-0000-4000-8001-000000000001": {
+      "threats": ["00000000-0000-4000-8001-000000000001"],
+      "objectives": ["00000000-0000-4000-8002-000000000001"],
+      "rules": ["00000000-0000-4000-8003-000000000001"]
+    },
     "00000000-0000-4000-8002-000000000001": {
+      "threats": ["00000000-0000-4000-8001-000000000001"],
+      "objectives": ["00000000-0000-4000-8002-000000000001"],
+      "rules": ["00000000-0000-4000-8003-000000000001"]
+    },
+    "00000000-0000-4000-8003-000000000001": {
       "threats": ["00000000-0000-4000-8001-000000000001"],
       "objectives": ["00000000-0000-4000-8002-000000000001"],
       "rules": ["00000000-0000-4000-8003-000000000001"]
@@ -126,7 +136,9 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 
 `rules` lists every rule in the connected set. A repository with several rules on one objective returns all of those UUIDs; the snippet above shows the shape with one rule.
 
-When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every participating UUID to that UUID's `graph`. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
+When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every UUID of the returned lineage (and the object itself, with the vectors of its `threat.chaining` entries) to that UUID's `graph`; it holds no other object of the repository, so the response stays small on a large catalogue. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
+
+A rule whose `detection_model` is a signal UUID belongs to the lineage of the objective that defines the signal, and an objective's `graph` lists such rules. Asking for a signal UUID returns its objective (`uuid`, `type: "objective"`) and adds `resolved_from: {"type": "signal", "uuid": "…"}`.
 
 The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository.
 
