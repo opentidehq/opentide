@@ -37,7 +37,7 @@ def test_ingest_creates_pr_when_previous_cycle_is_merged() -> None:
     assert text.count("gh pr list") >= 4
     assert text.count("--state open") >= 4
     assert "gh pr create --repo opentidehq/specifications" in text
-    assert "gh pr create --base development" in text
+    assert "gh pr create --base integration/unified-core" in text
 
 
 def test_ingest_fetches_existing_branch_before_force_push() -> None:
