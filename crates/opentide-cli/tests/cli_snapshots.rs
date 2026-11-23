@@ -88,7 +88,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "migrate.vocab-scope",
             "rules.unreviewed",
         ],
-        30,
+        32,
     ),
     // `setup` and its subcommands, the skills catalogue served from its
     // cassettes.
