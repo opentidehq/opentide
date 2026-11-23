@@ -13,7 +13,7 @@ exit: 1
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "command_failed",
+    "code": "credential_unset",
     "crash_log": null,
     "message": "SentinelOne credentials are unset ($S1_API_TOKEN). Set those environment variables, then run the command again.",
     "suggestion": null

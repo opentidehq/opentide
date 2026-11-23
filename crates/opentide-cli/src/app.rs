@@ -1300,6 +1300,20 @@ impl Run<'_> {
         );
         let mut report = live.report(self.env);
         report.ci_summary = Some(summary::query_summary(&live.result_json(), None));
+        if !live.findings.is_empty() {
+            // The refused queries as CI annotations on their rule files; the
+            // job summary above already lists them.
+            let terminal = self.terminal();
+            let provider = crate::render::ci::active_provider(terminal.mode, self.env);
+            let root = crate::render::ci::checkout_root(provider, self.env);
+            let lines =
+                crate::render::ci::annotation_lines(&live.findings, provider, root.as_deref());
+            if !lines.is_empty() {
+                report
+                    .body
+                    .push(crate::commands::Block::Raw(lines.join("\n") + "\n"));
+            }
+        }
         report
     }
 

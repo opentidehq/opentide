@@ -14,7 +14,7 @@ exit: 1
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "command_failed",
+    "code": "tenant_unreachable",
     "crash_log": null,
     "message": "Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
     "suggestion": null

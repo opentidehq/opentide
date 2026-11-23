@@ -14,7 +14,7 @@ exit: 1
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "command_failed",
+    "code": "tenant_unreachable",
     "crash_log": null,
     "message": "Cannot reach elastic tenant 'soc' at https://es.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
     "suggestion": null

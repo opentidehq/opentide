@@ -13,7 +13,7 @@ exit: 1
   "exit_code": 1,
   "failure": {
     "argument": null,
-    "code": "command_failed",
+    "code": "query_rejected",
     "crash_log": null,
     "message": "Queries rejected on elastic · 1 checked on 1 tenant",
     "suggestion": null
@@ -27,6 +27,25 @@ exit: 1
     "soc": 1
   },
   "queries_validated": 1,
+  "rejected": [
+    {
+      "errors": [
+        "ES|QL parsing exception: line 1:20: mismatched input 'error'"
+      ],
+      "file": "objects/rules/elastic-parse-error.yaml",
+      "line": 16,
+      "message": "ES|QL parsing exception: line 1:20: mismatched input 'error'",
+      "name": "Elastic parse error rule",
+      "platform": "elastic",
+      "rule": "00000000-0000-4000-8046-000000000006",
+      "status": "failed",
+      "tenant": "soc",
+      "warnings": [
+        "lookback_zero",
+        "esql_metadata_id"
+      ]
+    }
+  ],
   "schema_version": 1,
   "status": "failed",
   "strategies": [

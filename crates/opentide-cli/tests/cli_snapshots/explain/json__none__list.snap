@@ -277,6 +277,10 @@ exit: 0
       "meaning": "A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name."
     },
     {
+      "code": "credential_unset",
+      "meaning": "A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant."
+    },
+    {
       "code": "credentials",
       "meaning": "Per configured tenant, whether every `$VARIABLE` its setup names is set."
     },
@@ -1409,6 +1413,10 @@ exit: 0
       "meaning": "A `//` comment in a query that YAML folds into one line comments out the lines after it."
     },
     {
+      "code": "query_rejected",
+      "meaning": "`validate query --live` failed because a tenant refused a rule's query as invalid."
+    },
+    {
       "code": "recommended_field_missing",
       "meaning": "A field the templates ask for is missing; `opentide validate` accepts the object without it."
     },
@@ -1567,6 +1575,14 @@ exit: 0
     {
       "code": "templates_fresh",
       "meaning": "Every template this opentide version generates exists and matches what it would write."
+    },
+    {
+      "code": "tenant_refused",
+      "meaning": "A tenant refused the check itself, not a query: its credentials or the account's rights."
+    },
+    {
+      "code": "tenant_unreachable",
+      "meaning": "A tenant did not answer, so nothing was checked on it."
     },
     {
       "code": "threshold_lookback",
@@ -1885,13 +1901,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "468 diagnostic codes",
+  "message": "472 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 468
+    "codes": 472
   }
 }
 
