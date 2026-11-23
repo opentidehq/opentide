@@ -671,7 +671,9 @@ fn generated(text: &str) -> bool {
 }
 
 /// The variables the pipeline's jobs map: each enabled platform's tenants'
-/// (`credentials`), and with `sharing`, `sharing.toml`'s destinations'.
+/// (`credentials`; a platform without tenants has no entry, and its jobs fall
+/// back to the names its bundled platform file references), and with
+/// `sharing`, `sharing.toml`'s destinations'.
 /// A name the CI runner sets itself is warned about in `warnings`.
 fn pipeline_variables(
     stage: &stage::Stage,
@@ -687,11 +689,13 @@ fn pipeline_variables(
         let file = root
             .join(".opentide/configurations/platforms")
             .join(format!("{platform}.toml"));
-        let names = files::read_text(stage, &file)
-            .ok()
-            .flatten()
-            .map(|text| ci::tenant_variables(&text))
-            .unwrap_or_default();
+        let text = files::read_text(stage, &file).ok().flatten();
+        // A platform with no tenants has no entry: its jobs fall back to the
+        // names its bundled platform file references.
+        let Some(text) = text.filter(|text| ci::has_tenants(text)) else {
+            continue;
+        };
+        let names = ci::tenant_variables(&text);
         for name in names.iter().filter(|name| ci::runner_owned(name)) {
             warnings.push(runner_owned_warning(
                 &format!(".opentide/configurations/platforms/{platform}.toml"),
