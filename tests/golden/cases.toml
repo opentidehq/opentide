@@ -33,7 +33,7 @@ timeout_secs = 180
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
-vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
+vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", signal = "00000000-0000-4000-8099-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
 [fixtures.tide-corpus-folders]
 kind = "tide-corpus"
@@ -1708,7 +1708,14 @@ normalise = ["fresh-uuids"]
 [[case]]
 command = "new rule"
 variant = "signal-objective"
-args = ["new", "rule", "--name", "Logon Signal", "--objective", "00000000-0000-4000-8099-000000000001"]
+args = ["new", "rule", "--name", "Logon Signal", "--objective", "{signal}"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "unknown-objective"
+args = ["new", "rule", "--name", "Orphan", "--objective", "00000000-0000-4000-8000-000000000000"]
 fixtures = ["tide-corpus"]
 normalise = ["fresh-uuids"]
 

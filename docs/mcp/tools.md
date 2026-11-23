@@ -115,7 +115,17 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
     "rules": ["00000000-0000-4000-8003-000000000001"]
   },
   "chaining_index": {
+    "00000000-0000-4000-8001-000000000001": {
+      "threats": ["00000000-0000-4000-8001-000000000001"],
+      "objectives": ["00000000-0000-4000-8002-000000000001"],
+      "rules": ["00000000-0000-4000-8003-000000000001"]
+    },
     "00000000-0000-4000-8002-000000000001": {
+      "threats": ["00000000-0000-4000-8001-000000000001"],
+      "objectives": ["00000000-0000-4000-8002-000000000001"],
+      "rules": ["00000000-0000-4000-8003-000000000001"]
+    },
+    "00000000-0000-4000-8003-000000000001": {
       "threats": ["00000000-0000-4000-8001-000000000001"],
       "objectives": ["00000000-0000-4000-8002-000000000001"],
       "rules": ["00000000-0000-4000-8003-000000000001"]
@@ -126,7 +136,7 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 
 `rules` lists every rule in the connected set. A repository with several rules on one objective returns all of those UUIDs; the snippet above shows the shape with one rule.
 
-When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every UUID in the returned graph to that UUID's `graph`; it holds no other object of the repository, so the response stays small on a large catalogue. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
+When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every UUID of the returned lineage (and the object itself, with the vectors of its `threat.chaining` entries) to that UUID's `graph`; it holds no other object of the repository, so the response stays small on a large catalogue. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
 
 A rule whose `detection_model` is a signal UUID belongs to the lineage of the objective that defines the signal, and an objective's `graph` lists such rules. Asking for a signal UUID returns its objective (`uuid`, `type: "objective"`) and adds `resolved_from: {"type": "signal", "uuid": "…"}`.
 

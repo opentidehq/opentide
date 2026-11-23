@@ -443,18 +443,27 @@ fn organisation_for(config: &Node) -> OrganisationChoice {
 }
 
 /// `metadata.uuid` of every object under `folder`, lower-cased.
+#[cfg(test)]
 fn catalogue_uuids(folder: &Path) -> HashSet<String> {
+    catalogue_spellings(folder).into_keys().collect()
+}
+
+/// `metadata.uuid` of every object under `folder`, as written, by its
+/// lower-cased form.
+fn catalogue_spellings(folder: &Path) -> HashMap<String, String> {
     object_files(folder)
         .iter()
         .filter_map(|path| metadata_of(path))
-        .filter_map(|metadata| text_of(&metadata, "uuid").map(|uuid| uuid.trim().to_lowercase()))
+        .filter_map(|metadata| text_of(&metadata, "uuid").map(|uuid| uuid.trim().to_owned()))
+        .map(|uuid| (uuid.to_lowercase(), uuid))
         .collect()
 }
 
-/// `objective.signals[].uuid` of every objective under `folder`, lower-cased:
-/// a rule's `detection_model` may name a signal as well as its objective.
-fn signal_uuids(folder: &Path) -> HashSet<String> {
-    let mut found = HashSet::new();
+/// `objective.signals[].uuid` of every objective under `folder`, as written,
+/// by its lower-cased form: a rule's `detection_model` may name a signal as
+/// well as its objective.
+fn signal_spellings(folder: &Path) -> HashMap<String, String> {
+    let mut found = HashMap::new();
     for path in object_files(folder) {
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
@@ -472,7 +481,7 @@ fn signal_uuids(folder: &Path) -> HashSet<String> {
                 signals
                     .iter()
                     .filter_map(|signal| text_of(signal, "uuid"))
-                    .map(|uuid| uuid.trim().to_lowercase()),
+                    .map(|uuid| (uuid.trim().to_lowercase(), uuid.trim().to_owned())),
             );
         }
     }
@@ -804,7 +813,9 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             references.push(("--threat", "threat", threat));
         }
     }
-    let mut known: HashMap<&str, HashSet<String>> = HashMap::new();
+    let mut known: HashMap<&str, HashMap<String, String>> = HashMap::new();
+    // `--objective` as the catalogue spells it: `validate` compares exactly.
+    let mut objective_uuid: Option<String> = None;
     for (argument, referred, value) in &references {
         if !is_uuid(value) {
             return with_steps(
@@ -820,13 +831,17 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         }
         let folder = artifacts(&workspace, &root, referred).objects;
         let uuids = known.entry(referred).or_insert_with(|| {
-            let mut uuids = catalogue_uuids(&folder);
+            let mut uuids = catalogue_spellings(&folder);
             if *referred == "objective" {
-                uuids.extend(signal_uuids(&folder));
+                uuids.extend(signal_spellings(&folder));
             }
             uuids
         });
-        if !uuids.contains(&value.to_lowercase()) {
+        let spelled = uuids.get(&value.to_lowercase()).cloned();
+        if *referred == "objective" {
+            objective_uuid.clone_from(&spelled);
+        }
+        if spelled.is_none() {
             let what = if *referred == "objective" {
                 "objective or signal"
             } else {
@@ -958,7 +973,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         // Optional in the model but live in the template: left empty it
         // loads as null, and a deploy reads its alert_severity.
         wanted.push(path(&["response"]));
-        if let Some(objective) = &args.objective {
+        if let Some(objective) = &objective_uuid {
             values.insert(path(&["detection_model"]), Scalar::Text(objective.clone()));
             wanted.push(path(&["detection_model"]));
         }

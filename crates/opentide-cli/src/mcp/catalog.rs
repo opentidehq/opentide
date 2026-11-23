@@ -275,24 +275,6 @@ fn catalogue_family(index: &Index, uuid: &str) -> Option<&'static str> {
     .map(|(_, plural)| plural)
 }
 
-/// The objective that defines the signal `uuid` (UUIDs compare
-/// case-insensitively, an exact key first), or `None` when `uuid` is no signal.
-pub fn signal_owner<'i>(index: &'i Index, uuid: &str) -> Option<&'i str> {
-    let needle = uuid.trim();
-    let folded = needle.to_lowercase();
-    index
-        .signals
-        .get(needle)
-        .or_else(|| {
-            index
-                .signals
-                .iter()
-                .find(|(key, _)| key.to_lowercase() == folded)
-                .map(|(_, signal)| signal)
-        })
-        .map(|signal| signal.owner.as_str())
-}
-
 /// The threats, objectives and rules of one connected set.
 type Lineage = [Vec<String>; 3];
 
@@ -366,7 +348,9 @@ fn lineage_by_uuid(index: &Index) -> IndexMap<String, Lineage> {
             let objective = if catalogue_family(index, &target).is_some() {
                 target
             } else {
-                signal_owner(index, &target).map_or(target, str::to_owned)
+                index
+                    .signal(&target)
+                    .map_or(target, |signal| signal.owner.clone())
             };
             unite(uuid, "rules", &objective, "objectives");
         }
@@ -429,8 +413,8 @@ fn relation_json(relation: &IndexMap<String, Vec<String>>) -> Json {
 pub fn get_chaining(index: &Index, uuid: &str) -> Json {
     let (found, resolved_from) = match get_object(index, uuid) {
         Some(found) => (Some(found), None),
-        None => match signal_owner(index, uuid) {
-            Some(owner) => (get_object(index, owner), Some(uuid.trim())),
+        None => match index.signal(uuid) {
+            Some(signal) => (get_object(index, &signal.owner), Some(signal.uuid.as_str())),
             None => (None, None),
         },
     };
@@ -444,19 +428,25 @@ pub fn get_chaining(index: &Index, uuid: &str) -> Json {
     let lineages = lineage_by_uuid(index);
     let relation = index.chaining.get(node.uuid).filter(|r| !r.is_empty());
     let lineage = lineages.get(node.uuid);
-    let (graph, present): (Json, HashSet<String>) = match (relation, lineage) {
-        (Some(relation), _) => (
-            relation_json(relation),
-            std::iter::once(node.uuid.to_owned())
-                .chain(relation.values().flatten().map(|v| v.trim().to_owned()))
-                .collect(),
-        ),
-        (None, Some(lineage)) => (
-            lineage_json(lineage),
-            lineage.iter().flatten().cloned().collect(),
-        ),
-        (None, None) => (Json::object::<&str>([]), HashSet::new()),
+    let graph = match (relation, lineage) {
+        (Some(relation), _) => relation_json(relation),
+        (None, Some(lineage)) => lineage_json(lineage),
+        (None, None) => Json::object::<&str>([]),
     };
+    // Every UUID the response names: the object, the vectors of its
+    // relation, and its lineage (which `lineage` carries beside `graph`).
+    let mut present: HashSet<String> = HashSet::from([node.uuid.to_owned()]);
+    if let Some(relation) = relation {
+        present.extend(
+            relation
+                .values()
+                .flatten()
+                .map(|vector| vector.trim().to_owned()),
+        );
+    }
+    if let Some(lineage) = lineage {
+        present.extend(lineage.iter().flatten().cloned());
+    }
     let mut chaining_index: Vec<(String, Json)> = index
         .chaining
         .iter()
@@ -970,10 +960,15 @@ mod tests {
         let other = format!(
             "name: Other\nmetadata: {{uuid: {OTHER_THREAT}, schema: threat::1.0}}\nthreat:\n  mitre_attack: [T1003]\n"
         );
+        // The other threat has an objective, so a lineage, of its own.
+        let other_objective = format!(
+            "name: Other goal\nmetadata: {{uuid: 77777777-7777-4777-8777-777777777777, schema: objective::1.0}}\nobjective:\n  threats: [{OTHER_THREAT}]\n"
+        );
         index(&[
             ("objects/threats/t.yaml", THREAT),
             ("objects/threats/other.yaml", &other),
             ("objects/objectives/o.yaml", &objective),
+            ("objects/objectives/other.yaml", &other_objective),
             ("objects/rules/r.yaml", &rule),
         ])
     }
@@ -1041,9 +1036,42 @@ mod tests {
         let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
         assert!(keys.contains(&SIGNAL_RULE), "{keys:?}");
         assert!(
-            !keys.contains(&OTHER_THREAT),
+            !keys.contains(&OTHER_THREAT)
+                && !keys.contains(&"77777777-7777-4777-8777-777777777777"),
             "an unrelated threat stays out: {keys:?}"
         );
+    }
+
+    #[test]
+    fn chaining_index_follows_a_chain_and_the_lineage_it_returns() {
+        let threat = |n: u8, link: Option<u8>| {
+            let chaining = link.map_or(String::new(), |to| {
+                format!("  chaining:\n    - {{vector: {to}{to}{to}{to}{to}{to}{to}{to}-{to}{to}{to}{to}-4{to}{to}{to}-8{to}{to}{to}-{to}{to}{to}{to}{to}{to}{to}{to}{to}{to}{to}{to}, relation: preceeds}}\n")
+            });
+            format!(
+                "name: T{n}\nmetadata: {{uuid: {n}{n}{n}{n}{n}{n}{n}{n}-{n}{n}{n}{n}-4{n}{n}{n}-8{n}{n}{n}-{n}{n}{n}{n}{n}{n}{n}{n}{n}{n}{n}{n}, schema: threat::1.0}}\nthreat:\n  mitre_attack: [T1003]\n{chaining}"
+            )
+        };
+        let objective = "name: Goal\nmetadata: {uuid: 22222222-2222-4222-8222-222222222222, schema: objective::1.0}\nobjective:\n  threats: [33333333-3333-4333-8333-333333333333]\n";
+        let (a, b, c) = (threat(1, Some(2)), threat(2, Some(3)), threat(3, None));
+        let ws = index(&[
+            ("objects/threats/a.yaml", &a),
+            ("objects/threats/b.yaml", &b),
+            ("objects/threats/c.yaml", &c),
+            ("objects/objectives/o.yaml", objective),
+        ]);
+        let chained = get_chaining(ws.index(), "11111111-1111-4111-8111-111111111111");
+        let Some(Json::Object(entries)) = chained.get("chaining_index") else {
+            panic!("no chaining_index");
+        };
+        let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
+        for expected in [
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+            "33333333-3333-4333-8333-333333333333",
+        ] {
+            assert!(keys.contains(&expected), "{expected} in {keys:?}");
+        }
     }
 
     #[test]

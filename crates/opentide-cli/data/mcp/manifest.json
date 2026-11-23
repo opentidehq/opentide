@@ -76,7 +76,7 @@
     },
     {
       "name": "get_chaining",
-      "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. An unknown UUID returns only {uuid,\nfound: false, graph: {}}.\n",
+      "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. chaining_index has an entry for each\nUUID of the returned lineage, not for the whole catalogue. A signal UUID\n(objective.signals[].uuid) returns its objective, with resolved_from:\n{type: \"signal\", uuid}; a rule whose detection_model is a signal is in that\nobjective's lineage. An unknown UUID returns only {uuid, found: false,\ngraph: {}}.\n",
       "inputSchema": {
         "properties": {
           "uuid": {
