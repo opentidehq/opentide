@@ -1196,9 +1196,16 @@ fn stdout_report(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Report {
     };
     let mut report = Report::completed(COMMAND, Vec::new());
     report.outcome.message = format!("Printed the {} pipeline", args.provider.label());
-    report.warnings = unique(run.warnings);
+    // `body_only` skips the result's own warnings, so they go to stderr here.
+    let warnings = unique(run.warnings);
+    if !cx.quiet {
+        report
+            .body
+            .push(Block::Stderr(cx.terminal.stderr.warnings(&warnings)));
+    }
     report.body_only = true;
     report.body.push(Block::Raw(run.pipeline));
+    report.warnings = warnings;
     report
 }
 
