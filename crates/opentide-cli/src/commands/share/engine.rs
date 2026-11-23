@@ -213,6 +213,8 @@ impl Validator {
                 platform_configurations: crate::plugins::configurations(),
                 // Share checks each document alone: no compile check.
                 compile_check: None,
+                memo: None,
+                stop: None,
             });
             for issue in validation.report.issues {
                 if issue.severity == opentide_workspace::Severity::Error && !errors.contains(&issue)

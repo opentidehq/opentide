@@ -3810,6 +3810,12 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
         .as_u64()
         .unwrap();
     assert!(yields >= 1, "{yields}");
+    // The messages were answered in the middle of the first validation of
+    // every object, not only between the files that follow it, and it went on.
+    let stats = lsp.request("opentide/__stats", Value::Null);
+    let stops = stats["result"]["validateStops"].as_u64().unwrap();
+    assert!(stops >= 1, "the validation never stopped: {stats}");
+    assert_eq!(stats["result"]["validations"]["full"], 1, "{stats}");
 }
 
 /// #1767: the server reads each folder and file of the disk once between

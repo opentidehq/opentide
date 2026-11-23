@@ -213,6 +213,8 @@ impl Workspace {
             cve_check: None,
             platform_configurations: platforms,
             compile_check: compile_check(),
+            memo: None,
+            stop: None,
         })
     }
 
