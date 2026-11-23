@@ -671,7 +671,9 @@ fn generated(text: &str) -> bool {
 }
 
 /// The variables the pipeline's jobs map: each enabled platform's tenants'
-/// (`credentials`; a platform without tenants has none), and with `sharing`, `sharing.toml`'s destinations'.
+/// (`credentials`; a platform without tenants has no entry, and its jobs fall
+/// back to the names its bundled platform file references), and with
+/// `sharing`, `sharing.toml`'s destinations'.
 /// A name the CI runner sets itself is warned about in `warnings`.
 fn pipeline_variables(
     stage: &stage::Stage,

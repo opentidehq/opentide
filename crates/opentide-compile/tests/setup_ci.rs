@@ -166,24 +166,20 @@ fn repository_action_majors() -> IndexMap<String, u32> {
     majors
 }
 
+/// Majors the generated workflow must pin at least, for actions this
+/// repository's own workflows do not use: both still ran on Node 20 before.
+const FIXED_MINIMUMS: [(&str, u32); 2] = [("upload-pages-artifact", 5), ("deploy-pages", 5)];
+
 /// The generated GitHub workflow pins no `actions/*` major older than the one
-/// this repository's own workflows pin for the same action, so a generated
-/// pipeline does not run on a runtime GitHub is retiring (Node 20).
-/// `upload-pages-artifact` and `deploy-pages` are not used by this
-/// repository's workflows, so they are not compared.
+/// this repository's own workflows pin for the same action, nor older than
+/// [`FIXED_MINIMUMS`], so a generated pipeline does not run on a runtime
+/// GitHub is retiring (Node 20).
 #[test]
 fn generated_actions_are_not_older_than_the_repositorys_own() {
-    let own = repository_action_majors();
-    for action in [
-        "checkout",
-        "setup-python",
-        "upload-artifact",
-        "download-artifact",
-    ] {
-        assert!(
-            own.contains_key(action),
-            "{action} not found in .github/workflows"
-        );
+    let mut minimums = repository_action_majors();
+    for (action, major) in FIXED_MINIMUMS {
+        let entry = minimums.entry(action.to_owned()).or_insert(major);
+        *entry = (*entry).max(major);
     }
     let inputs: toml::Table = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ci/github-default.toml"),
@@ -195,20 +191,33 @@ fn generated_actions_are_not_older_than_the_repositorys_own() {
     options.explorer_pages = true;
     let written = render(&options).unwrap();
     let mut seen = 0;
+    let mut stale = Vec::new();
     for line in written.lines() {
         let Some((_, uses)) = line.split_once("uses: actions/") else {
             continue;
         };
-        let (action, version) = uses.trim().split_once('@').unwrap();
-        let Some(newest) = own.get(action) else {
+        let Some((action, version)) = uses.trim().split_once('@') else {
             continue;
         };
-        let major: u32 = version.trim_start_matches('v').parse().unwrap();
-        assert!(
-            major >= *newest,
-            "actions/{action}@v{major} in the generated workflow; this repository pins v{newest}"
-        );
+        let Some(newest) = minimums.get(action) else {
+            continue;
+        };
+        let Ok(major) = version.trim_start_matches('v').parse::<u32>() else {
+            continue;
+        };
         seen += 1;
+        if major < *newest {
+            stale.push(format!("actions/{action}@v{major} (needs v{newest})"));
+        }
     }
+    assert!(
+        stale.is_empty(),
+        "the generated workflow pins older actions than this repository does: {}.\n\
+         Bump them in crates/opentide-compile/src/ci/templates/github.yml.j2, regenerate \
+         crates/opentide-compile/tests/ci/*.yml (OPENTIDE_CI_RENDERED=<dir> cargo test -p \
+         opentide-compile --test setup_ci, then copy the files) and review the CLI snapshots \
+         (INSTA_UPDATE=always cargo test -p opentide-cli --test cli_snapshots).",
+        stale.join(", ")
+    );
     assert!(seen >= 5, "only {seen} actions compared:\n{written}");
 }

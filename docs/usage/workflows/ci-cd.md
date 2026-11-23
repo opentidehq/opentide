@@ -196,9 +196,9 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.28.1'
       - run: opentide validate --strict
@@ -223,9 +223,9 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.28.1'
       - run: opentide deploy --strategy PREVIEW --dry-run   # preview in logs
@@ -256,9 +256,9 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.28.1'
       - run: opentide deploy --strategy RELEASE --dry-run

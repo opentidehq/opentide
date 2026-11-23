@@ -402,8 +402,9 @@ with open(output, "w", encoding="utf-8") as stream:
 
 /// The variables a step that reaches `platform`'s tenants maps from the CI
 /// secret store, sorted: exactly the `$NAME`s the repository's tenants of
-/// that platform name in their `setup` values ([`Options::credentials`]),
-/// as `opentide doctor`'s credentials check derives them, so a tenant gets
+/// that platform name in their `setup` values ([`Options::credentials`];
+/// `opentide doctor`'s credentials check reads the same `$NAME` values, from
+/// the merged configuration), so a tenant gets
 /// its credential in CI as it does locally and no name that no tenant uses
 /// is asked for. Only a platform with no tenants configured (no entry in
 /// `credentials`) falls back to the names its bundled platform file
@@ -807,6 +808,21 @@ mod tests {
         let unset = "for name; do if [ \"$(printenv \"$name\")\" = \"\\$($name)\" ]; then unset \"$name\"; fi; done";
         assert_eq!(written.matches(unset).count(), 4, "{written}");
         assert!(written.contains("set -- AZURE_CLIENT_ID "), "{written}");
+    }
+
+    /// `has_tenants` tells a configured tenant from a commented-out example:
+    /// the `[[tenants]]` block `setup` writes is a comment, `tenants = []`
+    /// holds none, and a single `[tenants]` table is one.
+    #[test]
+    fn has_tenants_reads_configured_tenants_only() {
+        assert!(!has_tenants(
+            "[platform]\nenabled = true\n\n# [[tenants]]\n# name = \"x\"\n"
+        ));
+        assert!(!has_tenants("tenants = []\n"));
+        assert!(!has_tenants("not toml ["));
+        assert!(has_tenants("[[tenants]]\nname = \"a\"\n"));
+        assert!(has_tenants("[tenants]\nname = \"a\"\n"));
+        assert!(has_tenants("\u{feff}[[tenants]]\nname = \"a\"\n"));
     }
 
     /// A platform whose tenants name their variables is asked for exactly
