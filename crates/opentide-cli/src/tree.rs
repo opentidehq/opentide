@@ -679,6 +679,11 @@ pub struct SetupPipelineFields {
     )]
     pub variable_group: Vec<String>,
     #[arg(
+        long = "app-token",
+        help = "GitHub Actions: the production job checks out and pushes with a GitHub App token (variable OPENTIDE_APP_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN (ignored with a warning for gitlab and azure)"
+    )]
+    pub app_token: bool,
+    #[arg(
         long = "no-explorer-pages",
         overrides_with = "explorer_pages",
         help = "Turn --explorer-pages off"
@@ -939,6 +944,11 @@ pub struct SetupCiArgs {
     pub path: String,
     #[command(flatten)]
     pub pipeline: SetupPipelineFields,
+    #[arg(
+        long = "stdout",
+        help = "Print the generated pipeline to stdout and write nothing (to diff it against an adapted one; not with --json or --plan)"
+    )]
+    pub stdout: bool,
     #[command(flatten)]
     pub confirm: SetupConfirm,
 }

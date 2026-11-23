@@ -81,6 +81,7 @@ impl From<&SetupArgs> for GroupArgs {
             lint_changed: pipeline.lint_changed,
             explorer_pages: pipeline.explorer_pages,
             variable_group: pipeline.variable_group.clone(),
+            app_token: pipeline.app_token,
             promotion: pipeline.promotion_choice(),
             promotion_target: pipeline.promotion_target.clone(),
             python_version: pipeline.python_version.clone(),

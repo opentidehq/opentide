@@ -42,6 +42,8 @@ Hand-written examples below pin `pip install 'opentide==0.28.1'` so a pipeline c
 | `--promotion-target` | omit (keep the repository's setting) | Status `deploy` promotes rules to; another status is written to the same `[promotion]` table |
 | `--python-version` | `3.12` | CI Python version |
 | `--variable-group` | none | Azure only, repeatable: link an Azure DevOps Library variable group (`- group: <name>`) that holds your tenant secrets; `variables:` becomes a list. Ignored with a warning on GitHub and GitLab |
+| `--app-token` | off | GitHub only: the production job creates a GitHub App token (`actions/create-github-app-token`, from the repository variable `OPENTIDE_APP_ID` and the secret `OPENTIDE_APP_PRIVATE_KEY`) and checks out and pushes its write-backs with it instead of `GITHUB_TOKEN` (see [Pushing with a GitHub App](#pushing-with-a-github-app)). Ignored with a warning on GitLab and Azure |
+| `--stdout` | off | Print the generated pipeline to stdout and write nothing, with no confirmation, so you can diff it against a pipeline you adapted: `opentide setup ci github --stdout \| diff - .github/workflows/opentide.yml`. Warnings still go to stderr; not with `--json` or `--plan` (exit 2) |
 | `--default-branch` | `origin/HEAD`, then the checked-out branch, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
 
 Regenerating replaces the pipeline whole: `setup ci` warns, naming them, when the old file has jobs (on Azure, stages and jobs) the new one does not generate.
@@ -122,6 +124,36 @@ Every new vendor id is also logged as `external_id_recorded` at warning level, s
 Through 0.14.2 the production job dropped `DISABLED` and `REMOVED` rules before the `PRODUCTION` allow-list was consulted, and discarded the write-backs, so promoted statuses never landed and every later deploy of a Defender, SentinelOne or CrowdStrike rule created a duplicate remote rule. Regenerate existing pipelines with `opentide setup ci <github|gitlab|azure> --yes`.
 
 An Azure pipeline from **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch, so a topic-branch push still validates. Azure Repos Git ignores `pr:`. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy.
+
+### Pushing with a GitHub App
+
+The production job pushes the deployment state and the promoted rule files to the default branch. With `GITHUB_TOKEN` that push fails on a branch whose protection requires pull requests or checks, and it starts no workflow. `opentide setup ci github --app-token` makes the job push as a GitHub App instead. The job's first step is
+
+```yaml
+- name: Create GitHub App token
+  id: app-token
+  uses: actions/create-github-app-token@v3
+  with:
+    app-id: ${{ vars.OPENTIDE_APP_ID }}
+    private-key: ${{ secrets.OPENTIDE_APP_PRIVATE_KEY }}
+```
+
+and `actions/checkout` takes `token: ${{ steps.app-token.outputs.token }}`, so the write-back's fetches and pushes use it. Install the App on the repository with **Contents: read and write**, add it to the branch's bypass list when the branch is protected, and set the repository **variable** `OPENTIDE_APP_ID` and the **secret** `OPENTIDE_APP_PRIVATE_KEY`; the workflow's header lists both. Only the production job changes: the inflight jobs keep `GITHUB_TOKEN`. Without the flag the workflow is the same as before.
+
+The header's `regenerate with` line records the flag, and regenerating without it keeps it and warns `keeping --app-token from .github/workflows/opentide.yml`. To turn it off, delete `--app-token` from the file's first line and run the command again. GitLab and Azure ignore the flag and warn.
+
+### Your own jobs: the user-owned region
+
+Every generated pipeline ends its jobs with an empty region:
+
+```yaml
+  # Your own jobs between the markers below survive `opentide setup ci github --yes`;
+  # opentide replaces everything else in this file.
+  # opentide:user-begin
+  # opentide:user-end
+```
+
+(GitHub's `jobs:` at two spaces, GitLab's top level at none, Azure's `stages:` at two spaces, where a stage of your own goes.) Put jobs or stages of your own between the markers, at the indentation of the pipeline's own. A regenerate copies what is between them from the old file verbatim, so `opentide setup ci <provider> --yes` no longer removes them, and they are not named in the warning about dropped jobs. Everything outside the markers is still replaced. A file with a marker missing, or more than one region, keeps none of it, and the run warns. A pipeline written before the region existed has none: add the two marker lines at the end of its jobs, then regenerate.
 
 ### Skipping deploys for a catalogue-wide change
 
@@ -354,15 +386,17 @@ GitHub and GitLab name the commit a branch held before a push, so a push of seve
 
 The diff is exact for a push of one commit, and for a merge a pull request completed on the target branch (the merge commit's first parent is then the branch's previous tip). The run cannot tell those from a merge commit that is not (batched builds, a `git pull` merge then a direct push, a fast-forward to a branch that merged the target), so it warns for every Azure push. Build every commit (a branch policy, or batching off), or name the base.
 
-Name where a push's diff starts with `OPENTIDE_PUSH_BASE`, a commit that is an ancestor of `HEAD` (any provider reads it, on a push). A value that is not a commit of the checkout, or not an ancestor of `HEAD`, stops the run with exit `2` (the checkout is shallow when it says so: use `fetchDepth: 0`), and a run that reads it does not warn. Take it from the last successful build of the pipeline, with a full-history checkout:
+Name where a push's diff starts with `OPENTIDE_PUSH_BASE`, a commit that is an ancestor of `HEAD` (any provider reads it, on a push). A value that is not a commit of the checkout, or not an ancestor of `HEAD`, stops the run with exit `2` (the checkout is shallow when it says so: use `fetchDepth: 0`), and a run that reads it does not warn.
 
-```yaml
-  - script: OPENTIDE_PUSH_BASE=`az pipelines runs list --pipeline-ids $(System.DefinitionId) --branch main --result succeeded --query-order FinishTimeDesc --top 1 --query '[0].sourceVersion' -o tsv` opentide deploy --strategy RELEASE
-    env:
-      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+The generated pipeline sets it. On a CI push (`Build.Reason` is `IndividualCI` or `BatchedCI`), each job that reads a push's changed files (the production deploy, each live query check, `share`, and the `validate` job's `lint --changed` with `--lint-changed`) has a step, `Find this push's base commit`, before the step that runs opentide. The step asks the Azure DevOps REST API for this pipeline's last successful build of the same branch:
+
+```text
+GET $(System.CollectionUri)$(System.TeamProject)/_apis/build/builds?definitions=$(System.DefinitionId)&branchName=$(Build.SourceBranch)&resultFilter=succeeded&statusFilter=completed&queryOrder=finishTimeDescending&$top=1&api-version=7.1
 ```
 
-The generated pipeline does not set it. Without it, pass `--all` for a push that held several commits.
+It authenticates with `$(System.AccessToken)`, which the step maps into its `env:`. When that build exists and its `sourceVersion` is an ancestor of `HEAD` (`git merge-base --is-ancestor`), the step exports it with `##vso[task.setvariable variable=OPENTIDE_PUSH_BASE]`, and the push deploys every commit since that build. Otherwise (no earlier successful build, an API error, or a commit that is not an ancestor, as after a force push) it sets nothing, and opentide falls back to the last commit and its warning. The jobs that carry the step check out with `fetchDepth: 0`, so the base is in the checkout. The project's **build service** identity needs read access to builds, which it has by default (**View builds**); a project that removed it gets the fallback. Pull requests are not touched: they diff from the target branch's merge base.
+
+A pipeline you adapted, or one written before the step existed, can add the same step; `opentide setup ci azure --stdout` prints it.
 
 ### Library variable groups
 
@@ -383,7 +417,7 @@ variables:
     value: "1.0.0"
 ```
 
-and its header's `regenerate with` line records the groups (only the groups, not the other flags). Regenerating without `--variable-group` keeps the groups the old pipeline links and says so; pass the option again to replace them. Regenerating also removes any stage or job the run does not generate, including one you added by hand; the run names each in a warning.
+and its header's `regenerate with` line records the groups (and `--app-token` on GitHub, not the other flags). Regenerating without `--variable-group` keeps the groups the old pipeline links and says so; pass the option again to replace them. Regenerating also removes any stage or job the run does not generate, including one you added by hand; the run names each in a warning.
 
 ## Annotations, summaries and reports
 
