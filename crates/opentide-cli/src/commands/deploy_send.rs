@@ -672,18 +672,15 @@ fn deploy(
     } else {
         let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
         let top = workspace.root().to_path_buf();
-        let objects = super::object_folders(workspace);
-        match opentide_compile::dry_run::git_scope(
-            &top, cx.cwd, &lookup, &rules_dir, &folder, &objects,
-        ) {
+        match opentide_compile::dry_run::git_scope(&top, cx.cwd, &lookup, &rules_dir, &folder) {
             Ok((scope, warning)) => {
                 plan_warnings.extend(warning);
                 scope
             }
-            Err(message) if opentide_compile::git::scope_exit_code(&message) == 2 => {
-                return usage(&message, "usage_error", None);
+            Err(error) if error.exit_code == 2 => {
+                return usage(&error.message, "usage_error", None);
             }
-            Err(message) => return failed(&message),
+            Err(error) => return failed(&error.message),
         }
     };
     // Promotion rewrites the promoted rules' status on disk; the workspace

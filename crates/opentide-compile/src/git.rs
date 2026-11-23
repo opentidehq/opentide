@@ -102,6 +102,8 @@ pub enum GitError {
     MissingCheckout(PathBuf),
     /// Any other failure, with the message the run reports.
     Failed(String),
+    /// `OPENTIDE_PUSH_BASE` names no usable commit: a usage error (exit 2).
+    PushBase(String),
 }
 
 impl GitError {
@@ -114,7 +116,17 @@ impl GitError {
                  repository, or pass --all to read every rule file.",
                 dunce::simplified(searched).display()
             ),
-            Self::Failed(message) => message.clone(),
+            Self::Failed(message) | Self::PushBase(message) => message.clone(),
+        }
+    }
+
+    /// The exit code of a run this failure stops: `2` for a wrong
+    /// `OPENTIDE_PUSH_BASE`, else `1`.
+    #[must_use]
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Self::PushBase(_) => 2,
+            Self::MissingCheckout(_) | Self::Failed(_) => 1,
         }
     }
 }
@@ -500,17 +512,6 @@ pub const PUSH_BASE_VARIABLE: &str = "OPENTIDE_PUSH_BASE";
 /// that shows it as the CI run's warning.
 pub const LAST_COMMIT_ONLY_PREFIX: &str = "This push's diff starts at its last commit's parent";
 
-/// The exit code of a run whose changed-file scope failed with `message`: `2`
-/// (a usage error) when `OPENTIDE_PUSH_BASE` is wrong, else `1`.
-#[must_use]
-pub fn scope_exit_code(message: &str) -> i32 {
-    if message.starts_with(PUSH_BASE_VARIABLE) {
-        2
-    } else {
-        1
-    }
-}
-
 /// The commit `OPENTIDE_PUSH_BASE` names, when it is set: a commit of the
 /// checkout that is an ancestor of HEAD, else an error.
 fn push_base_override(repo: &Repo, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {
@@ -518,15 +519,23 @@ fn push_base_override(repo: &Repo, env: Env<'_>) -> Result<Option<ObjectId>, Git
         return Ok(None);
     };
     let base = commit_id(repo, &value).ok_or_else(|| {
-        failed(format!(
-            "{PUSH_BASE_VARIABLE}={value} is not a commit of this checkout: name a commit id \
-             the checkout holds (a full-history checkout has them all)"
-        ))
+        GitError::PushBase(if repo.shallow {
+            format!(
+                "{PUSH_BASE_VARIABLE}={value} is not a commit of this checkout: the checkout is \
+                 shallow, so it does not hold it. Check out the full history (`fetchDepth: 0` on \
+                 Azure Pipelines, `fetch-depth: 0` in GitHub Actions, `GIT_DEPTH: \"0\"` on GitLab)"
+            )
+        } else {
+            format!(
+                "{PUSH_BASE_VARIABLE}={value} is not a commit of this checkout: name a commit id \
+                 the checkout holds"
+            )
+        })
     })?;
     let head = head_commit(repo)
         .ok_or_else(|| failed("The git repository has no commits yet".to_owned()))?;
     if merge_base(repo, base, head) != Some(base) {
-        return Err(failed(format!(
+        return Err(GitError::PushBase(format!(
             "{PUSH_BASE_VARIABLE}={value} is not an ancestor of HEAD ({head}): name a commit \
              the checked-out commit descends from"
         )));
@@ -797,16 +806,12 @@ pub fn changed_paths_noted(
         // Azure Pipelines names no commit the branch held before the push.
         (Ci::Azure, DiffSource::Push) => match first_parent()? {
             Some(base) => {
-                // A merge commit's first parent is the branch tip before the
-                // merge (a pull request's completion): nothing is missed.
-                let merge = head
-                    .and_then(|head| parents(&repo, head))
-                    .is_some_and(|parents| parents.len() > 1);
-                if !merge {
-                    note = Some(last_commit_only(
-                        "Azure Pipelines does not name the commit the branch held before the push",
-                    ));
-                }
+                note = Some(last_commit_only(
+                    "Azure Pipelines does not name the commit the branch held before the push \
+                     (the diff is exact for a one-commit push, and for a merge a pull request \
+                     completed on the target branch; set OPENTIDE_PUSH_BASE, or build every \
+                     commit with a branch policy, for the rest)",
+                ));
                 Some(base.to_string())
             }
             None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
@@ -1109,10 +1114,13 @@ pub fn no_commits_warning(workspace: &Path, env: Env<'_>, advice: &str) -> Optio
     ))
 }
 
-/// `folder` and every folder below it, for the uncommitted-files note (a
-/// hidden folder and symbolic links are left out).
-fn folders_below(folder: &Path, into: &mut Vec<PathBuf>) {
+/// `folder` and, when `recursive`, every folder below it, for the
+/// uncommitted-files note (a hidden folder is left out).
+fn folders_below(folder: &Path, recursive: bool, into: &mut Vec<PathBuf>) {
     into.push(folder.to_path_buf());
+    if !recursive {
+        return;
+    }
     let Ok(entries) = std::fs::read_dir(folder) else {
         return;
     };
@@ -1126,7 +1134,7 @@ fn folders_below(folder: &Path, into: &mut Vec<PathBuf>) {
         .collect();
     below.sort();
     for path in below {
-        folders_below(&path, into);
+        folders_below(&path, true, into);
     }
 }
 
@@ -1135,12 +1143,21 @@ const UNCOMMITTED_SHOWN: usize = 3;
 
 /// The note of a run outside CI that reads the last commit (`--changed`,
 /// deploy's default scope) while object files in the work tree or the index
-/// differ from HEAD or are untracked: they are not in the scope, and a deploy
-/// reads committed content (F-05). `folders` are the workspace's object
-/// folders; the YAML files in them and below count. `None` in CI, outside a
-/// checkout, before HEAD names a commit, or when every object file is
-/// committed.
-pub fn uncommitted_warning(workspace: &Path, env: Env<'_>, folders: &[PathBuf]) -> Option<String> {
+/// differ from HEAD or are untracked, and the scope leaves them out (F-05):
+/// the command reads files from disk, so a file the scope names is read as
+/// it is now, and is not in the note. `folders` are the folders the scope can
+/// hold files of (the YAML files directly in each count, and below it when
+/// `recursive`); `in_scope` are the files the scope names. A file deleted
+/// from disk cannot be passed to `--file` and is not named. `None` in CI,
+/// outside a checkout, before HEAD names a commit, or when every such file is
+/// committed or in scope.
+pub fn uncommitted_warning(
+    workspace: &Path,
+    env: Env<'_>,
+    folders: &[PathBuf],
+    recursive: bool,
+    in_scope: &[PathBuf],
+) -> Option<String> {
     if ci(env) != Ci::Local || folders.is_empty() {
         return None;
     }
@@ -1148,7 +1165,7 @@ pub fn uncommitted_warning(workspace: &Path, env: Env<'_>, folders: &[PathBuf]) 
     head_commit(&repo)?;
     let mut all = Vec::new();
     for folder in folders {
-        folders_below(folder, &mut all);
+        folders_below(folder, recursive, &mut all);
     }
     let keep = |name: &str| {
         Path::new(name)
@@ -1159,24 +1176,33 @@ pub fn uncommitted_warning(workspace: &Path, env: Env<'_>, folders: &[PathBuf]) 
         head_commit(repo).ok_or_else(|| failed(NO_GIT_MESSAGE))
     })
     .ok()?;
-    if dirty.is_empty() {
+    let real = |path: &Path| dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let in_scope: Vec<PathBuf> = in_scope.iter().map(|path| real(path)).collect();
+    let left_out: Vec<&ChangedFile> = dirty
+        .iter()
+        .filter(|file| file.absolute.is_file() && !in_scope.contains(&real(&file.absolute)))
+        .collect();
+    if left_out.is_empty() {
         return None;
     }
-    let shown: Vec<&str> = dirty
+    let shown: Vec<&str> = left_out
         .iter()
         .take(UNCOMMITTED_SHOWN)
         .map(|file| file.relative.as_str())
         .collect();
-    let more = dirty.len().saturating_sub(UNCOMMITTED_SHOWN);
+    let more = left_out.len().saturating_sub(UNCOMMITTED_SHOWN);
     let names = if more == 0 {
         shown.join(", ")
     } else {
         format!("{} and {more} more", shown.join(", "))
     };
-    let (count, verb) = if dirty.len() == 1 {
+    let (count, verb) = if left_out.len() == 1 {
         ("1 uncommitted object file".to_owned(), "is")
     } else {
-        (format!("{} uncommitted object files", dirty.len()), "are")
+        (
+            format!("{} uncommitted object files", left_out.len()),
+            "are",
+        )
     };
     Some(format!(
         "{count} {verb} not in scope ({names}); commit them or pass --file"

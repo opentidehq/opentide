@@ -638,7 +638,8 @@ fn changed_files(
                 "no .git was found from {}",
                 document::resolve(&searched).display()
             ),
-            opentide_compile::git::GitError::Failed(message) => message,
+            opentide_compile::git::GitError::Failed(message)
+            | opentide_compile::git::GitError::PushBase(message) => message,
         };
         let text = text.trim().to_owned();
         if text.is_empty() {

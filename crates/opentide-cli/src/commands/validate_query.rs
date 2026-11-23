@@ -521,35 +521,50 @@ fn log_load_errors(ws: &Workspace, cwd: &Path) {
 }
 
 /// The changed rule files (`changed_rule_scope`), with the warning a
-/// checkout without commits gives; `Err` with the run's message.
+/// checkout without commits, a push that read only its last commit, or
+/// uncommitted rules the scope leaves out give; `Err` with the run's message
+/// and exit code.
 fn changed_scope(
     root: &Path,
     rules: &Path,
     folder: &str,
     cwd: &Path,
     env: &Env,
-    objects: &[std::path::PathBuf],
-) -> Result<(Scope, Option<String>), String> {
+) -> Result<(Scope, Option<String>), opentide_compile::dry_run::ScopeError> {
     let lookup = |name: &str| env.get(name).map(str::to_owned);
     let workspace = OsFs.resolve(root);
     let source = opentide_compile::git::diff_source(&lookup);
-    let changed = opentide_compile::git::changed_paths(&workspace, cwd, &lookup, source).map_err(
-        |error| match error {
+    let (changed, note) = opentide_compile::git::changed_paths_noted(
+        &workspace, cwd, &lookup, source,
+    )
+    .map_err(|error| opentide_compile::dry_run::ScopeError {
+        exit_code: error.exit_code(),
+        message: match error {
             opentide_compile::git::GitError::MissingCheckout(searched) => format!(
                 "--changed needs a git checkout; no .git was found from {}",
                 searched.display()
             ),
-            opentide_compile::git::GitError::Failed(message) => message,
+            opentide_compile::git::GitError::Failed(message)
+            | opentide_compile::git::GitError::PushBase(message) => message,
         },
-    )?;
+    })?;
     let (top, nested) = opentide_compile::git::split_rule_paths(&changed, folder);
-    let files = top
+    let files: Vec<std::path::PathBuf> = top
         .iter()
         .filter_map(|path| Path::new(path).file_name().map(|name| rules.join(name)))
         .collect();
     tracing::info!(rules = top.len(), "query_scope_changed");
     let warning = opentide_compile::git::no_commits_warning(&workspace, &lookup, NO_COMMITS_ADVICE)
-        .or_else(|| opentide_compile::git::uncommitted_warning(&workspace, &lookup, objects));
+        .or(note)
+        .or_else(|| {
+            opentide_compile::git::uncommitted_warning(
+                &workspace,
+                &lookup,
+                &[rules.to_path_buf()],
+                false,
+                &files,
+            )
+        });
     Ok((Scope { files, nested }, warning))
 }
 
@@ -853,22 +868,14 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(&ws);
         let local = opentide_compile::plan::local_scope(fs, &rules_dir, &folder);
         if args.changed {
-            match changed_scope(
-                &root,
-                &rules_dir,
-                &folder,
-                cx.cwd,
-                cx.env,
-                &super::object_folders(&ws),
-            ) {
+            match changed_scope(&root, &rules_dir, &folder, cx.cwd, cx.env) {
                 Ok((scope, warning)) => {
                     rule_files = scope.files;
                     scope_label = Some("changed");
                     warnings.extend(warning);
                 }
-                Err(message) => {
-                    let code = opentide_compile::git::scope_exit_code(&message);
-                    return scope_refused(platform, &message, code);
+                Err(error) => {
+                    return scope_refused(platform, &error.message, error.exit_code);
                 }
             }
         } else if !rule_targets.is_empty() || !args.uuids.is_empty() {

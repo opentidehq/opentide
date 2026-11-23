@@ -310,14 +310,19 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Live {
         let (_, options) = placement(cx.repo, cx.env, cx.cwd);
         if let Ok(workspace) = super::open(options) {
             let root = OsFs.resolve(workspace.root());
-            let objects = super::object_folders(&workspace);
+            let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(&workspace);
             if let Some(note) = opentide_compile::git::no_commits_warning(
                 &root,
                 &lookup,
                 "commit the rules, or drop --changed to check every rule",
             )
-            .or_else(|| opentide_compile::git::uncommitted_warning(&root, &lookup, &objects))
-            {
+            .or_else(|| {
+                // The scope's own warning: a push that read only its last
+                // commit, or uncommitted rules it leaves out.
+                opentide_compile::dry_run::git_scope(&root, cx.cwd, &lookup, &rules_dir, &folder)
+                    .ok()
+                    .and_then(|(_, warning)| warning)
+            }) {
                 let mut warnings = vec![Json::str(note)];
                 if let Some((_, Json::Array(earlier))) =
                     live.result.iter().find(|(key, _)| key == "warnings")
@@ -366,15 +371,19 @@ fn rule_scope(
         let root = OsFs.resolve(workspace.root());
         let source = opentide_compile::git::diff_source(&lookup);
         let changed = opentide_compile::git::changed_paths(&root, cx.cwd, &lookup, source)
-            .map_err(|error| match error {
-                opentide_compile::git::GitError::MissingCheckout(searched) => refused(
-                    &format!(
-                        "--changed needs a git checkout; no .git was found from {}",
-                        searched.display()
+            .map_err(|error| {
+                let code = i64::from(error.exit_code());
+                match error {
+                    opentide_compile::git::GitError::MissingCheckout(searched) => refused(
+                        &format!(
+                            "--changed needs a git checkout; no .git was found from {}",
+                            searched.display()
+                        ),
+                        code,
                     ),
-                    1,
-                ),
-                opentide_compile::git::GitError::Failed(message) => refused(&message, 1),
+                    opentide_compile::git::GitError::Failed(message)
+                    | opentide_compile::git::GitError::PushBase(message) => refused(&message, code),
+                }
             })?;
         let (top, _) = opentide_compile::git::split_rule_paths(&changed, &folder);
         let files: Vec<std::path::PathBuf> = top

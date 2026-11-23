@@ -345,6 +345,247 @@ steps:
 
 ### Which commits an Azure push deploys
 
+GitHub and GitLab name the commit a branch held before a push, so a push of several commits deploys the rules each of them changed. Azure Pipelines names none: a run on a push reads only its last commit, against that commit's first parent. A rule an earlier commit of the same push changed is not in the diff, so `opentide deploy`, `opentide validate query --changed` and `opentide lint --changed` skip it, and the run warns `This push's diff starts at its last commit's parent: …`. In the build summary the warning is an Azure issue (`##vso[task.logissue type=warning]`, from `deploy`); `--json` carries it in the document's warnings.
+
+The diff is exact for a push of one commit, and for a merge a pull request completed on the target branch (the merge commit's first parent is then the branch's previous tip). The run cannot tell those from a merge commit that is not (batched builds, a `git pull` merge then a direct push, a fast-forward to a branch that merged the target), so it warns for every Azure push. Build every commit (a branch policy, or batching off), or name the base.
+
+Name where a push's diff starts with `OPENTIDE_PUSH_BASE`, a commit that is an ancestor of `HEAD` (any provider reads it, on a push). A value that is not a commit of the checkout, or not an ancestor of `HEAD`, stops the run with exit `2` (the checkout is shallow when it says so: use `fetchDepth: 0`), and a run that reads it does not warn. Take it from the last successful build of the pipeline, with a full-history checkout:
+
+```yaml
+  - script: OPENTIDE_PUSH_BASE=`az pipelines runs list --pipeline-ids $(System.DefinitionId) --branch main --result succeeded --query-order FinishTimeDesc --top 1 --query '[0].sourceVersion' -o tsv` opentide deploy --strategy RELEASE
+    env:
+      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+```
+
+The generated pipeline does not set it. Without it, pass `--all` for a push that held several commits.
+
+### Skipping deploys for a catalogue-wide change
+
+A migration, a bulk rename or a reformat changes every rule file. Its pull or merge request would staging-deploy every rule that maps to `PREVIEW` and live-check every query, and its merge would promote every such rule and redeploy the catalogue. Mark the change instead, and the generated pipeline runs no live query check, no deploy and no share for it; object validation, `lint`, `generate`, the documentation and the inflight shards still run:
+
+| CI | Pull or merge request | Default branch, after the merge |
+|----|-----------------------|---------------------------------|
+| GitLab | `[skip deploy]` in the merge request title or in its latest commit message, or the label `skip-deploy` | `[skip deploy]` in the pushed commit's message |
+| GitHub | `[skip deploy]` in the pull request title, or the label `skip-deploy` | `[skip deploy]` in the pushed commit's message |
+| Azure | `[skip deploy]` in the pull request's source commit message (Azure exposes no labels to a pipeline) | `[skip deploy]` in the built commit's message |
+
+The default-branch run reads the merged commit's message, not the label. GitLab's default merge and squash commit messages and GitHub's merge commit message carry the request's title, and an Azure Repos merge is `Merged PR <n>: <title>`, so putting `[skip deploy]` in the title skips both runs; with a fast-forward or rebase merge, put it in the last commit's message. A label or title change on GitHub takes effect on the next push to the pull request, not on a re-run, which replays the original event.
+
+Use it only for a change that leaves what each rule deploys unchanged. The next push to the default branch deploys only its own changes, so a skipped rule change reaches the tenants only when that rule changes again, or with `opentide deploy --strategy RELEASE --all` run by hand. Promotion is skipped too: rules merged in a `PREVIEW` status keep it. On GitLab the skipped jobs are left out of the pipeline (`rules: ... when: never`), and every `needs` on them is optional, so the pipeline still starts; on GitHub they show as skipped. On Azure the jobs start and their first step stops them, with exit 0 and a line saying why: Azure fills `Build.SourceVersionMessage` only inside a running step, so a job or stage `condition:` cannot read the commit message.
+
+### GitLab write-back credentials
+
+The GitLab jobs that commit (`deploy_production`, its `after_script`, `inflight_shards` and `inflight_prune`) push to an explicit URL, not to `origin`:
+
+```bash
+git push "${OPENTIDE_PUSH_URL:-https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git}" "HEAD:$CI_DEFAULT_BRANCH"
+```
+
+Without any variable they push over HTTPS with the job token, which needs **Settings > CI/CD > Job token permissions > Allow Git push requests to the repository** and, on a private CA, `GIT_SSL_CAINFO` ([below](#behind-a-proxy-or-a-private-ca)). The runner checks the repository out from a token-less `https://<host>/…` `origin` and rewrites that prefix itself, so a `url.<ssh-url>.insteadOf` set by the project has no effect; set these CI/CD variables instead, and leave the generated file as it is:
+
+| Variable | Type | What it does |
+|----------|------|--------------|
+| `OPENTIDE_PUSH_URL` | Variable | Where the write-backs push: any URL `git push` takes, for example `git@gitlab.example.com:detections/catalogue.git` or `ssh://git@gitlab.example.com:2222/detections/catalogue.git`. A URL that carries a token must be a **masked** and **protected** variable |
+| `OPENTIDE_PUSH_SSH_KEY` | File | A private SSH key without a passphrase, ending with a newline. The jobs install `openssh-client`, push with it (`core.sshCommand`, `IdentitiesOnly=yes`) and sign their commits with it (`gpg.format ssh`, `commit.gpgsign`) |
+| `OPENTIDE_PUSH_SSH_KNOWN_HOSTS` | File | The server's `known_hosts` lines (`ssh-keyscan -p <port> <host>`, checked against the fingerprints the instance publishes). Required with the key: host keys are always checked, and a job with a key and no known hosts fails before it pushes |
+
+To push with a deploy key: generate a key pair, add the public key under **Settings > Repository > Deploy keys** with write access, allow deploy keys to push to the default branch under **Protected branches**, then set `OPENTIDE_PUSH_URL` to the project's SSH URL and the two File variables. The fetches still go through `origin` with the job token, which only needs read access. A commit signed with a deploy key shows as *Unverified*: GitLab verifies an SSH signature only against a user's signing keys, so use a bot user's key, added to that user as an authentication and signing key, for *Verified* commits. The key is never printed; the log says only that the key is used.
+
+### Behind a proxy or a private CA
+
+The generated file sets no proxy and no certificate: both belong to the runner's network. Set them as GitLab CI/CD variables (project or group) or Azure pipeline variables, which every job receives as environment variables, or in the runner's own environment (a self-hosted GitHub runner reads its `.env` file). Nothing in the generated file needs editing.
+
+| Variable | Read by |
+|----------|---------|
+| `HTTP_PROXY`, `HTTPS_PROXY` | `pip` and opentide (either spelling) |
+| `http_proxy`, `https_proxy` | `apt-get`, which installs `git` in the GitLab jobs, and `git` itself (lowercase only for plain HTTP) |
+| `NO_PROXY`, `no_proxy` | Every tool above: hosts reached directly |
+| `OPENTIDE_PROXY` | opentide only, the same as `opentide --proxy`: platform and lookup calls, not `pip` or `git` |
+
+Set both spellings to the same values. A proxy defined only in capitals leaves `apt-get` without one, and the GitLab jobs that install `git` fail before opentide runs.
+
+**A cloud tenant through the proxy and an internal one without it.** List the internal tenant's host in `NO_PROXY` and `no_proxy`, for example `NO_PROXY=splunk.internal.example,.internal.example`. opentide's platform clients honour it, so one deploy job reaches Sentinel through the proxy and Splunk directly. Sent through the proxy, a request for an internal tenant gets the proxy's HTML error page back where the Splunk client expects XML. There is no need to split the deploy per platform, and the generated file does not: the production job is the only one that commits deployment state, once per run ([production write-back](#production-write-back)).
+
+To send only opentide's platform calls through the proxy while `pip` and `git` go direct, set `OPENTIDE_PROXY` instead of the four proxy variables. `NO_PROXY` still applies to it.
+
+**A private certificate authority.** Point each tool at the CA bundle rather than turning verification off. In GitLab, a variable of type *File* holds the bundle and is exported as the path to it:
+
+| Variable | Read by |
+|----------|---------|
+| `GIT_SSL_CAINFO` | `git` fetch and push in the generated jobs |
+| `PIP_CERT` | `pip install` |
+| `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE` | opentide's platform clients and lookups |
+
+On GitLab, `CI_SERVER_TLS_CA_FILE` holds the CA the runner trusts for the GitLab server when the runner sets `tls-ca-file`, so `GIT_SSL_CAINFO: $CI_SERVER_TLS_CA_FILE` reuses it. `GIT_SSL_NO_VERIFY` also gets `git` past a private CA, but it turns certificate checks off for the fetch and for the push that carries the job token, so anyone between the runner and GitLab can read that token. The generated file never sets it.
+
+## Stage 1 — validate every pull request
+
+This is the non-negotiable gate. Object validation needs no secrets. The live query check sends each changed rule's queries to its tenants, so it needs the platform credentials, and `--changed` diffs from the pull request's merge base, so the checkout needs full history. The sketches below are minimal: `opentide setup ci` is the source of truth. Among other things, it replaces `.opentide/configurations` with the default branch's copy before any step that uses a credential ([tenant configuration on pull requests](#tenant-configuration-on-pull-requests)), which these sketches do not.
+
+```yaml
+# .github/workflows/validate.yml
+name: validate
+on: pull_request
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install 'opentide==0.28.1'
+      - run: opentide validate --strict
+      - run: opentide validate query --platform sentinel --live --changed
+```
+
+## Stage 2 — preview on the pull request (`--strategy PREVIEW`)
+
+`--strategy PREVIEW` deploys the pull request's changed rules whose status maps to `PREVIEW` (the default `DEVELOPMENT`, `IMPROVING`, `STAGING` and `ACCEPTANCE`) or `UNIVERSAL`, to the tenants whose `strategies` accept `PREVIEW`. In a pull request pipeline it reads the request's diff from its merge base, so the job checks out full history. Add the job to the same workflow:
+
+```yaml
+  deploy-staging:
+    needs: validate
+    if: github.base_ref == 'main'      # only pull requests into the default branch
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install 'opentide==0.28.1'
+      - run: opentide deploy --strategy PREVIEW --dry-run   # preview in logs
+      - run: opentide deploy --strategy PREVIEW
+```
+
+A rule whose status maps to `RELEASE` is not deployed here: it is released on merge.
+
+## Stage 3 — release on merge (`--strategy RELEASE`)
+
+`--strategy RELEASE` on a push to the default branch reads the pushed commit's diff. When promotion is enabled (the default), it first rewrites the status of each changed rule whose status maps to `INERT`, `PREVIEW` or `UNIVERSAL` to `promotion_target` (`PRODUCTION`), so merging a rule releases it. It then deploys the rules mapping to `RELEASE` or `UNIVERSAL` to the tenants whose `strategies` accept `RELEASE`, and disables or deletes those mapping to `DISABLEMENT` or `DELETION` there. Gate it behind a protected environment.
+
+```yaml
+# .github/workflows/deploy.yml
+name: deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production          # require reviewers on this environment
+    env:
+      OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install 'opentide==0.28.1'
+      - run: opentide deploy --strategy RELEASE --dry-run
+      - run: opentide deploy --strategy RELEASE
+```
+
+Promotion rewrites rule files, and the platforms that keep vendor ids record each new rule's id under `.opentide/states/deployment/`. This sketch leaves both on the runner; the generated production job commits them back to the default branch ([production write-back](#production-write-back)).
+
+## Secrets
+
+Never commit platform credentials. Inject them as CI secrets and reference them from your platform TOML with `${VAR}` — see [Configuration → credentials](../configuration.md#credentials).
+
+| Where | How |
+|-------|-----|
+| **GitHub** | Repository/environment secrets → `env:` or `${{ secrets.X }}` |
+| **GitLab** | CI/CD variables (masked, protected) → available as env vars |
+| **Azure** | Pipeline variables / variable groups (secret) → each step's `env:` (`X: $(X)`); a secret variable reaches a script only when the step maps it |
+
+Scope production secrets to a protected environment so PR builds from forks cannot read them.
+
+## GitLab CI
+
+```yaml
+# .gitlab-ci.yml
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages: [validate, deploy]
+
+variables:
+  OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
+  GIT_DEPTH: "0"
+
+default:
+  image: python:3.12
+  before_script:
+    - pip install 'opentide==0.28.1'
+
+validate:
+  stage: validate
+  script:
+    - opentide validate --strict
+    - opentide validate query --platform sentinel --live --changed
+
+deploy-staging:
+  stage: deploy
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+  script:
+    - opentide deploy --strategy PREVIEW
+
+deploy-production:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - opentide deploy --strategy RELEASE
+```
+
+Without `workflow:rules`, a GitLab job with no `rules` (here `validate`) is left out of merge request pipelines.
+
+## Azure Pipelines
+
+```yaml
+# azure-pipelines.yml
+trigger: [main]
+pool: { vmImage: ubuntu-latest }
+variables:
+  OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)
+steps:
+  - checkout: self
+    fetchDepth: 0
+  - task: UsePythonVersion@0
+    inputs: { versionSpec: '3.12' }
+  - script: pip install 'opentide==0.28.1'
+  - script: opentide validate --strict
+  - script: opentide validate query --platform sentinel --live --changed
+  - script: opentide deploy --strategy RELEASE
+    # A custom condition replaces the default succeeded(): keep it, or a failed check still deploys.
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+```
+
+### Which commits an Azure push deploys
+
 GitHub and GitLab name the commit a branch held before a push, so a push of several commits deploys the rules each of them changed. Azure Pipelines names none: a run on a push reads only its last commit, against that commit's first parent. A rule an earlier commit of the same push changed is not in the diff, so `opentide deploy` and `opentide validate query --changed` skip it, and the run warns `This push's diff starts at its last commit's parent: …`. In the build summary the warning is an Azure issue (`##vso[task.logissue type=warning]`); the CLI and `--json` carry it too.
 
 Two cases need nothing from you:

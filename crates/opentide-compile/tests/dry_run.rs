@@ -47,9 +47,10 @@ fn run(workspace: &Workspace, request: Request, set: &[&str]) -> Outcome {
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
-    let changed = |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
-        Err("no git here".to_owned())
-    };
+    let changed =
+        |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), dry_run::ScopeError> {
+            Err("no git here".to_owned().into())
+        };
     let is_set = |name: &str| set.contains(&name);
     dry_run::run(workspace, &owned, &request, &changed, &is_set)
 }
@@ -453,7 +454,7 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
 }
 
 #[test]
-fn a_wrong_push_base_is_a_usage_failure_and_another_git_failure_exits_1() {
+fn a_scope_failure_stops_the_run_with_its_own_exit_code() {
     let ws = workspace(&[(
         "objects/rules/a.yaml",
         &rule(
@@ -464,11 +465,15 @@ fn a_wrong_push_base_is_a_usage_failure_and_another_git_failure_exits_1() {
         ),
     )]);
     let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
-    let run_with = |message: &'static str| {
-        let changed =
-            move |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
-                Err(message.to_owned())
-            };
+    let run_with = |exit_code: i32| {
+        let changed = move |_: &std::path::Path,
+                            _: &str|
+              -> Result<(Scope, Option<String>), dry_run::ScopeError> {
+            Err(dry_run::ScopeError {
+                message: "OPENTIDE_PUSH_BASE=x is not an ancestor of HEAD (y)".to_owned(),
+                exit_code,
+            })
+        };
         let request = Request {
             strategies: vec!["preview".to_owned()],
             cwd: PathBuf::from("/ws"),
@@ -476,9 +481,6 @@ fn a_wrong_push_base_is_a_usage_failure_and_another_git_failure_exits_1() {
         };
         dry_run::run(&ws, &owned, &request, &changed, &|_: &str| false).exit_code
     };
-    assert_eq!(
-        run_with("OPENTIDE_PUSH_BASE=x is not an ancestor of HEAD (y)"),
-        2
-    );
-    assert_eq!(run_with("No Source Commit Found"), 1);
+    assert_eq!(run_with(2), 2);
+    assert_eq!(run_with(1), 1);
 }

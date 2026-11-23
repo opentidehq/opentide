@@ -77,14 +77,17 @@ fn changed_files(root: &Path, cwd: &Path, env: &Env, objects: &[PathBuf]) -> Cha
     let lookup = |name: &str| env.get(name).map(str::to_owned);
     let workspace = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let Some(worktree) = opentide_compile::git::worktree(&workspace) else {
-        return Changed::Failed(format!(
-            "--changed needs a git checkout; no .git was found from {}",
-            workspace.display()
-        ));
+        return Changed::Failed {
+            message: format!(
+                "--changed needs a git checkout; no .git was found from {}",
+                workspace.display()
+            ),
+            exit_code: 1,
+        };
     };
     let source = opentide_compile::git::diff_source(&lookup);
-    match opentide_compile::git::changed_paths(&workspace, cwd, &lookup, source) {
-        Ok(paths) => {
+    match opentide_compile::git::changed_paths_noted(&workspace, cwd, &lookup, source) {
+        Ok((paths, note)) => {
             let mut files: Vec<PathBuf> = paths
                 .iter()
                 .map(|entry| worktree.join(entry))
@@ -97,10 +100,18 @@ fn changed_files(root: &Path, cwd: &Path, env: &Env, objects: &[PathBuf]) -> Cha
             } else {
                 None
             }
-            .or_else(|| opentide_compile::git::uncommitted_warning(&workspace, &lookup, objects));
+            .or(note)
+            .or_else(|| {
+                opentide_compile::git::uncommitted_warning(
+                    &workspace, &lookup, objects, true, &files,
+                )
+            });
             Changed::Files { files, warning }
         }
-        Err(error) => Changed::Failed(error.message()),
+        Err(error) => Changed::Failed {
+            message: error.message(),
+            exit_code: error.exit_code(),
+        },
     }
 }
 

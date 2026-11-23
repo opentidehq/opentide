@@ -418,7 +418,7 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
     let env = |_: &str| None::<String>;
     let rules = h.root.join("objects/rules");
     let (scope, warning) =
-        opentide_compile::dry_run::git_scope(&h.root, &h.root, &env, &rules, "objects/rules", &[])
+        opentide_compile::dry_run::git_scope(&h.root, &h.root, &env, &rules, "objects/rules")
             .unwrap();
     assert_eq!(scope.files, [rules.join("r2.yaml")]);
     assert!(scope.nested.is_empty());
@@ -433,7 +433,6 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
         &env,
         &root.join("objects/rules"),
         "objects/rules",
-        &[],
     )
     .unwrap();
     assert!(scope.files.is_empty());
@@ -444,7 +443,7 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
     // Outside a checkout, the error says what to do.
     let bare = tempfile::tempdir().unwrap();
     assert!(
-        opentide_compile::dry_run::git_scope(bare.path(), bare.path(), &env, bare.path(), "x", &[])
+        opentide_compile::dry_run::git_scope(bare.path(), bare.path(), &env, bare.path(), "x")
             .is_err()
     );
 }
@@ -1302,8 +1301,7 @@ fn a_push_of_several_commits_reads_from_before_the_push() {
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
             .collect();
         let env = move |name: &str| map.get(name).cloned();
-        opentide_compile::dry_run::git_scope(&root, &root, &env, &rules, "objects/rules", &[])
-            .unwrap()
+        opentide_compile::dry_run::git_scope(&root, &root, &env, &rules, "objects/rules").unwrap()
     };
     // A push that names where the branch was says nothing more.
     let (read, warning) = scope(&github(&c, &created));
@@ -1354,28 +1352,53 @@ fn noted(root: &Path, pairs: &[(&str, &str)]) -> Result<(Vec<String>, Option<Str
     git::changed_paths_noted(root, root, &env, source)
 }
 
-/// An Azure push names no commit before it: a merge commit's first parent is
-/// the branch tip before the merge, so only another commit warns.
+/// An Azure push names no commit before it, and a merge commit's first parent
+/// is the previous tip only for a merge made on the target branch: the run
+/// warns for every such push, merge commits included.
 #[test]
-fn an_azure_push_of_a_merge_commit_does_not_warn() {
+fn an_azure_push_warns_even_when_head_is_a_merge_commit() {
     let h = history();
-    let azure = |sha: &str| {
-        noted(
-            &h.root,
-            &[("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", sha)],
-        )
+    let azure = |sha: &str, more: &[(&str, &str)]| {
+        let mut pairs = vec![("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", sha)];
+        pairs.extend_from_slice(more);
+        noted(&h.root, &pairs).unwrap()
     };
-    let (paths, note) = azure(&h.m).unwrap();
+    let warns = |note: Option<String>| {
+        note.is_some_and(|note| {
+            note.starts_with(git::LAST_COMMIT_ONLY_PREFIX) && note.contains("OPENTIDE_PUSH_BASE")
+        })
+    };
+    // A pull request completed on the target branch: exact, and still warned.
+    let (paths, note) = azure(&h.m, &[]);
     assert_eq!(paths, ["objects/rules/r2.yaml"]);
-    assert_eq!(note, None);
-    // A plain commit has the same diff and the note.
-    git_cmd(&h.root, &["checkout", "-q", &h.b]);
-    let (paths, note) = azure(&h.b).unwrap();
-    assert_eq!(paths, ["objects/rules/r1.yaml"]);
-    assert!(
-        note.is_some_and(|note| note.starts_with(git::LAST_COMMIT_ONLY_PREFIX)),
-        "a one-parent commit keeps the note"
+    assert!(warns(note));
+    // `git pull` (a merge of main into the branch) and a direct push of
+    // three commits: the first parent is the branch's own last commit, so the
+    // two commits before it are not in the diff.
+    git_cmd(&h.root, &["checkout", "-q", "-b", "topic", &h.a]);
+    write(&h.root, "objects/rules/t1.yaml", "t: 1\n");
+    commit(&h.root, "t1");
+    write(&h.root, "objects/rules/t2.yaml", "t: 2\n");
+    commit(&h.root, "t2");
+    git_cmd(&h.root, &["merge", "-q", "--no-ff", "-m", "pull", &h.b]);
+    let pulled = git_cmd(&h.root, &["rev-parse", "HEAD"]);
+    let (paths, note) = azure(&pulled, &[]);
+    assert_eq!(paths, ["objects/rules/r1.yaml"], "t1 and t2 are missed");
+    assert!(warns(note));
+    // The override reads the whole push and drops the warning.
+    let (paths, note) = azure(&pulled, &[("OPENTIDE_PUSH_BASE", &h.a)]);
+    assert_eq!(
+        paths,
+        [
+            "objects/rules/r1.yaml",
+            "objects/rules/t1.yaml",
+            "objects/rules/t2.yaml"
+        ]
     );
+    assert_eq!(note, None);
+    // A plain commit warns as before.
+    git_cmd(&h.root, &["checkout", "-q", &h.b]);
+    assert!(warns(azure(&h.b, &[]).1));
 }
 
 #[test]
@@ -1426,15 +1449,19 @@ fn opentide_push_base_must_be_an_ancestor_of_head() {
             ],
         )
     };
-    let GitError::Failed(message) = azure(&h.c).unwrap_err() else {
-        panic!("a failure");
+    let error = azure(&h.c).unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    let GitError::PushBase(message) = error else {
+        panic!("a usage failure");
     };
     assert!(
         message.contains("OPENTIDE_PUSH_BASE") && message.contains("not an ancestor of HEAD"),
         "{message}"
     );
-    let GitError::Failed(message) = azure(&"1".repeat(40)).unwrap_err() else {
-        panic!("a failure");
+    let error = azure(&"1".repeat(40)).unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    let GitError::PushBase(message) = error else {
+        panic!("a usage failure");
     };
     assert!(
         message.contains("is not a commit of this checkout"),
@@ -1444,59 +1471,76 @@ fn opentide_push_base_must_be_an_ancestor_of_head() {
     assert_eq!(azure(&h.a).unwrap().0, ["objects/rules/r1.yaml"]);
 }
 
-/// F-05: outside CI the scope is the last commit, and object files that are
-/// edited, staged or new are not in it: the run says so.
+/// F-05: outside CI the scope is the last commit, and the commands read files
+/// from disk: object files that are edited, staged or new and that the scope
+/// does not name are left out of the run, and the run says so.
 #[test]
-fn uncommitted_object_files_are_noted_outside_ci() {
+fn uncommitted_object_files_the_scope_leaves_out_are_noted_outside_ci() {
     let h = history();
     let rules = h.root.join("objects/rules");
-    let objects = [h.root.join("objects/rules"), h.root.join("objects/threats")];
+    let objects = [rules.clone(), h.root.join("objects/threats")];
     let no_env = |_: &str| None::<String>;
-    let note = || git::uncommitted_warning(&h.root, &no_env, &objects);
-    assert_eq!(note(), None, "a clean tree says nothing");
-    // An edited rule, a staged one, a new one (also in a subfolder) and a
-    // non-YAML file: three object files.
+    let note = |recursive: bool, in_scope: &[PathBuf]| {
+        git::uncommitted_warning(&h.root, &no_env, &objects, recursive, in_scope)
+    };
+    assert_eq!(note(true, &[]), None, "a clean tree says nothing");
+    // r1 edited, r2 (the file the last commit changed, so in scope) staged,
+    // a new rule below the rules folder, and a file that is no object.
     write(&h.root, "objects/rules/r1.yaml", "a: 3\n");
     write(&h.root, "objects/rules/r2.yaml", "b: 2\n");
     git_cmd(&h.root, &["add", "objects/rules/r2.yaml"]);
     write(&h.root, "objects/rules/nested/r4.yaml", "d: 1\n");
     write(&h.root, "objects/rules/notes.txt", "x\n");
+    let r2 = [rules.join("r2.yaml")];
+    // A file the scope names is read from disk as it is: not in the note.
     assert_eq!(
-        note().as_deref(),
+        note(true, &r2).as_deref(),
         Some(
-            "3 uncommitted object files are not in scope (objects/rules/nested/r4.yaml, \
-             objects/rules/r1.yaml, objects/rules/r2.yaml); commit them or pass --file"
+            "2 uncommitted object files are not in scope (objects/rules/nested/r4.yaml, \
+             objects/rules/r1.yaml); commit them or pass --file"
         )
     );
-    // Four: the note names three and counts the rest.
+    // Only the rules folder's own files can be in a deploy's scope.
+    assert_eq!(
+        note(false, &r2).as_deref(),
+        Some(
+            "1 uncommitted object file is not in scope (objects/rules/r1.yaml); commit them or \
+             pass --file"
+        )
+    );
+    // With nothing in scope, all three; a fourth, in another folder, is counted.
+    assert!(note(true, &[]).is_some_and(|text| text.starts_with("3 uncommitted object files")));
     write(&h.root, "objects/threats/t1.yaml", "t: 1\n");
-    let four = note().unwrap();
+    let four = note(true, &[]).unwrap();
     assert!(
         four.starts_with("4 uncommitted object files are not in scope (")
             && four.contains(" and 1 more)"),
         "{four}"
     );
-    // The scope itself is unchanged: the last commit, committed content.
-    let (scope, warning) = opentide_compile::dry_run::git_scope(
-        &h.root,
-        &h.root,
-        &no_env,
-        &rules,
-        "objects/rules",
-        &objects,
-    )
-    .unwrap();
+    // The dry run's scope is unchanged (the last commit), and its warning
+    // names the one rules-folder file it leaves out.
+    let (scope, warning) =
+        opentide_compile::dry_run::git_scope(&h.root, &h.root, &no_env, &rules, "objects/rules")
+            .unwrap();
     assert_eq!(scope.files, [rules.join("r2.yaml")]);
-    assert_eq!(warning, Some(four));
+    assert_eq!(
+        warning.as_deref(),
+        Some(
+            "1 uncommitted object file is not in scope (objects/rules/r1.yaml); commit them or \
+             pass --file"
+        )
+    );
+    // A file deleted from disk cannot be passed to `--file`: not named.
+    std::fs::remove_file(rules.join("r1.yaml")).unwrap();
+    assert!(note(false, &[]).is_some_and(|text| !text.contains("r1.yaml")));
     // Committing them clears it; CI never says it.
     commit(&h.root, "all");
-    assert_eq!(note(), None);
-    write(&h.root, "objects/rules/r1.yaml", "a: 4\n");
-    assert!(note().is_some());
+    assert_eq!(note(true, &[]), None);
+    write(&h.root, "objects/rules/r2.yaml", "b: 4\n");
+    assert!(note(true, &[]).is_some());
     let ci = |name: &str| (name == "GITHUB_ACTIONS").then(|| "true".to_owned());
-    assert_eq!(git::uncommitted_warning(&h.root, &ci, &objects), None);
-    // A single file reads in the singular.
-    assert!(
-        note().is_some_and(|text| text.starts_with("1 uncommitted object file is not in scope"))
+    assert_eq!(
+        git::uncommitted_warning(&h.root, &ci, &objects, true, &[]),
+        None
     );
 }

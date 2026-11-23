@@ -90,8 +90,10 @@ fn run(workspace: &Workspace, request: &Request) -> Outcome {
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
-    let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
-        Err("no git here".to_owned())
+    let changed = |_: &Path,
+                   _: &str|
+     -> Result<(Scope, Option<String>), opentide_compile::dry_run::ScopeError> {
+        Err("no git here".to_owned().into())
     };
     dry_run::run(workspace, &owned, request, &changed, &|_| false)
 }
