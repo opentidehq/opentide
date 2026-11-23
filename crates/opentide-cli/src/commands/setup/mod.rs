@@ -851,6 +851,37 @@ pub(crate) struct Run {
     pub(crate) pipeline: String,
 }
 
+/// What `setup ci` writes at `pipeline`: `None` for `--stdout`, which writes
+/// nothing, and for a region that cannot be read, which is not replaced, as
+/// a file that is not opentide's is not; else [`pipeline_bytes`].
+fn written_bytes(
+    args: &CiArgs,
+    pipeline: &str,
+    region: &Result<Option<String>, String>,
+    before: Result<Option<String>, String>,
+    text: String,
+    warnings: &mut Vec<String>,
+) -> Option<Vec<u8>> {
+    match (args.stdout, region) {
+        (true, Err(why)) => {
+            warnings.push(format!(
+                "the user-owned region of {pipeline} cannot be read ({why}), so this output has none"
+            ));
+            None
+        }
+        (true, Ok(_)) => None,
+        (false, Err(why)) => {
+            warnings.push(format!(
+                "the user-owned region of {pipeline} cannot be read ({why}), so it was kept as it is; mark the region with one `{}` line and one `{}` line, or move the file, and run the command again.",
+                ci::USER_BEGIN,
+                ci::USER_END
+            ));
+            None
+        }
+        (false, Ok(_)) => pipeline_bytes(args.provider, pipeline, before, text, warnings),
+    }
+}
+
 /// The provider-specific flags the provider does not have, each warned about.
 fn ignored_flag_warnings(args: &CiArgs, warnings: &mut Vec<String>) {
     if args.explorer_pages && args.provider != Provider::GitHub {
@@ -940,27 +971,7 @@ pub(crate) fn prepare(
         .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let exists = existing.exists() || !matches!(before, Ok(None));
     let rendered = text.clone();
-    // `--stdout` writes nothing, so there is no file to replace or keep; a
-    // region that cannot be read is not replaced, as a file that is not
-    // opentide's is not.
-    let bytes = match (args.stdout, &region) {
-        (true, Err(why)) => {
-            warnings.push(format!(
-                "the user-owned region of {pipeline} cannot be read ({why}), so this output has none"
-            ));
-            None
-        }
-        (true, Ok(_)) => None,
-        (false, Err(why)) => {
-            warnings.push(format!(
-                "the user-owned region of {pipeline} cannot be read ({why}), so it was kept as it is; mark the region with one `{}` line and one `{}` line, or move the file, and run the command again.",
-                ci::USER_BEGIN,
-                ci::USER_END
-            ));
-            None
-        }
-        (false, Ok(_)) => pipeline_bytes(args.provider, pipeline, before, text, &mut warnings),
-    };
+    let bytes = written_bytes(args, pipeline, &region, before, text, &mut warnings);
     let mut files = vec![(pipeline.to_owned(), bytes, exists)];
     if let Some(promotion) = promotion
         && let Some(content) = promotion.content

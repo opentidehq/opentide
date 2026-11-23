@@ -431,12 +431,12 @@ mod push_base_script {
         );
         // The token is on stdin (`-H @-`), never in the arguments.
         assert!(args.contains("Authorization: Bearer tok"), "{args}");
-        let argv = args.split("Authorization").next().unwrap();
-        assert!(!argv.contains("tok"), "{argv}");
-        assert!(argv.contains("-H\n@-\n"), "{argv}");
+        let arguments = args.split("Authorization").next().unwrap();
+        assert!(!arguments.contains("tok"), "{arguments}");
+        assert!(arguments.contains("-H\n@-\n"), "{arguments}");
         assert!(
-            argv.contains("--connect-timeout\n10\n--max-time\n30\n"),
-            "{argv}"
+            arguments.contains("--connect-timeout\n10\n--max-time\n30\n"),
+            "{arguments}"
         );
         assert!(args.contains("definitions=7"), "{args}");
         assert!(args.contains("branchName=refs/heads/main"), "{args}");
