@@ -1445,6 +1445,10 @@ exit: 0
       "meaning": "`share retract` would delete a remote event, and was not confirmed."
     },
     {
+      "code": "reviewed_before_modified",
+      "meaning": "A rule's `metadata.reviewed` date is earlier than its `metadata.modified` date: the rule changed after its last review."
+    },
+    {
       "code": "risk_band",
       "meaning": "The risk score is outside the band of the rule's severity."
     },

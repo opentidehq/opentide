@@ -53,13 +53,14 @@ pub const CODE_OFF: &str = "off";
 /// The codes `opentide lint` reports itself, each with the check it belongs
 /// to. Every other code in [`opentide_core::codes`] is the analysis engine's,
 /// and belongs to `queries`.
-pub const LINT_CODE_CHECKS: [(&str, &str); 8] = [
+pub const LINT_CODE_CHECKS: [(&str, &str); 9] = [
     ("yaml_parse", "filenames"),
     ("name_missing", "filenames"),
     ("filename_mismatch", "filenames"),
     ("filename_pattern", "filenames"),
     ("nested_object_file", "filenames"),
     ("metadata_recommended", "metadata"),
+    ("reviewed_before_modified", "metadata"),
     ("recommended_field_missing", "recommended"),
     ("placeholder", "placeholders"),
 ];

@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 use indexmap::IndexMap;
 use opentide_schema::configuration::lint::{CODE_OFF, FilenameConfig, LintConfig};
 use opentide_schema::node::{self, Node, Value};
+use opentide_schema::objects::checks;
 use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::{Value as Json, json};
@@ -65,6 +66,8 @@ pub mod codes {
     pub const FILENAME_PATTERN: &str = "filename_pattern";
     /// Recommended metadata is missing.
     pub const METADATA: &str = "metadata_recommended";
+    /// `metadata.reviewed` is a day before `metadata.modified`.
+    pub const REVIEWED_BEFORE_MODIFIED: &str = "reviewed_before_modified";
     /// A field the templates ask for and validation does not require is
     /// missing: the engine's code, which the editor reports too.
     pub const RECOMMENDED: &str = "recommended_field_missing";
@@ -75,12 +78,13 @@ pub mod codes {
 }
 
 /// Every code a lint rule reports (`LINT_CODES.values()`).
-pub const LINT_CODES: [&str; 8] = [
+pub const LINT_CODES: [&str; 9] = [
     codes::PARSE,
     codes::NAME,
     codes::FILENAME,
     codes::FILENAME_PATTERN,
     codes::METADATA,
+    codes::REVIEWED_BEFORE_MODIFIED,
     codes::RECOMMENDED,
     codes::PLACEHOLDER,
     codes::NESTED,
@@ -792,6 +796,7 @@ fn lint_with(
             shown.iter().map(|&i| &records[i]),
             &config.required_metadata,
         ));
+        findings.extend(reviewed_findings(shown.iter().map(|&i| &records[i])));
     }
     findings.extend(missing);
     if selected.contains(&LintCheck::Placeholders) {
@@ -976,7 +981,10 @@ fn editor_findings(
         .filter(|finding| {
             matches!(
                 finding.code(),
-                codes::FILENAME | codes::METADATA | codes::RECOMMENDED
+                codes::FILENAME
+                    | codes::METADATA
+                    | codes::REVIEWED_BEFORE_MODIFIED
+                    | codes::RECOMMENDED
             )
         })
         .collect()
@@ -1668,6 +1676,56 @@ fn metadata_findings<'r>(
             Some("metadata"),
             record.key_lines.get("metadata").copied(),
         ));
+    }
+    findings
+}
+
+/// The calendar day of `metadata.<key>` when it is a valid ISO 8601 date or
+/// datetime (`YYYY-MM-DD`, as written: an offset is not applied), `None` when
+/// the key is missing or the value is not one: the schema check reports those.
+fn metadata_day(metadata: &Node, key: &str) -> Option<String> {
+    let text = as_str(metadata.get(key).map(AsRef::as_ref))?;
+    checks::check_instant(&format!("metadata.{key}"), &text).ok()?;
+    text.get(..10).map(str::to_owned)
+}
+
+/// One warning for each rule whose `metadata.reviewed` day is before its
+/// `metadata.modified` day: the rule changed after its last review. Skipped
+/// when either value is missing or is not a date.
+fn reviewed_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft> {
+    let mut findings = Vec::new();
+    for record in records {
+        let (None, Some(metadata)) = (&record.parse_error, &record.metadata) else {
+            continue;
+        };
+        // Only a schema whose metadata has `reviewed` (rule::1.1): a threat,
+        // an objective or a rule::1.0 rule has none to compare.
+        let accepted = record.schema.as_deref().and_then(schema_metadata_keys);
+        if accepted.is_some_and(|keys| !keys.iter().any(|key| key == "reviewed")) {
+            continue;
+        }
+        let (Some(reviewed), Some(modified)) = (
+            metadata_day(metadata, "reviewed"),
+            metadata_day(metadata, "modified"),
+        ) else {
+            continue;
+        };
+        // ISO dates sort as text.
+        if reviewed >= modified {
+            continue;
+        }
+        let mut draft = Draft::new(
+            LintCheck::Metadata,
+            "warning",
+            record,
+            format!("metadata.reviewed ({reviewed}) is before metadata.modified ({modified})"),
+            codes::REVIEWED_BEFORE_MODIFIED,
+            Some("metadata"),
+            record.key_lines.get("metadata").copied(),
+        );
+        draft.field_path = vec!["metadata".to_owned(), "reviewed".to_owned()];
+        draft.help = Some("review the rule again, then update metadata.reviewed".to_owned());
+        findings.push(draft);
     }
     findings
 }

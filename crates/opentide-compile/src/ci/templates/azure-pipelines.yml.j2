@@ -20,7 +20,18 @@
 {%- endfor %}
 {%- endif %}
 {%- endmacro %}
-{% macro steps(commands, persist=false, full_history=false, secrets=none) -%}
+{#- The step that names the commit a push's diff starts at, for a job that
+    reads the changed files (`OPENTIDE_PUSH_BASE`): Azure names none. -#}
+{% macro push_base_step(pre=none) -%}
+- script: |
+    [[ ((pre or []) + [sh.push_base()]) | join("\n") | indent(4) ]]
+  displayName: Find this push's base commit
+  condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+  continueOnError: true
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+{%- endmacro %}
+{% macro steps(commands, persist=false, full_history=false, secrets=none, push_base=false, push_base_pre=none) -%}
 {% if persist or full_history %}
 - checkout: self
 {% if persist %}
@@ -35,6 +46,9 @@
     versionSpec: '[[ python ]]'
 - script: [[ pip ]]
   displayName: Install opentide
+{% if push_base %}
+[[ push_base_step(push_base_pre) ]]
+{% endif %}
 [[ script(commands, secrets) ]]
 {%- endmacro %}
 {% macro job(id, name, body, condition=none) -%}
@@ -50,7 +64,7 @@
 {% set push = "git push origin HEAD:" ~ branch %}
 {% set fetch = "git fetch origin " ~ branch %}
 {% set validate %}
-[[ steps(["mkdir -p opentide-reports"] + validate_sarif, full_history=lint_changed) ]]
+[[ steps(["mkdir -p opentide-reports"] + validate_sarif, full_history=lint_changed, push_base=lint_changed) ]]
 - task: PublishBuildArtifacts@1
   displayName: Publish opentide reports
   condition: succeededOrFailed()
@@ -59,7 +73,7 @@
     ArtifactName: CodeAnalysisLogs
 {% endset %}
 {% set production %}
-[[ steps([skip_guard] + identity + [sh.overlay(fetch), dry_run, 'echo "##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true"', deploy], persist=true, full_history=true, secrets=credentials) ]]
+[[ steps([skip_guard] + identity + [sh.overlay(fetch), dry_run, 'echo "##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true"', deploy], persist=true, full_history=true, secrets=credentials, push_base=true) ]]
 [[ script(identity + [sh.writeback(rules, push, fetch, 'git push origin "$state_commit:refs/opentide/deployment-state/$state_commit"')]) ]]
   displayName: Commit deployment write-backs
   condition: and(always(), eq(variables['OPENTIDE_DEPLOY_STARTED'], 'true'))
@@ -120,7 +134,7 @@ stages:
     jobs:
       [[ job("validate", "Validate objects", validate) | indent(6) ]]
 {% for query in queries %}
-      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true, secrets=query.secrets)) | indent(6) ]]
+      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true, secrets=query.secrets, push_base=true)) | indent(6) ]]
 {% endfor %}
 
   - stage: Generate
@@ -148,7 +162,7 @@ stages:
     dependsOn: [Generate, Deploy]
     condition: and(not(canceled()), eq(dependencies.Generate.result, 'Succeeded'), eq(variables['Build.SourceBranch'], 'refs/heads/[[ branch ]]'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
-      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true, secrets=sharing_credentials)) | indent(6) ]]
+      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true, secrets=sharing_credentials, push_base=true, push_base_pre=["git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD"])) | indent(6) ]]
 
 {% endif %}
   - stage: Document
@@ -157,3 +171,5 @@ stages:
     condition: [[ on_default_branch ]]
     jobs:
       [[ job("document", "Generate documentation", document) | indent(6) ]]
+
+[[ user_region ]]
