@@ -4586,11 +4586,6 @@ exit: 0
     }
   },
   "command": "info",
-  "counts": {
-    "objectives": 1,
-    "rules": 2,
-    "threats": 0
-  },
   "duration_ms": 0,
   "edges": [
     {
@@ -4700,114 +4695,6 @@ exit: 0
     }
   ],
   "ok": true,
-  "parse_error_count": 0,
-  "platforms": [
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "sentinel",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "defender_for_endpoint",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "splunk",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "sentinel_one",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": false,
-      "enabled": false,
-      "name": "crowdstrike",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": false,
-      "enabled": false,
-      "name": "harfanglab",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "carbon_black_cloud",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "elastic",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": false,
-      "can_validate": false,
-      "enabled": false,
-      "name": "sysdig",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": false,
-      "can_validate": false,
-      "enabled": false,
-      "name": "bitdefender",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "graylog",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "exabeam",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "google_secops",
-      "tenants": []
-    }
-  ],
-  "repo": "<WS>",
   "schema_version": 1,
   "signals": [],
   "status": "completed",
@@ -4819,8 +4706,7 @@ exit: 0
     "rules": 2,
     "signals": 0,
     "threats": 0
-  },
-  "version": "0.28.1"
+  }
 }
 
 ━━━ stderr · empty

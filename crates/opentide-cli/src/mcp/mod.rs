@@ -3,9 +3,9 @@
 //!
 //! What the server says of itself (its name, instructions, capabilities, the
 //! protocol version it falls back to, every tool's description and schemas,
-//! every resource and template) is the Python server's
-//! (`src/opentide/mcp_server/server.py`), as `scripts/build/mcp_manifest.py`
-//! wrote it to `data/mcp/manifest.json`: MCP shapes are a plan §3 invariant.
+//! every resource and template) was the Python server's
+//! (generated once into `data/mcp/manifest.json`, which is hand-edited since the
+//! generator was removed): MCP shapes are a plan §3 invariant.
 //!
 //! Every tool ([`TOOLS`]) and every resource runs here, on the workspace
 //! crates, and answers as the Python server's handlers did (it was replayed
