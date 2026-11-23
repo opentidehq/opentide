@@ -256,6 +256,87 @@ mod validate {
     }
 
     #[test]
+    fn a_root_composition_on_an_objective_gets_its_own_help() {
+        let fs = workspace();
+        let composition = "composition:\n  strategy: synergetic\n  description: compose\n";
+        let nested = "  composition:\n    strategy: synergetic\n    description: compose\n";
+        fs.write(
+            "/ws/objects/objectives/o.yaml",
+            format!(
+                "name: O\nmetadata:\n  uuid: {U1}\n  schema: objective::1.0\n{composition}objective:\n{nested}"
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<_> = with_code(&validation, "schema_validation")
+            .into_iter()
+            .filter(|d| d.field_path == ["composition"])
+            .collect();
+        assert_eq!(found.len(), 1, "{:?}", all(&validation));
+        assert!(
+            found[0]
+                .message
+                .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
+        );
+        let help = found[0].help.as_deref().unwrap_or_default();
+        assert!(
+            help.starts_with("move it under `objective:`, or delete the root copy"),
+            "{help}"
+        );
+        assert!(found[0].fix.is_none());
+    }
+
+    #[test]
+    fn a_file_that_does_not_exist_is_file_not_found() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        // Alone: no scope_no_match beside it.
+        for files in [
+            vec!["does/not/exist.yaml".to_owned()],
+            vec![
+                "objects/rules/a.yaml".to_owned(),
+                "does/not/exist.yaml".to_owned(),
+            ],
+        ] {
+            let selection = Selection {
+                files,
+                ..Selection::default()
+            };
+            let validation = run(
+                &fs,
+                &Options {
+                    selection: Some(&selection),
+                    ..Options::default()
+                },
+            );
+            let found = with_code(&validation, "file_not_found");
+            assert_eq!(found.len(), 1);
+            assert_eq!(
+                found[0].message,
+                "--file \"does/not/exist.yaml\" does not exist, so it was not validated"
+            );
+            assert!(with_code(&validation, "scope_no_match").is_empty());
+            assert_eq!(status(&validation, Check::Schema), "failed");
+            assert_eq!(status(&validation, Check::UuidFormat), "failed");
+            assert_eq!(status(&validation, Check::Queries), "failed");
+        }
+        // An existing path that is no object stays scope_no_match.
+        fs.write("/ws/notes.txt", "x");
+        let selection = Selection {
+            files: vec!["notes.txt".to_owned()],
+            ..Selection::default()
+        };
+        let validation = run(
+            &fs,
+            &Options {
+                selection: Some(&selection),
+                ..Options::default()
+            },
+        );
+        assert_eq!(with_code(&validation, "scope_no_match").len(), 1);
+        assert!(with_code(&validation, "file_not_found").is_empty());
+    }
+
+    #[test]
     fn nested_files_are_warnings_that_strict_counts() {
         let fs = workspace();
         fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
@@ -1057,14 +1138,15 @@ mod validate {
             (
                 validation.summary.objects,
                 with_code(&validation, "scope_no_match").len(),
+                with_code(&validation, "file_not_found").len(),
             )
         };
         let target = dir.join("shared/x.yaml").display().to_string();
         let link = dir.join("objects/rules/link.yaml").display().to_string();
-        assert_eq!(selected(&target), (1, 0));
-        assert_eq!(selected(&link), (1, 0));
-        assert_eq!(selected("objects/rules/plain.yaml"), (1, 0));
-        assert_eq!(selected("objects/rules/none.yaml"), (0, 1));
+        assert_eq!(selected(&target), (1, 0, 0));
+        assert_eq!(selected(&link), (1, 0, 0));
+        assert_eq!(selected("objects/rules/plain.yaml"), (1, 0, 0));
+        assert_eq!(selected("objects/rules/none.yaml"), (0, 0, 1));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
