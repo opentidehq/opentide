@@ -1341,3 +1341,103 @@ fn a_push_of_several_commits_reads_from_before_the_push() {
         );
     }
 }
+
+fn noted(root: &Path, pairs: &[(&str, &str)]) -> Result<(Vec<String>, Option<String>), GitError> {
+    let map: HashMap<String, String> = pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    let env = move |name: &str| map.get(name).cloned();
+    let source = git::diff_source(&env);
+    git::changed_paths_noted(root, root, &env, source)
+}
+
+/// An Azure push names no commit before it: a merge commit's first parent is
+/// the branch tip before the merge, so only another commit warns.
+#[test]
+fn an_azure_push_of_a_merge_commit_does_not_warn() {
+    let h = history();
+    let azure = |sha: &str| {
+        noted(
+            &h.root,
+            &[("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", sha)],
+        )
+    };
+    let (paths, note) = azure(&h.m).unwrap();
+    assert_eq!(paths, ["objects/rules/r2.yaml"]);
+    assert_eq!(note, None);
+    // A plain commit has the same diff and the note.
+    git_cmd(&h.root, &["checkout", "-q", &h.b]);
+    let (paths, note) = azure(&h.b).unwrap();
+    assert_eq!(paths, ["objects/rules/r1.yaml"]);
+    assert!(
+        note.is_some_and(|note| note.starts_with(git::LAST_COMMIT_ONLY_PREFIX)),
+        "a one-parent commit keeps the note"
+    );
+}
+
+#[test]
+fn opentide_push_base_starts_a_pushs_diff_on_any_provider() {
+    let h = history();
+    let base = [("OPENTIDE_PUSH_BASE", h.a.as_str())];
+    let azure = [
+        &[("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", h.m.as_str())][..],
+        &base,
+    ]
+    .concat();
+    let (paths, note) = noted(&h.root, &azure).unwrap();
+    assert_eq!(paths, ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]);
+    assert_eq!(note, None);
+    // GitHub with no push event: the override replaces the note's fallback.
+    let github = [
+        &[("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", h.m.as_str())][..],
+        &base,
+    ]
+    .concat();
+    let (paths, note) = noted(&h.root, &github).unwrap();
+    assert_eq!(paths, ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]);
+    assert_eq!(note, None);
+    // `share push --changed` reads the same base.
+    let map: HashMap<String, String> = azure
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    let env = move |name: &str| map.get(name).cloned();
+    assert_eq!(
+        git::changed_through_head(&h.root, &h.root, &env, None).unwrap(),
+        ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]
+    );
+}
+
+#[test]
+fn opentide_push_base_must_be_an_ancestor_of_head() {
+    let h = history();
+    // c is on the feature branch: not an ancestor of b.
+    git_cmd(&h.root, &["checkout", "-q", &h.b]);
+    let azure = |base: &str| {
+        noted(
+            &h.root,
+            &[
+                ("TF_BUILD", "True"),
+                ("BUILD_SOURCEVERSION", h.b.as_str()),
+                ("OPENTIDE_PUSH_BASE", base),
+            ],
+        )
+    };
+    let GitError::Failed(message) = azure(&h.c).unwrap_err() else {
+        panic!("a failure");
+    };
+    assert!(
+        message.contains("OPENTIDE_PUSH_BASE") && message.contains("not an ancestor of HEAD"),
+        "{message}"
+    );
+    let GitError::Failed(message) = azure(&"1".repeat(40)).unwrap_err() else {
+        panic!("a failure");
+    };
+    assert!(
+        message.contains("is not a commit of this checkout"),
+        "{message}"
+    );
+    // A valid ancestor works.
+    assert_eq!(azure(&h.a).unwrap().0, ["objects/rules/r1.yaml"]);
+}

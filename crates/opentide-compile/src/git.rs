@@ -492,11 +492,42 @@ fn gitlab_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
     }
 }
 
+/// The variable that names the commit a push's diff starts at, on any
+/// provider (#1683): for Azure Pipelines, which names none itself.
+pub const PUSH_BASE_VARIABLE: &str = "OPENTIDE_PUSH_BASE";
+
+/// How the note of a push that read only its last commit begins, for a host
+/// that shows it as the CI run's warning.
+pub const LAST_COMMIT_ONLY_PREFIX: &str = "This push's diff starts at its last commit's parent";
+
+/// The commit `OPENTIDE_PUSH_BASE` names, when it is set: a commit of the
+/// checkout that is an ancestor of HEAD, else an error.
+fn push_base_override(repo: &Repo, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {
+    let Some(value) = set(env, PUSH_BASE_VARIABLE) else {
+        return Ok(None);
+    };
+    let base = commit_id(repo, &value).ok_or_else(|| {
+        failed(format!(
+            "{PUSH_BASE_VARIABLE}={value} is not a commit of this checkout: name a commit id \
+             the checkout holds (a full-history checkout has them all)"
+        ))
+    })?;
+    let head = head_commit(repo)
+        .ok_or_else(|| failed("The git repository has no commits yet".to_owned()))?;
+    if merge_base(repo, base, head) != Some(base) {
+        return Err(failed(format!(
+            "{PUSH_BASE_VARIABLE}={value} is not an ancestor of HEAD ({head}): name a commit \
+             the checked-out commit descends from"
+        )));
+    }
+    Ok(Some(base))
+}
+
 /// What a push run that read only its last commit says: the commits before
 /// it in the same push are not in the diff.
 fn last_commit_only(why: &str) -> String {
     format!(
-        "This push's diff starts at its last commit's parent: {why}. Rules that earlier \
+        "{LAST_COMMIT_ONLY_PREFIX}: {why}. Rules that earlier \
          commits of the same push changed are not in it; pass --all to deploy every rule file"
     )
 }
@@ -663,8 +694,14 @@ pub fn changed_paths_noted(
             None => Err(no_commits_yet(&searched)),
         }
     };
+    let pushed_base = if source == DiffSource::Push {
+        push_base_override(&repo, env)?.map(|base| base.to_string())
+    } else {
+        None
+    };
     let base: Option<String> = match (platform, source) {
         (_, DiffSource::LastCommit) | (Ci::Local, _) => None,
+        (_, DiffSource::Push) if pushed_base.is_some() => pushed_base,
         (Ci::GitHub, DiffSource::Push) => match github_push_before(&repo, env) {
             PushBefore::Commit(before) => Some(before),
             PushBefore::Created => {
@@ -749,9 +786,16 @@ pub fn changed_paths_noted(
         // Azure Pipelines names no commit the branch held before the push.
         (Ci::Azure, DiffSource::Push) => match first_parent()? {
             Some(base) => {
-                note = Some(last_commit_only(
-                    "Azure Pipelines does not name the commit the branch held before the push",
-                ));
+                // A merge commit's first parent is the branch tip before the
+                // merge (a pull request's completion): nothing is missed.
+                let merge = head
+                    .and_then(|head| parents(&repo, head))
+                    .is_some_and(|parents| parents.len() > 1);
+                if !merge {
+                    note = Some(last_commit_only(
+                        "Azure Pipelines does not name the commit the branch held before the push",
+                    ));
+                }
                 Some(base.to_string())
             }
             None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
@@ -928,6 +972,9 @@ fn push_baseline(repo: &Repo, ci: Ci, env: Env<'_>) -> Result<Option<ObjectId>, 
             "{variable} is required to compute the changed objects"
         ))
     })?;
+    if let Some(base) = push_base_override(repo, env)? {
+        return Ok(Some(base));
+    }
     if ci == Ci::GitLab
         && let Some(before) =
             set(env, "CI_COMMIT_BEFORE_SHA").filter(|sha| !sha.trim_matches('0').is_empty())

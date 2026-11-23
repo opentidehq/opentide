@@ -343,6 +343,23 @@ steps:
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```
 
+### Which commits an Azure push deploys
+
+GitHub and GitLab name the commit a branch held before a push, so a push of several commits deploys the rules each of them changed. Azure Pipelines names none: a run on a push reads only its last commit, against that commit's first parent. A rule an earlier commit of the same push changed is not in the diff, so `opentide deploy` and `opentide validate query --changed` skip it, and the run warns `This push's diff starts at its last commit's parent: …`. In the build summary the warning is an Azure issue (`##vso[task.logissue type=warning]`); the CLI and `--json` carry it too.
+
+Two cases need nothing from you:
+
+- **A merge commit.** When the pipeline builds the commit a pull request completion made, the first parent is exactly the branch tip before the merge, so the diff holds everything the merge brought in. The run does not warn.
+- **A push of one commit.** The parent is the branch tip before the push.
+
+For a push of several commits, name where its diff starts with `OPENTIDE_PUSH_BASE`, a commit that is an ancestor of `HEAD` (any provider reads it, on a push). A value that is not a commit of the checkout, or not an ancestor of `HEAD`, stops the run with exit `2`, and a run that reads it does not warn. Take it from the last successful build of the pipeline, with a full-history checkout (`fetchDepth: 0`):
+
+```yaml
+  - script: OPENTIDE_PUSH_BASE=`az pipelines runs list --pipeline-ids $(System.DefinitionId) --branch main --result succeeded --top 1 --query '[0].sourceVersion' -o tsv` opentide deploy --strategy RELEASE
+```
+
+The generated pipeline does not set it. Without it, pass `--all` for a push that held several commits.
+
 ## Annotations, summaries and reports
 
 In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB_CI` or `TF_BUILD` is set), opentide adds to its usual output. Nothing has to be configured; `--json` turns all of it off, because stdout then holds the JSON document.
