@@ -55,8 +55,8 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -64,7 +64,7 @@ jobs:
       - run: opentide lint --strict --format sarif --output opentide-reports/lint.sarif
       - name: Upload opentide reports
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opentide-reports
           path: opentide-reports/
@@ -78,7 +78,7 @@ jobs:
       security-events: write
     steps:
       - name: Download opentide reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: opentide-reports
@@ -100,8 +100,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -112,10 +112,10 @@ jobs:
     needs: generate
     if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -136,11 +136,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout pull request head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -191,10 +191,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -231,10 +231,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -339,14 +339,14 @@ jobs:
     needs: generate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
       - run: opentide generate docs --output docs
       - name: Upload documentation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opentide-docs
           path: "docs/"
