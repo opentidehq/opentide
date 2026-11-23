@@ -1599,6 +1599,45 @@ fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
     );
 }
 
+/// A near miss of a known table is the error `kql_table_misspelt`, and the
+/// editor still offers to declare it: the workspace may hold a table by that
+/// name.
+#[test]
+fn the_quick_fix_declares_a_table_reported_as_misspelt() {
+    let scratch = Scratch::new("declare-misspelt");
+    let root = &scratch.0;
+    let uri = file_uri(&root.join("hunt.kql"));
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({
+            "capabilities": { "workspace": { "workspaceEdit": {
+                "documentChanges": true, "resourceOperations": ["create"]
+            } } },
+            "rootUri": file_uri(root)
+        }),
+    );
+    let codes = published_codes(&mut lsp, &uri, "kql", "SecurityEvnt | take 1");
+    assert_eq!(codes, vec!["kql_table_misspelt".to_string()]);
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } },
+            "context": { "diagnostics": [] }
+        }),
+    );
+    let title = "Add a [[logsources]] entry declaring 'SecurityEvnt' to visibility.toml";
+    assert!(
+        actions["result"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["title"] == title),
+        "{actions}"
+    );
+}
+
 /// visibility.toml applies as it is edited: in the editor, before it is
 /// saved, and on disk, through the file watcher.
 #[test]

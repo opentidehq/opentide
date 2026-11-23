@@ -248,9 +248,10 @@ How a KQL source name is reported:
 | declared | yes | nothing |
 | known to the engine's catalog, not declared | yes | [`kql_table_not_declared`](../cli/diagnostics.md#kql_table_not_declared), warning |
 | known to the engine's catalog | no | nothing |
-| unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `defender_for_endpoint` |
+| unknown to the catalog, not declared, a near miss of a known or declared table (one edit for a name of up to seven characters, two for a longer one; a match that differs only in case, `_`, `-` or spaces counts) and not a `_CL` table | either | [`kql_table_misspelt`](../cli/diagnostics.md#kql_table_misspelt), an error under `sentinel`, with the table to use; `defender_for_endpoint` reports [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table), also an error, with the same suggestion |
+| any other name unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `defender_for_endpoint` |
 
-Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
+A typo that passed `validate` as a warning before (`SecurityEvnt`) therefore fails it under `sentinel`. Correct the name; if the workspace really holds that table or function, declare it as a log source, or run `opentide validate --queries warn` to report it as a warning. Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
 
 #### Columns
 
@@ -265,6 +266,29 @@ Under opt-in a name is checked whatever its case; without, a name that starts wi
 - KQL: a declared table with `columns` is checked like a documented table: a near miss of a declared column is `kql_unknown_column`, an operator the declared type does not support is `kql_type_mismatch`, and hover and completion show the declared columns. On a table the engine's catalog also knows, the declared columns extend the catalog's, and a declared column with a catalog column's name replaces its type and description. A table declared without `columns` is known by name only.
 - Elastic: declared columns are fields the index pattern maps, so `ecs_unknown_field` is not reported for them and `ecs_type_mismatch` uses their declared type.
 - Splunk: declared columns are offered in hover and completion where the engine has them, and are not checked.
+
+#### One source, several tables
+
+A log source is one dataset, so a source such as "Windows Security" that fills two tables is two `[[logsources]]` entries, each with its own `columns`. A signal's `data.logsources` names both:
+
+```toml
+[[logsources]]
+name = "SecurityEvent"
+description = "Windows Security events"
+system = "sentinel"
+
+[[logsources]]
+name = "WindowsEvent"
+description = "Windows Security events"
+system = "sentinel"
+```
+
+```yaml
+data:
+  logsources:
+    - SecurityEvent
+    - WindowsEvent
+```
 
 #### Upgrading from 0.20.0
 

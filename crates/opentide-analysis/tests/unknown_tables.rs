@@ -65,7 +65,7 @@ fn raw_kql_file_warns_on_tables_the_catalog_does_not_list() {
 }
 
 #[test]
-fn tide_query_block_warns_and_still_suggests_a_known_table() {
+fn tide_query_block_warns_and_errors_on_a_near_miss_of_a_known_table() {
     let source = read("unknown-tables.rule.yaml");
     let found = diagnostics(
         LanguageId::TideYaml,
@@ -73,28 +73,25 @@ fn tide_query_block_warns_and_still_suggests_a_known_table() {
         source.clone(),
     );
     // The fixture's detection model is not in the workspace; only the query matters here.
-    assert!(
-        found
-            .iter()
-            .filter(|d| d.code.starts_with("kql_"))
-            .all(|d| d.severity != Severity::Error),
-        "{found:?}"
-    );
+    // The unknown tables stay warnings; `SigninLog`, one edit from `SigninLogs`,
+    // is a typo: its own code, an error.
     assert_eq!(
         unknown_tables(&found, &source),
         vec![
             ("MyCustomLog_CL".into(), Severity::Warning),
             ("VendorFirewallEvents".into(), Severity::Warning),
-            ("SigninLog".into(), Severity::Warning),
         ]
     );
-    let misspelt = found
+    let errors: Vec<_> = found
         .iter()
-        .find(|d| d.code == codes::KQL_UNKNOWN_TABLE && d.message.contains("'SigninLog'"))
-        .expect("SigninLog");
+        .filter(|d| d.code.starts_with("kql_") && d.severity == Severity::Error)
+        .collect();
+    assert_eq!(errors.len(), 1, "{found:?}");
+    let misspelt = errors[0];
+    assert_eq!(misspelt.code, codes::KQL_TABLE_MISSPELT);
     assert_eq!(misspelt.suggestion.as_deref(), Some("SigninLogs"));
     assert_eq!(
         misspelt.message,
-        "'SigninLog' is not a table opentide knows; if the workspace holds it, declare it in visibility.toml"
+        "'SigninLog' is not a table opentide knows; did you mean 'SigninLogs'?"
     );
 }

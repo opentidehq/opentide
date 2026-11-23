@@ -89,6 +89,30 @@ const CASES: &[Case] = &[
         },
     },
     Case {
+        // The Tide field catalog the language server generates from the models for a root's
+        // configuration (`models::build`, #1745 item 3): under WASI it is built in line before
+        // the request that first reads it, a document's first semantic tokens (#1767). Any
+        // configuration runs the same code: the bundled one's, resolved.
+        name: "tide-field-catalog",
+        run: || {
+            use opentide_schema::configuration::resolve::{Instance, resolve};
+            use opentide_schema::generate::catalog::{deprecations_catalog, dump, fields_catalog};
+            use opentide_schema::generate::schema::Sources;
+            let config = resolve(&Instance {
+                skip_parent: true,
+                ..Instance::default()
+            })
+            .expect("the bundled configuration resolves")
+            .tree;
+            let sources = Sources {
+                config: std::sync::Arc::new(config),
+                vocabularies: std::sync::Arc::new(opentide_schema::vocab::Vocabularies::bundled()),
+            };
+            std::hint::black_box(dump(&fields_catalog("0.0.0", &sources)));
+            std::hint::black_box(dump(&deprecations_catalog("0.0.0")));
+        },
+    },
+    Case {
         // The editor's first completion of an ATT&CK technique in a threat: the field catalog,
         // the list of techniques and the name and aliases of each (cold LSP completion, #1745).
         name: "complete-attack-technique",

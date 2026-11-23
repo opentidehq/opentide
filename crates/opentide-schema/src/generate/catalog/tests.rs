@@ -117,10 +117,10 @@ fn a_union_of_unions_is_flattened() {
         "Risk": {"type": "object", "properties": {"score": {"type": "integer"}}, "additionalProperties": false},
     }});
     let spec = json!({"anyOf": [{"$ref": "#/$defs/Choice"}, {"type": "null"}]});
-    let map = spec.as_object().unwrap();
-    let found = alternatives(&root, map);
+    let view = Spec::of(&root, &spec);
+    let found = alternatives(&root, &view);
     assert_eq!(found.len(), 2);
-    assert_eq!(type_name(&root, map, false), "object");
+    assert_eq!(type_name(&root, &view, false), "object");
     let target = object_of(&root, &spec).unwrap();
     assert!(closed(target));
 }
@@ -262,7 +262,7 @@ fn an_empty_enum_or_constant_offers_no_value() {
 #[test]
 fn a_scalar_enum_applies_only_to_strings() {
     let root = json!({});
-    let values = |spec: Value| enum_of(&root, spec.as_object().unwrap()).0;
+    let values = |spec: Value| enum_of(&root, &Spec::of(&root, &spec)).0;
     assert_eq!(
         values(json!({"type": "string", "enum": ["a", "b"]})),
         ["a", "b"]
@@ -275,14 +275,14 @@ fn a_scalar_enum_applies_only_to_strings() {
         );
         assert!(!scalar_enum_applies(
             &root,
-            json!({"type": kind, "enum": ["1"]}).as_object().unwrap()
+            &Spec::of(&root, &json!({"type": kind, "enum": ["1"]}))
         ));
     }
     // A union of a string and an array of strings: the enum applies.
     let strings = json!({"enum": ["a"], "anyOf": [
         {"type": "string"}, {"type": "array", "items": {"type": "string"}},
     ]});
-    assert!(scalar_enum_applies(&root, strings.as_object().unwrap()));
+    assert!(scalar_enum_applies(&root, &Spec::of(&root, &strings)));
     // A union with an array of objects: it does not, whatever else it holds.
     for items in [
         json!({"type": "object"}),
@@ -293,14 +293,14 @@ fn a_scalar_enum_applies_only_to_strings() {
             {"type": "string"}, {"type": "array", "items": items},
         ]});
         assert!(
-            !scalar_enum_applies(&root, objects.as_object().unwrap()),
+            !scalar_enum_applies(&root, &Spec::of(&root, &objects)),
             "{objects}"
         );
         assert!(values(objects).is_empty());
     }
     // A union with no string in it: it does not.
     let numbers = json!({"enum": ["a"], "anyOf": [{"type": "integer"}, {"type": "null"}]});
-    assert!(!scalar_enum_applies(&root, numbers.as_object().unwrap()));
+    assert!(!scalar_enum_applies(&root, &Spec::of(&root, &numbers)));
 }
 
 /// `recommended_fields` names the fields the bundled catalog marks
@@ -332,6 +332,65 @@ fn recommended_fields_are_the_catalogs() {
     );
     assert!(recommended_fields("threat::1.0").is_empty());
     assert!(recommended_fields("nope::1.0").is_empty());
+}
+
+/// A field's keywords are its own, then its definition's, never the `$ref`
+/// itself: what merging the two into one map gave.
+#[test]
+fn a_field_reads_its_own_keywords_then_its_definitions() {
+    let root = json!({"$defs": {
+        "Status": {"type": "string", "description": "the definition's", "enum": ["a", "b"]},
+        "Alias": {"$ref": "#/$defs/Status", "title": "alias"},
+    }});
+    let own = json!({"$ref": "#/$defs/Status", "description": "the field's"});
+    let view = Spec::of(&root, &own);
+    assert_eq!(view.get("description"), Some(&json!("the field's")));
+    assert_eq!(view.get("type"), Some(&json!("string")));
+    assert_eq!(view.get("enum"), Some(&json!(["a", "b"])));
+    assert_eq!(view.get("$ref"), None);
+    assert!(!view.contains_key("$ref"));
+    // A chain of definitions is followed to its end, as `deref` does; the
+    // links' own keywords are not read.
+    let chained = json!({"$ref": "#/$defs/Alias"});
+    let view = Spec::of(&root, &chained);
+    assert_eq!(view.get("type"), Some(&json!("string")));
+    assert_eq!(view.get("title"), None);
+    // A definition that is not there leaves the field's own keywords.
+    let missing = json!({"$ref": "#/$defs/Nothing", "type": "integer"});
+    let view = Spec::of(&root, &missing);
+    assert_eq!(view.get("type"), Some(&json!("integer")));
+    assert_eq!(view.get("$ref"), None);
+    // A field with no `$ref` is read as it is, and a node that is not an
+    // object has no keywords.
+    let plain = json!({"type": "boolean"});
+    assert_eq!(Spec::of(&root, &plain).get("type"), Some(&json!("boolean")));
+    assert_eq!(Spec::of(&root, &json!(true)).get("type"), None);
+}
+
+/// An enum of more values than [`ENUM_DOC_MAX`] keeps every value and none of
+/// their docs (a row writes none for it); one of that many keeps both.
+#[test]
+fn a_long_enum_keeps_its_values_and_no_docs() {
+    let enum_of_size = |size: usize| -> (Vec<Value>, Vec<Value>) {
+        (
+            (0..size).map(|i| json!(format!("v{i}"))).collect(),
+            (0..size).map(|i| json!(format!("doc --- {i}"))).collect(),
+        )
+    };
+    let (values, docs) = enum_of_size(ENUM_DOC_MAX);
+    let (cleaned, short) = clean_enum(&values, &docs);
+    assert_eq!(cleaned.len(), ENUM_DOC_MAX);
+    assert_eq!(short.len(), ENUM_DOC_MAX);
+    assert_eq!(short[3], "3");
+    let (values, docs) = enum_of_size(ENUM_DOC_MAX + 1);
+    let (cleaned, short) = clean_enum(&values, &docs);
+    assert_eq!(cleaned.len(), ENUM_DOC_MAX + 1);
+    assert!(short.is_empty());
+    // A null value does not count: the cut is on the values a row offers.
+    let (mut values, docs) = enum_of_size(ENUM_DOC_MAX);
+    values.push(Value::Null);
+    let (cleaned, short) = clean_enum(&values, &docs);
+    assert_eq!((cleaned.len(), short.len()), (ENUM_DOC_MAX, ENUM_DOC_MAX));
 }
 
 /// A field that names a vocabulary records it, and offers each value once:

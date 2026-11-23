@@ -778,3 +778,84 @@ fn a_harfanglab_tenant_type_is_refused_as_removed() {
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].field_path, ["tenants", "0", "setup", "kind"]);
 }
+
+/// The issues of one `visibility.toml` buffer.
+fn visibility_issues(text: &str) -> Vec<Finding> {
+    checks::buffer_issues(
+        "/w/.opentide/configurations/visibility.toml",
+        text,
+        &checks::BufferContext::default(),
+    )
+}
+
+#[test]
+fn a_zero_twenty_dataset_list_is_refused_with_one_entry_per_name() {
+    // `tables` stays removed (visibility::1.0): the refusal names the tables
+    // the file lists and shows one `[[logsources]]` entry for each.
+    let text = "[[logsources]]\nname = \"Windows Security\"\ndescription = \"Windows logs\"\n\
+                system = \"sentinel\"\ntables = [\"SecurityEvent\", \"WindowsEvent\"]\n";
+    let issues = visibility_issues(text);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].field_path, ["logsources", "0", "tables"]);
+    assert_eq!(
+        issues[0].message,
+        "`tables` was removed in 0.20.1: declare each table as its own [[logsources]] entry \
+         whose `name` is the table. For SecurityEvent, WindowsEvent, replace this entry with \
+         one entry per name, copying its `tenants`, `assets` and `references` into each:\n\
+         [[logsources]]\nname = \"SecurityEvent\"\ndescription = \"Windows logs\"\nsystem = \"sentinel\"\n\n\
+         [[logsources]]\nname = \"WindowsEvent\"\ndescription = \"Windows logs\"\nsystem = \"sentinel\"\n\
+         A signal's `data.logsources` then names each of them"
+    );
+    // A list the file does not fill in keeps the short message.
+    let issues = visibility_issues(
+        "[[logsources]]\nname = \"a\"\ndescription = \"d\"\nsystem = \"sentinel\"\ntables = []\n",
+    );
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert!(issues[0].message.ends_with("whose `name` is the table"));
+}
+
+#[test]
+fn the_dataset_list_refusal_escapes_values_and_counts_the_rest() {
+    // Quotes and backslashes in the file's values are escaped in the TOML the
+    // message writes; three names show two entries and say what is left.
+    let text = "[[logsources]]\nname = \"g\"\ndescription = 'say \"hi\" \\ now'\n\
+                system = \"sentinel\"\ntables = ['A\"B', 'C\\D', \"E\"]\n";
+    let issues = visibility_issues(text);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    let message = &issues[0].message;
+    assert!(
+        message.contains("name = \"A\\\"B\"\ndescription = \"say \\\"hi\\\" \\\\ now\""),
+        "{message}"
+    );
+    assert!(message.contains("name = \"C\\\\D\""), "{message}");
+    assert!(!message.contains("name = \"E\""), "{message}");
+    assert!(
+        message.contains("# ... and one more entry for the last name"),
+        "{message}"
+    );
+}
+
+#[test]
+fn the_dataset_list_refusal_covers_sourcetypes_and_a_missing_system() {
+    for (key, value) in [("sourcetypes", "syslog"), ("indices", "logs-*")] {
+        let text = format!(
+            "[[logsources]]\nname = \"g\"\ndescription = \"d\"\nsystem = \"splunk\"\n{key} = [\"{value}\"]\n"
+        );
+        let issues = visibility_issues(&text);
+        assert_eq!(issues.len(), 1, "{key}: {issues:?}");
+        assert!(
+            issues[0].message.contains(&format!(
+                "name = \"{value}\"\ndescription = \"d\"\nsystem = \"splunk\""
+            )),
+            "{}",
+            issues[0].message
+        );
+    }
+    // No `system` (or `description`) to copy: a placeholder to fill in.
+    let issues = visibility_issues("[[logsources]]\nname = \"g\"\ntables = [\"T\"]\n");
+    let message = &issues[0].message;
+    assert!(
+        message.contains("name = \"T\"\ndescription = \"<description>\"\nsystem = \"<system>\""),
+        "{message}"
+    );
+}

@@ -3668,6 +3668,60 @@ fn a_pull_the_server_cannot_answer_is_refused_once_for_the_client_to_retry() {
     );
 }
 
+/// #1767: the server reads each folder and file of the disk once between
+/// two messages that may say it changed, and a watcher's event is one: an
+/// object file read earlier in a batch, then changed on disk, is read again
+/// for the event that reports it later in the same batch, and the
+/// workspace's diagnostics are the new text's.
+#[test]
+fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
+    let scratch = workspace("disk-within-a-batch", true);
+    let root = &scratch.0;
+    let caps = pulling(json!({ "workspace": {
+        "diagnostics": { "refreshSupport": true },
+        "didChangeWatchedFiles": { "dynamicRegistration": true },
+    } }));
+    let (mut lsp, _) = start(json!({ "capabilities": caps, "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = root.join("objects/rules/rule-1.0.yaml");
+    // One batch: a request that reads every object file (the editor's index,
+    // from the workspace it loads), a pause in which the rule changes on
+    // disk, the watcher's event for it, and the workspace's diagnostics.
+    hold(&mut lsp, 1);
+    send(&mut lsp, 2, "workspace/symbol", json!({ "query": "" }));
+    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 400 }));
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&rule), "type": 2 }] }),
+    );
+    send(
+        &mut lsp,
+        4,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    until_response(&mut lsp, 2);
+    let text = std::fs::read_to_string(&rule).unwrap();
+    let changed = text.replacen("tlp: clear", "tlp: clearr", 1);
+    assert_ne!(changed, text);
+    std::fs::write(&rule, changed).unwrap();
+    let report = until_response(&mut lsp, 4).pop().unwrap();
+    let items = report["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{report}"));
+    let rule_item = items
+        .iter()
+        .find(|item| {
+            item["uri"]
+                .as_str()
+                .is_some_and(|uri| uri.ends_with("rule-1.0.yaml"))
+        })
+        .unwrap_or_else(|| panic!("no report for the rule: {report}"));
+    let codes = codes_of(rule_item["items"].as_array().unwrap_or(&Vec::new()));
+    assert!(codes.contains(&"vocab_unknown".to_string()), "{codes:?}");
+}
+
 /// A client that shows `labelDetails` and resolves documentation, as VS Code is.
 fn vocabulary_client() -> Lsp {
     let capabilities = json!({ "textDocument": { "completion": {
