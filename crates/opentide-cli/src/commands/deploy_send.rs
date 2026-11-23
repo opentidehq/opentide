@@ -683,6 +683,14 @@ fn deploy(
     // Promotion rewrites the promoted rules' status on disk; the workspace
     // read before it still holds the old status, which routes those rules
     // to no RELEASE tenant and compiles them with the old status.
+    if !args.skip_promotion {
+        let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
+        plan_warnings.extend(super::promotion_preview::undetermined_warning(
+            &runs,
+            reads_changes,
+            cx.env,
+        ));
+    }
     let reopened;
     let workspace = if promotes(args, &runs, cx.env) {
         let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);

@@ -28,6 +28,7 @@ pool:
 
 variables:
   OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)
+  OPENTIDE_DEFAULT_BRANCH: release/v1.2
   OPENTIDE_VERSION: "1.0"
 
 # Azure cannot serialise a job from YAML alone. Add an Exclusive lock

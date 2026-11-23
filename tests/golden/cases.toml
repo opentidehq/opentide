@@ -2168,7 +2168,16 @@ command = "deploy"
 variant = "promote-push"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push to any other branch (or a tag) promotes nothing: the rules stay
+# STAGING and no production tenant is planned (#1788 follow-up, F-01).
+[[case]]
+command = "deploy"
+variant = "promote-feature-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/feature/foo", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # UC-6.2e: a promotion target that is not a status name (a number), a
 # promoted block whose key is not a string, and promoted text that does not
@@ -2179,7 +2188,7 @@ command = "deploy"
 variant = "promote-fails"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push-no-target", "deploy-push-key", "deploy-push-unreadable"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
 command = "deploy"
@@ -2236,7 +2245,7 @@ command = "deploy"
 variant = "promote-gitlab-progress-json"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI_COMMIT_BRANCH = "main", CI_DEFAULT_BRANCH = "main", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
 
 [[case]]
 command = "deploy migrate-state"

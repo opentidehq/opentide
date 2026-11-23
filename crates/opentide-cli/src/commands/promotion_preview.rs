@@ -68,16 +68,50 @@ impl FileSystem for Overlay {
     }
 }
 
-/// Whether a run with `runs` would promote before it deploys: a `RELEASE`
+/// Whether the run is one that could promote before it deploys: a `RELEASE`
 /// run on a push in CI that reads the push's changes (no `--all`, `--uuid`
 /// or `--file`), as `deploy` decides (`deploy_send::promotes`).
-pub fn applies(runs: &[StatusStrategy], reads_changes: bool, env: &Env) -> bool {
+fn candidate(
+    runs: &[StatusStrategy],
+    reads_changes: bool,
+    env: &Env,
+) -> Option<opentide_compile::git::Ci> {
     let lookup = |name: &str| env.get(name).map(str::to_owned);
     let ci = opentide_compile::git::ci(&lookup);
-    runs.contains(&StatusStrategy::Release)
+    (runs.contains(&StatusStrategy::Release)
         && reads_changes
         && ci != opentide_compile::git::Ci::Local
-        && !opentide_compile::git::is_change_request(ci, &lookup)
+        && !opentide_compile::git::is_change_request(ci, &lookup))
+    .then_some(ci)
+}
+
+/// Whether a run with `runs` would promote before it deploys: a candidate
+/// run (see [`candidate`]) that is a push to the default branch. A push to
+/// another branch, a tag, or a default branch the CI environment does not
+/// say promotes nothing.
+pub fn applies(runs: &[StatusStrategy], reads_changes: bool, env: &Env) -> bool {
+    let lookup = |name: &str| env.get(name).map(str::to_owned);
+    candidate(runs, reads_changes, env)
+        .is_some_and(|ci| opentide_compile::git::default_branch_push(ci, &lookup) == Some(true))
+}
+
+/// The warning for a run that would promote but for a default branch the CI
+/// environment does not say: the promotion is skipped, and how to fix it.
+pub fn undetermined_warning(
+    runs: &[StatusStrategy],
+    reads_changes: bool,
+    env: &Env,
+) -> Option<String> {
+    let lookup = |name: &str| env.get(name).map(str::to_owned);
+    let ci = candidate(runs, reads_changes, env)?;
+    (opentide_compile::git::default_branch_push(ci, &lookup).is_none()).then(|| {
+        format!(
+            "status promotion skipped: the default branch could not be determined, so this push \
+             is not known to be to it. Set {} to the default branch's name, or regenerate the \
+             pipeline (`opentide setup ci`)",
+            opentide_compile::git::DEFAULT_BRANCH_ENV
+        )
+    })
 }
 
 /// What the push's deploy will do at its status promotion, as a preview
@@ -174,22 +208,63 @@ mod tests {
         assert_eq!(std::fs::read(&held).unwrap(), b"status: STAGING\n");
     }
 
-    #[test]
-    fn only_a_release_push_that_reads_its_changes_promotes() {
-        let push = Env::from_pairs([
+    fn github(reference: &str, extra: &[(&str, &str)]) -> Env {
+        let mut pairs = vec![
             ("GITHUB_ACTIONS".to_owned(), "true".to_owned()),
             ("GITHUB_EVENT_NAME".to_owned(), "push".to_owned()),
-        ]);
-        let request = Env::from_pairs([
-            ("GITHUB_ACTIONS".to_owned(), "true".to_owned()),
-            ("GITHUB_EVENT_NAME".to_owned(), "pull_request".to_owned()),
-        ]);
+            ("GITHUB_REF".to_owned(), reference.to_owned()),
+            (
+                opentide_compile::git::DEFAULT_BRANCH_ENV.to_owned(),
+                "main".to_owned(),
+            ),
+        ];
+        pairs.extend(
+            extra
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned())),
+        );
+        Env::from_pairs(pairs)
+    }
+
+    #[test]
+    fn only_a_release_push_to_the_default_branch_that_reads_its_changes_promotes() {
+        let push = github("refs/heads/main", &[]);
+        let feature = github("refs/heads/feature/foo", &[]);
+        let tag = github("refs/tags/v1", &[]);
+        let request = github("refs/heads/main", &[("GITHUB_EVENT_NAME", "pull_request")]);
         let local = Env::from_pairs(Vec::<(String, String)>::new());
         let release = [StatusStrategy::Release];
         assert!(applies(&release, true, &push));
         assert!(!applies(&release, false, &push));
         assert!(!applies(&[StatusStrategy::Preview], true, &push));
+        assert!(!applies(&release, true, &feature));
+        assert!(!applies(&release, true, &tag));
         assert!(!applies(&release, true, &request));
         assert!(!applies(&release, true, &local));
+        // A known other branch is no warning; only an unknown default is.
+        assert_eq!(undetermined_warning(&release, true, &feature), None);
+        assert_eq!(undetermined_warning(&release, true, &push), None);
+    }
+
+    #[test]
+    fn an_unknown_default_branch_skips_the_promotion_with_a_warning() {
+        let release = [StatusStrategy::Release];
+        let azure = Env::from_pairs([
+            ("TF_BUILD".to_owned(), "True".to_owned()),
+            ("BUILD_REASON".to_owned(), "IndividualCI".to_owned()),
+            (
+                "BUILD_SOURCEBRANCH".to_owned(),
+                "refs/heads/main".to_owned(),
+            ),
+        ]);
+        assert!(!applies(&release, true, &azure));
+        let warning = undetermined_warning(&release, true, &azure).unwrap();
+        assert!(warning.contains("OPENTIDE_DEFAULT_BRANCH"), "{warning}");
+        // Not a promoting run: nothing to warn about.
+        assert_eq!(undetermined_warning(&release, false, &azure), None);
+        assert_eq!(
+            undetermined_warning(&[StatusStrategy::Preview], true, &azure),
+            None
+        );
     }
 }

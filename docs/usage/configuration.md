@@ -121,7 +121,7 @@ Every platform retries a request the same way, and only when sending it twice is
 
 ## Deployment statuses and strategies
 
-Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
+Every rule's platform block `status` must match a status defined in the merged `deployment.toml` (the rule's root `status` is informational: deploy and promotion read each platform block's `status`). That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
 
 | Default status | Strategy | What it does |
 |--------|----------|--------------|
