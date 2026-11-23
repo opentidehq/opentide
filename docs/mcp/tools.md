@@ -463,7 +463,7 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `uuid` | string | required | Rule UUID |
-| `platform` | string | required | Platform key |
+| `platform` | string | optional | Platform key. Left out, it is the rule's only platform block; a rule with several answers an error (`action: "error"`) listing them in `platforms` |
 | `dry_run` | boolean | `true` | Simulate when true |
 
 ```json
@@ -478,9 +478,14 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
   "status": "STAGING",
   "dry_run": true,
   "platform": "sentinel",
-  "message": "dry-run"
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
+  "plan": { "sentinel": ["00000000-0000-4000-8003-000000000001"] },
+  "changes": [{ "platform": "sentinel", "tenant": null, "uuid": "00000000-0000-4000-8003-000000000001", "name": "Sentinel KQL Rule", "status": "STAGING", "action": "upsert" }],
+  "payloads": { "sentinel": [{ "uuid": "00000000-0000-4000-8003-000000000001", "api_request": { "kind": "Scheduled", "properties": {} } }] }
 }
 ```
+
+A dry run is the command line's `opentide --json deploy --dry-run --uuid <uuid> --platform <platform>`, run with the strategies the rule's status maps to: the answer has its `plan`, `changes`, `payloads` and the rest of its document (`warnings`, `missing_tenants`, ...) after the fields above, and `message` is the command's. When nothing would deploy, `message` says why: the platform is not enabled, or the status maps to `INERT`, and `plan` is empty.
 
 `action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing, or has no block for `platform`). `status` is the `status` of the rule's block for `platform` (the status deploy reads), not a planned-action label. A rule with no block for `platform` (or a block with no `status`) is refused the same way with or without `dry_run`: `"action": "error"`, `"status": "error"` and a `message` such as `Rule "Sentinel KQL Rule" has no splunk status to deploy`, so the preview says what the real call would. So is a status the deployment configuration does not define: both answer `isError`, naming the statuses it defines. Through 0.20.1 it was the rule-level `status`, which no command reads and which defaulted to `STAGING` when left out.
 

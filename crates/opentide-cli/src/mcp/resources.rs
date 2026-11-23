@@ -59,9 +59,17 @@ pub fn read(uri: &str, context: &Context<'_>) -> Answer {
     };
     match text {
         Ok(document) => {
-            let text = document_text(&document, true);
+            // An object template is YAML, served as it is; every other
+            // resource is a JSON document (`templates/systems` too: an object
+            // of YAML strings).
+            let (mime, text) = match &document {
+                Json::Str(yaml) if uri.starts_with("opentide://templates/") => {
+                    ("application/yaml", yaml.clone())
+                }
+                _ => ("application/json", document_text(&document, true)),
+            };
             Answer::Result(json!({
-                "contents": [{"uri": uri, "mimeType": "text/plain", "text": text.trim_end_matches('\n')}],
+                "contents": [{"uri": uri, "mimeType": mime, "text": text.trim_end_matches('\n')}],
             }))
         }
         Err(problem) => {

@@ -123,9 +123,9 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
         })(),
         "deploy_rule" => (|| {
             let uuid = args.required("uuid")?;
-            let platform = args.required("platform")?;
+            let platform = args.string("platform", "")?;
             let dry_run = args.boolean("dry_run", true)?;
-            deploy::deploy_rule(&uuid, &platform, dry_run, context).map(Payload::One)
+            deploy::deploy_rule(&uuid, Some(&platform), dry_run, context).map(Payload::One)
         })(),
         other => return error_result(&format!("Unknown tool: {other}")),
     };
