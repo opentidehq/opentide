@@ -242,6 +242,47 @@ fn value_prefix(cursor: &YamlCursor, field: Option<&TideField>) -> String {
     if known { String::new() } else { raw }
 }
 
+/// The entry of `value` in the vocabularies `field` names, from the first
+/// one whose bundled offer has it: its name and aliases. `None` for a field
+/// that names no vocabulary, or a value none of them has.
+pub fn vocab_value(
+    field: &TideField,
+    value: &str,
+) -> Option<opentide_schema::vocab::OfferedValue<'static>> {
+    let (references, scoped) = opentide_highlight::tide_field_vocab(field);
+    references
+        .iter()
+        .find_map(|reference| opentide_schema::vocab::bundled_value(reference, scoped, value))
+}
+
+/// The Markdown of `value`'s entry in the vocabularies `field` names (its
+/// name, identifier, vocabulary and description), as [`vocab_value`] finds
+/// it; `None` where it finds none or the entry says nothing.
+pub fn vocab_markdown(field: &TideField, value: &str) -> Option<&'static str> {
+    let (references, scoped) = opentide_highlight::tide_field_vocab(field);
+    references
+        .iter()
+        .find_map(|reference| opentide_schema::vocab::bundled_markdown(reference, scoped, value))
+        .filter(|markdown| !markdown.is_empty())
+}
+
+/// Whether a word of `text` starts with `prefix`, ignoring case: typing
+/// `bypass` finds `Abuse Elevation Control Mechanism: Bypass User Account
+/// Control`.
+fn word_match(prefix: &str, text: &str) -> bool {
+    if prefix.is_empty() {
+        return true;
+    }
+    let prefix = prefix.to_lowercase();
+    let text = text.to_lowercase();
+    text.match_indices(&prefix).any(|(at, _)| {
+        text[..at]
+            .chars()
+            .next_back()
+            .is_none_or(|before| !before.is_alphanumeric())
+    })
+}
+
 fn prefix_match(prefix: &str, candidate: &str) -> bool {
     prefix.is_empty()
         || candidate
@@ -263,11 +304,24 @@ fn complete_values(
     let prefix = value_prefix(cursor, Some(field));
     let mut items = Vec::new();
     for (index, value) in field.enum_values.iter().enumerate() {
-        if !prefix_match(&prefix, value) {
+        let entry = vocab_value(field, value);
+        if !prefix_match(&prefix, value)
+            && !entry.is_some_and(|entry| word_match(&prefix, entry.search))
+        {
             continue;
         }
         let mut item = CompletionItem::new(value.clone(), "enum")
             .with_detail(format!("{} {}", field.schema, field.path));
+        if let Some(entry) = entry {
+            // One item per value: the name is shown beside it, and the
+            // client finds it by the name and aliases too.
+            if !entry.name.is_empty() && entry.name != value {
+                item = item.with_label_detail(entry.name);
+            }
+            if !entry.search.is_empty() && entry.search != value {
+                item = item.with_filter_text(format!("{value} {}", entry.search));
+            }
+        }
         if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
             item = item.with_docs(doc.clone());
         } else if let Some(doc) = crate::elastic::value_docs(&field.path, value) {
@@ -309,7 +363,11 @@ pub fn resolve_completion(mut item: CompletionItem) -> CompletionItem {
     if item.documentation.is_some() {
         return item;
     }
-    if let Some(field) = field_from_detail(item.detail.as_deref())
+    let field = field_from_detail(item.detail.as_deref());
+    if let Some(markdown) = field.and_then(|field| vocab_markdown(field, &item.label)) {
+        return item.with_docs(markdown);
+    }
+    if let Some(field) = field
         && let Some(index) = field
             .enum_values
             .iter()

@@ -23,6 +23,38 @@ pub struct Offer {
     pub markdown: Vec<String>,
     /// A plain description for each.
     pub plain: Vec<String>,
+    /// The display name of each value's entry, empty where the offer has
+    /// none (a configured status, a tenant). An editor shows it beside the
+    /// value.
+    pub names: Vec<String>,
+    /// What an editor matches each value by besides the value itself: the
+    /// entry's name and aliases (`Abuse Elevation Control Mechanism`), empty
+    /// where the offer has none. A search hint is the value, `#` and this.
+    pub search: Vec<String>,
+}
+
+/// The values of an [`Offer`] with their names and search text alone: what an
+/// editor's list of values reads, without the Markdown of each (a bundled
+/// vocabulary's descriptions are most of its offer, and a list shows none).
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OfferNames {
+    /// The values offered.
+    pub values: Vec<String>,
+    /// [`Offer::names`].
+    pub names: Vec<String>,
+    /// [`Offer::search`].
+    pub search: Vec<String>,
+}
+
+impl Offer {
+    /// Its values with their names and search text.
+    pub fn offer_names(&self) -> OfferNames {
+        OfferNames {
+            values: self.values.clone(),
+            names: self.names.clone(),
+            search: self.search.clone(),
+        }
+    }
 }
 
 /// How a field asks for a vocabulary.
@@ -37,20 +69,12 @@ pub struct VocabOptions {
 /// The longest stage description a dropdown quotes, in characters.
 const STAGE_DESCRIPTION_LIMIT: usize = 300;
 
-/// The abbreviations that shorten a search hint longer than
-/// [`HINT_WRAP`] characters, in order.
-const HINT_ABBREVIATIONS: [(&str, &str); 10] = [
-    (" and ", " & "),
-    (" without ", " w/o "),
-    (" with ", " w/ "),
-    (" to ", " "),
-    (" of ", " "),
-    (" a ", " "),
-    (" an ", " "),
-    ("Use", " "),
-    ("used", " "),
-    ("Using", " "),
-];
+/// The abbreviations that shorten a search hint longer than [`HINT_WRAP`]
+/// characters: each replaces a whole word, never part of one, and none
+/// drops a word (`Use` once took the first letters of `User`, so a hint read
+/// `Bypass  r Account Control`).
+pub(crate) const HINT_ABBREVIATIONS: [(&str, &str); 3] =
+    [("and", "&"), ("without", "w/o"), ("with", "w/")];
 
 /// The length past which a search hint is abbreviated.
 const HINT_WRAP: usize = 60;
@@ -81,6 +105,8 @@ pub fn offer_of(vocabulary: &Vocabulary, vocab: &VocabRef, options: VocabOptions
             }
             offer.markdown.push(dropdown(vocabulary, entry, stages));
             offer.plain.push(plain(&value, entry));
+            offer.names.push(entry.name.trim().to_owned());
+            offer.search.push(search_text(entry));
             offer.values.push(value);
             true
         };
@@ -95,6 +121,8 @@ pub fn offer_of(vocabulary: &Vocabulary, vocab: &VocabRef, options: VocabOptions
                     .push(search_hint(&value, entry, options.no_wrap));
                 hint_offer.markdown.extend(offer.markdown.last().cloned());
                 hint_offer.plain.extend(offer.plain.last().cloned());
+                hint_offer.names.extend(offer.names.last().cloned());
+                hint_offer.search.extend(offer.search.last().cloned());
             }
             continue;
         }
@@ -116,6 +144,8 @@ pub fn offer_of(vocabulary: &Vocabulary, vocab: &VocabRef, options: VocabOptions
     offer.values.extend(hint_offer.values);
     offer.markdown.extend(hint_offer.markdown);
     offer.plain.extend(hint_offer.plain);
+    offer.names.extend(hint_offer.names);
+    offer.search.extend(hint_offer.search);
     offer
 }
 
@@ -128,10 +158,9 @@ fn extra<'e>(entry: &'e Entry, key: &str) -> Option<&'e str> {
         .filter(|text| !text.is_empty())
 }
 
-/// The text an editor searches: the value, then `#` and the entry's name
-/// and aliases, abbreviated past [`HINT_WRAP`] characters unless the field
-/// says not to wrap.
-pub(crate) fn search_hint(value: &str, entry: &Entry, no_wrap: bool) -> String {
+/// An entry's name, then its aliases, separated by `, `: what an editor
+/// matches its value by besides the value.
+pub(crate) fn search_text(entry: &Entry) -> String {
     let mut tips = entry.name.clone();
     if let Some(toml::Value::Array(aliases)) = entry.extra.get("alias")
         && !aliases.is_empty()
@@ -147,13 +176,35 @@ pub(crate) fn search_hint(value: &str, entry: &Entry, no_wrap: bool) -> String {
         tips.push_str(", ");
         tips.push_str(&aliases.join(", "));
     }
-    let mut hint = format!("{value} #{}", tips.trim());
-    if !no_wrap && hint.chars().count() > HINT_WRAP {
-        for (long, short) in HINT_ABBREVIATIONS {
-            hint = hint.replace(long, short);
-        }
+    tips.trim().to_owned()
+}
+
+/// The text an editor searches: the value, then `#` and the entry's name
+/// and aliases ([`search_text`]), abbreviated past [`HINT_WRAP`] characters
+/// unless the field says not to wrap. YAML reads what follows ` #` as a
+/// comment, so a hint a third-party editor inserts is still the value.
+pub(crate) fn search_hint(value: &str, entry: &Entry, no_wrap: bool) -> String {
+    let tips = search_text(entry);
+    let hint = format!("{value} #{tips}");
+    if no_wrap || hint.chars().count() <= HINT_WRAP {
+        return hint;
     }
-    hint
+    format!("{value} #{}", abbreviate(&tips))
+}
+
+/// `text` with each whole word of [`HINT_ABBREVIATIONS`] abbreviated: a
+/// word is what lies between two spaces, so `Used`, `User` and `and,` are
+/// left as they are.
+fn abbreviate(text: &str) -> String {
+    text.split(' ')
+        .map(|word| {
+            HINT_ABBREVIATIONS
+                .iter()
+                .find(|(long, _)| *long == word)
+                .map_or(word, |(_, short)| *short)
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Plain hover text: the entry's name (unless the value ends with it), then

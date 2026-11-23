@@ -20,6 +20,8 @@ parse_external = 17126029
 parse_external_allocations = 10743
 
 [datasets]
+complete-attack-technique = 34019684
+complete-attack-technique_allocations = 53027
 cql = 6815324
 cql_allocations = 11086
 eql = 2310426
@@ -30,8 +32,8 @@ exabeam = 12888503
 exabeam_allocations = 13079
 falco = 11917950
 falco_allocations = 16852
-hover-attack-technique = 33784222
-hover-attack-technique_allocations = 41486
+hover-attack-technique = 27284603
+hover-attack-technique_allocations = 39269
 kql-defender = 18837476
 kql-defender_allocations = 20764
 kql-sentinel = 30173140

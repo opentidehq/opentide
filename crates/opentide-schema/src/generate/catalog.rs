@@ -636,7 +636,11 @@ fn field_row(
 ) -> Row {
     let spec = effective(root, raw);
     // `clean_enum` drops an empty value, so an enum of `""` alone is empty.
-    let (mut values, docs, is_array) = enum_of(root, &spec);
+    let (mut values, mut docs, is_array) = enum_of(root, &spec);
+    let vocab = vocab_of(&spec, name);
+    if !vocab.is_empty() {
+        drop_search_hints(&mut values, &mut docs);
+    }
     let mut docs: Vec<String> = if values.len() > ENUM_DOC_MAX {
         Vec::new()
     } else {
@@ -708,6 +712,10 @@ fn field_row(
         Vec::new()
     };
     node.insert("enum_docs".into(), strings(&docs));
+    if !vocab.is_empty() && !values.is_empty() {
+        node.insert("vocab".into(), strings(&vocab.references));
+        node.insert("vocab_scoped".into(), Json::Bool(vocab.scoped));
+    }
     node.insert("ref".into(), reference.map_or(Json::Null, Json::from));
     node.insert("const".into(), constant.map_or(Json::Null, Json::from));
     node.insert("array".into(), Json::Bool(is_array || kind == "array"));
@@ -749,6 +757,66 @@ fn min_items(root: &Value, spec: &Map<String, Value>) -> Option<u64> {
     alternatives(root, spec)
         .iter()
         .find_map(|alt| alt.get("minItems").and_then(Value::as_u64))
+}
+
+/// The vocabularies a field's values come from: the references it names
+/// (`tide.vocab`: `true` for the vocabulary named after the field, a
+/// reference, or a list of them), and whether its values carry their stage.
+#[derive(Debug, Default)]
+struct VocabOf {
+    references: Vec<String>,
+    scoped: bool,
+}
+
+impl VocabOf {
+    fn is_empty(&self) -> bool {
+        self.references.is_empty()
+    }
+}
+
+fn vocab_of(spec: &Map<String, Value>, name: &str) -> VocabOf {
+    let references = match spec.get(keys::VOCAB) {
+        Some(Value::Bool(true)) => vec![name.to_owned()],
+        Some(Value::String(reference)) => vec![reference.clone()],
+        Some(Value::Array(references)) => references
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    };
+    let scoped = spec.get(keys::VOCAB_SCOPED).and_then(Value::as_bool) == Some(true);
+    VocabOf { references, scoped }
+}
+
+/// `values` without the search hints a model vocabulary adds for editors
+/// that know only the schema (`T1548 #Abuse Elevation Control Mechanism`,
+/// after `T1548`), and `docs` without theirs: the catalog's reader offers
+/// each value once and finds it by its name from the vocabulary.
+fn drop_search_hints(values: &mut Vec<String>, docs: &mut Vec<String>) {
+    let plain: std::collections::HashSet<String> = values
+        .iter()
+        .filter(|value| !value.contains(" #"))
+        .cloned()
+        .collect();
+    let hint = |value: &str| {
+        value
+            .split_once(" #")
+            .is_some_and(|(value, _)| plain.contains(value))
+    };
+    let keep: Vec<bool> = values.iter().map(|value| !hint(value)).collect();
+    let mut at = 0;
+    values.retain(|_| {
+        at += 1;
+        keep[at - 1]
+    });
+    if docs.len() == keep.len() {
+        let mut at = 0;
+        docs.retain(|_| {
+            at += 1;
+            keep[at - 1]
+        });
+    }
 }
 
 /// A field's enum values and their docs, and whether it is an array.
