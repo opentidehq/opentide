@@ -1137,11 +1137,13 @@ fn check_table_named(
     // query can write bare is offered: a declared display name such as
     // `Azure Activity` is not a KQL identifier, and substituting it breaks the
     // query.
+    // The declared names, read once for both lookups below.
+    let declared = std::cell::OnceCell::new();
+    let declared_names = || declared.get_or_init(|| datasets.names(platform));
     let suggest = || {
         suggest::closest(
             table,
-            datasets
-                .names(platform)
+            declared_names()
                 .iter()
                 .filter(|d| is_bare_identifier(d))
                 .map(String::as_str),
@@ -1156,8 +1158,7 @@ fn check_table_named(
         let edits = misspelt_edits(table);
         suggest::closest_within(
             table,
-            datasets
-                .names(platform)
+            declared_names()
                 .iter()
                 .filter(|d| is_bare_identifier(d))
                 .map(String::as_str),
