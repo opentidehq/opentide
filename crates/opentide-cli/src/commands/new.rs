@@ -451,6 +451,34 @@ fn catalogue_uuids(folder: &Path) -> HashSet<String> {
         .collect()
 }
 
+/// `objective.signals[].uuid` of every objective under `folder`, lower-cased:
+/// a rule's `detection_model` may name a signal as well as its objective.
+fn signal_uuids(folder: &Path) -> HashSet<String> {
+    let mut found = HashSet::new();
+    for path in object_files(folder) {
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let bytes = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+        let Some(root) = load_bytes(bytes)
+            .ok()
+            .and_then(|document| document.root().cloned())
+        else {
+            continue;
+        };
+        let signals = root.get("objective").and_then(|node| node.get("signals"));
+        if let Some(NodeValue::Seq(signals)) = signals.map(|node| &node.value) {
+            found.extend(
+                signals
+                    .iter()
+                    .filter_map(|signal| text_of(signal, "uuid"))
+                    .map(|uuid| uuid.trim().to_lowercase()),
+            );
+        }
+    }
+    found
+}
+
 /// The first configured deployment status whose strategy is `INERT`
 /// (`inert_status`): a new platform block starts there.
 fn inert_status(config: &Node) -> Option<String> {
@@ -791,15 +819,24 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             );
         }
         let folder = artifacts(&workspace, &root, referred).objects;
-        let uuids = known
-            .entry(referred)
-            .or_insert_with(|| catalogue_uuids(&folder));
+        let uuids = known.entry(referred).or_insert_with(|| {
+            let mut uuids = catalogue_uuids(&folder);
+            if *referred == "objective" {
+                uuids.extend(signal_uuids(&folder));
+            }
+            uuids
+        });
         if !uuids.contains(&value.to_lowercase()) {
+            let what = if *referred == "objective" {
+                "objective or signal"
+            } else {
+                referred
+            };
             return with_steps(
                 new_error(
                     &command,
                     format!(
-                        "No {referred} in {} has uuid {value}",
+                        "No {what} in {} has uuid {value}",
                         folder_shown(&folder, cx.cwd, &root)
                     ),
                     REFERENCE_NOT_FOUND,

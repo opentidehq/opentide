@@ -11443,7 +11443,7 @@ exit: 0
           "flags": [
             "--objective"
           ],
-          "help": "UUID of the objective this rule implements (detection_model)",
+          "help": "UUID of the objective or signal this rule implements (detection_model)",
           "is_flag": false,
           "multiple": false,
           "name": "objective",

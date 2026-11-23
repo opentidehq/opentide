@@ -1704,6 +1704,14 @@ args = ["new", "rule", "--name", "LSASS Access", "--objective", "{objective}"]
 fixtures = ["tide-corpus"]
 normalise = ["fresh-uuids"]
 
+# `--objective` also takes the UUID of a signal an objective defines.
+[[case]]
+command = "new rule"
+variant = "signal-objective"
+args = ["new", "rule", "--name", "Logon Signal", "--objective", "00000000-0000-4000-8099-000000000001"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
 # ---- generate ----
 
 [[case]]
