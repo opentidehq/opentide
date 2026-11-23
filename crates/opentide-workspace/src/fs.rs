@@ -223,9 +223,26 @@ impl FileSystem for OsFs {
         let mut entries = Vec::new();
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
-            let symlink = entry.file_type()?.is_symlink();
-            // A broken link, or one the process may not follow, is neither.
-            let kind = self.kind(&entry.path()).unwrap_or(EntryKind::Other);
+            let file_type = entry.file_type()?;
+            let symlink = file_type.is_symlink();
+            let kind = if symlink {
+                // What the link leads to. A broken link, or one the process
+                // may not follow, is neither.
+                self.kind(&entry.path()).unwrap_or(EntryKind::Other)
+            } else if file_type.is_dir() {
+                // The entry's own type, which is what `metadata` would say of
+                // anything but a link: no call per entry (a thousand under
+                // WASI, where each crosses to the host).
+                EntryKind::Dir
+            } else if file_type.is_file() {
+                EntryKind::File
+            } else {
+                // Neither, or a type the host did not say: WASI passes on
+                // what the host's listing reports, and a filesystem that
+                // reports no type (XFS without `ftype`, some network mounts)
+                // gives "unknown" where native std would have looked. Look.
+                self.kind(&entry.path()).unwrap_or(EntryKind::Other)
+            };
             let file_name = entry.file_name();
             entries.push(DirEntry {
                 name: file_name.to_string_lossy().into_owned(),
@@ -239,22 +256,44 @@ impl FileSystem for OsFs {
 
     fn resolve(&self, path: &Path) -> PathBuf {
         let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-        let mut resolved = PathBuf::new();
-        for component in absolute.components() {
-            match component {
-                Component::Prefix(_) | Component::RootDir => resolved.push(component),
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    resolved.pop();
-                }
-                Component::Normal(name) => {
-                    let candidate = resolved.join(name);
-                    resolved = dunce::canonicalize(&candidate).unwrap_or(candidate);
-                }
+        // A path that exists, and names no `.` or `..`, resolves in one call:
+        // each of its prefixes exists, and resolving them one by one (below)
+        // ends where resolving the whole path does. That is one call where
+        // the walk makes one per component, each walking its own prefix
+        // again: under WASI, where every call crosses to the host, resolving
+        // the findings of a thousand files took seconds (#1767).
+        if absolute.components().all(|component| {
+            matches!(
+                component,
+                Component::Prefix(_) | Component::RootDir | Component::Normal(_)
+            )
+        }) && let Ok(resolved) = dunce::canonicalize(&absolute)
+        {
+            return resolved;
+        }
+        resolve_by_component(&absolute)
+    }
+}
+
+/// An absolute `path` resolved one component at a time: each prefix's links
+/// followed as far as it exists, `..` taken from what the prefix resolved to,
+/// and the components past the last that exists kept as written.
+fn resolve_by_component(absolute: &Path) -> PathBuf {
+    let mut resolved = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => resolved.push(component),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::Normal(name) => {
+                let candidate = resolved.join(name);
+                resolved = dunce::canonicalize(&candidate).unwrap_or(candidate);
             }
         }
-        resolved
     }
+    resolved
 }
 
 impl WriteFs for OsFs {
@@ -971,5 +1010,86 @@ mod tests {
         assert!(!entries[0].symlink);
         assert!(fs.kind(&dir.join("nothing")).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A path resolved in one call (it exists, with no `.` or `..`) is what
+    /// the walk one component at a time resolves it to, through linked
+    /// folders and files, and a path the fast way does not take (one that
+    /// does not exist, one with `..`) is still walked.
+    #[cfg(unix)]
+    #[test]
+    fn os_fs_resolves_an_existing_path_as_the_walk_does() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("real/rules")).unwrap();
+        std::fs::write(root.join("real/rules/r.yaml"), "x: 1\n").unwrap();
+        // A linked folder, a linked file, and a link to a link.
+        symlink(root.join("real"), root.join("linked")).unwrap();
+        symlink(
+            root.join("real/rules/r.yaml"),
+            root.join("real/rules/l.yaml"),
+        )
+        .unwrap();
+        symlink(root.join("linked"), root.join("twice")).unwrap();
+        // A relative link that climbs out of the folder it is in.
+        symlink("../real/rules", root.join("real/up")).unwrap();
+        let fs = OsFs;
+        for path in [
+            "real/rules/r.yaml",
+            "linked/rules/r.yaml",
+            "linked/rules/l.yaml",
+            "twice/rules/l.yaml",
+            "real/up/r.yaml",
+            "linked/up/../rules/r.yaml",
+            "linked/rules/missing.yaml",
+            "twice/missing/x.yaml",
+            "real",
+            "linked",
+        ] {
+            let path = root.join(path);
+            let walked = resolve_by_component(&std::path::absolute(&path).unwrap());
+            assert_eq!(fs.resolve(&path), walked, "{}", path.display());
+        }
+        let real = dunce::canonicalize(root.join("real/rules/r.yaml")).unwrap();
+        assert_eq!(fs.resolve(&root.join("twice/rules/l.yaml")), real);
+        assert_eq!(fs.resolve(&root.join("real/up/r.yaml")), real);
+    }
+
+    /// A folder's entries say what each is without a call per entry, as
+    /// `kind` would: a folder, a file, and a link by what it leads to (a
+    /// broken one, neither).
+    #[cfg(unix)]
+    #[test]
+    fn os_fs_lists_each_entry_as_kind_names_it() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir(root.join("folder")).unwrap();
+        std::fs::write(root.join("file.yaml"), "x: 1\n").unwrap();
+        symlink(root.join("folder"), root.join("to-folder")).unwrap();
+        symlink(root.join("file.yaml"), root.join("to-file.yaml")).unwrap();
+        symlink(root.join("nothing"), root.join("broken.yaml")).unwrap();
+        let fs = OsFs;
+        let mut entries = fs.read_dir(root).unwrap();
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        let listed: Vec<(&str, EntryKind, bool)> = entries
+            .iter()
+            .map(|entry| (entry.name.as_str(), entry.kind, entry.symlink))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("broken.yaml", EntryKind::Other, true),
+                ("file.yaml", EntryKind::File, false),
+                ("folder", EntryKind::Dir, false),
+                ("to-file.yaml", EntryKind::File, true),
+                ("to-folder", EntryKind::Dir, true),
+            ]
+        );
+        for entry in &entries {
+            let kind = fs.kind(&root.join(&entry.name)).unwrap_or(EntryKind::Other);
+            assert_eq!(entry.kind, kind, "{}", entry.name);
+        }
     }
 }

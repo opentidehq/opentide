@@ -311,7 +311,7 @@ impl Facts {
             let child = join(path, key);
             self.required
                 .insert(child.clone(), required.contains(&key.as_str()));
-            let merged = effective(root, spec);
+            let merged = Spec::of(root, spec);
             if merged.get(keys::TEMPLATE_MULTILINE).is_some_and(flag) {
                 self.multiline.insert(child.clone());
             }
@@ -421,23 +421,67 @@ fn definition_name(root: &Value, node: &Value) -> Option<String> {
     reference.strip_prefix("#/$defs/").map(str::to_owned)
 }
 
-/// `node` with the keywords of the definition it refers to: the node's own
-/// keywords win (a property's `description` beside its `$ref`).
-fn effective(root: &Value, node: &Value) -> Map<String, Value> {
-    let mut merged = match node {
-        Value::Object(map) => map.clone(),
-        _ => Map::new(),
-    };
-    if merged.contains_key("$ref") {
-        let target = deref(root, node);
-        if let Value::Object(target) = target {
-            for (key, value) in target {
-                merged.entry(key.clone()).or_insert_with(|| value.clone());
-            }
-        }
-        merged.remove("$ref");
+/// What reads a schema node's keywords: a node, or a node seen with its
+/// definition's ([`Spec`]).
+trait Keywords {
+    fn get(&self, key: &str) -> Option<&Value>;
+
+    fn contains_key(&self, key: &str) -> bool {
+        self.get(key).is_some()
     }
-    merged
+}
+
+impl Keywords for Map<String, Value> {
+    fn get(&self, key: &str) -> Option<&Value> {
+        Map::get(self, key)
+    }
+}
+
+/// `node` with the keywords of the definition it refers to: the node's own
+/// keywords win (a property's `description` beside its `$ref`), and the
+/// `$ref` itself is not one of them. A view of the two, read in place: a
+/// field's keywords are read many times (its enum, its type, its branches),
+/// and copying them each time, with the enum values and docs of a vocabulary
+/// field, was most of the catalog's build.
+#[derive(Clone, Copy, Default)]
+struct Spec<'a> {
+    own: Option<&'a Map<String, Value>>,
+    /// The definition `own` refers to, when it refers to one.
+    target: Option<&'a Map<String, Value>>,
+    /// Whether `own` holds a `$ref`, which neither side then shows.
+    refers: bool,
+}
+
+impl<'a> Spec<'a> {
+    fn of(root: &'a Value, node: &'a Value) -> Self {
+        let own = node.as_object();
+        let refers = own.is_some_and(|own| own.contains_key("$ref"));
+        let target = if refers {
+            deref(root, node).as_object()
+        } else {
+            None
+        };
+        Self {
+            own,
+            target,
+            refers,
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<&'a Value> {
+        if self.refers && key == "$ref" {
+            return None;
+        }
+        self.own
+            .and_then(|own| own.get(key))
+            .or_else(|| self.target.and_then(|target| target.get(key)))
+    }
+}
+
+impl Keywords for Spec<'_> {
+    fn get(&self, key: &str) -> Option<&Value> {
+        Spec::get(self, key)
+    }
 }
 
 /// The object schema a field holds, through `$ref` and `anyOf` branches
@@ -467,6 +511,24 @@ fn object_in<'s>(root: &'s Value, node: &'s Value, depth: usize) -> Option<&'s V
         .find_map(|alt| object_in(root, alt, depth + 1))
 }
 
+/// Whether `spec` holds an object with properties: what [`object_of`] finds
+/// of the node `spec` reads, its `$ref` already followed.
+fn holds_object<'a>(root: &'a Value, spec: &Spec<'a>) -> bool {
+    has_properties_in(spec.get("properties"))
+        || spec
+            .get("anyOf")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|alt| object_in(root, alt, 1).is_some())
+}
+
+fn has_properties_in(properties: Option<&Value>) -> bool {
+    properties
+        .and_then(Value::as_object)
+        .is_some_and(|map| !map.is_empty())
+}
+
 fn has_properties(node: Option<&Value>) -> bool {
     node.and_then(|node| node.get("properties"))
         .and_then(Value::as_object)
@@ -474,7 +536,7 @@ fn has_properties(node: Option<&Value>) -> bool {
 }
 
 /// The JSON Schema types a node names: `"string"`, or `["string", "null"]`.
-fn types(node: &Map<String, Value>) -> Vec<&str> {
+fn types(node: &impl Keywords) -> Vec<&str> {
     match node.get("type") {
         Some(Value::String(kind)) => vec![kind.as_str()],
         Some(Value::Array(kinds)) => kinds.iter().filter_map(Value::as_str).collect(),
@@ -482,23 +544,23 @@ fn types(node: &Map<String, Value>) -> Vec<&str> {
     }
 }
 
-fn is_type(node: &Map<String, Value>, kind: &str) -> bool {
+fn is_type(node: &impl Keywords, kind: &str) -> bool {
     types(node).contains(&kind)
 }
 
 /// The non-null alternatives of a node: its `anyOf` branches, each with the
 /// keywords of the definition it refers to, and a branch that is itself a
 /// union (`RiskChoice`, `int | ElasticRisk`) as its own branches.
-fn alternatives(root: &Value, node: &Map<String, Value>) -> Vec<Map<String, Value>> {
+fn alternatives<'a>(root: &'a Value, node: &Spec<'a>) -> Vec<Spec<'a>> {
     let mut found = Vec::new();
     collect_alternatives(root, node, &mut found, 0);
     found
 }
 
-fn collect_alternatives(
-    root: &Value,
-    node: &Map<String, Value>,
-    found: &mut Vec<Map<String, Value>>,
+fn collect_alternatives<'a>(
+    root: &'a Value,
+    node: &Spec<'a>,
+    found: &mut Vec<Spec<'a>>,
     depth: usize,
 ) {
     for alt in node
@@ -507,7 +569,7 @@ fn collect_alternatives(
         .into_iter()
         .flatten()
     {
-        let alt = effective(root, alt);
+        let alt = Spec::of(root, alt);
         if types(&alt) == ["null"] {
             continue;
         }
@@ -520,7 +582,7 @@ fn collect_alternatives(
 }
 
 /// A schema that is only a union of others: `anyOf`, no type, no properties.
-fn is_union(node: &Map<String, Value>) -> bool {
+fn is_union(node: &Spec<'_>) -> bool {
     node.contains_key("anyOf") && !node.contains_key("type") && !node.contains_key("properties")
 }
 
@@ -634,7 +696,7 @@ fn field_row(
     required: bool,
     facts: &Facts,
 ) -> Row {
-    let spec = effective(root, raw);
+    let spec = Spec::of(root, raw);
     // `clean_enum` drops an empty value, so an enum of `""` alone is empty.
     let (mut values, mut docs, is_array) = enum_of(root, &spec);
     let vocab = vocab_of(&spec, name);
@@ -750,7 +812,7 @@ fn default_title(name: &str) -> String {
         .join(" ")
 }
 
-fn min_items(root: &Value, spec: &Map<String, Value>) -> Option<u64> {
+fn min_items<'a>(root: &'a Value, spec: &Spec<'a>) -> Option<u64> {
     if let Some(count) = spec.get("minItems").and_then(Value::as_u64) {
         return Some(count);
     }
@@ -774,7 +836,7 @@ impl VocabOf {
     }
 }
 
-fn vocab_of(spec: &Map<String, Value>, name: &str) -> VocabOf {
+fn vocab_of(spec: &impl Keywords, name: &str) -> VocabOf {
     let references = match spec.get(keys::VOCAB) {
         Some(Value::Bool(true)) => vec![name.to_owned()],
         Some(Value::String(reference)) => vec![reference.clone()],
@@ -794,17 +856,25 @@ fn vocab_of(spec: &Map<String, Value>, name: &str) -> VocabOf {
 /// after `T1548`), and `docs` without theirs: the catalog's reader offers
 /// each value once and finds it by its name from the vocabulary.
 fn drop_search_hints(values: &mut Vec<String>, docs: &mut Vec<String>) {
-    let plain: std::collections::HashSet<String> = values
-        .iter()
-        .filter(|value| !value.contains(" #"))
-        .cloned()
-        .collect();
-    let hint = |value: &str| {
-        value
-            .split_once(" #")
-            .is_some_and(|(value, _)| plain.contains(value))
+    // Borrowed, not copied: a vocabulary field's values are the vocabulary's.
+    let keep: Vec<bool> = {
+        let plain: std::collections::HashSet<&str> = values
+            .iter()
+            .map(String::as_str)
+            .filter(|value| !value.contains(" #"))
+            .collect();
+        values
+            .iter()
+            .map(|value| {
+                !value
+                    .split_once(" #")
+                    .is_some_and(|(value, _)| plain.contains(value))
+            })
+            .collect()
     };
-    let keep: Vec<bool> = values.iter().map(|value| !hint(value)).collect();
+    if keep.iter().all(|kept| *kept) {
+        return;
+    }
     let mut at = 0;
     values.retain(|_| {
         at += 1;
@@ -823,7 +893,7 @@ fn drop_search_hints(values: &mut Vec<String>, docs: &mut Vec<String>) {
 }
 
 /// A field's enum values and their docs, and whether it is an array.
-fn enum_of(root: &Value, spec: &Map<String, Value>) -> (Vec<String>, Vec<String>, bool) {
+fn enum_of<'a>(root: &'a Value, spec: &Spec<'a>) -> (Vec<String>, Vec<String>, bool) {
     if is_type(spec, "array") {
         return array_enum(root, spec);
     }
@@ -847,20 +917,20 @@ fn enum_of(root: &Value, spec: &Map<String, Value>) -> (Vec<String>, Vec<String>
     (Vec::new(), Vec::new(), is_type(spec, "array"))
 }
 
-fn enum_docs(spec: &Map<String, Value>) -> &[Value] {
+fn enum_docs<'a>(spec: &Spec<'a>) -> &'a [Value] {
     spec.get("markdownEnumDescriptions")
         .and_then(Value::as_array)
         .map_or(&[], Vec::as_slice)
 }
 
-fn items_of(root: &Value, spec: &Map<String, Value>) -> Map<String, Value> {
+fn items_of<'a>(root: &'a Value, spec: &Spec<'a>) -> Spec<'a> {
     spec.get("items")
         .filter(|items| items.is_object())
-        .map(|items| effective(root, items))
+        .map(|items| Spec::of(root, items))
         .unwrap_or_default()
 }
 
-fn array_enum(root: &Value, spec: &Map<String, Value>) -> (Vec<String>, Vec<String>, bool) {
+fn array_enum<'a>(root: &'a Value, spec: &Spec<'a>) -> (Vec<String>, Vec<String>, bool) {
     let items = items_of(root, spec);
     if let Some(Value::Array(values)) = items.get("enum") {
         let (values, docs) = clean_enum(values, enum_docs(&items));
@@ -869,7 +939,7 @@ fn array_enum(root: &Value, spec: &Map<String, Value>) -> (Vec<String>, Vec<Stri
     (Vec::new(), Vec::new(), true)
 }
 
-fn scalar_enum_applies(root: &Value, spec: &Map<String, Value>) -> bool {
+fn scalar_enum_applies<'a>(root: &'a Value, spec: &Spec<'a>) -> bool {
     let kinds: Vec<&str> = types(spec)
         .into_iter()
         .filter(|kind| *kind != "null")
@@ -890,7 +960,7 @@ fn scalar_enum_applies(root: &Value, spec: &Map<String, Value>) -> bool {
     alternatives.iter().any(|alt| holds_string(root, alt))
 }
 
-fn is_object_array(root: &Value, alt: &Map<String, Value>) -> bool {
+fn is_object_array<'a>(root: &'a Value, alt: &Spec<'a>) -> bool {
     if !is_type(alt, "array") {
         return false;
     }
@@ -900,7 +970,7 @@ fn is_object_array(root: &Value, alt: &Map<String, Value>) -> bool {
         || items.contains_key("additionalProperties")
 }
 
-fn holds_string(root: &Value, alt: &Map<String, Value>) -> bool {
+fn holds_string<'a>(root: &'a Value, alt: &Spec<'a>) -> bool {
     if is_type(alt, "string") {
         return true;
     }
@@ -930,7 +1000,7 @@ fn clean_enum(values: &[Value], docs: &[Value]) -> (Vec<String>, Vec<String>) {
     let paired = every_value || docs.len() == non_null;
     let mut docs = docs.iter();
     let mut cleaned = Vec::new();
-    let mut short = Vec::new();
+    let mut paired_docs: Vec<Option<&str>> = Vec::new();
     for value in values {
         let doc = if paired && (every_value || !value.is_null()) {
             docs.next()
@@ -941,12 +1011,19 @@ fn clean_enum(values: &[Value], docs: &[Value]) -> (Vec<String>, Vec<String>) {
             continue;
         };
         cleaned.push(rendered);
-        short.push(
-            doc.and_then(Value::as_str)
-                .map(short_doc)
-                .unwrap_or_default(),
-        );
+        paired_docs.push(doc.and_then(Value::as_str));
     }
+    // A field with more values than that keeps none of their docs
+    // ([`field_row`]): each is a vocabulary entry's whole description, and
+    // shortening the hundreds of an ATT&CK field's for every field and
+    // revision that offers them was a quarter of the catalog's build.
+    if cleaned.len() > ENUM_DOC_MAX {
+        return (cleaned, Vec::new());
+    }
+    let short = paired_docs
+        .into_iter()
+        .map(|doc| doc.map(short_doc).unwrap_or_default())
+        .collect();
     (cleaned, short)
 }
 
@@ -982,7 +1059,7 @@ fn cap_doc(text: &str) -> String {
     format!("{}…", kept.trim_end())
 }
 
-fn const_of(root: &Value, spec: &Map<String, Value>) -> Option<String> {
+fn const_of<'a>(root: &'a Value, spec: &Spec<'a>) -> Option<String> {
     if let Some(Value::String(constant)) = spec.get("const") {
         return Some(constant.clone());
     }
@@ -991,13 +1068,12 @@ fn const_of(root: &Value, spec: &Map<String, Value>) -> Option<String> {
         .find_map(|alt| alt.get("const").and_then(Value::as_str).map(str::to_owned))
 }
 
-fn type_name(root: &Value, spec: &Map<String, Value>, is_array: bool) -> String {
+fn type_name<'a>(root: &'a Value, spec: &Spec<'a>, is_array: bool) -> String {
     let alternatives = alternatives(root, spec);
     if is_array || is_type(spec, "array") || alternatives.iter().any(|alt| is_type(alt, "array")) {
         return "array".into();
     }
-    let node = Value::Object(spec.clone());
-    if has_properties(object_of(root, &node))
+    if holds_object(root, spec)
         || alternatives
             .iter()
             .any(|alt| alt.contains_key("properties"))
