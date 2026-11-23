@@ -398,7 +398,7 @@ opentide validate --strict
 Two objects share a `metadata.uuid`. UUIDs must be unique across the repo — you almost certainly copy-pasted an object. Generate a fresh one:
 
 ```bash
-python -c "import uuid; print(uuid.uuid4())"
+uuidgen                      # PowerShell: [guid]::NewGuid()
 ```
 
 ### `unknown objective` / dangling reference

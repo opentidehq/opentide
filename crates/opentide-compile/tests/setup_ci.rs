@@ -63,6 +63,7 @@ fn options(inputs: &toml::Table) -> Options {
         rules_folder: text("rules_folder"),
         credentials,
         sharing_credentials: Vec::new(),
+        variable_groups: inputs.get("variable_groups").map(list).unwrap_or_default(),
     }
 }
 

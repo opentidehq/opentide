@@ -35,7 +35,8 @@ const SAFE_FIX_CODES: [&str; 3] = [
 fn default_help(code: &str) -> Option<&'static str> {
     Some(match code {
         "invalid_uuid" => {
-            "replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\""
+            "replace it with a UUID v4 from any generator (`uuidgen`; PowerShell \
+             `[guid]::NewGuid()`)"
         }
         "missing_uuid" => "add metadata.uuid with a fresh UUID v4",
         "duplicate_id" => {
@@ -51,6 +52,21 @@ fn default_help(code: &str) -> Option<&'static str> {
         }
         _ => return None,
     })
+}
+
+/// What to do with a `composition` at the root of an objective, which older
+/// templates wrote there; it is read only under `objective:`.
+const ROOT_COMPOSITION_HELP: &str = "move it under `objective:`, or delete the root copy if \
+    `objective.composition` already holds it (merge by hand if they differ)";
+
+/// An objective's top-level `composition`: an unknown key since 0.21.
+fn is_root_composition(diagnostic: &Diagnostic) -> bool {
+    diagnostic.code == "schema_validation"
+        && diagnostic.object_type == "objective"
+        && diagnostic.field_path == ["composition"]
+        && diagnostic
+            .message
+            .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
 }
 
 /// `yaml_parse` problems that are not syntax: the indentation hint would
@@ -532,6 +548,8 @@ fn annotate_one(
             .and_then(ContextValue::as_str)
     {
         help = Some(format!("write {expected}"));
+    } else if help.is_none() && is_root_composition(diagnostic) {
+        help = Some(ROOT_COMPOSITION_HELP.to_owned());
     } else if help.is_none() {
         help = default_help(&diagnostic.code).map(str::to_owned);
     }
@@ -606,7 +624,11 @@ fn value_message(diagnostic: &Diagnostic, value: &str) -> Option<String> {
                     .collect::<Vec<_>>()
                     .join(" ")
             };
-            Some(format!("{} is not a {noun} value", quote(value)))
+            Some(format!(
+                "{} is not {} {noun} value",
+                quote(value),
+                indefinite_article(&noun)
+            ))
         }
         "config_enum_unknown" => {
             let setting = context("setting")?;
@@ -619,6 +641,23 @@ fn value_message(diagnostic: &Diagnostic, value: &str) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// `a` or `an` before `noun`, by how it is said: an upper-case acronym is
+/// spelled out ("an RSIT", "a TLP"), any other word by its first letter.
+fn indefinite_article(noun: &str) -> &'static str {
+    let mut chars = noun.chars();
+    let Some(first) = chars.next() else {
+        return "a";
+    };
+    let acronym = noun.chars().all(|c| c.is_ascii_uppercase());
+    let vowel_sound = if acronym {
+        // Letters whose name starts with a vowel sound: A E F H I L M N O R S X.
+        "AEFHILMNORSX".contains(first)
+    } else {
+        "aeiouAEIOU".contains(first)
+    };
+    if vowel_sound { "an" } else { "a" }
 }
 
 /// `UUID … is also used by 'Name'` (or `another object`).
@@ -699,10 +738,14 @@ mod tests {
     #[test]
     fn a_value_headline_names_the_vocabulary_as_a_person_reads_it() {
         // The acronyms are upper-case, every other name is words.
-        for (name, noun) in [("tlp", "TLP"), ("pap", "PAP"), ("rsit", "RSIT")] {
+        for (name, article, noun) in [
+            ("tlp", "a", "TLP"),
+            ("pap", "a", "PAP"),
+            ("rsit", "an", "RSIT"),
+        ] {
             assert_eq!(
                 value_message(&vocab(&format!("{name}::1.0")), "x").as_deref(),
-                Some(format!("\"x\" is not a {noun} value").as_str())
+                Some(format!("\"x\" is not {article} {noun} value").as_str())
             );
         }
         assert_eq!(
@@ -711,7 +754,7 @@ mod tests {
         );
         assert_eq!(
             value_message(&vocab("alert_severity"), "high").as_deref(),
-            Some("\"high\" is not a alert severity value")
+            Some("\"high\" is not an alert severity value")
         );
         assert_eq!(
             value_message(&Diagnostic::error("vocab_unknown", "x"), "v"),
