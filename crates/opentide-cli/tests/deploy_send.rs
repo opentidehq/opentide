@@ -5811,3 +5811,215 @@ fn a_splunk_retirement_names_the_rule_and_removed_survives_a_failed_cleanup() {
     );
     assert_eq!(removed(RETIRED), ["Old B 1"]);
 }
+
+/// A cassette of the Sentinel sign-in, the `GET` of the one rule the
+/// `deploy-tenants` workspace deploys (answered `status` with `held`) and,
+/// when `put`, the `PUT` of its planned body (OT-3).
+fn sentinel_read_replay(
+    planned: &Json,
+    status: u16,
+    held: Option<&Json>,
+    put: bool,
+) -> (Proxy, Env, tempfile::NamedTempFile) {
+    let text =
+        std::fs::read_to_string(repo().join("tests/cassettes/sentinel/deploy.json")).unwrap();
+    let mut cassette = Cassette::parse(&text).unwrap();
+    let body = planned.to_compact();
+    let at = |index: usize, rule: &str| {
+        let mut interaction = cassette.interactions[index].clone();
+        interaction.request.url = interaction
+            .request
+            .url
+            .replace("soc%20workspace", "soc")
+            .replace("00000000-0000-4000-8003-000000000001", rule);
+        interaction
+    };
+    let deployed = "00000000-0000-4000-8047-000000000071";
+    let mut read = at(6, deployed);
+    read.request.method = "GET".into();
+    read.response.status = status;
+    read.response.body =
+        opentide_cassette::cassette::Body::Text(held.map(Json::to_compact).unwrap_or_default());
+    let mut interactions = vec![at(0, deployed), at(1, deployed), read];
+    if put {
+        let mut write = at(2, deployed);
+        write.request.body = opentide_cassette::cassette::Body::Text(body);
+        interactions.push(write);
+    }
+    // The workspace's other rule is retired: a `DELETE` ARM answers 200.
+    interactions.push(at(6, "00000000-0000-4000-8047-000000000072"));
+    cassette.interactions = interactions;
+    let proxy = Proxy::start(
+        Mode::Replay { cassette },
+        Redaction::new([SECRET.to_owned()]),
+    )
+    .unwrap();
+    let mut ca = tempfile::NamedTempFile::new().unwrap();
+    ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
+    let env = Env::from_pairs(
+        proxy
+            .client_env(ca.path().to_str().unwrap())
+            .into_iter()
+            .chain([("AZURE_CLIENT_SECRET".to_owned(), SECRET.to_owned())]),
+    );
+    (proxy, env, ca)
+}
+
+/// The action of the one result row.
+fn only_action(sent: &Sent) -> String {
+    let Json::Array(results) = value(sent, "results") else {
+        panic!("no results")
+    };
+    // The deployed rule's row; the other rule is retired.
+    let row = results
+        .iter()
+        .find(|row| {
+            row.get("id").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+        })
+        .unwrap();
+    row.get("action")
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+#[test]
+fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
+    let ws = fixture("deploy-tenants");
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            "sentinel",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let payloads = result
+        .get("payloads")
+        .and_then(|p| p.get("sentinel"))
+        .and_then(Json::as_array)
+        .unwrap();
+    // The body a deploy sends is the dry run's `api_request`.
+    let sent_body = payloads
+        .iter()
+        .find(|p| {
+            p.get("uuid").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+        })
+        .and_then(|p| p.get("api_request"))
+        .unwrap()
+        .clone();
+    let planned = [sent_body.clone()];
+
+    // Not there: a create, written once.
+    let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 404, None, true);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "create");
+
+    // Held as sent, with what ARM adds: unchanged, deployed, nothing written.
+    let mut held = sent_body.clone();
+    held.as_object_mut()
+        .unwrap()
+        .insert("etag".into(), Json::str("\"e\""));
+    let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 200, Some(&held), false);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "unchanged");
+    assert!(
+        value(&sent, "message")
+            .as_str()
+            .is_some_and(|message| message.contains("1 deleted, 1 unchanged")),
+        "{:?}",
+        sent.result
+    );
+    assert!(stderr.contains("unchanged"), "{stderr}");
+
+    // Held with another name: an update.
+    let mut other = sent_body;
+    other
+        .get_mut("properties")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("displayName".into(), Json::str("another name"));
+    let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 200, Some(&other), true);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "update");
+}
+
+/// A `DISABLED` rule the workspace holds enabled is written, and the row
+/// keeps the plan's `disable` rather than an `update` (OT-3).
+#[test]
+fn sentinel_a_disabled_rule_held_enabled_is_written_and_stays_a_disable() {
+    let ws = fixture("deploy-tenants");
+    let file = ws.path().join("objects/rules/sentinel-a-create.yaml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains("status: STAGING"), "{text}");
+    std::fs::write(&file, text.replace("status: STAGING", "status: DISABLED")).unwrap();
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            "sentinel",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let sent_body = result
+        .get("payloads")
+        .and_then(|p| p.get("sentinel"))
+        .and_then(Json::as_array)
+        .unwrap()
+        .iter()
+        .find(|p| {
+            p.get("uuid").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+        })
+        .and_then(|p| p.get("api_request"))
+        .unwrap()
+        .clone();
+    assert_eq!(
+        sent_body.get("properties").and_then(|p| p.get("enabled")),
+        Some(&Json::Bool(false)),
+        "{}",
+        sent_body.to_compact()
+    );
+    let mut held = sent_body.clone();
+    held.get_mut("properties")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("enabled".into(), Json::Bool(true));
+    let (proxy, env, _ca) = sentinel_read_replay(&sent_body, 200, Some(&held), true);
+    let args = Args {
+        strategies: vec!["RELEASE".into()],
+        all: true,
+        platform: Some("sentinel".to_owned()),
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let (sent, _) = deploy_with(ws.path(), &args, &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "disable");
+}

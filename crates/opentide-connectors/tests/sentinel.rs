@@ -417,3 +417,407 @@ fn sentinel_a_redirect_answer_is_not_a_rule_written() {
     assert_eq!(error.status, 307, "{error}");
     assert_eq!(tenant.verify(), Vec::new());
 }
+
+/// OT-3: `deploy` reads the rule it writes before it writes it. A cassette of
+/// the sign-in, each `GET` the connector sends (*reads*: status and body)
+/// and, when the rule is written, the recorded `PUT` of *sent*.
+#[expect(
+    clippy::unwrap_used,
+    reason = "a test helper: a failed set-up is a failure"
+)]
+fn deploy_reading(
+    reads: &[(u16, Option<serde_json::Value>)],
+    sent: &serde_json::Value,
+    writes: bool,
+) -> (
+    Result<
+        opentide_connectors::connector::DeployOutcome,
+        opentide_connectors::connector::DeployError,
+    >,
+    Replayed,
+) {
+    use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
+    let inputs = fixture("sentinel");
+    let rule_id = text(inputs.get("deploy").unwrap().get("rule_id").unwrap());
+    let full = support::cassette("sentinel/deploy");
+    let mut interactions = vec![full.interactions[0].clone(), full.interactions[1].clone()];
+    for (status, body) in reads {
+        let mut read = full.interactions[6].clone();
+        read.request.method = "GET".into();
+        read.response.status = *status;
+        read.response.body = opentide_cassette::cassette::Body::Text(
+            body.as_ref().map(ToString::to_string).unwrap_or_default(),
+        );
+        interactions.push(read);
+    }
+    if writes {
+        let mut write = full.interactions[2].clone();
+        write.request.body = opentide_cassette::cassette::Body::Text(sent.to_string());
+        interactions.push(write);
+    }
+    let tenant = Replayed::start_with(
+        opentide_cassette::Cassette::new(&full.scenario, full.recorded_from, interactions),
+        sentinel::PLATFORM,
+        SETUP,
+        "AZURE_CLIENT_SECRET",
+        &sentinel::http_settings(Duration::from_secs(60)),
+    );
+    let request = DeployRequest::new(
+        rule_id.to_owned(),
+        Operation::Update,
+        sent.to_string().into_bytes(),
+    );
+    let done = block_on(async { connector().deploy(tenant.cx(), &request).await }).unwrap();
+    (done, tenant)
+}
+
+/// The rule the fixture deploys, as sent.
+#[expect(
+    clippy::unwrap_used,
+    reason = "a test helper: a failed set-up is a failure"
+)]
+fn sent_rule() -> serde_json::Value {
+    let inputs = fixture("sentinel");
+    serde_json::from_str(
+        &inputs
+            .get("deploy")
+            .unwrap()
+            .get("rule")
+            .unwrap()
+            .to_compact(),
+    )
+    .unwrap()
+}
+
+/// The rule as the cassette's `PUT` answered it: what was sent, with the
+/// members ARM adds (`name`, `etag`).
+#[expect(
+    clippy::unwrap_used,
+    reason = "a test helper: a failed set-up is a failure"
+)]
+fn held_rule() -> serde_json::Value {
+    let full = support::cassette("sentinel/deploy");
+    serde_json::from_slice(&full.interactions[2].response.body.bytes()).unwrap()
+}
+
+fn event_of(done: &opentide_connectors::connector::DeployOutcome) -> Vec<&str> {
+    done.events
+        .iter()
+        .map(|event| event.name.as_str())
+        .collect()
+}
+
+/// *edit* applied to a copy of the cassette's rule.
+fn edited(edit: impl Fn(&mut serde_json::Value)) -> serde_json::Value {
+    let mut rule = held_rule();
+    edit(&mut rule);
+    rule
+}
+
+#[test]
+fn sentinel_a_rule_the_workspace_lacks_is_created() {
+    let (done, tenant) = deploy_reading(&[(404, None)], &sent_rule(), true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_created"]);
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_a_rule_the_workspace_holds_as_sent_is_unchanged_and_not_written() {
+    // No `PUT` is in the cassette: one sent would be a mismatch.
+    let (done, tenant) = deploy_reading(&[(200, Some(held_rule()))], &sent_rule(), false);
+    let done = done.unwrap();
+    assert!(done.unchanged(), "{done:?}");
+    assert_eq!(event_of(&done), ["rule_unchanged"]);
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_a_field_that_differs_is_updated() {
+    for (field, value) in [
+        ("severity", serde_json::json!("Low")),
+        ("tactics", serde_json::json!(["Execution", "Persistence"])),
+        ("enabled", serde_json::json!(false)),
+        ("query", serde_json::json!("SecurityEvent | take 1")),
+    ] {
+        let held = edited(|rule| rule["properties"][field] = value.clone());
+        let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent_rule(), true);
+        assert_eq!(
+            event_of(&done.unwrap()),
+            ["sentinel_rule_updated"],
+            "{field}"
+        );
+        assert_eq!(tenant.verify(), Vec::new(), "{field}");
+    }
+}
+
+#[test]
+fn sentinel_a_disabled_rule_held_enabled_is_updated() {
+    let mut sent = sent_rule();
+    sent["properties"]["enabled"] = false.into();
+    let (done, tenant) = deploy_reading(&[(200, Some(held_rule()))], &sent, true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_updated"]);
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_what_arm_writes_itself_is_not_a_difference() {
+    let held = edited(|rule| {
+        rule["etag"] = "\"another\"".into();
+        rule["id"] = "/subscriptions/x/alertRules/y".into();
+        rule["type"] = "Microsoft.SecurityInsights/alertRules".into();
+        rule["systemData"] = serde_json::json!({"lastModifiedBy": "someone"});
+        rule["properties"]["lastModifiedUtc"] = "2026-01-01T00:00:00Z".into();
+        // Members ARM answers empty for what nobody set.
+        rule["properties"]["alertRuleTemplateName"] = serde_json::Value::Null;
+        rule["properties"]["customDetails"] = serde_json::Value::Null;
+        rule["properties"]["entityMappings"] = serde_json::json!([]);
+        rule["properties"]["alertDetailsOverride"] = serde_json::json!({});
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent_rule(), false);
+    assert!(done.unwrap().unchanged());
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_an_empty_container_sent_is_a_missing_or_null_member_held() {
+    let mut sent = sent_rule();
+    sent["properties"]["alertDetailsOverride"] = serde_json::json!({});
+    sent["properties"]["customDetails"] = serde_json::json!({});
+    sent["properties"]["entityMappings"] = serde_json::json!([]);
+    // Missing on the tenant, and `null` there.
+    for held in [
+        held_rule(),
+        edited(|rule| {
+            rule["properties"]["alertDetailsOverride"] = serde_json::Value::Null;
+            rule["properties"]["customDetails"] = serde_json::Value::Null;
+            rule["properties"]["entityMappings"] = serde_json::Value::Null;
+        }),
+    ] {
+        let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, false);
+        assert!(done.unwrap().unchanged());
+        assert_eq!(tenant.verify(), Vec::new());
+    }
+}
+
+#[test]
+fn sentinel_a_duration_is_the_same_in_arms_form_and_opentides() {
+    // ARM answers `PT1H`; opentide sends `PT01H00M00S`.
+    let mut sent = sent_rule();
+    for key in ["queryFrequency", "queryPeriod", "suppressionDuration"] {
+        sent["properties"][key] = "PT01H00M00S".into();
+    }
+    let held = edited(|rule| {
+        for key in ["queryFrequency", "queryPeriod", "suppressionDuration"] {
+            rule["properties"][key] = "PT1H".into();
+        }
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, false);
+    assert!(done.unwrap().unchanged());
+    assert_eq!(tenant.verify(), Vec::new());
+    // Another length is a difference.
+    let held = edited(|rule| rule["properties"]["queryPeriod"] = "PT2H".into());
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_updated"]);
+    assert_eq!(tenant.verify(), Vec::new());
+    // The lookback of incident grouping is read the same way.
+    let mut sent = sent_rule();
+    let grouping = |lookback: &str| {
+        serde_json::json!({"createIncident": true, "groupingConfiguration":
+            {"enabled": true, "lookbackDuration": lookback}})
+    };
+    sent["properties"]["incidentConfiguration"] = grouping("PT05H00M00S");
+    let held = edited(|rule| rule["properties"]["incidentConfiguration"] = grouping("PT5H"));
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, false);
+    assert!(done.unwrap().unchanged());
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// A member opentide no longer sends keeps its value on the workspace until
+/// a write replaces the rule, so the rule is written, never `unchanged`.
+#[test]
+fn sentinel_a_member_no_longer_sent_is_a_difference() {
+    let grouping = |extra: serde_json::Value| {
+        let mut configuration = serde_json::json!({"enabled": false});
+        if let Some(extra) = extra.as_object() {
+            for (key, value) in extra {
+                configuration[key] = value.clone();
+            }
+        }
+        serde_json::json!({"createIncident": true, "groupingConfiguration": configuration})
+    };
+    type Edit = Box<dyn Fn(&mut serde_json::Value)>;
+    let cases: Vec<(&str, Edit)> = vec![
+        (
+            "alert title",
+            Box::new(|r| {
+                r["properties"]["alertDetailsOverride"] =
+                    serde_json::json!({"alertDisplayNameFormat": "{{Computer}}"});
+            }),
+        ),
+        (
+            "alert description",
+            Box::new(|r| {
+                r["properties"]["alertDetailsOverride"] =
+                    serde_json::json!({"alertDescriptionFormat": "{{Account}}"});
+            }),
+        ),
+        (
+            "a custom detail",
+            Box::new(|r| {
+                r["properties"]["customDetails"] = serde_json::json!({"Host": "Computer"});
+            }),
+        ),
+        (
+            "entities",
+            Box::new(|r| {
+                r["properties"]["entityMappings"] = serde_json::json!([
+                    {"entityType": "Host", "fieldMappings": [
+                        {"identifier": "HostName", "columnName": "Computer"}]}
+                ]);
+            }),
+        ),
+        (
+            "the template link",
+            Box::new(|r| {
+                r["properties"]["alertRuleTemplateName"] =
+                    "11111111-2222-4333-8444-555555555555".into();
+            }),
+        ),
+        (
+            "group by entities",
+            Box::new(move |r| {
+                r["properties"]["incidentConfiguration"] =
+                    grouping(serde_json::json!({"groupByEntities": ["Host"]}));
+            }),
+        ),
+    ];
+    for (removed, edit) in &cases {
+        let mut held = held_rule();
+        edit(&mut held);
+        let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent_rule(), true);
+        assert_eq!(
+            event_of(&done.unwrap()),
+            ["sentinel_rule_updated"],
+            "{removed}"
+        );
+        assert_eq!(tenant.verify(), Vec::new(), "{removed}");
+    }
+    // A member of the rule as it is held, taken from what is sent.
+    for (removed, keys) in [
+        ("the trigger", &["triggerOperator", "triggerThreshold"][..]),
+        ("a sub-technique", &["subTechniques"][..]),
+    ] {
+        let mut sent = sent_rule();
+        for key in keys {
+            sent["properties"].as_object_mut().unwrap().remove(*key);
+        }
+        // The trigger held is not ARM's default (`GreaterThan`, `0`).
+        let held = edited(|rule| rule["properties"]["triggerThreshold"] = 3.into());
+        let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
+        assert_eq!(
+            event_of(&done.unwrap()),
+            ["sentinel_rule_updated"],
+            "{removed}"
+        );
+        assert_eq!(tenant.verify(), Vec::new(), "{removed}");
+    }
+}
+
+/// ARM answers a Scheduled rule with a trigger (`GreaterThan`, `0`) even when
+/// the rule sends none, so that is not a difference.
+#[test]
+fn sentinel_the_triggers_defaults_are_not_a_difference() {
+    let mut sent = sent_rule();
+    for key in ["triggerOperator", "triggerThreshold"] {
+        sent["properties"].as_object_mut().unwrap().remove(key);
+    }
+    let held = edited(|rule| {
+        rule["properties"]["triggerOperator"] = "GreaterThan".into();
+        rule["properties"]["triggerThreshold"] = 0.into();
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, false);
+    assert!(done.unwrap().unchanged());
+    assert_eq!(tenant.verify(), Vec::new());
+    // Another operator is a difference.
+    let held = edited(|rule| {
+        rule["properties"]["triggerOperator"] = "LessThan".into();
+        rule["properties"]["triggerThreshold"] = 0.into();
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_updated"]);
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// A `customDetails` key named like a duration is no duration: `PT1H` and
+/// `PT01H00M00S` there are two values.
+#[test]
+fn sentinel_a_duration_is_read_only_where_a_rule_has_one() {
+    let mut sent = sent_rule();
+    sent["properties"]["customDetails"] = serde_json::json!({"queryPeriod": "PT01H00M00S"});
+    let held = edited(|rule| {
+        rule["properties"]["customDetails"] = serde_json::json!({"queryPeriod": "PT1H"});
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_updated"]);
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_a_throttled_read_is_retried() {
+    let (done, tenant) = deploy_reading(
+        &[(429, None), (200, Some(held_rule()))],
+        &sent_rule(),
+        false,
+    );
+    assert!(done.unwrap().unchanged());
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_a_failed_read_fails_the_rule_and_writes_nothing() {
+    // A 403, which is not retried; the cassette has no `PUT`.
+    let body = serde_json::json!({"error": {"code": "AuthorizationFailed", "message": "no"}});
+    let (done, tenant) = deploy_reading(&[(403, Some(body))], &sent_rule(), false);
+    let error = done.unwrap_err();
+    assert!(error.to_string().contains("403"), "{error}");
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+#[test]
+fn sentinel_a_read_answered_with_a_page_fails_the_rule_and_writes_nothing() {
+    let (answer, tenant) = {
+        use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
+        let full = support::cassette("sentinel/deploy");
+        let mut read = full.interactions[6].clone();
+        read.request.method = "GET".into();
+        read.response.status = 200;
+        read.response.body =
+            opentide_cassette::cassette::Body::Text("<html><title>Gateway</title></html>".into());
+        let tenant = Replayed::start_with(
+            opentide_cassette::Cassette::new(
+                &full.scenario,
+                full.recorded_from,
+                vec![
+                    full.interactions[0].clone(),
+                    full.interactions[1].clone(),
+                    read,
+                ],
+            ),
+            sentinel::PLATFORM,
+            SETUP,
+            "AZURE_CLIENT_SECRET",
+            &sentinel::http_settings(Duration::from_secs(60)),
+        );
+        let request = DeployRequest::new(
+            "00000000-0000-4000-8003-000000000001".to_owned(),
+            Operation::Update,
+            sent_rule().to_string().into_bytes(),
+        );
+        (
+            block_on(async { connector().deploy(tenant.cx(), &request).await }).unwrap(),
+            tenant,
+        )
+    };
+    assert!(answer.is_err(), "{answer:?}");
+    assert_eq!(tenant.verify(), Vec::new());
+}

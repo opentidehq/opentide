@@ -619,6 +619,14 @@ pub struct CompletionItem {
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub documentation: Option<String>,
+    /// What an editor shows beside the label, in the list (LSP
+    /// `labelDetails.description`): a vocabulary value's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_detail: Option<String>,
+    /// The text an editor filters the item by, when it is more than the
+    /// label: a vocabulary value with its name and aliases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_text: Option<String>,
 }
 
 impl CompletionItem {
@@ -628,7 +636,21 @@ impl CompletionItem {
             detail: None,
             kind: kind.into(),
             documentation: None,
+            label_detail: None,
+            filter_text: None,
         }
+    }
+
+    /// The item with `label_detail` shown beside its label.
+    pub fn with_label_detail(mut self, label_detail: impl Into<String>) -> Self {
+        self.label_detail = Some(label_detail.into());
+        self
+    }
+
+    /// The item with `filter_text` to filter it by.
+    pub fn with_filter_text(mut self, filter_text: impl Into<String>) -> Self {
+        self.filter_text = Some(filter_text.into());
+        self
     }
 
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
