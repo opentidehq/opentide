@@ -3049,6 +3049,7 @@ dependencies = [
 name = "opentide-parse"
 version = "1.0.0"
 dependencies = [
+ "foldhash",
  "logos",
  "rowan",
 ]
