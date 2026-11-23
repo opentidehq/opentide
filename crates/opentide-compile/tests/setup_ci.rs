@@ -131,3 +131,84 @@ fn pipelines_are_the_oracles() {
     }
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
 }
+
+/// The major of each `actions/<name>` this repository's own workflows pin
+/// (`uses: actions/<name>@<sha> # v7.0.1` or `@v7`), the newest of each.
+fn repository_action_majors() -> IndexMap<String, u32> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows");
+    let mut majors: IndexMap<String, u32> = IndexMap::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if !path
+            .extension()
+            .is_some_and(|ext| ext == "yml" || ext == "yaml")
+        {
+            continue;
+        }
+        for line in std::fs::read_to_string(&path).unwrap().lines() {
+            let Some((_, uses)) = line.split_once("uses: actions/") else {
+                continue;
+            };
+            let (action, rest) = uses.split_once('@').unwrap();
+            let (reference, comment) = rest.split_once('#').unwrap_or((rest, ""));
+            let version = [reference, comment]
+                .iter()
+                .find_map(|text| text.trim().strip_prefix('v'));
+            let major = version
+                .and_then(|text| text.split(|c: char| !c.is_ascii_digit()).next())
+                .and_then(|digits| digits.parse::<u32>().ok());
+            if let Some(major) = major {
+                let newest = majors.entry(action.to_owned()).or_insert(major);
+                *newest = (*newest).max(major);
+            }
+        }
+    }
+    majors
+}
+
+/// The generated GitHub workflow pins no `actions/*` major older than the one
+/// this repository's own workflows pin for the same action, so a generated
+/// pipeline does not run on a runtime GitHub is retiring (Node 20).
+/// `upload-pages-artifact` and `deploy-pages` are not used by this
+/// repository's workflows, so they are not compared.
+#[test]
+fn generated_actions_are_not_older_than_the_repositorys_own() {
+    let own = repository_action_majors();
+    for action in [
+        "checkout",
+        "setup-python",
+        "upload-artifact",
+        "download-artifact",
+    ] {
+        assert!(
+            own.contains_key(action),
+            "{action} not found in .github/workflows"
+        );
+    }
+    let inputs: toml::Table = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ci/github-default.toml"),
+    )
+    .unwrap()
+    .parse()
+    .unwrap();
+    let mut options = options(&inputs);
+    options.explorer_pages = true;
+    let written = render(&options).unwrap();
+    let mut seen = 0;
+    for line in written.lines() {
+        let Some((_, uses)) = line.split_once("uses: actions/") else {
+            continue;
+        };
+        let (action, version) = uses.trim().split_once('@').unwrap();
+        let Some(newest) = own.get(action) else {
+            continue;
+        };
+        let major: u32 = version.trim_start_matches('v').parse().unwrap();
+        assert!(
+            major >= *newest,
+            "actions/{action}@v{major} in the generated workflow; this repository pins v{newest}"
+        );
+        seen += 1;
+    }
+    assert!(seen >= 5, "only {seen} actions compared:\n{written}");
+}

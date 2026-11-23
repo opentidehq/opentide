@@ -124,8 +124,9 @@ pub struct Options {
     pub docs_output: String,
     /// The workspace's rules folder, from the repository root.
     pub rules_folder: String,
-    /// For each enabled platform, the variables its tenants' credentials
-    /// name in the repository's platform file ([`tenant_variables`]): the
+    /// For each enabled platform that has tenants configured, the variables
+    /// those tenants' credentials name in the repository's platform file
+    /// ([`tenant_variables`]; a platform without tenants has no entry): the
     /// jobs that reach a tenant map them from the CI secret store
     /// ([`secret_names`]), and a query-checked platform's live check is
     /// skipped when one is unset.
@@ -400,29 +401,27 @@ with open(output, "w", encoding="utf-8") as stream:
 "#;
 
 /// The variables a step that reaches `platform`'s tenants maps from the CI
-/// secret store, sorted: those its bundled platform file references and
-/// those the repository's tenants of that platform name
-/// ([`Options::credentials`]), so a tenant that names its own `$NAME` gets
-/// its credential in CI as it does locally. No other platform's variable is
-/// in it (#1689). A name the CI runner sets itself ([`runner_owned`]) is
-/// left out: mapping it from the secret store would replace the runner's
-/// own value.
+/// secret store, sorted: exactly the `$NAME`s the repository's tenants of
+/// that platform name in their `setup` values ([`Options::credentials`]),
+/// as `opentide doctor`'s credentials check derives them, so a tenant gets
+/// its credential in CI as it does locally and no name that no tenant uses
+/// is asked for. Only a platform with no tenants configured (no entry in
+/// `credentials`) falls back to the names its bundled platform file
+/// references. No other platform's variable is in it (#1689). A name the CI
+/// runner sets itself ([`runner_owned`]) is left out: mapping it from the
+/// secret store would replace the runner's own value.
 pub fn platform_secret_names(options: &Options, platform: &str) -> Vec<String> {
+    if let Some(tenant_names) = options.credentials.get(platform) {
+        return mappable(tenant_names.clone());
+    }
     let bundled = format!("platforms/{platform}.toml");
-    let mut names: Vec<String> = opentide_schema::configuration::bundled::FILES
-        .iter()
-        .filter(|(path, _)| *path == bundled)
-        .flat_map(|(_, text)| references(text()))
-        .collect();
-    names.extend(
-        options
-            .credentials
-            .get(platform)
-            .into_iter()
-            .flatten()
-            .cloned(),
-    );
-    mappable(names)
+    mappable(
+        opentide_schema::configuration::bundled::FILES
+            .iter()
+            .filter(|(path, _)| *path == bundled)
+            .flat_map(|(_, text)| references(text()))
+            .collect(),
+    )
 }
 
 /// The variables the deploy steps map, sorted: [`platform_secret_names`] of
@@ -548,21 +547,31 @@ fn references(text: &str) -> Vec<String> {
     found
 }
 
-/// The variables a platform file's tenants name in their `setup` values
-/// (`workspace_credential_names`): each value that is `$NAME` or `${NAME}`
-/// as a whole, sorted. A file that is not TOML names none.
-pub fn tenant_variables(text: &str) -> Vec<String> {
+/// The tenants a platform file configures. A file that is not TOML has none.
+fn tenants_of(text: &str) -> Vec<toml::Value> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let Ok(document) = text.parse::<toml::Table>() else {
         return Vec::new();
     };
-    let tenants = match document.get("tenants") {
-        Some(toml::Value::Array(items)) => items.iter().collect(),
-        Some(table @ toml::Value::Table(_)) => vec![table],
+    match document.get("tenants") {
+        Some(toml::Value::Array(items)) => items.clone(),
+        Some(table @ toml::Value::Table(_)) => vec![table.clone()],
         _ => Vec::new(),
-    };
-    let mut names: Vec<String> = tenants
-        .into_iter()
+    }
+}
+
+/// Whether a platform file configures at least one tenant: then its
+/// [`tenant_variables`], even none, are the credentials its jobs map.
+pub fn has_tenants(text: &str) -> bool {
+    !tenants_of(text).is_empty()
+}
+
+/// The variables a platform file's tenants name in their `setup` values
+/// (`workspace_credential_names`): each value that is `$NAME` or `${NAME}`
+/// as a whole, sorted. A file that is not TOML names none.
+pub fn tenant_variables(text: &str) -> Vec<String> {
+    let mut names: Vec<String> = tenants_of(text)
+        .iter()
         .filter_map(|tenant| tenant.get("setup").and_then(toml::Value::as_table))
         .flat_map(|setup| setup.values())
         .filter_map(|value| value.as_str().and_then(crate::plan::env_reference))
@@ -800,6 +809,63 @@ mod tests {
         assert!(written.contains("set -- AZURE_CLIENT_ID "), "{written}");
     }
 
+    /// A platform whose tenants name their variables is asked for exactly
+    /// those: no name only the bundled platform file references (the
+    /// Sentinel file's `AZURE_SUBSCRIPTION_ID`, the Defender file's
+    /// `MDE_*`) reaches the header or any job. A platform with no tenants
+    /// configured keeps the bundled names.
+    #[test]
+    fn tenants_name_the_secrets_not_the_bundled_file() {
+        let bundled = |platform: &str| {
+            platform_secret_names(
+                &Options {
+                    credentials: IndexMap::new(),
+                    ..options(Provider::GitHub)
+                },
+                platform,
+            )
+        };
+        assert!(bundled("sentinel").contains(&"AZURE_SUBSCRIPTION_ID".to_owned()));
+        assert!(bundled("defender_for_endpoint").contains(&"MDE_CLIENT_ID".to_owned()));
+
+        for provider in [Provider::GitHub, Provider::GitLab, Provider::Azure] {
+            let mut options = options(provider);
+            options.platforms = vec!["sentinel".into(), "defender_for_endpoint".into()];
+            options.credentials = IndexMap::from([
+                (
+                    "sentinel".to_owned(),
+                    vec![
+                        "AZURE_CLIENT_ID".to_owned(),
+                        "RETAIL_AZURE_TENANT_ID".to_owned(),
+                    ],
+                ),
+                // Tenants whose values are all literals name no variable.
+                ("defender_for_endpoint".to_owned(), Vec::new()),
+            ]);
+            assert_eq!(
+                secret_names(&options),
+                ["AZURE_CLIENT_ID", "RETAIL_AZURE_TENANT_ID"]
+            );
+            let written = render(&options).unwrap();
+            for name in [
+                "AZURE_SUBSCRIPTION_ID",
+                "AZURE_WORKSPACE_ID",
+                "AZURE_CLIENT_SECRET",
+                "MDE_CLIENT_ID",
+                "MDE_CLIENT_SECRET",
+                "MDE_TENANT_ID",
+            ] {
+                assert!(!written.contains(name), "{name} in {written}");
+            }
+            assert!(written.contains("RETAIL_AZURE_TENANT_ID"), "{written}");
+        }
+
+        // No tenants configured: the bundled names are what the platform needs.
+        let mut options = options(Provider::GitHub);
+        options.credentials.clear();
+        assert!(secret_names(&options).contains(&"AZURE_SUBSCRIPTION_ID".to_owned()));
+    }
+
     /// #1689: a live query check maps only its own platform's variables, the
     /// gate maps none, and a deploy maps only the enabled platforms'.
     #[test]
@@ -818,13 +884,18 @@ mod tests {
             let rest = &written[from + start.len()..];
             rest[..rest.find(end).unwrap_or(rest.len())].to_owned()
         };
-        let sentinel = ["AZURE_CLIENT_SECRET", "MY_SENTINEL_SECRET"];
-        let splunk = ["SPLUNK_TOKEN", "MY_SPLUNK_TOKEN"];
+        // Each platform has tenants, so only the names they use are mapped,
+        // not the bundled files' (`AZURE_CLIENT_SECRET`, `SPLUNK_TOKEN`).
+        let sentinel = ["MY_SENTINEL_SECRET"];
+        let splunk = ["MY_SPLUNK_TOKEN"];
 
         let written = render(&options).unwrap();
         // Elastic is not enabled: its bundled variables are neither mapped
         // nor listed.
         assert!(!written.contains("ELASTIC_PROD_API_KEY"), "{written}");
+        assert!(!written.contains("AZURE_CLIENT_SECRET"), "{written}");
+        assert!(!written.contains("#   SPLUNK_TOKEN\n"), "{written}");
+        assert!(!written.contains("secrets.SPLUNK_TOKEN"), "{written}");
         let gate = part(&written, "\n  validate:\n", "- name: Validate sentinel");
         assert!(!gate.contains("secrets."), "{gate}");
         let checks = [

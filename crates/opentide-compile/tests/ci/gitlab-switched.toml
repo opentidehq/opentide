@@ -13,5 +13,3 @@ default_branch = "trunk"
 rules_folder = "objects/rules"
 
 [credentials]
-sentinel = []
-splunk = []

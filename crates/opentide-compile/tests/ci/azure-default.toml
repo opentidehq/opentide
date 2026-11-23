@@ -13,12 +13,3 @@ default_branch = "main"
 rules_folder = "objects/rules"
 
 [credentials]
-carbon_black_cloud = []
-defender_for_endpoint = []
-elastic = []
-exabeam = []
-google_secops = []
-graylog = []
-sentinel = []
-sentinel_one = []
-splunk = []
