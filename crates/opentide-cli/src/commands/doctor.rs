@@ -293,14 +293,27 @@ pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
     let skipped = |code: &'static str| {
         Check::new(code, "skip", "Not checked: the configuration does not load")
     };
+    // Opening the workspace and rendering the schemas takes a while, so it
+    // runs beside the checks that wait on the network and is joined after
+    // them: until then `schemas_fresh` and `lsp_catalog` hold the checks
+    // that need no comparison.
+    let comparing = (!configuration_failed).then(|| {
+        let options = options_for(&options);
+        let version = cx.version.to_owned();
+        std::thread::Builder::new()
+            .name("doctor-schemas".to_owned())
+            .stack_size(8 << 20)
+            .spawn(move || expected_schemas(&options, &version))
+    });
+    let schemas_at = checks.len() + 1;
     if configuration_failed {
         checks.push(skipped("templates_fresh"));
         checks.push(skipped("schemas_fresh"));
     } else {
-        doctor.expected = Some(expected_schemas(&options, cx.version));
         checks.push(doctor.templates());
         checks.push(doctor.schemas());
     }
+    let catalog_at = checks.len();
     checks.push(doctor.lsp_catalog());
     if configuration_failed {
         checks.push(skipped("platforms_enabled"));
@@ -322,6 +335,18 @@ pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
         let tenants = doctor.tenants();
         checks.extend(doctor.credentials(&tenants));
         checks.extend(doctor.connectivity(live, &tenants));
+    }
+    // A run that was interrupted does not wait for the comparison.
+    if let Some(started) = comparing
+        && !(cx.interrupted)()
+    {
+        doctor.expected = Some(match started.map(std::thread::JoinHandle::join) {
+            Ok(Ok(expected)) => expected,
+            Ok(Err(_)) => Err("the comparison stopped unexpectedly".to_owned()),
+            Err(error) => Err(error.to_string()),
+        });
+        checks[schemas_at] = doctor.schemas();
+        checks[catalog_at] = doctor.lsp_catalog();
     }
     checks.push(doctor.proxy(offline));
     if configuration_failed {
