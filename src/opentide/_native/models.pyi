@@ -1278,7 +1278,8 @@ class DefenderAlert:
     @property
     def techniques(self, /) -> list[str] | None:
         """
-        Accepted on the block. The current deployer sends an empty technique list.
+        MITRE ATT&CK technique or sub-technique ids (`T1528`, `T1059.001`), sent
+        as the alert's `mitreTechniques`. `generate extract` imports the tenant's.
         """
     @property
     def title(self, /) -> str | None:
