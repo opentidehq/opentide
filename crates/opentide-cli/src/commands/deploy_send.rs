@@ -3037,10 +3037,7 @@ impl Sender<'_, '_> {
         // rename's cleanup may still have deleted old copies (`removed`).
         if failed.is_none() && outcome.unchanged() {
             result.action = Some(UNCHANGED.to_owned());
-        } else if failed.is_none()
-            && id == Some(PlatformId::Sentinel)
-            && upsert
-        {
+        } else if failed.is_none() && id == Some(PlatformId::Sentinel) && upsert {
             // Sentinel reads before it writes (OT-3): an `upsert` reads as
             // what ARM did, a create or an update.
             result.action = outcome
