@@ -12,9 +12,10 @@
 //!
 //! The vocabularies it writes hold the same data as the Python ingest's from
 //! the same inputs (`scripts/vocabulary/README.md` records the comparison);
-//! their layout is the `toml` crate's ([`value::to_toml`]). `[[keys]]` keep
-//! the merge order, which is data; the order of keys inside a table is not,
-//! and comes out sorted.
+//! their layout is [`value::to_toml`]'s: every value on one line (the bundled
+//! loader reads a description as one line). `[[keys]]` keep the merge order,
+//! which is data; the order of keys inside a table is not, and comes out
+//! sorted.
 
 pub mod generate;
 pub mod lifecycle;
