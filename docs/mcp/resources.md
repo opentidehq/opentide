@@ -5,7 +5,7 @@ description: opentide:// resource URIs for catalogue indexes, objects, schemas, 
 
 # MCP resources
 
-Read-only resources registered on the opentide MCP server. Each is served as `text/plain`: a JSON document; for an object template, its YAML as a JSON string; for `templates/systems`, a JSON object of each platform's block template, a YAML string each.
+Read-only resources registered on the opentide MCP server. Each is a JSON document served as `application/json`, except an object template (`templates/{type}`), which is its YAML as it is, served as `application/yaml`. `templates/systems` is JSON: an object of each platform's block template, a YAML string each.
 
 ## URI catalogue
 

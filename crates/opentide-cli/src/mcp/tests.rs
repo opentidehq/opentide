@@ -158,6 +158,15 @@ fn every_catalogue_tool_answers_on_the_corpus() {
     );
     assert_eq!(dry_run["action"], "dry-run");
     assert_eq!(dry_run["status"], "STAGING");
+    // The preview carries the deploy command's plan, and the platform may be
+    // left out: the rule has one block.
+    assert_eq!(dry_run["plan"]["sentinel"][0], SENTINEL_RULE, "{dry_run}");
+    assert_eq!(dry_run["changes"][0]["uuid"], SENTINEL_RULE, "{dry_run}");
+    assert!(dry_run["payloads"]["sentinel"][0]["api_request"].is_object());
+    assert_eq!(dry_run["would_deploy"], true, "{dry_run}");
+    let implied = call(&server, "deploy_rule", json!({"uuid": SENTINEL_RULE}));
+    assert_eq!(implied["platform"], "sentinel", "{implied}");
+    assert_eq!(implied["plan"], dry_run["plan"], "{implied}");
     let unknown = failed_call(
         &server,
         "deploy_rule",
@@ -260,7 +269,16 @@ fn generated_schemas_and_templates_are_served() {
     let Answer::Result(result) = server.read("opentide://templates/rule") else {
         panic!("not a result");
     };
-    assert_eq!(result["contents"][0]["text"], "\"name: x\\n\"");
+    assert_eq!(result["contents"][0]["text"], "name: x\n");
+    assert_eq!(result["contents"][0]["mimeType"], "application/yaml");
+    let Answer::Result(systems) = server.read("opentide://templates/systems") else {
+        panic!("not a result");
+    };
+    assert_eq!(systems["contents"][0]["mimeType"], "application/json");
+    let Answer::Result(index) = server.read("opentide://index") else {
+        panic!("not a result");
+    };
+    assert_eq!(index["contents"][0]["mimeType"], "application/json");
     let index = read(&server, "opentide://index");
     assert_eq!(index["json_schemas"]["rule::1.1"]["title"], "eleven");
     assert!(index["framework_schemas"]["rule::1.0"].is_string());
@@ -327,11 +345,11 @@ fn the_rule_template_is_the_newest_revision_and_each_revision_is_served() {
         "opentide://templates/rule::1.1",
         "opentide://templates/rule.1.1",
     ] {
-        assert_eq!(text(uri), "\"schema: rule::1.1\\n\"", "{uri}");
+        assert_eq!(text(uri), "schema: rule::1.1\n", "{uri}");
     }
     assert_eq!(
         text("opentide://templates/rule::1.0"),
-        "\"schema: rule::1.0\\n\""
+        "schema: rule::1.0\n"
     );
     let unknown = read(&server, "opentide://templates/rule::9.9");
     assert!(unknown["error"].is_string(), "{unknown}");
@@ -1286,4 +1304,108 @@ fn a_tenant_that_refuses_or_goes_quiet_fails_the_call_as_a_tool_error() {
     assert_eq!(quiet["isError"], true, "{quiet}");
     let text = quiet["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("closed its input"), "{text}");
+}
+
+/// A rule with two platform blocks and no `platform` argument is an error that
+/// lists them, as data.
+#[test]
+fn a_dry_run_without_a_platform_lists_the_rules_blocks_when_there_are_several() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let path = ws.join("objects/rules/rule-0001-sentinel-kql.yaml");
+    // `configurations` is the file's last key: a second block is appended.
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str("  splunk:\n    enabled: true\n    status: STAGING\n");
+    std::fs::write(&path, text).unwrap();
+    let refused = failed_call(&server(&ws), "deploy_rule", json!({"uuid": SENTINEL_RULE}));
+    assert_eq!(refused["action"], "error", "{refused}");
+    assert_eq!(
+        refused["platforms"],
+        json!(["sentinel", "splunk"]),
+        "{refused}"
+    );
+}
+
+/// A dry run of a rule that would fail still returns its preview, with the
+/// diagnostics, as an answer (`isError` false): the command exits 1, the
+/// preview is what an agent needs (review of #1797).
+#[test]
+fn a_dry_run_of_a_failing_rule_keeps_its_preview() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let path = ws.join("objects/rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        text.replace("frequency: PT1H", "frequency: nonsense"),
+    )
+    .unwrap();
+    let preview = call(
+        &server(&ws),
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+    );
+    assert_eq!(preview["action"], "dry-run", "{preview}");
+    assert_eq!(preview["dry_run"], true, "{preview}");
+    assert_eq!(preview["status"], "STAGING", "{preview}");
+    assert_eq!(preview["changes"][0]["fails"], true, "{preview}");
+    assert_eq!(
+        preview["diagnostics"][0]["code"], "compile_invalid_rule",
+        "{preview}"
+    );
+    assert_eq!(preview["deploy_status"], "failed", "{preview}");
+}
+
+/// A platform that is not enabled says so, with no plan.
+#[test]
+fn a_dry_run_on_a_platform_that_is_not_enabled_says_why() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let config = ws.join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    std::fs::write(
+        &config,
+        text.replacen("enabled = true", "enabled = false", 1),
+    )
+    .unwrap();
+    let preview = call(
+        &server(&ws),
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+    );
+    assert_eq!(preview["action"], "dry-run", "{preview}");
+    assert_eq!(preview["would_deploy"], false, "{preview}");
+    let message = preview["message"].as_str().unwrap();
+    assert!(
+        message.contains("sentinel is not enabled") && message.contains("setup platforms"),
+        "{message}"
+    );
+    assert_eq!(preview["plan"], json!({}), "{preview}");
+    assert_eq!(preview["changes"], json!([]), "{preview}");
+    assert_eq!(preview["payloads"], json!({}), "{preview}");
+}
+
+/// A status that maps to INERT would deploy nothing: an empty preview.
+#[test]
+fn a_dry_run_of_an_inert_status_has_an_empty_plan() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let path = ws.join("objects/rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        text.replace("    status: STAGING", "    status: DESIGN"),
+    )
+    .unwrap();
+    let preview = call(
+        &server(&ws),
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+    );
+    assert_eq!(preview["action"], "dry-run", "{preview}");
+    assert_eq!(preview["status"], "DESIGN", "{preview}");
+    assert_eq!(preview["would_deploy"], false, "{preview}");
+    assert!(preview["message"].as_str().unwrap().contains("INERT"));
+    assert_eq!(preview["plan"], json!({}), "{preview}");
+    assert_eq!(preview["payloads"], json!({}), "{preview}");
 }
