@@ -477,7 +477,11 @@ pub fn tokens_during_pull(
                     .map(|(_, at)| *at)
                     .context("an answer is missing")
             };
-            Ok((at(4)?.duration_since(asked), at(3)?.duration_since(began)))
+            let measured = (at(4)?.duration_since(asked), at(3)?.duration_since(began));
+            request(stdin, 5, "shutdown", Value::Null)?;
+            wait_for_all(stdin, messages, session.start, &[5])?;
+            write_message(stdin, &json!({ "jsonrpc": "2.0", "method": "exit" }))?;
+            Ok(measured)
         },
     )?;
     Ok(TokensDuringPull {

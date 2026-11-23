@@ -92,8 +92,9 @@ fn waiting(ahead: &Ahead) -> bool {
     let read = rustix::io::read(&stdin, &mut buf);
     let _ = fcntl_setfl(&stdin, flags);
     match read {
-        // The end of input: the loop reads it next.
-        Ok(0) => true,
+        // The end of input is no message to yield to: the pull runs to its
+        // end, and the loop reads the end next.
+        Ok(0) => false,
         Ok(n) => {
             buf.truncate(n);
             ahead

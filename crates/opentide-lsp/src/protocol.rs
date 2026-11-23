@@ -234,7 +234,7 @@ impl<R: Read> Direct<R> {
     /// [`Direct::new`] over a reader `probe` can ask about.
     #[cfg_attr(
         not(target_os = "wasi"),
-        allow(dead_code, reason = "only the WASI build reads stdin on this thread")
+        expect(dead_code, reason = "only the WASI build reads stdin on this thread")
     )]
     pub(crate) fn with_probe(reader: R, probe: InputProbe) -> Self {
         Self {
@@ -294,7 +294,12 @@ impl Threaded {
                 loop {
                     let frame = read_frame(&mut reader);
                     let last = !matches!(frame, Ok(Some(_)));
-                    counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    // Only a frame is input a request may yield to: the end
+                    // of input is not (the loop answers what is carried
+                    // when it reads it, `run`).
+                    if !last {
+                        counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    }
                     if sender.send(frame).is_err() || last {
                         return;
                     }
@@ -322,13 +327,16 @@ impl Source for Threaded {
             return end.map(|()| None);
         }
         // The reader counts a frame before it sends it, so a frame received
-        // was counted: the count never goes below zero.
+        // was counted: the count never goes below zero. The end of input is
+        // not counted, nor taken.
         let taken = |queued: &std::sync::atomic::AtomicUsize| {
             queued.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
         };
         let first = match self.frames.recv() {
             Ok(frame) => {
-                taken(&self.queued);
+                if matches!(frame, Ok(Some(_))) {
+                    taken(&self.queued);
+                }
                 frame?
             }
             Err(_) => None,
@@ -338,9 +346,11 @@ impl Source for Threaded {
         };
         let mut batch = vec![first];
         while let Ok(next) = self.frames.try_recv() {
-            taken(&self.queued);
             match next {
-                Ok(Some(frame)) => batch.push(frame),
+                Ok(Some(frame)) => {
+                    taken(&self.queued);
+                    batch.push(frame);
+                }
                 Ok(None) => {
                     self.end = Some(Ok(()));
                     break;
@@ -388,6 +398,9 @@ pub(crate) fn run(
             return Ok(clean);
         }
     }
+    // The input ended with a workspace pull carried: it is answered, as it
+    // was when it ran to its end before the input was read again.
+    driver.answer_carried(session, writer)?;
     Ok(driver.state == Lifecycle::ShuttingDown)
 }
 
@@ -399,7 +412,9 @@ pub(crate) struct Driver {
     /// Workspace pulls that yielded to the messages behind them
     /// ([`Session::should_yield`](crate::session::Session::should_yield)):
     /// answered at the end of the next batch, after its own requests.
-    carried: Vec<(Request, HashSet<String>)>,
+    /// Each with when its first attempt began
+    /// ([`Session::begin_yieldable`](crate::session::Session::begin_yieldable)).
+    carried: Vec<(Request, HashSet<String>, Option<std::time::Instant>)>,
 }
 
 impl Default for Driver {
@@ -529,21 +544,24 @@ impl Driver {
         cancelled: &HashSet<RequestId>,
         may_yield: bool,
     ) -> io::Result<()> {
-        let mut queue = std::mem::take(deferred);
+        let mut queue: Vec<_> = std::mem::take(deferred)
+            .into_iter()
+            .map(|(request, staled_by)| (request, staled_by, None))
+            .collect();
         queue.append(&mut self.carried);
-        for (request, staled_by) in queue {
+        for (request, staled_by, first) in queue {
             let yields = may_yield
                 && self.state == Lifecycle::Running
                 && request.method == WORKSPACE_PULL
                 && !cancelled.contains(&request.id);
             if yields {
-                session.begin_yieldable();
+                let first = session.begin_yieldable(first);
                 let kept = request.clone();
                 let response = respond(session, &mut self.state, request, cancelled, &staled_by);
                 if session.end_yieldable() {
                     // A yielded pull is not answered; what its handler
                     // queued (a log, a refresh) goes out with the batch.
-                    self.carried.push((kept, staled_by));
+                    self.carried.push((kept, staled_by, first));
                     continue;
                 }
                 write_outbox(session, writer)?;
@@ -555,6 +573,16 @@ impl Driver {
             write(writer, &Message::Response(response))?;
         }
         Ok(())
+    }
+
+    /// Answer the workspace pulls a batch carried, none yielding: the input
+    /// ended, and no batch is left to carry them to.
+    fn answer_carried(&mut self, session: &mut Session, writer: &mut dyn Write) -> io::Result<()> {
+        if self.carried.is_empty() {
+            return Ok(());
+        }
+        self.answer_deferred(session, writer, &mut Vec::new(), &HashSet::new(), false)?;
+        flush(session, writer, self.state)
     }
 }
 
