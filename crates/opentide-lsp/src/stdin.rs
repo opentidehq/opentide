@@ -3,9 +3,9 @@
 //! while a request runs ([`crate::protocol::InputProbe`]): a workspace pull
 //! then yields to it (#1767).
 //!
-//! The hosts answer the question in different ways. wasmtime's `poll_oneoff`
+//! The hosts answer the question in different ways. One Wasm runtime's `poll_oneoff`
 //! says when stdin has bytes; Node's (uvwasi) never does, but lets stdin be
-//! read without waiting (`O_NONBLOCK`), which wasmtime refuses. The probe
+//! read without waiting (`O_NONBLOCK`), which that runtime refuses. The probe
 //! asks `poll` first, then reads without waiting and keeps what it read for
 //! the reader. A host that answers neither gets `false`: the pull runs to
 //! its end, as it did before.
