@@ -76,12 +76,18 @@
     },
     {
       "name": "get_chaining",
-      "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. chaining_index has an entry for each\nUUID of the returned lineage, not for the whole catalogue. A signal UUID\n(objective.signals[].uuid) returns its objective, with resolved_from:\n{type: \"signal\", uuid}; a rule whose detection_model is a signal is in that\nobjective's lineage. An unknown UUID returns only {uuid, found: false,\ngraph: {}}.\n",
+      "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. chaining_index has an entry for each\nUUID of the returned lineage, not for the whole catalogue.\ndepth (an integer, 0 or more) limits the lineage to the objects within that\nmany hops of the object, in either direction (threat <-> objective <-> rule\nand threat chaining links); 0 is the object alone, omitted is the whole\nlineage. graph, lineage and chaining_index then hold only those objects. A signal UUID\n(objective.signals[].uuid) returns its objective, with resolved_from:\n{type: \"signal\", uuid}; a rule whose detection_model is a signal is in that\nobjective's lineage. An unknown UUID returns only {uuid, found: false,\ngraph: {}}.\n",
       "inputSchema": {
         "properties": {
           "uuid": {
             "title": "Uuid",
             "type": "string"
+          },
+          "depth": {
+            "description": "Hops from the object, in each direction; 0 is the object alone. Omitted: the whole lineage.",
+            "minimum": 0,
+            "title": "Depth",
+            "type": "integer"
           }
         },
         "required": [
