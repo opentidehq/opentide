@@ -147,6 +147,15 @@ fn replay(
     interactions: &[usize],
     variable: &str,
 ) -> (Proxy, Env, tempfile::NamedTempFile) {
+    replay_with(scenario, interactions, &[(variable, SECRET)])
+}
+
+/// [`replay`] with every `(name, value)` of `variables` set.
+fn replay_with(
+    scenario: &str,
+    interactions: &[usize],
+    variables: &[(&str, &str)],
+) -> (Proxy, Env, tempfile::NamedTempFile) {
     let text =
         std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
     let mut cassette = Cassette::parse(&text).unwrap();
@@ -165,7 +174,11 @@ fn replay(
         proxy
             .client_env(ca.path().to_str().unwrap())
             .into_iter()
-            .chain([(variable.to_owned(), SECRET.to_owned())]),
+            .chain(
+                variables
+                    .iter()
+                    .map(|(name, value)| ((*name).to_owned(), (*value).to_owned())),
+            ),
     );
     (proxy, env, ca)
 }
@@ -6022,4 +6035,280 @@ fn sentinel_a_disabled_rule_held_enabled_is_written_and_stays_a_disable() {
     let (sent, _) = deploy_with(ws.path(), &args, &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
     assert_eq!(only_action(&sent), "disable");
+}
+
+// #1721: the body a deploy sends is compiled from the tenant's `setup` with
+// each `$NAME` replaced by what the variable holds. The `deploy-tenants`
+// fixture's tenants are rewritten to name a variable where they wrote the
+// value, and the cassette recorded with the value written out is replayed: it
+// holds only when the body carries the value, never the text `$NAME`.
+
+/// What a deploy of the `deploy-tenants` fixture's `platform` gave.
+#[derive(Debug, PartialEq)]
+struct Outcome {
+    /// The cassette's mismatches: the requests the tenant did not expect.
+    mismatches: Vec<String>,
+    /// Each row's status and error.
+    rows: Vec<(String, Option<String>)>,
+    /// The writes the tenant received.
+    writes: Vec<Received>,
+    /// Every request the tenant received (a Carbon Black report goes out
+    /// after reads it makes).
+    requests: Vec<Received>,
+}
+
+/// Deploys the `deploy-tenants` fixture's `platform` against `scenario`, its
+/// setup line `from` rewritten as `to` (when given), with the sign-in
+/// variable and `variables` set.
+fn deployed_tenants(
+    platform: &str,
+    scenario: &str,
+    sign_in: &str,
+    rewrite: Option<(&str, &str)>,
+    variables: &[(&str, &str)],
+) -> Outcome {
+    let ws = fixture("deploy-tenants");
+    if let Some((from, to)) = rewrite {
+        let file = ws.path().join(format!(
+            ".opentide/configurations/platforms/{platform}.toml"
+        ));
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains(from), "{from} is not in {text}");
+        std::fs::write(&file, text.replace(from, to)).unwrap();
+    }
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
+    let all: Vec<usize> = (0..Cassette::parse(&text).unwrap().interactions.len()).collect();
+    let mut names = vec![(sign_in, SECRET)];
+    names.extend_from_slice(variables);
+    let (proxy, env, _ca) = replay_with(scenario, &all, &names);
+    let (sent, _) = deploy(
+        ws.path(),
+        platform,
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    Outcome {
+        mismatches: proxy.verify().iter().map(|m| format!("{m:?}")).collect(),
+        rows: rows(&sent),
+        writes: received_writes(replayed(&proxy)),
+        requests: replayed(&proxy),
+    }
+}
+
+/// A setup variable that is set gives the deploy the value written out: the
+/// same requests, so the same rows and writes, and none holds the variable.
+fn assert_variable_is_sent_as_its_value(
+    platform: &str,
+    scenario: &str,
+    sign_in: &str,
+    (from, to): (&str, &str),
+    (variable, value): (&str, &str),
+) {
+    let written = deployed_tenants(platform, scenario, sign_in, None, &[]);
+    let named = deployed_tenants(
+        platform,
+        scenario,
+        sign_in,
+        Some((from, to)),
+        &[(variable, value)],
+    );
+    assert_eq!(named.mismatches, Vec::<String>::new(), "{named:?}");
+    assert!(!named.requests.is_empty(), "{named:?}");
+    assert_eq!(named, written);
+    for (_, url, body) in &named.requests {
+        let text = format!("{url} {}", String::from_utf8_lossy(body)).to_lowercase();
+        assert!(!text.contains(&variable.to_lowercase()), "{text}");
+    }
+}
+
+/// A setup variable that is unset fails the rules that read it, naming the
+/// variable and never a value, and writes nothing to the tenant.
+fn assert_unset_variable_fails_each_rule(
+    rows: &[(String, Option<String>)],
+    writes: &[Received],
+    variable: &str,
+) {
+    let failed: Vec<&Option<String>> = rows
+        .iter()
+        .filter(|(status, _)| status == "failed")
+        .map(|(_, error)| error)
+        .collect();
+    assert!(!failed.is_empty(), "{rows:?}");
+    for error in failed {
+        let error = error.as_deref().unwrap_or_default();
+        assert!(
+            error.contains(&format!(
+                "names the environment variable {variable}, which is unset"
+            )),
+            "{error}"
+        );
+        assert!(!error.contains(SECRET), "{error}");
+    }
+    assert!(
+        rows.iter().all(|(status, _)| status != "deployed"),
+        "{rows:?}"
+    );
+    assert_eq!(writes, Vec::<Received>::new());
+}
+
+#[test]
+fn crowdstrike_sends_a_customer_id_variable_as_its_value() {
+    assert_variable_is_sent_as_its_value(
+        "crowdstrike",
+        "golden/deploy-crowdstrike",
+        "CROWDSTRIKE_CLIENT_SECRET",
+        (
+            "customer_id = \"00000000000000000000000000000c1d\"",
+            "customer_id = \"$CS_CUSTOMER_ID\"",
+        ),
+        ("CS_CUSTOMER_ID", "00000000000000000000000000000c1d"),
+    );
+}
+
+#[test]
+fn crowdstrike_fails_each_rule_whose_customer_id_variable_is_unset() {
+    let unset = deployed_tenants(
+        "crowdstrike",
+        "golden/deploy-crowdstrike",
+        "CROWDSTRIKE_CLIENT_SECRET",
+        Some((
+            "customer_id = \"00000000000000000000000000000c1d\"",
+            "customer_id = \"$CS_CUSTOMER_ID\"",
+        )),
+        &[],
+    );
+    assert_unset_variable_fails_each_rule(&unset.rows, &unset.writes, "CS_CUSTOMER_ID");
+}
+
+#[test]
+fn sentinel_one_sends_an_account_id_variable_as_its_value() {
+    assert_variable_is_sent_as_its_value(
+        "sentinel_one",
+        "golden/deploy-sentinel-one",
+        "S1_API_TOKEN",
+        ("account_id = 1001", "account_id = \"$S1_ACCOUNT\""),
+        ("S1_ACCOUNT", "1001"),
+    );
+}
+
+// The connector resolves `account_id` for its own calls and fails the tenant
+// when it is unset; `site_id`, which the body reads and no call does, is the
+// setting a rule fails on.
+#[test]
+fn sentinel_one_fails_each_rule_whose_site_id_variable_is_unset() {
+    let unset = deployed_tenants(
+        "sentinel_one",
+        "golden/deploy-sentinel-one",
+        "S1_API_TOKEN",
+        Some((
+            "account_id = 1001",
+            "account_id = 1001\nsite_id = \"$S1_SITE\"",
+        )),
+        &[],
+    );
+    assert_unset_variable_fails_each_rule(&unset.rows, &unset.writes, "S1_SITE");
+}
+
+#[test]
+fn carbon_black_sends_a_watchlist_variable_as_its_value() {
+    assert_variable_is_sent_as_its_value(
+        "carbon_black_cloud",
+        "golden/deploy-carbon-black",
+        "CBC_TOKEN",
+        ("watchlist = \"opentide\"", "watchlist = \"$CBC_WATCHLIST\""),
+        ("CBC_WATCHLIST", "opentide"),
+    );
+}
+
+#[test]
+fn carbon_black_fails_each_rule_whose_watchlist_variable_is_unset() {
+    let unset = deployed_tenants(
+        "carbon_black_cloud",
+        "golden/deploy-carbon-black",
+        "CBC_TOKEN",
+        Some(("watchlist = \"opentide\"", "watchlist = \"$CBC_WATCHLIST\"")),
+        &[],
+    );
+    assert_unset_variable_fails_each_rule(&unset.rows, &unset.writes, "CBC_WATCHLIST");
+}
+
+/// A HarfangLab tenant on a wiremock server, its `source_id` the line
+/// `source`, with a sigma rule: the deploy's rows, and the bodies the server
+/// received.
+fn harfanglab_source(
+    source: &str,
+    variables: &[(&str, &str)],
+) -> (Vec<(String, Option<String>)>, Vec<String>) {
+    use wiremock::matchers::any;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(any())
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server),
+    );
+    let block = "  harfanglab:\n    status: STAGING\n    sigma:\n      logsource:\n        \
+                 category: process_creation\n        product: windows\n      selections:\n        \
+                 - name: selection\n          field: Image\n          value: cmd.exe\n      \
+                 condition: selection\n";
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$HL_TOKEN\"\n{source}\n",
+            server.uri()
+        ),
+        &[(
+            "a.yaml",
+            rule(
+                "HarfangLab sigma",
+                "00000000-0000-4000-8099-000000000721",
+                "A.",
+                block,
+            ),
+        )],
+    );
+    let env =
+        Env::from_pairs(std::iter::once(("HL_TOKEN", SECRET)).chain(variables.iter().copied()));
+    let (sent, _) = deploy(
+        ws.path(),
+        "harfanglab",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let bodies = rt
+        .block_on(server.received_requests())
+        .unwrap()
+        .into_iter()
+        .filter(|request| request.method.as_str() != "GET")
+        .map(|request| String::from_utf8_lossy(&request.body).into_owned())
+        .collect();
+    (rows(&sent), bodies)
+}
+
+#[test]
+fn harfanglab_sends_a_source_id_variable_as_its_value() {
+    let (rows, bodies) = harfanglab_source(
+        "source_id = \"$HL_SOURCE\"",
+        &[("HL_SOURCE", "src-from-the-environment")],
+    );
+    assert!(
+        rows.iter().all(|(status, _)| status != "failed"),
+        "{rows:?}"
+    );
+    assert!(!bodies.is_empty());
+    for body in &bodies {
+        assert!(body.contains("src-from-the-environment"), "{body}");
+        assert!(!body.contains("HL_SOURCE"), "{body}");
+    }
+}
+
+#[test]
+fn harfanglab_fails_each_rule_whose_source_id_variable_is_unset() {
+    let (rows, bodies) = harfanglab_source("source_id = \"$HL_SOURCE\"", &[]);
+    assert_unset_variable_fails_each_rule(&rows, &[], "HL_SOURCE");
+    assert_eq!(bodies, Vec::<String>::new());
 }

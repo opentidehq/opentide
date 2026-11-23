@@ -2182,6 +2182,44 @@ fn raised(error: &ConnectorError) -> Raised {
     described(error).stopping(stops)
 }
 
+/// The tenant's table with each `setup` string that names a variable
+/// (`$NAME`, `${NAME}`) replaced by what the variable holds, for the compile
+/// crates, which are I/O-free and read the raw table: without this a
+/// CrowdStrike `customer_id` or a SentinelOne `site_id` written as `$NAME`
+/// went into the body as the text `$NAME` (#1721).
+///
+/// The values come from the connection's [`Tenant`], resolved the way the
+/// connectors resolve them. A reference whose variable is unset is the
+/// [`ConnectorError::MissingCredential`] that names the variable (never a
+/// value, never the literal); the caller fails the rule with it. The copy
+/// holds secrets: it goes to the compile and nowhere else, and everything
+/// the compile writes into a body is redacted from the log like the rest of
+/// the tenant's values.
+fn resolved_table(table: &CJson, tenant: &Tenant) -> Result<CJson, ConnectorError> {
+    let mut resolved = table.clone();
+    let Some(setup) = resolved.get_mut("setup").and_then(CJson::as_object_mut) else {
+        return Ok(resolved);
+    };
+    let keys: Vec<String> = setup
+        .iter()
+        .filter(|(_, value)| matches!(value, CJson::Str(text) if text.starts_with('$')))
+        .map(|(key, _)| key.clone())
+        .collect();
+    for key in keys {
+        // `ssl` is read by the connection, not here: it holds no entry.
+        if tenant.setup.contains_key(&key) {
+            let value = tenant.secret(&key)?.expose().to_owned();
+            setup.insert(key, CJson::Str(value));
+        }
+    }
+    Ok(resolved)
+}
+
+/// A rule's failure for an unset variable of the setup: the rule only.
+fn unset_variable(error: &ConnectorError) -> Raised {
+    raised(error).stopping(Stops::Rule)
+}
+
 /// A `Deployer`'s failure, raised by `raise` from its connector error: the
 /// tenant stopped whenever the `Deployer` says the tenant failed, as the SDKs
 /// report it (`DeployError::scope`), whatever the error's kind.
@@ -2897,13 +2935,16 @@ impl Sender<'_, '_> {
     /// it is not deployed; `None` when the rule compiles to no report.
     fn carbon_black_request(
         &self,
+        connection: &Connection,
         batch: &Batch,
         rule: &opentide_compile::Rule,
     ) -> Result<Option<DeployRequest>, Raised> {
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
-        let Some(report) = opentide_compile::carbon_black::report(self.compile, rule, &batch.table)
+        let table =
+            resolved_table(&batch.table, &connection.tenant).map_err(|e| unset_variable(&e))?;
+        let Some(report) = opentide_compile::carbon_black::report(self.compile, rule, &table)
             .map_err(compile_error)?
         else {
             return Ok(None);
@@ -2939,6 +2980,7 @@ impl Sender<'_, '_> {
     /// compiled for it (`harfanglab::request_body`); a delete names the kind.
     fn harfanglab_request(
         &self,
+        connection: &Connection,
         batch: &Batch,
         rule: &opentide_compile::Rule,
         deletion: bool,
@@ -2953,7 +2995,9 @@ impl Sender<'_, '_> {
                 rule.uuid
             )));
         };
-        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &batch.table)
+        let table =
+            resolved_table(&batch.table, &connection.tenant).map_err(|e| unset_variable(&e))?;
+        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
             .map_err(compile_error)?;
         let Some(write) = writes.first() else {
             return Err(Raised::new(format!(
@@ -2991,11 +3035,13 @@ impl Sender<'_, '_> {
         let request = match id {
             Some(PlatformId::Sentinel) => self.sentinel_request(platform, batch, rule, deletion)?,
             Some(PlatformId::Splunk) => self.splunk_request(platform, batch, rule, deletion)?,
-            Some(PlatformId::CarbonBlackCloud) => match self.carbon_black_request(batch, rule)? {
-                Some(request) => request,
-                None => return Ok(()),
-            },
-            _ => self.harfanglab_request(batch, rule, deletion)?,
+            Some(PlatformId::CarbonBlackCloud) => {
+                match self.carbon_black_request(connection, batch, rule)? {
+                    Some(request) => request,
+                    None => return Ok(()),
+                }
+            }
+            _ => self.harfanglab_request(connection, batch, rule, deletion)?,
         };
         let deployer = self.deployer(platform)?;
         let context = self.context(connection);
@@ -3523,9 +3569,15 @@ impl Sender<'_, '_> {
                 )
             }
             Some(PlatformId::SentinelOne) => {
-                opentide_compile::sentinel_one::body(self.compile, rule, table)
+                let table =
+                    resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
+                opentide_compile::sentinel_one::body(self.compile, rule, &table)
             }
-            _ => opentide_compile::crowdstrike::body(self.compile, rule, table),
+            _ => {
+                let table =
+                    resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
+                opentide_compile::crowdstrike::body(self.compile, rule, &table)
+            }
         }
         .map_err(compile_error)?;
         let (remote_id, name) = match PlatformId::parse(platform) {
