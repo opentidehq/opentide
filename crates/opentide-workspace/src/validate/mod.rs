@@ -1423,7 +1423,21 @@ pub fn validate_resumable(ws: &Workspace, options: &Options<'_>) -> Option<Valid
 
     if has(Check::Configuration) && (scope.is_full() || checks.len() == 1) {
         for finding in resolved.issues() {
-            let diagnostic = configuration_diagnostic(finding);
+            let mut diagnostic = configuration_diagnostic(finding);
+            // A finding names its file by key (`deployment.toml`): point it at
+            // the workspace's own file, when there is one, so it has a path
+            // and, from the key's position in it, a line and column (#1659).
+            if diagnostic.file_path.is_none()
+                && let Some(key) = diagnostic
+                    .context
+                    .get("file")
+                    .and_then(ContextValue::as_str)
+            {
+                let file = root.join(".opentide/configurations").join(key);
+                if fs.is_file(&file) {
+                    diagnostic.file_path = Some(file);
+                }
+            }
             if diagnostic.is_error() {
                 issues.push(diagnostic);
             } else {

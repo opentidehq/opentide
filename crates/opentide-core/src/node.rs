@@ -337,6 +337,23 @@ pub struct Document {
 }
 
 impl Document {
+    /// A document whose `root` another reader built from `text` (TOML's,
+    /// with the positions [`Node`] holds), so spans and lines work the same
+    /// as for YAML.
+    pub fn with_root(text: &str, root: Node) -> Self {
+        let source = text.strip_prefix('\u{feff}').unwrap_or(text).to_owned();
+        let lines = locate::split_lines(&source);
+        let line_chars = std::iter::repeat_with(OnceLock::new)
+            .take(lines.len())
+            .collect();
+        Self {
+            source,
+            lines,
+            line_chars,
+            root: Some(Arc::new(root)),
+        }
+    }
+
     /// The root node.
     pub fn root(&self) -> Option<&Arc<Node>> {
         self.root.as_ref()

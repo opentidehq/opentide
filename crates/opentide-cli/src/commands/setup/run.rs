@@ -681,6 +681,14 @@ fn vscode(options: super::vscode::Options, shown: &Path, plan: bool, cx: &Contex
     const COMMAND: &str = "setup vscode";
     let root = root_of(cx, shown);
     super::vscode::deprecation(cx);
+    // A configuration file that does not parse is `config_parse`, its place
+    // and its diagnostic (#1659), not the generic `command_failed`.
+    let shown_root = root.to_string_lossy().into_owned();
+    let (_, roots) = crate::commands::placement(Some(&shown_root), cx.env, cx.cwd);
+    match crate::commands::open_for(COMMAND, roots) {
+        Ok(workspace) => crate::app::release(workspace),
+        Err(refused) => return *refused,
+    }
     let mut stage = Stage::new();
     match super::vscode::run(&mut stage, &root, options, cx) {
         Err(message) => Report::error(COMMAND, message),

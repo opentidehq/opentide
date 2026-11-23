@@ -476,3 +476,26 @@ fn a_plugin_tenants_setup_tables_reach_its_deploy_and_live_check() {
         );
     }
 }
+
+#[test]
+fn a_plugin_live_check_on_a_configuration_that_does_not_parse_is_config_parse() {
+    // #1659: the plugin's validate read the configuration and said
+    // `command_failed`, with no place.
+    let (_scratch, ws) = workspace();
+    let platform = ws.join(".opentide/configurations/platforms/acme.toml");
+    std::fs::write(&platform, "[platform\n").unwrap();
+    let (code, document) = opentide(&ws, &["validate", "query", "--platform", "acme", "--live"]);
+    assert_eq!(code, 1, "{document}");
+    assert_eq!(document["failure"]["code"], "config_parse", "{document}");
+    assert!(
+        document["message"]
+            .as_str()
+            .unwrap()
+            .contains("acme.toml:1:"),
+        "{document}"
+    );
+    assert_eq!(
+        document["diagnostics"][0]["code"], "config_parse",
+        "{document}"
+    );
+}

@@ -319,12 +319,19 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     };
     // The datasets visibility.toml declares, read afresh on each call as lint
     // and validate read them.
-    let root = context
-        .workspace_problem
-        .is_none()
-        .then(|| super::catalog::workspace(context).ok())
-        .flatten()
-        .map(|workspace| workspace.root().to_path_buf());
+    // A configuration file that does not parse is `config_parse`, its place
+    // in the message, not a workspace read as if it declared nothing (#1659).
+    let root = if context.workspace_problem.is_none() {
+        match super::catalog::workspace(context) {
+            Ok(workspace) => Some(workspace.root().to_path_buf()),
+            Err(message) if message.starts_with("config_parse") => {
+                return Json::object(failed(payload, message));
+            }
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
     let findings = Profiles::install(&opentide_workspace::OsFs, root.as_deref()).check_query(
         query,
         language_id,
