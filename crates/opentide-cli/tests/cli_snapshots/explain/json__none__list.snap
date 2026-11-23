@@ -1166,7 +1166,7 @@ exit: 0
     },
     {
       "code": "kql_table_misspelt",
-      "meaning": "A KQL table is not one the engine knows or the workspace declares, but its name is within two edits of one that is (ASCII case ignored), so it is most likely a typo."
+      "meaning": "A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo."
     },
     {
       "code": "kql_table_not_declared",

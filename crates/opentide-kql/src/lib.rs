@@ -1149,9 +1149,11 @@ fn check_table_named(
         .map(str::to_string)
         .or_else(|| catalog.suggest_bare_table(table))
     };
-    // The table within two edits (ASCII case ignored), declared first, else in
-    // the catalog; bare identifiers only, as for `suggest`.
+    // The table within `misspelt_edits` (a match that differs only in case, `_`,
+    // `-` or spaces counts), declared first, else in the catalog; bare
+    // identifiers only, as for `suggest`.
     let near_miss = || {
+        let edits = misspelt_edits(table);
         suggest::closest_within(
             table,
             datasets
@@ -1159,10 +1161,10 @@ fn check_table_named(
                 .iter()
                 .filter(|d| is_bare_identifier(d))
                 .map(String::as_str),
-            MISSPELT_EDITS,
+            edits,
         )
         .map(str::to_string)
-        .or_else(|| catalog.near_bare_table(table, MISSPELT_EDITS))
+        .or_else(|| catalog.near_bare_table(table, edits))
     };
     // The spec's precedence (visibility::1.0, Query checks): only a name the
     // catalog knows is "not declared"; one it does not know is unknown,
@@ -1187,9 +1189,9 @@ fn check_table_named(
                 // A Sentinel workspace holds tables no catalog lists (custom `_CL`
                 // tables, every Azure Monitor connector), so a name missing here is
                 // the engine's gap, not a mistake in the query.
-                // A name within two edits of a table the workspace declares or the
-                // catalog lists, and not a custom `_CL` table, is a typo: an error
-                // under its own code, so `lint.toml` can tune it alone.
+                // A near miss of a table the workspace declares or the catalog
+                // lists (`misspelt_edits`), and not a custom `_CL` table, is a
+                // typo: an error under its own code.
                 Profile::Sentinel => match near_miss().filter(|_| !table.ends_with("_CL")) {
                     Some(near) => {
                         out.push(
@@ -1232,8 +1234,14 @@ fn check_table_named(
 }
 
 /// The edits within which an unknown Sentinel table is a typo of a known one
-/// (`kql_table_misspelt`).
-const MISSPELT_EDITS: usize = 2;
+/// (`kql_table_misspelt`), by the unknown name's own length: one for a name of
+/// up to seven characters (`Sysmon`, a parser function, is two from `Syslog`;
+/// `Device` is two from `MADevice`), two for longer ones, and never more than
+/// the shared suggestion rule allows ([`suggest::max_edits`]).
+fn misspelt_edits(name: &str) -> usize {
+    let length = name.chars().count();
+    (if length <= 7 { 1 } else { 2 }).min(suggest::max_edits(length))
+}
 
 /// Whether `name` is written bare in a KQL query: `[A-Za-z_][A-Za-z0-9_]*`.
 /// Other names need the `['…']` quoting, which a suggestion does not add.
@@ -2934,14 +2942,15 @@ mod tests {
         );
     }
 
-    /// A Sentinel table within two edits of a known one is a typo: an error
+    /// A Sentinel table that is a near miss of a known one is a typo: an error
     /// under `kql_table_misspelt`, which suggests the table.
     #[test]
     fn near_miss_table_is_a_misspelt_error() {
         for (query, want) in [
             ("SecurityEvnt | take 1", "SecurityEvent"),
             ("SigninLog | take 1", "SigninLogs"),
-            // Two edits, and ASCII case ignored.
+            // Two edits for a name of eight characters or more, and a match that
+            // differs only in case counts (zero edits).
             ("SigninLogsXY | take 1", "SigninLogs"),
             ("SIGNINLOGS | take 1", "SigninLogs"),
         ] {
@@ -2964,6 +2973,48 @@ mod tests {
                     .iter()
                     .any(|d| d.code == codes::KQL_UNKNOWN_TABLE),
                 "{query}"
+            );
+        }
+    }
+
+    /// The bound is the typed name's own length: `Sysmon` (a parser function)
+    /// is two edits from `Syslog` and `Device` two from `MADevice`, and a
+    /// short name takes one edit only, so neither is a typo.
+    #[test]
+    fn short_names_two_edits_away_are_not_misspelt() {
+        for query in ["Sysmon | take 1", "Device | take 1"] {
+            let r = analyze(query, Profile::Sentinel);
+            assert!(
+                !r.diagnostics
+                    .iter()
+                    .any(|d| d.code == codes::KQL_TABLE_MISSPELT),
+                "{query}: {:?}",
+                r.diagnostics
+            );
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+                .unwrap_or_else(|| panic!("{query}: {:?}", r.diagnostics));
+            assert_eq!(d.severity, opentide_core::Severity::Warning, "{query}");
+        }
+    }
+
+    /// A `let` binding named like a near miss is not a table, and a lower-case
+    /// name with no declarations may be a workspace function: no finding.
+    #[test]
+    fn a_binding_or_lowercase_name_is_not_misspelt() {
+        for query in [
+            "let SigninLog = SigninLogs;\nSigninLog | take 1",
+            "signinlog | take 1",
+        ] {
+            let r = analyze(query, Profile::Sentinel);
+            assert!(
+                !r.diagnostics.iter().any(|d| {
+                    d.code == codes::KQL_TABLE_MISSPELT || d.code == codes::KQL_UNKNOWN_TABLE
+                }),
+                "{query}: {:?}",
+                r.diagnostics
             );
         }
     }

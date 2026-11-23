@@ -1662,19 +1662,45 @@ fn legacy_key_message(key: &str, message: &str, value: &Node, source: &Node) -> 
         .take(2)
         .map(|name| {
             format!(
-                "[[logsources]]\nname = \"{name}\"\ndescription = \"{description}\"\nsystem = \"{system}\""
+                "[[logsources]]\nname = {}\ndescription = {}\nsystem = {}",
+                toml_string(name),
+                toml_string(&description),
+                toml_string(&system)
             )
         })
         .collect();
     let more = match names.len().saturating_sub(2) {
         0 => String::new(),
-        n => format!("\n# ... and one more [[logsources]] entry for each of the other {n}"),
+        1 => "\n# ... and one more entry for the last name".to_string(),
+        n => format!("\n# ... and one more entry for each of the other {n} names"),
     };
     format!(
-        "{message}. For {}, write:\n{}{more}\nA signal's `data.logsources` then names each of them",
+        "{message}. For {}, replace this entry with one entry per name, copying its \
+         `tenants`, `assets` and `references` into each:\n{}{more}\n\
+         A signal's `data.logsources` then names each of them",
         names.join(", "),
         entries.join("\n\n")
     )
+}
+
+/// `text` as a TOML basic string: quotes, backslashes and control characters
+/// escaped, so a value from the file cannot end the string early.
+fn toml_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04X}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn source_name(node: &Node, cx: &mut Context) -> Option<String> {

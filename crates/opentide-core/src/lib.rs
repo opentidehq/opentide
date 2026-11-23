@@ -1433,7 +1433,7 @@ pub mod codes {
                 "The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known."
             }
             KQL_TABLE_MISSPELT => {
-                "The table is not one the engine knows or the workspace declares, but is within two edits of one that is (and is not a custom `_CL` table): a typo."
+                "A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo."
             }
             KQL_RENDER_NOT_VALID => "render draws a chart; it has no effect in a detection rule.",
             KQL_PARSE_ERROR => "The KQL query does not parse.",

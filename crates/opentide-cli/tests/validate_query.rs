@@ -740,6 +740,53 @@ fn a_platform_s_profile_decides_which_tables_a_query_file_may_read() {
     assert_eq!(codes, ["kql_unknown_table"], "{document}");
 }
 
+/// A near miss of a Sentinel table fails `validate query` (exit 1) under its
+/// own code; an unknown name that is no near miss still passes with a warning.
+#[test]
+fn a_misspelt_sentinel_table_fails_a_query_file() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("c.kql"), "SecurityEvnt | take 1\n").unwrap();
+    let run = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "sentinel",
+            "--file",
+            "c.kql",
+        ],
+        &[],
+    );
+    let document = run.json();
+    assert_eq!(run.code, 1, "{}", run.stdout);
+    assert_eq!(document["status"], "failed");
+    assert_eq!(failure_code(&document), "issues_found");
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["kql_table_misspelt"], "{document}");
+    std::fs::write(ws.join("c.kql"), "VendorFirewallEvents | take 1\n").unwrap();
+    let run = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "sentinel",
+            "--file",
+            "c.kql",
+        ],
+        &[],
+    );
+    assert_eq!(run.code, 0, "{}", run.stdout);
+}
+
 #[test]
 fn error_files_counts_each_file_once() {
     let (_scratch, ws) = corpus();
