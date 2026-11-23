@@ -522,6 +522,70 @@ mod lint {
         assert!(quiet.outcome_ok);
     }
 
+    /// `off` means off: `--fix` does not rename a file whose `filename_mismatch`
+    /// lint.toml drops, and the report does not mention it.
+    #[test]
+    fn off_stops_fix_from_renaming() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/rule-0001.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        let fix = LintOptions {
+            fix: true,
+            ..options()
+        };
+        let off = run(
+            &fs,
+            &config("[filenames.codes]\nfilename_mismatch = \"off\"\n"),
+            &fix,
+        );
+        assert!(fs.is_file(Path::new("/ws/objects/rules/rule-0001.yaml")));
+        assert!(!fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+        assert_eq!(off.fixed, 0);
+        assert!(off.findings.iter().all(|f| f.code() != "filename_mismatch"));
+        // Without the table the same run renames it.
+        let on = run(&fs, &LintConfig::default(), &fix);
+        assert_eq!(on.fixed, 1);
+        assert!(fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+    }
+
+    /// The code to check map `lint.toml` validates against is lint's own list.
+    #[test]
+    fn the_codes_tables_know_every_code_lint_reports_itself() {
+        use opentide_schema::configuration::lint::{LINT_CODE_CHECKS, RETIRED_CODES};
+        let mapped: Vec<&str> = LINT_CODE_CHECKS.iter().map(|(code, _)| *code).collect();
+        let mut listed: Vec<&str> = opentide_workspace::lint::LINT_CODES.to_vec();
+        let mut mapped_sorted = mapped.clone();
+        listed.sort_unstable();
+        mapped_sorted.sort_unstable();
+        assert_eq!(
+            mapped_sorted, listed,
+            "LINT_CODE_CHECKS and LINT_CODES differ"
+        );
+        for (code, check) in LINT_CODE_CHECKS {
+            assert!(LintCheck::parse(check).is_some(), "{code}: {check}");
+        }
+        for (retired, _) in RETIRED_CODES {
+            assert!(!mapped.contains(&retired));
+        }
+    }
+
+    /// A retired code in a `codes` table is a warning of the report, not a refusal.
+    #[test]
+    fn a_retired_code_is_a_warning_of_the_report() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let report = run(
+            &fs,
+            &config("[filenames.codes]\nfilename_slug = \"off\"\n"),
+            &options(),
+        );
+        assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+        assert!(report.warnings[0].contains("\"filename_slug\" is retired"));
+        assert!(report.warnings[0].contains("filename_mismatch"));
+    }
+
     /// The codes lint reports itself take the table of their check, and a
     /// table does not touch the check's other codes.
     #[test]

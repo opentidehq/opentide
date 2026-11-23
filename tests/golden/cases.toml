@@ -41,6 +41,18 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus with `[filenames.codes] filename_mismatch = \"info\"` in lint.toml (an `edits` entry with an empty `find`): the corpus's file names are not the slugs of its names, a warning `lint --strict` fails on (`strict` case), and with the one code set to a note the same run passes while the filenames check still runs (OT-5)"
 edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_mismatch = \"info\"\n" }]
 
+[fixtures.tide-corpus-lint-unknown-code]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a misspelt code in lint.toml (`[queries.codes] kql_unknown_tabel`): `lint` refuses the run, exit 2, naming the key and the nearest code (#1802)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unknown_tabel = \"off\"\n" }]
+
+[fixtures.tide-corpus-lint-engine-warning]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus whose Sentinel rule searches every table (`search`), a warning of the queries check, with lint.toml raising that code (`[queries.codes]`): the engine's finding takes the table's severity (#1802)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      SecurityEvent\n      | where EventID == 4688\n      | take 1\n", replace = "      search \"mimikatz\"\n      | take 1\n" }, { path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unscoped_search = \"error\"\n" }]
+
 [fixtures.tide-corpus-folders]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -1505,6 +1517,20 @@ command = "lint"
 variant = "strict-code-downgraded"
 args = ["lint", "--strict"]
 fixtures = ["tide-corpus-lint-code-note"]
+
+# #1802: a misspelt code is a configuration error (exit 2, with the nearest
+# code), and `[queries.codes]` sets the severity of a real engine warning.
+[[case]]
+command = "lint"
+variant = "unknown-code"
+args = ["lint"]
+fixtures = ["tide-corpus-lint-unknown-code"]
+
+[[case]]
+command = "lint"
+variant = "check-queries-code-error"
+args = ["lint", "--check", "queries"]
+fixtures = ["tide-corpus-lint-engine-warning"]
 
 # UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
 [[case]]

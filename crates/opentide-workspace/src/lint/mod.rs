@@ -809,7 +809,11 @@ fn lint_with(
         }
         findings.extend(filename_findings(
             fs,
-            writer.filter(|_| options.fix),
+            // `off` means off: a mismatch lint.toml drops is not renamed either.
+            writer.filter(|_| {
+                options.fix
+                    && code_level(config, LintCheck::Filenames, codes::FILENAME) != Some(CODE_OFF)
+            }),
             &target,
             &mut records,
             &config.filenames,
@@ -825,8 +829,7 @@ fn lint_with(
         findings.extend(nested.iter().map(|path| nested_finding(&target, path)));
     }
     // Severity from `lint.toml`, for each check that sets one; a code's own
-    // setting wins over its check's, and `off` drops the finding (one `--fix`
-    // renamed stays: the report says what the run did).
+    // setting wins over its check's, and `off` drops the finding.
     let mut engine_at = engine_at;
     let mut kept = 0;
     let mut position = 0;
@@ -834,7 +837,7 @@ fn lint_with(
         let before = position;
         position += 1;
         let keep = match code_level(config, draft.check, draft.code) {
-            Some(CODE_OFF) => draft.fixed(),
+            Some(CODE_OFF) => false,
             Some(level) => {
                 level.clone_into(&mut draft.severity);
                 true
@@ -880,7 +883,12 @@ fn lint_with(
     for draft in drafts {
         all.push(draft.finish(&target, &mut sources));
     }
-    report(fs, &target, selected, all, scope, shown.len(), options)
+    let mut result = report(fs, &target, selected, all, scope, shown.len(), options);
+    // What lint.toml asks without refusing it comes first, before the scope's.
+    result
+        .warnings
+        .splice(0..0, config.warnings.iter().cloned());
+    result
 }
 
 /// Lint's file name, metadata and recommended findings on one object file:

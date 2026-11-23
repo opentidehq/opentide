@@ -904,6 +904,7 @@ pub mod codes {
     pub const GRAYLOG_PRIORITY: &str = "graylog_priority";
     pub const GRAYLOG_FIELD_NAME: &str = "graylog_field_name";
     pub const GRAYLOG_OVERLAPPING_WINDOW: &str = "graylog_overlapping_window";
+    pub const GRAYLOG_ALL_STREAMS: &str = "graylog_all_streams";
 
     // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
     pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
@@ -1226,6 +1227,7 @@ pub mod codes {
         GRAYLOG_PRIORITY,
         GRAYLOG_FIELD_NAME,
         GRAYLOG_OVERLAPPING_WINDOW,
+        GRAYLOG_ALL_STREAMS,
         CQL_PARSE_ERROR,
         CQL_UNKNOWN_FUNCTION,
         CQL_REMOVED_FUNCTION,
@@ -1751,6 +1753,9 @@ pub mod codes {
             }
             GRAYLOG_OVERLAPPING_WINDOW => {
                 "A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run."
+            }
+            GRAYLOG_ALL_STREAMS => {
+                "A Graylog definition names no stream, so it searches every stream the token's user can read."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."

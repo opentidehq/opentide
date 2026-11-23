@@ -64,6 +64,32 @@ pub const LINT_CODE_CHECKS: [(&str, &str); 8] = [
     ("placeholder", "placeholders"),
 ];
 
+/// Codes nothing reports any more (`opentide explain` keeps their pages), each
+/// with what replaced it. A `codes` table that still names one is accepted
+/// with a warning, so an old `lint.toml` keeps working: the entry has no effect.
+pub const RETIRED_CODES: [(&str, &str); 5] = [
+    (
+        "crowdstrike_unsupported",
+        "CrowdStrike queries are checked as CQL, with the cql_* codes",
+    ),
+    (
+        "yara_x_incompatible",
+        "what YARA-X refuses has its own yara_* codes",
+    ),
+    (
+        "filename_slug",
+        "lint reports it as filename_mismatch, under [filenames.codes]",
+    ),
+    (
+        "missing_author",
+        "lint reports it as metadata_recommended, under [metadata.codes]",
+    ),
+    (
+        "missing_organisation",
+        "lint reports it as metadata_recommended, under [metadata.codes]",
+    ),
+];
+
 /// The check a finding with this code belongs to, `None` for an unknown code.
 pub fn check_of_code(code: &str) -> Option<&'static str> {
     LINT_CODE_CHECKS
@@ -157,6 +183,9 @@ pub struct LintConfig {
     pub required_metadata: Vec<String>,
     /// `[filenames]`.
     pub filenames: FilenameConfig,
+    /// What the file asks of the reader without refusing it: a retired code
+    /// in a `codes` table.
+    pub warnings: Vec<String>,
 }
 
 impl Default for LintConfig {
@@ -165,6 +194,7 @@ impl Default for LintConfig {
             checks: Vec::new(),
             required_metadata: DEFAULT_REQUIRED_METADATA.map(str::to_owned).to_vec(),
             filenames: FilenameConfig::default(),
+            warnings: Vec::new(),
         }
     }
 }
@@ -274,7 +304,7 @@ pub fn parse_lint_config(raw: Option<&Node>) -> Result<LintConfig, LintConfigErr
         };
         let codes = match table.get("codes") {
             None => Vec::new(),
-            Some(node) => code_levels(node, name)?,
+            Some(node) => code_levels(node, name, &mut config.warnings)?,
         };
         config.checks.push((
             name.to_owned(),
@@ -297,7 +327,12 @@ pub fn parse_lint_config(raw: Option<&Node>) -> Result<LintConfig, LintConfigErr
 }
 
 /// `[<check>.codes]`: each key a code of that check, each value a severity or `off`.
-fn code_levels(node: &Node, check: &str) -> Result<Vec<(String, String)>, LintConfigError> {
+/// A retired code is skipped with a warning.
+fn code_levels(
+    node: &Node,
+    check: &str,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<(String, String)>, LintConfigError> {
     let place = format!("{SOURCE} [{check}.codes]");
     if !matches!(node.value, Value::Map(_)) {
         return Err(LintConfigError(format!("{place} must be a table")));
@@ -305,6 +340,13 @@ fn code_levels(node: &Node, check: &str) -> Result<Vec<(String, String)>, LintCo
     let mut levels = Vec::new();
     for entry in entries(node) {
         let code = key_of(entry);
+        if let Some((_, replacement)) = RETIRED_CODES.iter().find(|(old, _)| *old == code) {
+            warnings.push(format!(
+                "{place}: code {} is retired and has no effect: {replacement}",
+                repr::quote(&code)
+            ));
+            continue;
+        }
         match check_of_code(&code) {
             None => {
                 let hint = opentide_core::suggest::closest(&code, every_code())
@@ -611,5 +653,34 @@ mod tests {
         }
         assert_eq!(check_of_code("kql_unknown_table"), Some("queries"));
         assert_eq!(check_of_code("nope"), None);
+    }
+
+    #[test]
+    fn a_retired_code_is_accepted_with_a_warning_naming_its_replacement() {
+        let config =
+            filenames("[filenames.codes]\nfilename_slug = \"off\"\nfilename_mismatch = \"info\"\n")
+                .unwrap();
+        let own = &config
+            .checks
+            .iter()
+            .find(|(name, _)| name == "filenames")
+            .unwrap()
+            .1;
+        assert_eq!(
+            own.codes,
+            [("filename_mismatch".to_owned(), "info".to_owned())]
+        );
+        assert_eq!(
+            config.warnings,
+            [
+                "lint.toml [filenames.codes]: code \"filename_slug\" is retired and has no effect: lint reports it as filename_mismatch, under [filenames.codes]"
+            ]
+        );
+        // Under any check, and whatever its value: it is not read.
+        let anywhere = filenames("[queries.codes]\nmissing_author = \"nonsense\"\n").unwrap();
+        assert_eq!(anywhere.warnings.len(), 1);
+        for (code, _) in RETIRED_CODES {
+            assert_eq!(check_of_code(code), None, "{code} is retired, not known");
+        }
     }
 }
