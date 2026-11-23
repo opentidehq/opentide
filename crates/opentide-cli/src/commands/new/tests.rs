@@ -79,6 +79,24 @@ fn configuration(text: &str) -> std::sync::Arc<Node> {
     std::sync::Arc::new(root)
 }
 
+#[test]
+fn a_signal_is_found_by_any_spelling_and_kept_as_the_catalogue_writes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("o.yaml"),
+        "metadata:\n  uuid: 0AAA\nobjective:\n  signals:\n    - {name: S, uuid: 0BBB}\n",
+    )
+    .unwrap();
+    assert_eq!(
+        signal_spellings(dir.path()),
+        HashMap::from([("0bbb".to_owned(), "0BBB".to_owned())])
+    );
+    assert_eq!(
+        catalogue_spellings(dir.path()),
+        HashMap::from([("0aaa".to_owned(), "0AAA".to_owned())])
+    );
+}
+
 const CONFIGURED_UUID: &str = "11111111-2222-4333-8444-555555555555";
 
 /// `organisation.toml` as the resolved configuration holds it.

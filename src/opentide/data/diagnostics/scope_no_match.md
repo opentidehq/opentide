@@ -12,4 +12,4 @@ opentide validate --file objects/rules/sentinel-kql-rul.yaml
 
 ## How to fix
 
-Fix the path, file name or UUID. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
+Fix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.

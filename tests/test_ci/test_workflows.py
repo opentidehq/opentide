@@ -314,3 +314,17 @@ def test_the_internal_channel_publishes_to_no_registry() -> None:
     for flag in ("--draft", "--prerelease", "--latest=false", "--verify-tag"):
         assert flag in script, flag
     assert not re.search(r"\b(?:twine|uv publish|cargo publish|npm publish)\b", script)
+
+
+def test_the_av_gates_clamav_job_scans_both_trees_and_extracts_first() -> None:
+    """The gate's design (#1743, kept by the CI review of 2026-11): ClamAV opens the
+    archives itself on the artifacts, and scans the extractor's files one by one too,
+    each seeing what the other might skip. A faster scan may not drop a tree."""
+    steps = load(WORKFLOWS / "av-gate.yml")["jobs"]["clamav"]["steps"]
+    runs_ = [str(step.get("run", "")) for step in steps]
+    extract = next(i for i, run in enumerate(runs_) if "scripts/av/extract.py" in run)
+    scan = next(i for i, run in enumerate(runs_) if "scripts/av/clamav-scan.sh" in run)
+    assert extract < scan
+    assert runs_[extract].split()[-2:] == ["av-artifacts", "av-extracted"]
+    assert runs_[scan].split()[-2:] == ["av-artifacts", "av-extracted"]
+    assert (ROOT / "scripts" / "av" / "clamav-scan.sh").is_file()

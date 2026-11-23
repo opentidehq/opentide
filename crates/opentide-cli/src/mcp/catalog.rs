@@ -3,7 +3,7 @@
 //! `deployment_status` and `validate_rule`, on the workspace as it is on disk
 //! at the call.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -343,7 +343,15 @@ fn lineage_by_uuid(index: &Index) -> IndexMap<String, Lineage> {
         }
     }
     for (uuid, body) in opentide_workspace::coverage::bucket(index, "rule") {
-        for objective in string_ids(body.get("detection_model").map(AsRef::as_ref)) {
+        for target in string_ids(body.get("detection_model").map(AsRef::as_ref)) {
+            // A signal belongs to its objective: the rule joins that lineage.
+            let objective = if catalogue_family(index, &target).is_some() {
+                target
+            } else {
+                index
+                    .signal(&target)
+                    .map_or(target, |signal| signal.owner.clone())
+            };
             unite(uuid, "rules", &objective, "objectives");
         }
     }
@@ -399,9 +407,18 @@ fn relation_json(relation: &IndexMap<String, Vec<String>>) -> Json {
     )
 }
 
-/// `get_chaining`: the lineage of the object `uuid` names.
+/// `get_chaining`: the lineage of the object `uuid` names; a signal's UUID
+/// names its objective (`resolved_from`). `chaining_index` holds only the
+/// UUIDs of the returned graph.
 pub fn get_chaining(index: &Index, uuid: &str) -> Json {
-    let Some(node) = get_object(index, uuid) else {
+    let (found, resolved_from) = match get_object(index, uuid) {
+        Some(found) => (Some(found), None),
+        None => match index.signal(uuid) {
+            Some(signal) => (get_object(index, &signal.owner), Some(signal.uuid.as_str())),
+            None => (None, None),
+        },
+    };
+    let Some(node) = found else {
         return Json::object([
             ("uuid", Json::str(uuid)),
             ("found", Json::Bool(false)),
@@ -416,14 +433,28 @@ pub fn get_chaining(index: &Index, uuid: &str) -> Json {
         (None, Some(lineage)) => lineage_json(lineage),
         (None, None) => Json::object::<&str>([]),
     };
+    // Every UUID the response names: the object, the vectors of its
+    // relation, and its lineage (which `lineage` carries beside `graph`).
+    let mut present: HashSet<String> = HashSet::from([node.uuid.to_owned()]);
+    if let Some(relation) = relation {
+        present.extend(
+            relation
+                .values()
+                .flatten()
+                .map(|vector| vector.trim().to_owned()),
+        );
+    }
+    if let Some(lineage) = lineage {
+        present.extend(lineage.iter().flatten().cloned());
+    }
     let mut chaining_index: Vec<(String, Json)> = index
         .chaining
         .iter()
-        .filter(|(_, relation)| !relation.is_empty())
+        .filter(|(uuid, relation)| !relation.is_empty() && present.contains(*uuid))
         .map(|(uuid, relation)| (uuid.clone(), relation_json(relation)))
         .collect();
     for (uuid, lineage) in &lineages {
-        if !chaining_index.iter().any(|(key, _)| key == uuid) {
+        if present.contains(uuid) && !chaining_index.iter().any(|(key, _)| key == uuid) {
             chaining_index.push((uuid.clone(), lineage_json(lineage)));
         }
     }
@@ -434,6 +465,12 @@ pub fn get_chaining(index: &Index, uuid: &str) -> Json {
         ("graph".to_owned(), graph),
         ("chaining_index".to_owned(), Json::object(chaining_index)),
     ];
+    if let Some(signal) = resolved_from {
+        payload.push((
+            "resolved_from".to_owned(),
+            Json::object([("type", Json::str("signal")), ("uuid", Json::str(signal))]),
+        ));
+    }
     if let Some(lineage) = lineage {
         payload.push(("lineage".to_owned(), lineage_json(lineage)));
     }
@@ -905,6 +942,136 @@ mod tests {
         assert_eq!(graph.get("graph"), Some(lineage));
         let unknown = get_chaining(ws.index(), "nope");
         assert_eq!(unknown.get("found"), Some(&Json::Bool(false)));
+    }
+
+    const SIGNAL: &str = "44444444-4444-4444-8444-444444444444";
+    const SIGNAL_RULE: &str = "55555555-5555-4555-8555-555555555555";
+    const OTHER_THREAT: &str = "66666666-6666-4666-8666-666666666666";
+
+    /// An objective that defines a signal, a rule that targets the signal and
+    /// a threat of no relation to either.
+    fn signal_ws() -> Workspace {
+        let objective = format!(
+            "name: Goal\nmetadata: {{uuid: 22222222-2222-4222-8222-222222222222, schema: objective::1.0}}\nobjective:\n  threats: [11111111-1111-4111-8111-111111111111]\n  signals:\n    - {{name: S, uuid: {SIGNAL}}}\n"
+        );
+        let rule = format!(
+            "name: By signal\nmetadata: {{uuid: {SIGNAL_RULE}, schema: rule::1.0}}\ndetection_model: {SIGNAL}\n"
+        );
+        let other = format!(
+            "name: Other\nmetadata: {{uuid: {OTHER_THREAT}, schema: threat::1.0}}\nthreat:\n  mitre_attack: [T1003]\n"
+        );
+        // The other threat has an objective, so a lineage, of its own.
+        let other_objective = format!(
+            "name: Other goal\nmetadata: {{uuid: 77777777-7777-4777-8777-777777777777, schema: objective::1.0}}\nobjective:\n  threats: [{OTHER_THREAT}]\n"
+        );
+        index(&[
+            ("objects/threats/t.yaml", THREAT),
+            ("objects/threats/other.yaml", &other),
+            ("objects/objectives/o.yaml", &objective),
+            ("objects/objectives/other.yaml", &other_objective),
+            ("objects/rules/r.yaml", &rule),
+        ])
+    }
+
+    fn ids(json: Option<&Json>) -> Vec<String> {
+        match json {
+            Some(Json::Array(items)) => items
+                .iter()
+                .map(|item| item.as_str().unwrap().to_owned())
+                .collect(),
+            other => panic!("not a list: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_rule_on_a_signal_stays_in_its_objectives_lineage() {
+        let ws = signal_ws();
+        let rule = get_chaining(ws.index(), SIGNAL_RULE);
+        let graph = rule.get("graph").unwrap();
+        assert_eq!(
+            ids(graph.get("objectives")),
+            ["22222222-2222-4222-8222-222222222222"],
+            "the owner, not the signal"
+        );
+        assert_eq!(
+            ids(graph.get("threats")),
+            ["11111111-1111-4111-8111-111111111111"]
+        );
+        // The objective sees its rule.
+        let objective = get_chaining(ws.index(), "22222222-2222-4222-8222-222222222222");
+        assert_eq!(
+            ids(objective.get("graph").unwrap().get("rules")),
+            [SIGNAL_RULE]
+        );
+        assert_eq!(objective.get("resolved_from"), None);
+    }
+
+    #[test]
+    fn a_signal_uuid_resolves_to_its_objective() {
+        let ws = signal_ws();
+        let chained = get_chaining(ws.index(), SIGNAL);
+        assert_eq!(chained.get("found"), Some(&Json::Bool(true)));
+        assert_eq!(chained.get("type"), Some(&Json::str("objective")));
+        assert_eq!(
+            chained.get("uuid"),
+            Some(&Json::str("22222222-2222-4222-8222-222222222222"))
+        );
+        assert_eq!(
+            chained.get("resolved_from").and_then(|r| r.get("uuid")),
+            Some(&Json::str(SIGNAL))
+        );
+        assert_eq!(
+            ids(chained.get("graph").unwrap().get("rules")),
+            [SIGNAL_RULE]
+        );
+    }
+
+    #[test]
+    fn chaining_index_holds_only_the_returned_graph() {
+        let ws = signal_ws();
+        let chained = get_chaining(ws.index(), SIGNAL_RULE);
+        let Some(Json::Object(entries)) = chained.get("chaining_index") else {
+            panic!("no chaining_index");
+        };
+        let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
+        assert!(keys.contains(&SIGNAL_RULE), "{keys:?}");
+        assert!(
+            !keys.contains(&OTHER_THREAT)
+                && !keys.contains(&"77777777-7777-4777-8777-777777777777"),
+            "an unrelated threat stays out: {keys:?}"
+        );
+    }
+
+    #[test]
+    fn chaining_index_follows_a_chain_and_the_lineage_it_returns() {
+        let threat = |n: u8, link: Option<u8>| {
+            let chaining = link.map_or(String::new(), |to| {
+                format!("  chaining:\n    - {{vector: {to}{to}{to}{to}{to}{to}{to}{to}-{to}{to}{to}{to}-4{to}{to}{to}-8{to}{to}{to}-{to}{to}{to}{to}{to}{to}{to}{to}{to}{to}{to}{to}, relation: preceeds}}\n")
+            });
+            format!(
+                "name: T{n}\nmetadata: {{uuid: {n}{n}{n}{n}{n}{n}{n}{n}-{n}{n}{n}{n}-4{n}{n}{n}-8{n}{n}{n}-{n}{n}{n}{n}{n}{n}{n}{n}{n}{n}{n}{n}, schema: threat::1.0}}\nthreat:\n  mitre_attack: [T1003]\n{chaining}"
+            )
+        };
+        let objective = "name: Goal\nmetadata: {uuid: 22222222-2222-4222-8222-222222222222, schema: objective::1.0}\nobjective:\n  threats: [33333333-3333-4333-8333-333333333333]\n";
+        let (a, b, c) = (threat(1, Some(2)), threat(2, Some(3)), threat(3, None));
+        let ws = index(&[
+            ("objects/threats/a.yaml", &a),
+            ("objects/threats/b.yaml", &b),
+            ("objects/threats/c.yaml", &c),
+            ("objects/objectives/o.yaml", objective),
+        ]);
+        let chained = get_chaining(ws.index(), "11111111-1111-4111-8111-111111111111");
+        let Some(Json::Object(entries)) = chained.get("chaining_index") else {
+            panic!("no chaining_index");
+        };
+        let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
+        for expected in [
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+            "33333333-3333-4333-8333-333333333333",
+        ] {
+            assert!(keys.contains(&expected), "{expected} in {keys:?}");
+        }
     }
 
     #[test]
