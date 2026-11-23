@@ -132,3 +132,93 @@ fn pipelines_are_the_oracles() {
     }
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
 }
+
+/// The major of each `actions/<name>` this repository's own workflows pin
+/// (`uses: actions/<name>@<sha> # v7.0.1` or `@v7`), the newest of each.
+fn repository_action_majors() -> IndexMap<String, u32> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows");
+    let mut majors: IndexMap<String, u32> = IndexMap::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if !path
+            .extension()
+            .is_some_and(|ext| ext == "yml" || ext == "yaml")
+        {
+            continue;
+        }
+        for line in std::fs::read_to_string(&path).unwrap().lines() {
+            let Some((_, uses)) = line.split_once("uses: actions/") else {
+                continue;
+            };
+            let (action, rest) = uses.split_once('@').unwrap();
+            let (reference, comment) = rest.split_once('#').unwrap_or((rest, ""));
+            let version = [reference, comment]
+                .iter()
+                .find_map(|text| text.trim().strip_prefix('v'));
+            let major = version
+                .and_then(|text| text.split(|c: char| !c.is_ascii_digit()).next())
+                .and_then(|digits| digits.parse::<u32>().ok());
+            if let Some(major) = major {
+                let newest = majors.entry(action.to_owned()).or_insert(major);
+                *newest = (*newest).max(major);
+            }
+        }
+    }
+    majors
+}
+
+/// Majors the generated workflow must pin at least, for actions this
+/// repository's own workflows do not use: both still ran on Node 20 before.
+const FIXED_MINIMUMS: [(&str, u32); 2] = [("upload-pages-artifact", 5), ("deploy-pages", 5)];
+
+/// The generated GitHub workflow pins no `actions/*` major older than the one
+/// this repository's own workflows pin for the same action, nor older than
+/// [`FIXED_MINIMUMS`], so a generated pipeline does not run on a runtime
+/// GitHub is retiring (Node 20).
+#[test]
+fn generated_actions_are_not_older_than_the_repositorys_own() {
+    let mut minimums = repository_action_majors();
+    for (action, major) in FIXED_MINIMUMS {
+        let entry = minimums.entry(action.to_owned()).or_insert(major);
+        *entry = (*entry).max(major);
+    }
+    let inputs: toml::Table = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ci/github-default.toml"),
+    )
+    .unwrap()
+    .parse()
+    .unwrap();
+    let mut options = options(&inputs);
+    options.explorer_pages = true;
+    let written = render(&options).unwrap();
+    let mut seen = 0;
+    let mut stale = Vec::new();
+    for line in written.lines() {
+        let Some((_, uses)) = line.split_once("uses: actions/") else {
+            continue;
+        };
+        let Some((action, version)) = uses.trim().split_once('@') else {
+            continue;
+        };
+        let Some(newest) = minimums.get(action) else {
+            continue;
+        };
+        let Ok(major) = version.trim_start_matches('v').parse::<u32>() else {
+            continue;
+        };
+        seen += 1;
+        if major < *newest {
+            stale.push(format!("actions/{action}@v{major} (needs v{newest})"));
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "the generated workflow pins older actions than this repository does: {}.\n\
+         Bump them in crates/opentide-compile/src/ci/templates/github.yml.j2, regenerate \
+         crates/opentide-compile/tests/ci/*.yml (OPENTIDE_CI_RENDERED=<dir> cargo test -p \
+         opentide-compile --test setup_ci, then copy the files) and review the CLI snapshots \
+         (INSTA_UPDATE=always cargo test -p opentide-cli --test cli_snapshots).",
+        stale.join(", ")
+    );
+    assert!(seen >= 5, "only {seen} actions compared:\n{written}");
+}
