@@ -18,13 +18,19 @@
 //!   cache, so even an attacker who can predict the seed (the browser's
 //!   WebAssembly module, where foldhash's seed is close to fixed) can make at
 //!   most a bounded number of colliding inserts.
+//! - **Sized up front.** Each table is made for the input's lexemes, up to
+//!   the cap, so it never grows and rehashes: on the many short queries of
+//!   the parse benchmarks this builder runs fewer instructions and
+//!   allocations than rowan's.
 //!
 //! Below the cap the tree is shared exactly as rowan's builder shares it: a
 //! token is interned on its kind and text; a node of at most three children,
 //! all of them interned, is interned on its kind and the identity of its
 //! children. The tree's shape and text never depend on the cache.
 
+use foldhash::fast::RandomState;
 use rowan::{GreenNode, GreenToken, NodeOrToken, SyntaxKind};
+use std::collections::hash_map::Entry;
 
 /// The most distinct tokens, and separately the most distinct nodes, one
 /// builder interns. An ordinary query, even a large one, repeats a few
@@ -46,7 +52,6 @@ type Child = (NodeOrToken<GreenNode, GreenToken>, bool);
 type NodeKey = (SyntaxKind, usize, [usize; MAX_INTERNED_CHILDREN]);
 
 /// Builds one green tree.
-#[derive(Default)]
 pub(crate) struct Builder<'a> {
     /// Each open node's kind and its first child in `children`.
     parents: Vec<(SyntaxKind, usize)>,
@@ -56,16 +61,27 @@ pub(crate) struct Builder<'a> {
 }
 
 impl<'a> Builder<'a> {
+    /// A builder for a tree of about `tokens` tokens: each cache is sized
+    /// for that many entries, up to [`MAX_INTERNED`], so it never grows.
+    pub(crate) fn new(tokens: usize) -> Self {
+        let capacity = tokens.min(MAX_INTERNED);
+        Self {
+            parents: Vec::new(),
+            children: Vec::new(),
+            tokens: foldhash::HashMap::with_capacity_and_hasher(capacity, RandomState::default()),
+            nodes: foldhash::HashMap::with_capacity_and_hasher(capacity, RandomState::default()),
+        }
+    }
+
     /// Adds a token to the open node.
     pub(crate) fn token(&mut self, kind: SyntaxKind, text: &'a str) {
-        let child = if let Some(token) = self.tokens.get(&(kind, text)) {
-            (token.clone(), true)
-        } else if self.tokens.len() < MAX_INTERNED {
-            let token = GreenToken::new(kind, text);
-            self.tokens.insert((kind, text), token.clone());
-            (token, true)
-        } else {
-            (GreenToken::new(kind, text), false)
+        let full = self.tokens.len() >= MAX_INTERNED;
+        let child = match self.tokens.entry((kind, text)) {
+            Entry::Occupied(entry) => (entry.get().clone(), true),
+            Entry::Vacant(entry) if !full => {
+                (entry.insert(GreenToken::new(kind, text)).clone(), true)
+            }
+            Entry::Vacant(_) => (GreenToken::new(kind, text), false),
         };
         self.children.push((NodeOrToken::Token(child.0), child.1));
     }
@@ -102,20 +118,18 @@ impl<'a> Builder<'a> {
                 }
                 (kind, children.len(), ids)
             });
-        if let Some(node) = key.and_then(|key| self.nodes.get(&key)) {
-            let node = node.clone();
-            self.children.truncate(first);
-            return (NodeOrToken::Node(node), true);
-        }
-        let node = GreenNode::new(kind, self.children.drain(first..).map(|(c, _)| c));
-        let interned = match key {
-            Some(key) if self.nodes.len() < MAX_INTERNED => {
-                self.nodes.insert(key, node.clone());
-                true
+        let full = self.nodes.len() >= MAX_INTERNED;
+        let mut build = || GreenNode::new(kind, self.children.drain(first..).map(|(c, _)| c));
+        match key.map(|key| self.nodes.entry(key)) {
+            Some(Entry::Occupied(entry)) => {
+                self.children.truncate(first);
+                (NodeOrToken::Node(entry.get().clone()), true)
             }
-            _ => false,
-        };
-        (NodeOrToken::Node(node), interned)
+            Some(Entry::Vacant(entry)) if !full => {
+                (NodeOrToken::Node(entry.insert(build()).clone()), true)
+            }
+            _ => (NodeOrToken::Node(build()), false),
+        }
     }
 
     /// The finished tree: its one root node, or `None` when the starts and
@@ -165,7 +179,7 @@ mod tests {
 
     #[test]
     fn repeated_tokens_and_small_nodes_are_shared() {
-        let mut b = Builder::default();
+        let mut b = Builder::new(0);
         b.start_node(ROOT);
         for _ in 0..3 {
             b.start_node(NAME);
@@ -182,7 +196,7 @@ mod tests {
     #[test]
     fn past_the_cap_tokens_and_nodes_are_built_without_interning() {
         let names: Vec<String> = (0..MAX_INTERNED + 100).map(|i| format!("n{i}")).collect();
-        let mut b = Builder::default();
+        let mut b = Builder::new(0);
         b.start_node(ROOT);
         for name in &names {
             b.start_node(NAME);
@@ -209,12 +223,12 @@ mod tests {
 
     #[test]
     fn unbalanced_builds_have_no_root() {
-        let mut b = Builder::default();
+        let mut b = Builder::new(0);
         b.start_node(ROOT);
         assert!(b.finish().is_none());
-        let mut b = Builder::default();
+        let mut b = Builder::new(0);
         b.token(WORD, "a");
         assert!(b.finish().is_none());
-        assert!(Builder::default().finish().is_none());
+        assert!(Builder::new(0).finish().is_none());
     }
 }

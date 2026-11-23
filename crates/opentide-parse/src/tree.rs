@@ -105,7 +105,7 @@ pub(crate) fn build_or_fallback(
         !panic_on_bug,
         "opentide-parse: the events do not form one root node (a Marker completed twice, a token outside the root, or an unclosed node)"
     );
-    let mut builder = Builder::default();
+    let mut builder = Builder::new(input.lexemes.len());
     builder.start_node(input.grammar.error);
     for l in &input.lexemes {
         builder.token(l.kind, input.text(l));
@@ -140,7 +140,7 @@ fn replay(
     errors: &mut Vec<SyntaxError>,
     max_tree_depth: usize,
 ) -> Option<(GreenNode, usize)> {
-    let mut builder = Builder::default();
+    let mut builder = Builder::new(input.lexemes.len());
     let lexemes = &input.lexemes;
     let mut next = 0usize; // the next lexeme to emit
     // Each open node, and whether the builder opened it (false past the
