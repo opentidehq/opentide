@@ -451,8 +451,10 @@ fn each_outcome_of_a_check_is_the_oracles() {
             "Query validation reported warnings for splunk"
         )])
     );
-    // A refusal fails the run too, so the timeouts are not its only failures.
-    assert!(!live.result.iter().any(|(key, _)| key == "_failure_code"));
+    // A refusal fails the run too, so the timeouts are not its only failures:
+    // `query_check_timeout` does not name it. It was `command_failed`; the run
+    // now says a tenant rejected a query (a departure from the oracle).
+    assert_eq!(value(&live, "_failure_code"), &Json::str("query_rejected"));
     // A run that rejected a query has no tick (#1658, E8).
     assert_eq!(
         live.step.as_ref().unwrap().status,
@@ -1144,7 +1146,7 @@ fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
     assert_eq!(proxy.verify(), Vec::new());
     let report = opentide_cli::commands::validate_live::report_of("validate query", &live.result);
     let failure = report.outcome.failure.as_ref().unwrap();
-    assert_eq!(failure.code, "command_failed");
+    assert_eq!(failure.code, "authentication_failed");
     let keys: Vec<&str> = live.result.iter().map(|(key, _)| key.as_str()).collect();
     assert_eq!(
         keys,
@@ -1157,7 +1159,8 @@ fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
             "host",
             "message",
             "advice",
-            "_exit_code"
+            "_exit_code",
+            "_failure_code"
         ]
     );
     assert_eq!(

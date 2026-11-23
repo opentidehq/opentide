@@ -6,7 +6,7 @@ args: opentide validate query --live --platform splunk
 exit: 1
 
 ━━━ stdout
-::error file=objects/rules/splunk-unknown-command.yaml,line=15,title=query_rejected::Splunk unknown command rule: the splunk tenant refused the query: Splunk refused the query on ***: Unknown search command 'badcommand'.
+::error file=objects/rules/splunk-unknown-command.yaml,line=15,title=query_rejected::Splunk unknown command rule: Splunk refused the query on ***: Unknown search command 'badcommand'.
 
 ━━━ stderr
 warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on *** · warning: Splunk's parser timed out behind a gateway; the query is assumed valid

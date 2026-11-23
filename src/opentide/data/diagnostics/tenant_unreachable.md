@@ -2,7 +2,7 @@
 
 A tenant did not answer, so nothing was checked on it.
 
-Exit 1, as `failure.code`, from `validate query --live` (after three queries in a row get no answer, or when the tenant answers none) and from the deploy commands. `tenant` and `host` name it, `advice` says what to check.
+Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check.
 
 ## Example
 

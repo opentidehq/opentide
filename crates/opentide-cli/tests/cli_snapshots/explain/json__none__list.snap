@@ -25,6 +25,10 @@ exit: 0
       "meaning": "A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare."
     },
     {
+      "code": "authentication_failed",
+      "meaning": "A tenant refused the check itself, not a query: its credentials, or the account's rights on it."
+    },
+    {
       "code": "bitdefender_action_scope",
       "meaning": "An automatic action is not allowed for the rule's kind or target."
     },
@@ -1575,10 +1579,6 @@ exit: 0
     {
       "code": "templates_fresh",
       "meaning": "Every template this opentide version generates exists and matches what it would write."
-    },
-    {
-      "code": "tenant_refused",
-      "meaning": "A tenant refused the check itself, not a query: its credentials or the account's rights."
     },
     {
       "code": "tenant_unreachable",

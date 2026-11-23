@@ -16,6 +16,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`authentication_failed`](#authentication_failed) | A tenant refused the check itself, not a query: its credentials, or the account's rights on it. |
 | [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is not allowed for the rule's kind or target. |
 | [`bitdefender_actions_unsupported`](#bitdefender_actions_unsupported) | The block sets `actions`, and the tenant's subscription has no automatic actions. |
 | [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
@@ -404,7 +405,6 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`technique_not_enterprise`](#technique_not_enterprise) | The ATT&CK technique is not in the Enterprise matrix that Elastic maps. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
-| [`tenant_refused`](#tenant_refused) | A tenant refused the check itself, not a query: its credentials or the account's rights. |
 | [`tenant_unreachable`](#tenant_unreachable) | A tenant did not answer, so nothing was checked on it. |
 | [`threshold_lookback`](#threshold_lookback) | A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat. |
 | [`unknown_connector`](#unknown_connector) | `sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped. |
@@ -558,6 +558,22 @@ assets = ["domain-controller"]   # declared as domain-controllers
 ### How to fix
 
 Correct the asset name, or declare the asset under `[[assets]]`.
+
+## authentication_failed
+
+A tenant refused the check itself, not a query: its credentials, or the account's rights on it.
+
+Exit 1, as `failure.code` of `validate query --live`. No query is checked on that tenant, and the next tenant is checked; `refused_tenants` names every tenant that refused. Queries the tenant refused as invalid before that are still listed in `rejected`. A query refused as invalid is `query_rejected`.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Check the credentials of the tenant named in `tenant` (the environment variables its setup names) and the account's rights on the tenant.
 
 ## bitdefender_action_scope
 
@@ -1695,7 +1711,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant.
 
-Exit 1, as `failure.code`, from `validate query --live` and from the deploy commands. `message` names the variables (`Splunk credentials are unset ($SPLUNK_TOKEN)`). Nothing is sent to the tenant, and no value is printed.
+Exit 1, as `failure.code` of `validate query --live`. `message` names the variables (`Splunk credentials are unset ($SPLUNK_TOKEN)`). Nothing is sent to the tenant, and no value is printed.
 
 ### Example
 
@@ -6520,7 +6536,7 @@ Or remove the comment.
 
 `validate query --live` failed because a tenant refused a rule's query as invalid.
 
-Exit 1. As `failure.code` when at least one query was rejected and the run did not fail only on timeouts. Each rejected check is an entry of `rejected` in `--json`, with the rule's `file` and the `line` of its query, the `platform`, the `tenant` and the platform's own `message`. In CI the same rejections are annotations on the rule file (`::error file=…,line=…::` on GitHub Actions) and rows of the job summary. A check that got no answer is not a rejection: see `query_check_timeout`.
+Exit 1. As `failure.code` when at least one query was rejected and the run did not fail only on timeouts. When a tenant also fails the run (`authentication_failed`, `tenant_unreachable`, `credential_unset`), the code is that tenant's, and `rejected` still lists the queries rejected before it. Each rejected check is an entry of `rejected` in `--json`, with the rule's `file` and the `line` of its query, the `platform`, the `tenant` and the platform's own `message`. In CI the same rejections are annotations on the rule file (`::error file=…,line=…::` on GitHub Actions) and rows of the job summary. A check that got no answer is not a rejection: see `query_check_timeout`.
 
 The other rules are still checked, so one run lists every rejected query.
 
@@ -7227,27 +7243,11 @@ Reported by `opentide doctor`. Warns when a template is missing or differs, usua
 
 Run `opentide generate templates`. When the warning names a `lint.toml` key, fix that key first: `generate` fails on the same file, so regenerating does not clear it. A `lint.toml` that is not valid TOML is reported by the `configuration` check instead, and this check is skipped.
 
-## tenant_refused
-
-A tenant refused the check itself, not a query: its credentials or the account's rights.
-
-Exit 1, as `failure.code`, from `validate query --live`. No query is checked on that tenant, and the next tenant is checked; `refused_tenants` names every tenant that refused. A query the tenant refused as invalid is `query_rejected`.
-
-### Example
-
-```text
-opentide validate query --live --platform splunk
-```
-
-### How to fix
-
-Check the credentials of the tenant named in `tenant` (the environment variables its setup names) and the account's rights on the tenant.
-
 ## tenant_unreachable
 
 A tenant did not answer, so nothing was checked on it.
 
-Exit 1, as `failure.code`, from `validate query --live` (after three queries in a row get no answer, or when the tenant answers none) and from the deploy commands. `tenant` and `host` name it, `advice` says what to check.
+Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check.
 
 ### Example
 

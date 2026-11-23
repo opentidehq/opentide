@@ -60,9 +60,9 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `usage_watch_needs_tty` | 2 | `validate --watch` under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`: it redraws a terminal until Ctrl-C, and nobody would see it |
 | `no_tenant_reached` | 2 | `validate query --live` sent no query because no configured tenant takes the rules |
 | `query_rejected` | 1 | `validate query --live`: a tenant refused at least one query as invalid. `rejected` lists them, each with the rule's `file` and `line` |
-| `credential_unset` | 1 | A tenant's setup names an environment variable that is not set (`validate query --live`, the deploy commands) |
+| `credential_unset` | 1 | `validate query --live`: a tenant's setup names an environment variable that is not set |
 | `tenant_unreachable` | 1 | `validate query --live`: a tenant did not answer, so nothing was checked on it |
-| `tenant_refused` | 1 | `validate query --live`: a tenant refused the check itself (its credential or the account's rights), not a query |
+| `authentication_failed` | 1 | `validate query --live`: a tenant refused the check itself (its credential or the account's rights), not a query |
 | `query_check_timeout` | 1 | `validate query --live`: every failed check got no answer within `--check-timeout`. `timed_out` lists them |
 | `needs_human_decision` | 2 | `migrate vocab-scope` left values only a person can place |
 | `not_implemented` | 2 | A reserved command, such as `deploy metadata` |

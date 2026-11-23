@@ -57,8 +57,9 @@ pub const QUERY_REJECTED: &str = "query_rejected";
 pub const CREDENTIAL_UNSET: &str = "credential_unset";
 /// The code of a tenant that cannot be reached (the connectors').
 pub const TENANT_UNREACHABLE: &str = "tenant_unreachable";
-/// The code of a tenant that refused the check itself (the connectors').
-pub const TENANT_REFUSED: &str = "tenant_refused";
+/// The code of a tenant that refused the check itself: its credential or the
+/// account's rights (the connectors').
+pub const AUTHENTICATION_FAILED: &str = "authentication_failed";
 /// `OPENTIDE_QUERY_CHECK_TIMEOUT`.
 const CHECK_TIMEOUT_ENV: &str = super::validate_query::CHECK_TIMEOUT_ENV;
 /// What a run that sent no query advises (`_no_tenant_reached`).
@@ -618,24 +619,19 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
     step.unit = "rule".into();
     step.count = Some(uuids.len());
     let started = Instant::now();
-    let (checked, refused) = check_batches(platform, &batches, timeout, cx, &compile_cx);
+    let (mut report, checked, refused) =
+        check_batches(platform, &batches, timeout, cx, &compile_cx);
     step.seconds = started.elapsed().as_secs_f64();
-    let mut findings = Vec::new();
+    let findings: Vec<Diagnostic>;
     let result = match checked {
         Err(early) => {
             step.status = StepStatus::Failed;
-            let mut result = stopped_early(platform, early, &reach);
-            if !refused.is_empty() {
-                // A tenant refused before this one stopped the check: named
-                // too, never hidden by the later failure (#1658, E8).
-                let at = result.len() - 1;
-                result.insert(at, ("refused_tenants".into(), refused_names(&refused)));
-            }
-            result
+            findings = rejections(&report, workspace, cx.env);
+            stopped_result(platform, early, &report, &reach, &refused)
         }
-        Ok(mut report) => {
+        Ok(()) => {
             report.refused = refused;
-            findings = rejections(platform, &report, workspace);
+            findings = rejections(&report, workspace, cx.env);
             // A run that rejected a query, or that a tenant refused, is no
             // tick (#1658, E8).
             step.status = if !report.refused.is_empty()
@@ -930,6 +926,31 @@ fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
     }
 }
 
+/// The result of a check that stopped early, with what came before: the
+/// queries already rejected, which a later tenant's failure never hides, and
+/// the tenants that refused first (#1658, E8).
+fn stopped_result(
+    platform: &str,
+    early: Early,
+    report: &CheckReport,
+    reach: &Reach<'_>,
+    refused: &[Refused],
+) -> Fields {
+    let mut result = stopped_early(platform, early, reach);
+    if let Some(rejected) = rejected_json(platform, report) {
+        let at = result
+            .iter()
+            .position(|(key, _)| key.starts_with('_'))
+            .unwrap_or(result.len());
+        result.insert(at, ("rejected".into(), rejected));
+    }
+    if !refused.is_empty() {
+        let at = result.len() - 1;
+        result.insert(at, ("refused_tenants".into(), refused_names(refused)));
+    }
+    result
+}
+
 /// The tenants' names, as a JSON list.
 fn refused_names(refused: &[Refused]) -> Json {
     Json::Array(
@@ -1050,9 +1071,13 @@ fn checked_result(platform: &str, report: &CheckReport, reach: &Reach<'_>, timeo
 }
 
 /// A `query_rejected` finding for each query a tenant refused, on the rule's
-/// file and the line of its query. The message is the platform's own; the
-/// tenant is named in `rejected`, not in a line a pull request shows.
-fn rejections(platform: &str, report: &CheckReport, workspace: &Workspace) -> Vec<Diagnostic> {
+/// file and the line of its query. The message is the rule's name and the
+/// platform's own, redacted as the log lines are; the tenant is named in
+/// `rejected`, not in a line a pull request shows.
+fn rejections(report: &CheckReport, workspace: &Workspace, env: &Env) -> Vec<Diagnostic> {
+    // What the log lines hide (tenant names, hosts, ids, secrets) is hidden
+    // in a line a pull request shows.
+    let redactor = crate::redact::workspace_redactor(&[workspace.root().to_path_buf()], env);
     report
         .checks
         .iter()
@@ -1061,11 +1086,7 @@ fn rejections(platform: &str, report: &CheckReport, workspace: &Workspace) -> Ve
             let mut finding = Diagnostic::new(
                 QUERY_REJECTED,
                 Severity::Error,
-                &format!(
-                    "{}: the {platform} tenant refused the query: {}",
-                    check.name,
-                    check.errors.join("; ").replace(&check.tenant, "***")
-                ),
+                &redactor.redact(&format!("{}: {}", check.name, check.errors.join("; "))),
             );
             finding.path.clone_from(&check.place.file);
             finding.file_path = check
@@ -1264,9 +1285,10 @@ impl Place {
             .map(|(block_line, block)| {
                 key_line(block, "query").map_or(block_line, |(line, _)| line)
             });
+        // A line means nothing without its file.
         Self {
             file: rule.file.clone(),
-            line,
+            line: line.filter(|_| rule.file.is_some()),
         }
     }
 }
@@ -1429,7 +1451,7 @@ impl Refused {
             )),
         ));
         result.push(("_exit_code".into(), Json::Int(1)));
-        result.push(("_failure_code".into(), Json::str(TENANT_REFUSED)));
+        result.push(("_failure_code".into(), Json::str(AUTHENTICATION_FAILED)));
         result
     }
 }
@@ -1781,20 +1803,23 @@ fn check_batches(
     timeout: f64,
     cx: &Context<'_>,
     compile: &opentide_compile::Context<'_>,
-) -> (Result<CheckReport, Early>, Vec<Refused>) {
+) -> (CheckReport, Result<(), Early>, Vec<Refused>) {
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
     // The tenants that refused the check, kept outside the report so that a
     // later tenant's failure never hides them (#1658, E8).
     let refusals: Refusals = std::sync::Mutex::new(Vec::new());
+    // The checks made so far, kept outside the run so that a tenant that
+    // stops it never hides the queries already rejected.
+    let mut report = CheckReport::default();
     let ran = opentide_connectors::runtime::sync_call(|| {
         tracing::dispatcher::with_default(&dispatch, || {
             opentide_connectors::runtime::block_on(async {
                 if platform == "elastic" {
-                    elastic(batches, timeout, cx, compile, &refusals).await
+                    elastic(batches, timeout, cx, compile, &refusals, &mut report).await
                 } else if platform == "google_secops" {
-                    google_secops(batches, timeout, cx, compile, &refusals).await
+                    google_secops(batches, timeout, cx, compile, &refusals, &mut report).await
                 } else {
-                    generic(platform, batches, timeout, cx, &refusals).await
+                    generic(platform, batches, timeout, cx, &refusals, &mut report).await
                 }
             })
         })
@@ -1807,7 +1832,7 @@ fn check_batches(
         Ok(Err(message)) => Err(Early::Crashed(message)),
         Err(_) => Err(Early::Crashed("the check stopped unexpectedly".to_owned())),
     };
-    (checked, refused)
+    (report, checked, refused)
 }
 
 /// The tenants that refused the check, in order.
@@ -1838,7 +1863,8 @@ async fn generic(
     timeout: f64,
     cx: &Context<'_>,
     refusals: &Refusals,
-) -> Result<CheckReport, Early> {
+    report: &mut CheckReport,
+) -> Result<(), Early> {
     let environment = Environment::from_pairs(cx.env.iter());
     let validator = cx
         .registry
@@ -1847,7 +1873,6 @@ async fn generic(
         .ok_or_else(|| Early::Crashed(format!("{platform} has no live validator")))?;
     let window = check_window(platform, cx.now);
     let cancel = CancellationToken::new();
-    let mut report = CheckReport::default();
     'tenants: for batch in batches {
         let tenant = &batch.tenant;
         let host = tenant_host(platform, tenant);
@@ -1917,7 +1942,7 @@ async fn generic(
         }
         streak.finish().map_err(Early::Unreachable)?;
     }
-    Ok(report)
+    Ok(())
 }
 
 /// The window a rule's query is checked over: Exabeam searches the 15
@@ -2074,14 +2099,14 @@ async fn google_secops(
     cx: &Context<'_>,
     compile: &opentide_compile::Context<'_>,
     refusals: &Refusals,
-) -> Result<CheckReport, Early> {
+    report: &mut CheckReport,
+) -> Result<(), Early> {
     use opentide_connectors::google_secops::client::Client;
     use opentide_connectors::google_secops::{GoogleSecops, Instance, check_rule};
     let platform = "google_secops";
     let environment = Environment::from_pairs(cx.env.iter());
     let connector = GoogleSecops::new(environment.clone());
     let cancel = CancellationToken::new();
-    let mut report = CheckReport::default();
     for batch in batches {
         let tenant = &batch.tenant;
         let rules: Vec<&opentide_compile::Rule> = batch
@@ -2228,7 +2253,7 @@ async fn google_secops(
         }
         streak.finish().map_err(Early::Unreachable)?;
     }
-    Ok(report)
+    Ok(())
 }
 
 /// A failure that stops the check (`reaching_tenant`, then the service's
@@ -2588,11 +2613,11 @@ async fn elastic(
     cx: &Context<'_>,
     compile: &opentide_compile::Context<'_>,
     refusals: &Refusals,
-) -> Result<CheckReport, Early> {
+    report: &mut CheckReport,
+) -> Result<(), Early> {
     let environment = Environment::from_pairs(cx.env.iter());
     let connector = Elastic;
     let cancel = CancellationToken::new();
-    let mut report = CheckReport::default();
     for batch in batches {
         let tenant = &batch.tenant;
         let conn = connect("elastic", tenant, timeout, cx, &environment).map_err(Early::from)?;
@@ -2723,7 +2748,7 @@ async fn elastic(
         }
         streak.finish().map_err(Early::Unreachable)?;
     }
-    Ok(report)
+    Ok(())
 }
 
 /// The tenants' names, for tests.
@@ -2742,6 +2767,110 @@ mod tests {
     fn rule(yaml: &str) -> opentide_compile::Rule {
         let document = opentide_schema::node::load(yaml).unwrap();
         opentide_compile::Rule::new(document.root().unwrap(), None)
+    }
+
+    fn rejected_check(file: Option<&str>) -> RuleCheck {
+        RuleCheck {
+            rule: "00000000-0000-4000-8000-000000000001".into(),
+            place: Place {
+                file: file.map(str::to_owned),
+                line: Some(9),
+            },
+            name: "R".into(),
+            tenant: "lab".into(),
+            label: None,
+            errors: vec!["bad command".into()],
+            warnings: Vec::new(),
+            code: None,
+        }
+    }
+
+    fn failure_code(result: &Fields) -> Option<&str> {
+        result
+            .iter()
+            .find(|(key, _)| key == "_failure_code")
+            .and_then(|(_, code)| code.as_str())
+    }
+
+    #[test]
+    fn a_tenant_that_refuses_the_credential_is_authentication_failed() {
+        let early = early(
+            "splunk",
+            "lab",
+            "host",
+            ConnectorError::authentication("splunk", "lab", "401"),
+        );
+        let runs = Vec::new();
+        let reach = Reach {
+            runs: &runs,
+            tenants: Vec::new(),
+        };
+        let result = stopped_early("splunk", early, &reach);
+        assert_eq!(failure_code(&result), Some(AUTHENTICATION_FAILED));
+    }
+
+    #[test]
+    fn a_check_that_stops_early_keeps_the_queries_it_rejected() {
+        let report = CheckReport {
+            checks: vec![rejected_check(Some("rules/a.yaml"))],
+            refused: Vec::new(),
+        };
+        let runs = Vec::new();
+        let reach = Reach {
+            runs: &runs,
+            tenants: Vec::new(),
+        };
+        let unreachable = Early::Unreachable(Unreachable {
+            tenant: "lab".into(),
+            host: "h".into(),
+            message: "down".into(),
+            timeouts: 0,
+        });
+        let result = stopped_result("splunk", unreachable, &report, &reach, &[]);
+        assert_eq!(failure_code(&result), Some(TENANT_UNREACHABLE));
+        let rejected = result
+            .iter()
+            .find(|(key, _)| key == "rejected")
+            .map(|(_, value)| value.clone())
+            .expect("the rejected query is reported");
+        let entry = rejected
+            .as_array()
+            .and_then(|items| items.first())
+            .expect("one entry");
+        assert_eq!(
+            entry.get("file").and_then(Json::as_str),
+            Some("rules/a.yaml")
+        );
+        assert_eq!(entry.get("line").and_then(Json::as_u64), Some(9));
+        // A check that was rejected for want of an answer is not one.
+        let mut slow = rejected_check(None);
+        slow.code = Some(QUERY_CHECK_TIMEOUT);
+        assert!(
+            rejected_json(
+                "splunk",
+                &CheckReport {
+                    checks: vec![slow],
+                    refused: Vec::new(),
+                }
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn a_line_needs_its_file_and_falls_back_to_the_block() {
+        let document = opentide_schema::node::load(
+            "name: R\nconfigurations:\n  splunk:\n    status: STAGING\n  sentinel:\n    query: q\n",
+        )
+        .unwrap();
+        let root = document.root().unwrap();
+        let in_file = opentide_compile::Rule::new(root, Some("rules/r.yaml".into()));
+        // A block with no `query` key: the block's own line.
+        assert_eq!(Place::of(&in_file, "splunk").line, Some(3));
+        assert_eq!(Place::of(&in_file, "sentinel").line, Some(6));
+        assert_eq!(Place::of(&in_file, "elastic").line, None);
+        let loose = opentide_compile::Rule::new(root, None);
+        assert_eq!(Place::of(&loose, "sentinel").line, None);
     }
 
     #[test]

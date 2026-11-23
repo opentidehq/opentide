@@ -544,7 +544,7 @@ In CI each rejected query is also an annotation on its rule file, `::error file=
 }
 ```
 
-A tenant whose credential variable is not set fails before any query is sent, with `failure.code` `credential_unset`; one that cannot be reached is `tenant_unreachable`, and one that refuses the check itself, `tenant_refused` (above). Through 1.0.0-rc.3 all of them were `command_failed`.
+A tenant whose credential variable is not set fails before any query is sent, with `failure.code` `credential_unset`; one that cannot be reached is `tenant_unreachable`, and one that refuses the check itself, `authentication_failed` (above). A run that stops on a tenant keeps the queries it rejected before: `rejected` lists them, with the tenant's code in `failure.code`. Through 1.0.0-rc.3 all of them were `command_failed`; that code remains for a setup that cannot be used, a cancelled run and a crash.
 
 A run whose tenants rejected a query, or that stopped on a tenant, ends its step without a tick: the checklist row is `✗`, never `✓`, above the `error:` line.
 
