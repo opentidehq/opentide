@@ -5961,6 +5961,22 @@ exit: 0
         "uuid": {
           "title": "Uuid",
           "type": "string"
+        },
+        "warnings": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Each technique the deploy changes (Sentinel: an objective id newer than ATT&CK v18 sent as its v18 equivalent, or left out), naming the rule, the id and what is sent instead",
+          "title": "Warnings"
         }
       },
       "required": [
@@ -11602,7 +11618,18 @@ exit: 0
       "summary": "Scaffold a detection rule"
     },
     {
-      "arguments": [],
+      "arguments": [
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "help": "Phases to run, in the order given: schemas, templates, vocabs, snippets. None runs the whole pipeline.",
+          "multiple": true,
+          "name": "PHASE",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "deprecated": false,
       "example": "opentide generate",
       "group": true,
@@ -12496,7 +12523,7 @@ exit: 0
           "flags": [
             "--skip-promotion"
           ],
-          "help": "Skip the status promotion of a RELEASE run on a push",
+          "help": "Skip the status promotion of a RELEASE run on a push to the default branch",
           "is_flag": true,
           "multiple": false,
           "name": "skip_promotion",
@@ -13508,6 +13535,23 @@ exit: 0
           "default": null,
           "envvars": [],
           "flags": [
+            "--app-token"
+          ],
+          "help": "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "app_token",
+          "required": false,
+          "secondary_flags": [
+            "--no-app-token"
+          ],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "flags": [
             "--default-branch"
           ],
           "help": "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
@@ -14276,6 +14320,23 @@ exit: 0
           "default": null,
           "envvars": [],
           "flags": [
+            "--app-token"
+          ],
+          "help": "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "app_token",
+          "required": false,
+          "secondary_flags": [
+            "--no-app-token"
+          ],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "flags": [
             "--default-branch"
           ],
           "help": "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
@@ -14285,6 +14346,21 @@ exit: 0
           "required": false,
           "secondary_flags": [],
           "type": "string"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--stdout"
+          ],
+          "help": "Print the generated pipeline to stdout and write nothing (to diff it against an adapted one; not with --json or --plan)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "stdout",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
         },
         {
           "choices": null,

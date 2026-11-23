@@ -4,7 +4,8 @@
 //! `update_detection_rule`, `delete_detection_rule`).
 
 use crate::Context;
-use crate::deploy::{self, Action, Write};
+use crate::attack;
+use crate::deploy::{self, Action, Write, strings};
 use crate::json::{Json, Object};
 use crate::kql;
 use crate::rule::{CompileError, Rule};
@@ -171,9 +172,36 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
     })
 }
 
+/// The techniques the alert template sends as `mitreTechniques`: technique and
+/// sub-technique ids as written. Graph reads the field back on the tenant, and
+/// `generate extract` imports it, so a redeploy that sent `[]` would wipe what
+/// the tenant holds.
+fn mitre_techniques(ids: Vec<String>) -> Json {
+    Json::Array(ids.into_iter().map(Json::from).collect())
+}
+
+/// The code of the warning an objective technique outside Enterprise ATT&CK
+/// earns.
+pub const TECHNIQUE_NOT_ENTERPRISE_CODE: &str = "technique_not_enterprise_left_out";
+
+/// A deploy's body and the `(code, message)` warnings it earned.
+pub type Compiled = (Json, Vec<(&'static str, String)>);
+
 /// The detection rule body `rule` deploys to `tenant` (`DetectionRule`, as
 /// the client sends it: `@odata.type` for `odata_type`).
 pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
+    body_with_warnings(cx, rule, tenant).map(|(body, _)| body)
+}
+
+/// [`body`] and its warnings: the objective's techniques outside Enterprise
+/// ATT&CK (Mobile, ICS) are left out of `mitreTechniques`, each named. The
+/// block's own `alert.techniques` are sent as written.
+pub fn body_with_warnings(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: &str,
+) -> Result<Compiled, CompileError> {
+    let mut warnings: Vec<(&'static str, String)> = Vec::new();
     let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
             "Rule {} ({}): configurations.{PLATFORM} is missing",
@@ -204,7 +232,25 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Compile
     );
     template.insert("severity".into(), severity.into());
     template.insert("category".into(), category.into());
-    template.insert("mitreTechniques".into(), Json::Array(Vec::new()));
+    let own = strings(alert.and_then(|alert| alert.get("techniques")));
+    let inherited = own.is_empty();
+    let mut techniques = deploy::platform_techniques(cx, DISPLAY, rule, own)?;
+    if inherited {
+        techniques.retain(|id| {
+            let outside = cx.attack.name(id).is_some_and(attack::non_enterprise);
+            if outside {
+                warnings.push((
+                    TECHNIQUE_NOT_ENTERPRISE_CODE,
+                    format!(
+                        "Rule {} ({}): leaving out {id}, which the rule's objective maps but is not an Enterprise ATT&CK technique, so Defender for Endpoint does not take it",
+                        rule.uuid, rule.name
+                    ),
+                ));
+            }
+            !outside
+        });
+    }
+    template.insert("mitreTechniques".into(), mitre_techniques(techniques));
     template.insert(
         "impactedAssets".into(),
         Json::Array(impacted_assets(block.get("impacted_entities"))),
@@ -247,7 +293,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Compile
     body.insert("schedule".into(), Json::Object(schedule));
     body.insert("detectionAction".into(), Json::Object(detection));
     body.insert("isEnabled".into(), Json::Bool(enabled));
-    Ok(Json::Object(body))
+    Ok((Json::Object(body), warnings))
 }
 
 /// The writes a deploy sends for `rule` to `tenant`, whose recorded id is
@@ -284,6 +330,15 @@ mod tests {
         assert_eq!(lower_first("DeviceId"), "deviceId");
         assert_eq!(lower_first("SHA1"), "sHA1");
         assert_eq!(lower_first(""), "");
+    }
+
+    #[test]
+    fn mitre_techniques_are_sent_as_given() {
+        assert_eq!(
+            mitre_techniques(vec!["T1528".into(), "T1059.001".into()]).to_compact(),
+            r#"["T1528","T1059.001"]"#
+        );
+        assert_eq!(mitre_techniques(Vec::new()).to_compact(), "[]");
     }
 
     #[test]

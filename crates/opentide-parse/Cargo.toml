@@ -14,6 +14,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+foldhash.workspace = true
 logos.workspace = true
 rowan.workspace = true
 

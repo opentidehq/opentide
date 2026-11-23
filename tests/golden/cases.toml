@@ -35,6 +35,30 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
 vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", signal = "00000000-0000-4000-8099-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
+[fixtures.tide-corpus-lint-code-note]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `[filenames.codes] filename_mismatch = \"info\"` in lint.toml (an `edits` entry with an empty `find`): the corpus's file names are not the slugs of its names, a warning `lint --strict` fails on (`strict` case), and with the one code set to a note the same run passes while the filenames check still runs (OT-5)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_mismatch = \"info\"\n" }]
+
+[fixtures.tide-corpus-lint-unknown-code]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a misspelt code in lint.toml (`[queries.codes] kql_unknown_tabel`): `lint` refuses the run, exit 2, naming the key and the nearest code (#1802)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unknown_tabel = \"off\"\n" }]
+
+[fixtures.tide-corpus-lint-engine-warning]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus whose Sentinel rule searches every table (`search`), a warning of the queries check, with lint.toml raising that code (`[queries.codes]`): the engine's finding takes the table's severity (#1802)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      SecurityEvent\n      | where EventID == 4688\n      | take 1\n", replace = "      search \"mimikatz\"\n      | take 1\n" }, { path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unscoped_search = \"error\"\n" }]
+
+[fixtures.tide-corpus-lint-retired-code]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a retired code in lint.toml (`[filenames.codes] filename_slug`): `lint` accepts it, exit 0, and says so in `warnings` (#1802)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_slug = \"off\"\n" }]
+
 [fixtures.tide-corpus-folders]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -1503,6 +1527,35 @@ variant = "strict"
 args = ["lint", "--strict"]
 fixtures = ["tide-corpus", "vscode", "fault-lint"]
 
+# OT-5: `[<check>.codes]` in lint.toml sets one code's severity. The `strict`
+# case fails on the corpus's `filename_mismatch` warnings; with that code set
+# to "info" the same run passes.
+[[case]]
+command = "lint"
+variant = "strict-code-downgraded"
+args = ["lint", "--strict"]
+fixtures = ["tide-corpus-lint-code-note"]
+
+# #1802: a misspelt code is a configuration error (exit 2, with the nearest
+# code), and `[queries.codes]` sets the severity of a real engine warning.
+[[case]]
+command = "lint"
+variant = "unknown-code"
+args = ["lint"]
+fixtures = ["tide-corpus-lint-unknown-code"]
+
+[[case]]
+command = "lint"
+variant = "check-queries-code-error"
+args = ["lint", "--check", "queries"]
+fixtures = ["tide-corpus-lint-engine-warning"]
+
+[[case]]
+command = "lint"
+variant = "retired-code"
+args = ["lint"]
+fixtures = ["tide-corpus-lint-retired-code"]
+
 # UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
 [[case]]
 command = "lint"
@@ -1647,6 +1700,18 @@ command = "info"
 variant = "rules"
 args = ["info", "rules"]
 fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "info"
+variant = "threats"
+args = ["info", "threats"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "objectives"
+args = ["info", "objectives"]
+fixtures = ["tide-corpus"]
 
 [[case]]
 command = "info"
@@ -2195,7 +2260,25 @@ command = "deploy"
 variant = "promote-push"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push to any other branch (or a tag) promotes nothing: the rules stay
+# STAGING and no production tenant is planned (F-01).
+[[case]]
+command = "deploy"
+variant = "promote-feature-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/feature/foo", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push whose default branch the CI environment does not say promotes
+# nothing and warns, naming OPENTIDE_DEFAULT_BRANCH.
+[[case]]
+command = "deploy"
+variant = "promote-unknown-default-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # UC-6.2e: a promotion target that is not a status name (a number), a
 # promoted block whose key is not a string, and promoted text that does not
@@ -2206,14 +2289,14 @@ command = "deploy"
 variant = "promote-fails"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push-no-target", "deploy-push-key", "deploy-push-unreadable"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]
 command = "deploy"
 variant = "promote-skip"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE", "--skip-promotion"]
 fixtures = ["deploy-push"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 # Git without the network (ADR 0007's amendment): a git checkout read with
 # gix, which the WASI build must read as natively. The dry run plans the rule
@@ -2263,7 +2346,7 @@ command = "deploy"
 variant = "promote-gitlab-progress-json"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push"]
-env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI_COMMIT_BRANCH = "main", CI_DEFAULT_BRANCH = "main", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
 
 [[case]]
 command = "deploy migrate-state"

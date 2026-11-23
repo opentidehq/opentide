@@ -416,6 +416,297 @@ mod lint {
         );
     }
 
+    /// The queries check's engine, standing in: one warning per code it is told of.
+    struct Engine(&'static [&'static str]);
+
+    impl opentide_workspace::lint::LintQueryCheck for Engine {
+        fn check(
+            &self,
+            _: &Path,
+            relative: &str,
+            uuid: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            Ok(self
+                .0
+                .iter()
+                .map(|code| {
+                    let engine =
+                        opentide_workspace::Diagnostic::new(*code, Severity::Warning, "finding");
+                    LintFinding::from_engine(relative, uuid, engine)
+                })
+                .collect())
+        }
+    }
+
+    fn severities(report: &LintReport) -> Vec<(&str, &str)> {
+        report
+            .findings
+            .iter()
+            .filter(|finding| finding.check == LintCheck::Queries)
+            .map(|finding| (finding.code(), finding.severity()))
+            .collect()
+    }
+
+    /// OT-5: `[queries.codes]` sets one code's severity, wins over the check's
+    /// `severity`, and `off` drops the finding; `--strict` counts the result.
+    #[test]
+    fn a_codes_table_sets_one_codes_severity_and_off_drops_it() {
+        const ALL: &[&str] = &[
+            "kql_join_summarize_before_project",
+            "kql_table_not_declared",
+            "kql_unknown_table",
+        ];
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let engine = Engine(ALL);
+        let strict = LintOptions {
+            strict: true,
+            checks: vec![LintCheck::Queries],
+            query_check: Some(&engine),
+            ..options()
+        };
+        let plain = run(&fs, &LintConfig::default(), &strict);
+        assert!(
+            severities(&plain)
+                .iter()
+                .all(|(_, level)| *level == "warning")
+        );
+        assert_eq!(plain.exit_code, 1);
+        // Downgrade the inherited warning and raise another: the rest stay.
+        let tuned = run(
+            &fs,
+            &config(
+                "[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_unknown_table = \"error\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(
+            severities(&tuned),
+            [
+                ("kql_join_summarize_before_project", "info"),
+                ("kql_table_not_declared", "warning"),
+                ("kql_unknown_table", "error"),
+            ]
+        );
+        let downgraded = tuned
+            .findings
+            .iter()
+            .find(|finding| finding.code() == "kql_join_summarize_before_project")
+            .unwrap();
+        assert_eq!(downgraded.diagnostic.severity, Severity::Info);
+        assert_eq!(tuned.exit_code, 1, "the raised code still fails --strict");
+        // A code's own setting wins over the check's; `off` drops it.
+        let layered = run(
+            &fs,
+            &config(
+                "[queries]\nseverity = \"error\"\n[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_table_not_declared = \"off\"\nkql_unknown_table = \"off\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(
+            severities(&layered),
+            [("kql_join_summarize_before_project", "info")]
+        );
+        assert_eq!(layered.exit_code, 0, "only a note is left");
+        assert_eq!(layered.status, LintStatus::Issues);
+        // `--strict` passes once every warning is a note or off.
+        let quiet = run(
+            &fs,
+            &config(
+                "[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_table_not_declared = \"off\"\nkql_unknown_table = \"info\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(quiet.exit_code, 0);
+        assert!(quiet.outcome_ok);
+    }
+
+    /// `off` means off: `--fix` does not rename a file whose `filename_mismatch`
+    /// lint.toml drops, and the report does not mention it.
+    #[test]
+    fn off_stops_fix_from_renaming() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/rule-0001.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        let fix = LintOptions {
+            fix: true,
+            ..options()
+        };
+        let off = run(
+            &fs,
+            &config("[filenames.codes]\nfilename_mismatch = \"off\"\n"),
+            &fix,
+        );
+        assert!(fs.is_file(Path::new("/ws/objects/rules/rule-0001.yaml")));
+        assert!(!fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+        assert_eq!(off.fixed, 0);
+        assert!(off.findings.iter().all(|f| f.code() != "filename_mismatch"));
+        // Without the table the same run renames it.
+        let on = run(&fs, &LintConfig::default(), &fix);
+        assert_eq!(on.fixed, 1);
+        assert!(fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+    }
+
+    /// The code to check map `lint.toml` validates against is lint's own list,
+    /// and names, for each code, the check that reports it.
+    #[test]
+    fn the_codes_tables_know_every_code_lint_reports_itself() {
+        use opentide_schema::configuration::lint::{LINT_CODE_CHECKS, RETIRED_CODES};
+        use opentide_workspace::lint::codes;
+        // Each lint code with the check that reports it, once.
+        let reporters = [
+            (codes::PARSE, LintCheck::Filenames),
+            (codes::NAME, LintCheck::Filenames),
+            (codes::FILENAME, LintCheck::Filenames),
+            (codes::FILENAME_PATTERN, LintCheck::Filenames),
+            (codes::NESTED, LintCheck::Filenames),
+            (codes::METADATA, LintCheck::Metadata),
+            (codes::REVIEWED_BEFORE_MODIFIED, LintCheck::Metadata),
+            (codes::RECOMMENDED, LintCheck::Recommended),
+            (codes::PLACEHOLDER, LintCheck::Placeholders),
+        ];
+        let mut listed: Vec<&str> = opentide_workspace::lint::LINT_CODES.to_vec();
+        let mut mapped: Vec<&str> = LINT_CODE_CHECKS.iter().map(|(code, _)| *code).collect();
+        listed.sort_unstable();
+        mapped.sort_unstable();
+        assert_eq!(mapped, listed, "LINT_CODE_CHECKS and LINT_CODES differ");
+        let mut covered: Vec<&str> = reporters.iter().map(|(code, _)| *code).collect();
+        covered.sort_unstable();
+        assert_eq!(covered, listed, "a lint code has no reporter in this test");
+        for (code, check) in reporters {
+            assert_eq!(
+                opentide_schema::configuration::lint::check_of_code(code),
+                Some(check.name()),
+                "{code} is reported by the {} check",
+                check.name()
+            );
+        }
+        for (retired, _) in RETIRED_CODES {
+            assert!(!listed.contains(&retired));
+        }
+    }
+
+    /// A retired code in a `codes` table is a warning of the report, not a refusal.
+    #[test]
+    fn a_retired_code_is_a_warning_of_the_report() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let report = run(
+            &fs,
+            &config("[filenames.codes]\nfilename_slug = \"off\"\n"),
+            &options(),
+        );
+        assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+        assert!(report.warnings[0].contains("\"filename_slug\" is retired"));
+        assert!(report.warnings[0].contains("filename_mismatch"));
+    }
+
+    /// A query check that refuses to run, as an engine that does not load.
+    struct Unavailable;
+
+    impl opentide_workspace::lint::LintQueryCheck for Unavailable {
+        fn check(
+            &self,
+            _: &Path,
+            _: &str,
+            _: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            Err("engine unavailable".to_owned())
+        }
+    }
+
+    /// The warning about a retired code is on the refused runs too: an engine
+    /// that does not load, and a `--file` that selects nothing.
+    #[test]
+    fn a_retired_codes_warning_is_on_a_refused_run_too() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let retired = config("[filenames.codes]\nfilename_slug = \"off\"\n");
+        let engine = run(
+            &fs,
+            &retired,
+            &LintOptions {
+                checks: vec![LintCheck::Queries],
+                query_check: Some(&Unavailable),
+                ..options()
+            },
+        );
+        assert_eq!(engine.failure_code, Some("engine_unavailable"));
+        assert_eq!(engine.warnings.len(), 1, "{:?}", engine.warnings);
+        let unmatched = run(
+            &fs,
+            &retired,
+            &LintOptions {
+                files: vec!["objects/rules/missing.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(unmatched.exit_code, 1);
+        assert_eq!(unmatched.warnings.len(), 1, "{:?}", unmatched.warnings);
+    }
+
+    /// The codes lint reports itself take the table of their check, and a
+    /// table does not touch the check's other codes.
+    #[test]
+    fn a_codes_table_covers_the_codes_lint_reports_itself() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/misnamed.yaml", rule(U1, "Another rule"));
+        fs.write(
+            "/ws/objects/rules/a-rule.yaml",
+            format!("name: A rule\nmetadata:\n  uuid: {U2}\n  schema: rule::1.1\n"),
+        );
+        let base = run(&fs, &LintConfig::default(), &options());
+        assert!(
+            base.findings
+                .iter()
+                .any(|f| f.code() == "filename_mismatch" && f.severity() == "warning")
+        );
+        let tuned = run(
+            &fs,
+            &config(
+                "[filenames.codes]\nfilename_mismatch = \"error\"\n[metadata.codes]\nmetadata_recommended = \"off\"\n[recommended.codes]\nrecommended_field_missing = \"warning\"\n",
+            ),
+            &options(),
+        );
+        for finding in &tuned.findings {
+            match finding.code() {
+                "filename_mismatch" => assert_eq!(finding.severity(), "error"),
+                "recommended_field_missing" => assert_eq!(finding.severity(), "warning"),
+                "metadata_recommended" => panic!("`off` left {:?}", json(finding)),
+                _ => {}
+            }
+        }
+        assert!(
+            tuned
+                .findings
+                .iter()
+                .any(|f| f.code() == "filename_mismatch")
+        );
+        assert!(
+            tuned
+                .findings
+                .iter()
+                .any(|f| f.code() == "recommended_field_missing")
+        );
+        assert_eq!(
+            tuned.findings.len() + 1,
+            base.findings.len(),
+            "only metadata dropped"
+        );
+        // `lint --file`'s editor path (`lint_file`) applies it too.
+        let editor = opentide_workspace::lint::lint_file(
+            &fs,
+            Path::new(ROOT),
+            &config("[metadata.codes]\nmetadata_recommended = \"off\"\n"),
+            Path::new("/ws/objects/rules/a-rule.yaml"),
+        );
+        assert!(editor.iter().all(|f| f.code() != "metadata_recommended"));
+    }
+
     #[test]
     fn strict_fails_on_errors_and_warnings_but_never_on_notes() {
         let fs = workspace();
@@ -1059,5 +1350,129 @@ mod lint {
         .unwrap();
         workspace.lint(None, &options);
         assert_eq!(sorted(&check), expected);
+    }
+
+    /// A rule whose `metadata` also holds `extra` (lines under `metadata:`).
+    fn dated_rule(extra: &str) -> String {
+        rule(U1, "Dated").replace("  author: me\n", &format!("  author: me\n{extra}"))
+    }
+
+    fn reviewed_findings(extra: &str, lint_toml: &str) -> Vec<LintFinding> {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/dated.yaml", dated_rule(extra));
+        run(&fs, &config(lint_toml), &options())
+            .findings
+            .into_iter()
+            .filter(|finding| finding.code() == "reviewed_before_modified")
+            .collect()
+    }
+
+    #[test]
+    fn reviewed_before_modified_warns_under_the_metadata_check() {
+        let found = reviewed_findings("  modified: 2026-11-20\n  reviewed: 2026-09-01\n", "");
+        assert_eq!(found.len(), 1);
+        let entry = serde_json::to_value(&found[0]).unwrap();
+        assert_eq!(entry["check"], "metadata");
+        assert_eq!(entry["severity"], "warning");
+        assert_eq!(entry["path"], "objects/rules/dated.yaml");
+        assert_eq!(
+            entry["message"],
+            "metadata.reviewed (2026-09-01) is before metadata.modified (2026-11-20)"
+        );
+        assert_eq!(
+            entry["field_path"],
+            serde_json::json!(["metadata", "reviewed"])
+        );
+        // A datetime counts by its day, as written.
+        let found = reviewed_findings(
+            "  modified: 2026-11-20 08:00:00\n  reviewed: 2026-11-19T23:00:00Z\n",
+            "",
+        );
+        assert_eq!(found.len(), 1);
+    }
+
+    #[test]
+    fn reviewed_on_or_after_modified_is_not_reported() {
+        for extra in [
+            "  modified: 2026-11-20\n  reviewed: 2026-11-20\n",
+            "  modified: 2026-11-20\n  reviewed: 2026-12-01\n",
+            "  modified: 2026-11-20T15:00:00Z\n  reviewed: 2026-11-20\n",
+        ] {
+            assert!(reviewed_findings(extra, "").is_empty(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn reviewed_before_modified_skips_a_missing_or_invalid_date() {
+        for extra in [
+            "  modified: 2026-11-20\n",
+            "  reviewed: 2026-09-01\n",
+            "  modified: 2026-11-20\n  reviewed: soon\n",
+            "  modified: 2026-13-45\n  reviewed: 2026-09-01\n",
+            "  modified: 2026-11-20\n  reviewed: 2026-09-01T10:00:00\n",
+        ] {
+            assert!(reviewed_findings(extra, "").is_empty(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn reviewed_before_modified_follows_lint_toml() {
+        let extra = "  modified: 2026-11-20\n  reviewed: 2026-09-01\n";
+        let off = "[metadata.codes]\nreviewed_before_modified = \"off\"\n";
+        assert!(reviewed_findings(extra, off).is_empty());
+        let info = "[metadata.codes]\nreviewed_before_modified = \"error\"\n";
+        assert_eq!(reviewed_findings(extra, info)[0].severity(), "error");
+        let check = "[metadata]\nseverity = \"info\"\n";
+        assert_eq!(reviewed_findings(extra, check)[0].severity(), "info");
+        // `required = []` stops the key demands, not this comparison.
+        assert_eq!(
+            reviewed_findings(extra, "[metadata]\nrequired = []\n").len(),
+            1
+        );
+        assert!(reviewed_findings(extra, "[metadata]\nenabled = false\n").is_empty());
+    }
+
+    #[test]
+    fn reviewed_before_modified_needs_a_schema_with_reviewed() {
+        let extra = "  modified: 2026-11-20\n  reviewed: 2026-09-01\n";
+        let fs = workspace();
+        // rule::1.0 has no `reviewed`: the schema check refuses the key, lint
+        // does not compare it.
+        fs.write(
+            "/ws/objects/rules/old.yaml",
+            dated_rule(extra).replace("rule::1.1", "rule::1.0"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.code() != "reviewed_before_modified"),
+            "{:?}",
+            codes(&report)
+        );
+    }
+
+    #[test]
+    fn the_editor_shows_reviewed_before_modified_at_the_configured_severity() {
+        use opentide_workspace::lint::lint_file;
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/dated.yaml",
+            dated_rule("  modified: 2026-11-20\n  reviewed: 2026-09-01\n"),
+        );
+        let path = Path::new("/ws/objects/rules/dated.yaml");
+        let found = lint_file(&fs, Path::new(ROOT), &LintConfig::default(), path);
+        let finding = found
+            .iter()
+            .find(|f| f.code() == "reviewed_before_modified")
+            .unwrap();
+        assert_eq!(finding.diagnostic.severity, Severity::Warning);
+        let off = config("[metadata.codes]\nreviewed_before_modified = \"off\"\n");
+        assert!(
+            lint_file(&fs, Path::new(ROOT), &off, path)
+                .iter()
+                .all(|f| f.code() != "reviewed_before_modified")
+        );
     }
 }

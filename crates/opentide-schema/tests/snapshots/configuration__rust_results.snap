@@ -1012,7 +1012,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "error": "lint.toml: unknown check(s) \"alpha\", \"zeta\". Known checks: filenames, metadata, recommended, placeholders, queries"
   },
   "lint-unknown-key": {
-    "error": "lint.toml [queries]: unknown key(s) \"colour\", \"shade\". Known keys: enabled, severity"
+    "error": "lint.toml [queries]: unknown key(s) \"colour\", \"shade\". Known keys: codes, enabled, severity"
   },
   "lint-unknown-kind": {
     "error": "lint.toml [filenames.widgets]: unknown object kind(s) \"widgets\". Known kinds: threats, objectives, rules"

@@ -679,6 +679,18 @@ pub struct SetupPipelineFields {
     )]
     pub variable_group: Vec<String>,
     #[arg(
+        long = "app-token",
+        help = "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
+        overrides_with = "no_app_token"
+    )]
+    pub app_token: bool,
+    #[arg(
+        long = "no-app-token",
+        overrides_with = "app_token",
+        help = "Turn --app-token off, including one the existing pipeline records"
+    )]
+    pub no_app_token: bool,
+    #[arg(
         long = "no-explorer-pages",
         overrides_with = "explorer_pages",
         help = "Turn --explorer-pages off"
@@ -939,6 +951,11 @@ pub struct SetupCiArgs {
     pub path: String,
     #[command(flatten)]
     pub pipeline: SetupPipelineFields,
+    #[arg(
+        long = "stdout",
+        help = "Print the generated pipeline to stdout and write nothing (to diff it against an adapted one; not with --json or --plan)"
+    )]
+    pub stdout: bool,
     #[command(flatten)]
     pub confirm: SetupConfirm,
 }
@@ -1149,7 +1166,7 @@ pub struct DeployArgs {
     pub drop_deprecated: bool,
     #[arg(
         long = "skip-promotion",
-        help = "Skip the status promotion of a RELEASE run on a push"
+        help = "Skip the status promotion of a RELEASE run on a push to the default branch"
     )]
     pub skip_promotion: bool,
     #[arg(
@@ -1217,7 +1234,11 @@ pub struct GenerateArgs {
     /// The phases named as words (`generate schemas templates`), in the
     /// order given; none runs the whole pipeline. An unknown one is refused
     /// by the run, which lists the phases.
-    #[arg(value_name = "PHASE", hide = true)]
+    #[arg(
+        value_name = "PHASE",
+        help = "Phases to run, in the order given: schemas, templates, vocabs, snippets. \
+                None runs the whole pipeline."
+    )]
     pub phases: Vec<String>,
 }
 

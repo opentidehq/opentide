@@ -686,6 +686,15 @@ fn deploy(
     // Promotion rewrites the promoted rules' status on disk; the workspace
     // read before it still holds the old status, which routes those rules
     // to no RELEASE tenant and compiles them with the old status.
+    if !args.skip_promotion {
+        let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
+        plan_warnings.extend(super::promotion_preview::warnings(
+            &runs,
+            reads_changes,
+            cx.env,
+            opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses).enabled,
+        ));
+    }
     let reopened;
     let workspace = if promotes(args, &runs, cx.env) {
         let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
@@ -996,6 +1005,7 @@ fn deploy(
         failures: Vec::new(),
         stopped_tenants: Vec::new(),
         warned: false,
+        sentinel_warned: std::collections::HashSet::new(),
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
         runtime: opentide_connectors::runtime::shared(),
@@ -2237,6 +2247,8 @@ struct Sender<'s, 'c> {
     stopped_tenants: Vec<(String, String)>,
     /// `DEPLOYMENT_WARNING_RAISED`.
     warned: bool,
+    /// The Sentinel rules whose technique warnings were logged.
+    sentinel_warned: std::collections::HashSet<String>,
     environment: Environment,
     cancel: CancellationToken,
     /// The process's network runtime, or why it could not start: a run
@@ -2734,7 +2746,11 @@ impl Sender<'_, '_> {
                 }
                 let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
                 connection.rule_begins();
-                let outcome = self.by_uuid_rule(platform, &connection, batch, rule, &mut result);
+                // Sentinel's `upsert` reads as what ARM did (OT-3).
+                let upsert =
+                    log.planned_action(platform, Some(&tenant), &rule.uuid) == Some("upsert");
+                let outcome =
+                    self.by_uuid_rule(platform, &connection, batch, rule, &mut result, upsert);
                 if self.raised_before_any_rule(&connection, platform, &tenant, log, &outcome) {
                     break;
                 }
@@ -2777,7 +2793,7 @@ impl Sender<'_, '_> {
     /// The request a Sentinel rule sends: the compiled analytic rule, or its
     /// deletion (announced).
     fn sentinel_request(
-        &self,
+        &mut self,
         platform: &str,
         batch: &Batch,
         rule: &opentide_compile::Rule,
@@ -2796,8 +2812,17 @@ impl Sender<'_, '_> {
             );
             DeployRequest::delete(rule.uuid.clone())
         } else {
-            let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
-                .map_err(compile_error)?;
+            let (body, warnings) =
+                opentide_compile::sentinel::compile_with_warnings(self.compile, rule, tenant)
+                    .map_err(compile_error)?;
+            // Once per rule, not once per tenant: the body, and so the
+            // warning, is the same on each.
+            if !warnings.is_empty() && self.sentinel_warned.insert(rule.uuid.clone()) {
+                self.warned = true;
+                for (code, message) in warnings {
+                    tracing::warn!(detail = message.as_str(), "{code}");
+                }
+            }
             DeployRequest::new(
                 rule.uuid.clone(),
                 Operation::Update,
@@ -2958,6 +2983,7 @@ impl Sender<'_, '_> {
         batch: &Batch,
         rule: &opentide_compile::Rule,
         result: &mut RuleResult,
+        upsert: bool,
     ) -> Result<(), Raised> {
         let strategy = self.strategy_of(rule, platform)?;
         let deletion = strategy == StatusStrategy::Deletion;
@@ -3011,6 +3037,21 @@ impl Sender<'_, '_> {
         // rename's cleanup may still have deleted old copies (`removed`).
         if failed.is_none() && outcome.unchanged() {
             result.action = Some(UNCHANGED.to_owned());
+        } else if failed.is_none() && id == Some(PlatformId::Sentinel) && upsert {
+            // Sentinel reads before it writes (OT-3): an `upsert` reads as
+            // what ARM did, a create or an update; none found keeps the plan's.
+            if let Some(action) =
+                outcome
+                    .events
+                    .iter()
+                    .find_map(|event| match event.name.as_str() {
+                        opentide_connectors::sentinel::RULE_CREATED => Some("create"),
+                        opentide_connectors::sentinel::RULE_UPDATED => Some("update"),
+                        _ => None,
+                    })
+            {
+                result.action = Some(action.to_owned());
+            }
         }
         match failed {
             Some(failed) => Err(scoped(failed, |error| raised(&error))),
@@ -3463,7 +3504,23 @@ impl Sender<'_, '_> {
         };
         let body = match PlatformId::parse(platform) {
             Some(PlatformId::DefenderForEndpoint) => {
-                opentide_compile::defender::body(self.compile, rule, tenant)
+                opentide_compile::defender::body_with_warnings(self.compile, rule, tenant).map(
+                    |(body, warnings)| {
+                        // Once per rule, not once per tenant: the techniques
+                        // are the rule's, so the warning is the same on each.
+                        if !warnings.is_empty()
+                            && self
+                                .sentinel_warned
+                                .insert(format!("defender:{}", rule.uuid))
+                        {
+                            self.warned = true;
+                            for (code, message) in warnings {
+                                tracing::warn!(detail = message.as_str(), "{code}");
+                            }
+                        }
+                        body
+                    },
+                )
             }
             Some(PlatformId::SentinelOne) => {
                 opentide_compile::sentinel_one::body(self.compile, rule, table)

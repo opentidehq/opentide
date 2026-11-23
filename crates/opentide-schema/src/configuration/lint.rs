@@ -46,7 +46,70 @@ pub const METADATA_KEYS: [&str; 10] = [
 ];
 
 const SOURCE: &str = "lint.toml";
-const COMMON_KEYS: [&str; 2] = ["enabled", "severity"];
+const COMMON_KEYS: [&str; 3] = ["enabled", "severity", "codes"];
+/// What a `[<check>.codes]` entry takes besides a severity: the finding is dropped.
+pub const CODE_OFF: &str = "off";
+
+/// The codes `opentide lint` reports itself, each with the check it belongs
+/// to. Every other code in [`opentide_core::codes`] is the analysis engine's,
+/// and belongs to `queries`.
+pub const LINT_CODE_CHECKS: [(&str, &str); 9] = [
+    ("yaml_parse", "filenames"),
+    ("name_missing", "filenames"),
+    ("filename_mismatch", "filenames"),
+    ("filename_pattern", "filenames"),
+    ("nested_object_file", "filenames"),
+    ("metadata_recommended", "metadata"),
+    ("reviewed_before_modified", "metadata"),
+    ("recommended_field_missing", "recommended"),
+    ("placeholder", "placeholders"),
+];
+
+/// Codes nothing reports any more (`opentide explain` keeps their pages), each
+/// with what replaced it. A `codes` table that still names one is accepted
+/// with a warning, so an old `lint.toml` keeps working: the entry has no effect.
+pub const RETIRED_CODES: [(&str, &str); 5] = [
+    (
+        "crowdstrike_unsupported",
+        "CrowdStrike queries are checked as CQL, with the cql_* codes",
+    ),
+    (
+        "yara_x_incompatible",
+        "what YARA-X refuses has its own yara_* codes",
+    ),
+    (
+        "filename_slug",
+        "lint reports it as filename_mismatch, under [filenames.codes]",
+    ),
+    (
+        "missing_author",
+        "lint reports it as metadata_recommended, under [metadata.codes]",
+    ),
+    (
+        "missing_organisation",
+        "lint reports it as metadata_recommended, under [metadata.codes]",
+    ),
+];
+
+/// The check a finding with this code belongs to, `None` for an unknown code.
+pub fn check_of_code(code: &str) -> Option<&'static str> {
+    LINT_CODE_CHECKS
+        .iter()
+        .find(|(known, _)| *known == code)
+        .map(|(_, check)| *check)
+        .or_else(|| {
+            opentide_core::codes::ALL
+                .contains(&code)
+                .then_some("queries")
+        })
+}
+
+fn every_code() -> impl Iterator<Item = &'static str> {
+    LINT_CODE_CHECKS
+        .iter()
+        .map(|(code, _)| *code)
+        .chain(opentide_core::codes::ALL.iter().copied())
+}
 
 fn check_keys(name: &str) -> Vec<&'static str> {
     let mut keys: Vec<&'static str> = COMMON_KEYS.to_vec();
@@ -69,6 +132,20 @@ pub struct CheckConfig {
     pub enabled: bool,
     /// The severity every finding takes, when set.
     pub severity: Option<String>,
+    /// `[<check>.codes]`: the severity of one code's findings (`error`,
+    /// `warning`, `info`) or [`CODE_OFF`], which wins over `severity`. In the
+    /// order the file lists them.
+    pub codes: Vec<(String, String)>,
+}
+
+impl CheckConfig {
+    /// What `[<check>.codes]` says of `code`, when it does.
+    pub fn code_level(&self, code: &str) -> Option<&str> {
+        self.codes
+            .iter()
+            .find(|(own, _)| own == code)
+            .map(|(_, level)| level.as_str())
+    }
 }
 
 /// The `[filenames]` convention.
@@ -107,6 +184,9 @@ pub struct LintConfig {
     pub required_metadata: Vec<String>,
     /// `[filenames]`.
     pub filenames: FilenameConfig,
+    /// What the file asks of the reader without refusing it: a retired code
+    /// in a `codes` table.
+    pub warnings: Vec<String>,
 }
 
 impl Default for LintConfig {
@@ -115,6 +195,7 @@ impl Default for LintConfig {
             checks: Vec::new(),
             required_metadata: DEFAULT_REQUIRED_METADATA.map(str::to_owned).to_vec(),
             filenames: FilenameConfig::default(),
+            warnings: Vec::new(),
         }
     }
 }
@@ -222,9 +303,18 @@ pub fn parse_lint_config(raw: Option<&Node>) -> Result<LintConfig, LintConfigErr
                 }
             },
         };
-        config
-            .checks
-            .push((name.to_owned(), CheckConfig { enabled, severity }));
+        let codes = match table.get("codes") {
+            None => Vec::new(),
+            Some(node) => code_levels(node, name, &mut config.warnings)?,
+        };
+        config.checks.push((
+            name.to_owned(),
+            CheckConfig {
+                enabled,
+                severity,
+                codes,
+            },
+        ));
         if name == "metadata"
             && let Some(required) = table.get("required")
         {
@@ -235,6 +325,62 @@ pub fn parse_lint_config(raw: Option<&Node>) -> Result<LintConfig, LintConfigErr
         }
     }
     Ok(config)
+}
+
+/// `[<check>.codes]`: each key a code of that check, each value a severity or `off`.
+/// A retired code is skipped with a warning.
+fn code_levels(
+    node: &Node,
+    check: &str,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<(String, String)>, LintConfigError> {
+    let place = format!("{SOURCE} [{check}.codes]");
+    if !matches!(node.value, Value::Map(_)) {
+        return Err(LintConfigError(format!("{place} must be a table")));
+    }
+    let mut levels = Vec::new();
+    for entry in entries(node) {
+        let code = key_of(entry);
+        if let Some((_, replacement)) = RETIRED_CODES.iter().find(|(old, _)| *old == code) {
+            warnings.push(format!(
+                "{place}: code {} is retired and has no effect: {replacement}",
+                repr::quote(&code)
+            ));
+            continue;
+        }
+        match check_of_code(&code) {
+            None => {
+                let hint = opentide_core::suggest::closest(&code, every_code())
+                    .map_or_else(String::new, |near| {
+                        format!(". Did you mean {}?", repr::quote(near))
+                    });
+                return Err(LintConfigError(format!(
+                    "{place}: unknown code {}{hint}",
+                    repr::quote(&code)
+                )));
+            }
+            Some(owner) if owner != check => {
+                return Err(LintConfigError(format!(
+                    "{place}: code {} belongs to the {owner} check; set it under [{owner}.codes]",
+                    repr::quote(&code)
+                )));
+            }
+            Some(_) => {}
+        }
+        match entry.value.value.as_str() {
+            Some(text) if SEVERITIES.contains(&text) || text == CODE_OFF => {
+                levels.push((code, text.to_owned()));
+            }
+            _ => {
+                return Err(LintConfigError(format!(
+                    "{place}.{code} must be one of {}, {CODE_OFF}, got {}",
+                    SEVERITIES.join(", "),
+                    repr::node(&entry.value)
+                )));
+            }
+        }
+    }
+    Ok(levels)
 }
 
 fn reject_unknown_kinds(table: &Node, unknown: &[String]) -> Result<(), LintConfigError> {
@@ -434,5 +580,108 @@ mod tests {
         let regex = flags.filenames.regex.unwrap();
         assert!(regex.is_match("R-ABC"));
         assert!(!regex.is_match("R-ABC-"));
+    }
+
+    #[test]
+    fn codes_tables_set_a_severity_or_off_per_code() {
+        let config = filenames(
+            "[queries]\nseverity = \"warning\"\n[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_unknown_table = \"off\"\n[filenames.codes]\nfilename_mismatch = \"error\"\n",
+        )
+        .unwrap();
+        let queries = &config
+            .checks
+            .iter()
+            .find(|(name, _)| name == "queries")
+            .unwrap()
+            .1;
+        assert_eq!(queries.severity.as_deref(), Some("warning"));
+        assert_eq!(
+            queries.code_level("kql_join_summarize_before_project"),
+            Some("info")
+        );
+        assert_eq!(queries.code_level("kql_unknown_table"), Some(CODE_OFF));
+        assert_eq!(queries.code_level("kql_table_not_declared"), None);
+        let names = &config
+            .checks
+            .iter()
+            .find(|(name, _)| name == "filenames")
+            .unwrap()
+            .1;
+        assert_eq!(names.code_level("filename_mismatch"), Some("error"));
+    }
+
+    #[test]
+    fn an_unknown_code_is_refused_with_the_nearest_known_one() {
+        let error = filenames("[queries.codes]\nkql_unknown_tabel = \"off\"\n").unwrap_err();
+        assert_eq!(
+            error.0,
+            "lint.toml [queries.codes]: unknown code \"kql_unknown_tabel\". Did you mean \"kql_unknown_table\"?"
+        );
+        let far = filenames("[queries.codes]\nzzzzzzzzzzzzzzzz = \"off\"\n").unwrap_err();
+        assert_eq!(
+            far.0,
+            "lint.toml [queries.codes]: unknown code \"zzzzzzzzzzzzzzzz\""
+        );
+    }
+
+    #[test]
+    fn a_code_under_the_wrong_check_is_refused_naming_its_own() {
+        let error = filenames("[filenames.codes]\nkql_unknown_table = \"off\"\n").unwrap_err();
+        assert_eq!(
+            error.0,
+            "lint.toml [filenames.codes]: code \"kql_unknown_table\" belongs to the queries check; set it under [queries.codes]"
+        );
+        assert!(filenames("[queries.codes]\nfilename_mismatch = \"off\"\n").is_err());
+    }
+
+    #[test]
+    fn a_codes_value_is_a_severity_or_off() {
+        let error = filenames("[queries.codes]\nkql_unknown_table = \"fatal\"\n").unwrap_err();
+        assert_eq!(
+            error.0,
+            "lint.toml [queries.codes].kql_unknown_table must be one of error, warning, info, off, got \"fatal\""
+        );
+        assert!(filenames("[queries.codes]\nkql_unknown_table = true\n").is_err());
+        let table = filenames("[queries]\ncodes = \"off\"\n").unwrap_err();
+        assert_eq!(table.0, "lint.toml [queries.codes] must be a table");
+    }
+
+    #[test]
+    fn every_lint_code_names_its_check() {
+        for (code, check) in LINT_CODE_CHECKS {
+            assert!(CHECK_NAMES.contains(&check), "{code}");
+            assert_eq!(check_of_code(code), Some(check));
+        }
+        assert_eq!(check_of_code("kql_unknown_table"), Some("queries"));
+        assert_eq!(check_of_code("nope"), None);
+    }
+
+    #[test]
+    fn a_retired_code_is_accepted_with_a_warning_naming_its_replacement() {
+        let config =
+            filenames("[filenames.codes]\nfilename_slug = \"off\"\nfilename_mismatch = \"info\"\n")
+                .unwrap();
+        let own = &config
+            .checks
+            .iter()
+            .find(|(name, _)| name == "filenames")
+            .unwrap()
+            .1;
+        assert_eq!(
+            own.codes,
+            [("filename_mismatch".to_owned(), "info".to_owned())]
+        );
+        assert_eq!(
+            config.warnings,
+            [
+                "lint.toml [filenames.codes]: code \"filename_slug\" is retired and has no effect: lint reports it as filename_mismatch, under [filenames.codes]"
+            ]
+        );
+        // Under any check, and whatever its value: it is not read.
+        let anywhere = filenames("[queries.codes]\nmissing_author = \"nonsense\"\n").unwrap();
+        assert_eq!(anywhere.warnings.len(), 1);
+        for (code, _) in RETIRED_CODES {
+            assert_eq!(check_of_code(code), None, "{code} is retired, not known");
+        }
     }
 }

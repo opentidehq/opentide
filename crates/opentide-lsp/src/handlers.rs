@@ -511,6 +511,11 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
                     .all(|wanted| names.iter().any(|name| name == wanted))
             })
         },
+        completion_label_details: text
+            .and_then(|t| t.completion.as_ref())
+            .and_then(|c| c.completion_item.as_ref())
+            .and_then(|i| i.label_details_support)
+            .unwrap_or(false),
         plaintext_completion: plaintext_only(
             text.and_then(|t| t.completion.as_ref())
                 .and_then(|c| c.completion_item.as_ref())
@@ -1595,25 +1600,51 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
             // say: a value that is not a field of the Tide models (an ECS
             // value, a Bitdefender target, `configurations.elastic.type`,
             // whose documentation is made elsewhere) keeps its own.
+            // A vocabulary value (an ATT&CK technique, an actor) is
+            // documented from its vocabulary entry, whatever the list's own
+            // documentation of it: the catalog keeps no docs for a list that
+            // long, and resolve gives the entry's.
             let resolvable = session.caps.resolve_completion_documentation
                 && field.is_some_and(|(schema, path)| {
-                    opentide_highlight::tide_field_at(schema, path).is_some()
-                        && own_documentation(schema, path, &c.label) == c.documentation
+                    opentide_highlight::tide_field_at(schema, path).is_some_and(|tide| {
+                        opentide_tide::vocab_value(tide, &c.label).is_some()
+                            || own_documentation(schema, path, &c.label) == c.documentation
+                    })
                 });
             let detail_resolved = resolvable && session.caps.resolve_completion_detail;
+            let new_text = insert_text(&c.label, c.label_detail.as_deref());
+            // A client that shows no `labelDetails` reads the name as the detail.
+            let named_detail = c
+                .label_detail
+                .clone()
+                .filter(|_| !session.caps.completion_label_details);
             lsp::CompletionItem {
                 kind: Some(completion_kind(&c.kind)),
-                detail: c.detail.clone().filter(|_| !detail_resolved),
+                detail: named_detail.or_else(|| c.detail.clone().filter(|_| !detail_resolved)),
+                label_details: c
+                    .label_detail
+                    .clone()
+                    .filter(|_| session.caps.completion_label_details)
+                    .map(|name| lsp::CompletionItemLabelDetails {
+                        detail: None,
+                        description: Some(name),
+                    }),
                 documentation: c
                     .documentation
                     .filter(|_| !resolvable)
                     .map(|d| lsp::Documentation::MarkupContent(markup(plain, d))),
-                insert_text: Some(c.label.clone()),
-                filter_text: dotted_edit.then(|| c.label.clone()),
+                insert_text: Some(new_text.clone()),
+                // A value found by its name and aliases as well; a dotted
+                // edit's label otherwise, which the client matches against
+                // the whole dotted word.
+                filter_text: c
+                    .filter_text
+                    .clone()
+                    .or_else(|| dotted_edit.then(|| c.label.clone())),
                 text_edit: dotted_edit.then(|| {
                     lsp::CompletionTextEdit::Edit(lsp::TextEdit {
                         range: lsp::Range::new(start, position),
-                        new_text: c.label.clone(),
+                        new_text,
                     })
                 }),
                 data: serde_json::to_value(data).ok(),
@@ -1623,6 +1654,21 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
         })
         .collect();
     Some(completion_response(session, items))
+}
+
+/// Whether a vocabulary value is inserted with its entry's name as a YAML
+/// comment (`T1548 #Abuse Elevation Control Mechanism`), as the search
+/// hints of the generated JSON schemas insert it. Off: a value is inserted
+/// bare. The one place to switch it; [`insert_text`] reads it.
+const INSERT_NAME_COMMENT: bool = false;
+
+/// The text a completion inserts for `label`: the label, or with
+/// [`INSERT_NAME_COMMENT`] a vocabulary value followed by its `name`.
+fn insert_text(label: &str, name: Option<&str>) -> String {
+    match name {
+        Some(name) if INSERT_NAME_COMMENT && !name.is_empty() => format!("{label} #{name}"),
+        _ => label.to_owned(),
+    }
 }
 
 /// The list as the client takes it: an array of items, or, for a client that
@@ -1696,7 +1742,15 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         .filter(|(schema, path)| opentide_highlight::tide_field_at(schema, path).is_some());
     let resolved_documentation =
         named.and_then(|(schema, path)| own_documentation(schema, path, &item.label));
-    let resolved_detail = named.map(|(schema, path)| format!("{schema} {path}"));
+    // A vocabulary value's detail is its entry's name, as the list gives it
+    // to a client that shows no `labelDetails`.
+    let resolved_detail = named.map(|(schema, path)| {
+        opentide_highlight::tide_field_at(schema, path)
+            .and_then(|field| opentide_tide::vocab_value(field, &item.label))
+            .map(|entry| entry.name)
+            .filter(|name| !name.is_empty())
+            .map_or_else(|| format!("{schema} {path}"), str::to_owned)
+    });
     if item.documentation.is_none()
         && let Some(docs) = resolved_documentation
     {
@@ -1716,6 +1770,10 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
 /// values); `None` when there is no such field or it says nothing of the value.
 fn own_documentation(schema: &str, path: &str, label: &str) -> Option<String> {
     let field = opentide_highlight::tide_field_at(schema, path)?;
+    // A vocabulary value: its entry's name, identifier and description.
+    if let Some(markdown) = opentide_tide::vocab_markdown(field, label) {
+        return Some(markdown.to_owned());
+    }
     let index = field.enum_values.iter().position(|value| value == label)?;
     let doc = field.enum_docs.get(index).filter(|doc| !doc.is_empty())?;
     Some(format!("**{label}**\n\n{doc}"))

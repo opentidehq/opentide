@@ -23,6 +23,8 @@ use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use opentide_core::codes;
+
 use crate::FromNode;
 use crate::configuration::repr;
 use crate::from_node::Context;
@@ -790,7 +792,7 @@ pub fn overlapping_window(block: &Node) -> Option<Advisory> {
     let window_node = get(schedule, "window")?;
     let every_text = every_node(schedule).map_or_else(|| DEFAULT_EVERY.to_owned(), py_str);
     Some(Advisory {
-        code: "graylog_overlapping_window",
+        code: codes::GRAYLOG_OVERLAPPING_WINDOW,
         field_path: block_path(&["schedule"]),
         message: format!(
             "the window ({}) is longer than the interval ({every_text}): on a filter, each \
@@ -837,7 +839,7 @@ pub fn all_streams(block: &Node, tenants: &[TenantView<'_>]) -> Option<Advisory>
         return None;
     }
     Some(Advisory {
-        code: "graylog_all_streams",
+        code: codes::GRAYLOG_ALL_STREAMS,
         field_path: block_path(&[]),
         message: format!(
             "the block sets no streams or stream_categories, and tenant(s) {} set no streams \
@@ -846,6 +848,12 @@ pub fn all_streams(block: &Node, tenants: &[TenantView<'_>]) -> Option<Advisory>
         ),
     })
 }
+
+/// Every advisory code ([`advisories`] emits no other).
+pub const ADVISORY_CODES: [&str; 2] = [
+    codes::GRAYLOG_OVERLAPPING_WINDOW,
+    codes::GRAYLOG_ALL_STREAMS,
+];
 
 /// Every advisory a rule's Graylog block, as authored, earns
 /// (`graylog_advisories`); `rule` is the rule's root.

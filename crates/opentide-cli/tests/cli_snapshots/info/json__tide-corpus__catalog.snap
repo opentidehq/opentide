@@ -4586,11 +4586,6 @@ exit: 0
     }
   },
   "command": "info",
-  "counts": {
-    "objectives": 1,
-    "rules": 10,
-    "threats": 1
-  },
   "duration_ms": 0,
   "edges": [
     {
@@ -5197,144 +5192,6 @@ exit: 0
     }
   ],
   "ok": true,
-  "parse_error_count": 0,
-  "platforms": [
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": true,
-      "name": "sentinel",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": true,
-      "name": "defender_for_endpoint",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": true,
-      "name": "splunk",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": true,
-      "name": "sentinel_one",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": false,
-      "enabled": true,
-      "name": "crowdstrike",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": false,
-      "enabled": true,
-      "name": "harfanglab",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": true,
-      "name": "carbon_black_cloud",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": true,
-      "name": "elastic",
-      "tenants": [
-        {
-          "description": "",
-          "manual": false,
-          "name": "staging",
-          "strategies": [
-            "PREVIEW"
-          ],
-          "variables": [
-            {
-              "name": "ELASTIC_API_KEY",
-              "set": false
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "can_deploy": true,
-      "can_query": false,
-      "can_validate": false,
-      "enabled": true,
-      "name": "sysdig",
-      "tenants": [
-        {
-          "description": "",
-          "manual": false,
-          "name": "staging",
-          "strategies": [
-            "PREVIEW"
-          ],
-          "variables": [
-            {
-              "name": "SYSDIG_SECURE_API_TOKEN",
-              "set": false
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "can_deploy": true,
-      "can_query": false,
-      "can_validate": false,
-      "enabled": false,
-      "name": "bitdefender",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "graylog",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "exabeam",
-      "tenants": []
-    },
-    {
-      "can_deploy": true,
-      "can_query": true,
-      "can_validate": true,
-      "enabled": false,
-      "name": "google_secops",
-      "tenants": []
-    }
-  ],
-  "repo": "<WS>",
   "schema_version": 1,
   "signals": [
     {
@@ -5353,8 +5210,7 @@ exit: 0
     "rules": 10,
     "signals": 1,
     "threats": 1
-  },
-  "version": "0.28.1"
+  }
 }
 
 ━━━ stderr · empty
