@@ -288,12 +288,12 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 
 ### Unchanged rules
 
-A deploy does not rewrite a rule the tenant already holds as the run would write it, whether the run selected the rule from the commit or with `--all`. It compares what it would send with what the lookup it makes anyway answered, field by field, on the fields opentide sends:
+A deploy does not rewrite a rule the tenant already holds as the run would write it, whether the run selected the rule from the commit or with `--all`. It compares what it would send with what the lookup it makes anyway answered, field by field, on the fields opentide sends (Sentinel's replace also drops a member opentide no longer sends, so the workspace's is compared too):
 
 | Platform | Compared | Not a difference |
 |----------|----------|------------------|
 | Elastic | Kibana's rule against the replace a deploy would send | the fields Kibana writes itself (`id`, `created_at`, `updated_at`, `revision`, `version`, …), a field holding Kibana's default (empty, `max_signals: 100`, `interval: 5m`, `from: now-6m`, `to: now`), an empty member Kibana adds inside a sent object, `73` against `73.0` |
-| Sentinel | the rule ARM answers a `GET` of (same resource and `api-version` as the `PUT`) against the `kind` and `properties` a deploy would send, member by member | the members ARM writes itself (`etag`, `id`, `name`, `type`, `systemData`, `lastModifiedUtc`), any member ARM adds that opentide does not send (defaults that depend on the rule's kind), `1` against `1.0` |
+| Sentinel | the rule ARM answers a `GET` of (same resource and `api-version` as the `PUT`) against the `kind` and `properties` a deploy would send. A `PUT` replaces the rule, so a member opentide no longer sends but the workspace holds is a difference too | the members ARM writes itself (`etag`, `id`, `name`, `type`, `systemData`, `lastModifiedUtc`), a member ARM answers empty (`null`, `false`, `""`, `[]`, `{}`), the trigger's defaults (`GreaterThan`, `0`), a duration in ARM's own form (`PT1H` against `PT01H00M00S`), `1` against `1.0` |
 | Splunk | the saved search's settings against each setting a deploy sends (an update writes no other), the `description` with its `opentide rule <uuid>` line and the empty `alert.managedBy` among them | Splunk's `1` and `0` for `true` and `false`; an emptied setting the tenant does not answer |
 
 A field opentide sent before and no longer sends is handled as each platform's write handles it:

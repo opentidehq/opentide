@@ -463,49 +463,89 @@ const DURATIONS: [&str; 4] = [
 /// a `PUT` replaces the whole resource, so every member opentide sends has
 /// the same value on the workspace (`same`), and every other member the
 /// workspace has is one ARM writes itself ([`SERVER_FIELDS`],
-/// `lastModifiedUtc`) or is empty (`null`, `false`, `""`, `[]`, `{}`). A
+/// `lastModifiedUtc`), is empty (`null`, `false`, `""`, `[]`, `{}`) or is a
+/// default ARM gives a member the rule leaves out ([`arm_default`]). A
 /// member opentide sent once and no longer sends keeps its value until a
 /// write replaces it: the rule is then not held, and is written.
 fn holds(held: &Json, sent: &Json) -> bool {
-    same_object(sent, held, &SERVER_FIELDS, Some("properties"))
+    same_object(sent, held, Level::Rule)
+}
+
+/// Where in a rule an object is: the durations and the defaults ARM fills in
+/// are read at the places they live, not by a member's name anywhere.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Level {
+    /// The request body: `kind` and `properties`.
+    Rule,
+    /// `properties`.
+    Properties,
+    /// `incidentConfiguration`.
+    IncidentConfiguration,
+    /// `incidentConfiguration.groupingConfiguration`.
+    Grouping,
+    /// Anything below: a `customDetails` key named like a duration is no
+    /// duration.
+    Other,
+}
+
+impl Level {
+    /// The level of the member *key* of an object at this level.
+    fn below(self, key: &str) -> Level {
+        match (self, key) {
+            (Level::Rule, "properties") => Level::Properties,
+            (Level::Properties, "incidentConfiguration") => Level::IncidentConfiguration,
+            (Level::IncidentConfiguration, "groupingConfiguration") => Level::Grouping,
+            _ => Level::Other,
+        }
+    }
 }
 
 /// *sent* and *held* as objects: each member sent is the same on the
 /// workspace (a missing one is a sent empty value), and each other member
-/// the workspace has is in *server* or empty. `inner` names the member whose
-/// own server-written members are [`SERVER_PROPERTIES`].
-fn same_object(sent: &Json, held: &Json, server: &[&str], inner: Option<&str>) -> bool {
+/// the workspace has is ARM's own, empty or a default of ARM's.
+fn same_object(sent: &Json, held: &Json, level: Level) -> bool {
     let (Some(sent), Some(held)) = (sent.as_object(), held.as_object()) else {
         return false;
     };
     sent.iter().all(|(key, value)| match held.get(key) {
-        Some(have) if inner == Some(key.as_str()) => {
-            same_object(value, have, &SERVER_PROPERTIES, None)
-        }
-        Some(have) => same(Some(key), value, have),
+        Some(have) => same(level, key, value, have),
         // `enabled` is always answered; a rule without it is not held.
         None => key != "enabled" && is_empty(value),
     }) && held.iter().all(|(key, have)| {
-        sent.contains_key(key) || server.contains(&key.as_str()) || is_empty(have)
+        sent.contains_key(key)
+            || (level == Level::Rule && SERVER_FIELDS.contains(&key.as_str()))
+            || (level == Level::Properties && SERVER_PROPERTIES.contains(&key.as_str()))
+            || is_empty(have)
+            || (level == Level::Properties && arm_default(key, have))
     })
 }
 
-/// Whether the value sent (under *key*) is the one the workspace holds: the
+/// What ARM answers for a member of `properties` the rule never sent: a
+/// Scheduled rule has the trigger `GreaterThan` `0`.
+fn arm_default(key: &str, held: &Json) -> bool {
+    match key {
+        "triggerOperator" => held.as_str() == Some("GreaterThan"),
+        "triggerThreshold" => number(held).as_deref() == Some("0"),
+        _ => false,
+    }
+}
+
+/// Whether the value sent under *key* is the one the workspace holds: the
 /// same scalar (a number by its value, `5` and `5.0` alike, a duration by
 /// its seconds), the same items in the same order, an object as
 /// [`same_object`], or both empty.
-fn same(key: Option<&String>, sent: &Json, held: &Json) -> bool {
+fn same(level: Level, key: &str, sent: &Json, held: &Json) -> bool {
     match (sent, held) {
-        (Json::Object(_), Json::Object(_)) => same_object(sent, held, &[], None),
+        (Json::Object(_), Json::Object(_)) => same_object(sent, held, level.below(key)),
         (Json::Array(sent), Json::Array(held)) => {
             sent.len() == held.len()
                 && sent
                     .iter()
                     .zip(held)
-                    .all(|(sent, held)| same(None, sent, held))
+                    .all(|(sent, held)| same(Level::Other, "", sent, held))
         }
         (Json::Str(sent), Json::Str(held))
-            if key.is_some_and(|key| DURATIONS.contains(&key.as_str())) =>
+            if matches!(level, Level::Properties | Level::Grouping) && DURATIONS.contains(&key) =>
         {
             match (
                 opentide_compile::duration::sentinel_seconds(sent),

@@ -711,7 +711,9 @@ fn sentinel_a_member_no_longer_sent_is_a_difference() {
         for key in keys {
             sent["properties"].as_object_mut().unwrap().remove(*key);
         }
-        let (done, tenant) = deploy_reading(&[(200, Some(held_rule()))], &sent, true);
+        // The trigger held is not ARM's default (`GreaterThan`, `0`).
+        let held = edited(|rule| rule["properties"]["triggerThreshold"] = 3.into());
+        let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
         assert_eq!(
             event_of(&done.unwrap()),
             ["sentinel_rule_updated"],
@@ -719,6 +721,45 @@ fn sentinel_a_member_no_longer_sent_is_a_difference() {
         );
         assert_eq!(tenant.verify(), Vec::new(), "{removed}");
     }
+}
+
+/// ARM answers a Scheduled rule with a trigger (`GreaterThan`, `0`) even when
+/// the rule sends none, so that is not a difference.
+#[test]
+fn sentinel_the_triggers_defaults_are_not_a_difference() {
+    let mut sent = sent_rule();
+    for key in ["triggerOperator", "triggerThreshold"] {
+        sent["properties"].as_object_mut().unwrap().remove(key);
+    }
+    let held = edited(|rule| {
+        rule["properties"]["triggerOperator"] = "GreaterThan".into();
+        rule["properties"]["triggerThreshold"] = 0.into();
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, false);
+    assert!(done.unwrap().unchanged());
+    assert_eq!(tenant.verify(), Vec::new());
+    // Another operator is a difference.
+    let held = edited(|rule| {
+        rule["properties"]["triggerOperator"] = "LessThan".into();
+        rule["properties"]["triggerThreshold"] = 0.into();
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_updated"]);
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// A `customDetails` key named like a duration is no duration: `PT1H` and
+/// `PT01H00M00S` there are two values.
+#[test]
+fn sentinel_a_duration_is_read_only_where_a_rule_has_one() {
+    let mut sent = sent_rule();
+    sent["properties"]["customDetails"] = serde_json::json!({"queryPeriod": "PT01H00M00S"});
+    let held = edited(|rule| {
+        rule["properties"]["customDetails"] = serde_json::json!({"queryPeriod": "PT1H"});
+    });
+    let (done, tenant) = deploy_reading(&[(200, Some(held))], &sent, true);
+    assert_eq!(event_of(&done.unwrap()), ["sentinel_rule_updated"]);
+    assert_eq!(tenant.verify(), Vec::new());
 }
 
 #[test]
