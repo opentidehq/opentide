@@ -310,11 +310,14 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Live {
         let (_, options) = placement(cx.repo, cx.env, cx.cwd);
         if let Ok(workspace) = super::open(options) {
             let root = OsFs.resolve(workspace.root());
+            let objects = super::object_folders(&workspace);
             if let Some(note) = opentide_compile::git::no_commits_warning(
                 &root,
                 &lookup,
                 "commit the rules, or drop --changed to check every rule",
-            ) {
+            )
+            .or_else(|| opentide_compile::git::uncommitted_warning(&root, &lookup, &objects))
+            {
                 let mut warnings = vec![Json::str(note)];
                 if let Some((_, Json::Array(earlier))) =
                     live.result.iter().find(|(key, _)| key == "warnings")

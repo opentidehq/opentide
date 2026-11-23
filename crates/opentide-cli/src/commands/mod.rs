@@ -750,3 +750,15 @@ mod verbose_tests {
         assert!(none.is_empty());
     }
 }
+
+/// The folders of the workspace's object families (`rules`, `objectives`,
+/// `threats`, as `paths.toml` places them), for the note on uncommitted
+/// object files.
+pub fn object_folders(workspace: &opentide_workspace::Workspace) -> Vec<std::path::PathBuf> {
+    workspace
+        .configuration()
+        .object_folders
+        .iter()
+        .filter_map(|folder| folder.path.clone())
+        .collect()
+}

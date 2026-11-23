@@ -418,7 +418,7 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
     let env = |_: &str| None::<String>;
     let rules = h.root.join("objects/rules");
     let (scope, warning) =
-        opentide_compile::dry_run::git_scope(&h.root, &h.root, &env, &rules, "objects/rules")
+        opentide_compile::dry_run::git_scope(&h.root, &h.root, &env, &rules, "objects/rules", &[])
             .unwrap();
     assert_eq!(scope.files, [rules.join("r2.yaml")]);
     assert!(scope.nested.is_empty());
@@ -433,6 +433,7 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
         &env,
         &root.join("objects/rules"),
         "objects/rules",
+        &[],
     )
     .unwrap();
     assert!(scope.files.is_empty());
@@ -443,7 +444,7 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
     // Outside a checkout, the error says what to do.
     let bare = tempfile::tempdir().unwrap();
     assert!(
-        opentide_compile::dry_run::git_scope(bare.path(), bare.path(), &env, bare.path(), "x")
+        opentide_compile::dry_run::git_scope(bare.path(), bare.path(), &env, bare.path(), "x", &[])
             .is_err()
     );
 }
@@ -1301,7 +1302,8 @@ fn a_push_of_several_commits_reads_from_before_the_push() {
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
             .collect();
         let env = move |name: &str| map.get(name).cloned();
-        opentide_compile::dry_run::git_scope(&root, &root, &env, &rules, "objects/rules").unwrap()
+        opentide_compile::dry_run::git_scope(&root, &root, &env, &rules, "objects/rules", &[])
+            .unwrap()
     };
     // A push that names where the branch was says nothing more.
     let (read, warning) = scope(&github(&c, &created));
@@ -1440,4 +1442,61 @@ fn opentide_push_base_must_be_an_ancestor_of_head() {
     );
     // A valid ancestor works.
     assert_eq!(azure(&h.a).unwrap().0, ["objects/rules/r1.yaml"]);
+}
+
+/// F-05: outside CI the scope is the last commit, and object files that are
+/// edited, staged or new are not in it: the run says so.
+#[test]
+fn uncommitted_object_files_are_noted_outside_ci() {
+    let h = history();
+    let rules = h.root.join("objects/rules");
+    let objects = [h.root.join("objects/rules"), h.root.join("objects/threats")];
+    let no_env = |_: &str| None::<String>;
+    let note = || git::uncommitted_warning(&h.root, &no_env, &objects);
+    assert_eq!(note(), None, "a clean tree says nothing");
+    // An edited rule, a staged one, a new one (also in a subfolder) and a
+    // non-YAML file: three object files.
+    write(&h.root, "objects/rules/r1.yaml", "a: 3\n");
+    write(&h.root, "objects/rules/r2.yaml", "b: 2\n");
+    git_cmd(&h.root, &["add", "objects/rules/r2.yaml"]);
+    write(&h.root, "objects/rules/nested/r4.yaml", "d: 1\n");
+    write(&h.root, "objects/rules/notes.txt", "x\n");
+    assert_eq!(
+        note().as_deref(),
+        Some(
+            "3 uncommitted object files are not in scope (objects/rules/nested/r4.yaml, \
+             objects/rules/r1.yaml, objects/rules/r2.yaml); commit them or pass --file"
+        )
+    );
+    // Four: the note names three and counts the rest.
+    write(&h.root, "objects/threats/t1.yaml", "t: 1\n");
+    let four = note().unwrap();
+    assert!(
+        four.starts_with("4 uncommitted object files are not in scope (")
+            && four.contains(" and 1 more)"),
+        "{four}"
+    );
+    // The scope itself is unchanged: the last commit, committed content.
+    let (scope, warning) = opentide_compile::dry_run::git_scope(
+        &h.root,
+        &h.root,
+        &no_env,
+        &rules,
+        "objects/rules",
+        &objects,
+    )
+    .unwrap();
+    assert_eq!(scope.files, [rules.join("r2.yaml")]);
+    assert_eq!(warning, Some(four));
+    // Committing them clears it; CI never says it.
+    commit(&h.root, "all");
+    assert_eq!(note(), None);
+    write(&h.root, "objects/rules/r1.yaml", "a: 4\n");
+    assert!(note().is_some());
+    let ci = |name: &str| (name == "GITHUB_ACTIONS").then(|| "true".to_owned());
+    assert_eq!(git::uncommitted_warning(&h.root, &ci, &objects), None);
+    // A single file reads in the singular.
+    assert!(
+        note().is_some_and(|text| text.starts_with("1 uncommitted object file is not in scope"))
+    );
 }

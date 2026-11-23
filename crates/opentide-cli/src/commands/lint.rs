@@ -73,7 +73,7 @@ pub struct Context<'a> {
 /// The object files the run changed (`changed_files_under`): the diff
 /// `deploy` reads, every file under the workspace rather than the rules
 /// folder's alone.
-fn changed_files(root: &Path, cwd: &Path, env: &Env) -> Changed {
+fn changed_files(root: &Path, cwd: &Path, env: &Env, objects: &[PathBuf]) -> Changed {
     let lookup = |name: &str| env.get(name).map(str::to_owned);
     let workspace = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let Some(worktree) = opentide_compile::git::worktree(&workspace) else {
@@ -96,7 +96,8 @@ fn changed_files(root: &Path, cwd: &Path, env: &Env) -> Changed {
                 opentide_compile::git::no_commits_warning(&workspace, &lookup, NO_COMMITS_ADVICE)
             } else {
                 None
-            };
+            }
+            .or_else(|| opentide_compile::git::uncommitted_warning(&workspace, &lookup, objects));
             Changed::Files { files, warning }
         }
         Err(error) => Changed::Failed(error.message()),
@@ -121,8 +122,14 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         Err(report) => return *report,
     };
     let root = ws.root().to_path_buf();
-    let changed = (args.changed && args.files.is_empty())
-        .then(|| changed_files(&OsFs.resolve(&root), cx.cwd, cx.env));
+    let changed = (args.changed && args.files.is_empty()).then(|| {
+        changed_files(
+            &OsFs.resolve(&root),
+            cx.cwd,
+            cx.env,
+            &super::object_folders(&ws),
+        )
+    });
     let wants_queries = args.checks.is_empty() || args.checks.contains(&LintCheck::Queries);
     let lint = {
         let queries = wants_queries.then(|| EngineLintQueries::install(&OsFs, &root));

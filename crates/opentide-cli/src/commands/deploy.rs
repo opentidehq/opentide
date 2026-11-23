@@ -271,8 +271,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         .as_ref()
         .map(|(files, _, _)| files.clone())
         .unwrap_or_default();
+    let objects = super::object_folders(&workspace);
     let changed = |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), String> {
-        let (mut scope, warning) = dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder)?;
+        let (mut scope, warning) =
+            dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder, &objects)?;
         for file in &promoted_files {
             if !scope.files.contains(file) {
                 scope.files.push(file.clone());
@@ -351,7 +353,8 @@ fn preview(
     let (rules_dir, folder) = dry_run::rules_folder(workspace);
     let env = |name: &str| cx.env.get(name).map(str::to_owned);
     // The dry run reports a diff it cannot read itself.
-    let Ok((scope, _)) = dry_run::git_scope(workspace.root(), cx.cwd, &env, &rules_dir, &folder)
+    let Ok((scope, _)) =
+        dry_run::git_scope(workspace.root(), cx.cwd, &env, &rules_dir, &folder, &[])
     else {
         return Ok(None);
     };

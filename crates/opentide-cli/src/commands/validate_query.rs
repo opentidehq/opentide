@@ -528,6 +528,7 @@ fn changed_scope(
     folder: &str,
     cwd: &Path,
     env: &Env,
+    objects: &[std::path::PathBuf],
 ) -> Result<(Scope, Option<String>), String> {
     let lookup = |name: &str| env.get(name).map(str::to_owned);
     let workspace = OsFs.resolve(root);
@@ -547,7 +548,8 @@ fn changed_scope(
         .filter_map(|path| Path::new(path).file_name().map(|name| rules.join(name)))
         .collect();
     tracing::info!(rules = top.len(), "query_scope_changed");
-    let warning = opentide_compile::git::no_commits_warning(&workspace, &lookup, NO_COMMITS_ADVICE);
+    let warning = opentide_compile::git::no_commits_warning(&workspace, &lookup, NO_COMMITS_ADVICE)
+        .or_else(|| opentide_compile::git::uncommitted_warning(&workspace, &lookup, objects));
     Ok((Scope { files, nested }, warning))
 }
 
@@ -851,13 +853,18 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(&ws);
         let local = opentide_compile::plan::local_scope(fs, &rules_dir, &folder);
         if args.changed {
-            match changed_scope(&root, &rules_dir, &folder, cx.cwd, cx.env) {
+            match changed_scope(
+                &root,
+                &rules_dir,
+                &folder,
+                cx.cwd,
+                cx.env,
+                &super::object_folders(&ws),
+            ) {
                 Ok((scope, warning)) => {
                     rule_files = scope.files;
                     scope_label = Some("changed");
-                    if rule_files.is_empty() {
-                        warnings.extend(warning);
-                    }
+                    warnings.extend(warning);
                 }
                 Err(message) => {
                     let code = opentide_compile::git::scope_exit_code(&message);

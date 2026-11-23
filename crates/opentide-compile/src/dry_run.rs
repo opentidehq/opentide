@@ -53,13 +53,16 @@ pub struct Request {
 pub type ChangedScope<'a> = &'a dyn Fn(&Path, &str) -> Result<(Scope, Option<String>), String>;
 
 /// The changed rule files from the git baseline ([`crate::git`]), for the
-/// environment `env`.
+/// environment `env`. `objects` are the workspace's object folders: outside
+/// CI, the warning says when object files there are uncommitted, so not read
+/// (F-05).
 pub fn git_scope(
     workspace: &Path,
     cwd: &Path,
     env: crate::git::Env<'_>,
     rules: &Path,
     folder: &str,
+    objects: &[PathBuf],
 ) -> Result<(Scope, Option<String>), String> {
     let source = crate::git::diff_source(env);
     let (changed, note) = crate::git::changed_paths_noted(workspace, cwd, env, source)
@@ -79,7 +82,9 @@ pub fn git_scope(
     } else {
         None
     };
-    Ok((scope, warning.or(note)))
+    // The note is CI's and the uncommitted files' is a local run's: one at most.
+    let uncommitted = crate::git::uncommitted_warning(workspace, env, objects);
+    Ok((scope, warning.or(note).or(uncommitted)))
 }
 
 /// A failure the CLI reports with a code and an exit status.

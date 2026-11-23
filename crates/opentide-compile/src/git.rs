@@ -1109,6 +1109,80 @@ pub fn no_commits_warning(workspace: &Path, env: Env<'_>, advice: &str) -> Optio
     ))
 }
 
+/// `folder` and every folder below it, for the uncommitted-files note (a
+/// hidden folder and symbolic links are left out).
+fn folders_below(folder: &Path, into: &mut Vec<PathBuf>) {
+    into.push(folder.to_path_buf());
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return;
+    };
+    let mut below: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && !entry.file_name().to_string_lossy().starts_with('.')
+        })
+        .map(|entry| entry.path())
+        .collect();
+    below.sort();
+    for path in below {
+        folders_below(&path, into);
+    }
+}
+
+/// How many uncommitted object files a note names.
+const UNCOMMITTED_SHOWN: usize = 3;
+
+/// The note of a run outside CI that reads the last commit (`--changed`,
+/// deploy's default scope) while object files in the work tree or the index
+/// differ from HEAD or are untracked: they are not in the scope, and a deploy
+/// reads committed content (F-05). `folders` are the workspace's object
+/// folders; the YAML files in them and below count. `None` in CI, outside a
+/// checkout, before HEAD names a commit, or when every object file is
+/// committed.
+pub fn uncommitted_warning(workspace: &Path, env: Env<'_>, folders: &[PathBuf]) -> Option<String> {
+    if ci(env) != Ci::Local || folders.is_empty() {
+        return None;
+    }
+    let repo = open(workspace).ok()?;
+    head_commit(&repo)?;
+    let mut all = Vec::new();
+    for folder in folders {
+        folders_below(folder, &mut all);
+    }
+    let keep = |name: &str| {
+        Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml"))
+    };
+    let dirty = changed_in_folders_against(workspace, &all, &keep, &|repo, _| {
+        head_commit(repo).ok_or_else(|| failed(NO_GIT_MESSAGE))
+    })
+    .ok()?;
+    if dirty.is_empty() {
+        return None;
+    }
+    let shown: Vec<&str> = dirty
+        .iter()
+        .take(UNCOMMITTED_SHOWN)
+        .map(|file| file.relative.as_str())
+        .collect();
+    let more = dirty.len().saturating_sub(UNCOMMITTED_SHOWN);
+    let names = if more == 0 {
+        shown.join(", ")
+    } else {
+        format!("{} and {more} more", shown.join(", "))
+    };
+    let (count, verb) = if dirty.len() == 1 {
+        ("1 uncommitted object file".to_owned(), "is")
+    } else {
+        (format!("{} uncommitted object files", dirty.len()), "are")
+    };
+    Some(format!(
+        "{count} {verb} not in scope ({names}); commit them or pass --file"
+    ))
+}
+
 // --- the default-branch baseline (`core/git_baseline.py`) ---------------------
 
 /// The message of a run that needs a commit to compare with
@@ -1543,9 +1617,21 @@ pub fn changed_in_folders(
     folders: &[PathBuf],
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<Vec<ChangedFile>, GitError> {
+    changed_in_folders_against(workspace, folders, keep, &|repo, git_dir| {
+        baseline(repo, git_dir)
+    })
+}
+
+/// [`changed_in_folders`] against the commit `base_of` picks.
+fn changed_in_folders_against(
+    workspace: &Path,
+    folders: &[PathBuf],
+    keep: &dyn Fn(&str) -> bool,
+    base_of: &dyn Fn(&Repo, &Path) -> Result<ObjectId, GitError>,
+) -> Result<Vec<ChangedFile>, GitError> {
     let (top, git_dir) = discover(workspace).ok_or_else(|| failed(NO_GIT_MESSAGE))?;
     let repo = open(workspace).map_err(|_| failed(NO_GIT_MESSAGE))?;
-    let base = baseline(&repo, &git_dir)?;
+    let base = base_of(&repo, &git_dir)?;
     let top = dunce::canonicalize(&top).unwrap_or(top);
     let mut work = WorkTree::open(&top, &git_dir);
     let mut changed = Vec::new();

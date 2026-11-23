@@ -672,7 +672,10 @@ fn deploy(
     } else {
         let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
         let top = workspace.root().to_path_buf();
-        match opentide_compile::dry_run::git_scope(&top, cx.cwd, &lookup, &rules_dir, &folder) {
+        let objects = super::object_folders(workspace);
+        match opentide_compile::dry_run::git_scope(
+            &top, cx.cwd, &lookup, &rules_dir, &folder, &objects,
+        ) {
             Ok((scope, warning)) => {
                 plan_warnings.extend(warning);
                 scope
