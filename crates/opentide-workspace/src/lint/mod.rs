@@ -159,8 +159,14 @@ pub enum Changed {
         /// Why nothing was selected, when the checkout has no commit.
         warning: Option<String>,
     },
-    /// The diff could not be read: the run fails (exit 1) with this message.
-    Failed(String),
+    /// The diff could not be read: the run fails with this message and exit
+    /// code (`1`, or `2` for a usage error such as a wrong `OPENTIDE_PUSH_BASE`).
+    Failed {
+        /// The message.
+        message: String,
+        /// The process exit code.
+        exit_code: i32,
+    },
 }
 
 /// The queries check, which the host runs (the query engines sit above this
@@ -1087,11 +1093,11 @@ fn narrow(
     }
     match &options.changed {
         None => Ok(None),
-        Some(Changed::Failed(message)) => Err(Box::new(LintReport::refused(
+        Some(Changed::Failed { message, exit_code }) => Err(Box::new(LintReport::refused(
             target,
             Vec::new(),
             message.clone(),
-            1,
+            *exit_code,
         ))),
         Some(Changed::Files { files, warning }) => Ok(Some(Narrowed {
             label: "changed",

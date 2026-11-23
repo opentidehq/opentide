@@ -50,20 +50,63 @@ pub struct Request {
 /// selection: the git baseline's answer (`modified_rule_scope`), with the
 /// warning a checkout without commits gives. `rules` is the rules folder,
 /// `folder` as the workspace spells it.
-pub type ChangedScope<'a> = &'a dyn Fn(&Path, &str) -> Result<(Scope, Option<String>), String>;
+pub type ChangedScope<'a> = &'a dyn Fn(&Path, &str) -> Result<(Scope, Option<String>), ScopeError>;
+
+/// Why the changed rule files could not be read, and the exit code of the
+/// run that stops for it: `1`, or `2` for a usage error (a wrong
+/// `OPENTIDE_PUSH_BASE`). A message converts to the exit code `1`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeError {
+    /// The message the run reports.
+    pub message: String,
+    /// The process exit code.
+    pub exit_code: i32,
+}
+
+impl From<String> for ScopeError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            exit_code: 1,
+        }
+    }
+}
+
+impl From<crate::git::GitError> for ScopeError {
+    fn from(error: crate::git::GitError) -> Self {
+        Self {
+            message: error.message(),
+            exit_code: error.exit_code(),
+        }
+    }
+}
 
 /// The changed rule files from the git baseline ([`crate::git`]), for the
-/// environment `env`.
+/// environment `env`. Outside CI, the warning says when rule files directly
+/// in `rules` are uncommitted and the scope leaves them out (F-05).
 pub fn git_scope(
     workspace: &Path,
     cwd: &Path,
     env: crate::git::Env<'_>,
     rules: &Path,
     folder: &str,
-) -> Result<(Scope, Option<String>), String> {
+) -> Result<(Scope, Option<String>), ScopeError> {
+    git_scope_also(workspace, cwd, env, rules, folder, &[])
+}
+
+/// [`git_scope`] for a run that reads `also_read` besides the changed files
+/// (the rules a status promotion rewrote): they are not left out of the
+/// warning about uncommitted rules.
+pub fn git_scope_also(
+    workspace: &Path,
+    cwd: &Path,
+    env: crate::git::Env<'_>,
+    rules: &Path,
+    folder: &str,
+    also_read: &[PathBuf],
+) -> Result<(Scope, Option<String>), ScopeError> {
     let source = crate::git::diff_source(env);
-    let (changed, note) = crate::git::changed_paths_noted(workspace, cwd, env, source)
-        .map_err(|error| error.message())?;
+    let (changed, note) = crate::git::changed_paths_noted(workspace, cwd, env, source)?;
     let (top, nested) = crate::git::split_rule_paths(&changed, folder);
     let files = top
         .iter()
@@ -79,7 +122,15 @@ pub fn git_scope(
     } else {
         None
     };
-    Ok((scope, warning.or(note)))
+    // The note is CI's and the uncommitted files' is a local run's: one at
+    // most, and the check reads the work tree only when nothing else says.
+    Ok((
+        scope.clone(),
+        warning.or(note).or_else(|| {
+            let read: Vec<PathBuf> = scope.files.iter().chain(also_read).cloned().collect();
+            crate::git::uncommitted_warning(workspace, env, &[rules.to_path_buf()], false, &read)
+        }),
+    ))
 }
 
 /// A failure the CLI reports with a code and an exit status.
@@ -369,8 +420,8 @@ pub fn run(
                 no_commits = warning;
                 scope
             }
-            Err(message) => {
-                let mut outcome = Outcome::failed(message, 1);
+            Err(ScopeError { message, exit_code }) => {
+                let mut outcome = Outcome::failed(message, exit_code);
                 let mut own = Vec::new();
                 let mut warnings = Vec::new();
                 finish_failure(
@@ -784,7 +835,14 @@ pub fn run(
         &owned.statuses,
         workspace,
         &config,
-        &deployment.keys().map(String::as_str).collect::<Vec<_>>(),
+        &targets
+            .iter()
+            .flat_map(|(platform, tenants)| {
+                tenants
+                    .keys()
+                    .map(move |tenant| (platform.as_str(), tenant.as_str()))
+            })
+            .collect::<Vec<_>>(),
         is_set,
         &request.cwd,
     );
@@ -934,7 +992,7 @@ fn finish(
     statuses: &strategy::Statuses,
     workspace: &Workspace,
     config: &Json,
-    platforms: &[&str],
+    planned: &[(&str, &str)],
     is_set: &dyn Fn(&str) -> bool,
     cwd: &Path,
 ) {
@@ -949,12 +1007,7 @@ fn finish(
             unread.join(", ")
         ));
     }
-    let with_tenants: Vec<&str> = platforms
-        .iter()
-        .copied()
-        .filter(|platform| !plan::tenants(config, platform).is_empty())
-        .collect();
-    let unset = plan::unset_variables(config, &with_tenants, is_set);
+    let unset = plan::unset_variables(config, planned, is_set);
     if !unset.is_empty() {
         plan_warnings.push(plan::unset_warning(&unset));
     }

@@ -40,8 +40,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         cwd: root,
         ..Request::default()
     };
-    let changed = |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
-        Err("--all reads no diff".to_owned())
+    let changed = |_: &std::path::Path,
+                   _: &str|
+     -> Result<(Scope, Option<String>), opentide_compile::dry_run::ScopeError> {
+        Err("--all reads no diff".to_owned().into())
     };
     let is_set = |name: &str| std::env::var_os(name).is_some();
     let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
