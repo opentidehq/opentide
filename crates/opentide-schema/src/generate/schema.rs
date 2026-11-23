@@ -100,7 +100,11 @@ pub fn revision_schema(identifier: &str, sources: &Sources) -> Option<Schema> {
 /// [`revision_schema`] without [`Recompose`]: `configurations` stays the
 /// model's, every platform block as its model declares it. The language
 /// server's catalog is built from it ([`super::catalog`]), so its rows are
-/// the same whichever platforms a workspace enables.
+/// the same whichever platforms a workspace enables. It keeps the
+/// vocabulary each field names (`tide.vocab`, `tide.vocab.scoped`, the
+/// pins applied), which the catalog records so an editor can name and
+/// document a value from its vocabulary; every other `tide.*` keyword is
+/// stripped.
 pub fn unrecomposed_revision_schema(identifier: &str, sources: &Sources) -> Option<Schema> {
     transformed(identifier, sources, false)
 }
@@ -121,9 +125,16 @@ fn transformed(identifier: &str, sources: &Sources, recompose: bool) -> Option<S
     ResolveValues { sources }.transform(&mut schema);
     CloseObjects.transform(&mut schema);
     PinIdentifier { identifier }.transform(&mut schema);
-    StripFrameworkKeywords.transform(&mut schema);
+    if recompose {
+        StripFrameworkKeywords.transform(&mut schema);
+    } else {
+        with_value(&mut schema, |value| strip_except(value, &VOCAB_KEYWORDS));
+    }
     Some(schema)
 }
+
+/// The `tide.*` keywords [`unrecomposed_revision_schema`] keeps.
+const VOCAB_KEYWORDS: [&str; 2] = [keys::VOCAB, keys::VOCAB_SCOPED];
 
 /// `visibility.toml`'s schema as `generate schemas` writes it: the
 /// configuration schema of [`VisibilityConfig`] (one schema source for the
@@ -206,12 +217,17 @@ impl Transform for StripFrameworkKeywords {
 }
 
 fn strip(value: &mut Value) {
+    strip_except(value, &[]);
+}
+
+/// [`strip`], keeping the `tide.*` keywords `kept` names.
+fn strip_except(value: &mut Value, kept: &[&str]) {
     match value {
         Value::Object(map) => {
-            map.retain(|key, _| !key.starts_with("tide."));
-            map.values_mut().for_each(strip);
+            map.retain(|key, _| !key.starts_with("tide.") || kept.contains(&key.as_str()));
+            map.values_mut().for_each(|value| strip_except(value, kept));
         }
-        Value::Array(items) => items.iter_mut().for_each(strip),
+        Value::Array(items) => items.iter_mut().for_each(|value| strip_except(value, kept)),
         _ => {}
     }
 }
@@ -707,6 +723,16 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
         offer.values.extend(one.values.iter().cloned());
         offer.markdown.extend(one.markdown.iter().cloned());
         offer.plain.extend(one.plain.iter().cloned());
+        // Each offer's names and search text stay beside its own values,
+        // whether or not it has them.
+        let len = offer.values.len();
+        for (merged, own) in [
+            (&mut offer.names, &one.names),
+            (&mut offer.search, &one.search),
+        ] {
+            merged.extend(own.iter().cloned());
+            merged.resize(len, String::new());
+        }
     }
     apply_enum(map, &offer.keywords(true));
 }

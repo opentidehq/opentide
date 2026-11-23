@@ -1,6 +1,7 @@
-//! The Sentinel body's techniques: the objective's ATT&CK ids replace the
-//! block's, are held to ATT&CK v18 (the version Sentinel is aligned to) and
-//! earn a warning for each id that changes.
+//! The Sentinel body's techniques: the block's `alert.techniques` are sent
+//! when it sets any, else the objective's ATT&CK ids. What is sent is held to
+//! ATT&CK v18 (the version Sentinel is aligned to), and each id that changes
+//! earns a warning.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: the workspace and the rule open"
@@ -119,8 +120,73 @@ fn a_clean_objective_earns_no_warning() {
 }
 
 #[test]
-fn an_objective_with_nothing_to_send_leaves_the_blocks_techniques() {
-    let (body, warnings, _) = compile(&["T1691"], "      techniques: [T1059]\n");
-    assert_eq!(property(&body, "techniques"), r#"["T1059"]"#);
+fn block_techniques_are_sent_and_beat_the_objectives() {
+    let (body, warnings, _) = compile(&["T1562.008"], "      techniques: [T1059.001, T1003]\n");
+    assert_eq!(property(&body, "techniques"), r#"["T1059","T1003"]"#);
+    assert_eq!(property(&body, "subTechniques"), r#"["T1059.001"]"#);
+    // Tactics come from what is sent (Execution, Credential Access).
+    assert_eq!(
+        property(&body, "tactics"),
+        r#"["Execution","CredentialAccess"]"#
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
+#[test]
+fn a_block_without_techniques_sends_the_objectives() {
+    let (body, _, _) = compile(&["T1562.008"], "");
+    assert_eq!(property(&body, "techniques"), r#"["T1562"]"#);
+    assert_eq!(property(&body, "subTechniques"), r#"["T1562.008"]"#);
+}
+
+#[test]
+fn block_tactics_are_sent_in_place_of_derived_ones() {
+    let (body, _, _) = compile(&["T1562.008"], "      tactics: [Persistence]\n");
+    assert_eq!(property(&body, "tactics"), r#"["Persistence"]"#);
+    assert_eq!(property(&body, "techniques"), r#"["T1562"]"#);
+}
+
+#[test]
+fn an_objective_with_nothing_to_send_sends_no_techniques() {
+    let (body, warnings, _) = compile(&["T1691"], "");
+    assert_eq!(property(&body, "techniques"), "absent");
+    assert_eq!(property(&body, "tactics"), "absent");
     assert_eq!(warnings.len(), 1, "{warnings:?}");
+}
+
+#[test]
+fn a_newer_parent_hint_lists_its_sub_techniques_v18_mappings() {
+    let (_, warnings, _) = compile(&["T1685"], "");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        warnings[0].contains("in place of T1685, which is newer than ATT&CK v18"),
+        "{}",
+        warnings[0]
+    );
+    assert!(
+        warnings[0].contains(
+            "Its sub-techniques map to ATT&CK v18 as T1685.001 → T1562.002, \
+             T1685.002 → T1562.008"
+        ),
+        "{}",
+        warnings[0]
+    );
+    // As deploy sends it: T1685.007 replaced only a sub-technique, so it
+    // stands for what its parent replaced.
+    assert!(warnings[0].contains("T1685.007 → T1562"), "{}", warnings[0]);
+}
+
+#[test]
+fn a_block_whose_ids_cannot_be_sent_does_not_fall_back_to_the_objectives() {
+    let (body, warnings, _) = compile(&["T1562.008"], "      techniques: [T1691]\n");
+    assert_eq!(property(&body, "techniques"), "absent");
+    assert_eq!(property(&body, "subTechniques"), "absent");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+}
+
+#[test]
+fn an_empty_list_counts_as_unset() {
+    let (body, _, _) = compile(&["T1562.008"], "      techniques: []\n      tactics: []\n");
+    assert_eq!(property(&body, "techniques"), r#"["T1562"]"#);
+    assert_eq!(property(&body, "tactics"), r#"["DefenseEvasion"]"#);
 }

@@ -58,6 +58,9 @@ pub(crate) struct ClientCaps {
     /// The client takes the `data` and the edit range of a completion list's
     /// items from its `itemDefaults` (`completionList.itemDefaults`).
     pub completion_item_defaults: bool,
+    /// The client shows an item's `labelDetails` beside its label
+    /// (`completionItem.labelDetailsSupport`): a vocabulary value's name.
+    pub completion_label_details: bool,
     /// A workspace edit may create a file (`documentChanges` with the
     /// `create` resource operation).
     pub create_files: bool,

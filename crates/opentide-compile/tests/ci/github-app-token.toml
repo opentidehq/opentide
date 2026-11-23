@@ -1,0 +1,17 @@
+# GitHub with --app-token: the production job pushes with a GitHub App token.
+ci = "github"
+path = ".github/workflows/opentide.yml"
+platforms = ["bitdefender", "carbon_black_cloud", "crowdstrike", "defender_for_endpoint", "elastic", "exabeam", "google_secops", "graylog", "harfanglab", "sentinel", "sentinel_one", "splunk", "sysdig"]
+staging = true
+inflight = true
+sharing = false
+lint_changed = false
+explorer_pages = false
+python_version = "3.12"
+opentide_version = "0.23.0"
+default_branch = "main"
+rules_folder = "objects/rules"
+
+app_token = true
+
+[credentials]

@@ -51,13 +51,20 @@ pub const MIN_CHECKED: usize = 100;
 /// points at another spec page, or says what the spec says rather than what
 /// the model enforces. The Python check's list, with the serialised names
 /// (`schema` for `schema_id` and `platform_schema`).
-pub const REWRITTEN: [(&str, &str); 18] = [
+pub const REWRITTEN: [(&str, &str); 20] = [
     ("DetectionObjective", "metadata"),
     ("DetectionRule", "metadata"),
     // The spec row still says deploy sends an empty technique list; it now
-    // sends the block's own `alert.techniques` as `mitreTechniques`. Drop
-    // this entry once the specification's row says so.
+    // sends the block's own `alert.techniques` as `mitreTechniques`, else the
+    // objective's, Enterprise ids only (the block-wins-else-objective policy;
+    // the spec row is being updated). Drop this entry once the row says so.
     ("DefenderAlert", "techniques"),
+    // The spec rows say the objective's tactics and techniques replace the
+    // block's; deploy now sends the block's own when it sets any (the
+    // block-wins-else-objective policy). The specification's rows are being
+    // updated; drop these two entries once they say so.
+    ("SentinelAlert", "tactics"),
+    ("SentinelAlert", "techniques"),
     // The spec calls these the rule's lifecycle status and severity; deploy
     // and promotion read each platform block's status and
     // response.alert_severity.
