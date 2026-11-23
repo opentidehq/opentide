@@ -9,7 +9,7 @@ use opentide_workspace::{Workspace, fields};
 
 use super::catalog::{known_platform, require};
 use super::tools::Context;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 fn error(uuid: &str, status: &str, dry_run: bool, rest: Vec<(&str, Json)>) -> Json {
     let mut members = vec![
@@ -137,17 +137,28 @@ fn only_platform<'a>(
     ))
 }
 
-/// A dry run's answer: the header the tool always had, then what the
-/// command line's `deploy --dry-run` reported (`plan`, `changes`, `payloads`,
-/// ...). `message` is the command's, which says why when nothing would deploy.
+/// A dry run's answer: the header the tool always had, `would_deploy`, then
+/// what the command line's `deploy --dry-run` reported (`plan`, `changes`,
+/// `payloads`, diagnostics, ...) under its own keys. `status` stays the rule's
+/// block status; the command's is `deploy_status`. `message` is the command's
+/// when it gave one.
 fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<&Json>) -> Json {
-    let mut members = vec![
+    let nonempty = |value: Option<&Json>| match value {
+        Some(Json::Object(map)) => map.values().any(|rules| match rules {
+            Json::Array(items) => !items.is_empty(),
+            _ => true,
+        }),
+        _ => false,
+    };
+    let would_deploy = nonempty(cli.and_then(|document| document.get("plan")));
+    let mut members: Vec<(String, Json)> = vec![
         ("action".to_owned(), Json::str("dry-run")),
         ("tenant".to_owned(), Json::Null),
         ("rule_id".to_owned(), Json::str(uuid)),
         ("status".to_owned(), Json::str(status)),
         ("dry_run".to_owned(), Json::Bool(true)),
         ("platform".to_owned(), Json::str(platform)),
+        ("would_deploy".to_owned(), Json::Bool(would_deploy)),
         (
             "message".to_owned(),
             Json::str(if message.is_empty() {
@@ -157,14 +168,44 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
             }),
         ),
     ];
-    if let Some(Json::Object(entries)) = cli {
-        for (key, value) in entries {
-            if !members.iter().any(|(name, _)| name == key) {
-                members.push((key.clone(), value.clone()));
+    match cli {
+        Some(Json::Object(entries)) => {
+            for (key, value) in entries {
+                let key = if key == "status" {
+                    "deploy_status"
+                } else {
+                    key
+                };
+                if !members.iter().any(|(name, _)| name == key) {
+                    members.push((key.to_owned(), value.clone()));
+                }
             }
+        }
+        // Nothing would run: the command's own skip path has these empty.
+        _ => {
+            members.push(("plan".to_owned(), Json::Object(Object::new())));
+            members.push(("changes".to_owned(), Json::Array(Vec::new())));
+            members.push(("payloads".to_owned(), Json::Object(Object::new())));
         }
     }
     Json::Object(members.into_iter().collect())
+}
+
+/// Whether the merged configuration enables `platform`
+/// (`platforms.<platform>.platform.enabled` is `true`).
+fn platform_enabled(workspace: &Workspace, platform: &str) -> bool {
+    matches!(
+        workspace
+            .configuration()
+            .resolved
+            .tree
+            .get("platforms")
+            .and_then(|platforms| platforms.get(platform))
+            .and_then(|table| table.get("platform"))
+            .and_then(|block| block.get("enabled"))
+            .map(|node| &node.value),
+        Some(Value::Bool(true))
+    )
 }
 
 /// `deploy_rule`.
@@ -244,6 +285,19 @@ pub fn deploy_rule(
     let strategy = statuses
         .strategy(&status)
         .map_err(|problem| problem.to_string())?;
+    if dry_run && !platform_enabled(&workspace, platform) {
+        let flag = platform.replace('_', "-");
+        return Ok(preview(
+            uuid,
+            &status,
+            platform,
+            &format!(
+                "Nothing would deploy: {platform} is not enabled in this workspace; enable it \
+                 with `opentide setup platforms --{flag}`"
+            ),
+            None,
+        ));
+    }
     let runs = deployed_by(strategy);
     let deployed = |message: &str| {
         Json::object([
@@ -309,14 +363,30 @@ pub fn deploy_rule(
             .to_owned()
     };
     let message = text_of("message");
-    if dry_run && run.exit_code == 0 {
-        return Ok(preview(
-            uuid,
-            &status,
-            platform,
-            &message,
-            document.as_ref(),
-        ));
+    if dry_run {
+        // Whatever the exit code (it is 1 when a rule would fail), a document
+        // with a plan is the preview, its diagnostics in it.
+        return Ok(
+            match document.as_ref().filter(|doc| doc.get("plan").is_some()) {
+                Some(document) => preview(uuid, &status, platform, &message, Some(document)),
+                None => error(
+                    uuid,
+                    "failed",
+                    true,
+                    vec![
+                        ("platform", Json::str(platform)),
+                        (
+                            "message",
+                            Json::Str(format!(
+                                "The dry run produced no plan (exit code {})",
+                                run.exit_code
+                            )),
+                        ),
+                        ("error", Json::str("dry_run_failed")),
+                    ],
+                ),
+            },
+        );
     }
     if run.exit_code != 0 {
         let cause = failure_cause(document.as_ref(), &message);

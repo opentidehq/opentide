@@ -317,37 +317,37 @@
       "name": "index_resource",
       "uri": "opentide://index",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "rules_resource",
       "uri": "opentide://rules",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "threats_resource",
       "uri": "opentide://threats",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "objectives_resource",
       "uri": "opentide://objectives",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "vocabularies_resource",
       "uri": "opentide://vocabularies",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "platforms_resource",
       "uri": "opentide://platforms",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     }
   ],
   "resourceTemplates": [
@@ -355,37 +355,37 @@
       "name": "rule_resource",
       "uriTemplate": "opentide://rules/{uuid}",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "threat_resource",
       "uriTemplate": "opentide://threats/{uuid}",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "objective_resource",
       "uriTemplate": "opentide://objectives/{uuid}",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "schema_resource",
       "uriTemplate": "opentide://schemas/{object_type}",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     },
     {
       "name": "template_resource",
       "uriTemplate": "opentide://templates/{object_type}",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/yaml"
     },
     {
       "name": "vocabulary_resource",
       "uriTemplate": "opentide://vocabularies/{+name}",
       "description": "",
-      "mimeType": "text/plain"
+      "mimeType": "application/json"
     }
   ]
 }

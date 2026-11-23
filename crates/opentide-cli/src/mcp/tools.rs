@@ -121,12 +121,7 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
             }
             queries::run_query(&request, context).map(Payload::One)
         })(),
-        "deploy_rule" => (|| {
-            let uuid = args.required("uuid")?;
-            let platform = args.string("platform", "")?;
-            let dry_run = args.boolean("dry_run", true)?;
-            deploy::deploy_rule(&uuid, Some(&platform), dry_run, context).map(Payload::One)
-        })(),
+        "deploy_rule" => deploy_rule(&args, context).map(Payload::One),
         other => return error_result(&format!("Unknown tool: {other}")),
     };
     match payload {
@@ -136,6 +131,19 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
         // As MCPServer reports a tool that raised.
         Err(message) => error_result(&format!("Error executing tool {name}: {message}")),
     }
+}
+
+/// `deploy_rule`'s arguments; `platform` may be left out.
+fn deploy_rule(args: &Args<'_>, context: &Context<'_>) -> Result<Json, String> {
+    let uuid = args.required("uuid")?;
+    let platform = args.string("platform", "")?;
+    let dry_run = args.boolean("dry_run", true)?;
+    deploy::deploy_rule(
+        &uuid,
+        (!platform.is_empty()).then_some(platform.as_str()),
+        dry_run,
+        context,
+    )
 }
 
 /// `search`'s `type`: empty, or one of the object families; any other value
