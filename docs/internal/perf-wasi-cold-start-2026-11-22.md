@@ -182,3 +182,132 @@ per-package split (engine crates at `s`, the rest at `z`).
 The command line's WASI module is not a release asset today (`engine-release-build.yml` ships
 `opentide-lsp-wasm32-wasip1.wasm` and the browser build; the extension builds the module from the repository), so
 no release size budget in `tests/bench/sizes.toml` covers it: `build-wasm.sh cli`'s 15 MiB gzip check does.
+
+## Paths resolved in one lookup, the disk read once a batch (#1767, the target met)
+
+The large workspace's WASI start still missed its 350 ms target (an EPYC 7763 of the runner class: 493 ms).
+This round profiled the module itself: `wasmtime run --profile guest` (a build of `--profile wasi-lsp` with
+`CARGO_PROFILE_WASI_LSP_STRIP=none`, sampled every 0.2 ms) and a script that sums each function's inclusive
+time, beside callgrind of a native build for instruction counts.
+
+### Where the time went
+
+Spawn to the first diagnostics of a rule (the corpus copied to 1,000 objects), wasmtime 38, before:
+
+| Part | ms |
+|---|---:|
+| Module load and instantiation, before `initialize` is answered (`opentide-lsp --version`: 131 ms; Node 84 ms, 27 of them Node's own start) | 125 to 135 |
+| The server's walk of the object files for the editor's index (`DiskObjects::refresh`, `yaml_files`) | 63 |
+| The workspace's discovery (`scan_with`) and path resolution (`OsFs::resolve`) | 86 |
+| The YAML parse of 1,000 objects (`node::load`, one thread) | 77 to 86 |
+| `validate` for the opened file | 33 to 43 |
+| lint for the opened file (`editor_lint`), which scans the object folders again | 47 to 83 |
+| The engine's analysis of the rule (Tide YAML, its KQL query) | 19 |
+
+Two costs that native hosts do not have stood out, both of the disk:
+
+- **Listing a folder** of a thousand files takes 27 ms under wasmtime (Node 6 ms, native 0.3 ms), and the
+  first request listed `objects/rules` three times: the walk for the editor's index, the workspace's discovery,
+  and lint's scan.
+- **`canonicalize`** takes 0.28 ms under wasmtime (Node 0.02 ms), and `OsFs::resolve` made one per component of
+  a path, each walking its own prefix again. The first workspace pull of the 1,000 objects took 7.7 s of guest
+  time under wasmtime, 6.2 s of it in `canonicalize`: resolving the file of each finding (`checks::by_file`) and
+  of each object (`RootChecks::resolve`). On a single-threaded host that pull holds every request behind it.
+
+### What changed
+
+1. **`OsFs::resolve` resolves a path that exists, and names no `.` or `..`, in one `canonicalize`**
+   (`crates/opentide-workspace/src/fs.rs`): every prefix of such a path exists, and resolving them one by one
+   ends where resolving the whole does; a test holds the two equal through linked folders, linked files, links
+   to links and a relative link that climbs. The walk stays for a path that does not exist yet and one with
+   `..`. `OsFs::read_dir` no longer calls `metadata` on every entry: an entry's own type answers for anything but
+   a link, which is still followed.
+2. **Each root reads the disk through a `Disk`** (`crates/opentide-lsp/src/checks.rs`) that keeps what a folder
+   lists and a file holds until it is forgotten: at the start and the end of each batch, before each
+   notification, and when a change is reported to the root's checks. A read that began before a forget is not
+   kept (the native workspace loads on a thread of its own). The server's walk reads through it
+   (`server::yaml_files_in`), so the workspace's load and lint list and read what the walk just did. A test
+   changes a file on disk between two messages of one batch, after a request read it and before the watcher's
+   event: the workspace's diagnostics are the new text's (it fails when the forget before a notification is
+   taken out).
+
+### Before and after
+
+Spawn to the first diagnostics, the cold-start client (`scripts/perf/lsp-bench.mjs`, VS Code's capabilities),
+alternating the builds, 15 runs each, medians (ms):
+
+| Host, workspace | Before | Paths (1) | Paths and disk (1 + 2) |
+|---|---:|---:|---:|
+| wasmtime 38, small | 227 | 201 | 207 |
+| wasmtime 38, large | 501 | 545 | 391 |
+| Node 22 WASI, small | 278 | 283 | 287 |
+| Node 22 WASI, large | 433 | 452 | 419 |
+
+The small workspace and Node move within this machine's noise (about 10% between runs). The first workspace pull
+of the 1,000 objects, 7 runs: wasmtime 6.9 to 8.1 s before, 2.2 to 2.7 s after (1); Node 1.75 s to 1.44 s.
+
+`scripts/perf/cold-start.sh` (10 runs, p50, the job's own measurement), before and after both, and the field
+catalog's change beside them (which takes no time off this path): native 46.6 / 78.5 ms to 36.0 / 58.9 ms,
+WASI under wasmtime 219.2 / 395.4 ms to 179.2 / 300.8 ms (small / large). On the EPYC 7763 the job measured
+the baseline 1.25 times slower than this machine, which puts the large WASI start at about 375 ms there, under
+the 385 ms the check allows (the target and `policy.regression`), and the EPYC 9V74 and 9V45 at about 320 and
+250 ms. `tests/bench/lsp-cold-start.toml` no longer waives `wasi_large`.
+
+### The extension's host (Node's WASI)
+
+The VS Code extension compiles the module once per extension host (`WebAssembly.compile`) and starts each server
+from it ([the handoff](./vscode-wasi.md)). Measured on Node 22.23 for the 11.9 MB `wasi-lsp` module: reading
+it 8 to 14 ms, `WebAssembly.compile` 26 to 34 ms (lazy: each function is compiled by Liftoff at its first call,
+which the first request pays), instantiating 5 to 11 ms. Compiling it eagerly costs more, not less (Liftoff 160
+ms, TurboFan 2.9 s). Node 22 has no supported way to keep a compiled `WebAssembly.Module` between processes:
+`v8.serialize` of one gives a two-byte placeholder, and `module.enableCompileCache()` covers JavaScript only. So
+the extension's levers stay those above: compile once when the extension activates, and start the server then,
+before the first document opens, so that the module load and the workspace's load are not in the first
+document's wait. A smaller module is the server's own lever: 8.3 MB of it is code.
+
+### What is left
+
+- **The module's size.** Under wasmtime about 125 ms of every start is loading the compiled module from its cache
+  (`--version` takes 131 ms); under Node, its compile and each function's first. The code is the engine itself:
+  every query language's parser, `schemars`, the YAML stack.
+- **The large workspace's first request** is now one listing of each folder, 1,000 reads, the YAML parse and
+  the first `validate`: what checking the opened file against the workspace costs.
+- **Semantic tokens before the workspace.** A document's tokens come from the engine's analysis alone, but
+  `semanticTokens/full` goes through `Session::analysis`, which also loads the workspace and runs `validate`.
+  Answering them from the engine part would bring the first highlighting before the first diagnostics. Their
+  captures read the field catalog's enum values (`in_enum`), which a root's configuration changes, so it wants a
+  `workspace/semanticTokens/refresh` when a root's own catalog replaces the compiled-in one: whether one is sent
+  then today (`Sighting::First` only bumps the epoch) is to check first.
+
+## The datasets' decode before first diagnostics (zstd, `ruzstd`)
+
+Since #1743 every dataset is a zstd blob that `ruzstd` decodes on first use (`opentide-dataset`). The question
+was how much of the WASI cold start that decode is, and whether a faster pure-Rust codec (sirocco's DEFLATE,
+`lz4_flex`) would be worth comparing if it were more than about 10%.
+
+Measured with a temporary timer around `opentide_dataset::decode` (not committed). The run is the cold-start
+sequence (spawn, `initialize`, `didOpen` of `rule-0001-sentinel-kql.yaml`, its pulled diagnostics) on
+`make_workspace.py`'s small (`--objects 0`) and large (`--objects 1000`) workspaces, 7 runs each, medians, on
+this branch. It counts every decode that finished before the diagnostics' answer.
+
+| Host | Workspace | Start to first diagnostics | Datasets decoded | Compressed → decoded | Decode time | Share |
+|---|---|---:|---:|---:|---:|---:|
+| Node 22 WASI | small | 216 ms | 35 | 218 kB → 1.35 MB | 11.5 ms | 5.3% |
+| Node 22 WASI | large | 314 ms | 35 | 218 kB → 1.35 MB | 11.4 ms | 3.6% |
+| native | small | 37 ms | 41 | 1.09 MB → 7.27 MB | 30.0 ms of CPU | on the warm-up threads |
+| native | large | 58 ms | 43 | 1.09 MB → 7.28 MB | 36.9 ms of CPU | on the warm-up threads |
+
+Per dataset under Node's WASI (small workspace; the large one is within 0.1 ms of it): `tide-choices` 1.8 ms,
+`tide-fields` 1.6, `kql-core-rows` 1.5, `kql-azure-monitor-heads` 1.3, `kql-asim` 1.1, `highlights/spec.toml`
+1.0 (0.8 kB, but the first decode, so it includes Node compiling the decoder's functions), `vocab/lean/att&ck`
+0.8, `sentinel/attack-v18.json` 0.6, the bundled configuration's TOML files 0.5 together,
+`kql-azure-monitor-columns-24` 0.4, `kql-sentinel-rows` 0.4. Everything else is under 0.05 ms.
+
+Natively, the warm-up threads also decode the vocabularies (13.8 ms, 565 kB → 2.6 MB) and the ATT&CK offers
+(11.1 ms, 296 kB → 3.3 MB) beside the first request. That accounts for the 30 to 37 ms of decode CPU against
+37 to 58 ms of wall time. A WASI host decodes neither before first diagnostics.
+
+**Conclusion:** decode is 3.6 to 5.3% of the WASI cold start under Node, below the 10% at which a codec
+comparison was planned, so sirocco and `lz4_flex` were not benchmarked. Even a decoder that took no time at
+all would save about 11 ms of 216 to 314. The module load and the first request's own work are where the time
+goes (above).

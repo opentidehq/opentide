@@ -44,7 +44,6 @@ target_ms = 192
 id = "wasi_large"
 label = "WASI, large workspace"
 target_ms = 350
-target_waiver = "#1767, an EPYC 7763 of the runner class measures 493 ms under wasmtime 38 (an EPYC 9V45: 304 to 330 ms), above #1746's machine"
 
 [[cpu_baseline]]
 cpu_model = "AMD EPYC 9V74 80-Core Processor"
