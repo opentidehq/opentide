@@ -503,7 +503,22 @@ pub fn fix_command(
     queries: Option<&str>,
     selection: &crate::validate::Selection,
 ) -> String {
-    let mut words: Vec<&str> = vec!["opentide", "validate", "--fix"];
+    validate_command(true, check, queries, selection)
+}
+
+/// `opentide validate` again with the scope of a run (`--check`, `--queries`,
+/// `--file`, `--uuid`, `--type`), plus `--fix` when `fix`, quoted as a shell
+/// reads it.
+pub fn validate_command(
+    fix: bool,
+    check: Option<&str>,
+    queries: Option<&str>,
+    selection: &crate::validate::Selection,
+) -> String {
+    let mut words: Vec<&str> = vec!["opentide", "validate"];
+    if fix {
+        words.push("--fix");
+    }
     if let Some(check) = check {
         words.extend(["--check", check]);
     }
@@ -805,6 +820,23 @@ mod tests {
         assert_eq!(
             fix_phrase(written.changes.len(), written.file_count(), false, 1),
             "Fixed 1 value in 1 file · could not write 1 fix"
+        );
+    }
+
+    #[test]
+    fn the_rerun_command_keeps_the_scope_and_drops_fix() {
+        let selection = crate::validate::Selection {
+            files: vec!["objects/rules/my rule.yaml".to_owned()],
+            types: vec!["rule".to_owned()],
+            ..crate::validate::Selection::default()
+        };
+        assert_eq!(
+            validate_command(false, Some("schema"), None, &selection),
+            "opentide validate --check schema --file 'objects/rules/my rule.yaml' --type rule"
+        );
+        assert_eq!(
+            validate_command(false, None, None, &crate::validate::Selection::default()),
+            "opentide validate"
         );
     }
 

@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use opentide_compile::validate::Compilers;
-use opentide_workspace::fix::{apply_reason, fix_command, fix_phrase, plural};
+use opentide_workspace::fix::{
+    apply_reason, fix_command, fix_phrase, plural, validate_command,
+};
 use opentide_workspace::validate::{
     Check, Options, QueriesMode, STRICT_EXEMPT_WARNINGS, Selection, Validation,
 };
@@ -542,11 +544,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 "how to fix it",
             ));
         }
-        let mut rerun = vec!["opentide", "validate"];
-        if let Some(flag) = queries_flag(queries) {
-            rerun.extend(["--queries", flag]);
-        }
-        next.push(NextAction::new(rerun.join(" "), "check again"));
+        let rerun = validate_command(false, check_name, queries_flag(queries), &args.selection);
+        next.push(NextAction::new(rerun, "check again"));
     }
     if summary.fixable > 0 {
         next.insert(
