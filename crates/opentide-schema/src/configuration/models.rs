@@ -1613,11 +1613,68 @@ fn no_legacy_keys(node: &Node, cx: &mut Context) -> bool {
             continue;
         };
         if let Some((_, message)) = LEGACY_DATASET_KEYS.iter().find(|(name, _)| *name == key) {
-            cx.at_key(key, |cx| value_error(cx, *message, &entry.value));
+            let message = legacy_key_message(key, message, &entry.value, node);
+            cx.at_key(key, |cx| value_error(cx, message, &entry.value));
             clean = false;
         }
     }
     clean
+}
+
+/// The refusal of a 0.20.0 dataset list. For `tables`, `sourcetypes` and
+/// `indices` that list names, it spells out the fix with the names the file
+/// lists: one `[[logsources]]` entry per name (at most two shown).
+fn legacy_key_message(key: &str, message: &str, value: &Node, source: &Node) -> String {
+    let (Value::Seq(items), true) = (
+        &value.value,
+        matches!(key, "tables" | "sourcetypes" | "indices"),
+    ) else {
+        return message.to_string();
+    };
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|item| item.value.as_str().map(str::to_string))
+        .filter(|name| !name.trim().is_empty())
+        .collect();
+    if names.is_empty() {
+        return message.to_string();
+    }
+    let field = |name: &str| -> String {
+        let Value::Map(entries) = &source.value else {
+            return String::new();
+        };
+        entries
+            .iter()
+            .find(|entry| entry.key.value.as_str() == Some(name))
+            .and_then(|entry| entry.value.value.as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    let system = match field("system") {
+        system if system.is_empty() => "<system>".to_string(),
+        system => system,
+    };
+    let description = match field("description") {
+        description if description.is_empty() => "<description>".to_string(),
+        description => description,
+    };
+    let entries: Vec<String> = names
+        .iter()
+        .take(2)
+        .map(|name| {
+            format!(
+                "[[logsources]]\nname = \"{name}\"\ndescription = \"{description}\"\nsystem = \"{system}\""
+            )
+        })
+        .collect();
+    let more = match names.len().saturating_sub(2) {
+        0 => String::new(),
+        n => format!("\n# ... and one more [[logsources]] entry for each of the other {n}"),
+    };
+    format!(
+        "{message}. For {}, write:\n{}{more}\nA signal's `data.logsources` then names each of them",
+        names.join(", "),
+        entries.join("\n\n")
+    )
 }
 
 fn source_name(node: &Node, cx: &mut Context) -> Option<String> {

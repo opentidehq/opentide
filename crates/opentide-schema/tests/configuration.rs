@@ -778,3 +778,31 @@ fn a_harfanglab_tenant_type_is_refused_as_removed() {
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].field_path, ["tenants", "0", "setup", "kind"]);
 }
+
+#[test]
+fn a_zero_twenty_dataset_list_is_refused_with_one_entry_per_name() {
+    // `tables` stays removed (visibility::1.0): the refusal names the tables
+    // the file lists and shows one `[[logsources]]` entry for each.
+    let path = "/w/.opentide/configurations/visibility.toml";
+    let text = "[[logsources]]\nname = \"Windows Security\"\ndescription = \"Windows logs\"\n\
+                system = \"sentinel\"\ntables = [\"SecurityEvent\", \"WindowsEvent\"]\n";
+    let issues = checks::buffer_issues(path, text, &checks::BufferContext::default());
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].field_path, ["logsources", "0", "tables"]);
+    assert_eq!(
+        issues[0].message,
+        "`tables` was removed in 0.20.1: declare each table as its own [[logsources]] entry \
+         whose `name` is the table. For SecurityEvent, WindowsEvent, write:\n\
+         [[logsources]]\nname = \"SecurityEvent\"\ndescription = \"Windows logs\"\nsystem = \"sentinel\"\n\n\
+         [[logsources]]\nname = \"WindowsEvent\"\ndescription = \"Windows logs\"\nsystem = \"sentinel\"\n\
+         A signal's `data.logsources` then names each of them"
+    );
+    // A list the file does not fill in keeps the short message.
+    let issues = checks::buffer_issues(
+        path,
+        "[[logsources]]\nname = \"a\"\ndescription = \"d\"\nsystem = \"sentinel\"\ntables = []\n",
+        &checks::BufferContext::default(),
+    );
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert!(issues[0].message.ends_with("whose `name` is the table"));
+}

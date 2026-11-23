@@ -738,6 +738,7 @@ pub mod codes {
     pub const KQL_DEPRECATED_FUNCTION: &str = "kql_deprecated_function";
     pub const KQL_DEPRECATED_OPERATOR: &str = "kql_deprecated_operator";
     pub const KQL_UNKNOWN_TABLE: &str = "kql_unknown_table";
+    pub const KQL_TABLE_MISSPELT: &str = "kql_table_misspelt";
     pub const KQL_RENDER_NOT_VALID: &str = "kql_render_not_valid";
     pub const KQL_PARSE_ERROR: &str = "kql_parse_error";
     pub const KQL_WHERE_NOT_FIRST: &str = "kql_where_not_first";
@@ -1082,6 +1083,7 @@ pub mod codes {
         KQL_DEPRECATED_FUNCTION,
         KQL_DEPRECATED_OPERATOR,
         KQL_UNKNOWN_TABLE,
+        KQL_TABLE_MISSPELT,
         KQL_RENDER_NOT_VALID,
         KQL_PARSE_ERROR,
         KQL_WHERE_NOT_FIRST,
@@ -1407,6 +1409,9 @@ pub mod codes {
             }
             KQL_UNKNOWN_TABLE => {
                 "The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known."
+            }
+            KQL_TABLE_MISSPELT => {
+                "The table is not one the engine knows or the workspace declares, but is within two edits of one that is (and is not a custom `_CL` table): a typo."
             }
             KQL_RENDER_NOT_VALID => "render draws a chart; it has no effect in a detection rule.",
             KQL_PARSE_ERROR => "The KQL query does not parse.",

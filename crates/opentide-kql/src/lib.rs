@@ -829,16 +829,17 @@ impl Catalog {
     /// spaces included, which a rename must never offer: the best bare name
     /// wins instead.
     fn suggest_bare_table(&self, name: &str) -> Option<String> {
+        self.near_bare_table(name, suggest::max_edits(name.chars().count()))
+    }
+
+    /// [`Catalog::suggest_bare_table`] within `edits` edits.
+    fn near_bare_table(&self, name: &str, edits: usize) -> Option<String> {
         let prepared = self
             .memo
             .table_names
             .get_or_init(|| suggest::Candidates::new(self.tables.iter().map(|t| t.name.as_str())));
         prepared
-            .ranked(
-                name,
-                suggest::max_edits(name.chars().count()),
-                self.tables.len(),
-            )
+            .ranked(name, edits, self.tables.len())
             .into_iter()
             .filter_map(|i| self.tables.get(i))
             .find(|t| is_bare_identifier(&t.name))
@@ -1148,6 +1149,21 @@ fn check_table_named(
         .map(str::to_string)
         .or_else(|| catalog.suggest_bare_table(table))
     };
+    // The table within two edits (ASCII case ignored), declared first, else in
+    // the catalog; bare identifiers only, as for `suggest`.
+    let near_miss = || {
+        suggest::closest_within(
+            table,
+            datasets
+                .names(platform)
+                .iter()
+                .filter(|d| is_bare_identifier(d))
+                .map(String::as_str),
+            MISSPELT_EDITS,
+        )
+        .map(str::to_string)
+        .or_else(|| catalog.near_bare_table(table, MISSPELT_EDITS))
+    };
     // The spec's precedence (visibility::1.0, Query checks): only a name the
     // catalog knows is "not declared"; one it does not know is unknown,
     // opted in or not, at the profile's severity.
@@ -1171,11 +1187,27 @@ fn check_table_named(
                 // A Sentinel workspace holds tables no catalog lists (custom `_CL`
                 // tables, every Azure Monitor connector), so a name missing here is
                 // the engine's gap, not a mistake in the query.
-                Profile::Sentinel => Diagnostic::warning(
-                    codes::KQL_UNKNOWN_TABLE,
-                    format!("'{table}' is not a table opentide knows{help}"),
-                    range,
-                ),
+                // A name within two edits of a table the workspace declares or the
+                // catalog lists, and not a custom `_CL` table, is a typo: an error
+                // under its own code, so `lint.toml` can tune it alone.
+                Profile::Sentinel => match near_miss().filter(|_| !table.ends_with("_CL")) {
+                    Some(near) => {
+                        out.push(
+                            Diagnostic::error(
+                                codes::KQL_TABLE_MISSPELT,
+                                format!("'{table}' is not a table opentide knows; did you mean '{near}'?"),
+                                range,
+                            )
+                            .with_suggestion(near),
+                        );
+                        return;
+                    }
+                    None => Diagnostic::warning(
+                        codes::KQL_UNKNOWN_TABLE,
+                        format!("'{table}' is not a table opentide knows{help}"),
+                        range,
+                    ),
+                },
                 // Advanced hunting is a closed schema: an unknown table is an
                 // error, and with declarations its help names them.
                 Profile::Core | Profile::Defender if opted_in => Diagnostic::error(
@@ -1198,6 +1230,10 @@ fn check_table_named(
     }
     out.push(d);
 }
+
+/// The edits within which an unknown Sentinel table is a typo of a known one
+/// (`kql_table_misspelt`).
+const MISSPELT_EDITS: usize = 2;
 
 /// Whether `name` is written bare in a KQL query: `[A-Za-z_][A-Za-z0-9_]*`.
 /// Other names need the `['…']` quoting, which a suggestion does not add.
@@ -2898,23 +2934,60 @@ mod tests {
         );
     }
 
+    /// A Sentinel table within two edits of a known one is a typo: an error
+    /// under `kql_table_misspelt`, which suggests the table.
     #[test]
-    fn unknown_table_suggests() {
-        let r = analyze("SecurityEvnt | take 1", Profile::Sentinel);
-        let d = r
-            .diagnostics
-            .iter()
-            .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
-            .expect("table diag");
-        assert_eq!(d.suggestion.as_deref(), Some("SecurityEvent"));
-        assert_eq!(d.severity, opentide_core::Severity::Warning);
-        let r = analyze("SigninLog | take 1", Profile::Sentinel);
-        let d = r
-            .diagnostics
-            .iter()
-            .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
-            .expect("table diag");
-        assert_eq!(d.suggestion.as_deref(), Some("SigninLogs"));
+    fn near_miss_table_is_a_misspelt_error() {
+        for (query, want) in [
+            ("SecurityEvnt | take 1", "SecurityEvent"),
+            ("SigninLog | take 1", "SigninLogs"),
+            // Two edits, and ASCII case ignored.
+            ("SigninLogsXY | take 1", "SigninLogs"),
+            ("SIGNINLOGS | take 1", "SigninLogs"),
+        ] {
+            let r = analyze(query, Profile::Sentinel);
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == codes::KQL_TABLE_MISSPELT)
+                .unwrap_or_else(|| panic!("{query}: {:?}", r.diagnostics));
+            assert_eq!(d.suggestion.as_deref(), Some(want), "{query}");
+            assert_eq!(d.severity, opentide_core::Severity::Error, "{query}");
+            assert!(
+                d.message.contains(&format!("did you mean '{want}'?")),
+                "{}",
+                d.message
+            );
+            // One finding per name, not also the unknown-table warning.
+            assert!(
+                !r.diagnostics
+                    .iter()
+                    .any(|d| d.code == codes::KQL_UNKNOWN_TABLE),
+                "{query}"
+            );
+        }
+    }
+
+    /// Custom `_CL` tables and names three edits away stay the warning: a
+    /// workspace holds tables no catalog lists.
+    #[test]
+    fn far_or_custom_table_stays_an_unknown_warning() {
+        // `SigninLogsXYZ` is three insertions from `SigninLogs`.
+        for query in ["SigninLogsXYZ | take 1", "SigninLog_CL | take 1"] {
+            let r = analyze(query, Profile::Sentinel);
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+                .unwrap_or_else(|| panic!("{query}: {:?}", r.diagnostics));
+            assert_eq!(d.severity, opentide_core::Severity::Warning, "{query}");
+            assert!(
+                !r.diagnostics
+                    .iter()
+                    .any(|d| d.code == codes::KQL_TABLE_MISSPELT),
+                "{query}"
+            );
+        }
     }
 
     #[test]

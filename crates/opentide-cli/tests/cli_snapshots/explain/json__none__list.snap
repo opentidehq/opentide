@@ -1165,6 +1165,10 @@ exit: 0
       "meaning": "render draws a chart; it has no effect in a detection rule."
     },
     {
+      "code": "kql_table_misspelt",
+      "meaning": "A KQL table is not one the engine knows or the workspace declares, but its name is within two edits of one that is (ASCII case ignored), so it is most likely a typo."
+    },
+    {
       "code": "kql_table_not_declared",
       "meaning": "The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml."
     },
@@ -1905,13 +1909,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "473 diagnostic codes",
+  "message": "474 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 473
+    "codes": 474
   }
 }
 

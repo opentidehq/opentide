@@ -239,14 +239,27 @@ tables = ["Custom_CL"]
         findings("sentinel", "Custom_CL | join (AuditLogs) on OperationName"),
         warning(codes::KQL_TABLE_NOT_DECLARED)
     );
-    // Undeclared and unknown to the catalog: still `kql_unknown_table` at
-    // the profile's severity (#147), its help naming the declaration, and a
-    // near miss of a declared table suggests it.
+    // Undeclared and unknown to the catalog, and within two edits of a
+    // declared table that does not end in `_CL`: `kql_table_misspelt`, an
+    // error, naming the declared table.
     let d = analyze_query(&QueryRequest {
         language: LanguageId::Kql,
         platform: Some("sentinel".into()),
         stack: None,
-        text: "Custom_C | take 1".into(),
+        text: "NTANetAnalytic | take 1".into(),
+    });
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].code, codes::KQL_TABLE_MISSPELT);
+    assert_eq!(d[0].severity, opentide_analysis::Severity::Error);
+    assert_eq!(d[0].suggestion.as_deref(), Some("NTANetAnalytics"));
+    // A custom `_CL` near miss is still `kql_unknown_table` at the
+    // profile's severity (#147), its help naming the declaration, and a near
+    // miss of a declared table suggests it.
+    let d = analyze_query(&QueryRequest {
+        language: LanguageId::Kql,
+        platform: Some("sentinel".into()),
+        stack: None,
+        text: "Custom_C_CL | take 1".into(),
     });
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, codes::KQL_UNKNOWN_TABLE);
@@ -254,7 +267,7 @@ tables = ["Custom_CL"]
     assert_eq!(d[0].suggestion.as_deref(), Some("Custom_CL"));
     assert_eq!(
         d[0].message,
-        "'Custom_C' is not a table opentide knows; if the workspace holds it, declare it for sentinel in visibility.toml"
+        "'Custom_C_CL' is not a table opentide knows; if the workspace holds it, declare it for sentinel in visibility.toml"
     );
     assert_eq!(
         findings("sentinel", "Other_CL | take 1"),
