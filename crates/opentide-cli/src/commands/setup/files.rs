@@ -796,18 +796,31 @@ pub fn repo(stage: &mut Stage, target: &Path, options: &RepoOptions) -> Result<S
         result.set("warnings", strings(&warnings));
     }
     if !options.platforms.is_empty() {
-        let platforms = platforms(stage, target, &options.platforms)?;
-        result.set(
-            "platform_files",
-            Json::Array(platforms.strings("files").iter().map(Json::str).collect()),
-        );
-        let mut all = result.strings("warnings");
-        all.extend(platforms.strings("warnings"));
-        if !all.is_empty() {
-            result.set("warnings", strings(&all));
-        }
+        repo_platforms(stage, target, &options.platforms, &mut result)?;
     }
     Ok(result)
+}
+
+/// `setup repo --platform`: the platforms step, its files under
+/// `platform_files` and its warnings (the key changes of a platform file that
+/// already exists) added to `result`'s.
+fn repo_platforms(
+    stage: &mut Stage,
+    target: &Path,
+    chosen: &[String],
+    result: &mut StepResult,
+) -> Result<(), String> {
+    let step = platforms(stage, target, chosen)?;
+    result.set(
+        "platform_files",
+        Json::Array(step.strings("files").iter().map(Json::str).collect()),
+    );
+    let mut warnings = result.strings("warnings");
+    warnings.extend(step.strings("warnings"));
+    if !warnings.is_empty() {
+        result.set("warnings", strings(&warnings));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------- mcp
