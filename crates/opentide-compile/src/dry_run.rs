@@ -370,7 +370,8 @@ pub fn run(
                 scope
             }
             Err(message) => {
-                let mut outcome = Outcome::failed(message, 1);
+                let code = crate::git::scope_exit_code(&message);
+                let mut outcome = Outcome::failed(message, code);
                 let mut own = Vec::new();
                 let mut warnings = Vec::new();
                 finish_failure(

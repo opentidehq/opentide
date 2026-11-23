@@ -500,6 +500,17 @@ pub const PUSH_BASE_VARIABLE: &str = "OPENTIDE_PUSH_BASE";
 /// that shows it as the CI run's warning.
 pub const LAST_COMMIT_ONLY_PREFIX: &str = "This push's diff starts at its last commit's parent";
 
+/// The exit code of a run whose changed-file scope failed with `message`: `2`
+/// (a usage error) when `OPENTIDE_PUSH_BASE` is wrong, else `1`.
+#[must_use]
+pub fn scope_exit_code(message: &str) -> i32 {
+    if message.starts_with(PUSH_BASE_VARIABLE) {
+        2
+    } else {
+        1
+    }
+}
+
 /// The commit `OPENTIDE_PUSH_BASE` names, when it is set: a commit of the
 /// checkout that is an ancestor of HEAD, else an error.
 fn push_base_override(repo: &Repo, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {

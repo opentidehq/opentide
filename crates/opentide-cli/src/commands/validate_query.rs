@@ -859,7 +859,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         warnings.extend(warning);
                     }
                 }
-                Err(message) => return scope_refused(platform, &message, 1),
+                Err(message) => {
+                    let code = opentide_compile::git::scope_exit_code(&message);
+                    return scope_refused(platform, &message, code);
+                }
             }
         } else if !rule_targets.is_empty() || !args.uuids.is_empty() {
             let request = opentide_compile::dry_run::Request {

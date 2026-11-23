@@ -451,3 +451,34 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
         "{payloads}"
     );
 }
+
+#[test]
+fn a_wrong_push_base_is_a_usage_failure_and_another_git_failure_exits_1() {
+    let ws = workspace(&[(
+        "objects/rules/a.yaml",
+        &rule(
+            "00000000-0000-4000-8000-00000000000a",
+            "defender_for_endpoint",
+            "STAGING",
+            "",
+        ),
+    )]);
+    let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
+    let run_with = |message: &'static str| {
+        let changed =
+            move |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
+                Err(message.to_owned())
+            };
+        let request = Request {
+            strategies: vec!["preview".to_owned()],
+            cwd: PathBuf::from("/ws"),
+            ..Request::default()
+        };
+        dry_run::run(&ws, &owned, &request, &changed, &|_: &str| false).exit_code
+    };
+    assert_eq!(
+        run_with("OPENTIDE_PUSH_BASE=x is not an ancestor of HEAD (y)"),
+        2
+    );
+    assert_eq!(run_with("No Source Commit Found"), 1);
+}

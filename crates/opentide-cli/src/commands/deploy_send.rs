@@ -677,6 +677,9 @@ fn deploy(
                 plan_warnings.extend(warning);
                 scope
             }
+            Err(message) if opentide_compile::git::scope_exit_code(&message) == 2 => {
+                return usage(&message, "usage_error", None);
+            }
             Err(message) => return failed(&message),
         }
     };
