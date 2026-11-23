@@ -1703,6 +1703,18 @@ fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "info"
+variant = "threats"
+args = ["info", "threats"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "objectives"
+args = ["info", "objectives"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
 variant = "vocab"
 args = ["info", "vocab"]
 fixtures = ["tide-corpus"]

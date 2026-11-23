@@ -150,7 +150,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     );
     let count = |family: &str| index.objects.get(family).map_or(0, indexmap::IndexMap::len);
     let load_errors = index.load_errors.len() + index.duplicates.len();
-    let mut out: Vec<(String, Json)> = vec![
+    // Without a section the document is the overview; with one it holds
+    // only that section's keys (`info vocab --json | jq .vocabularies`).
+    let overview: Vec<(String, Json)> = vec![
         ("version".into(), Json::str(cx.version)),
         ("repo".into(), Json::str(&repo)),
         (
@@ -164,6 +166,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ("parse_error_count".into(), count_json(load_errors)),
         ("platforms".into(), json(&platforms)),
     ];
+    let mut out: Vec<(String, Json)> = Vec::new();
     let mut summary: Vec<(String, Json)> = vec![
         ("rules".into(), count_json(count("rule"))),
         ("threats".into(), count_json(count("threat"))),
@@ -262,7 +265,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         count("objective"),
         load_errors,
     );
-    let mut report = Report::completed(COMMAND, out);
+    let mut report = Report::completed(COMMAND, if section.is_some() { out } else { overview });
     report.outcome.summary = summary;
     report.outcome_line = Some(outcome);
     if load_errors > 0 {
