@@ -819,7 +819,10 @@ pub fn app_token(text: &str) -> bool {
     text.trim_start_matches('\u{feff}')
         .lines()
         .next()
-        .is_some_and(|line| line.split_whitespace().any(|word| word == "--app-token"))
+        .is_some_and(|line| {
+            line.split_whitespace()
+                .any(|word| word.trim_matches('`') == "--app-token")
+        })
 }
 
 /// The user-owned region at the end of the pipeline's jobs, `pad` spaces in:
