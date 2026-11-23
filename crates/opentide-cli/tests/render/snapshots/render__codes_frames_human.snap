@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: candidate
 ---
 == analysis_engine
 [1m[31merror[analysis_engine][0m[1m: The analysis engine loads: the Rust module compiled into opentide[0m
@@ -3759,7 +3758,8 @@ expression: candidate
   [34m╰─[0m [1m[36mhelp:[0m opentide explain schema_validation
 
 == schemas_fresh
-[1m[31merror[schemas_fresh][0m[1m: Every JSON schema this opentide version generates exists.[0m
+[1m[31merror[schemas_fresh][0m[1m: Every JSON schema this opentide version generates exists and matches what[0m
+  [1m`opentide generate schemas` writes now.[0m
   [34m╭─▶[0m ]8;;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
 [34m  │[0m
 [34m3 │[0m   uuid: 00000000-0000-4000-8003-000000000001

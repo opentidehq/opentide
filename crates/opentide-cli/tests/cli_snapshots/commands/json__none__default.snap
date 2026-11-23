@@ -11602,7 +11602,18 @@ exit: 0
       "summary": "Scaffold a detection rule"
     },
     {
-      "arguments": [],
+      "arguments": [
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "help": "Phases to run, in the order given: schemas, templates, vocabs, snippets. None runs the whole pipeline.",
+          "multiple": true,
+          "name": "PHASE",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "deprecated": false,
       "example": "opentide generate",
       "group": true,

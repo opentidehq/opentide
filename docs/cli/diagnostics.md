@@ -374,7 +374,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`rule_status_unknown`](#rule_status_unknown) | A `sharing.toml` block lists a rule status your configuration does not declare. |
 | [`schema_missing`](#schema_missing) | An object has no `metadata.schema`, so no schema can check it. |
 | [`schema_validation`](#schema_validation) | An object does not match the schema its `metadata.schema` names. |
-| [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists. |
+| [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now. |
 | [`scope_no_match`](#scope_no_match) | A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated. |
 | [`share_failed`](#share_failed) | `share` reached the destination, and every object failed. |
 | [`share_partial`](#share_partial) | `share` shared some objects, and others failed. |
@@ -5798,7 +5798,7 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 opentide can generate the language server's catalog for this workspace, and a committed copy is current.
 
-Reported by `opentide doctor`. `opentide lsp start`, the `opentide-lsp` binary on its own and `opentide tui` check objects with the catalog they generate in memory, each time they start, from the models they were built with and the workspace's configuration; nothing is cached. No program reads the copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`: it is there for other tools. Warns when a committed copy does not parse or comes from another opentide version.
+Reported by `opentide doctor`. `opentide lsp start`, the `opentide-lsp` binary on its own and `opentide tui` check objects with the catalog they generate in memory, each time they start, from the models they were built with and the workspace's configuration; nothing is cached. No program reads the copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`: it is there for other tools. Warns when a committed copy does not parse, comes from another opentide version, is missing a file (`fields.json` or `deprecations.json`) or differs from what `opentide generate schemas` writes now. Line endings and a byte order mark are not compared.
 
 ### Example
 
@@ -6719,14 +6719,14 @@ The message is the schema's own (a missing required field, a wrong type, an unkn
 
 ## schemas_fresh
 
-Every JSON schema this opentide version generates exists.
+Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now.
 
-Reported by `opentide doctor`. Warns when one is missing. Schemas carry no version stamp, so only presence is checked.
+Reported by `opentide doctor`. Warns when one is missing or its text differs from what the phase would write: the schemas are built from the workspace's objects (a rule's `detection_model` offers their names), its visibility, statuses and enabled platforms, so a changed object or configuration makes them stale, as does a schema another opentide version wrote. Line endings and a byte order mark are not compared. If the workspace does not open, only the presence of each schema is checked, and the message says so.
 
 ### Example
 
 ```text illustrative
-! 1 schema(s) this version generates are missing: rule · schemas_fresh
+! 1 schema(s) differ from what `generate schemas` writes now (objects or configuration changed, or another version wrote them): rule.1.0.schema.json · schemas_fresh
   → opentide generate schemas
 ```
 
