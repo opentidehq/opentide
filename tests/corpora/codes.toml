@@ -235,6 +235,7 @@ lint = [
     "name_missing",
     "placeholder",
     "recommended_field_missing",
+    "reviewed_before_modified",
     "yaml_parse",
 ]
 configuration = [

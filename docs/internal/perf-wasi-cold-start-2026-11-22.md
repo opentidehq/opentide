@@ -98,8 +98,9 @@ which `clean_enum` 206M; the schema transforms 180M (the vocabulary offers' one-
 The catalogs are byte for byte the same: the bundled configuration's (the language server's
 `the_default_catalogs_are_the_bundled_ones` and `cargo xtask codegen --check`) and the corpus configuration's
 (compared before and after). The `datasets` bench counts the build from a fresh process
-(`tide-field-catalog`, the offers' decode included): 383M to 209M instructions, 849k to 471k allocations
-(`tests/bench/instructions.toml`). Natively the first build in a process goes from 194 to 102 ms, a later one
+(`tide-field-catalog`, the offers' decode included): 383M to 209M instructions, 849k to 471k allocations.
+On top of #1808, which adds each vocabulary field's references and drops the search hints from its enum, it is
+395M to 222M, 873k to 488k (`tests/bench/instructions.toml`). Natively the first build in a process goes from 194 to 102 ms, a later one
 from 91 to 127 ms to 49 to 53 ms; under wasmtime `catalog: fields_catalog` (`OPENTIDE_LSP_TIMING=1`) from 167
 to 95 ms.
 

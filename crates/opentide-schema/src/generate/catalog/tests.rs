@@ -392,3 +392,57 @@ fn a_long_enum_keeps_its_values_and_no_docs() {
     let (cleaned, short) = clean_enum(&values, &docs);
     assert_eq!((cleaned.len(), short.len()), (ENUM_DOC_MAX, ENUM_DOC_MAX));
 }
+
+/// A field that names a vocabulary records it, and offers each value once:
+/// the search hints a model vocabulary adds to the schema's `enum` for
+/// editors that know only the schema (`T1 #Name`) are not values.
+#[test]
+fn a_vocabulary_field_names_its_vocabulary_and_offers_no_search_hint() {
+    let root = json!({});
+    let facts = Facts::default();
+    let spec = json!({
+        "type": "array",
+        "tide.vocab": "att&ck::1.2",
+        "items": {
+            "enum": ["T1", "T1.001", "T1 #One", "T1.001 #One: Sub", "C# #Not a hint"],
+            "markdownEnumDescriptions": ["**1**", "**1.1**", "**1**", "**1.1**", "**C**"],
+        },
+    });
+    let row = row_of(&root, "threat.mitre_attack", &spec, &facts);
+    assert_eq!(
+        row.node["enum"],
+        Json::Array(
+            ["T1", "T1.001", "C# #Not a hint"]
+                .into_iter()
+                .map(Json::from)
+                .collect()
+        )
+    );
+    assert_eq!(
+        row.node["enum_docs"],
+        Json::Array(vec![
+            Json::from("**1**"),
+            Json::from("**1.1**"),
+            Json::from("**C**")
+        ])
+    );
+    assert_eq!(
+        row.node["vocab"],
+        Json::Array(vec![Json::from("att&ck::1.2")])
+    );
+    assert_eq!(row.node["vocab_scoped"], Json::Bool(false));
+    // `true` names the vocabulary after the field.
+    let named =
+        json!({"type": "string", "tide.vocab": true, "tide.vocab.scoped": true, "enum": ["a"]});
+    let row = row_of(&root, "threat.surface", &named, &facts);
+    assert_eq!(row.node["vocab"], Json::Array(vec![Json::from("surface")]));
+    assert_eq!(row.node["vocab_scoped"], Json::Bool(true));
+    // A field that names none keeps its values, hints or not, and says nothing.
+    let plain = json!({"type": "string", "enum": ["T1", "T1 #One"]});
+    let row = row_of(&root, "a.b", &plain, &facts);
+    assert_eq!(
+        row.node["enum"],
+        Json::Array(vec![Json::from("T1"), Json::from("T1 #One")])
+    );
+    assert!(!row.node.contains_key("vocab"));
+}

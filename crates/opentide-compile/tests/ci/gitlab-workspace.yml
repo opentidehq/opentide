@@ -537,3 +537,8 @@ document:
     - opentide generate docs --output docs
   needs:
     - generate
+
+# Your own jobs between the markers below survive `opentide setup ci gitlab --yes`;
+# opentide replaces everything else in this file.
+# opentide:user-begin
+# opentide:user-end
