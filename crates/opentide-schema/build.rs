@@ -113,7 +113,8 @@ fn write_offers(
     datasets: &opentide_dataset::build::Datasets,
     vocabularies: &[(String, String, String)],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut table = String::from("pub(super) const OFFERS: &[(&str, bool, Load)] = &[\n");
+    let mut table =
+        String::from("pub(super) const OFFERS: &[(&str, bool, Load, LoadNames)] = &[\n");
     for (reference, scoped) in OFFERED {
         let vocab: VocabRef = reference
             .parse()
@@ -139,8 +140,11 @@ fn write_offers(
             if *scoped { "scoped" } else { "plain" }
         );
         datasets.value(&name, &[source], &offer)?;
+        let names = format!("{name}.names");
+        datasets.value(&names, &[source], &offer.offer_names())?;
         table.push_str(&format!(
-            "    ({reference:?}, {scoped}, || opentide_dataset::value!(Offer, {name:?})),\n"
+            "    ({reference:?}, {scoped}, || opentide_dataset::value!(Offer, {name:?}), \
+             || opentide_dataset::value!(OfferNames, {names:?})),\n"
         ));
     }
     table.push_str("];\n");

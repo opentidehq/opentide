@@ -45,6 +45,16 @@ pub struct TideField {
     pub enum_values: Choices,
     #[serde(default)]
     pub enum_docs: Vec<String>,
+    /// The vocabularies the values come from (`att&ck::1.2`, as the field
+    /// names them), empty for a field that names none: an editor names and
+    /// documents each value from its entry there. As a catalog file gives
+    /// them: the bundled catalog stores them apart, so read them through
+    /// [`tide_field_vocab`](crate::tide_field_vocab).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vocab: Vec<String>,
+    /// Whether the values carry their first stage (`OS::Windows::Desktop`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vocab_scoped: bool,
     #[serde(default, rename = "ref")]
     pub ref_kind: Option<String>,
     #[serde(default, rename = "const")]
@@ -156,6 +166,17 @@ pub struct StoredField {
     pub recommended: bool,
     pub closed: bool,
     pub legacy: Vec<(u32, Option<u32>)>,
+}
+
+/// The vocabularies one field of the bundled catalog names ([`TideField::vocab`]), stored apart
+/// from the fields: two more keys on each of a thousand stored rows made the catalog's first decode
+/// 3% slower, for the two dozen fields that name one. Read when a value is first looked up.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StoredVocab {
+    pub schema: String,
+    pub path: String,
+    pub references: Vec<String>,
+    pub scoped: bool,
 }
 
 /// The bundled catalog as the build stores it (#1743): every string once, and the fields by place

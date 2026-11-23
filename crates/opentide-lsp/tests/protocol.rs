@@ -2151,20 +2151,31 @@ fn the_values_of_a_tide_field_are_listed_by_label_and_say_the_same_once() {
         .as_array()
         .expect("an array for a client with no defaults");
     let (mut lsp, list) = complete(json!({ "textDocument": { "completion": {
-        "completionItem": { "resolveSupport": { "properties": ["documentation", "detail"] } },
+        "completionItem": {
+            "labelDetailsSupport": true,
+            "resolveSupport": { "properties": ["documentation", "detail"] }
+        },
         "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
     } } }));
     let items = list["items"]
         .as_array()
         .expect("a list for a client with defaults");
-    assert!(whole.len() > 300, "the ATT&CK list: {}", whole.len());
+    // The techniques from T1000 to T1099 and their sub-techniques, each once
+    // (each was listed twice, with its search hint, before #1745).
+    assert!(whole.len() > 150, "the ATT&CK list: {}", whole.len());
     assert_eq!(items.len(), whole.len());
     assert_eq!(list["isIncomplete"], false);
     let size = |value: &Value| serde_json::to_string(value).unwrap().len();
-    // A label, a kind and, where it differs, the text: 51 bytes an item here,
-    // 383 when each item says its data and its range again.
+    // A label, a kind, the name shown beside it and the text it is found by
+    // (the label, the name and the aliases), and where it differs, the text:
+    // about 64 bytes an item besides what it names, where each item that says
+    // its data and its range again takes 330 more.
+    // A label, a kind, the technique's name beside it (`labelDetails`) and the
+    // text it is found by (the value, the name and the aliases): 167 bytes an
+    // item here (30.8 KB for 185 techniques), where each item that says its
+    // data and its range again takes 360.
     assert!(
-        size(&list) < items.len() * 64,
+        size(&list) < items.len() * 180,
         "labels: {} bytes for {} items, whole: {} bytes",
         size(&list),
         items.len(),
@@ -3654,5 +3665,191 @@ fn a_pull_the_server_cannot_answer_is_refused_once_for_the_client_to_retry() {
     assert!(
         !codes.is_empty(),
         "the open document shows nothing: {codes:?}"
+    );
+}
+
+/// A client that shows `labelDetails` and resolves documentation, as VS Code is.
+fn vocabulary_client() -> Lsp {
+    let capabilities = json!({ "textDocument": { "completion": {
+        "completionItem": {
+            "labelDetailsSupport": true,
+            "resolveSupport": { "properties": ["documentation", "detail"] }
+        },
+        "completionList": { "itemDefaults": ["commitCharacters", "editRange", "data"] }
+    } } });
+    start(json!({ "capabilities": capabilities })).0
+}
+
+/// The items completion offers at the end of `text`, opened as `uri`, and the
+/// `data` the list says once for them all (`null` when each says its own).
+fn complete_at_end(lsp: &mut Lsp, uri: &str, text: &str) -> (Vec<Value>, Value) {
+    open(lsp, uri, "opentide-yaml", text);
+    let line = text.lines().count() - 1;
+    let character = text.lines().last().unwrap().len();
+    let list = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    );
+    let result = list["result"].clone();
+    let items = result
+        .as_array()
+        .or_else(|| result["items"].as_array())
+        .unwrap_or_else(|| panic!("{result}"))
+        .clone();
+    (items, result["itemDefaults"]["data"].clone())
+}
+
+/// Each item's label, asserting that no value is offered twice, and none as
+/// a schema search hint (`T1548 #Abuse Elevation Control Mechanism`).
+fn labels_offered_once(items: &[Value]) -> std::collections::BTreeSet<&str> {
+    let labels: std::collections::BTreeSet<&str> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str())
+        .collect();
+    assert_eq!(labels.len(), items.len(), "a value is offered twice");
+    assert!(
+        labels.iter().all(|label| !label.contains(" #")),
+        "a search hint is offered: {:?}",
+        labels.iter().find(|label| label.contains(" #"))
+    );
+    labels
+}
+
+const THREAT_HEAD: &str = "name: Simulated actor
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: threat::1.0
+  version: 1
+threat:
+";
+
+/// Completion of a vocabulary value (#1745 item 2): under `threat.mitre_attack`
+/// each ATT&CK technique is one item, never also its schema search hint; its
+/// name is shown beside it (`labelDetails.description`), the client finds it
+/// by that name too (`filterText`), it inserts the bare value, and
+/// `completionItem/resolve` documents it from the vocabulary, which the list
+/// leaves to it.
+#[test]
+fn an_attack_technique_is_offered_once_named_and_documented_on_resolve() {
+    let mut lsp = vocabulary_client();
+    let head = format!("{THREAT_HEAD}  mitre_attack:\n    - T1059\n    - ");
+    let (items, data) = complete_at_end(
+        &mut lsp,
+        "file:///tmp/objects/threats/techniques.yaml",
+        &head,
+    );
+    let labels = labels_offered_once(&items);
+    assert!(items.len() > 900, "{} items", items.len());
+    let uac = items
+        .iter()
+        .find(|item| item["label"] == "T1548.002")
+        .unwrap_or_else(|| panic!("no T1548.002 among {labels:?}"));
+    assert_eq!(
+        uac["labelDetails"]["description"],
+        "Abuse Elevation Control Mechanism: Bypass User Account Control",
+        "{uac}"
+    );
+    let filter = uac["filterText"].as_str().unwrap_or_default();
+    assert!(
+        filter.starts_with("T1548.002 ") && filter.contains("Bypass User Account Control"),
+        "{uac}"
+    );
+    // The bare value is inserted, and the list carries no documentation.
+    assert!(
+        uac.get("textEditText").is_none()
+            && uac
+                .get("insertText")
+                .is_none_or(|text| *text == "T1548.002"),
+        "{uac}"
+    );
+    assert!(uac.get("documentation").is_none_or(Value::is_null), "{uac}");
+    let mut sent = uac.clone();
+    if sent.get("data").is_none() {
+        sent["data"] = data;
+    }
+    let resolved = lsp.request("completionItem/resolve", sent)["result"].clone();
+    let docs = resolved["documentation"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert_eq!(resolved["documentation"]["kind"], "markdown", "{resolved}");
+    for said in [
+        "Abuse Elevation Control Mechanism: Bypass User Account Control",
+        "`T1548.002`",
+        "Adversaries may bypass UAC mechanisms",
+    ] {
+        assert!(docs.contains(said), "resolve does not say {said:?}: {docs}");
+    }
+    // Typing a word of the name finds the technique.
+    let (typed, _) = complete_at_end(
+        &mut lsp,
+        "file:///tmp/objects/threats/typed.yaml",
+        &format!("{head}bypass"),
+    );
+    assert!(
+        typed.iter().any(|item| item["label"] == "T1548.002"),
+        "`bypass` does not find T1548.002: {typed:?}"
+    );
+}
+
+/// An actor's `name` offers each actor once, named, and found by its aliases.
+#[test]
+fn a_threat_actor_is_offered_once_and_named() {
+    let mut lsp = vocabulary_client();
+    let actors = format!("{THREAT_HEAD}  actors:\n    - name: ");
+    let (items, _) = complete_at_end(&mut lsp, "file:///tmp/objects/threats/actors.yaml", &actors);
+    let labels = labels_offered_once(&items);
+    assert!(items.len() > 1000, "{} items", items.len());
+    let apt1 = items
+        .iter()
+        .find(|item| item["label"] == "att&ck::G0006")
+        .unwrap_or_else(|| panic!("no att&ck::G0006 among {labels:?}"));
+    assert_eq!(
+        apt1["labelDetails"]["description"], "[Enterprise] APT1",
+        "{apt1}"
+    );
+    assert!(
+        apt1["filterText"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Comment Crew"),
+        "{apt1}"
+    );
+}
+
+/// A client that neither shows `labelDetails` nor resolves an item (a bare
+/// LSP client) reads a technique's name as the item's detail, and finds it by
+/// the name as well.
+#[test]
+fn a_client_without_label_details_reads_the_name_as_the_detail() {
+    let (mut lsp, _) = start(json!({ "capabilities": {} }));
+    let head = format!("{THREAT_HEAD}  mitre_attack:\n    - ");
+    let (items, _) = complete_at_end(&mut lsp, "file:///tmp/objects/threats/bare.yaml", &head);
+    labels_offered_once(&items);
+    let uac = items
+        .iter()
+        .find(|item| item["label"] == "T1548.002")
+        .expect("T1548.002");
+    assert!(uac.get("labelDetails").is_none_or(Value::is_null), "{uac}");
+    assert_eq!(
+        uac["detail"], "Abuse Elevation Control Mechanism: Bypass User Account Control",
+        "{uac}"
+    );
+    assert!(
+        uac["filterText"]
+            .as_str()
+            .is_some_and(|text| text.contains("Bypass User Account Control")),
+        "{uac}"
+    );
+    // Resolving it, as a client may still do, keeps the detail and documents it.
+    let resolved = lsp.request("completionItem/resolve", uac.clone())["result"].clone();
+    assert_eq!(resolved["detail"], uac["detail"], "{resolved}");
+    assert!(
+        resolved["documentation"]["value"]
+            .as_str()
+            .is_some_and(|docs| docs.contains("Adversaries may bypass UAC mechanisms")),
+        "{resolved}"
     );
 }
