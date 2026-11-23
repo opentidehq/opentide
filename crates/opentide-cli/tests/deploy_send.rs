@@ -5825,24 +5825,29 @@ fn sentinel_read_replay(
         std::fs::read_to_string(repo().join("tests/cassettes/sentinel/deploy.json")).unwrap();
     let mut cassette = Cassette::parse(&text).unwrap();
     let body = planned.to_compact();
-    let at = |index: usize| {
+    let at = |index: usize, rule: &str| {
         let mut interaction = cassette.interactions[index].clone();
-        interaction.request.url = interaction.request.url.replace("soc%20workspace", "soc");
+        interaction.request.url = interaction
+            .request
+            .url
+            .replace("soc%20workspace", "soc")
+            .replace("00000000-0000-4000-8003-000000000001", rule);
         interaction
     };
-    let mut read = at(6);
+    let deployed = "00000000-0000-4000-8047-000000000071";
+    let mut read = at(6, deployed);
     read.request.method = "GET".into();
     read.response.status = status;
     read.response.body =
         opentide_cassette::cassette::Body::Text(held.map(Json::to_compact).unwrap_or_default());
-    let mut interactions = vec![at(0), at(1), read];
+    let mut interactions = vec![at(0, deployed), at(1, deployed), read];
     if put {
-        let mut write = at(2);
+        let mut write = at(2, deployed);
         write.request.body = opentide_cassette::cassette::Body::Text(body);
         interactions.push(write);
     }
     // The workspace's other rule is retired: a `DELETE` ARM answers 200.
-    interactions.push(at(6));
+    interactions.push(at(6, "00000000-0000-4000-8047-000000000072"));
     cassette.interactions = interactions;
     let proxy = Proxy::start(
         Mode::Replay { cassette },
