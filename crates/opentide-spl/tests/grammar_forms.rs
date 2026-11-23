@@ -437,7 +437,7 @@ fn known_command_arguments_never_make_an_unknown_command() {
     assert_eq!(
         unknown,
         [
-            "'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it"
+            "'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = \"info\"` under `[queries.codes]` in lint.toml"
         ],
         "{r:?}",
         r = r.diagnostics

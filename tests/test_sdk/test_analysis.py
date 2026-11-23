@@ -61,11 +61,11 @@ def test_the_stack_reaches_esql() -> None:
     assert "esql_metadata_id" in codes
 
 
-def test_a_promise_opentide_cannot_keep_is_reworded() -> None:
+def test_an_unknown_spl_command_points_at_lint_toml_not_a_declaration() -> None:
     [finding] = analysis.check_query("index=main | nosuchcmd", language="spl")
     assert finding.code == "spl_unknown_command"
-    assert "opentide cannot declare app commands yet" in finding.message
-    assert "declare it" not in finding.message
+    assert "[queries.codes]" in finding.message
+    assert "declare" not in finding.message
 
 
 def test_a_span_that_ends_on_a_newline_ends_on_its_own_line() -> None:

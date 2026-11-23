@@ -65,7 +65,7 @@ spl_unknown_datamodel error 7:40-7:57 `Endpont` is not a CIM data model; did you
 473..487 property
 487..488 punctuation.bracket
 == conformance/external/spl/7zip_commandline_to_smb_share_path.broken.spl
-spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -248,7 +248,7 @@ spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide kno
 1077..1078 operator.pipe
 1079..1122 macro
 == conformance/external/spl/access_lsass_memory_for_dump_creation.broken.spl
-spl_unknown_command warning 1:4-11:42 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 1:4-11:42 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..8 macro
 9..18 property
 18..19 operator
@@ -383,7 +383,7 @@ spl_unknown_command warning 1:4-11:42 'notacommand' is not a command opentide kn
 701..702 operator.pipe
 703..749 macro
 == conformance/external/spl/active_directory_lateral_movement_identified.broken.spl
-spl_unknown_command warning 3:2-3:45 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 3:2-3:45 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -597,7 +597,7 @@ spl_unknown_command warning 3:2-3:45 'notacommand' is not a command opentide kno
 1026..1027 operator.pipe
 1028..1081 macro
 == conformance/external/spl/active_directory_privilege_escalation_identified.broken.spl
-spl_unknown_command warning 3:2-3:45 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 3:2-3:45 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -811,7 +811,7 @@ spl_unknown_command warning 3:2-3:45 'notacommand' is not a command opentide kno
 1030..1031 operator.pipe
 1032..1089 macro
 == conformance/external/spl/active_setup_registry_autostart.broken.spl
-spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -918,7 +918,7 @@ spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide kno
 661..662 operator.pipe
 663..703 macro
 == conformance/external/spl/add_defaultuser_and_password_in_registry.broken.spl
-spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -1035,7 +1035,7 @@ spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide kno
 719..720 operator.pipe
 721..770 macro
 == conformance/external/spl/add_or_set_windows_defender_exclusion.broken.spl
-spl_unknown_command warning 17:2-17:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 17:2-17:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -1175,7 +1175,7 @@ spl_unknown_command warning 17:2-17:46 'notacommand' is not a command opentide k
 992..993 operator.pipe
 994..1040 macro
 == conformance/external/spl/adsisearcher_account_discovery.broken.spl
-spl_unknown_command warning 2:4-7:22 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 2:4-7:22 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..12 macro
 13..22 property
 22..23 operator
@@ -1278,7 +1278,7 @@ spl_unknown_command warning 2:4-7:22 'notacommand' is not a command opentide kno
 453..454 operator.pipe
 455..494 macro
 == conformance/external/spl/advanced_ip_or_port_scanner_execution.broken.spl
-spl_unknown_command warning 19:2-19:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 19:2-19:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -1446,7 +1446,7 @@ spl_unknown_command warning 19:2-19:46 'notacommand' is not a command opentide k
 1186..1187 operator.pipe
 1188..1234 macro
 == conformance/external/spl/allow_file_and_printing_sharing_in_firewall.broken.spl
-spl_unknown_command warning 12:2-12:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 12:2-12:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -1570,7 +1570,7 @@ spl_unknown_command warning 12:2-12:46 'notacommand' is not a command opentide k
 882..883 operator.pipe
 884..936 macro
 == conformance/external/spl/allow_inbound_traffic_by_firewall_rule_registry.broken.spl
-spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -1689,7 +1689,7 @@ spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide kno
 797..798 operator.pipe
 799..855 macro
 == conformance/external/spl/allow_inbound_traffic_in_firewall_rule.broken.spl
-spl_unknown_command warning 2:4-7:22 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 2:4-7:22 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..12 macro
 13..22 property
 22..23 operator
@@ -1798,7 +1798,7 @@ spl_unknown_command warning 2:4-7:22 'notacommand' is not a command opentide kno
 464..465 operator.pipe
 466..513 macro
 == conformance/external/spl/allow_network_discovery_in_firewall.broken.spl
-spl_unknown_command warning 9:2-9:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 9:2-9:46 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -1928,7 +1928,7 @@ spl_unknown_command warning 9:2-9:46 'notacommand' is not a command opentide kno
 917..918 operator.pipe
 919..963 macro
 == conformance/external/spl/allow_operation_with_consent_admin.broken.spl
-spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 1:2-1:13 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..1 operator.pipe
 2..8 keyword
 9..41 macro
@@ -3322,7 +3322,7 @@ spl_command_without_pipe error 0:0-0:6 the search starts with the command name `
 172..186 property
 == corpus/spl/unknown_command__invalid.spl
 spl_parse_error error 0:27-0:28 unbalanced parentheses: this '(' is never closed
-spl_unknown_command warning 0:13-0:28 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 0:13-0:28 'notacommand' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..5 property
 5..6 operator
 6..10 variable
@@ -3332,7 +3332,7 @@ spl_unknown_command warning 0:13-0:28 'notacommand' is not a command opentide kn
 26..27 operator
 27..28 punctuation.bracket
 == corpus/spl/unknown_command__valid.spl
-spl_unknown_command warning 0:13-0:26 'bogus' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 0:13-0:26 'bogus' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..5 property
 5..6 operator
 6..10 variable
@@ -4793,7 +4793,7 @@ spl_parse_error error 0:16-0:17 SPL syntax error: expected a field before '|'
 19..20 punctuation.bracket
 == oracles/spl/term_pipe.broken.spl
 spl_parse_error error 0:16-0:17 unbalanced parentheses: this ')' has no matching '('
-spl_unknown_command warning 0:15-0:16 'y' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_unknown_command warning 0:15-0:16 'y' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml
 0..5 property
 5..6 operator
 6..7 variable

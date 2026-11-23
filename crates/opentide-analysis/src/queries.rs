@@ -154,15 +154,6 @@ pub fn lint_owned(code: &str) -> bool {
 /// Words in an engine message that make its `suggestion` a replacement name.
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
 
-/// Engine sentences that promise a step opentide does not offer, and what
-/// opentide says instead: the engine asks to "declare" an SPL command an app
-/// provides, and no configuration declares one.
-const MESSAGE_CORRECTIONS: [(&str, &str, &str); 1] = [(
-    "spl_unknown_command",
-    "; if an app on the search head provides it, declare it",
-    "; an app on the search head may provide it (opentide cannot declare app commands yet)",
-)];
-
 /// Held by a host while it installs datasets or catalogs for the whole
 /// process. Nothing in opentide takes it any more (#1142): the queries
 /// checks of [`Profiles`] and the TUI's catalog are scoped to the threads
@@ -857,7 +848,7 @@ pub fn finding(text: &str, lines: &LineStarts, diagnostic: crate::Diagnostic) ->
     let (line, column, end_line, end_column) = lines.convert(text, diagnostic.range);
     let (end_line, end_column) = span_end(line, column, end_line, end_column, text);
     Finding {
-        message: corrected_message(&diagnostic.code, diagnostic.message),
+        message: diagnostic.message,
         code: diagnostic.code,
         severity: diagnostic.severity,
         line,
@@ -867,18 +858,6 @@ pub fn finding(text: &str, lines: &LineStarts, diagnostic: crate::Diagnostic) ->
         field_path: diagnostic.field_path.unwrap_or_default(),
         suggestion: diagnostic.suggestion,
     }
-}
-
-/// `message`, without a promise of a setting opentide does not have.
-fn corrected_message(code: &str, message: String) -> String {
-    for (wanted, engine_text, replacement) in MESSAGE_CORRECTIONS {
-        if code == wanted
-            && let Some(kept) = message.strip_suffix(engine_text)
-        {
-            return format!("{kept}{replacement}");
-        }
-    }
-    message
 }
 
 /// The end of a span on the line of its last character. The engine's end is
@@ -1300,24 +1279,6 @@ mod tests {
     #[test]
     fn a_span_on_an_empty_line_still_marks_a_character() {
         assert_eq!(span_end(2, 1, 3, 1, "a\n\nb"), (2, 2));
-    }
-
-    #[test]
-    fn the_spl_app_command_message_promises_nothing() {
-        let said = corrected_message(
-            "spl_unknown_command",
-            "unknown command `x`; if an app on the search head provides it, declare it".into(),
-        );
-        assert_eq!(
-            said,
-            "unknown command `x`; an app on the search head may provide it (opentide cannot \
-             declare app commands yet)"
-        );
-        let other = "x; if an app on the search head provides it, declare it";
-        assert_eq!(
-            corrected_message("kql_unknown_operator", other.into()),
-            other
-        );
     }
 
     #[test]

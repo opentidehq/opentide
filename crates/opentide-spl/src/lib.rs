@@ -337,12 +337,18 @@ pub fn unknown_command_findings() -> usize {
 pub(crate) fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     #[cfg(debug_assertions)]
     UNKNOWN_COMMAND_FINDINGS.set(UNKNOWN_COMMAND_FINDINGS.get() + 1);
-    let message = format!(
-        "'{name}' is not a command opentide knows; if an app on the search head provides it, declare it"
-    );
+    // A near miss is an error, which `[queries.codes]` in lint.toml cannot
+    // lower: it says to check the spelling. Any other name is a warning, which
+    // it can (nothing declares an app's commands yet).
     let mut d = if catalog.is_command_typo(name) {
+        let message = format!(
+            "'{name}' is not a command opentide knows; it looks like a misspelt known command, so check the spelling"
+        );
         Diagnostic::error(codes::SPL_UNKNOWN_COMMAND, message, range)
     } else {
+        let message = format!(
+            "'{name}' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = \"info\"` under `[queries.codes]` in lint.toml"
+        );
         Diagnostic::warning(codes::SPL_UNKNOWN_COMMAND, message, range)
     };
     if let Some(suggestion) = catalog.suggest_command(name) {
@@ -1196,7 +1202,7 @@ mod tests {
         assert_eq!(d.severity, opentide_core::Severity::Warning, "{d:?}");
         assert_eq!(
             d.message,
-            "'mispsearch' is not a command opentide knows; if an app on the search head provides it, declare it"
+            "'mispsearch' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = \"info\"` under `[queries.codes]` in lint.toml"
         );
     }
 
@@ -1207,6 +1213,10 @@ mod tests {
         assert_eq!(found[0].suggestion.as_deref(), Some("stats"), "{found:?}");
         // One edit from a known command is a typo Splunk rejects.
         assert_eq!(found[0].severity, opentide_core::Severity::Error);
+        assert_eq!(
+            found[0].message,
+            "'stast' is not a command opentide knows; it looks like a misspelt known command, so check the spelling"
+        );
         let typo = unknown_commands("index=a | statz count");
         assert_eq!(typo.len(), 1, "{typo:?}");
         assert_eq!(typo[0].severity, opentide_core::Severity::Error, "{typo:?}");
