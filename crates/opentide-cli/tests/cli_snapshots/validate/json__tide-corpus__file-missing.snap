@@ -43,11 +43,11 @@ exit: 1
   "message": "Validation failed",
   "next_actions": [
     {
-      "command": "opentide --json explain scope_no_match",
+      "command": "opentide --json explain file_not_found",
       "reason": "how to fix it"
     },
     {
-      "command": "opentide --json validate",
+      "command": "opentide --json validate --file objects/rules/sentinel-kql-rul.yaml",
       "reason": "check again"
     }
   ],
@@ -55,7 +55,7 @@ exit: 1
   "report": {
     "issues": [
       {
-        "code": "scope_no_match",
+        "code": "file_not_found",
         "column": null,
         "context": {
           "object_types": [],
@@ -65,13 +65,13 @@ exit: 1
         },
         "end_column": null,
         "end_line": null,
-        "explain": "opentide explain scope_no_match",
+        "explain": "opentide explain file_not_found",
         "field_path": [],
         "file_path": null,
         "fix": null,
         "help": null,
         "line": null,
-        "message": "No objects matched the validation scope (check --file, --uuid, --type)",
+        "message": "--file \"objects/rules/sentinel-kql-rul.yaml\" does not exist, so it was not validated",
         "object_type": "",
         "object_uuid": "",
         "path": null,

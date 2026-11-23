@@ -809,6 +809,10 @@ exit: 0
       "meaning": "The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule."
     },
     {
+      "code": "file_not_found",
+      "meaning": "A `--file` path names a file that does not exist, so it was not validated."
+    },
+    {
       "code": "filename_mismatch",
       "meaning": "An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default."
     },
@@ -1901,13 +1905,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "472 diagnostic codes",
+  "message": "473 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 472
+    "codes": 473
   }
 }
 

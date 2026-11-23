@@ -47,7 +47,7 @@ exit: 1
       "reason": "how to fix it"
     },
     {
-      "command": "opentide --json validate",
+      "command": "opentide --json validate --file objects/rules/suspicious-lsass-access.yaml",
       "reason": "check again"
     }
   ],

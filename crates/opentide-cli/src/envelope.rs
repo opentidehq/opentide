@@ -127,9 +127,12 @@ pub fn json_command(command: &str) -> String {
     if words.first() != Some(&"opentide") || words.contains(&"--json") {
         return command.to_owned();
     }
-    let mut out = vec!["opentide", "--json"];
-    out.extend(&words[1..]);
-    out.join(" ")
+    // After the prefix, not re-joined by words: a quoted path may hold
+    // runs of spaces.
+    match command.strip_prefix("opentide ") {
+        Some(rest) => format!("opentide --json {rest}"),
+        None => "opentide --json".to_owned(),
+    }
 }
 
 /// A command's result, before it is printed.
@@ -305,6 +308,12 @@ mod tests {
         );
         assert_eq!(json_command("opentide --json lint"), "opentide --json lint");
         assert_eq!(json_command("git status"), "git status");
+        // A quoted path keeps its spaces.
+        assert_eq!(
+            json_command("opentide validate --file 'a  b.yaml'"),
+            "opentide --json validate --file 'a  b.yaml'"
+        );
+        assert_eq!(json_command("opentide"), "opentide --json");
     }
 
     #[test]

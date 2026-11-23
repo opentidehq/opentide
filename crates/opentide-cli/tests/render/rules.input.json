@@ -1947,7 +1947,7 @@
   "code": "missing_uuid",
   "retired": false,
   "summary": "An object file has no UUID, so it cannot be indexed.",
-  "markdown": "# missing_uuid\n\nAn object file has no UUID, so it cannot be indexed.\n\nSeverity: error. Reported by `opentide validate` (schema check).\n\n## Example\n\n```yaml\nname: Sentinel KQL Rule\nmetadata:\n  schema: rule::1.0\n  # uuid: is missing\n```\n\n## How to fix\n\nAdd `metadata.uuid` with a fresh UUID v4 (`python -c \"import uuid; print(uuid.uuid4())\"`). Never reuse the UUID of another object: references and deployment state follow it.\n"
+  "markdown": "# missing_uuid\n\nAn object file has no UUID, so it cannot be indexed.\n\nSeverity: error. Reported by `opentide validate` (schema check).\n\n## Example\n\n```yaml\nname: Sentinel KQL Rule\nmetadata:\n  schema: rule::1.0\n  # uuid: is missing\n```\n\n## How to fix\n\nAdd `metadata.uuid` with a fresh UUID v4 from any UUID v4 generator (`uuidgen`; PowerShell `[guid]::NewGuid()`). Never reuse the UUID of another object: references and deployment state follow it.\n"
  },
  {
   "code": "name_invalid",
@@ -2145,7 +2145,7 @@
   "code": "scope_no_match",
   "retired": false,
   "summary": "A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated.",
-  "markdown": "# scope_no_match\n\nA `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated.\n\nSeverity: error. Reported by `opentide validate`. `opentide share` also sets it as `failure.code` and `preflight` when no sharing target matches `--target` or none is enabled.\n\n## Example\n\n```text\nopentide validate --file objects/rules/sentinel-kql-rul.yaml\n```\n\n## How to fix\n\nFix the path, file name or UUID. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.\n"
+  "markdown": "# scope_no_match\n\nA `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated.\n\nSeverity: error. Reported by `opentide validate`. `opentide share` also sets it as `failure.code` and `preflight` when no sharing target matches `--target` or none is enabled.\n\n## Example\n\n```text\nopentide validate --file objects/rules/sentinel-kql-rul.yaml\n```\n\n## How to fix\n\nFix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.\n"
  },
  {
   "code": "share_failed",
@@ -2343,7 +2343,7 @@
   "code": "unknown_key",
   "retired": false,
   "summary": "A configuration file has a key opentide does not read, usually a misspelling.",
-  "markdown": "# unknown_key\n\nA configuration file has a key opentide does not read, usually a misspelling.\n\nSeverity: error. Reported by `opentide validate` (check `configuration`) for the files under `.opentide/configurations/`, by every command that reads the file, and by `opentide validate --check sharing-config` and `opentide share` for `sharing.toml`. The message names the file and the key, never its value.\n\n## Example\n\n```toml\n# deployment.toml\n[promotion]\nenabeld = false        # the key is enabled\n```\n\n## How to fix\n\nRemove the key or correct its spelling. The JSON Schema of each file (`python -m opentide.generation.configuration_schemas <dir>`) lists the keys it takes.\n"
+  "markdown": "# unknown_key\n\nA configuration file has a key opentide does not read, usually a misspelling.\n\nSeverity: error. Reported by `opentide validate` (check `configuration`) for the files under `.opentide/configurations/`, by every command that reads the file, and by `opentide validate --check sharing-config` and `opentide share` for `sharing.toml`. The message names the file and the key, never its value.\n\n## Example\n\n```toml\n# deployment.toml\n[promotion]\nenabeld = false        # the key is enabled\n```\n\n## How to fix\n\nRemove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows the keys of the platform files, and an editor on `opentide lsp start` offers each file's keys as you type.\n"
  },
  {
   "code": "url_invalid",
