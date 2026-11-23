@@ -996,6 +996,14 @@ mod tests {
         let groups = "variables:\n  - group: a\n  - name: X\n    value: y\n  - group: b c\n";
         assert_eq!(variable_groups(groups), ["a", "b c"]);
         assert!(variable_groups("variables:\n  X: y\n").is_empty());
+        // Only the top-level list counts, and only plain `- group: <name>`.
+        assert!(
+            variable_groups("stages:\n  - stage: A\n    variables:\n      - group: x\n").is_empty()
+        );
+        assert!(
+            variable_groups("variables:\n  - ${{ if eq(1, 1) }}:\n    - group: x\n  - template: t.yml\n  - group: [a]\n")
+                .is_empty()
+        );
     }
 
     /// A tenant that names its own variable gets it in CI (#1655): every job
