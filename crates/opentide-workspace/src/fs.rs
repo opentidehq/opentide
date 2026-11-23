@@ -237,7 +237,11 @@ impl FileSystem for OsFs {
             } else if file_type.is_file() {
                 EntryKind::File
             } else {
-                EntryKind::Other
+                // Neither, or a type the host did not say: WASI passes on
+                // what the host's listing reports, and a filesystem that
+                // reports no type (XFS without `ftype`, some network mounts)
+                // gives "unknown" where native std would have looked. Look.
+                self.kind(&entry.path()).unwrap_or(EntryKind::Other)
             };
             let file_name = entry.file_name();
             entries.push(DirEntry {
