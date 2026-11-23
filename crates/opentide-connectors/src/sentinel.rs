@@ -17,9 +17,9 @@ use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
-    kql_with_limit, probe_verdict,
+    BoxFuture, DeployEvent, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner,
+    RULE_UNCHANGED, Row, TenantContext, kql_with_limit, probe_verdict,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
@@ -224,6 +224,35 @@ impl Sentinel {
             }))
     }
 
+    /// The analytics rule *rule_id* as the workspace holds it, `None` for a
+    /// 404 (`GET` of the resource the `PUT` writes, same `api-version`).
+    pub async fn read(
+        &self,
+        cx: TenantContext<'_>,
+        rule_id: &str,
+    ) -> Result<Result<Option<Json>, ArmError>, ConnectorError> {
+        let url = Self::rules_url(cx, Some(rule_id))?;
+        match self
+            .arm(cx, crate::transport::Method::GET, &url, None)
+            .await?
+        {
+            Ok(answer) => match answer.json() {
+                Some(held) => Ok(Ok(Some(held))),
+                None => Err(ConnectorError::Answer {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    address: ARM_ENDPOINT.into(),
+                    reason: format!(
+                        "reading the analytics rule: {}",
+                        answer.not_json_page().unwrap_or_default()
+                    ),
+                }),
+            },
+            Err(error) if error.status == 404 => Ok(Ok(None)),
+            Err(error) => Ok(Err(error)),
+        }
+    }
+
     /// Deletes the analytics rule *rule_id* (`AlertRules.delete`).
     pub async fn delete(
         &self,
@@ -408,6 +437,151 @@ impl Sentinel {
             errors: Vec::new(),
             warnings: Vec::new(),
         })
+    }
+}
+
+/// The events of a deploy: what it did to the rule.
+pub const RULE_CREATED: &str = "sentinel_rule_created";
+/// See [`RULE_CREATED`].
+pub const RULE_UPDATED: &str = "sentinel_rule_updated";
+
+/// What ARM writes to a rule itself, never a difference: the members beside
+/// `properties` ...
+const SERVER_FIELDS: [&str; 5] = ["etag", "id", "name", "type", "systemData"];
+/// ... and the one inside it.
+const SERVER_PROPERTIES: [&str; 1] = ["lastModifiedUtc"];
+/// The members ARM answers in its own form of a duration (`PT1H` for the
+/// `PT01H00M00S` opentide sends), compared by their seconds.
+const DURATIONS: [&str; 4] = [
+    "queryFrequency",
+    "queryPeriod",
+    "suppressionDuration",
+    "lookbackDuration",
+];
+
+/// Whether the workspace's rule *held* is what a `PUT` of *sent* would leave:
+/// a `PUT` replaces the whole resource, so every member opentide sends has
+/// the same value on the workspace (`same`), and every other member the
+/// workspace has is one ARM writes itself ([`SERVER_FIELDS`],
+/// `lastModifiedUtc`), is empty (`null`, `false`, `""`, `[]`, `{}`) or is a
+/// default ARM gives a member the rule leaves out ([`arm_default`]). A
+/// member opentide sent once and no longer sends keeps its value until a
+/// write replaces it: the rule is then not held, and is written.
+fn holds(held: &Json, sent: &Json) -> bool {
+    same_object(sent, held, Level::Rule)
+}
+
+/// Where in a rule an object is: the durations and the defaults ARM fills in
+/// are read at the places they live, not by a member's name anywhere.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Level {
+    /// The request body: `kind` and `properties`.
+    Rule,
+    /// `properties`.
+    Properties,
+    /// `incidentConfiguration`.
+    IncidentConfiguration,
+    /// `incidentConfiguration.groupingConfiguration`.
+    Grouping,
+    /// Anything below: a `customDetails` key named like a duration is no
+    /// duration.
+    Other,
+}
+
+impl Level {
+    /// The level of the member *key* of an object at this level.
+    fn below(self, key: &str) -> Level {
+        match (self, key) {
+            (Level::Rule, "properties") => Level::Properties,
+            (Level::Properties, "incidentConfiguration") => Level::IncidentConfiguration,
+            (Level::IncidentConfiguration, "groupingConfiguration") => Level::Grouping,
+            _ => Level::Other,
+        }
+    }
+}
+
+/// *sent* and *held* as objects: each member sent is the same on the
+/// workspace (a missing one is a sent empty value), and each other member
+/// the workspace has is ARM's own, empty or a default of ARM's.
+fn same_object(sent: &Json, held: &Json, level: Level) -> bool {
+    let (Some(sent), Some(held)) = (sent.as_object(), held.as_object()) else {
+        return false;
+    };
+    sent.iter().all(|(key, value)| match held.get(key) {
+        Some(have) => same(level, key, value, have),
+        // `enabled` is always answered; a rule without it is not held.
+        None => key != "enabled" && is_empty(value),
+    }) && held.iter().all(|(key, have)| {
+        sent.contains_key(key)
+            || (level == Level::Rule && SERVER_FIELDS.contains(&key.as_str()))
+            || (level == Level::Properties && SERVER_PROPERTIES.contains(&key.as_str()))
+            || is_empty(have)
+            || (level == Level::Properties && arm_default(key, have))
+    })
+}
+
+/// What ARM answers for a member of `properties` the rule never sent: a
+/// Scheduled rule has the trigger `GreaterThan` `0`.
+fn arm_default(key: &str, held: &Json) -> bool {
+    match key {
+        "triggerOperator" => held.as_str() == Some("GreaterThan"),
+        "triggerThreshold" => number(held).as_deref() == Some("0"),
+        _ => false,
+    }
+}
+
+/// Whether the value sent under *key* is the one the workspace holds: the
+/// same scalar (a number by its value, `5` and `5.0` alike, a duration by
+/// its seconds), the same items in the same order, an object as
+/// [`same_object`], or both empty.
+fn same(level: Level, key: &str, sent: &Json, held: &Json) -> bool {
+    match (sent, held) {
+        (Json::Object(_), Json::Object(_)) => same_object(sent, held, level.below(key)),
+        (Json::Array(sent), Json::Array(held)) => {
+            sent.len() == held.len()
+                && sent
+                    .iter()
+                    .zip(held)
+                    .all(|(sent, held)| same(Level::Other, "", sent, held))
+        }
+        (Json::Str(sent), Json::Str(held))
+            if matches!(level, Level::Properties | Level::Grouping) && DURATIONS.contains(&key) =>
+        {
+            match (
+                opentide_compile::duration::sentinel_seconds(sent),
+                opentide_compile::duration::sentinel_seconds(held),
+            ) {
+                (Ok(sent), Ok(held)) => sent == held,
+                _ => sent == held,
+            }
+        }
+        _ => match (number(sent), number(held)) {
+            (Some(sent), Some(held)) => sent == held,
+            _ => sent == held || (is_empty(sent) && is_empty(held)),
+        },
+    }
+}
+
+/// A number as text, `73.0` as `73`, so `73` and `73.0` are one value.
+fn number(value: &Json) -> Option<String> {
+    match value {
+        Json::Int(_) | Json::UInt(_) | Json::Float(_) => {
+            let text = value.to_compact();
+            Some(text.strip_suffix(".0").map_or(text.clone(), str::to_owned))
+        }
+        _ => None,
+    }
+}
+
+/// Whether a value is what ARM answers for a member nobody set: `null`,
+/// `false`, an empty string, list or object.
+fn is_empty(value: &Json) -> bool {
+    match value {
+        Json::Null | Json::Bool(false) => true,
+        Json::Str(text) => text.is_empty(),
+        Json::Array(items) => items.is_empty(),
+        Json::Object(members) => members.is_empty(),
+        _ => false,
     }
 }
 
@@ -665,11 +839,23 @@ impl Deployer for Sentinel {
                     tenant: cx.tenant.label.tenant.clone(),
                     message: format!("the compiled rule is not JSON: {error}"),
                 })?;
-            self.create_or_update(cx, &request.rule_id, &body)
-                .await?
-                .map_err(refused)?;
+            // Read before writing (OT-3): a rule the workspace already holds
+            // as the request has it is not written, and a failed read fails
+            // the rule: it never falls through to the `PUT`.
+            let event = match self.read(cx, &request.rule_id).await?.map_err(refused)? {
+                None => RULE_CREATED,
+                Some(held) if holds(&held, &body) => RULE_UNCHANGED,
+                Some(_) => RULE_UPDATED,
+            };
+            if event != RULE_UNCHANGED {
+                self.create_or_update(cx, &request.rule_id, &body)
+                    .await?
+                    .map_err(refused)?;
+            }
             Ok(DeployOutcome {
-                events: Vec::new(),
+                events: vec![
+                    DeployEvent::new(event).with_field("rule_id", request.rule_id.clone()),
+                ],
                 remote_id: Some(request.rule_id.clone()),
                 operation: request.operation,
                 warnings: Vec::new(),
