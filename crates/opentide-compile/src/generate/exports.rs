@@ -14,6 +14,7 @@ use opentide_schema::configuration::models::ObjectFamily;
 use opentide_schema::node::{Node, Value};
 use opentide_schema::vocab::{Entry, Vocabularies};
 use opentide_workspace::config::Configuration;
+use opentide_workspace::coverage::RuleTechniques;
 use opentide_workspace::{Index, index::holds_name};
 
 use super::json_text::{pretty, sorted};
@@ -155,6 +156,7 @@ const GREEN: &str = "#74c476";
 fn techniques_of(
     relations: &Relations<'_>,
     family: &str,
+    rule_techniques: &IndexMap<String, RuleTechniques>,
 ) -> Result<IndexMap<String, Vec<String>>, PhaseError> {
     let index = relations.index();
     let Some(members) = index.objects.get(family) else {
@@ -180,8 +182,17 @@ fn techniques_of(
     let label = family.to_uppercase();
     let mut mapping: IndexMap<String, Vec<String>> = IndexMap::new();
     for (_, uuid, root) in ordered {
-        let techniques = crate::attack::techniques(index, uuid)
+        // The walk that fails on an object it cannot read, as the oracle's does.
+        let resolved = crate::attack::techniques(index, uuid)
             .map_err(|missing| PhaseError::rendering(uuid, &Cause::from(missing)))?;
+        let techniques = if family == "rule" {
+            // A rule's own techniques and those it inherits: `info coverage`'s count.
+            rule_techniques.get(uuid).map_or_else(Vec::new, |found| {
+                found.own.iter().chain(&found.inherited).cloned().collect()
+            })
+        } else {
+            resolved
+        };
         let fail = |key: &str| PhaseError::rendering(uuid, &Cause::MissingKey(key.into()));
         let name = root
             .get("name")
@@ -202,8 +213,10 @@ fn techniques_of(
 }
 
 fn navigator(relations: &Relations<'_>, settings: &Settings) -> Result<Output, PhaseError> {
-    let threats = techniques_of(relations, "threat")?;
-    let rules = techniques_of(relations, "rule")?;
+    // Built once: a rule's own techniques and those it inherits.
+    let rule_techniques = opentide_workspace::coverage::rule_technique_index(relations.index());
+    let threats = techniques_of(relations, "threat", &rule_techniques)?;
+    let rules = techniques_of(relations, "rule", &rule_techniques)?;
     let mut layer: Vec<(String, &str, String)> = Vec::new();
     for (technique, names) in &threats {
         match rules.get(technique) {
@@ -655,6 +668,30 @@ mod tests {
                 ("T1566", "#6baed6", "[RULE] Rule b"),
             ]
         );
+    }
+
+    #[test]
+    fn a_rules_own_techniques_count_with_the_ones_it_inherits() {
+        let index = index_of(&[
+            (
+                "objective",
+                "o1",
+                "name: Objective\nmetadata: {uuid: o1}\nobjective: {mitre_attack: [T1059]}\n",
+            ),
+            (
+                "rule",
+                "r1",
+                "name: Rule\nmetadata: {uuid: r1}\ndetection_model: o1\ntechniques: [T1021]\n",
+            ),
+        ]);
+        let layer = rendered(Target::Navigator, &index, &settings(&[]));
+        let ids: Vec<&str> = layer["techniques"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|technique| technique["techniqueID"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["T1021", "T1059"]);
     }
 
     #[test]
