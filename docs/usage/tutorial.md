@@ -286,7 +286,7 @@ opentide validate query --platform sentinel
 ✓ 1 query valid
 ```
 
-`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Azure SDK ships with opentide. Then dry-run the deploy. The rule's status is `STAGING`, one of the default statuses, which maps to the `PREVIEW` strategy, so a `PREVIEW` run deploys it. `--all` reads every rule file instead of only the ones the last commit changed:
+`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Sentinel connector is part of opentide, with no SDK to install. Then dry-run the deploy. The rule's status is `STAGING`, one of the default statuses, which maps to the `PREVIEW` strategy, so a `PREVIEW` run deploys it. `--all` reads every rule file instead of only the ones the last commit changed:
 
 ```bash
 opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
