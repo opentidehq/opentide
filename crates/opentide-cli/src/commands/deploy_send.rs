@@ -993,6 +993,7 @@ fn deploy(
         failures: Vec::new(),
         stopped_tenants: Vec::new(),
         warned: false,
+        sentinel_warned: std::collections::HashSet::new(),
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
         runtime: opentide_connectors::runtime::shared(),
@@ -2234,6 +2235,8 @@ struct Sender<'s, 'c> {
     stopped_tenants: Vec<(String, String)>,
     /// `DEPLOYMENT_WARNING_RAISED`.
     warned: bool,
+    /// The Sentinel rules whose technique warnings were logged.
+    sentinel_warned: std::collections::HashSet<String>,
     environment: Environment,
     cancel: CancellationToken,
     /// The process's network runtime, or why it could not start: a run
@@ -2774,7 +2777,7 @@ impl Sender<'_, '_> {
     /// The request a Sentinel rule sends: the compiled analytic rule, or its
     /// deletion (announced).
     fn sentinel_request(
-        &self,
+        &mut self,
         platform: &str,
         batch: &Batch,
         rule: &opentide_compile::Rule,
@@ -2796,8 +2799,13 @@ impl Sender<'_, '_> {
             let (body, warnings) =
                 opentide_compile::sentinel::compile_with_warnings(self.compile, rule, tenant)
                     .map_err(compile_error)?;
-            for (code, message) in warnings {
-                tracing::warn!(detail = message.as_str(), "{code}");
+            // Once per rule, not once per tenant: the body, and so the
+            // warning, is the same on each.
+            if !warnings.is_empty() && self.sentinel_warned.insert(rule.uuid.clone()) {
+                self.warned = true;
+                for (code, message) in warnings {
+                    tracing::warn!(detail = message.as_str(), "{code}");
+                }
             }
             DeployRequest::new(
                 rule.uuid.clone(),

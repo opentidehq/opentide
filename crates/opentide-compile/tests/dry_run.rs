@@ -147,6 +147,32 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
 }
 
 #[test]
+fn a_defender_rules_alert_techniques_are_in_the_dry_runs_request() {
+    let ws = workspace(&[
+        (
+            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            DEFENDER,
+        ),
+        (
+            "objects/rules/a.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000a",
+                "defender_for_endpoint",
+                "STAGING",
+                "    alert:\n      techniques: [T1528, T1059.001]\n",
+            ),
+        ),
+    ]);
+    let outcome = run(&ws, all(&["preview"]), &["DEFENDER_CLIENT"]);
+    assert_eq!(outcome.exit_code, 0);
+    let payloads = text(&outcome, "payloads");
+    assert!(
+        payloads.contains(r#""mitreTechniques":["T1528","T1059.001"]"#),
+        "{payloads}"
+    );
+}
+
+#[test]
 fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
     let ws = workspace(&[
         (

@@ -142,59 +142,71 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     compile_with_warnings(cx, rule, tenant).map(|(body, _)| body)
 }
 
-/// The ids Sentinel takes for the objective's `resolved` ATT&CK ids: an id
-/// newer than v18 becomes the v18 id(s) it replaced, one with none is dropped,
-/// each with a warning naming the rule, the id and what replaced it.
+/// The ids Sentinel takes for the objective's `resolved` ATT&CK ids, each
+/// change with a warning naming the rule, the id and what is sent instead:
+///
+/// - an id newer than v18 becomes the v18 id(s) it replaced; with none, its
+///   v18 parent when it is a sub-technique (`T1027.018` sends `T1027`),
+///   else nothing;
+/// - a retired id becomes the id(s) that replaced it, else nothing;
+/// - an id the list does not know at all is left out.
 fn v18_techniques(
     label: &str,
     resolved: &[String],
     warnings: &mut Vec<(&'static str, String)>,
 ) -> Vec<String> {
     let attack = SentinelAttack::bundled();
+    let version = opentide_schema::vocab::sentinel::VERSION;
     let mut out: Vec<String> = Vec::new();
-    let push = |id: &str, out: &mut Vec<String>| {
-        if !out.iter().any(|known| known == id) {
-            out.push(id.to_owned());
-        }
-    };
+    let known = |id: &&String| attack.techniques.contains_key(*id);
     for id in resolved {
-        if attack.techniques.contains_key(id) {
-            push(id, &mut out);
+        if known(&id) {
+            if !out.contains(id) {
+                out.push(id.clone());
+            }
             continue;
         }
-        let replacements: Vec<&String> = attack
-            .later
-            .techniques
-            .get(id)
-            .map(|newer| {
-                newer
-                    .replaces
-                    .iter()
-                    .filter(|old| attack.techniques.contains_key(*old))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let message = if replacements.is_empty() {
-            format!(
-                "{label}: dropping {id}, which is newer than ATT&CK v{} and has no \
-                 equivalent Sentinel accepts",
-                opentide_schema::vocab::sentinel::VERSION
-            )
+        let (instead, why): (Vec<&String>, String) =
+            if let Some(newer) = attack.later.techniques.get(id) {
+                let replaced: Vec<&String> = newer.replaces.iter().filter(known).collect();
+                let parent = id
+                    .split_once('.')
+                    .and_then(|(parent, _)| attack.techniques.get_key_value(parent))
+                    .map(|(parent, _)| parent);
+                (
+                    if replaced.is_empty() {
+                        parent.into_iter().collect()
+                    } else {
+                        replaced
+                    },
+                    format!("newer than ATT&CK v{version}"),
+                )
+            } else if let Some(retired) = attack.retired.get(id) {
+                (
+                    retired.replaced_by.iter().filter(known).collect(),
+                    format!("retired before ATT&CK v{version}"),
+                )
+            } else {
+                (
+                    Vec::new(),
+                    format!("not an ATT&CK v{version} id Sentinel knows"),
+                )
+            };
+        let message = if instead.is_empty() {
+            format!("{label}: leaving out {id}, which is {why} and has no v{version} equivalent")
         } else {
-            for old in &replacements {
-                push(old, &mut out);
-            }
+            let names: Vec<&str> = instead.iter().map(|id| id.as_str()).collect();
             format!(
-                "{label}: sending {} in place of {id}, which is newer than ATT&CK v{}",
-                replacements
-                    .iter()
-                    .map(|old| old.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" and "),
-                opentide_schema::vocab::sentinel::VERSION
+                "{label}: sending {} in place of {id}, which is {why}",
+                names.join(" and ")
             )
         };
         warnings.push((TECHNIQUE_NEWER_CODE, message));
+        for id in instead {
+            if !out.contains(id) {
+                out.push(id.clone());
+            }
+        }
     }
     out
 }
@@ -500,9 +512,16 @@ pub fn compile_with_warnings(
     properties.insert("description".into(), rule.description().into());
     let resolved = crate::attack::techniques(cx.index, &rule.uuid)
         .map_err(|missing| CompileError::failed(DISPLAY, &format!("{:?}", missing.0)))?;
-    if !resolved.is_empty() {
+    let sendable = v18_techniques(
+        &format!("Rule {} ({})", rule.uuid, rule.name),
+        &resolved,
+        &mut warnings,
+    );
+    // The objective replaces `alert.techniques` and `alert.tactics` only
+    // when some id of it can be sent.
+    if !sendable.is_empty() {
         let mut tactics: Vec<String> = Vec::new();
-        for technique in &resolved {
+        for technique in &sendable {
             for stage in cx.attack.stages(technique) {
                 if let Some(tactic) = tactic(&stage)
                     && !tactics.iter().any(|known| known == tactic)
@@ -512,11 +531,6 @@ pub fn compile_with_warnings(
             }
         }
         properties.insert("tactics".into(), tactics.into());
-        let sendable = v18_techniques(
-            &format!("Rule {} ({})", rule.uuid, rule.name),
-            &resolved,
-            &mut warnings,
-        );
         let (techniques, subs) = split_techniques(&sendable);
         properties.insert("techniques".into(), techniques.into());
         properties.insert(
@@ -579,21 +593,58 @@ mod tests {
     }
 
     #[test]
-    fn a_newer_parent_without_a_v18_equivalent_is_dropped_with_a_warning() {
-        let later = &SentinelAttack::bundled().later.techniques;
-        let orphan = later
-            .iter()
-            .find(|(_, newer)| newer.replaces.is_empty())
-            .map(|(id, _)| id.clone());
-        let Some(orphan) = orphan else { return };
+    fn a_newer_sub_technique_without_a_replacement_sends_its_v18_parent() {
+        let mut warnings = Vec::new();
+        let sendable = v18_techniques("Rule r (n)", &["T1027.018".into()], &mut warnings);
+        assert_eq!(sendable, ["T1027"]);
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0]
+                .1
+                .contains("sending T1027 in place of T1027.018"),
+            "{}",
+            warnings[0].1
+        );
+    }
+
+    #[test]
+    fn a_newer_parent_without_a_v18_equivalent_is_left_out_with_a_warning() {
         let mut warnings = Vec::new();
         let sendable = v18_techniques(
             "Rule r (n)",
-            &[orphan.clone(), "T1059".into()],
+            &["T1691".into(), "T1059".into()],
             &mut warnings,
         );
         assert_eq!(sendable, ["T1059"]);
-        assert!(warnings[0].1.contains(&format!("dropping {orphan}")));
+        assert!(
+            warnings[0].1.contains("leaving out T1691"),
+            "{}",
+            warnings[0].1
+        );
+    }
+
+    #[test]
+    fn unknown_and_retired_ids_are_named_as_such() {
+        let mut warnings = Vec::new();
+        let sendable = v18_techniques(
+            "Rule r (n)",
+            &["T9999".into(), "T1002".into(), "T1476".into()],
+            &mut warnings,
+        );
+        assert_eq!(sendable, ["T1560"]);
+        assert!(
+            warnings[0]
+                .1
+                .contains("not an ATT&CK v18 id Sentinel knows"),
+            "{}",
+            warnings[0].1
+        );
+        assert!(warnings[1].1.contains("sending T1560 in place of T1002"));
+        assert!(
+            warnings[2].1.contains("leaving out T1476"),
+            "{}",
+            warnings[2].1
+        );
     }
 
     #[test]
