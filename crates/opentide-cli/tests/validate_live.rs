@@ -356,8 +356,40 @@ fn splunk_rules(count: usize) -> tempfile::TempDir {
     )
 }
 
+/// Installs, once per process, a global subscriber that records nothing.
+///
+/// `tracing` caches in each callsite whether any subscriber wants it, and
+/// every test of this file runs in one process. Without a subscriber a
+/// callsite hit first by a test that logs to none (or racing the scoped
+/// subscriber of the test that captures its events) can cache "never", and
+/// the capturing test then misses that event. With a global subscriber that
+/// is interested in everything (it only discards), no callsite is ever
+/// cached as "never", so each test's scoped subscriber sees its own events
+/// whatever the other threads do.
+fn keep_callsites_enabled() {
+    use opentide_cli::logging::{Config, LogLayer, Sink, subscriber};
+    use opentide_cli::redact::Redactor;
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let sink: Sink = std::sync::Arc::new(std::sync::Mutex::new(std::io::sink()));
+        let layer = LogLayer::new(
+            Config {
+                debug: false,
+                quiet: true,
+                json_lines: true,
+            },
+            sink,
+            Redactor::new(Vec::new(), Vec::new()),
+            String::new,
+        );
+        tracing::subscriber::set_global_default(subscriber(layer))
+            .expect("no other global subscriber in this test binary");
+    });
+}
+
 /// Runs the scripted checks on `ws`'s Splunk rules.
 fn scripted(ws: &Path, outcomes: Vec<Result<LiveCheck, ConnectorError>>) -> Live {
+    keep_callsites_enabled();
     let registry = Scripted::registry("splunk", outcomes);
     let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
     let args = Args {
@@ -490,6 +522,7 @@ fn the_check_events_name_the_rule_with_rule_name() {
     use opentide_cli::logging::{Config, LogLayer, Sink, subscriber};
     use opentide_cli::redact::Redactor;
 
+    keep_callsites_enabled();
     let ws = splunk_rules(1);
     let buffer = Captured::default();
     let sink: Sink = std::sync::Arc::new(std::sync::Mutex::new(buffer.clone()));
