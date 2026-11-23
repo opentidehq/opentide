@@ -55,6 +55,7 @@ pub mod ast;
 pub mod conformance;
 
 mod debug;
+mod green;
 mod input;
 mod parser;
 mod token_set;

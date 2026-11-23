@@ -1268,6 +1268,56 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
     );
 }
 
+/// `get_chaining`'s `depth` bounds the hops from the object; a depth that is
+/// not a whole number of 0 or more is a failed call, as data.
+#[test]
+fn get_chaining_takes_a_depth_and_refuses_a_bad_one() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
+    let full = call(&server, "get_chaining", json!({"uuid": THREAT}));
+    let alone = call(&server, "get_chaining", json!({"uuid": THREAT, "depth": 0}));
+    assert_eq!(alone["graph"], json!({}), "{alone}");
+    assert_eq!(
+        alone["chaining_index"].as_object().unwrap().len(),
+        1,
+        "{alone}"
+    );
+    let one = call(&server, "get_chaining", json!({"uuid": THREAT, "depth": 1}));
+    assert_eq!(one["graph"]["objectives"][0], OBJECTIVE, "{one}");
+    assert_eq!(
+        call(
+            &server,
+            "get_chaining",
+            json!({"uuid": THREAT, "depth": 99})
+        ),
+        full
+    );
+    for (bad, reason) in [
+        (json!(-1), "argument depth must be 0 or more, not -1"),
+        (
+            json!(1.5),
+            "argument depth must be an integer, not a number",
+        ),
+        (
+            json!("deep"),
+            "argument depth must be an integer, not \"deep\"",
+        ),
+    ] {
+        let Answer::Result(result) = server.call(
+            "get_chaining",
+            &arguments(json!({"uuid": THREAT, "depth": bad})),
+        ) else {
+            panic!("not a result");
+        };
+        assert_eq!(result["isError"], true, "{bad}: {result}");
+        assert_eq!(
+            result["content"][0]["text"],
+            format!("Error executing tool get_chaining: {reason}")
+        );
+    }
+}
+
 /// A tenant that refuses the credential, or cannot be reached, is a failed
 /// call too: the client made the request (`OPENTIDE_FETCH=stdio`) and
 /// answered 401, or never answered.
