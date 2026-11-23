@@ -5937,9 +5937,12 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
     assert_eq!(only_action(&sent), "unchanged");
-    assert_eq!(
-        value(&sent, "summary").get("unchanged"),
-        Some(&Json::Int(1))
+    assert!(
+        value(&sent, "message")
+            .as_str()
+            .is_some_and(|message| message.contains("1 deleted, 1 unchanged")),
+        "{:?}",
+        sent.result
     );
     assert!(stderr.contains("unchanged"), "{stderr}");
 
