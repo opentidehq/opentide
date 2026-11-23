@@ -147,7 +147,7 @@ pub fn lint_owned(code: &str) -> bool {
             .iter()
             .any(|(prefix, _, _)| code.starts_with(prefix))
         || ELASTIC_ADVISORIES.contains(&code)
-        || code == "sysdig_list_self_reference"
+        || code == opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE
         || DECLARED_DATASET_CODES.contains(&code)
 }
 
@@ -1254,12 +1254,14 @@ mod tests {
     /// configure it (`graylog_all_streams` was missing, #1802).
     #[test]
     fn every_code_lint_reports_outside_the_engines_is_configurable() {
-        use opentide_schema::objects::platform::{bitdefender, exabeam, google_secops, harfanglab};
+        use opentide_schema::objects::platform::{
+            bitdefender, exabeam, google_secops, graylog, harfanglab,
+        };
         let reported: Vec<&str> = ELASTIC_ADVISORIES
             .into_iter()
             .chain(DECLARED_DATASET_CODES)
-            .chain(["sysdig_list_self_reference"])
-            .chain(["graylog_overlapping_window", "graylog_all_streams"])
+            .chain([opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE])
+            .chain(graylog::ADVISORY_CODES)
             .chain(harfanglab::yara::ADVISORY_CODES)
             .chain(bitdefender::advisories::ADVISORY_CODES)
             .chain(exabeam::ADVISORY_CODES)
@@ -1284,7 +1286,7 @@ mod tests {
         ] {
             assert!(lint_owned(code), "{code}");
         }
-        assert!(lint_owned("sysdig_list_self_reference"));
+        assert!(lint_owned(opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE));
         assert!(!lint_owned("vocab_unknown"));
         // A Graylog finding names Graylog's search syntax page.
         assert!(

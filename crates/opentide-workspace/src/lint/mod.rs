@@ -690,6 +690,10 @@ fn lint_with(
         Ok(scope) => scope,
         Err(mut refused) => {
             refused.checks = selected;
+            // What lint.toml asks without refusing it is said on a refusal too.
+            refused
+                .warnings
+                .splice(0..0, config.warnings.iter().cloned());
             return *refused;
         }
     };
@@ -795,6 +799,9 @@ fn lint_with(
             Err(message) => {
                 let mut report = LintReport::refused(&target, selected, message, 2);
                 report.failure_code = Some("engine_unavailable");
+                report
+                    .warnings
+                    .splice(0..0, config.warnings.iter().cloned());
                 return report;
             }
         }

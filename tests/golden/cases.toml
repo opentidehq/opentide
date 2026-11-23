@@ -53,6 +53,12 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus whose Sentinel rule searches every table (`search`), a warning of the queries check, with lint.toml raising that code (`[queries.codes]`): the engine's finding takes the table's severity (#1802)"
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      SecurityEvent\n      | where EventID == 4688\n      | take 1\n", replace = "      search \"mimikatz\"\n      | take 1\n" }, { path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unscoped_search = \"error\"\n" }]
 
+[fixtures.tide-corpus-lint-retired-code]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a retired code in lint.toml (`[filenames.codes] filename_slug`): `lint` accepts it, exit 0, and says so in `warnings` (#1802)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_slug = \"off\"\n" }]
+
 [fixtures.tide-corpus-folders]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -1531,6 +1537,12 @@ command = "lint"
 variant = "check-queries-code-error"
 args = ["lint", "--check", "queries"]
 fixtures = ["tide-corpus-lint-engine-warning"]
+
+[[case]]
+command = "lint"
+variant = "retired-code"
+args = ["lint"]
+fixtures = ["tide-corpus-lint-retired-code"]
 
 # UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
 [[case]]

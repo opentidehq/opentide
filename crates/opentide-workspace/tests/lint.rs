@@ -550,24 +550,41 @@ mod lint {
         assert!(fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
     }
 
-    /// The code to check map `lint.toml` validates against is lint's own list.
+    /// The code to check map `lint.toml` validates against is lint's own list,
+    /// and names, for each code, the check that reports it.
     #[test]
     fn the_codes_tables_know_every_code_lint_reports_itself() {
         use opentide_schema::configuration::lint::{LINT_CODE_CHECKS, RETIRED_CODES};
-        let mapped: Vec<&str> = LINT_CODE_CHECKS.iter().map(|(code, _)| *code).collect();
+        use opentide_workspace::lint::codes;
+        // Each lint code with the check that reports it, once.
+        let reporters = [
+            (codes::PARSE, LintCheck::Filenames),
+            (codes::NAME, LintCheck::Filenames),
+            (codes::FILENAME, LintCheck::Filenames),
+            (codes::FILENAME_PATTERN, LintCheck::Filenames),
+            (codes::NESTED, LintCheck::Filenames),
+            (codes::METADATA, LintCheck::Metadata),
+            (codes::RECOMMENDED, LintCheck::Recommended),
+            (codes::PLACEHOLDER, LintCheck::Placeholders),
+        ];
         let mut listed: Vec<&str> = opentide_workspace::lint::LINT_CODES.to_vec();
-        let mut mapped_sorted = mapped.clone();
+        let mut mapped: Vec<&str> = LINT_CODE_CHECKS.iter().map(|(code, _)| *code).collect();
         listed.sort_unstable();
-        mapped_sorted.sort_unstable();
-        assert_eq!(
-            mapped_sorted, listed,
-            "LINT_CODE_CHECKS and LINT_CODES differ"
-        );
-        for (code, check) in LINT_CODE_CHECKS {
-            assert!(LintCheck::parse(check).is_some(), "{code}: {check}");
+        mapped.sort_unstable();
+        assert_eq!(mapped, listed, "LINT_CODE_CHECKS and LINT_CODES differ");
+        let mut covered: Vec<&str> = reporters.iter().map(|(code, _)| *code).collect();
+        covered.sort_unstable();
+        assert_eq!(covered, listed, "a lint code has no reporter in this test");
+        for (code, check) in reporters {
+            assert_eq!(
+                opentide_schema::configuration::lint::check_of_code(code),
+                Some(check.name()),
+                "{code} is reported by the {} check",
+                check.name()
+            );
         }
         for (retired, _) in RETIRED_CODES {
-            assert!(!mapped.contains(&retired));
+            assert!(!listed.contains(&retired));
         }
     }
 
@@ -584,6 +601,51 @@ mod lint {
         assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
         assert!(report.warnings[0].contains("\"filename_slug\" is retired"));
         assert!(report.warnings[0].contains("filename_mismatch"));
+    }
+
+    /// A query check that refuses to run, as an engine that does not load.
+    struct Unavailable;
+
+    impl opentide_workspace::lint::LintQueryCheck for Unavailable {
+        fn check(
+            &self,
+            _: &Path,
+            _: &str,
+            _: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            Err("engine unavailable".to_owned())
+        }
+    }
+
+    /// The warning about a retired code is on the refused runs too: an engine
+    /// that does not load, and a `--file` that selects nothing.
+    #[test]
+    fn a_retired_codes_warning_is_on_a_refused_run_too() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let retired = config("[filenames.codes]\nfilename_slug = \"off\"\n");
+        let engine = run(
+            &fs,
+            &retired,
+            &LintOptions {
+                checks: vec![LintCheck::Queries],
+                query_check: Some(&Unavailable),
+                ..options()
+            },
+        );
+        assert_eq!(engine.failure_code, Some("engine_unavailable"));
+        assert_eq!(engine.warnings.len(), 1, "{:?}", engine.warnings);
+        let unmatched = run(
+            &fs,
+            &retired,
+            &LintOptions {
+                files: vec!["objects/rules/missing.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(unmatched.exit_code, 1);
+        assert_eq!(unmatched.warnings.len(), 1, "{:?}", unmatched.warnings);
     }
 
     /// The codes lint reports itself take the table of their check, and a
