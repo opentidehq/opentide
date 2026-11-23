@@ -98,6 +98,8 @@ variables:
 {% endfor %}
   - name: OPENTIDE_REPO_ROOT
     value: $(Build.SourcesDirectory)
+  - name: OPENTIDE_DEFAULT_BRANCH
+    value: [[ branch | scalar(4) ]]
   - name: OPENTIDE_VERSION
     value: [[ version_json ]]
 {% else %}
