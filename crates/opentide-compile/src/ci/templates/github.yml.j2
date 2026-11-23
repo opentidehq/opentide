@@ -1,7 +1,7 @@
 {#- GitHub Actions: `.github/workflows/opentide.yml` (`ci/github.py`). -#}
 {% import "scripts.sh.j2" as sh %}
 {% macro setup(full_history=false, ref=none) -%}
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
 {% if ref %}
   with:
     ref: [[ ref ]]
@@ -10,7 +10,7 @@
   with:
     fetch-depth: 0
 {% endif %}
-- uses: actions/setup-python@v5
+- uses: actions/setup-python@v7
   with:
     python-version: "[[ python ]]"
 - run: [[ pip ]]
@@ -66,7 +66,7 @@ jobs:
 {% endfor %}
       - name: Upload opentide reports
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opentide-reports
           path: opentide-reports/
@@ -80,7 +80,7 @@ jobs:
       security-events: write
     steps:
       - name: Download opentide reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: opentide-reports
@@ -123,11 +123,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout pull request head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "[[ python ]]"
       - run: [[ pip ]]
@@ -151,10 +151,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "[[ python ]]"
       - run: [[ pip ]]
@@ -218,7 +218,7 @@ jobs:
 {% endfor %}
 {% if docs %}
       - name: Upload documentation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opentide-docs
           path: [[ docs_path ]]
@@ -230,21 +230,21 @@ jobs:
     needs: document
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Checkout explorer
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: opentidehq/explorer
           # [[ explorer_release ]], the explorer release this opentide's bundle is built for
           ref: [[ explorer_commit ]]
           path: explorer
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "[[ python ]]"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -271,7 +271,7 @@ jobs:
           mv explorer/out ./out/explorer
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./out/explorer
   deploy-explorer:
@@ -291,5 +291,5 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 {% endif %}
