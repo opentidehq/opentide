@@ -1913,13 +1913,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "474 diagnostic codes",
+  "message": "475 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 474
+    "codes": 475
   }
 }
 
