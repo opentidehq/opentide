@@ -550,6 +550,20 @@ pub fn rule_catalogue() -> RuleCatalogue {
 mod tests {
     use super::*;
 
+    /// `lint.toml` accepts a retired code with a warning
+    /// (`opentide_schema::configuration::lint::RETIRED_CODES`): its list is this one.
+    #[test]
+    fn lint_toml_knows_the_retired_codes_explain_keeps() {
+        let mut here: Vec<&str> = RETIRED.iter().map(|retired| retired.code).collect();
+        let mut there: Vec<&str> = opentide_schema::configuration::lint::RETIRED_CODES
+            .iter()
+            .map(|(code, _)| *code)
+            .collect();
+        here.sort_unstable();
+        there.sort_unstable();
+        assert_eq!(here, there);
+    }
+
     #[test]
     fn a_file_page_wins_and_summarises_its_first_paragraph() {
         let page = page("VOCAB_UNKNOWN").unwrap();

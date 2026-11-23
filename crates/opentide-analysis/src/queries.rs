@@ -147,7 +147,7 @@ pub fn lint_owned(code: &str) -> bool {
             .iter()
             .any(|(prefix, _, _)| code.starts_with(prefix))
         || ELASTIC_ADVISORIES.contains(&code)
-        || code == "sysdig_list_self_reference"
+        || code == opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE
         || DECLARED_DATASET_CODES.contains(&code)
 }
 
@@ -1247,6 +1247,34 @@ mod tests {
         assert_eq!(span_end(1, 1, 12, 1, text), (12, 1));
     }
 
+    /// `[queries.codes]` takes the codes in `opentide_core::codes::ALL`: every
+    /// code the queries check can report from outside the engine crates
+    /// (the platforms' block advisories, Elastic's, the undeclared datasets
+    /// and Sysdig's list self-reference) must be there, or a user cannot
+    /// configure it (`graylog_all_streams` was missing, #1802).
+    #[test]
+    fn every_code_lint_reports_outside_the_engines_is_configurable() {
+        use opentide_schema::objects::platform::{
+            bitdefender, exabeam, google_secops, graylog, harfanglab,
+        };
+        let reported: Vec<&str> = ELASTIC_ADVISORIES
+            .into_iter()
+            .chain(DECLARED_DATASET_CODES)
+            .chain([opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE])
+            .chain(graylog::ADVISORY_CODES)
+            .chain(harfanglab::yara::ADVISORY_CODES)
+            .chain(bitdefender::advisories::ADVISORY_CODES)
+            .chain(exabeam::ADVISORY_CODES)
+            .chain(google_secops::advisories::ADVISORY_CODES)
+            .collect();
+        for code in reported {
+            assert!(
+                opentide_core::codes::ALL.contains(&code),
+                "{code} is reported by lint but missing from opentide_core::codes::ALL"
+            );
+        }
+    }
+
     #[test]
     fn lint_keeps_the_graylog_dialects_warnings() {
         // 0.28.1 (#1015): lint dropped them for want of a reference.
@@ -1258,7 +1286,7 @@ mod tests {
         ] {
             assert!(lint_owned(code), "{code}");
         }
-        assert!(lint_owned("sysdig_list_self_reference"));
+        assert!(lint_owned(opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE));
         assert!(!lint_owned("vocab_unknown"));
         // A Graylog finding names Graylog's search syntax page.
         assert!(

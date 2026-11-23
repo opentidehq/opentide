@@ -298,7 +298,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_control_command_unsupported`](#kql_control_command_unsupported) | A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it. |
 | [`kql_deprecated_function`](#kql_deprecated_function) | The KQL function is a deprecated alias; Microsoft Learn names its replacement. |
 | [`kql_deprecated_operator`](#kql_deprecated_operator) | The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs). |
-| [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | join or summarize runs before project, so it carries every column. |
+| [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
@@ -374,7 +374,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`rule_status_unknown`](#rule_status_unknown) | A `sharing.toml` block lists a rule status your configuration does not declare. |
 | [`schema_missing`](#schema_missing) | An object has no `metadata.schema`, so no schema can check it. |
 | [`schema_validation`](#schema_validation) | An object does not match the schema its `metadata.schema` names. |
-| [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists. |
+| [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now. |
 | [`scope_no_match`](#scope_no_match) | A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated. |
 | [`share_failed`](#share_failed) | `share` reached the destination, and every object failed. |
 | [`share_partial`](#share_partial) | `share` shared some objects, and others failed. |
@@ -5413,19 +5413,40 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## kql_join_summarize_before_project
 
-join or summarize runs before project, so it carries every column.
+A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it.
 
-Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: warning, a cost hint and never an error. Reported by the analysis engine on a KQL query: `opentide lint` (its `queries` check), an editor running `opentide lsp start`, the MCP tool `validate_query` and the TUI show it; `opentide validate` and `opentide validate query` drop engine warnings, so they never report it. The query is legal and returns the same rows: only the amount of data the join moves changes.
+
+The warning is about the **left** side of the join, the pipeline the `join` operator sits in. It does not look at the right side: a `let` or sub-query on the right that ends in `project`, `summarize` or `distinct` is narrow already, and making it narrower changes nothing here. The right side's shape does not matter; to clear the warning, narrow the left side before the `join`.
+
+It fires when the `join` comes before any `project` / `project-keep` / `project-away`, `summarize`, `distinct`, `count` or `make-series` in that pipeline, and a `project` / `project-keep` / `project-away` comes after it. It stays quiet when no `project` follows the `join`, when the pipeline starts from a `let` (or a `union` of `let`s) that ends in one of those operators, and for `summarize` itself, which returns only the columns it names.
 
 ### Example
 
-```text
-opentide validate query
+```kusto
+let Admins = IdentityInfo
+| summarize by AccountUPN;               // the right side is already narrow
+AzureActivity                            // the left side carries every column
+| join kind=inner Admins on $left.Caller == $right.AccountUPN
+| project TimeGenerated, Caller, OperationNameValue
 ```
+
+The warning points at the `join`: `AzureActivity` carries every column into it, however small `Admins` is.
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+Project the columns the rest of the query needs on the left side, before the `join`:
+
+```kusto
+let Admins = IdentityInfo
+| summarize by AccountUPN;
+AzureActivity
+| project TimeGenerated, Caller, OperationNameValue
+| join kind=inner Admins on $left.Caller == $right.AccountUPN
+| project TimeGenerated, Caller, OperationNameValue
+```
+
+Keep every column the `join` key and the later operators read. If the query needs all columns, for instance `arg_max(TimeGenerated, *)`, leave it: the warning is a hint about cost, and a rule can accept it.
 
 ## kql_parse_error
 
@@ -5481,7 +5502,7 @@ NTAIpDetails   // known to the engine, not declared for sentinel
 
 ### How to fix
 
-Correct the table name, or declare it: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Declare the table: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 
 ```toml
 [[logsources]]
@@ -5489,6 +5510,8 @@ name = "NTAIpDetails"
 description = "IP details from traffic analytics."
 system = "sentinel"
 ```
+
+opentide offers no rename for this code: the table is a real one, so a declared log source's name is never a correction. A declared name that is not a bare KQL identifier (a display name such as `Azure Activity`) is never suggested for any table.
 
 ## kql_type_mismatch
 
@@ -5798,7 +5821,7 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 opentide can generate the language server's catalog for this workspace, and a committed copy is current.
 
-Reported by `opentide doctor`. `opentide lsp start`, the `opentide-lsp` binary on its own and `opentide tui` check objects with the catalog they generate in memory, each time they start, from the models they were built with and the workspace's configuration; nothing is cached. No program reads the copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`: it is there for other tools. Warns when a committed copy does not parse or comes from another opentide version.
+Reported by `opentide doctor`. `opentide lsp start`, the `opentide-lsp` binary on its own and `opentide tui` check objects with the catalog they generate in memory, each time they start, from the models they were built with and the workspace's configuration; nothing is cached. No program reads the copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`: it is there for other tools. Warns when a committed copy does not parse, comes from another opentide version, is missing a file (`fields.json` or `deprecations.json`) or differs from what `opentide generate schemas` writes now. Line endings and a byte order mark are not compared.
 
 ### Example
 
@@ -6719,14 +6742,14 @@ The message is the schema's own (a missing required field, a wrong type, an unkn
 
 ## schemas_fresh
 
-Every JSON schema this opentide version generates exists.
+Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now.
 
-Reported by `opentide doctor`. Warns when one is missing. Schemas carry no version stamp, so only presence is checked.
+Reported by `opentide doctor`. Warns when one is missing or its text differs from what the phase would write: the schemas are built from the workspace's objects (a rule's `detection_model` offers their names), its visibility, statuses and enabled platforms, so a changed object or configuration makes them stale, as does a schema another opentide version wrote. Line endings and a byte order mark are not compared. If the workspace does not open, only the presence of each schema is checked, and the message says so.
 
 ### Example
 
 ```text illustrative
-! 1 schema(s) this version generates are missing: rule · schemas_fresh
+! 1 schema(s) differ from what `generate schemas` writes now (objects or configuration changed, or another version wrote them): rule.1.0.schema.json · schemas_fresh
   → opentide generate schemas
 ```
 

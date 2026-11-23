@@ -49,6 +49,8 @@ variables:
   - group: Shared secrets
   - name: OPENTIDE_REPO_ROOT
     value: $(Build.SourcesDirectory)
+  - name: OPENTIDE_DEFAULT_BRANCH
+    value: main
   - name: OPENTIDE_VERSION
     value: "0.23.0"
 

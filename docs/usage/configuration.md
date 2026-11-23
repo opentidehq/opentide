@@ -121,7 +121,7 @@ Every platform retries a request the same way, and only when sending it twice is
 
 ## Deployment statuses and strategies
 
-Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
+Every rule's platform block `status` must match a status defined in the merged `deployment.toml` (the rule's root `status` is informational: deploy and promotion read each platform block's `status`). That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
 
 | Default status | Strategy | What it does |
 |--------|----------|--------------|
@@ -307,9 +307,13 @@ style = "slug"          # the file stem is slugify(name) (default); "name" or "n
 [filenames.rules]       # rules only; also [filenames.threats] and [filenames.objectives]
 style = "name"          # the file stem is the rule's name
 pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expression
+
+[queries.codes]         # one code's severity, over the check's: error, warning, info or off
+kql_join_summarize_before_project = "info"   # a note: `lint --strict` no longer fails on it
+kql_unknown_table = "error"
 ```
 
-A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
+A `codes` table under any check sets one finding code's severity (or `off`), so one inherited warning can be tamed without silencing its neighbours: see [Severity per code](../cli/lint.md#severity-per-code). A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
 The editor (`opentide lsp start`) reports what `opentide validate` reports; the file-name and metadata recommendations are `opentide lint`'s alone.
 

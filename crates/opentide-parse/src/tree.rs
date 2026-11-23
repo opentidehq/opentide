@@ -1,8 +1,9 @@
 //! [`build`]: events to a lossless rowan green tree and its errors.
 
+use crate::green::Builder;
 use crate::input::offset;
 use crate::{ErrorKind, Event, Input, Lexeme, TokenSet};
-use rowan::{GreenNode, GreenNodeBuilder, SyntaxKind, TextRange, TextSize};
+use rowan::{GreenNode, SyntaxKind, TextRange, TextSize};
 
 /// A syntax error of a parse.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,7 +105,7 @@ pub(crate) fn build_or_fallback(
         !panic_on_bug,
         "opentide-parse: the events do not form one root node (a Marker completed twice, a token outside the root, or an unclosed node)"
     );
-    let mut builder = GreenNodeBuilder::new();
+    let mut builder = Builder::new(input.lexemes.len());
     builder.start_node(input.grammar.error);
     for l in &input.lexemes {
         builder.token(l.kind, input.text(l));
@@ -118,7 +119,10 @@ pub(crate) fn build_or_fallback(
         within: Vec::new(),
     });
     Parse {
-        green: builder.finish(),
+        // One node opened and closed around tokens: always one root.
+        green: builder
+            .finish()
+            .unwrap_or_else(|| GreenNode::new(input.grammar.error, [])),
         errors,
         depth: 1,
     }
@@ -136,7 +140,7 @@ fn replay(
     errors: &mut Vec<SyntaxError>,
     max_tree_depth: usize,
 ) -> Option<(GreenNode, usize)> {
-    let mut builder = GreenNodeBuilder::new();
+    let mut builder = Builder::new(input.lexemes.len());
     let lexemes = &input.lexemes;
     let mut next = 0usize; // the next lexeme to emit
     // Each open node, and whether the builder opened it (false past the
@@ -243,7 +247,11 @@ fn replay(
             Event::Tombstone => {}
         }
     }
-    (open.is_empty() && roots == 1).then(|| (builder.finish(), deepest))
+    if open.is_empty() && roots == 1 {
+        builder.finish().map(|green| (green, deepest))
+    } else {
+        None
+    }
 }
 
 /// From the end of the last significant token emitted (`last_end`) to the
@@ -259,7 +267,7 @@ fn gap(input: &Input<'_>, next: usize, last_end: TextSize) -> TextRange {
     TextRange::new(last_end, after.max(last_end))
 }
 
-fn flush_trivia(builder: &mut GreenNodeBuilder<'_>, input: &Input<'_>, next: &mut usize) {
+fn flush_trivia<'s>(builder: &mut Builder<'s>, input: &Input<'s>, next: &mut usize) {
     while let Some(l) = input.lexemes.get(*next) {
         if !input.grammar.trivia.contains(l.kind) {
             break;
@@ -271,7 +279,7 @@ fn flush_trivia(builder: &mut GreenNodeBuilder<'_>, input: &Input<'_>, next: &mu
 
 /// What is left when the root closes: trivia, and tokens the grammar left
 /// unconsumed (in an error node, so the tree stays lossless).
-fn flush_rest(builder: &mut GreenNodeBuilder<'_>, input: &Input<'_>, next: &mut usize) {
+fn flush_rest<'s>(builder: &mut Builder<'s>, input: &Input<'s>, next: &mut usize) {
     flush_trivia(builder, input, next);
     let rest: &[Lexeme] = input.lexemes.get(*next..).unwrap_or_default();
     if !rest.is_empty() {

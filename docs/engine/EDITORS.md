@@ -118,8 +118,8 @@ Suggestions the KQL, SPL, YARA-L, Exabeam and Tide engines attach (and the comma
 | `kql_unknown_function` (scalar) | the function name | non-deprecated catalog function within Levenshtein distance 1–2, chosen by the shared rule. No diagnostic when nothing is that close |
 | `kql_unknown_function` (evaluate plugin) | the plugin name | catalog plugin, by the shared rule |
 | `kql_deprecated_function`, `kql_deprecated_operator` | the function name, the operator | the replacement the catalog names |
-| `kql_unknown_table` | the table reference | catalog table, by the shared rule. Only names that start with an ASCII uppercase letter are reported |
-| `kql_table_not_declared` | the table reference | declared table, by the shared rule; otherwise, for a table the catalog lacks, a catalog table by the shared rule |
+| `kql_unknown_table` | the table reference | a declared table written as a bare identifier (`[A-Za-z_][A-Za-z0-9_]*`), else a catalog table written as one, by the shared rule. Only names that start with an ASCII uppercase letter are reported |
+| `kql_table_not_declared` | the table reference | none: the table is a real one, and the fix is the *Declare a dataset* action |
 | `kql_unknown_column` | the column | column of the source within Levenshtein distance 2 (ignoring case) and less than half the name's length, chosen by the shared rule ([kql/columns.md](kql/columns.md)) |
 | `spl_unknown_command` | the pipe stage: the command and its arguments (the quick fix replaces the command alone, [#887](https://github.com/opentidehq/opentide/issues/887)) | catalog command. The finding is an error when the name is one typo from a command (one edit, or one or two swapped neighbours), and then suggests the best of those commands by the shared rule's order (`tsast` suggests `stats`); a warning otherwise, with a command by the shared rule |
 | `spl_search_operator` | the operator | `=`, `!=`, `>=` or `<=` ([spl/search-syntax.md](spl/search-syntax.md)) |

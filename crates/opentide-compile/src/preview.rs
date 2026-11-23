@@ -579,8 +579,22 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
         "graylog" => graylog_preview(cx, rule, &[]),
         // A compile error the oracle reports with the platform's display
         // name: compile_diagnostic(exc) names Sentinel.
-        "sentinel" => match sentinel::compile(cx, rule, PREVIEW_TENANT) {
-            Ok(body) => compiled(rule, body),
+        "sentinel" => match sentinel::compile_with_warnings(cx, rule, PREVIEW_TENANT) {
+            Ok((body, warnings)) => {
+                let mut entry = compiled(rule, body);
+                if let (Json::Object(fields), false) = (&mut entry, warnings.is_empty()) {
+                    fields.insert(
+                        "warnings".into(),
+                        Json::Array(
+                            warnings
+                                .into_iter()
+                                .map(|(_, message)| Json::Str(message))
+                                .collect(),
+                        ),
+                    );
+                }
+                entry
+            }
             Err(error) => failure(rule, &error),
         },
         // The oracle names Sentinel in a Sysdig failure (`_compile_failure`

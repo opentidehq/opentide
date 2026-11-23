@@ -126,7 +126,7 @@ A placeholder's `help` is the step that clears it, and a `filename_pattern` find
 | An engine warning on a query or an Elastic block | `warning` | The finding's line |
 | An engine note (a hint) on a query | `info` | The finding's line |
 
-These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check. `--strict` exits `1` when an error or a warning is left; an `info` finding never fails it. To gate CI on a missing author, raise the check's `severity` to `warning` or `error`.
+These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check, unless the check's `codes` table sets the code ([Severity per code](#severity-per-code)). `--strict` exits `1` when an error or a warning is left; an `info` finding never fails it. To gate CI on a missing author, raise the check's `severity` to `warning` or `error`.
 
 ## Configuration
 
@@ -155,7 +155,8 @@ enabled = true
 | Key | Tables | Value |
 |-----|--------|-------|
 | `enabled` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
-| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included. The language server follows `[metadata]` and `[recommended]` too, so the editor shows the same severity |
+| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included, unless the check's `codes` table sets the code. The language server follows `[filenames]`, `[metadata]` and `[recommended]` too, so the editor shows the same severity |
+| `codes` | `[filenames.codes]`, `[metadata.codes]`, `[recommended.codes]`, `[placeholders.codes]`, `[queries.codes]` | A table of `<code> = "<level>"`: `error`, `warning`, `info` or `off`, for one finding code of that check. It wins over the check's `severity`, so one code can be tamed (or raised) without touching the others, and `off` drops the code's findings. `--strict` counts the severity it sets. See [Severity per code](#severity-per-code) |
 | `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
 | `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
 | `style`, `pattern` | `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` | The same keys for one kind of object, over `[filenames]`. See [A convention per object kind](#a-convention-per-object-kind) |
@@ -177,6 +178,24 @@ A value lint cannot use fails the command with exit `2` and a message that names
 ```text illustrative
 FATAL: lint.toml [metadata].required: unknown metadata field(s) 'owner'. Known fields: uuid, schema, version, created, modified, tlp, author, contributors, organisation, reviewed
 ```
+
+### Severity per code
+
+`severity` moves a whole check, which is too coarse where only one code is a problem: setting `[queries] severity = "info"` to quiet an inherited `kql_join_summarize_before_project` also silences `kql_table_not_declared` and `kql_unknown_table`. A `codes` table under the check sets one code and leaves the others:
+
+```toml
+[queries.codes]
+kql_join_summarize_before_project = "info"   # a note: --strict no longer fails on it
+kql_unknown_table = "error"                  # raised: --strict fails on it
+kql_wildcard_table = "off"                   # dropped
+```
+
+- A value is `error`, `warning`, `info` or `off`. A code's value wins over the check's `severity`; a code the table does not list keeps the check's `severity`, or its own.
+- Each code goes under the check that reports it: the engine's codes (`kql_*`, `spl_*`, `lookback_zero`, ...) under `[queries.codes]`, `filename_mismatch`, `filename_pattern`, `name_missing`, `yaml_parse` and `nested_object_file` under `[filenames.codes]`, `metadata_recommended` under `[metadata.codes]`, `recommended_field_missing` under `[recommended.codes]` and `placeholder` under `[placeholders.codes]`. A code that does not exist is refused with the nearest one (`unknown code "kql_unknown_tabel". Did you mean "kql_unknown_table"?`), and so is one under the wrong check, naming the right table. `lint.toml` is read as strictly as before: a typo is an error, never silently ignored.
+- An `off` finding is not reported and does not count, as if the code did not exist. `filename_mismatch = "off"` also stops `--fix` renaming: a file name the table drops is left alone.
+- The table changes what lint reports. Under `[filenames.codes]` that includes lint's own errors (`yaml_parse`, `name_missing`); under `[queries.codes]` it is the engine's warnings and notes, never an engine error, which is `validate`'s to report (`lint` does not print it). A code that only `validate` reports, such as `vocab_unknown`, is accepted and has no effect on `lint`.
+- A retired code (`filename_slug`, `missing_author`, `missing_organisation`, `crowdstrike_unsupported`, `yara_x_incompatible`) is accepted so an old `lint.toml` keeps working: it has no effect, and the run's `warnings` name its replacement.
+- `opentide lint` and `lint --strict` apply the table. [`opentide validate`](./validate.md) does not read `lint.toml`'s severities: its `--queries` flag is its own control. The language server follows the tables of `[filenames]`, `[metadata]` and `[recommended]`, as it does their `severity`; its query diagnostics are the editor's own analysis, which `[queries.codes]` does not change.
 
 ### Filename convention
 
@@ -278,7 +297,7 @@ warning[kql_where_not_first]: `where` is not the first operator after the table 
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 ```
 
-A warning is `warning`, a note `info`; `[queries] severity` replaces both. A placeholder query is left to the `placeholders` check. When the engine does not load, lint fails with exit `1` and `failure.code` `engine_unavailable`, as `validate` does; `--check` without `queries` does not need it.
+A warning is `warning`, a note `info`; `[queries] severity` replaces both, unless `[queries.codes]` sets the code. A placeholder query is left to the `placeholders` check. When the engine does not load, lint fails with exit `1` and `failure.code` `engine_unavailable`, as `validate` does; `--check` without `queries` does not need it.
 
 ## Source
 

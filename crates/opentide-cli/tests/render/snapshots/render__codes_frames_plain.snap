@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: candidate
 ---
 == analysis_engine
 error[analysis_engine]: The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
@@ -3563,7 +3562,7 @@ error[schema_validation]: An object does not match the schema its `metadata.sche
   ╰─ help: opentide explain schema_validation
 
 == schemas_fresh
-error[schemas_fresh]: Every JSON schema this opentide version generates exists.
+error[schemas_fresh]: Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now.
   ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
 3 │   uuid: 00000000-0000-4000-8003-000000000001

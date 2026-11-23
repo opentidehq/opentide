@@ -48,3 +48,10 @@ enabled = true
 # reject is opentide validate's error, not lint's.
 enabled = true
 # severity = "warning"
+# One code's severity instead of the whole check's: "error", "warning", "info",
+# or "off" to drop the code's findings. It wins over `severity`. Every check
+# takes a `codes` table for the codes it reports (a code under another check's
+# table is refused); `opentide explain <code>` describes one.
+# [queries.codes]
+# kql_join_summarize_before_project = "info"
+# kql_unknown_table = "error"
