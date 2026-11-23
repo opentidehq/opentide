@@ -239,3 +239,36 @@ document's wait. A smaller module is the server's own lever: 8.3 MB of it is cod
   captures read the field catalog's enum values (`in_enum`), which a root's configuration changes, so it wants a
   `workspace/semanticTokens/refresh` when a root's own catalog replaces the compiled-in one: whether one is sent
   then today (`Sighting::First` only bumps the epoch) is to check first.
+
+## The datasets' decode before first diagnostics (zstd, `ruzstd`)
+
+Since #1743 every dataset is a zstd blob that `ruzstd` decodes on first use (`opentide-dataset`). The question
+was how much of the WASI cold start that decode is, and whether a faster pure-Rust codec (sirocco's DEFLATE,
+`lz4_flex`) would be worth comparing if it were more than about 10%.
+
+Measured with a temporary timer around `opentide_dataset::decode` (not committed). The run is the cold-start
+sequence (spawn, `initialize`, `didOpen` of `rule-0001-sentinel-kql.yaml`, its pulled diagnostics) on
+`make_workspace.py`'s small (`--objects 0`) and large (`--objects 1000`) workspaces, 7 runs each, medians, on
+this branch. It counts every decode that finished before the diagnostics' answer.
+
+| Host | Workspace | Start to first diagnostics | Datasets decoded | Compressed → decoded | Decode time | Share |
+|---|---|---:|---:|---:|---:|---:|
+| Node 22 WASI | small | 216 ms | 35 | 218 kB → 1.35 MB | 11.5 ms | 5.3% |
+| Node 22 WASI | large | 314 ms | 35 | 218 kB → 1.35 MB | 11.4 ms | 3.6% |
+| native | small | 37 ms | 41 | 1.09 MB → 7.27 MB | 30.0 ms of CPU | on the warm-up threads |
+| native | large | 58 ms | 43 | 1.09 MB → 7.28 MB | 36.9 ms of CPU | on the warm-up threads |
+
+Per dataset under Node's WASI (small workspace; the large one is within 0.1 ms of it): `tide-choices` 1.8 ms,
+`tide-fields` 1.6, `kql-core-rows` 1.5, `kql-azure-monitor-heads` 1.3, `kql-asim` 1.1, `highlights/spec.toml`
+1.0 (0.8 kB, but the first decode, so it includes Node compiling the decoder's functions), `vocab/lean/att&ck`
+0.8, `sentinel/attack-v18.json` 0.6, the bundled configuration's TOML files 0.5 together,
+`kql-azure-monitor-columns-24` 0.4, `kql-sentinel-rows` 0.4. Everything else is under 0.05 ms.
+
+Natively, the warm-up threads also decode the vocabularies (13.8 ms, 565 kB → 2.6 MB) and the ATT&CK offers
+(11.1 ms, 296 kB → 3.3 MB) beside the first request. That accounts for the 30 to 37 ms of decode CPU against
+37 to 58 ms of wall time. A WASI host decodes neither before first diagnostics.
+
+**Conclusion:** decode is 3.6 to 5.3% of the WASI cold start under Node, below the 10% at which a codec
+comparison was planned, so sirocco and `lz4_flex` were not benchmarked. Even a decoder that took no time at
+all would save about 11 ms of 216 to 314. The module load and the first request's own work are where the time
+goes (above).
