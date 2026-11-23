@@ -472,15 +472,15 @@ pub struct SentinelAlert {
     /// Whether a firing alert opens an incident.
     #[serde(default = "yes")]
     pub create_incident: bool,
-    /// Sentinel tactic names (the ARM `AttackTactic` enum). Replaced when the rule's ATT&CK
-    /// techniques resolve to tactics: each `att&ck` stage maps to the tactic of the same name.
-    /// Stealth, Defense Impairment, and the ICS Evasion tactic map to `DefenseEvasion`. A stage with
-    /// no Sentinel tactic is dropped.
+    /// Sentinel tactic names (the ARM `AttackTactic` enum), sent when set; an empty list counts
+    /// as unset. Left out, the tactics are those of the techniques that are sent: each `att&ck`
+    /// stage maps to the tactic of the same name. Stealth, Defense Impairment, and the ICS Evasion
+    /// tactic map to `DefenseEvasion`. A stage with no Sentinel tactic is dropped.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tactics: Option<Vec<String>>,
     /// ATT&CK v18 technique and sub-technique ids, the ATT&CK version Sentinel is aligned to. A
-    /// sub-technique is sent in `subTechniques` and its parent in `techniques`. Replaced by the
-    /// rule's resolved techniques when those exist.
+    /// sub-technique is sent in `subTechniques` and its parent in `techniques`. Sent when set; an
+    /// empty list counts as unset. Left out, the techniques of the rule's objective are sent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(custom(garde_techniques))]
     pub techniques: Option<Vec<SentinelTechnique>>,

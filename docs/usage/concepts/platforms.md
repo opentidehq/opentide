@@ -168,6 +168,10 @@ for platform in ws.info()["platforms"]:
     print(platform["name"], platform["enabled"], platform["can_deploy"], platform["can_validate"])
 ```
 
+## ATT&CK techniques
+
+On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Defender for Endpoint (`alert.techniques`) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
+
 ## Query validation policy
 
 Only platforms with `can_validate=True` check queries on the tenant. CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check: CLI and MCP return `supported: false` for them with `--live` (`live: true`) — **never fake validation**. CrowdStrike's CQL, Sysdig's Falco conditions and HarfangLab's and Bitdefender's YARA are checked offline only. SentinelOne is checked on the tenant only: without `--live`, `validate query --platform sentinel_one` exits `2` and names `--live`. Graylog and Exabeam are checked both ways: offline by default, on the tenant with `--live`.
