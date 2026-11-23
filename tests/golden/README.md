@@ -202,6 +202,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 |------|------|
 | `tide-corpus` | [`tests/fixtures/tide_corpus/current`](../fixtures/tide_corpus/), moved to the `.opentide/` layout as `tests/corpus_support.py` does |
 | `vscode` | the VS Code extension's fixture workspace, vendored unchanged in [`fixtures/vscode-workspace/`](fixtures/vscode-workspace/) (source and commit in `vscode-workspace.SOURCE.toml`, MIT licence in `vscode-workspace.LICENSE`) |
+| `tide-corpus-lint-code-note` | `tide-corpus` with `[filenames.codes] filename_mismatch = "info"` written to lint.toml (an `edits` entry with an empty `find`): `lint --strict` fails on `tide-corpus`'s file name warnings and passes here (OT-5) |
 | `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is snapshotted |
 | `tide-corpus-bad-values` | `tide-corpus` with two declared edits: CrowdStrike `trigger: sometimes` and SentinelOne `treat_as_threat: maybe`, values the models do not take, whose help and `context.expected` name the values the field takes (#1663) |
 | `vscode-own-pipeline` | `vscode` with one declared edit: a `.gitlab-ci.yml` of the user's own, which `setup ci gitlab` and `setup --ci gitlab` keep (#1656) |

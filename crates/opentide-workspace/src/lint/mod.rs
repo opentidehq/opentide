@@ -31,7 +31,7 @@ pub mod stems;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
-use opentide_schema::configuration::lint::{FilenameConfig, LintConfig};
+use opentide_schema::configuration::lint::{CODE_OFF, FilenameConfig, LintConfig};
 use opentide_schema::node::{self, Node, Value};
 use rayon::prelude::*;
 use serde::Serialize;
@@ -824,18 +824,52 @@ fn lint_with(
         rewrite_renamed_paths(&mut findings);
         findings.extend(nested.iter().map(|path| nested_finding(&target, path)));
     }
-    // Severity from `lint.toml`, for each check that sets one.
-    for draft in &mut findings {
-        if let Some(severity) = check_severity(config, draft.check) {
-            severity.clone_into(&mut draft.severity);
+    // Severity from `lint.toml`, for each check that sets one; a code's own
+    // setting wins over its check's, and `off` drops the finding (one `--fix`
+    // renamed stays: the report says what the run did).
+    let mut engine_at = engine_at;
+    let mut kept = 0;
+    let mut position = 0;
+    findings.retain_mut(|draft| {
+        let before = position;
+        position += 1;
+        let keep = match code_level(config, draft.check, draft.code) {
+            Some(CODE_OFF) => draft.fixed(),
+            Some(level) => {
+                level.clone_into(&mut draft.severity);
+                true
+            }
+            None => {
+                if let Some(severity) = check_severity(config, draft.check) {
+                    severity.clone_into(&mut draft.severity);
+                }
+                true
+            }
+        };
+        if keep && before < engine_at {
+            kept += 1;
         }
-    }
-    for finding in &mut engine {
-        if let Some(severity) = check_severity(config, finding.check) {
-            severity.clone_into(&mut finding.entry.severity);
-            finding.diagnostic.severity = Severity::parse(severity).unwrap_or(Severity::Warning);
-        }
-    }
+        keep
+    });
+    engine_at = kept;
+    engine.retain_mut(
+        |finding| match code_level(config, finding.check, &finding.entry.code) {
+            Some(CODE_OFF) => false,
+            Some(level) => {
+                level.clone_into(&mut finding.entry.severity);
+                finding.diagnostic.severity = Severity::parse(level).unwrap_or(Severity::Warning);
+                true
+            }
+            None => {
+                if let Some(severity) = check_severity(config, finding.check) {
+                    severity.clone_into(&mut finding.entry.severity);
+                    finding.diagnostic.severity =
+                        Severity::parse(severity).unwrap_or(Severity::Warning);
+                }
+                true
+            }
+        },
+    );
     let mut sources = Sources::files(fs);
     let mut all: Vec<LintFinding> = Vec::with_capacity(findings.len() + engine.len());
     let mut drafts = findings.into_iter();
@@ -925,6 +959,15 @@ fn editor_findings(
             )
         })
         .collect()
+}
+
+/// What `[<check>.codes]` sets for `code`: a severity, or `off`.
+fn code_level<'a>(config: &'a LintConfig, check: LintCheck, code: &str) -> Option<&'a str> {
+    config
+        .checks
+        .iter()
+        .find(|(name, _)| name == check.name())
+        .and_then(|(_, own)| own.code_level(code))
 }
 
 fn check_severity(config: &LintConfig, check: LintCheck) -> Option<&str> {

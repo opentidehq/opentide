@@ -35,6 +35,12 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
 vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
+[fixtures.tide-corpus-lint-code-note]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `[filenames.codes] filename_mismatch = \"info\"` in lint.toml (an `edits` entry with an empty `find`): the corpus's file names are not the slugs of its names, a warning `lint --strict` fails on (`strict` case), and with the one code set to a note the same run passes while the filenames check still runs (OT-5)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_mismatch = \"info\"\n" }]
+
 [fixtures.tide-corpus-folders]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -1490,6 +1496,15 @@ command = "lint"
 variant = "strict"
 args = ["lint", "--strict"]
 fixtures = ["tide-corpus", "vscode", "fault-lint"]
+
+# OT-5: `[<check>.codes]` in lint.toml sets one code's severity. The `strict`
+# case fails on the corpus's `filename_mismatch` warnings; with that code set
+# to "info" the same run passes.
+[[case]]
+command = "lint"
+variant = "strict-code-downgraded"
+args = ["lint", "--strict"]
+fixtures = ["tide-corpus-lint-code-note"]
 
 # UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
 [[case]]

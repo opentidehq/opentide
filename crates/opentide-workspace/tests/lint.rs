@@ -416,6 +416,170 @@ mod lint {
         );
     }
 
+    /// The queries check's engine, standing in: one warning per code it is told of.
+    struct Engine(&'static [&'static str]);
+
+    impl opentide_workspace::lint::LintQueryCheck for Engine {
+        fn check(
+            &self,
+            _: &Path,
+            relative: &str,
+            uuid: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            Ok(self
+                .0
+                .iter()
+                .map(|code| {
+                    let engine =
+                        opentide_workspace::Diagnostic::new(*code, Severity::Warning, "finding");
+                    LintFinding::from_engine(relative, uuid, engine)
+                })
+                .collect())
+        }
+    }
+
+    fn severities(report: &LintReport) -> Vec<(&str, &str)> {
+        report
+            .findings
+            .iter()
+            .filter(|finding| finding.check == LintCheck::Queries)
+            .map(|finding| (finding.code(), finding.severity()))
+            .collect()
+    }
+
+    /// OT-5: `[queries.codes]` sets one code's severity, wins over the check's
+    /// `severity`, and `off` drops the finding; `--strict` counts the result.
+    #[test]
+    fn a_codes_table_sets_one_codes_severity_and_off_drops_it() {
+        const ALL: &[&str] = &[
+            "kql_join_summarize_before_project",
+            "kql_table_not_declared",
+            "kql_unknown_table",
+        ];
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let engine = Engine(ALL);
+        let strict = LintOptions {
+            strict: true,
+            checks: vec![LintCheck::Queries],
+            query_check: Some(&engine),
+            ..options()
+        };
+        let plain = run(&fs, &LintConfig::default(), &strict);
+        assert!(
+            severities(&plain)
+                .iter()
+                .all(|(_, level)| *level == "warning")
+        );
+        assert_eq!(plain.exit_code, 1);
+        // Downgrade the inherited warning and raise another: the rest stay.
+        let tuned = run(
+            &fs,
+            &config(
+                "[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_unknown_table = \"error\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(
+            severities(&tuned),
+            [
+                ("kql_join_summarize_before_project", "info"),
+                ("kql_table_not_declared", "warning"),
+                ("kql_unknown_table", "error"),
+            ]
+        );
+        let downgraded = tuned
+            .findings
+            .iter()
+            .find(|finding| finding.code() == "kql_join_summarize_before_project")
+            .unwrap();
+        assert_eq!(downgraded.diagnostic.severity, Severity::Info);
+        assert_eq!(tuned.exit_code, 1, "the raised code still fails --strict");
+        // A code's own setting wins over the check's; `off` drops it.
+        let layered = run(
+            &fs,
+            &config(
+                "[queries]\nseverity = \"error\"\n[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_table_not_declared = \"off\"\nkql_unknown_table = \"off\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(
+            severities(&layered),
+            [("kql_join_summarize_before_project", "info")]
+        );
+        assert_eq!(layered.exit_code, 0, "only a note is left");
+        assert_eq!(layered.status, LintStatus::Issues);
+        // `--strict` passes once every warning is a note or off.
+        let quiet = run(
+            &fs,
+            &config(
+                "[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_table_not_declared = \"off\"\nkql_unknown_table = \"info\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(quiet.exit_code, 0);
+        assert!(quiet.outcome_ok);
+    }
+
+    /// The codes lint reports itself take the table of their check, and a
+    /// table does not touch the check's other codes.
+    #[test]
+    fn a_codes_table_covers_the_codes_lint_reports_itself() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/misnamed.yaml", rule(U1, "Another rule"));
+        fs.write(
+            "/ws/objects/rules/a-rule.yaml",
+            format!("name: A rule\nmetadata:\n  uuid: {U2}\n  schema: rule::1.1\n"),
+        );
+        let base = run(&fs, &LintConfig::default(), &options());
+        assert!(
+            base.findings
+                .iter()
+                .any(|f| f.code() == "filename_mismatch" && f.severity() == "warning")
+        );
+        let tuned = run(
+            &fs,
+            &config(
+                "[filenames.codes]\nfilename_mismatch = \"error\"\n[metadata.codes]\nmetadata_recommended = \"off\"\n[recommended.codes]\nrecommended_field_missing = \"warning\"\n",
+            ),
+            &options(),
+        );
+        for finding in &tuned.findings {
+            match finding.code() {
+                "filename_mismatch" => assert_eq!(finding.severity(), "error"),
+                "recommended_field_missing" => assert_eq!(finding.severity(), "warning"),
+                "metadata_recommended" => panic!("`off` left {:?}", json(finding)),
+                _ => {}
+            }
+        }
+        assert!(
+            tuned
+                .findings
+                .iter()
+                .any(|f| f.code() == "filename_mismatch")
+        );
+        assert!(
+            tuned
+                .findings
+                .iter()
+                .any(|f| f.code() == "recommended_field_missing")
+        );
+        assert_eq!(
+            tuned.findings.len() + 1,
+            base.findings.len(),
+            "only metadata dropped"
+        );
+        // `lint --file`'s editor path (`lint_file`) applies it too.
+        let editor = opentide_workspace::lint::lint_file(
+            &fs,
+            Path::new(ROOT),
+            &config("[metadata.codes]\nmetadata_recommended = \"off\"\n"),
+            Path::new("/ws/objects/rules/a-rule.yaml"),
+        );
+        assert!(editor.iter().all(|f| f.code() != "metadata_recommended"));
+    }
+
     #[test]
     fn strict_fails_on_errors_and_warnings_but_never_on_notes() {
         let fs = workspace();

@@ -54,7 +54,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "lsp.start",
             "mcp.start",
         ],
-        67,
+        68,
     ),
     (
         "generate",

@@ -156,6 +156,7 @@ enabled = true
 |-----|--------|-------|
 | `enabled` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
 | `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included. The language server follows `[metadata]` and `[recommended]` too, so the editor shows the same severity |
+| `codes` | `[filenames.codes]`, `[metadata.codes]`, `[recommended.codes]`, `[placeholders.codes]`, `[queries.codes]` | A table of `<code> = "<level>"`: `error`, `warning`, `info` or `off`, for one finding code of that check. It wins over the check's `severity`, so one code can be tamed (or raised) without touching the others, and `off` drops the code's findings. `--strict` counts the severity it sets. See [Severity per code](#severity-per-code) |
 | `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
 | `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
 | `style`, `pattern` | `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` | The same keys for one kind of object, over `[filenames]`. See [A convention per object kind](#a-convention-per-object-kind) |
@@ -177,6 +178,22 @@ A value lint cannot use fails the command with exit `2` and a message that names
 ```text illustrative
 FATAL: lint.toml [metadata].required: unknown metadata field(s) 'owner'. Known fields: uuid, schema, version, created, modified, tlp, author, contributors, organisation, reviewed
 ```
+
+### Severity per code
+
+`severity` moves a whole check, which is too coarse where only one code is a problem: setting `[queries] severity = "info"` to quiet an inherited `kql_join_summarize_before_project` also silences `kql_table_not_declared` and `kql_unknown_table`. A `codes` table under the check sets one code and leaves the others:
+
+```toml
+[queries.codes]
+kql_join_summarize_before_project = "info"   # a note: --strict no longer fails on it
+kql_unknown_table = "error"                  # raised: --strict fails on it
+kql_wildcard_table = "off"                   # dropped
+```
+
+- A value is `error`, `warning`, `info` or `off`. A code's value wins over the check's `severity`; a code the table does not list keeps the check's `severity`, or its own.
+- Each code goes under the check that reports it: the engine's codes (`kql_*`, `spl_*`, `lookback_zero`, ...) under `[queries.codes]`, `filename_mismatch`, `filename_pattern`, `name_missing`, `yaml_parse` and `nested_object_file` under `[filenames.codes]`, `metadata_recommended` under `[metadata.codes]`, `recommended_field_missing` under `[recommended.codes]` and `placeholder` under `[placeholders.codes]`. A code that does not exist is refused with the nearest one (`unknown code "kql_unknown_tabel". Did you mean "kql_unknown_table"?`), and so is one under the wrong check, naming the right table. `lint.toml` is read as strictly as before: a typo is an error, never silently ignored.
+- An `off` finding is not reported and does not count, as if the code did not exist. One exception: a file name `--fix` already renamed is still reported as `fixed`.
+- `opentide lint` and `lint --strict` apply the table. [`opentide validate`](./validate.md) does not read `lint.toml`'s severities: its `--queries` flag is its own control. The language server follows the tables of `[filenames]`, `[metadata]` and `[recommended]`, as it does their `severity`; its query diagnostics are the editor's own analysis, which `[queries.codes]` does not change.
 
 ### Filename convention
 
