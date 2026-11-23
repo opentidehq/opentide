@@ -181,10 +181,11 @@ keyword table and the catalog's name lookups each hash a name per use.
   names crafted to share their low 17 hash bits, in a 980 KB query, parsed in 2.06 s against
   0.084 s for ordinary names (about 24×). opentide-parse builds its green trees with a builder of
   its own (`src/green.rs`), over rowan's `GreenToken::new` and `GreenNode::new`: its caches hash
-  with foldhash's per-map seed and hold at most 4,096 tokens and 4,096 nodes, past which a token
-  or node is built without interning, so even a predictable seed (the browser module) allows only
-  a bounded number of colliding inserts. The same query parses in about the ordinary time
-  (0.94–1.16× over runs), and the parse passes of `cargo xtask throughput` fell by up to 8%;
+  with foldhash's per-map seed and hold at most 4,096 tokens and 4,096 nodes. A full cache is no
+  longer consulted: every later token or node is built without interning. So even with a
+  predictable seed (the browser module), a build costs at most the cap's square in probes, then
+  linear time: no lookup walks a full table of colliding entries. The same query parses in about the ordinary time
+  (0.8–1.2× over runs), and the parse passes of `cargo xtask throughput` fell by up to 8%;
   `crates/opentide-parse/tests/token_cache.rs` holds the bound with 20,000 precomputed names.
 - **Known exceptions.** KQL's catalog name lookups (`lib.rs`) still use
   SipHash until #1609 lands; their keys are catalog names, not the query's.

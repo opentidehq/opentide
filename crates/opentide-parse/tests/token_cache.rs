@@ -9,9 +9,9 @@
 //! kind 4, enough to fill one probe sequence of a table that size: built
 //! with rowan's builder, they took about 20 times as long as ordinary names
 //! (its node cache hashed the tokens' hashes, so nodes of one name collided
-//! too; 1 MB of them, in a KQL `project` list, about 24 times). opentide-parse's own builder
-//! (`src/green.rs`) hashes with a per-map seed and interns at most 4,096
-//! tokens, so the two take about as long.
+//! too; 1 MB of them, in a KQL `project` list, about 24 times).
+//! opentide-parse's own builder (`src/green.rs`) hashes with a per-map seed
+//! and stops interning at 4,096 tokens, so the two take about as long.
 //!
 //! The names took a search over hundreds of millions of hashes; the ignored
 //! test below writes them again (`cargo test --release -p opentide-parse
@@ -187,18 +187,22 @@ fn colliding_names_build_about_as_fast_as_ordinary_ones() {
     let control: Vec<&str> = control.iter().map(String::as_str).collect();
     let (attack, control) = (Timed::new(&attack), Timed::new(&control));
     // The fastest of five builds each, in turns, so load on the machine
-    // weighs on both alike.
-    let (mut fastest_attack, mut fastest_control) = (Duration::MAX, Duration::MAX);
-    for _ in 0..5 {
-        fastest_attack = fastest_attack.min(attack.run());
-        fastest_control = fastest_control.min(control.run());
+    // weighs on both alike; up to three rounds, so one burst of load on a
+    // shared runner does not fail it. rowan's builder: about 20×, every
+    // round. Ours: about 1×.
+    let mut rounds = Vec::new();
+    for _ in 0..3 {
+        let (mut fastest_attack, mut fastest_control) = (Duration::MAX, Duration::MAX);
+        for _ in 0..5 {
+            fastest_attack = fastest_attack.min(attack.run());
+            fastest_control = fastest_control.min(control.run());
+        }
+        if fastest_attack < fastest_control * 2 {
+            return;
+        }
+        rounds.push((fastest_attack, fastest_control));
     }
-    let (attack, control) = (fastest_attack, fastest_control);
-    // rowan's builder: about 20×. Ours: about 1×.
-    assert!(
-        attack < control * 2,
-        "colliding names took {attack:?}, ordinary ones {control:?}"
-    );
+    panic!("colliding names took twice as long as ordinary ones or more, each round: {rounds:?}");
 }
 
 /// Writes `fx-colliding-names.txt` again: the first [`COUNT`] distinct

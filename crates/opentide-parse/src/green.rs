@@ -5,7 +5,7 @@
 //! `NodeCache`, a hashbrown table hashed with FxHash. Fx is a fixed function,
 //! so names whose hashes share their low bits can be worked out offline, and
 //! each one inserted walks the probe sequence past all the earlier ones: a
-//! 1 MB KQL `project` list of 70,000 such names parsed about 22 times slower
+//! 1 MB KQL `project` list of 70,000 such names parsed about 24 times slower
 //! than ordinary names. rowan offers no way to choose its hasher, or to add a
 //! token without interning it, so this builder makes the green tree itself
 //! from rowan's public constructors ([`GreenToken::new`], [`GreenNode::new`])
@@ -13,11 +13,13 @@
 //!
 //! - **Seeded.** Both tables hash with foldhash's per-map seed (ADR 0014
 //!   §5b), so collisions prepared ahead of time do not carry over.
-//! - **Capped.** Each table holds at most [`MAX_INTERNED`] entries. Past it a
-//!   new token or node is built without interning, as it would be without a
-//!   cache, so even an attacker who can predict the seed (the browser's
-//!   WebAssembly module, where foldhash's seed is close to fixed) can make at
-//!   most a bounded number of colliding inserts.
+//! - **Capped.** Each table holds at most [`MAX_INTERNED`] entries. Once it
+//!   is full it is no longer consulted: every later token or node is built
+//!   without interning, as it would be without a cache. A full table is where
+//!   an attacker who can predict the seed (the browser's WebAssembly module,
+//!   where foldhash's seed is close to fixed) would make each lookup walk
+//!   thousands of colliding entries; with no lookups past the cap, a build
+//!   costs at most the cap's square in probes, then linear time.
 //! - **Sized up front.** Each table is made for the input's lexemes, up to
 //!   the cap, so it never grows and rehashes: on the many short queries of
 //!   the parse benchmarks this builder runs fewer instructions and
@@ -75,13 +77,13 @@ impl<'a> Builder<'a> {
 
     /// Adds a token to the open node.
     pub(crate) fn token(&mut self, kind: SyntaxKind, text: &'a str) {
-        let full = self.tokens.len() >= MAX_INTERNED;
-        let child = match self.tokens.entry((kind, text)) {
-            Entry::Occupied(entry) => (entry.get().clone(), true),
-            Entry::Vacant(entry) if !full => {
-                (entry.insert(GreenToken::new(kind, text)).clone(), true)
+        let child = if self.tokens.len() >= MAX_INTERNED {
+            (GreenToken::new(kind, text), false)
+        } else {
+            match self.tokens.entry((kind, text)) {
+                Entry::Occupied(entry) => (entry.get().clone(), true),
+                Entry::Vacant(entry) => (entry.insert(GreenToken::new(kind, text)).clone(), true),
             }
-            Entry::Vacant(_) => (GreenToken::new(kind, text), false),
         };
         self.children.push((NodeOrToken::Token(child.0), child.1));
     }
@@ -110,25 +112,24 @@ impl<'a> Builder<'a> {
     /// interning it when it may be.
     fn node(&mut self, kind: SyntaxKind, first: usize) -> Child {
         let children = &self.children[first..];
-        let key =
-            (children.len() <= MAX_INTERNED_CHILDREN && children.iter().all(|c| c.1)).then(|| {
-                let mut ids = [0; MAX_INTERNED_CHILDREN];
-                for (id, (child, _)) in ids.iter_mut().zip(children) {
-                    *id = address(child);
-                }
-                (kind, children.len(), ids)
-            });
-        let full = self.nodes.len() >= MAX_INTERNED;
+        let internable = self.nodes.len() < MAX_INTERNED
+            && children.len() <= MAX_INTERNED_CHILDREN
+            && children.iter().all(|c| c.1);
+        let key = internable.then(|| {
+            let mut ids = [0; MAX_INTERNED_CHILDREN];
+            for (id, (child, _)) in ids.iter_mut().zip(children) {
+                *id = address(child);
+            }
+            (kind, children.len(), ids)
+        });
         let mut build = || GreenNode::new(kind, self.children.drain(first..).map(|(c, _)| c));
         match key.map(|key| self.nodes.entry(key)) {
             Some(Entry::Occupied(entry)) => {
                 self.children.truncate(first);
                 (NodeOrToken::Node(entry.get().clone()), true)
             }
-            Some(Entry::Vacant(entry)) if !full => {
-                (NodeOrToken::Node(entry.insert(build()).clone()), true)
-            }
-            _ => (NodeOrToken::Node(build()), false),
+            Some(Entry::Vacant(entry)) => (NodeOrToken::Node(entry.insert(build()).clone()), true),
+            None => (NodeOrToken::Node(build()), false),
         }
     }
 
@@ -194,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn past_the_cap_tokens_and_nodes_are_built_without_interning() {
+    fn past_the_cap_nothing_is_looked_up_or_interned() {
         let names: Vec<String> = (0..MAX_INTERNED + 100).map(|i| format!("n{i}")).collect();
         let mut b = Builder::new(0);
         b.start_node(ROOT);
@@ -203,7 +204,8 @@ mod tests {
             b.token(WORD, name);
             b.finish_node();
         }
-        // A name seen before the cap is still shared; a new one past it is not.
+        // Once a table is full it is not consulted: a name interned before
+        // the cap is built anew too, so no lookup walks a full table.
         for name in [&names[0], &names[MAX_INTERNED + 50]] {
             b.start_node(NAME);
             b.token(WORD, name);
@@ -217,8 +219,19 @@ mod tests {
             names.concat() + &names[0] + &names[MAX_INTERNED + 50]
         );
         let n = names.len();
-        assert_eq!(ptr(&root, 0), ptr(&root, n));
+        assert_ne!(ptr(&root, 0), ptr(&root, n));
         assert_ne!(ptr(&root, MAX_INTERNED + 50), ptr(&root, n + 1));
+        // Below the cap, a repeated name and its node are shared.
+        let mut b = Builder::new(0);
+        b.start_node(ROOT);
+        for name in [&names[0], &names[1], &names[0]] {
+            b.start_node(NAME);
+            b.token(WORD, name);
+            b.finish_node();
+        }
+        b.finish_node();
+        let root = b.finish().unwrap_or_else(|| panic!("one root"));
+        assert_eq!(ptr(&root, 0), ptr(&root, 2));
     }
 
     #[test]
