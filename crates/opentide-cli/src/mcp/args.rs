@@ -88,6 +88,17 @@ impl<'a> Args<'a> {
         };
         parsed.ok_or_else(|| format!("argument {name} must be an integer, not {}", shown(value)))
     }
+
+    /// The whole number `name` that is 0 or more, `None` when absent.
+    pub fn optional_count(&self, name: &str) -> Result<Option<usize>, String> {
+        if !self.map.contains_key(name) {
+            return Ok(None);
+        }
+        let value = self.integer(name, 0)?;
+        usize::try_from(value)
+            .map(Some)
+            .map_err(|_| format!("argument {name} must be 0 or more, not {value}"))
+    }
 }
 
 fn missing(name: &str) -> String {
