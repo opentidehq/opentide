@@ -53,6 +53,21 @@ fn default_help(code: &str) -> Option<&'static str> {
     })
 }
 
+/// What to do with a `composition` at the root of an objective, which older
+/// templates wrote there; it is read only under `objective:`.
+const ROOT_COMPOSITION_HELP: &str = "`composition` belongs under `objective:`; delete the root \
+    copy (it is ignored). If it differs from `objective.composition`, merge the two by hand first";
+
+/// An objective's top-level `composition`: an unknown key since 0.21.
+fn is_root_composition(diagnostic: &Diagnostic) -> bool {
+    diagnostic.code == "schema_validation"
+        && diagnostic.object_type == "objective"
+        && diagnostic.field_path == ["composition"]
+        && diagnostic
+            .message
+            .starts_with("Extra inputs are not permitted")
+}
+
 /// `yaml_parse` problems that are not syntax: the indentation hint would
 /// mislead.
 const YAML_PARSE_HELP: [(&str, &str); 7] = [
@@ -532,6 +547,8 @@ fn annotate_one(
             .and_then(ContextValue::as_str)
     {
         help = Some(format!("write {expected}"));
+    } else if help.is_none() && is_root_composition(diagnostic) {
+        help = Some(ROOT_COMPOSITION_HELP.to_owned());
     } else if help.is_none() {
         help = default_help(&diagnostic.code).map(str::to_owned);
     }

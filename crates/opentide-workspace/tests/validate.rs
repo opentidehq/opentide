@@ -256,6 +256,26 @@ mod validate {
     }
 
     #[test]
+    fn a_root_composition_on_an_objective_gets_its_own_help() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/objectives/o.yaml",
+            format!(
+                "name: O\nmetadata:\n  uuid: {U1}\n  schema: objective::1.0\ncomposition:\n  operator: all\nobjective:\n  composition:\n    operator: all\n"
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<_> = with_code(&validation, "schema_validation")
+            .into_iter()
+            .filter(|d| d.field_path == ["composition"])
+            .collect();
+        assert_eq!(found.len(), 1, "{:?}", all(&validation));
+        let help = found[0].help.as_deref().unwrap_or_default();
+        assert!(help.contains("belongs under `objective:`"), "{help}");
+        assert!(found[0].fix.is_none());
+    }
+
+    #[test]
     fn a_file_that_does_not_exist_is_file_not_found() {
         let fs = workspace();
         fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
