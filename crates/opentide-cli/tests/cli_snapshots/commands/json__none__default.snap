@@ -13535,6 +13535,23 @@ exit: 0
           "default": null,
           "envvars": [],
           "flags": [
+            "--app-token"
+          ],
+          "help": "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "app_token",
+          "required": false,
+          "secondary_flags": [
+            "--no-app-token"
+          ],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "flags": [
             "--default-branch"
           ],
           "help": "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
@@ -14303,6 +14320,23 @@ exit: 0
           "default": null,
           "envvars": [],
           "flags": [
+            "--app-token"
+          ],
+          "help": "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "app_token",
+          "required": false,
+          "secondary_flags": [
+            "--no-app-token"
+          ],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "flags": [
             "--default-branch"
           ],
           "help": "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
@@ -14312,6 +14346,21 @@ exit: 0
           "required": false,
           "secondary_flags": [],
           "type": "string"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--stdout"
+          ],
+          "help": "Print the generated pipeline to stdout and write nothing (to diff it against an adapted one; not with --json or --plan)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "stdout",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
         },
         {
           "choices": null,

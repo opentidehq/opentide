@@ -36,6 +36,8 @@ fn merge_script() -> String {
         credentials: IndexMap::new(),
         sharing_credentials: Vec::new(),
         variable_groups: Vec::new(),
+        app_token: false,
+        user_region: None,
     })
     .unwrap();
     let document = opentide_schema::node::load(&pipeline).unwrap();

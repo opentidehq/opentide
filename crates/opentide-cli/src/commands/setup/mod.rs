@@ -83,6 +83,10 @@ pub struct CiArgs {
     pub explorer_pages: bool,
     /// `--variable-group`, in order.
     pub variable_group: Vec<String>,
+    /// `--app-token/--no-app-token`; `None` keeps the existing pipeline's.
+    pub app_token: Option<bool>,
+    /// `--stdout`: print the pipeline, write nothing.
+    pub stdout: bool,
     /// `--default-branch`; `None` detects it.
     pub default_branch: Option<String>,
     /// `--plan`, here or on the group.
@@ -696,6 +700,41 @@ fn group_names(given: &[String]) -> Vec<String> {
     names
 }
 
+/// Whether the pipeline is written with `--app-token`: the flag or
+/// `--no-app-token`, or, when neither is given, what the existing GitHub
+/// pipeline opentide wrote records (`warnings` says so). Only GitHub has it.
+fn app_token(
+    args: &CiArgs,
+    pipeline: &str,
+    before: &Result<Option<String>, String>,
+    warnings: &mut Vec<String>,
+) -> bool {
+    if args.provider != Provider::GitHub {
+        return false;
+    }
+    if let Some(choice) = args.app_token {
+        return choice;
+    }
+    let kept = matches!(before, Ok(Some(old)) if generated(old) && ci::app_token(old));
+    if kept {
+        warnings.push(format!(
+            "keeping --app-token from {pipeline}: the jobs that push to the default branch still use the GitHub App token; pass --no-app-token to turn it off"
+        ));
+    }
+    kept
+}
+
+/// What the existing pipeline holds between its user-owned region's markers
+/// (`ci::user_region`), which the regenerated one keeps: `Err` when the
+/// markers cannot be read, which is why. Only a pipeline opentide wrote has
+/// a region.
+fn user_region(before: &Result<Option<String>, String>) -> Result<Option<String>, String> {
+    match before {
+        Ok(Some(old)) if generated(old) => ci::user_region(old),
+        _ => Ok(None),
+    }
+}
+
 /// What `setup ci` writes at `pipeline`, which holds `before` (as
 /// `files::read_text` read it): `text`, or nothing when the file there is the
 /// user's own or cannot be read as text; `warnings` says which.
@@ -808,6 +847,61 @@ pub(crate) struct Run {
     pub(crate) warnings: Vec<String>,
     pub(crate) platforms: Vec<String>,
     pub(crate) branch: String,
+    /// The pipeline as rendered, whether or not it is written.
+    pub(crate) pipeline: String,
+}
+
+/// What `setup ci` writes at `pipeline`: `None` for `--stdout`, which writes
+/// nothing, and for a region that cannot be read, which is not replaced, as
+/// a file that is not opentide's is not; else [`pipeline_bytes`].
+fn written_bytes(
+    args: &CiArgs,
+    pipeline: &str,
+    region: &Result<Option<String>, String>,
+    before: Result<Option<String>, String>,
+    text: String,
+    warnings: &mut Vec<String>,
+) -> Option<Vec<u8>> {
+    match (args.stdout, region) {
+        (true, Err(why)) => {
+            warnings.push(format!(
+                "the user-owned region of {pipeline} cannot be read ({why}), so this output has none"
+            ));
+            None
+        }
+        (true, Ok(_)) => None,
+        (false, Err(why)) => {
+            warnings.push(format!(
+                "the user-owned region of {pipeline} cannot be read ({why}), so it was kept as it is; mark the region with one `{}` line and one `{}` line, or move the file, and run the command again.",
+                ci::USER_BEGIN,
+                ci::USER_END
+            ));
+            None
+        }
+        (false, Ok(_)) => pipeline_bytes(args.provider, pipeline, before, text, warnings),
+    }
+}
+
+/// The provider-specific flags the provider does not have, each warned about.
+fn ignored_flag_warnings(args: &CiArgs, warnings: &mut Vec<String>) {
+    if args.explorer_pages && args.provider != Provider::GitHub {
+        warnings.push(format!(
+            "Explorer pages were not written for {}",
+            args.provider.name()
+        ));
+    }
+    if !args.variable_group.is_empty() && args.provider != Provider::Azure {
+        warnings.push(format!(
+            "--variable-group was ignored: only Azure Pipelines links Library variable groups, not {}",
+            args.provider.name()
+        ));
+    }
+    if args.app_token == Some(true) && args.provider != Provider::GitHub {
+        warnings.push(format!(
+            "--app-token was ignored: only GitHub Actions creates a GitHub App token, not {}",
+            args.provider.name()
+        ));
+    }
 }
 
 /// `run_ci_setup`: everything but the writing.
@@ -828,18 +922,7 @@ pub(crate) fn prepare(
     if platforms.is_empty() {
         warnings.push(NO_PLATFORMS_WARNING.to_owned());
     }
-    if args.explorer_pages && args.provider != Provider::GitHub {
-        warnings.push(format!(
-            "Explorer pages were not written for {}",
-            args.provider.name()
-        ));
-    }
-    if !args.variable_group.is_empty() && args.provider != Provider::Azure {
-        warnings.push(format!(
-            "--variable-group was ignored: only Azure Pipelines links Library variable groups, not {}",
-            args.provider.name()
-        ));
-    }
+    ignored_flag_warnings(args, &mut warnings);
     let branch = match (&args.provider, &args.default_branch) {
         (Provider::GitLab, given) => {
             if given.is_some() {
@@ -874,15 +957,21 @@ pub(crate) fn prepare(
         credentials,
         sharing_credentials,
         variable_groups: Vec::new(),
+        app_token: false,
+        user_region: None,
     };
     let pipeline = args.provider.path();
     let existing = root.join(pipeline);
     let before = files::read_text(stage, &existing);
     options.variable_groups = variable_groups(args, pipeline, &before, &mut warnings);
+    options.app_token = app_token(args, pipeline, &before, &mut warnings);
+    let region = user_region(&before);
+    options.user_region = region.clone().unwrap_or(None);
     let text = ci::render(&options)
         .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let exists = existing.exists() || !matches!(before, Ok(None));
-    let bytes = pipeline_bytes(args.provider, pipeline, before, text, &mut warnings);
+    let rendered = text.clone();
+    let bytes = written_bytes(args, pipeline, &region, before, text, &mut warnings);
     let mut files = vec![(pipeline.to_owned(), bytes, exists)];
     if let Some(promotion) = promotion
         && let Some(content) = promotion.content
@@ -904,6 +993,7 @@ pub(crate) fn prepare(
         warnings,
         platforms,
         branch,
+        pipeline: rendered,
     })
 }
 
@@ -1003,11 +1093,28 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
             None,
         );
     }
+    if args.stdout && cx.mode == Mode::Json {
+        return *bad_parameter(
+            "--stdout prints the pipeline as text, which --json cannot carry; drop one of them",
+            &["--stdout"],
+            Some("--stdout"),
+        );
+    }
+    if args.stdout && args.plan {
+        return *bad_parameter(
+            "--stdout and --plan cannot be combined: --plan lists the files, --stdout prints the pipeline",
+            &["--stdout"],
+            Some("--stdout"),
+        );
+    }
     let shown = match target(args, cx) {
         Ok(shown) => shown,
         Err(report) => return *report,
     };
     let root = resolved(cx.cwd, &shown);
+    if args.stdout {
+        return stdout_report(args, &root, cx);
+    }
     if !args.plan && !args.yes {
         match confirm(&shown, &root, cx) {
             Ok(true) => {}
@@ -1095,6 +1202,28 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
         lines.push(Text::default());
         report.body = vec![Block::Lines(lines)];
     }
+    report
+}
+
+/// `--stdout`: the pipeline the run would write, on stdout and nothing else;
+/// the warnings go to stderr as always.
+fn stdout_report(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Report {
+    let run = match prepare(&stage::Stage::new(), args, root, cx) {
+        Ok(run) => run,
+        Err(report) => return *report,
+    };
+    let mut report = Report::completed(COMMAND, Vec::new());
+    report.outcome.message = format!("Printed the {} pipeline", args.provider.label());
+    // `body_only` skips the result's own warnings, so they go to stderr here.
+    let warnings = unique(run.warnings);
+    if !cx.quiet {
+        report
+            .body
+            .push(Block::Stderr(cx.terminal.stderr.warnings(&warnings)));
+    }
+    report.body_only = true;
+    report.body.push(Block::Raw(run.pipeline));
+    report.warnings = warnings;
     report
 }
 
@@ -1339,6 +1468,8 @@ mod tests {
             python_version: "3.12".into(),
             explorer_pages: false,
             variable_group: Vec::new(),
+            app_token: None,
+            stdout: false,
             default_branch: None,
             plan: false,
             yes: true,
@@ -1402,6 +1533,8 @@ mod tests {
             python_version: "3.12".into(),
             explorer_pages: false,
             variable_group: Vec::new(),
+            app_token: None,
+            stdout: false,
             default_branch: None,
             plan: false,
             yes: true,
@@ -1477,6 +1610,8 @@ mod tests {
             python_version: "3.12".into(),
             explorer_pages: false,
             variable_group: Vec::new(),
+            app_token: None,
+            stdout: false,
             default_branch: None,
             plan: false,
             yes: true,
