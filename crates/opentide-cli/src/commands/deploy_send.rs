@@ -3504,7 +3504,23 @@ impl Sender<'_, '_> {
         };
         let body = match PlatformId::parse(platform) {
             Some(PlatformId::DefenderForEndpoint) => {
-                opentide_compile::defender::body(self.compile, rule, tenant)
+                opentide_compile::defender::body_with_warnings(self.compile, rule, tenant).map(
+                    |(body, warnings)| {
+                        // Once per rule, not once per tenant: the techniques
+                        // are the rule's, so the warning is the same on each.
+                        if !warnings.is_empty()
+                            && self
+                                .sentinel_warned
+                                .insert(format!("defender:{}", rule.uuid))
+                        {
+                            self.warned = true;
+                            for (code, message) in warnings {
+                                tracing::warn!(detail = message.as_str(), "{code}");
+                            }
+                        }
+                        body
+                    },
+                )
             }
             Some(PlatformId::SentinelOne) => {
                 opentide_compile::sentinel_one::body(self.compile, rule, table)

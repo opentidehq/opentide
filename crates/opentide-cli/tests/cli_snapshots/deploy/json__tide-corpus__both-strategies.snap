@@ -210,7 +210,9 @@ exit: 0
                       "identifier": "device_id"
                     }
                   ],
-                  "mitreTechniques": [],
+                  "mitreTechniques": [
+                    "T1059"
+                  ],
                   "recommendedActions": null,
                   "severity": "high",
                   "title": "Defender KQL Rule"
