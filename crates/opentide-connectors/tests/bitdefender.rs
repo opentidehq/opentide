@@ -586,6 +586,47 @@ fn a_name_conflict_on_the_retry_is_unconfirmed() {
     assert_eq!(outcome.state, StateChange::Keep);
 }
 
+/// A create's answer is lost and its retry is refused: the first create may
+/// still have landed, so the rule is unconfirmed (with the console-cleanup
+/// advice) and keeps its `create_retried` warning, whatever refused the retry.
+#[test]
+fn a_refused_retry_is_unconfirmed_and_keeps_the_retried_warning() {
+    let refusals: Vec<(Scripted, &str)> = vec![
+        (
+            Box::new(|body: &Value| {
+                answer(200, &error(&body["id"], -32000, "Internal error", None))
+            }),
+            "the retry was refused",
+        ),
+        (
+            Box::new(|_: &Value| ResponseTemplate::new(401)),
+            "the retry was refused by the tenant",
+        ),
+        (
+            Box::new(|_: &Value| answer(403, &json!({"message": "forbidden"}))),
+            "the retry was refused by the tenant",
+        ),
+    ];
+    for (refusal, said) in refusals {
+        let run = Run::new();
+        run.script(|_| ResponseTemplate::new(200).set_delay(Duration::from_secs(2)));
+        run.state().script.push_back(refusal);
+        let outcome = run
+            .deploy_on(&create(), "", Duration::from_millis(300))
+            .unwrap();
+        assert_eq!(run.methods(), ["createCustomRule", "createCustomRule"]);
+        assert_eq!(code(&outcome), Some("bitdefender_create_unconfirmed"));
+        let Some(Failure::Request { error, detail, .. }) = &outcome.failure else {
+            panic!("a failure");
+        };
+        assert!(error.contains("GravityZone console"), "{error}");
+        assert!(error.ends_with(said), "{error}");
+        assert!(detail.is_some(), "the refusal is kept as detail");
+        assert_eq!(events(&outcome), [("bitdefender_create_retried", false)]);
+        assert_eq!(outcome.state, StateChange::Keep);
+    }
+}
+
 #[test]
 fn two_creates_without_an_answer_fail_that_rule_only() {
     let run = Run::new();
