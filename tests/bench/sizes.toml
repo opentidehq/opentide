@@ -30,9 +30,11 @@ max_bytes = 15_900_000
 glob = "opentide-wasm32-wasip1.wasm"
 max_bytes = 22_800_000
 
+# The browser build (`opentide-wasm-web`): 5,826,470 bytes in the 1.0.0-rc.4 publish run (45252808101),
+# after the ATT&CK 20.1 and MISP actor data (#1827) and this round's fixes; 5,800,000 before. +3%.
 [[artifact]]
 glob = "opentide-wasm-web-v*.zip"
-max_bytes = 5_800_000
+max_bytes = 6_000_000
 
 [[artifact]]
 glob = "opentide-*-cp310-abi3-win_amd64.whl"
