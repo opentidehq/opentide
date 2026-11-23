@@ -77,6 +77,45 @@ large one reaches about 400 / 497 ms: still above its 350 ms target, which stays
   while VS Code is still loading the workspace. Starting the server itself on activation moves the module load
   and the workspace load off the first document's wait the same way.
 
+## The field catalog is built without copying each field (#1745 item 3)
+
+A root's Tide field catalog (`models::build`: `fields.json` and `deprecations.json`, which hover, completion
+and highlighting read) is generated from the models for the root's configuration. Natively a thread builds it;
+under WASI it is built in line, before the request that first reads it once the workspace has loaded: the first
+semantic tokens of the opened rule, 170 to 190 ms after the first diagnostics under wasmtime.
+
+Callgrind of one build for the Tide corpus's configuration (native, 770M instructions): `field_row` 372M, of
+which `clean_enum` 206M; the schema transforms 180M (the vocabulary offers' one-time decode 121M); `annotate`
+116M; and freeing the copies all of it made. Two changes, in `opentide-schema`'s `generate/catalog.rs`:
+
+1. **A field's keywords are read through a view** (`Spec`): its own, then those of the definition its `$ref`
+   names, the `$ref` itself hidden, as the merged copy (`effective`) had them. The copy held a vocabulary
+   field's enum values and docs (hundreds for an ATT&CK field) and an object field's whole subtree, and was made
+   several times a field: for its enum, its type, its const, its `minItems`, and once more for each branch.
+2. **An enum of more than 40 values keeps no docs** (`ENUM_DOC_MAX`, which `field_row` already applied): their
+   docs are no longer shortened first. Each is a vocabulary entry's whole description.
+
+The catalogs are byte for byte the same: the bundled configuration's (the language server's
+`the_default_catalogs_are_the_bundled_ones` and `cargo xtask codegen --check`) and the corpus configuration's
+(compared before and after). The `datasets` bench counts the build from a fresh process
+(`tide-field-catalog`, the offers' decode included): 383M to 209M instructions, 849k to 471k allocations.
+On top of #1808, which adds each vocabulary field's references and drops the search hints from its enum, it is
+395M to 222M, 873k to 488k (`tests/bench/instructions.toml`). Natively the first build in a process goes from 194 to 102 ms, a later one
+from 91 to 127 ms to 49 to 53 ms; under wasmtime `catalog: fields_catalog` (`OPENTIDE_LSP_TIMING=1`) from 167
+to 95 ms.
+
+Spawn to the first `semanticTokens/full` of the rule (`didOpen`, the pull of its diagnostics, then the tokens),
+15 runs of each build alternating, medians (ms), small / large workspace:
+
+| Host | Before | After |
+|---|---:|---:|
+| wasmtime 38 | 428 / 743 | 393 / 691 |
+| Node 22 WASI | 546 / 655 | 434 / 614 |
+
+What is left of the build under WASI: the offers' decode on first use (a vocabulary dataset), the model schemas
+(`schemars`) and the transforms of four revisions. Building only the opened document's revision would not save
+much: a rule workspace's pull analyses the closed files of both rule revisions soon after.
+
 ## The KQL catalog reads a table's columns when asked for (follow-up to #1767)
 
 The first KQL request still decoded all 943 Azure Monitor tables (27,237 columns) and built about 40,000 column

@@ -70,6 +70,9 @@ struct Wire {
     timeout: Duration,
     /// For each request to the metadata host, whether its client had a proxy.
     metadata_proxied: Arc<Mutex<Vec<bool>>>,
+    /// For each stalled request to the metadata host, how long the wire held
+    /// it: its client's timeout.
+    metadata_held: Arc<Mutex<Vec<Duration>>>,
     interrupt: Option<Interrupt>,
     seen: Arc<Mutex<Vec<String>>>,
     /// `host` and the `Authorization` header of each request that had one.
@@ -85,6 +88,7 @@ impl Wire {
             proxied: false,
             timeout: Duration::ZERO,
             metadata_proxied: Arc::default(),
+            metadata_held: Arc::default(),
             interrupt: None,
             seen: Arc::default(),
             keyed: Arc::default(),
@@ -100,6 +104,11 @@ impl Wire {
     /// proxy.
     fn metadata_proxied(&self) -> Vec<bool> {
         self.metadata_proxied.lock().unwrap().clone()
+    }
+
+    /// How long the wire held each stalled request to the metadata host.
+    fn metadata_held(&self) -> Vec<Duration> {
+        self.metadata_held.lock().unwrap().clone()
     }
 
     fn signing_in(mut self, status: u16) -> Self {
@@ -168,12 +177,14 @@ impl Transport for Wire {
             self.metadata_proxied.lock().unwrap().push(self.proxied);
             let metadata = self.metadata;
             let waits = self.timeout.min(Duration::from_secs(15));
+            let held = Arc::clone(&self.metadata_held);
             return Box::pin(async move {
                 match metadata {
                     Metadata::Unreachable => Err(TransportFailure::Connect {
                         reason: "no such host".into(),
                     }),
                     Metadata::Stalls => {
+                        held.lock().unwrap().push(waits);
                         tokio::time::sleep(waits).await;
                         Err(TransportFailure::Timeout)
                     }
@@ -879,8 +890,16 @@ fn a_metadata_host_that_stalls_is_skipped_within_a_short_timeout() {
     let document: serde_json::Value = serde_json::from_str(&raw.stdout).unwrap();
     assert_eq!(raw.code, 0, "{document}");
     // The wire holds a request for as long as its client's timeout, at most
-    // fifteen seconds: google-auth's three, not a tenant's two minutes.
-    assert!(raw.took < Duration::from_secs(8), "{:?}", raw.took);
+    // fifteen seconds: google-auth's three, not a tenant's two minutes. The
+    // test asserts that hold, which does not depend on the machine's load. The
+    // run's own duration (`raw.took`) does: it also joins `doctor`'s
+    // background thread that reads the schemas (#1800), which is CPU-bound
+    // and slow on a loaded runner, and says nothing about the probe.
+    assert_eq!(
+        wire.metadata_held(),
+        [Duration::from_secs(3)],
+        "one metadata request, held for google-auth's timeout"
+    );
     let check = document["checks"]
         .as_array()
         .unwrap()

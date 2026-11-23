@@ -5,7 +5,10 @@
 //!
 //! The layer is laid out at four spaces in its keys' order; the table and the
 //! snapshot at two, keys sorted, so a run writes the same file whatever order
-//! it read the objects in ([`super::json_text`]).
+//! it read the objects in ([`super::json_text`]). The table's rows are in
+//! family order, then UUID, and each `childs` list in UUID order: arrays are
+//! not sorted by `json_text`, and the load order they would follow differs
+//! between operating systems.
 
 use std::path::{Path, PathBuf};
 
@@ -454,7 +457,12 @@ fn objects(
         let Some(members) = index.objects.get(family) else {
             continue;
         };
-        for object in members.values() {
+        // By UUID: the index holds objects in the order their files loaded,
+        // which differs between operating systems (path separators, case),
+        // and the table must be the same file everywhere.
+        let mut members: Vec<_> = members.values().collect();
+        members.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+        for object in members {
             let Some(root) = object.root() else {
                 continue;
             };
@@ -625,6 +633,44 @@ mod tests {
     fn rendered(target: Target, index: &Index, settings: &Settings) -> serde_json::Value {
         let output = export(target, index, settings, &Vocabularies::bundled()).unwrap();
         serde_json::from_slice(&output.bytes).unwrap()
+    }
+
+    /// The same objects loaded in another order give the same bytes.
+    #[test]
+    fn the_table_does_not_depend_on_the_order_the_objects_loaded_in() {
+        let objective = "name: Objective\nmetadata: {schema: 'objective::1.0', uuid: o1, tlp: clear, version: 1, created: a, modified: b}\nobjective: {}\n";
+        let rules = ["r3", "r1", "r2"].map(|uuid| {
+            format!(
+                "name: '{uuid}'\nmetadata: {{schema: 'rule::1.0', uuid: {uuid}, tlp: clear, version: 1, created: a, modified: b}}\ndetection_model: o1\n"
+            )
+        });
+        let load = |order: [usize; 3]| {
+            let mut objects = vec![("objective", "o1", objective)];
+            for position in order {
+                let uuid = ["r3", "r1", "r2"][position];
+                objects.push(("rule", uuid, rules[position].as_str()));
+            }
+            index_of(&objects)
+        };
+        let settings = settings(&[("objective", "Objective"), ("rule", "Rule")]);
+        let render = |index: &Index| {
+            export(Target::Objects, index, &settings, &Vocabularies::bundled())
+                .unwrap()
+                .bytes
+        };
+        let forward = render(&load([0, 1, 2]));
+        let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).unwrap();
+        assert_eq!(text(&forward), text(&render(&load([2, 1, 0]))));
+        assert_eq!(text(&forward), text(&render(&load([1, 2, 0]))));
+        let table: serde_json::Value = serde_json::from_slice(&forward).unwrap();
+        let uuids: Vec<&str> = table
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["uuid"].as_str().unwrap())
+            .collect();
+        assert_eq!(uuids, ["o1", "r1", "r2", "r3"]);
+        assert_eq!(table[0]["childs"], "r1, r2, r3");
     }
 
     fn rule(name: &str, uuid: &str, model: &str) -> String {
