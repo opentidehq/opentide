@@ -382,8 +382,9 @@ fn keep_callsites_enabled() {
             Redactor::new(Vec::new(), Vec::new()),
             String::new,
         );
-        tracing::subscriber::set_global_default(subscriber(layer))
-            .expect("no other global subscriber in this test binary");
+        // An `Err` means another global subscriber is already installed,
+        // which keeps the callsites enabled just the same.
+        tracing::subscriber::set_global_default(subscriber(layer)).ok();
     });
 }
 
