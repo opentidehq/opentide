@@ -6,6 +6,7 @@
 use opentide_schema::vocab::sentinel::SentinelAttack;
 
 use crate::Context;
+use crate::deploy;
 use crate::duration;
 use crate::json::{Json, Object};
 use crate::kql;
@@ -131,7 +132,7 @@ fn strings(value: Option<&Json>) -> Vec<String> {
     }
 }
 
-/// The code of the warning an objective technique newer than ATT&CK v18 earns.
+/// The code of the warning a technique newer than ATT&CK v18 earns.
 pub const TECHNIQUE_NEWER_CODE: &str = "technique_newer_than_sentinel_attack";
 
 /// A deploy's body and the `(code, message)` warnings it earned.
@@ -142,7 +143,45 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     compile_with_warnings(cx, rule, tenant).map(|(body, _)| body)
 }
 
-/// The ids Sentinel takes for the objective's `resolved` ATT&CK ids, each
+/// For a parent technique newer than ATT&CK v18, where its sub-technique ids
+/// go: `its sub-techniques map to ATT&CK v18 as T1685.002 → T1562.008, ...`
+/// (`none` for a sub-technique v18 has no equivalent of). `None` for a
+/// sub-technique or an id the list does not hold as newer.
+fn sub_technique_hint(attack: &SentinelAttack, id: &str) -> Option<String> {
+    if id.contains('.') || !attack.later.techniques.contains_key(id) {
+        return None;
+    }
+    let prefix = format!("{id}.");
+    let version = opentide_schema::vocab::sentinel::VERSION;
+    let mappings: Vec<String> = attack
+        .later
+        .techniques
+        .iter()
+        .filter(|(sub, _)| sub.starts_with(&prefix))
+        .map(|(sub, newer)| {
+            let known: Vec<&str> = newer
+                .replaces
+                .iter()
+                .filter(|old| attack.techniques.contains_key(*old))
+                .map(String::as_str)
+                .collect();
+            if known.is_empty() {
+                format!("{sub} → none")
+            } else {
+                format!("{sub} → {}", known.join(" and "))
+            }
+        })
+        .collect();
+    if mappings.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Its sub-techniques map to ATT&CK v{version} as {}",
+        mappings.join(", ")
+    ))
+}
+
+/// The ids Sentinel takes for the `resolved` ATT&CK ids (the block's, else the objective's), each
 /// change with a warning naming the rule, the id and what is sent instead:
 ///
 /// - an id newer than v18 becomes the v18 id(s) it replaced; with none, its
@@ -214,7 +253,7 @@ fn v18_techniques(
                     format!("not an ATT&CK v{version} id Sentinel knows"),
                 )
             };
-        let message = if instead.is_empty() {
+        let mut message = if instead.is_empty() {
             format!("{label}: leaving out {id}, which is {why} and has no v{version} equivalent")
         } else {
             let names: Vec<&str> = instead.iter().map(|id| id.as_str()).collect();
@@ -223,6 +262,10 @@ fn v18_techniques(
                 names.join(" and ")
             )
         };
+        if let Some(hint) = sub_technique_hint(attack, id) {
+            message.push_str(". ");
+            message.push_str(&hint);
+        }
         warnings.push((TECHNIQUE_NEWER_CODE, message));
         for id in instead {
             if !out.contains(id) {
@@ -396,20 +439,6 @@ pub fn compile_with_warnings(
         }
     }
     properties.insert("alertDetailsOverride".into(), Json::Object(overrides));
-    let alert_techniques = strings(alert.and_then(|alert| alert.get("techniques")));
-    if !alert_techniques.is_empty() {
-        let (techniques, subs) = split_techniques(&alert_techniques);
-        properties.insert("techniques".into(), techniques.into());
-        if !subs.is_empty() {
-            properties.insert("subTechniques".into(), subs.into());
-        }
-    }
-    if let Some(tactics) = alert
-        .and_then(|alert| alert.get("tactics"))
-        .filter(|tactics| tactics.is_filled())
-    {
-        properties.insert("tactics".into(), tactics.clone());
-    }
     if let Some(Json::Array(details)) = alert.and_then(|alert| alert.get("custom_details"))
         && !details.is_empty()
     {
@@ -532,16 +561,25 @@ pub fn compile_with_warnings(
     properties.insert("severity".into(), severity.into());
     properties.insert("displayName".into(), rule.name.clone().into());
     properties.insert("description".into(), rule.description().into());
-    let resolved = crate::attack::techniques(cx.index, &rule.uuid)
-        .map_err(|missing| CompileError::failed(DISPLAY, &format!("{:?}", missing.0)))?;
+    let resolved = deploy::platform_techniques(
+        cx,
+        DISPLAY,
+        rule,
+        strings(alert.and_then(|alert| alert.get("techniques"))),
+    )?;
     let sendable = v18_techniques(
         &format!("Rule {} ({})", rule.uuid, rule.name),
         &resolved,
         &mut warnings,
     );
-    // The objective replaces `alert.techniques` and `alert.tactics` only
-    // when some id of it can be sent.
-    if !sendable.is_empty() {
+    // The block's `alert.tactics` are sent when set; otherwise the tactics are
+    // those of the techniques that are sent.
+    if let Some(tactics) = alert
+        .and_then(|alert| alert.get("tactics"))
+        .filter(|tactics| tactics.is_filled())
+    {
+        properties.insert("tactics".into(), tactics.clone());
+    } else if !sendable.is_empty() {
         let mut tactics: Vec<String> = Vec::new();
         for technique in &sendable {
             for stage in cx.attack.stages(technique) {
@@ -553,6 +591,8 @@ pub fn compile_with_warnings(
             }
         }
         properties.insert("tactics".into(), tactics.into());
+    }
+    if !sendable.is_empty() {
         let (techniques, subs) = split_techniques(&sendable);
         properties.insert("techniques".into(), techniques.into());
         properties.insert(

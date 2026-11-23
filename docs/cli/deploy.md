@@ -172,23 +172,34 @@ The rule's row in the plan reads `✗ would fail` instead of its action, and the
 
 The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_value`, `compile_invalid_rule` and `compile_failed`. A dry run sends nothing, so an unset `$VARIABLE` in a tenant's setup is a warning there (`a real deploy would need $AZURE_CLIENT_SECRET, which is unset`), not an error. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
+#### ATT&CK techniques
+
+**A block's own techniques are sent; otherwise the rule's objective's are.** On a platform whose block can set techniques, the block's list is sent when it sets one, and only then are the techniques resolved from the rule's `detection_model` (its objective's `mitre_attack`, otherwise its threats') sent instead. The two are never merged: explicit beats inherited. Two platforms have such a field:
+
+| Platform | Block field | Sent as |
+|---|---|---|
+| Sentinel | `alert.techniques`, `alert.tactics` | `techniques`, `subTechniques`, `tactics` ([below](#sentinel-techniques)) |
+| Defender for Endpoint | `alert.techniques` | the alert template's `mitreTechniques` |
+
+The other platforms have no block field. Splunk (the correlation search's `mitre_attack` annotation), Elastic (`threat`), Google Security Operations (`meta`), Exabeam, Bitdefender, Graylog and Sysdig send the rule's own `techniques` together with those it inherits, de-duplicated in order; Carbon Black sends the inherited ones as report tags; SentinelOne, CrowdStrike and HarfangLab send none.
+
 #### Sentinel techniques
 
-**The rule's objective replaces `configurations.sentinel.alert.techniques`.** The ids come from the rule's objective (its `mitre_attack`, otherwise its threats'), and when any can be sent they replace `alert.techniques` and `alert.tactics`; `alert.techniques` is read only when none resolve.
+**The block's `alert.techniques` is sent; otherwise the objective's.** `alert.tactics` is sent when the block sets it; otherwise the tactics are those of the techniques that are sent. Whatever is sent is held to ATT&CK v18 below.
 
-In a Sentinel body, `techniques` holds parent technique ids and `subTechniques` the sub-technique ids: an objective mapped to `T1556.009` is sent as `"techniques": ["T1556"]` and `"subTechniques": ["T1556.009"]`, because ARM rejects a sub-technique in `techniques`. A sub-technique listed in `alert.techniques` is split the same way. Sentinel is aligned to ATT&CK v18, and ARM rejects an id it does not know, so each resolved id Sentinel does not take is changed, and each change earns a `technique_newer_than_sentinel_attack` warning that names the rule, the id and what is sent instead (in the log, and in the dry run's `warnings` on the rule's entry in `payloads`):
+In a Sentinel body, `techniques` holds parent technique ids and `subTechniques` the sub-technique ids: an objective mapped to `T1556.009` is sent as `"techniques": ["T1556"]` and `"subTechniques": ["T1556.009"]`, because ARM rejects a sub-technique in `techniques`. A sub-technique listed in `alert.techniques` is split the same way. Sentinel is aligned to ATT&CK v18, and ARM rejects an id it does not know, so each id Sentinel does not take is changed (an objective's, since `alert.techniques` takes v18 ids only), and each change earns a `technique_newer_than_sentinel_attack` warning that names the rule, the id and what is sent instead (in the log, and in the dry run's `warnings` on the rule's entry in `payloads`):
 
-- an id newer than v18 is sent as the v18 id or ids it replaced (`T1685.002` as `T1562.008`); with none, a sub-technique sends its v18 parent (`T1027.018` as `T1027`), and anything else is left out;
+- an id newer than v18 is sent as the v18 id or ids it replaced (`T1685.002` as `T1562.008`); with none, a sub-technique sends its v18 parent (`T1027.018` as `T1027`), and anything else is left out. The warning for a newer parent also lists where its sub-techniques go (`Its sub-techniques map to ATT&CK v18 as T1685.001 → T1562.002, T1685.002 → T1562.008, …`), so the objective can name the v18 id instead;
 - a retired id is sent as the id or ids that replaced it, or left out;
 - an id that is not an ATT&CK v18 id Sentinel knows (a typo) is left out.
 
-The ids are de-duplicated, and `tactics` and the parents are taken from the ids that are sent. When none can be sent, `alert.techniques` and `alert.tactics` stay as the block has them. `alert.techniques` takes ATT&CK v18 ids only ([A technique fails only under the Sentinel block](../usage/troubleshooting.md#a-technique-fails-only-under-configurationssentinelalerttechniques)). The rule's own `techniques` field is not sent. `opentide generate extract sentinel` lists each imported sub-technique in `alert.techniques` in place of its parent, so the rule redeploys with the same ids.
+The ids are de-duplicated, and the parents (and the tactics, when the block sets none) are taken from the ids that are sent. When none can be sent, no `techniques` are sent, and `alert.tactics` is still sent when the block sets it. `alert.techniques` takes ATT&CK v18 ids only ([A technique fails only under the Sentinel block](../usage/troubleshooting.md#a-technique-fails-only-under-configurationssentinelalerttechniques)). The rule's own `techniques` field is not sent. `opentide generate extract sentinel` lists each imported sub-technique in `alert.techniques` in place of its parent, so the rule redeploys with the same ids.
 
 Deploy writes the alert rule with ARM api-version `2025-10-01-preview`, because NRT rules exist only in the preview versions. The stable api-versions do not return `subTechniques`, so a `GET` of the rule with one looks as though the field was dropped: read it with a preview version to see what was sent.
 
 #### Defender for Endpoint techniques
 
-A Defender for Endpoint block's `alert.techniques` is sent as the alert template's `mitreTechniques` (technique and sub-technique ids such as `T1528` and `T1059.001`); the objective's techniques are not inherited. `opentide generate extract defender` imports the tenant's `mitreTechniques` into `alert.techniques`, so an extracted rule redeploys with the same ids.
+A Defender for Endpoint block's `alert.techniques` is sent as the alert template's `mitreTechniques` (technique and sub-technique ids such as `T1528` and `T1059.001`); a block that sets none sends the rule's objective's techniques, as ids are written there, so a rule with neither sends `[]`. Defender takes the `att&ck` vocabulary's ids as they are: the Sentinel v18 mapping does not apply. `opentide generate extract defender` imports the tenant's `mitreTechniques` into `alert.techniques`, so an extracted rule redeploys with the same ids.
 
 When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 

@@ -237,6 +237,30 @@ pub fn inherited_techniques(
         .map_err(|missing| CompileError::failed(display, &format!("{:?}", missing.0)))
 }
 
+/// The ATT&CK ids a platform sends, by one policy on every platform whose
+/// block can set its own: the block's `own` techniques when it sets any,
+/// otherwise those `rule` resolves through its objective. Explicit beats
+/// inherited; the two are never merged. De-duplicated, in order.
+pub fn platform_techniques(
+    cx: &Context<'_>,
+    display: &str,
+    rule: &Rule,
+    own: Vec<String>,
+) -> Result<Vec<String>, CompileError> {
+    let chosen = if own.is_empty() {
+        inherited_techniques(cx, display, rule)?
+    } else {
+        own
+    };
+    let mut unique: Vec<String> = Vec::with_capacity(chosen.len());
+    for id in chosen {
+        if !unique.contains(&id) {
+            unique.push(id);
+        }
+    }
+    Ok(unique)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

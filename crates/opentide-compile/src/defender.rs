@@ -171,20 +171,23 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
     })
 }
 
-/// The block's `alert.techniques` as `mitreTechniques`: technique and
-/// sub-technique ids as written, without repeats. Graph reads the field back
-/// on the tenant, and `generate extract` imports it, so a redeploy that sent
-/// `[]` would wipe what the tenant holds.
-fn mitre_techniques(alert: Option<&Json>) -> Json {
-    let mut ids: Vec<Json> = Vec::new();
-    if let Some(Json::Array(items)) = alert.and_then(|alert| alert.get("techniques")) {
-        for id in items.iter().filter_map(Json::as_str) {
-            if !ids.iter().any(|known| known.as_str() == Some(id)) {
-                ids.push(id.into());
-            }
-        }
+/// The strings of a list.
+fn strings(value: Option<&Json>) -> Vec<String> {
+    match value {
+        Some(Json::Array(items)) => items
+            .iter()
+            .filter_map(|item| item.as_str().map(str::to_owned))
+            .collect(),
+        _ => Vec::new(),
     }
-    Json::Array(ids)
+}
+
+/// The techniques the alert template sends as `mitreTechniques`: technique and
+/// sub-technique ids as written. Graph reads the field back on the tenant, and
+/// `generate extract` imports it, so a redeploy that sent `[]` would wipe what
+/// the tenant holds.
+fn mitre_techniques(ids: Vec<String>) -> Json {
+    Json::Array(ids.into_iter().map(Json::from).collect())
 }
 
 /// The detection rule body `rule` deploys to `tenant` (`DetectionRule`, as
@@ -220,7 +223,13 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Compile
     );
     template.insert("severity".into(), severity.into());
     template.insert("category".into(), category.into());
-    template.insert("mitreTechniques".into(), mitre_techniques(alert));
+    let techniques = deploy::platform_techniques(
+        cx,
+        DISPLAY,
+        rule,
+        strings(alert.and_then(|alert| alert.get("techniques"))),
+    )?;
+    template.insert("mitreTechniques".into(), mitre_techniques(techniques));
     template.insert(
         "impactedAssets".into(),
         Json::Array(impacted_assets(block.get("impacted_entities"))),
@@ -303,21 +312,12 @@ mod tests {
     }
 
     #[test]
-    fn alert_techniques_are_sent_as_mitre_techniques() {
-        let mut alert = Object::new();
-        alert.insert(
-            "techniques".into(),
-            Json::Array(vec!["T1528".into(), "T1059.001".into(), "T1528".into()]),
-        );
+    fn mitre_techniques_are_sent_as_given() {
         assert_eq!(
-            mitre_techniques(Some(&Json::Object(alert))).to_compact(),
+            mitre_techniques(vec!["T1528".into(), "T1059.001".into()]).to_compact(),
             r#"["T1528","T1059.001"]"#
         );
-        assert_eq!(mitre_techniques(None).to_compact(), "[]");
-        assert_eq!(
-            mitre_techniques(Some(&Json::Object(Object::new()))).to_compact(),
-            "[]"
-        );
+        assert_eq!(mitre_techniques(Vec::new()).to_compact(), "[]");
     }
 
     #[test]
