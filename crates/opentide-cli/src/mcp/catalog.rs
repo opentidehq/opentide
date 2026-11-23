@@ -344,7 +344,7 @@ fn lineage_edges(index: &Index) -> Vec<Edge> {
 /// The connected sets reached through `objective.threats`,
 /// `detection_model` and `threat.chaining` (`_lineage_by_uuid`): each
 /// member's set, in the order members were first linked.
-fn lineage_by_uuid(index: &Index) -> IndexMap<String, Lineage> {
+fn lineage_by_uuid(index: &Index, edges: &[Edge]) -> IndexMap<String, Lineage> {
     let mut parent: HashMap<String, String> = HashMap::new();
     let mut families: IndexMap<String, &'static str> = IndexMap::new();
     fn find(parent: &mut HashMap<String, String>, node: &str) -> String {
@@ -377,8 +377,8 @@ fn lineage_by_uuid(index: &Index) -> IndexMap<String, Lineage> {
                 parent.insert(right_root, left_root);
             }
         };
-    for (left, left_family, right, right_family) in lineage_edges(index) {
-        unite(&left, left_family, &right, right_family);
+    for (left, left_family, right, right_family) in edges {
+        unite(left, left_family, right, right_family);
     }
     let mut groups: IndexMap<String, Vec<String>> = IndexMap::new();
     let members: Vec<String> = families.keys().cloned().collect();
@@ -425,14 +425,17 @@ fn relation_json(relation: &IndexMap<String, Vec<String>>) -> Json {
 /// The UUIDs within `depth` hops of `start`, over the lineage's references
 /// followed in either direction: threat <-> objective <-> rule, and the
 /// links of `threat.chaining`.
-fn within_hops(index: &Index, start: &str, depth: usize) -> HashSet<String> {
+fn within_hops(edges: &[Edge], start: &str, depth: usize) -> HashSet<String> {
     let mut neighbours: HashMap<String, Vec<String>> = HashMap::new();
-    for (left, _, right, _) in lineage_edges(index) {
+    for (left, _, right, _) in edges {
         neighbours
             .entry(left.clone())
             .or_default()
             .push(right.clone());
-        neighbours.entry(right).or_default().push(left);
+        neighbours
+            .entry(right.clone())
+            .or_default()
+            .push(left.clone());
     }
     let mut reached: HashSet<String> = HashSet::from([start.to_owned()]);
     let mut frontier = vec![start.to_owned()];
@@ -473,9 +476,10 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
             ("graph", Json::object::<&str>([])),
         ]);
     };
-    let lineages = lineage_by_uuid(index);
+    let edges = lineage_edges(index);
+    let lineages = lineage_by_uuid(index, &edges);
     // What a `depth` lets through; every UUID without one.
-    let allowed = depth.map(|depth| within_hops(index, node.uuid, depth));
+    let allowed = depth.map(|depth| within_hops(&edges, node.uuid, depth));
     let keeps = |uuid: &str| allowed.as_ref().is_none_or(|set| set.contains(uuid.trim()));
     let narrow_relation = |relation: &IndexMap<String, Vec<String>>| {
         let kept: IndexMap<String, Vec<String>> = relation
@@ -1175,6 +1179,131 @@ mod tests {
         assert_eq!(get_chaining(ws.index(), SIGNAL_RULE, Some(2)), full);
         assert_eq!(get_chaining(ws.index(), SIGNAL_RULE, Some(50)), full);
         assert_eq!(ids(full.get("graph").unwrap().get("threats")), [THREAT_ID]);
+    }
+
+    const TA: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const TB: &str = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const R1: &str = "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1";
+    const R2: &str = "c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2";
+
+    fn threat_yaml(uuid: &str, links: &[&str]) -> String {
+        let mut chaining = String::new();
+        for to in links {
+            chaining.push_str(&format!("    - {{vector: {to}, relation: preceeds}}\n"));
+        }
+        let chaining = if chaining.is_empty() {
+            String::new()
+        } else {
+            format!("  chaining:\n{chaining}")
+        };
+        format!(
+            "name: T\nmetadata: {{uuid: {uuid}, schema: threat::1.0}}\nthreat:\n  mitre_attack: [T1003]\n{chaining}"
+        )
+    }
+
+    fn rule_yaml(uuid: &str, target: &str) -> String {
+        format!(
+            "name: R\nmetadata: {{uuid: {uuid}, schema: rule::1.0}}\ndetection_model: {target}\n"
+        )
+    }
+
+    fn sorted(mut keys: Vec<String>) -> Vec<String> {
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn depth_two_from_a_rule_reaches_the_sibling_rules_of_its_objective() {
+        let objective = format!(
+            "name: Goal\nmetadata: {{uuid: {OBJECTIVE_ID}, schema: objective::1.0}}\nobjective:\n  threats: [{THREAT_ID}]\n"
+        );
+        let (r1, r2) = (rule_yaml(R1, OBJECTIVE_ID), rule_yaml(R2, OBJECTIVE_ID));
+        let t = threat_yaml(THREAT_ID, &[]);
+        let ws = index(&[
+            ("objects/threats/t.yaml", &t),
+            ("objects/objectives/o.yaml", &objective),
+            ("objects/rules/r1.yaml", &r1),
+            ("objects/rules/r2.yaml", &r2),
+        ]);
+        let one = get_chaining(ws.index(), R1, Some(1));
+        assert_eq!(
+            index_keys(&one),
+            sorted(vec![R1.into(), OBJECTIVE_ID.into()])
+        );
+        let two = get_chaining(ws.index(), R1, Some(2));
+        assert_eq!(ids(two.get("graph").unwrap().get("rules")), [R1, R2]);
+        assert_eq!(ids(two.get("graph").unwrap().get("threats")), [THREAT_ID]);
+        assert_eq!(index_keys(&two).len(), 4);
+    }
+
+    #[test]
+    fn a_chaining_cycle_ends_at_any_depth() {
+        let (a, b) = (threat_yaml(TA, &[TB]), threat_yaml(TB, &[TA]));
+        let ws = index(&[
+            ("objects/threats/a.yaml", &a),
+            ("objects/threats/b.yaml", &b),
+        ]);
+        let full = get_chaining(ws.index(), TA, None);
+        for depth in [1, 2, 9] {
+            let chained = get_chaining(ws.index(), TA, Some(depth));
+            assert_eq!(index_keys(&chained), [TA, TB], "depth {depth}");
+            assert_eq!(chained, full, "depth {depth}");
+        }
+        let alone = get_chaining(ws.index(), TA, Some(0));
+        assert_eq!(index_keys(&alone), [TA]);
+        assert_eq!(alone.get("graph"), Some(&Json::object::<&str>([])));
+    }
+
+    #[test]
+    fn a_signal_uuid_combines_with_depth() {
+        let ws = signal_ws();
+        let alone = get_chaining(ws.index(), SIGNAL, Some(0));
+        assert_eq!(alone.get("uuid"), Some(&Json::str(OBJECTIVE_ID)));
+        assert_eq!(
+            alone.get("resolved_from").and_then(|r| r.get("uuid")),
+            Some(&Json::str(SIGNAL))
+        );
+        assert_eq!(alone.get("graph"), Some(&Json::object::<&str>([])));
+        assert_eq!(index_keys(&alone), [OBJECTIVE_ID]);
+        let one = get_chaining(ws.index(), SIGNAL, Some(1));
+        assert_eq!(one.get("resolved_from"), alone.get("resolved_from"));
+        assert_eq!(ids(one.get("graph").unwrap().get("threats")), [THREAT_ID]);
+        assert_eq!(ids(one.get("graph").unwrap().get("rules")), [SIGNAL_RULE]);
+    }
+
+    #[test]
+    fn a_threat_with_chaining_and_objectives_is_cut_by_depth() {
+        let objective = format!(
+            "name: Goal\nmetadata: {{uuid: {OBJECTIVE_ID}, schema: objective::1.0}}\nobjective:\n  threats: [{THREAT_ID}]\n"
+        );
+        let (t1, t2) = (threat_yaml(THREAT_ID, &[TB]), threat_yaml(TB, &[]));
+        let rule = rule_yaml(R1, OBJECTIVE_ID);
+        let ws = index(&[
+            ("objects/threats/t1.yaml", &t1),
+            ("objects/threats/t2.yaml", &t2),
+            ("objects/objectives/o.yaml", &objective),
+            ("objects/rules/r.yaml", &rule),
+        ]);
+        let one = get_chaining(ws.index(), THREAT_ID, Some(1));
+        // graph stays the chaining relation; lineage is cut at one hop.
+        assert_eq!(
+            one.get("graph"),
+            Some(&Json::object([(
+                "preceeds",
+                Json::Array(vec![Json::str(TB)])
+            )]))
+        );
+        let lineage = one.get("lineage").unwrap();
+        assert_eq!(ids(lineage.get("threats")), [THREAT_ID, TB]);
+        assert_eq!(ids(lineage.get("objectives")), [OBJECTIVE_ID]);
+        assert!(ids(lineage.get("rules")).is_empty());
+        assert_eq!(
+            index_keys(&one),
+            sorted(vec![THREAT_ID.into(), TB.into(), OBJECTIVE_ID.into()])
+        );
+        let two = get_chaining(ws.index(), THREAT_ID, Some(2));
+        assert_eq!(ids(two.get("lineage").unwrap().get("rules")), [R1]);
+        assert_eq!(two, get_chaining(ws.index(), THREAT_ID, None));
     }
 
     #[test]

@@ -122,6 +122,18 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             &[],
         );
     }
+    if let (Some(platform), Some(section)) = (&args.platform, section) {
+        return Report::usage(
+            COMMAND,
+            format!(
+                "--platform filters the platform table of `info` without a section; got {platform:?} after {section:?}"
+            ),
+            USAGE_INVALID_VALUE,
+            "--platform",
+            None,
+            &[],
+        );
+    }
     let (repo, options) = placement(cx.repo, cx.env, cx.cwd);
     // The catalogue's ATT&CK matrix and field roles are parsed while the
     // workspace loads: both are cached for the run.
@@ -727,6 +739,17 @@ mod tests {
             report.outcome.message,
             "Only the vocab section takes a name; got \"a\\nb\" after \"rules\""
         );
+        assert_eq!(report.outcome.failure.unwrap().code, USAGE_INVALID_VALUE);
+        // A platform filter only has a table to filter without a section.
+        let report = run(
+            &Args {
+                section: Some("vocab".into()),
+                platform: Some("sentinel".into()),
+                ..Args::default()
+            },
+            &cx,
+        );
+        assert_eq!(report.outcome.exit_code, 2);
         assert_eq!(report.outcome.failure.unwrap().code, USAGE_INVALID_VALUE);
     }
 }

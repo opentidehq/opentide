@@ -143,7 +143,7 @@ A rule whose `detection_model` is a signal UUID belongs to the lineage of the ob
 
 The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository.
 
-With `depth`, `lineage`, `graph` and `chaining_index` hold only the objects within that many hops of the object: each `chaining_index` entry lists only UUIDs that the response returns. `depth: 0` returns the object alone (`graph` is `{}`, `chaining_index` has one entry); a depth at least as long as the longest path returns what an omitted `depth` does. A negative or non-integer `depth` fails the call (`isError: true`, `argument depth must be 0 or more, not -1`) and returns nothing.
+`depth` counts hops over the references in either direction, so a lineage is walked up and down: depth 2 from a rule includes the other rules of its objective (rule → objective → rule), and depth 2 from an objective includes the objectives that cover the same threats. With `depth`, `lineage`, `graph` and `chaining_index` hold only the objects within that many hops of the object: each `chaining_index` entry lists only UUIDs that the response returns. `depth: 0` returns the object alone: `graph` is `{}`, `lineage` stays and holds only the object, and `chaining_index` has at most one entry (none when the object has neither a chaining relation nor a lineage); a depth at least as long as the longest path returns what an omitted `depth` does. A negative or non-integer `depth` fails the call (`isError: true`, `argument depth must be 0 or more, not -1`) and returns nothing.
 
 ## coverage
 

@@ -21,7 +21,7 @@ opentide --json info catalog
 |-------|---------|
 | `[section]` | Optional section: `rules`, `threats`, `objectives`, `coverage` (requires `--technique`), `vocab`, or `catalog` (see [The catalogue](#the-catalogue)) |
 | `[name]` | With `vocab` only: the vocabulary to inspect (see [Vocabulary contract revisions](#vocabulary-contract-revisions)) |
-| `--platform` | Filter platform table to one platform |
+| `--platform` | Filter the platform table to one platform. Only without a section: with one it is a [usage error](./exit-codes.md) (exit `2`), since a section's document has no platform table |
 | `--technique` | ATT&CK technique ID — use with positional `coverage` |
 | `--strict` | Exit non-zero when any object file failed to load |
 | `--json` | Structured output (**global flag** — place before `info`) |
