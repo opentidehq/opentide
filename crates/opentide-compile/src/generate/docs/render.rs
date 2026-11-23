@@ -92,7 +92,6 @@ struct RuleView<'r> {
     references: Option<&'r opentide_schema::objects::ObjectReferences>,
     description: &'r str,
     severity: Option<&'r str>,
-    techniques: &'r [String],
     detection_model: Option<&'r str>,
     response: Option<&'r opentide_schema::objects::RuleResponse>,
     configurations: Option<&'r opentide_schema::objects::RuleConfigurations>,
@@ -107,7 +106,6 @@ macro_rules! rule_view {
             references: rule.references.as_ref(),
             description: &rule.description,
             severity: rule.displayed_severity(),
-            techniques: &rule.techniques,
             detection_model: rule.detection_model.as_deref(),
             response: rule.response.as_ref(),
             configurations: rule.configurations.as_ref(),
@@ -384,7 +382,7 @@ impl Pages<'_, '_> {
     }
 
     /// Technique ids as links, one line each, for an overview cell.
-    fn technique_links(&self, techniques: &[String]) -> String {
+    fn technique_links(&self, techniques: &[String], inherited: &[String]) -> String {
         let mut lines = Vec::new();
         for technique in unique(techniques) {
             let entry = self.vocab.enrich("att&ck", technique);
@@ -393,7 +391,12 @@ impl Pages<'_, '_> {
             } else {
                 format!(" {}", entry.label)
             };
-            lines.push(entry_link(&entry, technique, Some(&inline_code(technique))) + &name);
+            let mark = if inherited.contains(technique) {
+                " (inherited)"
+            } else {
+                ""
+            };
+            lines.push(entry_link(&entry, technique, Some(&inline_code(technique))) + &name + mark);
         }
         join_lines(lines)
     }
@@ -404,6 +407,7 @@ impl Pages<'_, '_> {
     fn attack_table(
         &self,
         techniques: &[String],
+        inherited: &[String],
         detections: Option<&[(String, Vec<String>)]>,
     ) -> String {
         let order = self.vocab.attack_tactics();
@@ -422,11 +426,14 @@ impl Pages<'_, '_> {
             let entry = self.vocab.enrich("att&ck", technique);
             let mut row = vec![
                 entry_link(&entry, technique, Some(&inline_code(technique))),
-                table_cell(if entry.label == *technique {
-                    ""
-                } else {
-                    &entry.label
-                }),
+                table_cell(
+                    &match (entry.label == *technique, inherited.contains(technique)) {
+                        (true, false) => String::new(),
+                        (false, false) => entry.label.clone(),
+                        (true, true) => "*(inherited)*".to_owned(),
+                        (false, true) => format!("{} *(inherited)*", entry.label),
+                    },
+                ),
                 table_cell(&self.vocab.technique_tactics(technique, &order).join(", ")),
             ];
             if let Some(detections) = detections {
@@ -470,7 +477,8 @@ impl Pages<'_, '_> {
                     .rules
                     .iter()
                     .filter(|record| {
-                        rule_techniques(&record.model)
+                        self.catalog
+                            .rule_techniques(&record.uuid)
                             .iter()
                             .any(|found| covers_technique(found, technique))
                     })
@@ -565,7 +573,14 @@ impl Pages<'_, '_> {
             self.deployment,
         );
         let mut page = self.page(RULE, rule.name, &rule.meta, rule.description);
-        page.add_lead([self.rule_overview(&rule, &deployments)]);
+        let inherited = self.catalog.rule_inherited(&record.uuid);
+        let all_techniques: Vec<String> = self
+            .catalog
+            .rule_techniques(&record.uuid)
+            .into_iter()
+            .cloned()
+            .collect();
+        page.add_lead([self.rule_overview(&rule, &all_techniques, inherited, &deployments)]);
         let map = diagrams::deployment(&record.uuid, rule.name, &deployments);
         page.add(
             Section::new(
@@ -596,7 +611,7 @@ impl Pages<'_, '_> {
         ));
         page.add(Section::new(
             "ATT&CK techniques",
-            [self.attack_table(rule.techniques, None)],
+            [self.attack_table(&all_techniques, inherited, None)],
         ));
         page.add(self.coverage_section(RULE, &record.uuid, &record.name, "rules"));
         page.add(self.references_section(rule.references));
@@ -606,7 +621,13 @@ impl Pages<'_, '_> {
 
     /// The facts a reader needs first: severity, model, techniques, where it
     /// runs, who handles it.
-    fn rule_overview(&self, rule: &RuleView<'_>, deployments: &[PlatformDeployment]) -> String {
+    fn rule_overview(
+        &self,
+        rule: &RuleView<'_>,
+        techniques: &[String],
+        inherited: &[String],
+        deployments: &[PlatformDeployment],
+    ) -> String {
         let response = rule.response;
         let rows = [
             (
@@ -620,7 +641,7 @@ impl Pages<'_, '_> {
                     .map(|model| self.link_to(model, "rules", false))
                     .unwrap_or_default(),
             ),
-            ("ATT&CK", self.technique_links(rule.techniques)),
+            ("ATT&CK", self.technique_links(techniques, inherited)),
             (
                 "Platforms",
                 join_lines(deployments.iter().map(|deployment| {
@@ -743,7 +764,7 @@ impl Pages<'_, '_> {
         let detections = self.technique_detections(&techniques, "objectives");
         page.add(Section::new(
             "ATT&CK techniques",
-            [self.attack_table(&techniques, Some(&detections))],
+            [self.attack_table(&techniques, &[], Some(&detections))],
         ));
         page.add(self.coverage_section(OBJECTIVE, &record.uuid, &record.name, "objectives"));
         page.add(self.references_section(objective.references.as_ref()));
@@ -849,7 +870,7 @@ impl Pages<'_, '_> {
             ("Platforms", platforms.join(", ")),
             (
                 "ATT&CK",
-                self.technique_links(body.mitre_attack.as_deref().unwrap_or_default()),
+                self.technique_links(body.mitre_attack.as_deref().unwrap_or_default(), &[]),
             ),
         ];
         key_value_table(&rows, ["Property", "Value"])
@@ -1165,7 +1186,7 @@ impl Pages<'_, '_> {
         let detections = self.technique_detections(&body.mitre_attack, "threats");
         page.add(Section::new(
             "ATT&CK techniques",
-            [self.attack_table(&body.mitre_attack, Some(&detections))],
+            [self.attack_table(&body.mitre_attack, &[], Some(&detections))],
         ));
         page.add(Section::new("CVE", [self.cve_body(&cves)]));
         page.add(
@@ -1233,7 +1254,7 @@ impl Pages<'_, '_> {
                     .join(", "),
             ),
             ("Actors", table_cell(&actors.join(", "))),
-            ("ATT&CK", self.technique_links(&body.mitre_attack)),
+            ("ATT&CK", self.technique_links(&body.mitre_attack, &[])),
             ("CVE", cves.overview()),
             ("Detection coverage", detection),
         ];
@@ -1793,13 +1814,23 @@ impl Pages<'_, '_> {
                     RuleModel::V1_0(rule) => (rule.displayed_severity(), &rule.techniques),
                     RuleModel::V1_1(rule) => (rule.displayed_severity(), &rule.techniques),
                 };
+                let inherited = self.catalog.rule_inherited(&record.uuid);
                 row.push(
                     severity
                         .filter(|severity| !severity.is_empty())
                         .map_or_else(|| "-".to_owned(), table_cell),
                 );
                 row.push(self.rule_platforms(&record.uuid));
-                row.push(codes(techniques));
+                let mut cell = codes(techniques);
+                for technique in inherited {
+                    let code = inline_code(technique);
+                    cell = if cell == "-" {
+                        format!("{code} (inherited)")
+                    } else {
+                        format!("{cell}, {code} (inherited)")
+                    };
+                }
+                row.push(cell);
             }
             Model::Objective(objective) => {
                 let body = &objective.objective;
@@ -2196,7 +2227,7 @@ impl Pages<'_, '_> {
             .count();
         let mut techniques: Vec<&String> = rules
             .iter()
-            .flat_map(|record| rule_techniques(&record.model))
+            .flat_map(|record| self.catalog.rule_techniques(&record.uuid))
             .collect();
         techniques.sort();
         techniques.dedup();
@@ -2339,7 +2370,7 @@ impl Pages<'_, '_> {
             .catalog
             .rules
             .iter()
-            .flat_map(|record| rule_techniques(&record.model))
+            .flat_map(|record| self.catalog.rule_techniques(&record.uuid))
             .collect();
         let order = self.vocab.attack_tactics();
         let mut by_tactic: Vec<(String, Vec<&String>)> = Vec::new();
@@ -2543,15 +2574,6 @@ fn covers_technique(detected: &str, wanted: &str) -> bool {
         || detected
             .strip_prefix(wanted)
             .is_some_and(|rest| rest.starts_with('.'))
-}
-
-/// A rule's techniques.
-fn rule_techniques(model: &Model) -> &[String] {
-    match model {
-        Model::Rule(RuleModel::V1_0(rule)) => &rule.techniques,
-        Model::Rule(RuleModel::V1_1(rule)) => &rule.techniques,
-        _ => &[],
-    }
 }
 
 /// Codes as code spans, comma-separated; `-` when there are none.
