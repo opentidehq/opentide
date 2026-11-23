@@ -5811,3 +5811,113 @@ fn a_splunk_retirement_names_the_rule_and_removed_survives_a_failed_cleanup() {
     );
     assert_eq!(removed(RETIRED), ["Old B 1"]);
 }
+
+/// A cassette of the Sentinel sign-in, the `GET` of the one rule the
+/// `deploy-tenants` workspace deploys (answered `status` with `held`) and,
+/// when `put`, the `PUT` of its planned body (OT-3).
+fn sentinel_read_replay(
+    planned: &Json,
+    status: u16,
+    held: Option<&Json>,
+    put: bool,
+) -> (Proxy, Env, tempfile::NamedTempFile) {
+    let text =
+        std::fs::read_to_string(repo().join("tests/cassettes/sentinel/deploy.json")).unwrap();
+    let mut cassette = Cassette::parse(&text).unwrap();
+    let body = match planned.get("body") {
+        Some(Json::Str(text)) => text.clone(),
+        Some(other) => other.to_compact(),
+        None => panic!("no body in {}", planned.to_compact()),
+    };
+    let at = |index: usize| {
+        let mut interaction = cassette.interactions[index].clone();
+        interaction.request.url = interaction.request.url.replace("soc%20workspace", "soc");
+        interaction
+    };
+    let mut read = at(6);
+    read.request.method = "GET".into();
+    read.response.status = status;
+    read.response.body =
+        opentide_cassette::cassette::Body::Text(held.map(Json::to_compact).unwrap_or_default());
+    let mut interactions = vec![at(0), at(1), read];
+    if put {
+        let mut write = at(2);
+        write.request.body = opentide_cassette::cassette::Body::Text(body);
+        interactions.push(write);
+    }
+    cassette.interactions = interactions;
+    let proxy = Proxy::start(
+        Mode::Replay { cassette },
+        Redaction::new([SECRET.to_owned()]),
+    )
+    .unwrap();
+    let mut ca = tempfile::NamedTempFile::new().unwrap();
+    ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
+    let env = Env::from_pairs(
+        proxy
+            .client_env(ca.path().to_str().unwrap())
+            .into_iter()
+            .chain([("AZURE_CLIENT_SECRET".to_owned(), SECRET.to_owned())]),
+    );
+    (proxy, env, ca)
+}
+
+/// The action of the one result row.
+fn only_action(sent: &Sent) -> String {
+    let Json::Array(results) = value(sent, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(results.len(), 1, "{results:?}");
+    results[0]
+        .get("action")
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+#[test]
+fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
+    let ws = fixture("deploy-tenants");
+    let planned = planned_writes(ws.path(), "sentinel");
+    assert_eq!(planned.len(), 1, "{planned:?}");
+    let sent_body = match planned[0].get("body") {
+        Some(Json::Str(text)) => Json::parse(text).unwrap(),
+        Some(other) => other.clone(),
+        None => panic!("no body"),
+    };
+
+    // Not there: a create, written once.
+    let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 404, None, true);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "create");
+
+    // Held as sent, with what ARM adds: unchanged, deployed, nothing written.
+    let mut held = sent_body.clone();
+    held.as_object_mut()
+        .unwrap()
+        .insert("etag".into(), Json::str("\"e\""));
+    let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 200, Some(&held), false);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
+    assert_eq!(only_action(&sent), "unchanged");
+    assert_eq!(
+        value(&sent, "summary").get("unchanged"),
+        Some(&Json::Int(1))
+    );
+    assert!(stderr.contains("unchanged"), "{stderr}");
+
+    // Held with another severity: an update.
+    let mut other = sent_body;
+    other
+        .get_mut("properties")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("displayName".into(), Json::str("another name"));
+    let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 200, Some(&other), true);
+    let (sent, _) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    assert_eq!(only_action(&sent), "update");
+}
