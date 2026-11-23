@@ -777,7 +777,7 @@ ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairm
 
 ### A technique fails only under `configurations.sentinel.alert.techniques`
 
-Microsoft Sentinel is aligned to ATT&CK v18, while the `att&ck` vocabulary that threats, objectives and a rule's own `techniques` use follows ATT&CK 20.0. `configurations.sentinel.alert.techniques` therefore takes its own list: every technique and sub-technique of the ATT&CK 18.1 Enterprise, Mobile and ICS matrices that is not revoked or deprecated (18.0 has the same ids). An id outside it fails validation (`sentinel_attack_technique`), and the message says what to use instead:
+Microsoft Sentinel is aligned to ATT&CK v18, while the `att&ck` vocabulary that threats, objectives and a rule's own `techniques` use follows ATT&CK 20.0. `configurations.sentinel.alert.techniques` therefore takes its own list: every technique and sub-technique of the ATT&CK 18.1 Enterprise, Mobile and ICS matrices that is not revoked or deprecated (18.0 has the same ids). An id outside it fails validation (`sentinel_attack_technique`), and the message says what to use instead (the ids an objective maps are different: deploy maps them to v18 ids and warns, see [Sentinel techniques](../cli/deploy.md#sentinel-techniques)):
 
 ```text
 'T1685' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; T1685 (Disable or Modify Tools) is newer than ATT&CK v18: use T1562 or T1562.001 or T1562.006, which it replaced

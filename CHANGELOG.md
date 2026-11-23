@@ -11,7 +11,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 ### Upgrade
 
 - If a log filter or an alert matches the warning `dropping_sub_technique_newer_than_sentinel_attack` (emitted by 0.21 to 0.28), match `technique_newer_than_sentinel_attack` instead: it now also covers an id that is mapped to its v18 equivalent and a parent newer than ATT&CK v18.
-- If you edited a Defender for Endpoint rule's MITRE techniques by hand in the portal, set them in the rule's `configurations.defender_for_endpoint.alert.techniques` before the next deploy: it now sends that list (empty when the block has none), so a redeploy overwrites what the portal holds.
+- If you edit a Defender for Endpoint rule's MITRE techniques by hand in the portal, set them in the rule's `configurations.defender_for_endpoint.alert.techniques` instead: a redeploy now sends that list (empty when the block has none), replacing what the portal holds.
 - If a client JSON-decodes the text of an MCP template resource (`opentide://templates/rule` and the other object templates), read it as YAML: it is the template itself, with `mimeType` `application/yaml`. The other resources are JSON, with `mimeType` `application/json`; `templates/systems` is still a JSON object of YAML strings.
 - If a script or an agent reads the `malapi` vocabulary (`opentide info vocab --json`, the MCP resource `opentide://vocabularies/malapi`), stop: it is removed and no field takes its values. Objects need no change.
 - If a script reads `opentide deploy --json` after a tenant failed before any rule (its credentials or its connection), read the tenant's entry in `failures` and its rules' `not_attempted` rows: no rule is `failed`, and `failure.code` is `command_failed`, not `issues_found`.

@@ -135,7 +135,7 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 `plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. A rule that no tenant takes is in `unrouted`, one entry per platform block (`platform`, `uuid`, `reason`, the reason a real deploy reports it `skipped` with: see [A real run](#a-real-run)), with a warning; it has no row in `changes`, and `unrouted` is absent when every rule has a tenant. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request a live deploy would send:
 
-- **Sentinel**: the ARM alert-rule body.
+- **Sentinel**: the ARM alert-rule body, with `warnings` (the text of each technique it changes) when it changes any; see [Sentinel techniques](#sentinel-techniques).
 - **Elastic**: `{"payload": <the Kibana rule body>, "block": <the rule's elastic block>}`. The block is what the Elasticsearch checks read before the rule is written, and the SDKs' `deploy` takes this body as it is. It is compiled for the first tenant the run sends the rule to, with that tenant's modifiers and `setup`, and the entry names that `tenant`. A rule that does not compile is shown as its block, with the model's defaults filled in, without the `null` of an optional field the block does not set, and without `enabled` and `name` when the block does not write them.
 - **Sysdig**: the `/api/secure/rules` body. Beside it, `policies` lists the runtime policies a block that names its own joins instead of the tenant's.
 - **Bitdefender**: the `createCustomRule` JSON-RPC body. **Exabeam** and **Graylog**: the create request, `{"method", "path", "body"}`. **Google SecOps**: the `rules.create` body with the run state the deploy sets.
@@ -174,7 +174,7 @@ The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_v
 
 #### Sentinel techniques
 
-**The rule's objective replaces `configurations.sentinel.alert.techniques`.** The ids come from the rule's objective (its `mitre_attack`, otherwise its threats'), and when any resolve they replace `alert.techniques` and `alert.tactics`; `alert.techniques` is read only when none resolve.
+**The rule's objective replaces `configurations.sentinel.alert.techniques`.** The ids come from the rule's objective (its `mitre_attack`, otherwise its threats'), and when any can be sent they replace `alert.techniques` and `alert.tactics`; `alert.techniques` is read only when none resolve.
 
 In a Sentinel body, `techniques` holds parent technique ids and `subTechniques` the sub-technique ids: an objective mapped to `T1556.009` is sent as `"techniques": ["T1556"]` and `"subTechniques": ["T1556.009"]`, because ARM rejects a sub-technique in `techniques`. A sub-technique listed in `alert.techniques` is split the same way. Sentinel is aligned to ATT&CK v18, and ARM rejects an id it does not know, so each resolved id Sentinel does not take is changed, and each change earns a `technique_newer_than_sentinel_attack` warning that names the rule, the id and what is sent instead (in the log, and in the dry run's `warnings` on the rule's entry in `payloads`):
 

@@ -169,13 +169,35 @@ fn v18_techniques(
         let (instead, why): (Vec<&String>, String) =
             if let Some(newer) = attack.later.techniques.get(id) {
                 let replaced: Vec<&String> = newer.replaces.iter().filter(known).collect();
-                let parent = id
+                // A sub-technique with no replacement stands for its parent: the
+                // parent when v18 has it, else the parent's own v18 parents (the
+                // dot-free ids it replaced).
+                let parent: Vec<&String> = id
                     .split_once('.')
-                    .and_then(|(parent, _)| attack.techniques.get_key_value(parent))
-                    .map(|(parent, _)| parent);
+                    .map(|(parent, _)| {
+                        attack.techniques.get_key_value(parent).map_or_else(
+                            || {
+                                attack
+                                    .later
+                                    .techniques
+                                    .get(parent)
+                                    .map(|newer| {
+                                        newer
+                                            .replaces
+                                            .iter()
+                                            .filter(|old| !old.contains('.'))
+                                            .filter(known)
+                                            .collect()
+                                    })
+                                    .unwrap_or_default()
+                            },
+                            |(parent, _)| vec![parent],
+                        )
+                    })
+                    .unwrap_or_default();
                 (
                     if replaced.is_empty() {
-                        parent.into_iter().collect()
+                        parent
                     } else {
                         replaced
                     },
@@ -604,6 +626,31 @@ mod tests {
                 .contains("sending T1027 in place of T1027.018"),
             "{}",
             warnings[0].1
+        );
+    }
+
+    #[test]
+    fn a_newer_sub_technique_of_a_newer_parent_sends_the_parents_v18_parents() {
+        let mut warnings = Vec::new();
+        let sendable = v18_techniques(
+            "Rule r (n)",
+            &["T1685.007".into(), "T1686.003".into()],
+            &mut warnings,
+        );
+        // T1685 replaced T1562 (and two of its sub-techniques); T1686 replaced
+        // only a sub-technique, so nothing is dot-free.
+        assert_eq!(sendable, ["T1562"]);
+        assert!(
+            warnings[0]
+                .1
+                .contains("sending T1562 in place of T1685.007"),
+            "{}",
+            warnings[0].1
+        );
+        assert!(
+            warnings[1].1.contains("leaving out T1686.003"),
+            "{}",
+            warnings[1].1
         );
     }
 
