@@ -153,6 +153,38 @@ fn a_dry_run_hides_the_findings_it_would_fix_and_no_other() {
     assert!(plain.contains("error[schema_validation]"), "{plain}");
 }
 
+/// A `--file` path that does not exist fails with `file_not_found`, not
+/// `scope_no_match`, and the "check again" step keeps the run's scope.
+#[test]
+fn a_missing_file_is_not_found_and_the_rerun_keeps_the_scope() {
+    let scratch = tempfile::tempdir().unwrap();
+    let dir = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    replay::fixture("tide-corpus-typo", &dir);
+    let (code, stdout) = run_at(
+        &dir,
+        &["--json", "validate", "--file", "does/not/exist.yaml"],
+    );
+    assert_eq!(code, 1, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let codes: Vec<&str> = document["report"]["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|issue| issue["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["file_not_found"], "{stdout}");
+    let commands: Vec<&str> = document["next_actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|action| action["command"].as_str().unwrap())
+        .collect();
+    assert!(
+        commands.contains(&"opentide --json validate --file does/not/exist.yaml"),
+        "{commands:?}"
+    );
+}
+
 /// A run narrowed to objects that do not exist fails with `scope_no_match`;
 /// it is not the empty workspace's pass, which suggests `opentide setup`.
 #[test]

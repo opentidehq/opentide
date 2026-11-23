@@ -265,9 +265,9 @@ Move the file up into its object folder to make it an object. `--strict` fails o
 | Absolute path | That file only. |
 | Bare file name (`rule.yaml`) | Every object file with that name, in any object folder. |
 
-A path never falls back to its file name, and a path that names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
+A path never falls back to its file name. A path with no file on disk fails with `file_not_found` (the path is in `context.targets`); a path that exists but names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
 
-Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
+Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue (`file_not_found` when the path does not exist) naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
 
 Every issue reports the `file_path` of the object it concerns, so issues from two files that share a name stay apart when a bare file name selects both.
 

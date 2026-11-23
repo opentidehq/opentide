@@ -164,6 +164,32 @@ impl Scope {
         self.targets.contains(uuid) || self.matches_file_with(path, resolve)
     }
 
+    /// The `--file` targets, as given, that name a path (not a bare file name)
+    /// where nothing exists on disk.
+    pub fn missing_file_targets(&self, fs: &dyn FileSystem) -> Vec<String> {
+        self.file_targets
+            .iter()
+            .filter(|target| {
+                !target.paths.is_empty() && target.paths.iter().all(|path| fs.kind(path).is_err())
+            })
+            .map(|target| target.raw.clone())
+            .collect()
+    }
+
+    /// Whether the run selects by anything other than the `--file` targets
+    /// in `missing`: a `--uuid`, a `--type`, or another `--file`.
+    pub fn selects_beyond(&self, missing: &[String]) -> bool {
+        !self.object_types.is_empty()
+            || self
+                .targets
+                .iter()
+                .any(|target| !self.file_targets.iter().any(|f| f.raw.trim() == target))
+            || self
+                .file_targets
+                .iter()
+                .any(|target| !missing.contains(&target.raw))
+    }
+
     /// The `--file` targets, as given, that select none of `files`.
     pub fn unmatched_file_targets(&self, fs: &dyn FileSystem, files: &[&Path]) -> Vec<String> {
         self.file_targets
