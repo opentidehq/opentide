@@ -5,7 +5,7 @@ description: Output-first generation pipeline — docs, exports, vocabs, templat
 
 # opentide generate
 
-Builds client-visible outputs first, then framework internals from Pydantic models and bundled vocabulary.
+Builds client-visible outputs first, then framework internals from the Tide models and bundled vocabulary.
 
 ```bash
 opentide generate                    # full pipeline (no extract)
@@ -75,14 +75,14 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 
 ## generate templates
 
-`opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
+`opentide generate templates` walks the Tide models' fields (not JSON Schema `$defs`). Output is line-oriented YAML:
 
-- Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Uncommented keys are the model's required fields (aliases honoured: `att&ck`, `schema`).
 - Optional `metadata` keys that [`opentide lint`](./lint.md#configuration) requires are uncommented too: `author` and `organisation` by default, or the `[metadata].required` list in `lint.toml`.
 - Optional fields are the same YAML with `#` hugging each key (`#references:` / `  #public:`). Nested optionals inside that block are not commented again. Spacer blank lines stay blank (they are not turned into a lone `#`). Uncomment a block and it is valid YAML.
 - Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
 - Vocabulary fields are empty scalars (no enum dump).
-- `DetectionRule.file` and other `Path` / hidden fields are omitted.
+- A rule's `file` and other path or hidden fields are omitted.
 - Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
 - Each enabled platform's block is written to `.opentide/templates/platforms/<platform>.template.yaml` (`sentinel.template.yaml`), named by the platform file, never by its display `name`. `generate snippets` reads it there. Nothing is written into the installed package.
 
