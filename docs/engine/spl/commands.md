@@ -240,7 +240,7 @@ Commands a Splunk app adds to the search head. Catalogued with `app = "<App>"` i
 | `listmodels` | MLTK | generating | List the models saved by `fit`. | same |
 | `deletemodel` | MLTK | generating | Delete a model saved by `fit`. | same |
 
-A command in neither the Search Reference nor this table is `spl_unknown_command`: a **warning**, because an app on the search head may provide it (`'mispsearch' is not a command opentide knows; if an app on the search head provides it, declare it`), with the nearest known command as a suggestion. One edit from a known command (`statz`, `stast`), it is an **error**: almost certainly a typo, which Splunk rejects.
+A command in neither the Search Reference nor this table is `spl_unknown_command`: a **warning**, because an app on the search head may provide it (``'mispsearch' is not a command opentide knows; if an app on the search head provides it, set `spl_unknown_command = "info"` under `[queries.codes]` in lint.toml``), with the nearest known command as a suggestion. One edit from a known command (`statz`, `stast`), it is an **error**: almost certainly a typo, which Splunk rejects.
 
 ---
 
