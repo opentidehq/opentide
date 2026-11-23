@@ -364,6 +364,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
                 "closedAnalyses": s.closed_analyses.get(),
                 "workspaceReportHits": s.workspace_report_hits.get(),
                 "pullYields": s.pull_yields.get(),
+                "validateStops": s.validate_stops(),
                 "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),

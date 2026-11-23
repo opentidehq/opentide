@@ -228,6 +228,8 @@ pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize, usize
         cve_check: None,
         platform_configurations: None,
         compile_check: None,
+        memo: None,
+        stop: None,
     });
     Ok((
         serde_json::to_value(&validation.report)?,

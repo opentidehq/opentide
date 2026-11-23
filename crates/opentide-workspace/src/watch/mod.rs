@@ -551,6 +551,8 @@ impl Validate for WorkspaceValidate<'_> {
             cve_check: None,
             platform_configurations: self.platform_configurations,
             compile_check: self.compile_check,
+            memo: None,
+            stop: None,
         });
         let objects = validation.summary.objects;
         let mut found = validation.report.issues;

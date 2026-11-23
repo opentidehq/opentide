@@ -341,6 +341,9 @@ pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
         platform_configurations: crate::plugins::configurations(),
         compile_check: Some(&Compilers),
+        // The command line's run never stops.
+        memo: None,
+        stop: None,
     };
     let validation = ws.validate(&options);
     Ok(run_of(validation, ws.root()))
@@ -444,6 +447,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
         platform_configurations: crate::plugins::configurations(),
         compile_check: Some(&Compilers),
+        // The command line's run never stops.
+        memo: None,
+        stop: None,
     };
     let check_name = args.check.map(Check::name);
     let rerun_fix = fix_command(check_name, queries_flag(queries), &args.selection);
