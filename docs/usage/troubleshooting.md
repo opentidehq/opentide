@@ -478,7 +478,7 @@ Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pi
 
 ### `opentide validate query --live` fails before it reaches the tenant
 
-`--live` needs tenant credentials; the vendor SDKs ship with `pip install opentide`.
+`--live` needs tenant credentials. The connectors are part of opentide (there are no vendor SDKs to install), so an error before the tenant answers is about the credentials, the network or the proxy: run `opentide doctor`.
 
 Through 0.15.0 the SDKs were extras, so a pipeline that installed only
 `opentide==<version>` failed `--live` with `needs a vendor SDK: No module named
