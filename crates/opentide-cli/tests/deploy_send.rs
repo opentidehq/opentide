@@ -5841,6 +5841,8 @@ fn sentinel_read_replay(
         write.request.body = opentide_cassette::cassette::Body::Text(body);
         interactions.push(write);
     }
+    // The workspace's other rule is retired: a `DELETE` ARM answers 200.
+    interactions.push(at(6));
     cassette.interactions = interactions;
     let proxy = Proxy::start(
         Mode::Replay { cassette },
@@ -5863,9 +5865,14 @@ fn only_action(sent: &Sent) -> String {
     let Json::Array(results) = value(sent, "results") else {
         panic!("no results")
     };
-    assert_eq!(results.len(), 1, "{results:?}");
-    results[0]
-        .get("action")
+    // The deployed rule's row; the other rule is retired.
+    let row = results
+        .iter()
+        .find(|row| {
+            row.get("uuid").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+        })
+        .unwrap();
+    row.get("action")
         .and_then(Json::as_str)
         .unwrap_or_default()
         .to_owned()
@@ -5899,9 +5906,15 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
         .and_then(|p| p.get("sentinel"))
         .and_then(Json::as_array)
         .unwrap();
-    assert_eq!(payloads.len(), 1, "{stdout}");
     // The body a deploy sends is the dry run's `api_request`.
-    let sent_body = payloads[0].get("api_request").unwrap().clone();
+    let sent_body = payloads
+        .iter()
+        .find(|p| {
+            p.get("uuid").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+        })
+        .and_then(|p| p.get("api_request"))
+        .unwrap()
+        .clone();
     let planned = [sent_body.clone()];
 
     // Not there: a create, written once.
@@ -5918,7 +5931,6 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 200, Some(&held), false);
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
-    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
     assert_eq!(only_action(&sent), "unchanged");
     assert_eq!(
         value(&sent, "summary").get("unchanged"),
