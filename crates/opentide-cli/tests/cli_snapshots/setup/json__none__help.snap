@@ -84,6 +84,9 @@ Options:
       --variable-group <NAME>
           Azure Pipelines: link this Library variable group in variables: (repeatable; ignored with a warning for github and gitlab)
 
+      --app-token
+          GitHub Actions: the production job checks out and pushes with a GitHub App token (variable OPENTIDE_APP_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN (ignored with a warning for gitlab and azure)
+
       --default-branch <DEFAULT_BRANCH>
           Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)
 
