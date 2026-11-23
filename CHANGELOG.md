@@ -10,6 +10,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Upgrade
 
+- Run `opentide validate`; where it reports `kql_table_misspelt`, correct the table name, or, if the workspace really holds that table or function, declare it as a `[[logsources]]` entry in `visibility.toml`.
 - If a script reads `version`, `repo`, `counts`, `parse_error_count` or `platforms` from `opentide --json info <section>`, read them from `opentide --json info`. If it passes `--platform` with a section, drop it: the combination is now a usage error.
 - If a script reads `action` from `opentide deploy --json` for Sentinel rules, accept `create`, `update` and `unchanged` where it matched `upsert`.
 - If a Sentinel rule sets `configurations.sentinel.alert.techniques` and you want its objective's techniques sent, remove the block's list: the block's list is now sent, where the objective's used to replace it.
@@ -81,6 +82,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Breaking
 
+- **A misspelt Sentinel table fails `validate`.** A KQL table name that is not in the catalog or `visibility.toml` but is a near miss of one that is (`SecurityEvnt` for `SecurityEvent`; one edit for names of up to seven characters, two for longer ones) is now the error `kql_table_misspelt`, with the table to use; it was the `kql_unknown_table` warning. `_CL` tables and names further away are unchanged.
 - **`opentide --json info <section>` holds only that section.** `rules`, `threats`, `objectives`, `coverage`, `vocab` and `catalog` no longer carry `version`, `repo`, `counts`, `parse_error_count` and `platforms`, and `--platform` with a section exits `2`.
 - **A deployed Sentinel rule's `action` says what ARM did.** `opentide deploy --json` rows and the summary give `create`, `update` or `unchanged` instead of `upsert`; `status` stays `deployed`. A failed or not-attempted row keeps `upsert`.
 - **A tenant that fails before any rule is sent leaves every rule `not attempted`** ([#1701](https://github.com/opentidehq/opentide/issues/1701)). In 0.28.1, an unreachable tenant or a refused token on the platforms that stop at the first rejected rule (Sentinel, Splunk, Carbon Black, Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab) made the first rule `failed`, its `failures` entry named that rule, and `failure.code` was `issues_found`. Now, on every platform, a tenant that fails before it took any rule (an unset or refused credential, a refused connection, a sign-in that gets no token) has every rule `not attempted`, `failures` holds the tenant's own entry (no rule `id` or `name`), the other tenants go on, and the run exits `1` with `command_failed` when no rule failed. A rule whose write may have landed stays `failed`. A Splunk or HarfangLab `401` fails the tenant ([deploy](docs/cli/deploy.md#a-real-run)).
@@ -137,6 +139,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Added
 
+- **`opentide explain kql_table_misspelt`** describes the new error and its fixes.
 - **MCP `get_chaining` takes `depth`.** The tool follows only that many hops from the object, in each direction (`0` is the object alone; depth 2 from a rule includes the other rules of its objective). Leave it out for the whole lineage, as before. See [MCP tools](docs/mcp/tools.md).
 - **Sentinel deploy skips a rule the workspace already holds.** `opentide deploy` reads each analytics rule (a `GET` of the `PUT`'s resource) before writing it: a `404` is a create, a rule that differs is replaced, and an identical rule is not written and reads `unchanged`. A read ARM refuses fails the rule and writes nothing. A rule whose block no longer sets a member is rewritten once, so the workspace drops it. See [deploy](docs/cli/deploy.md#unchanged-rules).
 - **`opentide setup ci --stdout`** prints the generated pipeline to stdout and writes nothing, so you can diff it against a pipeline you adapted. It is a usage error with `--json` or `--plan`; warnings still go to stderr.
@@ -192,6 +195,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **The refusal of a 0.20.0 dataset list shows the fix.** A log source with `tables`, `sourcetypes` or `indices` is refused naming the listed values and writing one `[[logsources]]` entry for each, to replace the original; the docs show a two-table source as two entries.
 - **One technique policy on every platform whose block holds a technique list.** A block that sets its own list (Sentinel `alert.techniques` and `alert.tactics`, Defender for Endpoint `alert.techniques`; an empty list counts as unset) sends it; otherwise deploy sends the rule's objective's. The two are never merged. Sentinel still maps what it sends to ATT&CK v18, and takes its tactics from `alert.tactics` or, when unset, from the techniques sent. CrowdStrike is the exception: `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. See [deploy](docs/cli/deploy.md#attck-techniques).
 - **The Sentinel v18 warning for a newer parent lists where its sub-techniques go.** `technique_newer_than_sentinel_attack` for an id such as `T1685` now adds `Its sub-techniques map to ATT&CK v18 as T1685.002 → T1562.008, …`, with the ids deploy sends.
 - **Defender for Endpoint leaves out the objective's Mobile and ICS techniques.** Each is named in a `technique_not_enterprise_left_out` warning in the deploy log.
@@ -421,6 +425,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **`generate exports objects` writes the same file on every OS.** `objects.export.json` listed its rows, and each `childs` value its UUIDs, in the order the files loaded, which differs between Windows and Linux. Rows are now ordered by UUID within each object family and `childs` by UUID. A repository's `childs` values may reorder once on the next export.
 - **Azure pushes of several commits deploy all of them.** The generated Azure pipeline sets `OPENTIDE_PUSH_BASE` from the pipeline's last successful build of the branch, so `deploy`, `validate query --changed`, `lint --changed` and `share` read every commit of the push, not only the last.
 - **`opentide doctor` reports schemas written by an older opentide.** `schemas_fresh` compared only that each schema file exists, so a workspace whose six schemas an earlier version wrote passed while `opentide generate schemas` rewrote every one. It now compares each file with what `generate schemas` would write now, from the workspace's objects, visibility, statuses and enabled platforms, and warns naming the files that differ (an object or the configuration changed, or another version wrote them); line endings and a byte order mark do not count, here and for `templates_fresh`. `lsp_catalog` compares the committed `fields.json` and `deprecations.json` the same way and warns when one is missing, not only on their version. When the workspace does not open, `schemas_fresh` falls back to the presence check and says so.
 - **`opentide generate --help` and `opentide --json commands` list the phases.** `generate` takes the phases `schemas`, `templates`, `vocabs` and `snippets` as words, but its usage line and its `arguments` did not show them; they now appear as `PHASE`.
