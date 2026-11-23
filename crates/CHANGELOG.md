@@ -255,6 +255,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 ### Security
 
 - **`unsafe-libyaml` (RUSTSEC-2024-0449, unmaintained) is out of the dependency tree** ([opentide#850](https://github.com/opentidehq/opentide/issues/850)). It came in through `serde_yaml` 0.9, archived, which `opentide-tide` and `opentide-lsp` read Tide YAML with; neither crate depends on it now, and `deny.toml` no longer excepts the advisory. It was never a vulnerability report: nothing to upgrade for.
+- **`opentide_parse::build` resists names crafted to collide in its token cache** ([opentide#1616](https://github.com/opentidehq/opentide/issues/1616)). It built every green tree with rowan 0.17's `GreenNodeBuilder`, whose `NodeCache` hashes tokens, and small nodes, with FxHash: names chosen to share their low hash bits made a parse quadratic (70,000 of them in a 980 KB KQL query: 2.06 s, 24× ordinary names). `build` now uses a builder of its own over rowan's `GreenToken::new` and `GreenNode::new`, whose caches hash with foldhash's per-map seed (ADR 0014 §5b) and hold at most 4,096 tokens and 4,096 nodes each; past that a token or node is built without interning. The same query parses in 1.02× the time of ordinary names. Trees are the same text and shape; below the cap they share tokens and small nodes as before. The API is unchanged.
 
 ## [0.16.1] - 2026-11-13
 

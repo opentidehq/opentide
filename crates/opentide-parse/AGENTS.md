@@ -10,6 +10,7 @@ names the few the toolkit needs in a `Grammar`. I/O-free, no `unsafe`, no worksp
 | `input.rs` | `Grammar`, `Lexeme`, `lex` (a logos token source that resumes one character after an error), `Input` (trivia kept, skipped for lookahead) |
 | `parser.rs` | `Parser` (`nth`/`at`/`eat`/`expect`/`bump_as`/`err_*`/`enter`/`exit`), `Marker`/`CompletedMarker::precede`, `Event`, `ErrorKind` |
 | `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively, no deeper than `MAX_TREE_DEPTH` |
+| `green.rs` | The green tree builder `build` uses in place of rowan's `GreenNodeBuilder` (#1616): token and node caches hashed with foldhash's per-map seed and capped at 4,096 entries each, so names crafted to collide under rowan's Fx hash cannot make a parse quadratic. Never build a tree with rowan's builder outside tests |
 | `ast.rs` | `AstNode` and `support`: the runtime of the typed AST `cargo xtask codegen` generates from a language's `.ungram` (below) |
 | `conformance.rs` | `check`/`assert_conforms`: every node's children against its `.ungram` rule (`NodeRule`s, data the generated `RULES` holds), every mismatch reported with its range |
 | `debug.rs` | `debug_tree`/`debug_errors` for insta snapshots, `describe_expected` for messages |
