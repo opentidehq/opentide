@@ -253,6 +253,8 @@ opentide generate exports revisions
 
 `generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
 
+Every nested value is written as text in a string field: `chaining` is JSON text (`{"leads_to":["t9"]}`, an empty string when the threat has none), where opentide 0.x wrote Python's `str()` of the dictionary, so a script parses it as JSON; `actors`, `attack`, `childs` and `parents` are comma-separated strings.
+
 `generate exports revisions` writes `.opentide/exports/revisions.export.json`: for each object UUID, its `name`, its kind (`object`, the display name of its family), its `description`, and `versions`, keyed by `metadata.version`, each with that version's `schema`, `created`, `modified` and `author`. It snapshots the versions in the working tree; git keeps their history. An object without `metadata.version` is left out. Keys are sorted, so the file changes only when a version or its metadata does.
 
 ## generate explorer
