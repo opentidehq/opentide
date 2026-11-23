@@ -824,6 +824,27 @@ impl Catalog {
             .map(|t| t.name.clone())
     }
 
+    /// [`Catalog::suggest_table`] among the tables a query can write bare. A
+    /// declared log source with columns is a catalog row named after it,
+    /// spaces included, which a rename must never offer: the best bare name
+    /// wins instead.
+    fn suggest_bare_table(&self, name: &str) -> Option<String> {
+        let prepared = self
+            .memo
+            .table_names
+            .get_or_init(|| suggest::Candidates::new(self.tables.iter().map(|t| t.name.as_str())));
+        prepared
+            .ranked(
+                name,
+                suggest::max_edits(name.chars().count()),
+                self.tables.len(),
+            )
+            .into_iter()
+            .filter_map(|i| self.tables.get(i))
+            .find(|t| is_bare_identifier(&t.name))
+            .map(|t| t.name.clone())
+    }
+
     pub fn operator_names(&self) -> Vec<String> {
         self.operators.iter().map(|o| o.name.clone()).collect()
     }
@@ -1125,7 +1146,7 @@ fn check_table_named(
                 .map(String::as_str),
         )
         .map(str::to_string)
-        .or_else(|| catalog.suggest_table(table))
+        .or_else(|| catalog.suggest_bare_table(table))
     };
     // The spec's precedence (visibility::1.0, Query checks): only a name the
     // catalog knows is "not declared"; one it does not know is unknown,

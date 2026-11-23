@@ -16,6 +16,14 @@ description = "A display name, not a KQL identifier."
 system = "sentinel"
 
 [[logsources]]
+name = "Contoso Audit"
+description = "A display name with columns: a catalog row named after it."
+system = "sentinel"
+
+[logsources.columns]
+TimeGenerated = { type = "datetime" }
+
+[[logsources]]
 name = "Proxy*Logs"
 description = "Proxy tables."
 system = "sentinel"
@@ -71,11 +79,14 @@ fn declared_tables_are_suggested_and_patterns_are_not() {
     assert_eq!(known.len(), 1, "{known:?}");
     assert_eq!(known[0].code, codes::KQL_TABLE_NOT_DECLARED);
     assert_eq!(known[0].suggestion, None, "{known:?}");
-    // An unknown near miss: no declared name that is not an identifier.
-    let near = suggestions("AzureActivty | take 1");
+    // An unknown near miss gets the catalog table, never a declared display name.
+    assert_eq!(suggestions("AzureActivty | take 1"), ["AzureActivity"]);
+    // A declared display name with columns is a catalog row too: it is not
+    // offered through that fallback either.
+    let audit = suggestions("ContosoAudt | take 1");
     assert!(
-        !near.iter().any(|s| s.contains(' ')),
-        "a non-identifier was suggested: {near:?}"
+        !audit.iter().any(|s| s.contains(' ')),
+        "a display name was suggested: {audit:?}"
     );
     install_catalog(&Catalog::default()).unwrap();
 }

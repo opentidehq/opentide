@@ -1142,7 +1142,7 @@ exit: 0
     },
     {
       "code": "kql_join_summarize_before_project",
-      "meaning": "A `join` runs on the pipeline's own side while it still carries every column, and a `project` later in the same pipeline would have narrowed it."
+      "meaning": "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
     },
     {
       "code": "kql_parse_error",
