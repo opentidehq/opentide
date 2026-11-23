@@ -12523,7 +12523,7 @@ exit: 0
           "flags": [
             "--skip-promotion"
           ],
-          "help": "Skip the status promotion of a RELEASE run on a push",
+          "help": "Skip the status promotion of a RELEASE run on a push to the default branch",
           "is_flag": true,
           "multiple": false,
           "name": "skip_promotion",

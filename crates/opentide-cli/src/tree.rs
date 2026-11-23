@@ -1149,7 +1149,7 @@ pub struct DeployArgs {
     pub drop_deprecated: bool,
     #[arg(
         long = "skip-promotion",
-        help = "Skip the status promotion of a RELEASE run on a push"
+        help = "Skip the status promotion of a RELEASE run on a push to the default branch"
     )]
     pub skip_promotion: bool,
     #[arg(
