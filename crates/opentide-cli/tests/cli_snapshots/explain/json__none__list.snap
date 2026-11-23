@@ -1441,6 +1441,10 @@ exit: 0
       "meaning": "`share retract` would delete a remote event, and was not confirmed."
     },
     {
+      "code": "reviewed_before_modified",
+      "meaning": "A rule's `metadata.reviewed` date is earlier than its `metadata.modified` date: the rule changed after its last review."
+    },
+    {
       "code": "risk_band",
       "meaning": "The risk score is outside the band of the rule's severity."
     },
@@ -1905,13 +1909,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "473 diagnostic codes",
+  "message": "474 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 473
+    "codes": 474
   }
 }
 

@@ -145,7 +145,7 @@ fn validate_and_the_language_server_report_the_same_codes_on_the_same_lines() {
             .filter(|finding| {
                 !matches!(
                     finding.code.as_str(),
-                    "filename_mismatch" | "metadata_recommended"
+                    "filename_mismatch" | "metadata_recommended" | "reviewed_before_modified"
                 )
             })
             .collect();
