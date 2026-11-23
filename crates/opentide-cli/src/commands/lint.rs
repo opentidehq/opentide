@@ -103,7 +103,7 @@ fn changed_files(root: &Path, cwd: &Path, env: &Env, objects: &[PathBuf]) -> Cha
             .or(note)
             .or_else(|| {
                 opentide_compile::git::uncommitted_warning(
-                    &workspace, &lookup, objects, true, &files,
+                    &workspace, &lookup, objects, false, &files,
                 )
             });
             Changed::Files { files, warning }

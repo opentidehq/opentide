@@ -91,6 +91,20 @@ pub fn git_scope(
     rules: &Path,
     folder: &str,
 ) -> Result<(Scope, Option<String>), ScopeError> {
+    git_scope_also(workspace, cwd, env, rules, folder, &[])
+}
+
+/// [`git_scope`] for a run that reads `also_read` besides the changed files
+/// (the rules a status promotion rewrote): they are not left out of the
+/// warning about uncommitted rules.
+pub fn git_scope_also(
+    workspace: &Path,
+    cwd: &Path,
+    env: crate::git::Env<'_>,
+    rules: &Path,
+    folder: &str,
+    also_read: &[PathBuf],
+) -> Result<(Scope, Option<String>), ScopeError> {
     let source = crate::git::diff_source(env);
     let (changed, note) = crate::git::changed_paths_noted(workspace, cwd, env, source)?;
     let (top, nested) = crate::git::split_rule_paths(&changed, folder);
@@ -113,13 +127,8 @@ pub fn git_scope(
     Ok((
         scope.clone(),
         warning.or(note).or_else(|| {
-            crate::git::uncommitted_warning(
-                workspace,
-                env,
-                &[rules.to_path_buf()],
-                false,
-                &scope.files,
-            )
+            let read: Vec<PathBuf> = scope.files.iter().chain(also_read).cloned().collect();
+            crate::git::uncommitted_warning(workspace, env, &[rules.to_path_buf()], false, &read)
         }),
     ))
 }

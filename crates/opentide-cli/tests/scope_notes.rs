@@ -11,7 +11,6 @@ use opentide_cli::env::Env;
 use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
@@ -73,17 +72,20 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }
 
+/// A repository on disk, removed when dropped.
+struct Repo {
+    _dir: tempfile::TempDir,
+    root: PathBuf,
+    /// The first of its two commits.
+    first: String,
+}
+
 /// A Sysdig workspace that is a git checkout of two commits: the first holds
 /// `kept.yaml` and `edited.yaml`, the second changes `edited.yaml`, so the
 /// last commit's scope is that one file. Returns the root and the first commit.
-fn repository() -> (PathBuf, String) {
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let root = std::env::temp_dir().join(format!(
-        "opentide-cli-scope-notes-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&root);
+fn repository() -> Repo {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
     write(
         &root,
         ".opentide/configurations/platforms/sysdig.toml",
@@ -109,7 +111,11 @@ fn repository() -> (PathBuf, String) {
         &rule(EDITED, "proc.name = c"),
     );
     git(&root, &["commit", "-q", "-a", "-m", "change"]);
-    (root, first)
+    Repo {
+        _dir: dir,
+        root,
+        first,
+    }
 }
 
 fn opentide(ws: &Path, args: &[&str], env: &[(&str, String)]) -> Ran {
@@ -162,7 +168,8 @@ fn dirty(root: &Path) {
 
 #[test]
 fn a_local_deploy_names_the_uncommitted_rule_its_scope_leaves_out() {
-    let (ws, _) = repository();
+    let repo = repository();
+    let ws = repo.root.clone();
     dirty(&ws);
     let args = ["deploy", "--dry-run", "--strategy", "PREVIEW"];
     let ran = opentide(&ws, &args, &[]);
@@ -190,7 +197,8 @@ fn a_local_deploy_names_the_uncommitted_rule_its_scope_leaves_out() {
 
 #[test]
 fn lint_and_validate_query_name_what_changed_leaves_out() {
-    let (ws, _) = repository();
+    let repo = repository();
+    let ws = repo.root.clone();
     dirty(&ws);
     // A rule that is not a rules-folder file is no scope for validate query,
     // but lint reads every object folder: a new object there is named too.
@@ -226,7 +234,9 @@ fn azure(ws: &Path, base: Option<String>) -> Vec<(&'static str, String)> {
 
 #[test]
 fn an_azure_push_without_a_base_warns_in_the_build_summary_and_not_in_json() {
-    let (ws, first) = repository();
+    let repo = repository();
+    let ws = repo.root.clone();
+    let first = repo.first.clone();
     let args = ["deploy", "--dry-run", "--strategy", "PREVIEW"];
     let ran = opentide(&ws, &args, &azure(&ws, None));
     assert_eq!(ran.exit_code, 0, "{}", ran.all());
@@ -276,7 +286,8 @@ fn an_azure_push_without_a_base_warns_in_the_build_summary_and_not_in_json() {
 
 #[test]
 fn a_wrong_push_base_is_a_usage_error_in_deploy_lint_and_validate_query() {
-    let (ws, _) = repository();
+    let repo = repository();
+    let ws = repo.root.clone();
     // Not in the checkout, and a commit that is not an ancestor of HEAD.
     git(&ws, &["checkout", "-q", "-b", "other", "HEAD~1"]);
     write(
@@ -295,6 +306,14 @@ fn a_wrong_push_base_is_a_usage_error_in_deploy_lint_and_validate_query() {
             vec!["deploy", "--strategy", "PREVIEW"],
             vec!["lint", "--changed"],
             vec!["validate", "query", "--changed"],
+            vec![
+                "validate",
+                "query",
+                "--live",
+                "--changed",
+                "--platform",
+                "sentinel",
+            ],
         ] {
             let ran = opentide(&ws, &command, &env);
             assert_eq!(ran.exit_code, 2, "{command:?}: {}", ran.all());

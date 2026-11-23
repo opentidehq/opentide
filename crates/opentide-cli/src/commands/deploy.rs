@@ -273,7 +273,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         .unwrap_or_default();
     let changed =
         |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), dry_run::ScopeError> {
-            let (mut scope, warning) = dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder)?;
+            let (mut scope, warning) =
+                dry_run::git_scope_also(&root_dir, cx.cwd, &env, rules, folder, &promoted_files)?;
             for file in &promoted_files {
                 if !scope.files.contains(file) {
                     scope.files.push(file.clone());
