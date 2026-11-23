@@ -282,7 +282,10 @@ mod validate {
         // Alone: no scope_no_match beside it.
         for files in [
             vec!["does/not/exist.yaml".to_owned()],
-            vec!["objects/rules/a.yaml".to_owned(), "does/not/exist.yaml".to_owned()],
+            vec![
+                "objects/rules/a.yaml".to_owned(),
+                "does/not/exist.yaml".to_owned(),
+            ],
         ] {
             let selection = Selection {
                 files,

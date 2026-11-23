@@ -8,9 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use opentide_compile::validate::Compilers;
-use opentide_workspace::fix::{
-    apply_reason, fix_command, fix_phrase, plural, validate_command,
-};
+use opentide_workspace::fix::{apply_reason, fix_command, fix_phrase, plural, validate_command};
 use opentide_workspace::validate::{
     Check, Options, QueriesMode, STRICT_EXEMPT_WARNINGS, Selection, Validation,
 };

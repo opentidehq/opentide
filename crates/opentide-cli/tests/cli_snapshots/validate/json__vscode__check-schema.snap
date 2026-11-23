@@ -32,7 +32,7 @@ exit: 1
       "reason": "how to fix it"
     },
     {
-      "command": "opentide --json validate",
+      "command": "opentide --json validate --check schema",
       "reason": "check again"
     }
   ],

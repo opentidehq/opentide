@@ -47,7 +47,7 @@ exit: 1
       "reason": "how to fix it"
     },
     {
-      "command": "opentide --json validate",
+      "command": "opentide --json validate --uuid ff8bf67e-64dc-460d-b5df-48db643f3560",
       "reason": "check again"
     }
   ],
