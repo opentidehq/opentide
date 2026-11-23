@@ -1036,6 +1036,8 @@ mod tests {
             )]),
             sharing_credentials: Vec::new(),
             variable_groups: Vec::new(),
+            app_token: false,
+            user_region: None,
         }
     }
 
