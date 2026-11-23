@@ -2746,7 +2746,11 @@ impl Sender<'_, '_> {
                 }
                 let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
                 connection.rule_begins();
-                let outcome = self.by_uuid_rule(platform, &connection, batch, rule, &mut result);
+                // Sentinel's `upsert` reads as what ARM did (OT-3).
+                let upsert =
+                    log.planned_action(platform, Some(&tenant), &rule.uuid) == Some("upsert");
+                let outcome =
+                    self.by_uuid_rule(platform, &connection, batch, rule, &mut result, upsert);
                 if self.raised_before_any_rule(&connection, platform, &tenant, log, &outcome) {
                     break;
                 }
@@ -2979,6 +2983,7 @@ impl Sender<'_, '_> {
         batch: &Batch,
         rule: &opentide_compile::Rule,
         result: &mut RuleResult,
+        upsert: bool,
     ) -> Result<(), Raised> {
         let strategy = self.strategy_of(rule, platform)?;
         let deletion = strategy == StatusStrategy::Deletion;
@@ -3032,6 +3037,20 @@ impl Sender<'_, '_> {
         // rename's cleanup may still have deleted old copies (`removed`).
         if failed.is_none() && outcome.unchanged() {
             result.action = Some(UNCHANGED.to_owned());
+        } else if failed.is_none()
+            && id == Some(PlatformId::Sentinel)
+            && upsert
+        {
+            // Sentinel reads before it writes (OT-3): an `upsert` reads as
+            // what ARM did, a create or an update.
+            result.action = outcome
+                .events
+                .iter()
+                .find_map(|event| match event.name.as_str() {
+                    opentide_connectors::sentinel::RULE_CREATED => Some("create".to_owned()),
+                    opentide_connectors::sentinel::RULE_UPDATED => Some("update".to_owned()),
+                    _ => None,
+                });
         }
         match failed {
             Some(failed) => Err(scoped(failed, |error| raised(&error))),

@@ -17,9 +17,9 @@ use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
-    kql_with_limit, probe_verdict,
+    BoxFuture, DeployEvent, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner,
+    RULE_UNCHANGED, Row, TenantContext, kql_with_limit, probe_verdict,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
@@ -224,6 +224,35 @@ impl Sentinel {
             }))
     }
 
+    /// The analytics rule *rule_id* as the workspace holds it, `None` for a
+    /// 404 (`GET` of the resource the `PUT` writes, same `api-version`).
+    pub async fn read(
+        &self,
+        cx: TenantContext<'_>,
+        rule_id: &str,
+    ) -> Result<Result<Option<Json>, ArmError>, ConnectorError> {
+        let url = Self::rules_url(cx, Some(rule_id))?;
+        match self
+            .arm(cx, crate::transport::Method::GET, &url, None)
+            .await?
+        {
+            Ok(answer) => match answer.json() {
+                Some(held) => Ok(Ok(Some(held))),
+                None => Err(ConnectorError::Answer {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    address: ARM_ENDPOINT.into(),
+                    reason: format!(
+                        "reading the analytics rule: {}",
+                        answer.not_json_page().unwrap_or_default()
+                    ),
+                }),
+            },
+            Err(error) if error.status == 404 => Ok(Ok(None)),
+            Err(error) => Ok(Err(error)),
+        }
+    }
+
     /// Deletes the analytics rule *rule_id* (`AlertRules.delete`).
     pub async fn delete(
         &self,
@@ -413,6 +442,63 @@ impl Sentinel {
 
 /// The `error.message` of a partial result, the request's credentials masked
 /// (the rows around it are data and stay as they came).
+/// The events of a deploy: what it did to the rule.
+pub const RULE_CREATED: &str = "sentinel_rule_created";
+/// See [`RULE_CREATED`].
+pub const RULE_UPDATED: &str = "sentinel_rule_updated";
+
+/// Server-populated members ARM adds to a rule; never compared.
+const SERVER_FIELDS: [&str; 6] = [
+    "etag",
+    "id",
+    "name",
+    "type",
+    "systemData",
+    "lastModifiedUtc",
+];
+
+/// Whether the workspace's rule *held* has every member *sent* has, equal:
+/// only what the request sends is compared (ARM's `etag`, `id`, `name`,
+/// `type`, `systemData`, `lastModifiedUtc` and any default it fills in are
+/// ignored).
+fn holds(held: &Json, sent: &Json) -> bool {
+    match (held.as_object(), sent.as_object()) {
+        (Some(held), Some(sent)) => sent
+            .iter()
+            .filter(|(key, _)| !SERVER_FIELDS.contains(&key.as_str()))
+            .all(|(key, value)| held.get(key).is_some_and(|have| holds_member(have, value))),
+        _ => false,
+    }
+}
+
+fn number(value: &Json) -> Option<f64> {
+    match value {
+        Json::Int(n) => Some(*n as f64),
+        Json::UInt(n) => Some(*n as f64),
+        Json::Float(n) => Some(*n),
+        _ => None,
+    }
+}
+
+fn holds_member(held: &Json, sent: &Json) -> bool {
+    if let (Some(held), Some(sent)) = (held.as_object(), sent.as_object()) {
+        return sent
+            .iter()
+            .all(|(key, value)| held.get(key).is_some_and(|have| holds_member(have, value)));
+    }
+    if let (Some(held), Some(sent)) = (held.as_array(), sent.as_array()) {
+        return held.len() == sent.len()
+            && held
+                .iter()
+                .zip(sent)
+                .all(|(have, want)| holds_member(have, want));
+    }
+    match (number(held), number(sent)) {
+        (Some(held), Some(sent)) => held == sent,
+        _ => held == sent,
+    }
+}
+
 fn partial_message(answer: &Answer, body: &Json) -> String {
     body.get("error")
         .and_then(|error| error.get("message"))
@@ -665,11 +751,23 @@ impl Deployer for Sentinel {
                     tenant: cx.tenant.label.tenant.clone(),
                     message: format!("the compiled rule is not JSON: {error}"),
                 })?;
-            self.create_or_update(cx, &request.rule_id, &body)
-                .await?
-                .map_err(refused)?;
+            // Read before writing (OT-3): a rule the workspace already holds
+            // as the request has it is not written, and a failed read fails
+            // the rule: it never falls through to the `PUT`.
+            let event = match self.read(cx, &request.rule_id).await?.map_err(refused)? {
+                None => RULE_CREATED,
+                Some(held) if holds(&held, &body) => RULE_UNCHANGED,
+                Some(_) => RULE_UPDATED,
+            };
+            if event != RULE_UNCHANGED {
+                self.create_or_update(cx, &request.rule_id, &body)
+                    .await?
+                    .map_err(refused)?;
+            }
             Ok(DeployOutcome {
-                events: Vec::new(),
+                events: vec![
+                    DeployEvent::new(event).with_field("rule_id", request.rule_id.clone()),
+                ],
                 remote_id: Some(request.rule_id.clone()),
                 operation: request.operation,
                 warnings: Vec::new(),
