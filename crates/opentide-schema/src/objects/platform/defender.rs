@@ -56,8 +56,9 @@ pub struct DefenderAlert {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recommendation: Option<String>,
     /// MITRE ATT&CK technique or sub-technique ids (`T1528`, `T1059.001`), sent
-    /// as the alert's `mitreTechniques` when set; left out, the techniques of the rule's
-    /// objective are sent. `generate extract` imports the tenant's.
+    /// as the alert's `mitreTechniques` when set; an empty list counts as unset. Left out, the
+    /// techniques of the rule's objective are sent, those outside Enterprise ATT&CK left out.
+    /// `generate extract` imports the tenant's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub techniques: Option<Vec<String>>,
 }

@@ -1,6 +1,7 @@
 //! The Sentinel body's techniques: the block's `alert.techniques` are sent
-//! when it sets any, else the objective's ATT&CK ids; what is sent is held to ATT&CK v18 (the version Sentinel is aligned to) and
-//! earn a warning for each id that changes.
+//! when it sets any, else the objective's ATT&CK ids. What is sent is held to
+//! ATT&CK v18 (the version Sentinel is aligned to), and each id that changes
+//! earns a warning.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: the workspace and the rule open"
@@ -149,6 +150,7 @@ fn block_tactics_are_sent_in_place_of_derived_ones() {
 fn an_objective_with_nothing_to_send_sends_no_techniques() {
     let (body, warnings, _) = compile(&["T1691"], "");
     assert_eq!(property(&body, "techniques"), "absent");
+    assert_eq!(property(&body, "tactics"), "absent");
     assert_eq!(warnings.len(), 1, "{warnings:?}");
 }
 
@@ -169,5 +171,22 @@ fn a_newer_parent_hint_lists_its_sub_techniques_v18_mappings() {
         "{}",
         warnings[0]
     );
-    assert!(warnings[0].contains("T1685.007 → none"), "{}", warnings[0]);
+    // As deploy sends it: T1685.007 replaced only a sub-technique, so it
+    // stands for what its parent replaced.
+    assert!(warnings[0].contains("T1685.007 → T1562"), "{}", warnings[0]);
+}
+
+#[test]
+fn a_block_whose_ids_cannot_be_sent_does_not_fall_back_to_the_objectives() {
+    let (body, warnings, _) = compile(&["T1562.008"], "      techniques: [T1691]\n");
+    assert_eq!(property(&body, "techniques"), "absent");
+    assert_eq!(property(&body, "subTechniques"), "absent");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+}
+
+#[test]
+fn an_empty_list_counts_as_unset() {
+    let (body, _, _) = compile(&["T1562.008"], "      techniques: []\n      tactics: []\n");
+    assert_eq!(property(&body, "techniques"), r#"["T1562"]"#);
+    assert_eq!(property(&body, "tactics"), r#"["DefenseEvasion"]"#);
 }

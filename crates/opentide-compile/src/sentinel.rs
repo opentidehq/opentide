@@ -6,7 +6,7 @@
 use opentide_schema::vocab::sentinel::SentinelAttack;
 
 use crate::Context;
-use crate::deploy;
+use crate::deploy::{self, strings};
 use crate::duration;
 use crate::json::{Json, Object};
 use crate::kql;
@@ -121,17 +121,6 @@ fn duration_text(value: &Json) -> String {
     }
 }
 
-/// The strings of a list.
-fn strings(value: Option<&Json>) -> Vec<String> {
-    match value {
-        Some(Json::Array(items)) => items
-            .iter()
-            .filter_map(|item| item.as_str().map(str::to_owned))
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
 /// The code of the warning a technique newer than ATT&CK v18 earns.
 pub const TECHNIQUE_NEWER_CODE: &str = "technique_newer_than_sentinel_attack";
 
@@ -143,10 +132,66 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     compile_with_warnings(cx, rule, tenant).map(|(body, _)| body)
 }
 
+/// What v18 holds in place of `id`, an id it does not know, and why: the v18
+/// ids that replace it (none when it has no equivalent), and the reason.
+///
+/// - an id newer than v18 becomes the v18 id(s) it replaced; with none, its
+///   v18 parent when it is a sub-technique (`T1027.018` sends `T1027`), or the
+///   v18 parents its newer parent replaced (`T1685.007` sends `T1562`);
+/// - a retired id becomes the id(s) that replaced it;
+/// - an id the list does not know at all has none.
+fn v18_replacement<'a>(attack: &'a SentinelAttack, id: &str) -> (Vec<&'a String>, String) {
+    let version = opentide_schema::vocab::sentinel::VERSION;
+    let known = |id: &&String| attack.techniques.contains_key(*id);
+    if let Some(newer) = attack.later.techniques.get(id) {
+        let replaced: Vec<&String> = newer.replaces.iter().filter(known).collect();
+        let instead = if replaced.is_empty() {
+            // A sub-technique with no replacement stands for its parent: the
+            // parent when v18 has it, else the parent's own v18 parents (the
+            // dot-free ids it replaced).
+            id.split_once('.')
+                .map(|(parent, _)| {
+                    attack.techniques.get_key_value(parent).map_or_else(
+                        || {
+                            attack
+                                .later
+                                .techniques
+                                .get(parent)
+                                .map(|newer| {
+                                    newer
+                                        .replaces
+                                        .iter()
+                                        .filter(|old| !old.contains('.'))
+                                        .filter(known)
+                                        .collect()
+                                })
+                                .unwrap_or_default()
+                        },
+                        |(parent, _)| vec![parent],
+                    )
+                })
+                .unwrap_or_default()
+        } else {
+            replaced
+        };
+        (instead, format!("newer than ATT&CK v{version}"))
+    } else if let Some(retired) = attack.retired.get(id) {
+        (
+            retired.replaced_by.iter().filter(known).collect(),
+            format!("retired before ATT&CK v{version}"),
+        )
+    } else {
+        (
+            Vec::new(),
+            format!("not an ATT&CK v{version} id Sentinel knows"),
+        )
+    }
+}
+
 /// For a parent technique newer than ATT&CK v18, where its sub-technique ids
-/// go: `its sub-techniques map to ATT&CK v18 as T1685.002 → T1562.008, ...`
-/// (`none` for a sub-technique v18 has no equivalent of). `None` for a
-/// sub-technique or an id the list does not hold as newer.
+/// go, as deploy sends them: `Its sub-techniques map to ATT&CK v18 as
+/// T1685.002 → T1562.008, ...` (`none` for one with no v18 equivalent). `None`
+/// for a sub-technique or an id the list does not hold as newer.
 fn sub_technique_hint(attack: &SentinelAttack, id: &str) -> Option<String> {
     if id.contains('.') || !attack.later.techniques.contains_key(id) {
         return None;
@@ -156,19 +201,15 @@ fn sub_technique_hint(attack: &SentinelAttack, id: &str) -> Option<String> {
     let mappings: Vec<String> = attack
         .later
         .techniques
-        .iter()
-        .filter(|(sub, _)| sub.starts_with(&prefix))
-        .map(|(sub, newer)| {
-            let known: Vec<&str> = newer
-                .replaces
-                .iter()
-                .filter(|old| attack.techniques.contains_key(*old))
-                .map(String::as_str)
-                .collect();
-            if known.is_empty() {
+        .keys()
+        .filter(|sub| sub.starts_with(&prefix))
+        .map(|sub| {
+            let (instead, _) = v18_replacement(attack, sub);
+            if instead.is_empty() {
                 format!("{sub} → none")
             } else {
-                format!("{sub} → {}", known.join(" and "))
+                let names: Vec<&str> = instead.iter().map(|id| id.as_str()).collect();
+                format!("{sub} → {}", names.join(" and "))
             }
         })
         .collect();
@@ -181,14 +222,9 @@ fn sub_technique_hint(attack: &SentinelAttack, id: &str) -> Option<String> {
     ))
 }
 
-/// The ids Sentinel takes for the `resolved` ATT&CK ids (the block's, else the objective's), each
-/// change with a warning naming the rule, the id and what is sent instead:
-///
-/// - an id newer than v18 becomes the v18 id(s) it replaced; with none, its
-///   v18 parent when it is a sub-technique (`T1027.018` sends `T1027`),
-///   else nothing;
-/// - a retired id becomes the id(s) that replaced it, else nothing;
-/// - an id the list does not know at all is left out.
+/// The ids Sentinel takes for the `resolved` ATT&CK ids (the block's, else the
+/// objective's), each change with a warning naming the rule, the id and what
+/// is sent instead (see [`v18_replacement`]); an id v18 has is kept.
 fn v18_techniques(
     label: &str,
     resolved: &[String],
@@ -197,62 +233,14 @@ fn v18_techniques(
     let attack = SentinelAttack::bundled();
     let version = opentide_schema::vocab::sentinel::VERSION;
     let mut out: Vec<String> = Vec::new();
-    let known = |id: &&String| attack.techniques.contains_key(*id);
     for id in resolved {
-        if known(&id) {
+        if attack.techniques.contains_key(id) {
             if !out.contains(id) {
                 out.push(id.clone());
             }
             continue;
         }
-        let (instead, why): (Vec<&String>, String) =
-            if let Some(newer) = attack.later.techniques.get(id) {
-                let replaced: Vec<&String> = newer.replaces.iter().filter(known).collect();
-                // A sub-technique with no replacement stands for its parent: the
-                // parent when v18 has it, else the parent's own v18 parents (the
-                // dot-free ids it replaced).
-                let parent: Vec<&String> = id
-                    .split_once('.')
-                    .map(|(parent, _)| {
-                        attack.techniques.get_key_value(parent).map_or_else(
-                            || {
-                                attack
-                                    .later
-                                    .techniques
-                                    .get(parent)
-                                    .map(|newer| {
-                                        newer
-                                            .replaces
-                                            .iter()
-                                            .filter(|old| !old.contains('.'))
-                                            .filter(known)
-                                            .collect()
-                                    })
-                                    .unwrap_or_default()
-                            },
-                            |(parent, _)| vec![parent],
-                        )
-                    })
-                    .unwrap_or_default();
-                (
-                    if replaced.is_empty() {
-                        parent
-                    } else {
-                        replaced
-                    },
-                    format!("newer than ATT&CK v{version}"),
-                )
-            } else if let Some(retired) = attack.retired.get(id) {
-                (
-                    retired.replaced_by.iter().filter(known).collect(),
-                    format!("retired before ATT&CK v{version}"),
-                )
-            } else {
-                (
-                    Vec::new(),
-                    format!("not an ATT&CK v{version} id Sentinel knows"),
-                )
-            };
+        let (instead, why) = v18_replacement(attack, id);
         let mut message = if instead.is_empty() {
             format!("{label}: leaving out {id}, which is {why} and has no v{version} equivalent")
         } else {

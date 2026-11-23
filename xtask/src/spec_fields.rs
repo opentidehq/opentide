@@ -56,8 +56,8 @@ pub const REWRITTEN: [(&str, &str); 20] = [
     ("DetectionRule", "metadata"),
     // The spec row still says deploy sends an empty technique list; it now
     // sends the block's own `alert.techniques` as `mitreTechniques`, else the
-    // objective's (the block-wins-else-objective policy, every platform). Drop
-    // this entry once the specification's row says so.
+    // objective's, Enterprise ids only (the block-wins-else-objective policy;
+    // the spec row is being updated). Drop this entry once the row says so.
     ("DefenderAlert", "techniques"),
     // The spec rows say the objective's tactics and techniques replace the
     // block's; deploy now sends the block's own when it sets any (the

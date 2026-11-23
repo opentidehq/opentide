@@ -168,7 +168,7 @@ for platform in ws.info()["platforms"]:
 
 ## ATT&CK techniques
 
-A platform block that can set its own techniques wins; otherwise the rule's objective supplies them. Sentinel (`alert.techniques`, `alert.tactics`) and Defender for Endpoint (`alert.techniques`) have such fields: when the block sets one, deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. The other platforms have no block field and send the rule's own `techniques` with the objective's. See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
+On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Defender for Endpoint (`alert.techniques`) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
 
 ## Query validation policy
 

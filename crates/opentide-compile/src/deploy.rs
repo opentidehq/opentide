@@ -237,21 +237,35 @@ pub fn inherited_techniques(
         .map_err(|missing| CompileError::failed(display, &format!("{:?}", missing.0)))
 }
 
+/// The strings of a list.
+pub fn strings(value: Option<&Json>) -> Vec<String> {
+    match value {
+        Some(Json::Array(items)) => items
+            .iter()
+            .filter_map(|item| item.as_str().map(str::to_owned))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// The ATT&CK ids a platform sends, by one policy on every platform whose
-/// block can set its own: the block's `own` techniques when it sets any,
-/// otherwise those `rule` resolves through its objective. Explicit beats
-/// inherited; the two are never merged. De-duplicated, in order.
+/// block holds a list: the block's `own` techniques when it sets any (an empty
+/// list is unset), otherwise those `rule` resolves through its objective.
+/// Explicit beats inherited; the two are never merged. De-duplicated, in order.
 pub fn platform_techniques(
     cx: &Context<'_>,
     display: &str,
     rule: &Rule,
     own: Vec<String>,
 ) -> Result<Vec<String>, CompileError> {
-    let chosen = if own.is_empty() {
-        inherited_techniques(cx, display, rule)?
-    } else {
-        own
-    };
+    pick_techniques(own, || inherited_techniques(cx, display, rule))
+}
+
+fn pick_techniques(
+    own: Vec<String>,
+    inherited: impl FnOnce() -> Result<Vec<String>, CompileError>,
+) -> Result<Vec<String>, CompileError> {
+    let chosen = if own.is_empty() { inherited()? } else { own };
     let mut unique: Vec<String> = Vec::with_capacity(chosen.len());
     for id in chosen {
         if !unique.contains(&id) {
@@ -264,6 +278,28 @@ pub fn platform_techniques(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_blocks_techniques_win_and_are_deduplicated() {
+        let own = vec!["T1059".to_owned(), "T1003".to_owned(), "T1059".to_owned()];
+        let picked = pick_techniques(own, || Ok(vec!["T1562".to_owned()])).unwrap();
+        assert_eq!(picked, ["T1059", "T1003"]);
+    }
+
+    #[test]
+    fn an_empty_list_inherits_the_objectives_deduplicated() {
+        let inherited = || {
+            Ok(vec![
+                "T1562".to_owned(),
+                "T1562".to_owned(),
+                "T1070".to_owned(),
+            ])
+        };
+        assert_eq!(
+            pick_techniques(Vec::new(), inherited).unwrap(),
+            ["T1562", "T1070"]
+        );
+    }
 
     #[test]
     fn a_path_segment_escapes_separators_and_keeps_index_patterns() {
