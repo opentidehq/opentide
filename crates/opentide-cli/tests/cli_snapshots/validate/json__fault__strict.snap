@@ -9,14 +9,14 @@ view: diagnostics (code, severity, file, line, column and counts; a warning's te
 ━━━ stdout · json
 findings: 106
   issues_found | - | - | - | -
-  unknown_key | error | deployment.toml | - | -
-  unknown_key | error | deployment.toml | - | -
-  unknown_key | error | deployment.toml | - | -
-  unknown_key | error | deployment.toml | - | -
-  unknown_key | error | deployment.toml | - | -
-  unknown_key | error | platforms/sentinel.toml | - | -
-  schema_validation | error | platforms/splunk.toml | - | -
-  missing_field | error | platforms/defender_for_endpoint.toml | - | -
+  unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 1 | 1
+  unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 2 | 1
+  unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 3 | 1
+  unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 4 | 1
+  unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 5 | 1
+  missing_field | error | <WS>/.opentide/configurations/platforms/defender_for_endpoint.toml | 6 | 1
+  unknown_key | error | <WS>/.opentide/configurations/platforms/sentinel.toml | 2 | 1
+  schema_validation | error | <WS>/.opentide/configurations/platforms/splunk.toml | 4 | 8
   deployment_state_shape | error | <WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json | - | -
   deployment_state_platform | error | <WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json | - | -
   deployment_state_uuid_mismatch | error | <WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json | - | -
@@ -109,21 +109,21 @@ findings: 106
   vocab_unknown | error | <WS>/objects/threats/rogue-downgrade-threat-0002.yaml | 22 | 13
   invalid_uuid | error | <WS>/objects/threats/scheduled-loader-threat-0010.yaml | 5 | 10
   nested_object_file | warning | <WS>/objects/rules/nested/encoded-spray-rule-0017.yaml | - | -
-  asset_unknown | warning | visibility.toml | - | -
-  asset_unknown | warning | visibility.toml | - | -
-  asset_unknown | warning | visibility.toml | - | -
-  asset_unknown | warning | visibility.toml | - | -
-  asset_unknown | warning | visibility.toml | - | -
+  asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 48 | 12
+  asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 54 | 12
+  asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 60 | 12
+  asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 66 | 12
+  asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 72 | 12
 exit_code: 1
 report.stats.objects_checked: 872
 report.stats.queries_checked: 2025
 schema_version: 1
 summary.errors: 99
-summary.files: 87
+summary.files: 91
 summary.fixable: 0
 summary.objects: 872
 summary.queries: 2025
-summary.warning_files: 1
+summary.warning_files: 2
 summary.warnings: 6
 next_actions[]: 2 items
 report.issues[]: 99 items
