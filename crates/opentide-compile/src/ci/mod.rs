@@ -592,23 +592,39 @@ pub fn enables(text: &str) -> bool {
     section && enabled
 }
 
-/// The top-level jobs `text` holds, as `provider` names them: a GitHub
-/// workflow's `jobs:` keys, a GitLab pipeline's top-level job keys (hidden
-/// `.templates` and the reserved keywords left out), an Azure pipeline's
-/// stages and, in each, its jobs. Empty when `text` is not YAML.
-pub fn job_names(provider: Provider, text: &str) -> Vec<String> {
+/// One job-like entry of a pipeline: what it is, where it sits and its name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Entry {
+    /// The Azure stage it sits in; `None` where there is no stage.
+    stage: Option<String>,
+    /// `job`, `deployment` or `template`.
+    kind: &'static str,
+    name: String,
+}
+
+/// The pipeline's stages (Azure only) and its job-like entries, as `provider`
+/// names them: a GitHub workflow's `jobs:` keys, a GitLab pipeline's
+/// top-level job keys (hidden `.templates` and the reserved keywords left
+/// out), an Azure pipeline's stages and, in each, its `job:`, `deployment:`
+/// and `template:` entries. Both empty when `text` is not YAML.
+fn pipeline_entries(provider: Provider, text: &str) -> (Vec<String>, Vec<Entry>) {
     use crate::Json;
     let Some(root) = opentide_schema::node::load(text)
         .ok()
         .and_then(|document| document.root().map(|root| Json::from_node(root)))
     else {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     };
-    let mut names = Vec::new();
+    let (mut stages, mut entries) = (Vec::new(), Vec::new());
+    let plain = |name: &String| Entry {
+        stage: None,
+        kind: "job",
+        name: name.clone(),
+    };
     match provider {
         Provider::GitHub => {
             if let Some(jobs) = root.get("jobs").and_then(Json::as_object) {
-                names.extend(jobs.iter().map(|(name, _)| name.clone()));
+                entries.extend(jobs.iter().map(|(name, _)| plain(name)));
             }
         }
         Provider::GitLab => {
@@ -626,53 +642,109 @@ pub fn job_names(provider: Provider, text: &str) -> Vec<String> {
                 "spec",
             ];
             if let Some(top) = root.as_object() {
-                names.extend(
+                entries.extend(
                     top.iter()
                         .filter(|(name, value)| {
                             !name.starts_with('.')
                                 && !RESERVED.contains(&name.as_str())
                                 && value.as_object().is_some()
                         })
-                        .map(|(name, _)| name.clone()),
+                        .map(|(name, _)| plain(name)),
                 );
             }
         }
         Provider::Azure => {
-            let entries = |value: Option<&Json>, key: &str| -> Vec<Json> {
-                value
-                    .and_then(Json::as_array)
-                    .map(|items| {
-                        items
-                            .iter()
-                            .filter(|item| item.get(key).is_some())
-                            .cloned()
-                            .collect()
+            const KINDS: [&str; 3] = ["job", "deployment", "template"];
+            let entries_of = |list: Option<&Json>, stage: Option<&str>| -> Vec<Entry> {
+                list.and_then(Json::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| {
+                        KINDS.iter().find_map(|kind| {
+                            item.get(kind).and_then(Json::as_str).map(|name| Entry {
+                                stage: stage.map(str::to_owned),
+                                kind,
+                                name: name.to_owned(),
+                            })
+                        })
                     })
-                    .unwrap_or_default()
+                    .collect()
             };
-            let name =
-                |item: &Json, key: &str| item.get(key).and_then(Json::as_str).map(str::to_owned);
-            for stage in entries(root.get("stages"), "stage") {
-                names.extend(name(&stage, "stage"));
-                for job in entries(stage.get("jobs"), "job") {
-                    names.extend(name(&job, "job"));
+            for item in root
+                .get("stages")
+                .and_then(Json::as_array)
+                .into_iter()
+                .flatten()
+            {
+                match item.get("stage").and_then(Json::as_str) {
+                    Some(stage) => {
+                        stages.push(stage.to_owned());
+                        entries.extend(entries_of(item.get("jobs"), Some(stage)));
+                    }
+                    // A `- template:` stage list: no stage to name.
+                    None => {
+                        entries.extend(entries_of(Some(&Json::Array(vec![item.clone()])), None));
+                    }
                 }
             }
-            for job in entries(root.get("jobs"), "job") {
-                names.extend(name(&job, "job"));
-            }
+            entries.extend(entries_of(root.get("jobs"), None));
         }
     }
-    names
+    (stages, entries)
 }
 
-/// The jobs of `before` that `after` does not hold, in `before`'s order:
-/// what a regenerate removes from a pipeline someone added to.
+/// What `before` holds that `after` does not, in `before`'s order, each as
+/// the pipeline's own words: `job intel_sources` (GitHub, GitLab),
+/// `stage Intel (job intel_sources)` for a stage that is gone with what it
+/// held, `job Deploy/approve_prod` or `deployment Deploy/approve_prod` for an
+/// entry of a stage that is kept. Jobs are compared as (stage, name) pairs.
+/// What a regenerate removes from a pipeline someone added to.
 pub fn dropped_jobs(provider: Provider, before: &str, after: &str) -> Vec<String> {
-    let kept = job_names(provider, after);
-    job_names(provider, before)
+    let (kept_stages, kept) = pipeline_entries(provider, after);
+    let (stages, entries) = pipeline_entries(provider, before);
+    let describe = |entry: &Entry| match &entry.stage {
+        Some(stage) => format!("{} {stage}/{}", entry.kind, entry.name),
+        None => format!("{} {}", entry.kind, entry.name),
+    };
+    let mut dropped = Vec::new();
+    for stage in stages.iter().filter(|stage| !kept_stages.contains(stage)) {
+        let inside: Vec<String> = entries
+            .iter()
+            .filter(|entry| entry.stage.as_deref() == Some(stage))
+            .map(|entry| format!("{} {}", entry.kind, entry.name))
+            .collect();
+        dropped.push(if inside.is_empty() {
+            format!("stage {stage}")
+        } else {
+            format!("stage {stage} ({})", inside.join(", "))
+        });
+    }
+    dropped.extend(
+        entries
+            .iter()
+            .filter(|entry| {
+                !kept.contains(entry)
+                    && entry
+                        .stage
+                        .as_ref()
+                        .is_none_or(|stage| kept_stages.contains(stage))
+            })
+            .map(describe),
+    );
+    dropped
+}
+
+/// The Library variable groups the Azure pipeline `text` links: the
+/// `- group:` entries of its top-level `variables:` list, in order.
+pub fn variable_groups(text: &str) -> Vec<String> {
+    use crate::Json;
+    opentide_schema::node::load(text)
+        .ok()
+        .and_then(|document| document.root().map(|root| Json::from_node(root)))
+        .and_then(|root| root.get("variables").and_then(Json::as_array).cloned())
         .into_iter()
-        .filter(|name| !kept.contains(name))
+        .flatten()
+        .filter_map(|item| item.get("group").and_then(Json::as_str).map(str::to_owned))
         .collect()
 }
 
@@ -879,6 +951,41 @@ mod tests {
             written.starts_with("# Generated by opentide — regenerate with `opentide setup ci azure --variable-group tenants --variable-group 'Shared secrets'`\n"),
             "{written}"
         );
+    }
+
+    /// Dropped jobs are compared as (stage, name) pairs and named by kind;
+    /// a Library group is read from the top-level `variables:` list only.
+    #[test]
+    fn dropped_jobs_are_named_by_kind_and_stage() {
+        let before = "stages:\n  - stage: Deploy\n    jobs:\n      - job: keep\n      - deployment: approve_prod\n      - template: extra.yml\n  - stage: Intel\n    jobs:\n      - job: intel_sources\n";
+        let after = "stages:\n  - stage: Deploy\n    jobs:\n      - job: keep\n";
+        assert_eq!(
+            dropped_jobs(Provider::Azure, before, after),
+            [
+                "stage Intel (job intel_sources)",
+                "deployment Deploy/approve_prod",
+                "template Deploy/extra.yml"
+            ]
+        );
+        // The same name in another stage is another job.
+        let moved = "stages:\n  - stage: Other\n    jobs:\n      - job: keep\n";
+        assert_eq!(
+            dropped_jobs(Provider::Azure, after, moved),
+            ["stage Deploy (job keep)"]
+        );
+        assert_eq!(
+            dropped_jobs(
+                Provider::GitHub,
+                "jobs:\n  a: {}\n  b: {}\n",
+                "jobs:\n  a: {}\n"
+            ),
+            ["job b"]
+        );
+        assert!(dropped_jobs(Provider::GitHub, "not: [yaml", "jobs: {}\n").is_empty());
+
+        let groups = "variables:\n  - group: a\n  - name: X\n    value: y\n  - group: b c\n";
+        assert_eq!(variable_groups(groups), ["a", "b c"]);
+        assert!(variable_groups("variables:\n  X: y\n").is_empty());
     }
 
     /// A tenant that names its own variable gets it in CI (#1655): every job

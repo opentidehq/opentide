@@ -365,7 +365,7 @@ variables:
     value: "1.0.0"
 ```
 
-and its header's `regenerate with` line carries the flag, so regenerating keeps the group. Without `--variable-group`, a regenerated pipeline has no link to the group, `$(AZURE_CLIENT_ID)` stays unresolved and live query and deploy fail with `credential_unset`. Regenerating also removes any stage or job you added by hand; the run names each one in a warning.
+and its header's `regenerate with` line records the groups (only the groups, not the other flags). Regenerating without `--variable-group` keeps the groups the old pipeline links and says so; pass the option again to replace them. Regenerating also removes any stage or job the run does not generate, including one you added by hand; the run names each in a warning.
 
 ## Annotations, summaries and reports
 

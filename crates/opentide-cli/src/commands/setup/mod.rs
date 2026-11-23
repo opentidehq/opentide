@@ -627,6 +627,54 @@ fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
         .collect()
 }
 
+/// The Library variable groups the pipeline links: the `--variable-group`
+/// names, or, when none is given, the groups the existing Azure pipeline
+/// opentide wrote links (they hold the tenants' secrets), which `warnings`
+/// names. Only Azure has them.
+fn variable_groups(
+    args: &CiArgs,
+    pipeline: &str,
+    before: &Result<Option<String>, String>,
+    warnings: &mut Vec<String>,
+) -> Vec<String> {
+    if args.provider != Provider::Azure {
+        return Vec::new();
+    }
+    let given = group_names(&args.variable_group);
+    if !given.is_empty() {
+        return given;
+    }
+    let Ok(Some(old)) = before else {
+        return Vec::new();
+    };
+    if !generated(old) {
+        return Vec::new();
+    }
+    let kept = ci::variable_groups(old);
+    if !kept.is_empty() {
+        let many = kept.len() > 1;
+        warnings.push(format!(
+            "keeping variable {} {} from {pipeline}; pass --variable-group to replace {}",
+            if many { "groups" } else { "group" },
+            kept.join(", "),
+            if many { "them" } else { "it" },
+        ));
+    }
+    kept
+}
+
+/// `--variable-group` names as the pipeline writes them: trimmed, each once,
+/// in the order given.
+fn group_names(given: &[String]) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for name in given.iter().map(|name| name.trim()) {
+        if !names.iter().any(|seen| seen == name) {
+            names.push(name.to_owned());
+        }
+    }
+    names
+}
+
 /// What `setup ci` writes at `pipeline`, which holds `before` (as
 /// `files::read_text` read it): `text`, or nothing when the file there is the
 /// user's own or cannot be read as text; `warnings` says which.
@@ -661,9 +709,8 @@ fn pipeline_bytes(
             let dropped = ci::dropped_jobs(provider, &before, &text);
             if !dropped.is_empty() {
                 warnings.push(format!(
-                    "replacing {pipeline} drops {} {} that opentide does not generate",
-                    if dropped.len() == 1 { "job" } else { "jobs" },
-                    dropped.join(", ")
+                    "replacing {pipeline} drops {} that this run does not generate",
+                    dropped.join("; ")
                 ));
             }
             Some(text.into_bytes())
@@ -786,7 +833,7 @@ pub(crate) fn prepare(
     };
     let (credentials, sharing_credentials) =
         pipeline_variables(stage, root, &platforms, args.sharing, &mut warnings);
-    let options = ci::Options {
+    let mut options = ci::Options {
         provider: args.provider,
         platforms: platforms.clone(),
         staging: args.staging,
@@ -801,17 +848,14 @@ pub(crate) fn prepare(
         rules_folder: rules_folder(root, cx),
         credentials,
         sharing_credentials,
-        variable_groups: if args.provider == Provider::Azure {
-            args.variable_group.clone()
-        } else {
-            Vec::new()
-        },
+        variable_groups: Vec::new(),
     };
-    let text = ci::render(&options)
-        .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let pipeline = args.provider.path();
     let existing = root.join(pipeline);
     let before = files::read_text(stage, &existing);
+    options.variable_groups = variable_groups(args, pipeline, &before, &mut warnings);
+    let text = ci::render(&options)
+        .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let exists = existing.exists() || !matches!(before, Ok(None));
     let bytes = pipeline_bytes(args.provider, pipeline, before, text, &mut warnings);
     let mut files = vec![(pipeline.to_owned(), bytes, exists)];
@@ -861,7 +905,7 @@ pub(crate) fn check_pipeline_values(args: &CiArgs) -> Result<(), Box<Report>> {
     if let Some(group) = args
         .variable_group
         .iter()
-        .find(|group| group.trim().is_empty() || group.chars().any(char::is_control))
+        .find(|group| group.trim().is_empty() || group.trim().chars().any(char::is_control))
     {
         return Err(bad_parameter(
             &format!(
