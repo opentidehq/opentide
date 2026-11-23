@@ -35,8 +35,8 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `git_repository` | The workspace is in a repository, and its default branch (`origin/HEAD`) | | Not a repository, or `origin/HEAD` is not set | |
 | `configuration` | The workspace configuration TOMLs (`.opentide/configurations/`, and a parent instance's) load | One does not parse: the message names the file and line | | |
 | `templates_fresh` | Every template this version generates exists and matches what it would write, with the metadata keys `lint.toml` requires rendered live as `generate templates` does | | A template is missing or differs, or `lint.toml` holds a value opentide rejects | |
-| `schemas_fresh` | Every schema this version generates exists | | A schema is missing | |
-| `lsp_catalog` | No catalog is committed, or the committed copy (`.opentide/lsp/catalogs/generated/`, which no program reads: the language server generates its own) comes from this opentide version | | The committed copy does not parse or comes from another version | No workspace |
+| `schemas_fresh` | Every schema this version generates exists and matches what `generate schemas` would write now, with the workspace's visibility, statuses and enabled platforms, byte for byte. When the workspace does not open, only the presence of each schema is checked, and the message says so | | A schema is missing or differs | |
+| `lsp_catalog` | No catalog is committed, or the committed copy (`.opentide/lsp/catalogs/generated/`, which no program reads: the language server generates its own) comes from this opentide version and matches what `generate schemas` would write now (`fields.json`, `deprecations.json`) | | The committed copy does not parse, comes from another version or differs | No workspace |
 | `platforms_enabled` | Which platforms are enabled | | None is | |
 | `platform_sdk` | Each enabled platform's SDK imports | It does not | | |
 | `analysis_engine` | The analysis engine compiled into opentide loads, and the language-server version it was built from: what `validate`, `validate query`, `lint` and `opentide lsp` run | It does not | | |
@@ -139,7 +139,7 @@ One line per check, its fix under it, then the outcome line. `✓` is a pass, `!
   → git init ./
 ✓ 1 configuration file loads · configuration
 ✓ Templates match the installed version · templates_fresh
-✓ Every schema this version generates is present (6) · schemas_fresh
+✓ Schemas match the installed version (6) · schemas_fresh
 ✓ Enabled: sentinel · platforms_enabled
 ✓ sentinel: azure.identity, azure.monitor.query, requests import · platform_sdk
 ○ sentinel: no tenant configured · credentials

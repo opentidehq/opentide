@@ -23,10 +23,12 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use opentide_compile::Json as CJson;
+use opentide_compile::generate::Output;
 use opentide_connectors::connector::{CREDENTIALS_UNAVAILABLE, DeployError, TenantContext};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, HttpClient, Tenant};
 use opentide_schema::configuration::lint::parse_lint_config;
+use opentide_schema::generate::catalog::CATALOG_DIR;
 use opentide_schema::generate::router::{schema_artifact_name, template_artifact_name};
 use opentide_schema::generate::template::Options;
 use opentide_schema::generate::workspace::{
@@ -40,6 +42,7 @@ use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
 
 use super::doctor_network as network;
+use super::generate::phase_outputs;
 use super::interrupt::watched;
 use super::{Block, Report, placement};
 use crate::env::Env;
@@ -147,6 +150,42 @@ struct Doctor<'a> {
     tide_workspace: Option<PathBuf>,
     /// The merged configuration, when it loads.
     config: Option<Node>,
+    /// What `generate schemas` would write now, when the workspace opens
+    /// with the generator's own configuration: `Err` says why not.
+    expected: Option<Result<Expected, String>>,
+}
+
+/// The files `generate schemas` writes for this version, in memory.
+struct Expected {
+    /// Their folder's root: the workspace's.
+    root: PathBuf,
+    outputs: Vec<Output>,
+}
+
+impl Expected {
+    /// The files of the schemas (`catalog` false) or of the language-server
+    /// catalog (`catalog` true) that are missing on disk and the ones whose
+    /// bytes differ, by file name.
+    fn compare(&self, catalog: bool) -> (Vec<String>, Vec<String>) {
+        let catalog_dir = self.root.join(CATALOG_DIR);
+        let mut missing = Vec::new();
+        let mut differing = Vec::new();
+        for output in &self.outputs {
+            if output.path.starts_with(&catalog_dir) != catalog {
+                continue;
+            }
+            let name = output
+                .path
+                .file_name()
+                .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+            match std::fs::read(&output.path) {
+                Ok(bytes) if bytes == output.bytes => {}
+                Ok(_) => differing.push(name),
+                Err(_) => missing.push(name),
+            }
+        }
+        (missing, differing)
+    }
 }
 
 /// One configured tenant: the environment variables its setup names.
@@ -192,6 +231,7 @@ pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
         cwd,
         tide_workspace,
         config: None,
+        expected: None,
     };
     let roots = root::resolve(&OsFs, &options_for(&options));
     let loaded = config::load(&OsFs, &roots);
@@ -217,6 +257,7 @@ pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
         checks.push(skipped("templates_fresh"));
         checks.push(skipped("schemas_fresh"));
     } else {
+        doctor.expected = Some(expected_schemas(&options, cx.version));
         checks.push(doctor.templates());
         checks.push(doctor.schemas());
     }
@@ -251,6 +292,17 @@ pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
     }
     checks.push(doctor.mcp());
     report(&checks, cx.text)
+}
+
+/// What `generate schemas` would write: the workspace opened as the
+/// generator opens it (its visibility, statuses and enabled platforms shape
+/// the schemas), the phase's outputs in memory.
+fn expected_schemas(options: &RootOptions, version: &str) -> Result<Expected, String> {
+    let workspace = super::open_for("doctor", options_for(options))
+        .map_err(|report| report.outcome.message.clone())?;
+    let root = workspace.root().to_path_buf();
+    let outputs = phase_outputs("schemas", &workspace, &root, version)?;
+    Ok(Expected { root, outputs })
 }
 
 /// `check_latest_version`: whether PyPI has a newer opentide.
@@ -727,6 +779,46 @@ impl Doctor<'_> {
                 unique.push(name);
             }
         }
+        let fix = "opentide generate schemas";
+        let mut note = String::new();
+        match &self.expected {
+            Some(Ok(expected)) => {
+                let (missing, differing) = expected.compare(false);
+                if !missing.is_empty() {
+                    return Check::new(
+                        "schemas_fresh",
+                        "warn",
+                        format!(
+                            "{} schema(s) this version generates are missing: {}",
+                            missing.len(),
+                            missing.join(", ")
+                        ),
+                    )
+                    .fix(fix);
+                }
+                if !differing.is_empty() {
+                    return Check::new(
+                        "schemas_fresh",
+                        "warn",
+                        format!(
+                            "{} schema(s) differ from what this version generates: {}",
+                            differing.len(),
+                            differing.join(", ")
+                        ),
+                    )
+                    .fix(fix);
+                }
+                return Check::new(
+                    "schemas_fresh",
+                    "pass",
+                    format!("Schemas match the installed version ({})", unique.len()),
+                );
+            }
+            Some(Err(reason)) => {
+                note = format!("; contents not compared, the workspace did not open: {reason}");
+            }
+            None => {}
+        }
         let missing: Vec<&String> = unique
             .iter()
             .filter(|name| !folder.join(name.as_str()).is_file())
@@ -751,7 +843,7 @@ impl Doctor<'_> {
             "schemas_fresh",
             "pass",
             format!(
-                "Every schema this version generates is present ({})",
+                "Every schema this version generates is present ({}){note}",
                 unique.len()
             ),
         )
@@ -815,6 +907,21 @@ impl Doctor<'_> {
                     ),
                 )
                 .fix(fix);
+            }
+            if let Some(Ok(expected)) = &self.expected {
+                let (_, differing) = expected.compare(true);
+                if !differing.is_empty() {
+                    return Check::new(
+                        "lsp_catalog",
+                        "warn",
+                        format!(
+                            "The language-server catalog committed in {shown} differs from \
+                             what opentide {version} generates: {}",
+                            differing.join(", ")
+                        ),
+                    )
+                    .fix(fix);
+                }
             }
         }
         Check::new(
@@ -1951,6 +2058,7 @@ mod tests {
             cwd: dir.path().to_path_buf(),
             tide_workspace: None,
             config: None,
+            expected: None,
         };
         assert_eq!(doctor.lsp_catalog().status, "pass");
         std::fs::write(generated.join("fields.json"), r#"{"opentide": "0.18.0"}"#).unwrap();
@@ -1992,6 +2100,7 @@ mod tests {
                 cwd: dir.path().to_path_buf(),
                 tide_workspace: None,
                 config: None,
+                expected: None,
             };
             std::fs::write(
                 generated.join("fields.json"),
@@ -2020,6 +2129,7 @@ mod tests {
             cwd: dir.path().to_path_buf(),
             tide_workspace: None,
             config: None,
+            expected: None,
         };
         let check = doctor.proxy(false);
         assert_eq!(check.status, "pass");
@@ -2162,6 +2272,59 @@ mod tests {
     }
 
     #[test]
+    fn schemas_this_version_writes_are_fresh_and_older_ones_are_not() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".opentide")).unwrap();
+        let env = Env::from_pairs(Vec::<(String, String)>::new());
+        let cx = context(&env, dir.path());
+        let (_, options) = placement(None, &env, dir.path());
+        let expected = expected_schemas(&options, cx.version).unwrap();
+        for output in &expected.outputs {
+            std::fs::create_dir_all(output.path.parent().unwrap()).unwrap();
+            std::fs::write(&output.path, &output.bytes).unwrap();
+        }
+        let find = |code: &str| {
+            checks(&run(true, false, &context(&env, dir.path())))
+                .into_iter()
+                .find(|(found, ..)| found == code)
+                .unwrap()
+        };
+        assert_eq!(
+            find("schemas_fresh").1,
+            "pass",
+            "{:?}",
+            find("schemas_fresh")
+        );
+        assert_eq!(find("lsp_catalog").1, "pass", "{:?}", find("lsp_catalog"));
+        // A schema an older version wrote differs by its bytes, not its presence.
+        let schema = expected
+            .outputs
+            .iter()
+            .find(|output| !output.path.starts_with(expected.root.join(CATALOG_DIR)))
+            .unwrap();
+        let mut older = schema.bytes.clone();
+        older.extend_from_slice(b" ");
+        std::fs::write(&schema.path, older).unwrap();
+        let stale = find("schemas_fresh");
+        assert_eq!(stale.1, "warn");
+        let name = schema.path.file_name().unwrap().to_string_lossy();
+        assert!(
+            stale.2.starts_with("1 schema(s) differ") && stale.2.contains(name.as_ref()),
+            "{stale:?}"
+        );
+        // So does the committed catalog, with the version string unchanged.
+        let catalog = expected
+            .outputs
+            .iter()
+            .find(|output| output.path.ends_with("deprecations.json"))
+            .unwrap();
+        std::fs::write(&catalog.path, b"{}\n").unwrap();
+        let stale = find("lsp_catalog");
+        assert_eq!(stale.1, "warn", "{stale:?}");
+        assert!(stale.2.contains("deprecations.json"), "{stale:?}");
+    }
+
+    #[test]
     fn a_broken_configuration_names_the_file_and_line_and_skips_its_readers() {
         let dir = tempfile::tempdir().unwrap();
         let config = dir.path().join(".opentide/configurations");
@@ -2240,6 +2403,7 @@ mod tests {
             cwd: dir.path().to_path_buf(),
             tide_workspace: None,
             config: None,
+            expected: None,
         };
         doctor.proxy(false)
     }
