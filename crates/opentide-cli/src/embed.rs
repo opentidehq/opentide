@@ -197,6 +197,8 @@ pub fn validate_json(request: &ValidateRequest, env: &Env, cwd: &Path) -> String
         cve_check: None,
         platform_configurations: crate::plugins::configurations(),
         compile_check: Some(&opentide_compile::validate::Compilers),
+        memo: None,
+        stop: None,
     });
     if let Some(refusal) = &validation.refused {
         return error(refusal.code, refusal.message.clone());

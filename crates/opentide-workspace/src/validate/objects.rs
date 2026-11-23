@@ -301,7 +301,7 @@ pub fn revision_schema(identifier: &str) -> Option<&'static Json> {
 }
 
 /// The findings of one object: its errors and its warnings.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Found {
     /// Errors.
     pub issues: Vec<Diagnostic>,

@@ -371,6 +371,40 @@ pub struct Options<'a> {
     /// The platform compilers (the compile check); without them nothing is
     /// compiled.
     pub compile_check: Option<&'a dyn CompileCheck>,
+    /// Where a run that may stop keeps what it checked, so that the next
+    /// run goes on from there (see [`Options::stop`]).
+    pub memo: Option<&'a ObjectMemo>,
+    /// Asked between batches of objects: when it returns `true` the run
+    /// stops and [`validate_resumable`] returns `None`. What it checked is kept in `memo`; a run given
+    /// the same memo, over the same workspace, then reports exactly what an
+    /// uninterrupted run would. Without a `memo` it is not asked. The command
+    /// line passes neither: its run never stops.
+    pub stop: Option<&'a dyn Fn() -> bool>,
+}
+
+/// What a run that stopped ([`Options::stop`]) had checked: each object's
+/// findings, by the object's file and UUID. It holds findings of one
+/// workspace as it was: drop it when anything the checks read changed.
+#[derive(Debug, Default)]
+pub struct ObjectMemo {
+    found: std::sync::Mutex<HashMap<(PathBuf, String), objects::Found>>,
+}
+
+impl ObjectMemo {
+    /// How many objects it holds.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.found
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+
+    /// Whether it holds none.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl std::fmt::Debug for Options<'_> {
@@ -387,6 +421,8 @@ impl std::fmt::Debug for Options<'_> {
                 &self.platform_configurations.is_some(),
             )
             .field("compile_check", &self.compile_check.is_some())
+            .field("memo", &self.memo.is_some())
+            .field("stop", &self.stop.is_some())
             .finish()
     }
 }
@@ -521,6 +557,10 @@ impl Validation {
 
     /// A run that checked nothing: `refusal` says why.
     fn refusing(refusal: Refusal) -> Self {
+        Self::empty(Some(refusal))
+    }
+
+    fn empty(refused: Option<Refusal>) -> Self {
         Self {
             checks: Vec::new(),
             report: Report {
@@ -548,7 +588,7 @@ impl Validation {
             },
             failed: true,
             warned: false,
-            refused: Some(refusal),
+            refused,
         }
     }
 
@@ -1181,16 +1221,30 @@ fn cve_findings(threat: &crate::index::Object, lookup: &dyn CveCheck) -> Vec<Dia
 }
 
 /// Runs `validate` over `ws`.
+pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
+    let never = Options {
+        memo: None,
+        stop: None,
+        ..*options
+    };
+    // Only a stop hook makes a run return `None`, and `never` has none: the
+    // empty report is not reachable.
+    validate_resumable(ws, &never).unwrap_or_else(|| Validation::empty(None))
+}
+
+/// [`validate`], which may stop ([`Options::stop`]) and go on later
+/// ([`Options::memo`]): `None` when it stopped, the same report an
+/// uninterrupted run makes otherwise.
 #[expect(
     clippy::too_many_lines,
     reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
 )]
-pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
+pub fn validate_resumable(ws: &Workspace, options: &Options<'_>) -> Option<Validation> {
     if let Some(refusal) = options
         .selection
         .and_then(|selection| unknown_types(&selection.types))
     {
-        return Validation::refusing(refusal);
+        return Some(Validation::refusing(refusal));
     }
     let started = clock_start();
     let fs = ws.fs().as_ref();
@@ -1400,10 +1454,15 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             schema: has(Check::Schema),
             check_shard: !scope.is_full(),
         };
-        let found: Vec<objects::Found> = work
-            .par_iter()
-            .map(|subject| objects::check_object(subject, &graph, checks, fs, &root))
-            .collect();
+        let found: Vec<objects::Found> = match (options.memo, options.stop) {
+            (Some(memo), Some(stop)) => {
+                check_in_batches(&work, memo, stop, &graph, checks, fs, &root)?
+            }
+            _ => work
+                .par_iter()
+                .map(|subject| objects::check_object(subject, &graph, checks, fs, &root))
+                .collect(),
+        };
         for one in found {
             issues.extend(one.issues);
             warnings.extend(one.warnings);
@@ -1562,14 +1621,73 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             .changes
             .len(),
     };
-    Validation {
+    Some(Validation {
         checks: check_list,
         report,
         summary,
         failed,
         warned,
         refused: None,
+    })
+}
+
+/// The findings of each of `work`'s objects, in order, checked in batches
+/// (each on the threads the host has) with `stop` asked before each; what is
+/// checked is kept in `memo`, and an object `memo` holds is not checked
+/// again. `None` when `stop` said to stop, which it is never asked before the
+/// first batch with an object to check: each call makes progress.
+fn check_in_batches(
+    work: &[Subject<'_>],
+    memo: &ObjectMemo,
+    stop: &dyn Fn() -> bool,
+    graph: &Graph<'_>,
+    checks: ObjectChecks,
+    fs: &dyn FileSystem,
+    root: &Path,
+) -> Option<Vec<objects::Found>> {
+    // Objects checked between two asks of `stop`: a few milliseconds on a
+    // host with one thread; more on a host with many, so that its threads
+    // are not joined every few objects.
+    let batch_len = 32.max(4 * rayon::current_num_threads());
+    let key = |subject: &Subject<'_>| (subject.path.to_path_buf(), subject.uuid.to_string());
+    let lock = || {
+        memo.found
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    };
+    let mut all = Vec::with_capacity(work.len());
+    // A call checks one batch before it asks `stop`: a pull that input keeps
+    // interrupting still goes on, a batch at a time.
+    let mut checked = false;
+    for batch in work.chunks(batch_len) {
+        let kept: Vec<Option<objects::Found>> = {
+            let held = lock();
+            batch
+                .iter()
+                .map(|subject| held.get(&key(subject)).cloned())
+                .collect()
+        };
+        let fresh_work = kept.iter().any(Option::is_none);
+        if fresh_work && checked && stop() {
+            return None;
+        }
+        checked |= fresh_work;
+        let fresh: Vec<Option<objects::Found>> = batch
+            .par_iter()
+            .zip(kept)
+            .map(|(subject, kept)| match kept {
+                Some(found) => Some(found),
+                None => Some(objects::check_object(subject, graph, checks, fs, root)),
+            })
+            .collect();
+        let mut held = lock();
+        for (subject, found) in batch.iter().zip(fresh) {
+            let Some(found) = found else { continue };
+            held.entry(key(subject)).or_insert_with(|| found.clone());
+            all.push(found);
+        }
     }
+    Some(all)
 }
 
 /// The object files discovery listed, resolved as [`FileSystem::resolve`]
@@ -1802,6 +1920,12 @@ impl Workspace {
     /// Runs `validate` ([`validate`]).
     pub fn validate(&self, options: &Options<'_>) -> Validation {
         validate(self, options)
+    }
+
+    /// [`validate`](Self::validate) that may stop and go on later
+    /// ([`validate_resumable`]).
+    pub fn validate_resumable(&self, options: &Options<'_>) -> Option<Validation> {
+        validate_resumable(self, options)
     }
 
     /// The `deployment_state_*` findings a full `validate` run reports on the

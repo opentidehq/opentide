@@ -1447,9 +1447,11 @@ impl Session {
     /// attempt began, if one did, and what is returned is to be passed for
     /// the next. It may not yield when the client watches no files (nothing
     /// it finds is kept from one batch to the next, so an attempt that yields
-    /// is lost), nor once its first attempt is [`YIELD_FOR`] old: work no
-    /// attempt can interrupt (the findings of every object, after an edit
-    /// they read) is done again by each, and the pull then runs to its end.
+    /// is lost), nor once its first attempt is [`YIELD_FOR`] old: the work
+    /// between two checks of the input (a batch of objects, the lint and
+    /// placing after them, the workspace's load) cannot be interrupted, and
+    /// what an edit the checks across objects read throws away is done again
+    /// by each attempt; the pull then runs to its end.
     pub(crate) fn begin_yieldable(&self, first: Option<Instant>) -> Option<Instant> {
         /// How long after its first attempt a workspace pull may still yield.
         const YIELD_FOR: Duration = Duration::from_secs(1);
@@ -1754,6 +1756,21 @@ impl Session {
             .unwrap_or_default()
     }
 
+    /// What `validate` reports on every object of root `root`, or `None`
+    /// when `may_stop` and the run stopped for the messages behind the pull
+    /// ([`should_yield`](Self::should_yield)): it goes on from there later.
+    fn findings_of_every_object(&self, root: usize, may_stop: bool) -> Option<Findings> {
+        let r = self.roots.get(root)?;
+        let (generation, epoch) = self.state_key();
+        let buffers = self.buffers(Some(root));
+        let _span = crate::timing::Span::new("workspace/diagnostic: findings of every object");
+        let should_stop = || self.should_yield();
+        let stop = may_stop.then_some(&should_stop as &dyn Fn() -> bool);
+        r.checks
+            .borrow_mut()
+            .all_findings_until(&r.path, buffers, generation, epoch, stop)
+    }
+
     /// What a workspace pull reports for each closed object file of `root`
     /// (the files the editor has not open): the workspace's findings and the
     /// engine's analysis, built into an entry by `build`. An entry is kept
@@ -1775,13 +1792,12 @@ impl Session {
         let Some(r) = self.roots.get(root) else {
             return Vec::new();
         };
-        let (generation, epoch) = self.state_key();
-        let found = {
-            let buffers = self.buffers(Some(root));
-            let _span = crate::timing::Span::new("workspace/diagnostic: findings of every object");
-            r.checks
-                .borrow_mut()
-                .all_findings(&r.path, buffers, generation, epoch)
+        let (_, epoch) = self.state_key();
+        let found = self.findings_of_every_object(root, only.is_none());
+        let Some(found) = found else {
+            // Stopped between two objects: the messages behind the pull go
+            // first, and it goes on from what was checked.
+            return Vec::new();
         };
         // A client that does not watch files is not told what changed on
         // disk: nothing is kept for it.
@@ -2001,6 +2017,16 @@ impl Session {
             .fold((0, 0), |sum, (full, partial)| {
                 (sum.0 + full, sum.1 + partial)
             })
+    }
+
+    /// How many times a run over every object stopped for the messages
+    /// behind it, summed over the roots.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn validate_stops(&self) -> u64 {
+        self.roots
+            .iter()
+            .map(|r| r.checks.borrow().validate_stops)
+            .sum()
     }
 
     /// The files the editor and the host hold for a root's workspace: the

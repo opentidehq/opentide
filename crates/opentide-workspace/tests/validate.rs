@@ -2068,4 +2068,64 @@ configurations:
         );
         assert!(validation.failed);
     }
+
+    /// A run that stops at every Nth ask and is resumed to the end reports
+    /// what `validate` does, for any N; a call is never asked before its first
+    /// batch, so each makes progress.
+    #[test]
+    fn a_run_that_stops_and_goes_on_equals_one_that_does_not() {
+        use opentide_workspace::validate::ObjectMemo;
+        use std::cell::Cell;
+
+        let fs = workspace();
+        for i in 0..150 {
+            // Every 10th shares the first's UUID, every 7th has no name.
+            let uuid = if i % 10 == 0 {
+                U1.to_string()
+            } else {
+                format!("11111111-1111-4111-8111-{i:012}")
+            };
+            let text = if i % 7 == 0 {
+                format!("metadata:\n  uuid: {uuid}\n  schema: rule::1.1\n")
+            } else {
+                rule(&uuid, &format!("Rule {i}"))
+            };
+            fs.write(format!("/ws/objects/rules/rule-{i:03}.yaml"), text);
+        }
+        let workspace = open(&fs);
+        let expected = workspace.validate(&Options::default());
+        assert!(!expected.report.issues.is_empty());
+        for nth in [1_usize, 2, 3] {
+            let memo = ObjectMemo::default();
+            let asked = Cell::new(0_usize);
+            let stop = || {
+                asked.set(asked.get() + 1);
+                asked.get().is_multiple_of(nth)
+            };
+            let mut attempts = 0;
+            let resumed = loop {
+                attempts += 1;
+                assert!(attempts < 100, "every {nth}: it never finishes");
+                let options = Options {
+                    memo: Some(&memo),
+                    stop: Some(&stop),
+                    ..Options::default()
+                };
+                if let Some(done) = workspace.validate_resumable(&options) {
+                    break done;
+                }
+            };
+            assert!(attempts > 1, "every {nth}: it never stopped");
+            assert_eq!(resumed.report.issues, expected.report.issues, "every {nth}");
+            assert_eq!(
+                resumed.report.warnings, expected.report.warnings,
+                "every {nth}"
+            );
+            assert_eq!(resumed.failed, expected.failed, "every {nth}");
+            assert_eq!(
+                resumed.summary.objects, expected.summary.objects,
+                "every {nth}"
+            );
+        }
+    }
 }

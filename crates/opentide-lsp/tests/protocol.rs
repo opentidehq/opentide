@@ -3810,6 +3810,13 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
         .as_u64()
         .unwrap();
     assert!(yields >= 1, "{yields}");
+    // The first validation of every object ran once, to its end. Whether it
+    // also stopped for these messages depends on timing (a many-core host can
+    // finish its first batch before they wait), so that is not asserted here:
+    // `checks.rs` and `opentide-workspace`'s tests hold stopping and resuming
+    // deterministically.
+    let stats = lsp.request("opentide/__stats", Value::Null);
+    assert_eq!(stats["result"]["validations"]["full"], 1, "{stats}");
 }
 
 /// #1767: the server reads each folder and file of the disk once between

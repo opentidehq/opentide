@@ -9,7 +9,9 @@
 use opentide_core::{Diagnostic as EngineDiagnostic, Position, Range, Severity};
 use opentide_workspace::fs::{DirEntry, EntryKind};
 use opentide_workspace::lint;
-use opentide_workspace::validate::{Options as ValidateOptions, QueriesMode, Selection};
+use opentide_workspace::validate::{
+    ObjectMemo, Options as ValidateOptions, QueriesMode, Selection,
+};
 use opentide_workspace::{
     Change, Diagnostic, FileSystem, MemoryFs, OpenError, Options, OsFs, RootOptions, Workspace,
 };
@@ -246,6 +248,10 @@ pub(crate) struct RootChecks {
     /// The findings of every object, kept up to date across edits
     /// ([`refresh_all`](Self::refresh_all)).
     all: Option<Kept>,
+    /// What a run over every object that stopped had checked, and the epoch
+    /// it is for: the next run goes on from it. Dropped when anything the
+    /// workspace reads changes ([`update`](Self::update)).
+    memo: (u64, ObjectMemo),
     /// The object files whose parse changed since [`all`](Self::all) was
     /// last made current.
     dirty: std::collections::BTreeSet<PathBuf>,
@@ -258,6 +264,9 @@ pub(crate) struct RootChecks {
     /// How many times every object was checked, and how many times only the
     /// files that changed were (the tests' counters, `opentide/__stats`).
     pub(crate) validations: (u64, u64),
+    /// How many times a run over every object stopped to let the messages
+    /// behind it go first, and went on later.
+    pub(crate) validate_stops: u64,
     /// Counts the changes to [`all`](Self::all): its entry for a file is
     /// the one made at the revision [`stamp_of`](Self::stamp_of) says.
     revision: u64,
@@ -284,6 +293,8 @@ impl Default for RootChecks {
             pending: Vec::new(),
             findings: None,
             all: None,
+            memo: (0, ObjectMemo::default()),
+            validate_stops: 0,
             dirty: std::collections::BTreeSet::new(),
             stale: false,
             states_changed: false,
@@ -480,6 +491,7 @@ impl RootChecks {
         if !current {
             let changes = std::mem::take(&mut self.pending);
             self.findings = None;
+            self.memo.1 = ObjectMemo::default();
             let result = match self.workspace.as_mut() {
                 Some(workspace) => workspace.invalidate(&changes).map(|invalidation| {
                     // What the kept findings of every object need: the files
@@ -563,7 +575,7 @@ impl RootChecks {
             return Arc::default();
         }
         if self.all.as_ref().is_some_and(|kept| kept.epoch == epoch)
-            && let Some(kept) = self.refresh_all(generation, epoch)
+            && let Ok(Some(kept)) = self.refresh_all(generation, epoch, None)
         {
             let holds = self.workspace.as_ref().is_some_and(|workspace| {
                 files.iter().all(|file| {
@@ -714,15 +726,32 @@ impl RootChecks {
         generation: u64,
         epoch: u64,
     ) -> Findings {
+        self.all_findings_until(root, buffers, generation, epoch, None)
+            .unwrap_or_default()
+    }
+
+    /// [`all_findings`](Self::all_findings) that may stop, when `stop` (given
+    /// only where the run may) says so between two batches of objects: `None`
+    /// then, with what was checked kept for the next call, which reports what
+    /// a run that never stopped would. Without `stop` nothing is kept and the
+    /// objects are checked in one go.
+    pub(crate) fn all_findings_until(
+        &mut self,
+        root: &Path,
+        buffers: Buffers,
+        generation: u64,
+        epoch: u64,
+        stop: Option<&dyn Fn() -> bool>,
+    ) -> Option<Findings> {
         if let Some(kept) = &self.all
             && kept.generation == generation
             && kept.epoch == epoch
             && self.pending.is_empty()
         {
-            return Arc::clone(&kept.found);
+            return Some(Arc::clone(&kept.found));
         }
         if self.workspace(root, buffers).is_none() {
-            return Arc::default();
+            return Some(Arc::default());
         }
         if self.all.as_ref().is_none_or(|kept| kept.epoch != epoch) {
             self.all = None;
@@ -730,7 +759,16 @@ impl RootChecks {
             self.stale = true;
             self.states_changed = false;
         }
-        self.refresh_all(generation, epoch).unwrap_or_default()
+        if self.memo.0 != epoch {
+            self.memo = (epoch, ObjectMemo::default());
+        }
+        match self.refresh_all(generation, epoch, stop) {
+            Ok(found) => Some(found.unwrap_or_default()),
+            Err(Stopped) => {
+                self.validate_stops += 1;
+                None
+            }
+        }
     }
 
     /// What identifies `file`'s entry of [`all_findings`](Self::all_findings):
@@ -744,8 +782,15 @@ impl RootChecks {
     /// checked again when none are kept, or something other objects' checks
     /// read changed (an object's UUID or name, a platform block the cross-rule
     /// checks compare, the configuration).
-    fn refresh_all(&mut self, generation: u64, epoch: u64) -> Option<Findings> {
-        let workspace = self.workspace.as_ref()?;
+    fn refresh_all(
+        &mut self,
+        generation: u64,
+        epoch: u64,
+        stop: Option<&dyn Fn() -> bool>,
+    ) -> Result<Option<Findings>, Stopped> {
+        let Some(workspace) = self.workspace.as_ref() else {
+            return Ok(None);
+        };
         let kept = self.all.take().filter(|_| !self.stale);
         let states_changed = std::mem::take(&mut self.states_changed) && kept.is_some();
         let found = match kept {
@@ -804,18 +849,21 @@ impl RootChecks {
             }
             None => {
                 let _span = crate::timing::Span::new("validate: every object");
+                let run = workspace
+                    .validate_resumable(&ValidateOptions {
+                        queries: QueriesMode::Off,
+                        memo: stop.map(|_| &self.memo.1),
+                        stop,
+                        ..ValidateOptions::default()
+                    })
+                    .ok_or(Stopped)?;
                 self.revision += 1;
                 self.base_stamp = self.revision;
                 self.stamps.clear();
                 self.validations.0 += 1;
-                Arc::new(by_file(
-                    workspace,
-                    workspace.validate(&ValidateOptions {
-                        queries: QueriesMode::Off,
-                        ..ValidateOptions::default()
-                    }),
-                    None,
-                ))
+                self.memo.1 = ObjectMemo::default();
+                let _span = crate::timing::Span::new("validate: lint and placing");
+                Arc::new(by_file(workspace, run, None))
             }
         };
         self.dirty.clear();
@@ -825,9 +873,12 @@ impl RootChecks {
             epoch,
             found: Arc::clone(&found),
         });
-        Some(found)
+        Ok(Some(found))
     }
 }
+
+/// A run over every object stopped ([`RootChecks::all_findings_until`]).
+struct Stopped;
 
 impl RootChecks {
     /// Put the `deployment_state_*` findings of the shards as they are now in
@@ -1800,6 +1851,78 @@ mod tests {
         kept.changed([target.clone()]);
         let found = kept.all_findings(&root, Buffers::default(), 9, 0);
         assert_eq!(found, fresh(&root), "mended through the target");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A run over every object that stops between batches and goes on
+    /// reports what one that never stops does, however often it stops, and
+    /// an edit between two attempts is in what it reports.
+    #[test]
+    fn a_run_over_every_object_that_stops_and_goes_on_equals_one_that_does_not() {
+        use std::cell::Cell;
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/objects");
+        let root = std::env::temp_dir().join(format!("opentide-resume-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        let text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+        let write = |i: usize, text: &str| {
+            let path = root.join(format!("objects/rules/rule-{i:04}.yaml"));
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        for i in 1..=100 {
+            let mut one = text.replace("8003-000000000001", &format!("8003-{i:012}"));
+            if i % 7 == 0 {
+                one = one.replace("severity: High", "severity: Nope");
+            }
+            write(i, &one);
+        }
+        let fresh = RootChecks::default().all_findings(&root, Buffers::default(), 0, 0);
+        assert!(fresh.values().any(|findings| !findings.is_empty()));
+
+        let mut kept = RootChecks::default();
+        let stops = Cell::new(0_usize);
+        // Stops at every ask: each attempt checks one batch (a call is not
+        // asked before its first), so the run needs several.
+        let stop = || {
+            stops.set(stops.get() + 1);
+            true
+        };
+        let mut attempts = 0;
+        let found = loop {
+            attempts += 1;
+            assert!(attempts < 50, "it never finishes");
+            if let Some(found) =
+                kept.all_findings_until(&root, Buffers::default(), 0, 0, Some(&stop))
+            {
+                break found;
+            }
+        };
+        assert!(stops.get() >= 2, "it stopped {} times", stops.get());
+        assert_eq!(kept.validate_stops, attempts - 1);
+        assert_eq!(found, fresh, "resumed equals uninterrupted");
+        assert_eq!(kept.validations, (1, 0), "every object is checked once");
+
+        // An edit between two attempts: the objects checked before it are
+        // checked again. The first attempt checks the first batch, which holds
+        // `rule-0001`.
+        let mut kept = RootChecks::default();
+        assert!(
+            kept.all_findings_until(&root, Buffers::default(), 0, 0, Some(&stop))
+                .is_none()
+        );
+        assert!(kept.memo.1.len() >= 32, "{} kept", kept.memo.1.len());
+        let edited = write(1, &text.replace("severity: High", "severity: Nope"));
+        kept.changed([edited]);
+        let found = loop {
+            if let Some(found) =
+                kept.all_findings_until(&root, Buffers::default(), 1, 0, Some(&stop))
+            {
+                break found;
+            }
+        };
+        let fresh = RootChecks::default().all_findings(&root, Buffers::default(), 0, 0);
+        assert_eq!(found, fresh, "an edit between two attempts");
         let _ = std::fs::remove_dir_all(&root);
     }
 }
