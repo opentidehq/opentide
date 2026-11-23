@@ -1140,6 +1140,7 @@ fn check_table_named(
     // The declared names, read once for both lookups below.
     let declared = std::cell::OnceCell::new();
     let declared_names = || declared.get_or_init(|| datasets.names(platform));
+    let suggestion_cell = std::cell::OnceCell::new();
     let suggest = || {
         suggest::closest(
             table,
@@ -1151,6 +1152,9 @@ fn check_table_named(
         .map(str::to_string)
         .or_else(|| catalog.suggest_bare_table(table))
     };
+    // Looked up once: a name with no suggestion has no near miss either, so the
+    // typo check below runs only when there is one.
+    let suggestion = || suggestion_cell.get_or_init(suggest).clone();
     // The table within `misspelt_edits` (a match that differs only in case, `_`,
     // `-` or spaces counts), declared first, else in the catalog; bare
     // identifiers only, as for `suggest`.
@@ -1193,7 +1197,10 @@ fn check_table_named(
                 // A near miss of a table the workspace declares or the catalog
                 // lists (`misspelt_edits`), and not a custom `_CL` table, is a
                 // typo: an error under its own code.
-                Profile::Sentinel => match near_miss().filter(|_| !table.ends_with("_CL")) {
+                Profile::Sentinel => match (!table.ends_with("_CL") && suggestion().is_some())
+                    .then(near_miss)
+                    .flatten()
+                {
                     Some(near) => {
                         out.push(
                             Diagnostic::error(
@@ -1228,7 +1235,7 @@ fn check_table_named(
     };
     // A table the catalog knows is not misspelt: the fix is to declare it, not
     // to rename it into a declared name.
-    if !known && let Some(s) = suggest() {
+    if !known && let Some(s) = suggestion() {
         d = d.with_suggestion(s);
     }
     out.push(d);
