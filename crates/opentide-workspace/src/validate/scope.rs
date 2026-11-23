@@ -170,7 +170,9 @@ impl Scope {
         self.file_targets
             .iter()
             .filter(|target| {
-                !target.paths.is_empty() && target.paths.iter().all(|path| fs.kind(path).is_err())
+                !target.paths.is_empty() && target.paths.iter().all(|path| {
+                        matches!(fs.kind(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+                    })
             })
             .map(|target| target.raw.clone())
             .collect()

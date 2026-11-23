@@ -503,22 +503,20 @@ pub fn fix_command(
     queries: Option<&str>,
     selection: &crate::validate::Selection,
 ) -> String {
-    validate_command(true, check, queries, selection)
+    validate_command(&["--fix"], check, queries, selection)
 }
 
 /// `opentide validate` again with the scope of a run (`--check`, `--queries`,
-/// `--file`, `--uuid`, `--type`), plus `--fix` when `fix`, quoted as a shell
-/// reads it.
+/// `--file`, `--uuid`, `--type`), after the `flags` that decide how it
+/// judges (`--fix`, `--strict`, `--allow-empty`), quoted as a shell reads it.
 pub fn validate_command(
-    fix: bool,
+    flags: &[&str],
     check: Option<&str>,
     queries: Option<&str>,
     selection: &crate::validate::Selection,
 ) -> String {
     let mut words: Vec<&str> = vec!["opentide", "validate"];
-    if fix {
-        words.push("--fix");
-    }
+    words.extend(flags);
     if let Some(check) = check {
         words.extend(["--check", check]);
     }
@@ -831,12 +829,21 @@ mod tests {
             ..crate::validate::Selection::default()
         };
         assert_eq!(
-            validate_command(false, Some("schema"), None, &selection),
+            validate_command(&[], Some("schema"), None, &selection),
             "opentide validate --check schema --file 'objects/rules/my rule.yaml' --type rule"
         );
         assert_eq!(
-            validate_command(false, None, None, &crate::validate::Selection::default()),
+            validate_command(&[], None, None, &crate::validate::Selection::default()),
             "opentide validate"
+        );
+        assert_eq!(
+            validate_command(
+                &["--strict", "--allow-empty"],
+                None,
+                None,
+                &crate::validate::Selection::default()
+            ),
+            "opentide validate --strict --allow-empty"
         );
     }
 

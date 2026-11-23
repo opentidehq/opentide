@@ -35,7 +35,8 @@ const SAFE_FIX_CODES: [&str; 3] = [
 fn default_help(code: &str) -> Option<&'static str> {
     Some(match code {
         "invalid_uuid" => {
-            "replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\""
+            "replace it with a UUID v4 from any generator (`uuidgen`; PowerShell \
+             `[guid]::NewGuid()`)"
         }
         "missing_uuid" => "add metadata.uuid with a fresh UUID v4",
         "duplicate_id" => {
@@ -55,8 +56,8 @@ fn default_help(code: &str) -> Option<&'static str> {
 
 /// What to do with a `composition` at the root of an objective, which older
 /// templates wrote there; it is read only under `objective:`.
-const ROOT_COMPOSITION_HELP: &str = "`composition` belongs under `objective:`; delete the root \
-    copy (it is ignored). If it differs from `objective.composition`, merge the two by hand first";
+const ROOT_COMPOSITION_HELP: &str = "move it under `objective:`, or delete the root copy if \
+    `objective.composition` already holds it (merge by hand if they differ)";
 
 /// An objective's top-level `composition`: an unknown key since 0.21.
 fn is_root_composition(diagnostic: &Diagnostic) -> bool {
@@ -65,7 +66,7 @@ fn is_root_composition(diagnostic: &Diagnostic) -> bool {
         && diagnostic.field_path == ["composition"]
         && diagnostic
             .message
-            .starts_with("Extra inputs are not permitted")
+            .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
 }
 
 /// `yaml_parse` problems that are not syntax: the indentation hint would

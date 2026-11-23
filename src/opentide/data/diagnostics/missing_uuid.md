@@ -15,4 +15,4 @@ metadata:
 
 ## How to fix
 
-Add `metadata.uuid` with a fresh UUID v4 (`opentide new rule` writes one, or run `uuidgen`). Never reuse the UUID of another object: references and deployment state follow it.
+Add `metadata.uuid` with a fresh UUID v4 from any UUID v4 generator (`uuidgen`; PowerShell `[guid]::NewGuid()`). Never reuse the UUID of another object: references and deployment state follow it.

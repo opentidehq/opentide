@@ -14,4 +14,4 @@ enabeld = false        # the key is enabled
 
 ## How to fix
 
-Remove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows them, and an editor on `opentide lsp start` offers each file's keys as you type.
+Remove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows the keys of the platform files, and an editor on `opentide lsp start` offers each file's keys as you type.

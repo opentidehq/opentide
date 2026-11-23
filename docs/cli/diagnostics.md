@@ -3888,7 +3888,7 @@ opentide validate --file objects/rules/does-not-exist.yaml
 
 ### How to fix
 
-Fix the path: it is read relative to the workspace and to the working directory, and is case-sensitive. `opentide validate` without `--file` lists every object it finds.
+Fix the path: it is read relative to the working directory and to the workspace root, and whether its case matters depends on the filesystem. `--file` takes a path or a file name, not a glob: a quoted pattern such as `'objects/rules/*.yaml'` is reported here too, so let the shell expand it. Run `opentide validate` without `--file` to check every object.
 
 ## filename_mismatch
 
@@ -6089,7 +6089,7 @@ metadata:
 
 ### How to fix
 
-Add `metadata.uuid` with a fresh UUID v4 (`opentide new rule` writes one, or run `uuidgen`). Never reuse the UUID of another object: references and deployment state follow it.
+Add `metadata.uuid` with a fresh UUID v4 from any UUID v4 generator (`uuidgen`; PowerShell `[guid]::NewGuid()`). Never reuse the UUID of another object: references and deployment state follow it.
 
 ## name_invalid
 
@@ -7253,7 +7253,7 @@ enabeld = false        # the key is enabled
 
 ### How to fix
 
-Remove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows them, and an editor on `opentide lsp start` offers each file's keys as you type.
+Remove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows the keys of the platform files, and an editor on `opentide lsp start` offers each file's keys as you type.
 
 ## url_invalid
 

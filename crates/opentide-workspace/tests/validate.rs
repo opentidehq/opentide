@@ -258,10 +258,12 @@ mod validate {
     #[test]
     fn a_root_composition_on_an_objective_gets_its_own_help() {
         let fs = workspace();
+        let composition = "composition:\n  strategy: synergetic\n  description: compose\n";
+        let nested = "  composition:\n    strategy: synergetic\n    description: compose\n";
         fs.write(
             "/ws/objects/objectives/o.yaml",
             format!(
-                "name: O\nmetadata:\n  uuid: {U1}\n  schema: objective::1.0\ncomposition:\n  operator: all\nobjective:\n  composition:\n    operator: all\n"
+                "name: O\nmetadata:\n  uuid: {U1}\n  schema: objective::1.0\n{composition}objective:\n{nested}"
             ),
         );
         let validation = run(&fs, &Options::default());
@@ -270,8 +272,16 @@ mod validate {
             .filter(|d| d.field_path == ["composition"])
             .collect();
         assert_eq!(found.len(), 1, "{:?}", all(&validation));
+        assert!(
+            found[0]
+                .message
+                .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
+        );
         let help = found[0].help.as_deref().unwrap_or_default();
-        assert!(help.contains("belongs under `objective:`"), "{help}");
+        assert!(
+            help.starts_with("move it under `objective:`, or delete the root copy"),
+            "{help}"
+        );
         assert!(found[0].fix.is_none());
     }
 

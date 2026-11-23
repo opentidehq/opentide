@@ -12,4 +12,4 @@ opentide validate --file objects/rules/does-not-exist.yaml
 
 ## How to fix
 
-Fix the path: it is read relative to the workspace and to the working directory, and is case-sensitive. `opentide validate` without `--file` lists every object it finds.
+Fix the path: it is read relative to the working directory and to the workspace root, and whether its case matters depends on the filesystem. `--file` takes a path or a file name, not a glob: a quoted pattern such as `'objects/rules/*.yaml'` is reported here too, so let the shell expand it. Run `opentide validate` without `--file` to check every object.

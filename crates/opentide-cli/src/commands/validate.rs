@@ -542,7 +542,16 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 "how to fix it",
             ));
         }
-        let rerun = validate_command(false, check_name, queries_flag(queries), &args.selection);
+        // The rerun judges as the run did: `--strict` fails on warnings a
+        // plain run passes.
+        let mut flags = Vec::new();
+        if args.strict {
+            flags.push("--strict");
+            if args.allow_empty {
+                flags.push("--allow-empty");
+            }
+        }
+        let rerun = validate_command(&flags, check_name, queries_flag(queries), &args.selection);
         next.push(NextAction::new(rerun, "check again"));
     }
     if summary.fixable > 0 {
