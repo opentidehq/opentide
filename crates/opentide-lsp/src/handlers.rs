@@ -363,6 +363,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
                 "analyses": s.analyses.get(),
                 "closedAnalyses": s.closed_analyses.get(),
                 "workspaceReportHits": s.workspace_report_hits.get(),
+                "pullYields": s.pull_yields.get(),
                 "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
                 "editorIndexed": s.editor_indexed(),
                 "editorParsed": s.editor_parsed(),
@@ -1346,6 +1347,16 @@ fn handle_workspace_diagnostics(
         let _span = crate::timing::Span::new("workspace/diagnostic: host");
         let _ = session.host(Some(root));
     }
+    // A pull that yields to the messages behind it is answered later
+    // (`protocol::Driver::answer_deferred`): this answer is not sent.
+    let unsent = || {
+        lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {
+            items: Vec::new(),
+        })
+    };
+    if session.should_yield() {
+        return unsent();
+    }
     let key = session.state_key();
     // A client that does not watch files is told nothing of what changes on
     // disk (the configuration is resolved again with each batch, and no
@@ -1367,6 +1378,10 @@ fn handle_workspace_diagnostics(
         }
         None => {
             let entries = Arc::new(workspace_report(session));
+            if session.has_yielded() {
+                // Part of the files: nothing is kept of the report itself.
+                return unsent();
+            }
             if keeps {
                 *session.workspace_report.borrow_mut() = Some((key, Arc::clone(&entries)));
             }
@@ -1464,6 +1479,9 @@ fn workspace_report(session: &Session) -> Vec<crate::session::ReportEntry> {
         .collect();
     let mut entries = Vec::new();
     for root in 0..session.roots.len() {
+        if session.has_yielded() {
+            break;
+        }
         // Each root's own catalogs and datasets are the ones installed while
         // its files are analysed.
         let host = session.host(Some(root));

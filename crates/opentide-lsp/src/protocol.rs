@@ -20,6 +20,7 @@ use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response}
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::sync::Arc;
 
 /// One frame from the client.
 pub(crate) enum Frame {
@@ -196,24 +197,58 @@ fn names_an_id(raw: &[u8]) -> bool {
 pub(crate) trait Source {
     /// The next batch, never empty; `None` at the end of input.
     fn next_batch(&mut self) -> io::Result<Option<Vec<Frame>>>;
+
+    /// What tells, while a batch is handled, whether the client sent more
+    /// ([`InputProbe`]): `None` where the source cannot tell, and a long
+    /// request then runs to its end as before.
+    fn probe(&self) -> Option<InputProbe> {
+        None
+    }
 }
+
+/// Whether input is waiting to be read, asked without waiting for it: a
+/// workspace pull yields to the messages behind it when it is
+/// ([`Session::should_yield`](crate::session::Session::should_yield)).
+pub(crate) type InputProbe = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// Frames read on the caller's thread. A batch is one frame and every
 /// further frame already in the buffer: reading never waits for a message
 /// that has not started to arrive.
 pub(crate) struct Direct<R: Read> {
     reader: BufReader<R>,
+    /// Whether the reader has input waiting, when it can tell. A batch ends
+    /// with the buffer empty (it takes every frame the buffer holds, and
+    /// waits for the rest of one it holds part of), so the reader's is the
+    /// only input there is to ask about.
+    probe: Option<InputProbe>,
 }
 
 impl<R: Read> Direct<R> {
     pub(crate) fn new(reader: R) -> Self {
         Self {
             reader: BufReader::new(reader),
+            probe: None,
+        }
+    }
+
+    /// [`Direct::new`] over a reader `probe` can ask about.
+    #[cfg_attr(
+        not(target_os = "wasi"),
+        allow(dead_code, reason = "only the WASI build reads stdin on this thread")
+    )]
+    pub(crate) fn with_probe(reader: R, probe: InputProbe) -> Self {
+        Self {
+            reader: BufReader::new(reader),
+            probe: Some(probe),
         }
     }
 }
 
 impl<R: Read> Source for Direct<R> {
+    fn probe(&self) -> Option<InputProbe> {
+        self.probe.clone()
+    }
+
     fn next_batch(&mut self) -> io::Result<Option<Vec<Frame>>> {
         let Some(first) = read_frame(&mut self.reader)? else {
             return Ok(None);
@@ -236,6 +271,8 @@ pub(crate) struct Threaded {
     frames: std::sync::mpsc::Receiver<io::Result<Option<Frame>>>,
     /// What ended the input, kept until the batch before it is handled.
     end: Option<io::Result<()>>,
+    /// How many frames the reader sent that no batch took yet.
+    queued: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 #[cfg(not(target_os = "wasi"))]
@@ -248,6 +285,8 @@ impl Threaded {
         F: FnOnce() -> R + Send + 'static,
     {
         let (sender, frames) = std::sync::mpsc::channel();
+        let queued = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&queued);
         std::thread::Builder::new()
             .name("opentide-lsp-reader".into())
             .spawn(move || {
@@ -255,23 +294,43 @@ impl Threaded {
                 loop {
                     let frame = read_frame(&mut reader);
                     let last = !matches!(frame, Ok(Some(_)));
+                    counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     if sender.send(frame).is_err() || last {
                         return;
                     }
                 }
             })?;
-        Ok(Self { frames, end: None })
+        Ok(Self {
+            frames,
+            end: None,
+            queued,
+        })
     }
 }
 
 #[cfg(not(target_os = "wasi"))]
 impl Source for Threaded {
+    fn probe(&self) -> Option<InputProbe> {
+        let queued = Arc::clone(&self.queued);
+        Some(Arc::new(move || {
+            queued.load(std::sync::atomic::Ordering::SeqCst) > 0
+        }))
+    }
+
     fn next_batch(&mut self) -> io::Result<Option<Vec<Frame>>> {
         if let Some(end) = self.end.take() {
             return end.map(|()| None);
         }
+        // The reader counts a frame before it sends it, so a frame received
+        // was counted: the count never goes below zero.
+        let taken = |queued: &std::sync::atomic::AtomicUsize| {
+            queued.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        };
         let first = match self.frames.recv() {
-            Ok(frame) => frame?,
+            Ok(frame) => {
+                taken(&self.queued);
+                frame?
+            }
             Err(_) => None,
         };
         let Some(first) = first else {
@@ -279,6 +338,7 @@ impl Source for Threaded {
         };
         let mut batch = vec![first];
         while let Ok(next) = self.frames.try_recv() {
+            taken(&self.queued);
             match next {
                 Ok(Some(frame)) => batch.push(frame),
                 Ok(None) => {
@@ -322,6 +382,7 @@ pub(crate) fn run(
     session: &mut Session,
 ) -> anyhow::Result<bool> {
     let mut driver = Driver::default();
+    session.set_input_probe(source.probe());
     while let Some(batch) = source.next_batch()? {
         if let Some(clean) = driver.batch(session, writer, batch)? {
             return Ok(clean);
@@ -335,12 +396,17 @@ pub(crate) fn run(
 /// [`MessageSession`](crate::MessageSession) feeds it one message at a time.
 pub(crate) struct Driver {
     pub(crate) state: Lifecycle,
+    /// Workspace pulls that yielded to the messages behind them
+    /// ([`Session::should_yield`](crate::session::Session::should_yield)):
+    /// answered at the end of the next batch, after its own requests.
+    carried: Vec<(Request, HashSet<String>)>,
 }
 
 impl Default for Driver {
     fn default() -> Self {
         Self {
             state: Lifecycle::Uninitialized,
+            carried: Vec::new(),
         }
     }
 }
@@ -402,7 +468,7 @@ impl Driver {
                     if notification.method == "exit" {
                         // What the batch asked before `exit` is answered
                         // first, as it was before diagnostics came last.
-                        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled, false)?;
                         flush(session, writer, self.state)?;
                         return Ok(Some(self.state == Lifecycle::ShuttingDown));
                     }
@@ -431,7 +497,7 @@ impl Driver {
                     if request.method == "shutdown" {
                         // The server is shut down for what follows, not for
                         // what the batch asked before it.
-                        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled, false)?;
                     }
                     let staled_by = &edited_after[i + 1];
                     let response =
@@ -444,20 +510,46 @@ impl Driver {
             }
             write_outbox(session, writer)?;
         }
-        self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
+        self.answer_deferred(session, writer, &mut deferred, &cancelled, true)?;
         flush(session, writer, self.state)?;
         Ok(None)
     }
 
     /// Answer the requests [`DEFERRED`] put off, in the order they came.
+    /// The batch's own deferred requests first, then the workspace pulls an
+    /// earlier batch carried. With `may_yield` (the end of a batch, not a
+    /// `shutdown` or `exit` the batch holds), a workspace pull that finds the
+    /// client sent more stops without an answer and is carried to the next
+    /// batch: what it found so far is kept, so it goes on where it stopped.
     fn answer_deferred(
         &mut self,
         session: &mut Session,
         writer: &mut dyn Write,
         deferred: &mut Vec<(Request, HashSet<String>)>,
         cancelled: &HashSet<RequestId>,
+        may_yield: bool,
     ) -> io::Result<()> {
-        for (request, staled_by) in std::mem::take(deferred) {
+        let mut queue = std::mem::take(deferred);
+        queue.append(&mut self.carried);
+        for (request, staled_by) in queue {
+            let yields = may_yield
+                && self.state == Lifecycle::Running
+                && request.method == WORKSPACE_PULL
+                && !cancelled.contains(&request.id);
+            if yields {
+                session.begin_yieldable();
+                let kept = request.clone();
+                let response = respond(session, &mut self.state, request, cancelled, &staled_by);
+                if session.end_yieldable() {
+                    // A yielded pull is not answered; what its handler
+                    // queued (a log, a refresh) goes out with the batch.
+                    self.carried.push((kept, staled_by));
+                    continue;
+                }
+                write_outbox(session, writer)?;
+                write(writer, &Message::Response(response))?;
+                continue;
+            }
             let response = respond(session, &mut self.state, request, cancelled, &staled_by);
             write_outbox(session, writer)?;
             write(writer, &Message::Response(response))?;
@@ -470,7 +562,11 @@ impl Driver {
 /// a document, which on a large workspace take tenths of a second (what
 /// `validate` and `lint` check across every object file) while a completion
 /// or a hover takes a millisecond.
-const DEFERRED: [&str; 2] = ["workspace/diagnostic", "textDocument/diagnostic"];
+const DEFERRED: [&str; 2] = [WORKSPACE_PULL, "textDocument/diagnostic"];
+
+/// The workspace's diagnostics: the one request that yields to the messages
+/// behind it ([`Driver::answer_deferred`]).
+const WORKSPACE_PULL: &str = "workspace/diagnostic";
 
 /// One message's JSON text, without its `Content-Length` header, read as
 /// [`read_frame`] reads a framed one: the same answers for a body that is

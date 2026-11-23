@@ -3561,6 +3561,7 @@ dependencies = [
  "percent-encoding",
  "rayon",
  "regex",
+ "rustix",
  "serde",
  "serde_json",
  "trycmd",

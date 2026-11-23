@@ -18,6 +18,8 @@ mod models;
 mod protocol;
 pub mod server;
 mod session;
+#[cfg(target_os = "wasi")]
+mod stdin;
 mod timing;
 pub mod uri;
 

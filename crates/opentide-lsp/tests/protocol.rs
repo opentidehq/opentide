@@ -3656,3 +3656,147 @@ fn a_pull_the_server_cannot_answer_is_refused_once_for_the_client_to_retry() {
         "the open document shows nothing: {codes:?}"
     );
 }
+
+/// A workspace of `count` rules (the fixture's, each with its own UUID).
+fn rules_workspace(name: &str, count: usize) -> Scratch {
+    let scratch = workspace(name, false);
+    let rule = fixture(RULE);
+    let first_uuid = "00000000-0000-4000-8003-000000000001";
+    assert!(rule.contains(first_uuid));
+    for i in 2..=count {
+        let text = rule.replacen(first_uuid, &format!("00000000-0000-4000-8003-{i:012}"), 1);
+        std::fs::write(
+            scratch.0.join(format!("objects/rules/rule-{i:04}.yaml")),
+            text,
+        )
+        .unwrap();
+    }
+    scratch
+}
+
+/// The capabilities of a client that pulls diagnostics and watches files.
+fn pulling_and_watching() -> Value {
+    pulling(json!({ "workspace": {
+        "diagnostics": { "refreshSupport": true },
+        "didChangeWatchedFiles": { "dynamicRegistration": true },
+    } }))
+}
+
+/// A workspace pull the client cancels while it yields to the messages
+/// behind it is answered `RequestCanceled`, after them.
+#[test]
+fn a_workspace_pull_cancelled_while_it_yields_is_answered_cancelled() {
+    let scratch = rules_workspace("pull-yields-cancelled", 1000);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling_and_watching(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    send(
+        &mut lsp,
+        1,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    send(
+        &mut lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    until_response(&mut lsp, 1);
+    send(
+        &mut lsp,
+        3,
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    lsp.notify("$/cancelRequest", json!({ "id": 2 }));
+    let seen = until_response(&mut lsp, 2);
+    let answered: Vec<i64> = seen
+        .iter()
+        .filter(|message| message.get("method").is_none())
+        .filter_map(|message| message["id"].as_i64())
+        .collect();
+    assert_eq!(answered, [3, 2], "{seen:#?}");
+    assert_eq!(seen.last().unwrap()["error"]["code"], -32800, "{seen:#?}");
+}
+
+/// #1767: what VS Code sends after it opens a rule (QA's trace): the
+/// document's diagnostics, the workspace's, then `documentSymbol`,
+/// `codeAction`, `documentLink`, `inlayHint`, `foldingRange` and
+/// `semanticTokens/full`. The four after the workspace pull arrive while the
+/// server makes it, on a workspace of 1,000 rules; each is answered before
+/// the workspace pull, which yields to them and is answered after, with every
+/// rule's report.
+#[test]
+fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
+    let scratch = rules_workspace("pull-yields", 1000);
+    let root = &scratch.0;
+    let rule = fixture(RULE);
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling_and_watching(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &rule);
+    let document = json!({ "textDocument": { "uri": uri } });
+    let range =
+        json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 5, "character": 0 } });
+    send(&mut lsp, 1, "textDocument/diagnostic", document.clone());
+    send(
+        &mut lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    // The document's diagnostics are answered first (the batch's rule); the
+    // workspace pull starts after them, and the rest arrive while it runs.
+    let mut seen = until_response(&mut lsp, 1);
+    let requests = [
+        (3, "textDocument/documentSymbol", document.clone()),
+        (
+            4,
+            "textDocument/codeAction",
+            json!({ "textDocument": { "uri": uri }, "range": range, "context": { "diagnostics": [] } }),
+        ),
+        (5, "textDocument/documentLink", document.clone()),
+        (
+            6,
+            "textDocument/inlayHint",
+            json!({ "textDocument": { "uri": uri }, "range": range }),
+        ),
+        (7, "textDocument/foldingRange", document.clone()),
+        (8, "textDocument/semanticTokens/full", document.clone()),
+    ];
+    for (id, method, params) in requests {
+        send(&mut lsp, id, method, params);
+    }
+    seen.extend(until_response(&mut lsp, 2));
+    let answered: Vec<i64> = seen
+        .iter()
+        .filter(|message| message.get("method").is_none())
+        .filter_map(|message| message["id"].as_i64())
+        .collect();
+    let at = |id: i64| answered.iter().position(|seen| *seen == id);
+    let pull = at(2).unwrap_or_else(|| panic!("{answered:?}"));
+    for id in 3..=8 {
+        let answer = at(id).unwrap_or_else(|| panic!("no answer to {id}: {answered:?}"));
+        assert!(
+            answer < pull,
+            "request {id} waited for the workspace pull: {answered:?}"
+        );
+    }
+    let report = seen.last().unwrap();
+    let items = report["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{report}"));
+    // Every closed rule is reported: 999 (the opened one is the document's).
+    assert_eq!(items.len(), 999, "{report}");
+    let yields = lsp.request("opentide/__stats", Value::Null)["result"]["pullYields"]
+        .as_u64()
+        .unwrap();
+    assert!(yields >= 1, "{yields}");
+}

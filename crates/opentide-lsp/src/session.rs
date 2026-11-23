@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// An open document.
 pub(crate) struct Document {
@@ -729,6 +730,18 @@ pub(crate) struct Session {
     /// How many workspace pulls were answered from [`workspace_report`](Self::workspace_report),
     /// for the tests (`opentide/__stats`).
     pub workspace_report_hits: Cell<u64>,
+    /// Whether the client sent more while a request runs, where the source
+    /// can tell ([`crate::protocol::InputProbe`]).
+    input_probe: Option<crate::protocol::InputProbe>,
+    /// While a workspace pull may yield ([`should_yield`](Self::should_yield)):
+    /// when it began, when the input was last asked about, and whether it
+    /// yielded.
+    pull_began: Cell<Option<Instant>>,
+    last_probe: Cell<Option<Instant>>,
+    yielded: Cell<bool>,
+    /// How many times a workspace pull yielded, for the tests
+    /// (`opentide/__stats`).
+    pub pull_yields: Cell<u64>,
     /// The folders the client was last asked to watch beyond the fixed
     /// globs ([`sync_watchers`](Self::sync_watchers)).
     watched: RefCell<Watched>,
@@ -1420,6 +1433,74 @@ impl Session {
     /// A new batch: without a file watcher the disk is read again, and an
     /// analysis is not reused across batches (a configuration file may have
     /// changed under it).
+    /// What tells whether the client sent more ([`crate::protocol::Source::probe`]).
+    pub(crate) fn set_input_probe(&mut self, probe: Option<crate::protocol::InputProbe>) {
+        self.input_probe = probe;
+    }
+
+    /// A workspace pull that may yield begins ([`should_yield`](Self::should_yield)).
+    pub(crate) fn begin_yieldable(&self) {
+        self.yielded.set(false);
+        self.last_probe.set(None);
+        // Read the clock only where there is input to ask about: the
+        // browser's build has no clock, and no probe.
+        self.pull_began
+            .set(self.input_probe.as_ref().map(|_| Instant::now()));
+    }
+
+    /// The workspace pull ended: whether it yielded.
+    pub(crate) fn end_yieldable(&self) -> bool {
+        self.pull_began.set(None);
+        let yielded = self.yielded.replace(false);
+        if yielded {
+            self.pull_yields.set(self.pull_yields.get() + 1);
+        }
+        yielded
+    }
+
+    /// Whether the workspace pull being answered stopped to let the messages
+    /// behind it go first ([`should_yield`](Self::should_yield)).
+    pub(crate) fn has_yielded(&self) -> bool {
+        self.yielded.get()
+    }
+
+    /// Whether the workspace pull being answered should stop and let the
+    /// messages the client sent meanwhile go first: a hover, the semantic
+    /// tokens of a document just opened, a keystroke (#1767). The pull is
+    /// carried to the end of the next batch, and goes on from what it kept
+    /// (the findings of every object, each file's analysis).
+    ///
+    /// Only once the pull ran [`MIN_RUN`] in this attempt, so each attempt
+    /// gets somewhere however fast the client types, and asking the input at
+    /// most every [`PROBE_EVERY`]. Never outside a pull that may yield, nor
+    /// where the source cannot tell (the browser's host, a host's own
+    /// streams).
+    pub(crate) fn should_yield(&self) -> bool {
+        /// How long a pull runs before it may yield.
+        const MIN_RUN: Duration = Duration::from_millis(20);
+        /// How often it asks whether input is waiting.
+        const PROBE_EVERY: Duration = Duration::from_millis(5);
+        if self.yielded.get() {
+            return true;
+        }
+        let (Some(probe), Some(began)) = (self.input_probe.as_ref(), self.pull_began.get()) else {
+            return false;
+        };
+        let now = Instant::now();
+        if now.duration_since(began) < MIN_RUN
+            || self
+                .last_probe
+                .get()
+                .is_some_and(|last| now.duration_since(last) < PROBE_EVERY)
+        {
+            return false;
+        }
+        self.last_probe.set(Some(now));
+        let waiting = probe();
+        self.yielded.set(waiting);
+        waiting
+    }
+
     pub(crate) fn begin_batch(&self) {
         self.batch.set(self.batch.get() + 1);
         if !self.caps.watch_files {
@@ -1668,6 +1749,12 @@ impl Session {
         let _span = crate::timing::Span::new("workspace/diagnostic: files");
         let mut entries = Vec::new();
         for file in disk.index_pending(&parses).values() {
+            // A workspace pull may stop before any file, and go on later
+            // from what is kept (the findings of every object, each file's
+            // analysis); a document's own pull (`only`) never stops.
+            if only.is_none() && self.should_yield() {
+                break;
+            }
             let Some(object) = file.entry() else {
                 continue;
             };

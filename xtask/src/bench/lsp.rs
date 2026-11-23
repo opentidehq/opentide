@@ -415,6 +415,80 @@ pub fn editor_latency(
     })
 }
 
+/// How long after the first workspace pull began [`tokens_during_pull`] asks
+/// for the semantic tokens: the pull is under way by then.
+pub const TOKENS_AFTER_PULL: Duration = Duration::from_millis(30);
+
+/// What one run of [`tokens_during_pull`] measured.
+#[derive(Clone, Copy, Debug)]
+pub struct TokensDuringPull {
+    /// How long the semantic tokens waited, and the server's peak RSS.
+    pub sample: Sample,
+    /// How long the first workspace pull took.
+    pub pull: Duration,
+}
+
+/// What VS Code sends when it opens a rule (#1767, the QA trace of the
+/// extension): the document's diagnostics, the workspace's, and then, while
+/// that pull runs, the document's semantic tokens. The run opens `document`
+/// in the heavy workspace, pulls its diagnostics, starts the first
+/// workspace pull, and [`TOKENS_AFTER_PULL`] later asks for
+/// `textDocument/semanticTokens/full`: the time to that answer is how long
+/// the editor's colours wait, which a server that runs the pull to its end
+/// first makes as long as the pull.
+pub fn tokens_during_pull(
+    program: &Path,
+    args: &[OsString],
+    run: &RunDir,
+    document: &Path,
+) -> Result<TokensDuringPull> {
+    let ((tokens, pull), peak_rss_bytes) = run_server(
+        program,
+        args,
+        run,
+        document,
+        || {},
+        |stdin, messages, session| {
+            start_editor(stdin, messages, session)?;
+            let request = |stdin: &mut ChildStdin, id: i64, method: &str, params: Value| {
+                write_message(
+                    stdin,
+                    &json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
+                )
+            };
+            let document = json!({ "textDocument": { "uri": session.uri } });
+            request(stdin, 2, "textDocument/diagnostic", document.clone())?;
+            wait_for_all(stdin, messages, session.start, &[2])?;
+            let began = Instant::now();
+            request(
+                stdin,
+                3,
+                "workspace/diagnostic",
+                json!({ "previousResultIds": [] }),
+            )?;
+            std::thread::sleep(TOKENS_AFTER_PULL);
+            let asked = Instant::now();
+            request(stdin, 4, "textDocument/semanticTokens/full", document)?;
+            let arrived = wait_for_all(stdin, messages, session.start, &[3, 4])?;
+            let at = |id: i64| {
+                arrived
+                    .iter()
+                    .find(|(seen, _)| *seen == id)
+                    .map(|(_, at)| *at)
+                    .context("an answer is missing")
+            };
+            Ok((at(4)?.duration_since(asked), at(3)?.duration_since(began)))
+        },
+    )?;
+    Ok(TokensDuringPull {
+        sample: Sample {
+            wall_s: tokens.as_secs_f64(),
+            peak_rss_bytes,
+        },
+        pull,
+    })
+}
+
 /// `initialize` as VS Code's client sends it (pull diagnostics, refresh and
 /// file watching), `initialized`, and `didOpen` of the document.
 fn start_editor(

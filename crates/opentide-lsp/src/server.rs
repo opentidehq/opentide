@@ -30,8 +30,13 @@ pub fn run_stdio_status() -> Result<bool> {
     warm_up();
     #[cfg(not(target_os = "wasi"))]
     let mut source = protocol::Threaded::spawn(|| std::io::stdin().lock())?;
+    // wasip1 has no threads: stdin is read on this one, and a probe tells a
+    // workspace pull when the client sent more (`crate::stdin`).
     #[cfg(target_os = "wasi")]
-    let mut source = Direct::new(std::io::stdin().lock());
+    let mut source = {
+        let (stdin, probe) = crate::stdin::ProbedStdin::new();
+        Direct::with_probe(stdin, probe)
+    };
     protocol::run(&mut source, &mut writer, &mut session)
 }
 
