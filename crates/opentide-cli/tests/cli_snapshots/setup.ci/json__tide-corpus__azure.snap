@@ -126,7 +126,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -144,6 +144,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -172,7 +173,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -190,6 +191,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -218,7 +220,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -236,6 +238,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -262,7 +265,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -280,6 +283,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -310,7 +314,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -328,6 +332,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -354,7 +359,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -372,6 +377,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -549,7 +555,7 @@ stages:
             displayName: Install opentide
           - script: |
               project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-              response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
                 --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
                 --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
                 --data-urlencode "resultFilter=succeeded" \
@@ -567,6 +573,7 @@ stages:
               fi
             displayName: Find this push's base commit
             condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
           - script: |
@@ -711,7 +718,7 @@ stages:
               PathtoPublish: "$(Build.SourcesDirectory)/docs"
               ArtifactName: opentide-docs
 
-  # Your own jobs and stages between the markers below survive `opentide setup ci azure --yes`;
+  # Your own stages between the markers below survive `opentide setup ci azure --yes`;
   # opentide replaces everything else in this file.
   # opentide:user-begin
   # opentide:user-end

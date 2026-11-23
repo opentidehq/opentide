@@ -13532,17 +13532,19 @@ exit: 0
         },
         {
           "choices": null,
-          "default": false,
+          "default": null,
           "envvars": [],
           "flags": [
             "--app-token"
           ],
-          "help": "GitHub Actions: the production job checks out and pushes with a GitHub App token (variable OPENTIDE_APP_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN (ignored with a warning for gitlab and azure)",
+          "help": "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
           "is_flag": true,
           "multiple": false,
           "name": "app_token",
           "required": false,
-          "secondary_flags": [],
+          "secondary_flags": [
+            "--no-app-token"
+          ],
           "type": "boolean"
         },
         {
@@ -14315,17 +14317,19 @@ exit: 0
         },
         {
           "choices": null,
-          "default": false,
+          "default": null,
           "envvars": [],
           "flags": [
             "--app-token"
           ],
-          "help": "GitHub Actions: the production job checks out and pushes with a GitHub App token (variable OPENTIDE_APP_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN (ignored with a warning for gitlab and azure)",
+          "help": "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
           "is_flag": true,
           "multiple": false,
           "name": "app_token",
           "required": false,
-          "secondary_flags": [],
+          "secondary_flags": [
+            "--no-app-token"
+          ],
           "type": "boolean"
         },
         {
