@@ -538,9 +538,14 @@ fn shared(args: &Args, cx: &Context<'_>, workspace: &Workspace, sharing: &Sharin
         match changed_files(workspace, cx, args.since.as_deref(), filters.as_ref()) {
             Ok(Some(changed)) => filters = Some(changed),
             Ok(None) => return Payload::quiet(NO_CHANGED_OBJECTS, sharing).with_warnings(&nested),
-            Err(message) => {
-                return Payload::preflight("changed_diff", sharing, &[], Some(&message))
-                    .with_warnings(&nested);
+            Err((message, exit_code)) => {
+                let mut payload = Payload::preflight("changed_diff", sharing, &[], Some(&message));
+                if exit_code == USAGE_EXIT_CODE {
+                    // A wrong OPENTIDE_PUSH_BASE is a usage error.
+                    payload.exit_code = exit_code;
+                    payload.failure_code = Some("usage_error".to_owned());
+                }
+                return payload.with_warnings(&nested);
             }
         }
     }
@@ -622,7 +627,7 @@ fn changed_files(
     cx: &Context<'_>,
     since: Option<&str>,
     filters: Option<&Filters>,
-) -> Result<Option<Filters>, String> {
+) -> Result<Option<Filters>, (String, i32)> {
     let root = workspace.root();
     let env_get = |name: &str| cx.env.get(name).map(str::to_owned);
     let changed = opentide_compile::git::changed_through_head(
@@ -632,19 +637,21 @@ fn changed_files(
         since,
     )
     .map_err(|error| {
+        let exit_code = error.exit_code();
         let text = match error {
             // `MissingGitCheckout`'s own words, not deploy's advice.
             opentide_compile::git::GitError::MissingCheckout(searched) => format!(
                 "no .git was found from {}",
                 document::resolve(&searched).display()
             ),
-            opentide_compile::git::GitError::Failed(message) => message,
+            opentide_compile::git::GitError::Failed(message)
+            | opentide_compile::git::GitError::PushBase(message) => message,
         };
         let text = text.trim().to_owned();
         if text.is_empty() {
-            preflight_message("changed_diff").to_owned()
+            (preflight_message("changed_diff").to_owned(), exit_code)
         } else {
-            text
+            (text, exit_code)
         }
     })?;
     let directories = object_directories(workspace);

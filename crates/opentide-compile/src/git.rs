@@ -102,6 +102,8 @@ pub enum GitError {
     MissingCheckout(PathBuf),
     /// Any other failure, with the message the run reports.
     Failed(String),
+    /// `OPENTIDE_PUSH_BASE` names no usable commit: a usage error (exit 2).
+    PushBase(String),
 }
 
 impl GitError {
@@ -114,7 +116,17 @@ impl GitError {
                  repository, or pass --all to read every rule file.",
                 dunce::simplified(searched).display()
             ),
-            Self::Failed(message) => message.clone(),
+            Self::Failed(message) | Self::PushBase(message) => message.clone(),
+        }
+    }
+
+    /// The exit code of a run this failure stops: `2` for a wrong
+    /// `OPENTIDE_PUSH_BASE`, else `1`.
+    #[must_use]
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Self::PushBase(_) => 2,
+            Self::MissingCheckout(_) | Self::Failed(_) => 1,
         }
     }
 }
@@ -492,11 +504,50 @@ fn gitlab_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
     }
 }
 
+/// The variable that names the commit a push's diff starts at, on any
+/// provider (#1683): for Azure Pipelines, which names none itself.
+pub const PUSH_BASE_VARIABLE: &str = "OPENTIDE_PUSH_BASE";
+
+/// How the note of a push that read only its last commit begins, for a host
+/// that shows it as the CI run's warning.
+pub const LAST_COMMIT_ONLY_PREFIX: &str = "This push's diff starts at its last commit's parent";
+
+/// The commit `OPENTIDE_PUSH_BASE` names, when it is set: a commit of the
+/// checkout that is an ancestor of HEAD, else an error.
+fn push_base_override(repo: &Repo, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {
+    let Some(value) = set(env, PUSH_BASE_VARIABLE) else {
+        return Ok(None);
+    };
+    let base = commit_id(repo, &value).ok_or_else(|| {
+        GitError::PushBase(if repo.shallow {
+            format!(
+                "{PUSH_BASE_VARIABLE}={value} is not a commit of this checkout: the checkout is \
+                 shallow, so it does not hold it. Check out the full history (`fetchDepth: 0` on \
+                 Azure Pipelines, `fetch-depth: 0` in GitHub Actions, `GIT_DEPTH: \"0\"` on GitLab)"
+            )
+        } else {
+            format!(
+                "{PUSH_BASE_VARIABLE}={value} is not a commit of this checkout: name a commit id \
+                 the checkout holds"
+            )
+        })
+    })?;
+    let head = head_commit(repo)
+        .ok_or_else(|| failed("The git repository has no commits yet".to_owned()))?;
+    if merge_base(repo, base, head) != Some(base) {
+        return Err(GitError::PushBase(format!(
+            "{PUSH_BASE_VARIABLE}={value} is not an ancestor of HEAD ({head}): name a commit \
+             the checked-out commit descends from"
+        )));
+    }
+    Ok(Some(base))
+}
+
 /// What a push run that read only its last commit says: the commits before
 /// it in the same push are not in the diff.
 fn last_commit_only(why: &str) -> String {
     format!(
-        "This push's diff starts at its last commit's parent: {why}. Rules that earlier \
+        "{LAST_COMMIT_ONLY_PREFIX}: {why}. Rules that earlier \
          commits of the same push changed are not in it; pass --all to deploy every rule file"
     )
 }
@@ -663,8 +714,14 @@ pub fn changed_paths_noted(
             None => Err(no_commits_yet(&searched)),
         }
     };
+    let pushed_base = if source == DiffSource::Push {
+        push_base_override(&repo, env)?.map(|base| base.to_string())
+    } else {
+        None
+    };
     let base: Option<String> = match (platform, source) {
         (_, DiffSource::LastCommit) | (Ci::Local, _) => None,
+        (_, DiffSource::Push) if pushed_base.is_some() => pushed_base,
         (Ci::GitHub, DiffSource::Push) => match github_push_before(&repo, env) {
             PushBefore::Commit(before) => Some(before),
             PushBefore::Created => {
@@ -750,7 +807,10 @@ pub fn changed_paths_noted(
         (Ci::Azure, DiffSource::Push) => match first_parent()? {
             Some(base) => {
                 note = Some(last_commit_only(
-                    "Azure Pipelines does not name the commit the branch held before the push",
+                    "Azure Pipelines does not name the commit the branch held before the push \
+                     (the diff is exact for a one-commit push, and for a merge a pull request \
+                     completed on the target branch; set OPENTIDE_PUSH_BASE, or build every \
+                     commit with a branch policy, for the rest)",
                 ));
                 Some(base.to_string())
             }
@@ -928,6 +988,9 @@ fn push_baseline(repo: &Repo, ci: Ci, env: Env<'_>) -> Result<Option<ObjectId>, 
             "{variable} is required to compute the changed objects"
         ))
     })?;
+    if let Some(base) = push_base_override(repo, env)? {
+        return Ok(Some(base));
+    }
     if ci == Ci::GitLab
         && let Some(before) =
             set(env, "CI_COMMIT_BEFORE_SHA").filter(|sha| !sha.trim_matches('0').is_empty())
@@ -1048,6 +1111,101 @@ pub fn no_commits_warning(workspace: &Path, env: Env<'_>, advice: &str) -> Optio
     Some(format!(
         "HEAD names no commit yet (a new repository or an orphan branch), so no file has changed: \
          {advice}"
+    ))
+}
+
+/// `folder` and, when `recursive`, every folder below it, for the
+/// uncommitted-files note (a hidden folder is left out).
+fn folders_below(folder: &Path, recursive: bool, into: &mut Vec<PathBuf>) {
+    into.push(folder.to_path_buf());
+    if !recursive {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return;
+    };
+    let mut below: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && !entry.file_name().to_string_lossy().starts_with('.')
+        })
+        .map(|entry| entry.path())
+        .collect();
+    below.sort();
+    for path in below {
+        folders_below(&path, true, into);
+    }
+}
+
+/// How many uncommitted object files a note names.
+const UNCOMMITTED_SHOWN: usize = 3;
+
+/// The note of a run outside CI that reads the last commit (`--changed`,
+/// deploy's default scope) while object files in the work tree or the index
+/// differ from HEAD or are untracked, and the scope leaves them out (F-05):
+/// the command reads files from disk, so a file the scope names is read as
+/// it is now, and is not in the note. `folders` are the folders the scope can
+/// hold files of (the YAML files directly in each count, and below it when
+/// `recursive`); `in_scope` are the files the scope names. A file deleted
+/// from disk cannot be passed to `--file` and is not named. `None` in CI,
+/// outside a checkout, before HEAD names a commit, or when every such file is
+/// committed or in scope.
+pub fn uncommitted_warning(
+    workspace: &Path,
+    env: Env<'_>,
+    folders: &[PathBuf],
+    recursive: bool,
+    in_scope: &[PathBuf],
+) -> Option<String> {
+    if ci(env) != Ci::Local || folders.is_empty() {
+        return None;
+    }
+    let repo = open(workspace).ok()?;
+    head_commit(&repo)?;
+    let mut all = Vec::new();
+    for folder in folders {
+        folders_below(folder, recursive, &mut all);
+    }
+    let keep = |name: &str| {
+        Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml"))
+    };
+    let dirty = changed_in_folders_against(workspace, &all, &keep, &|repo, _| {
+        head_commit(repo).ok_or_else(|| failed(NO_GIT_MESSAGE))
+    })
+    .ok()?;
+    let real = |path: &Path| dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let in_scope: Vec<PathBuf> = in_scope.iter().map(|path| real(path)).collect();
+    let left_out: Vec<&ChangedFile> = dirty
+        .iter()
+        .filter(|file| file.absolute.is_file() && !in_scope.contains(&real(&file.absolute)))
+        .collect();
+    if left_out.is_empty() {
+        return None;
+    }
+    let shown: Vec<&str> = left_out
+        .iter()
+        .take(UNCOMMITTED_SHOWN)
+        .map(|file| file.relative.as_str())
+        .collect();
+    let more = left_out.len().saturating_sub(UNCOMMITTED_SHOWN);
+    let names = if more == 0 {
+        shown.join(", ")
+    } else {
+        format!("{} and {more} more", shown.join(", "))
+    };
+    let (count, verb) = if left_out.len() == 1 {
+        ("1 uncommitted object file".to_owned(), "is")
+    } else {
+        (
+            format!("{} uncommitted object files", left_out.len()),
+            "are",
+        )
+    };
+    Some(format!(
+        "{count} {verb} not in scope ({names}); commit them or pass --file"
     ))
 }
 
@@ -1485,9 +1643,21 @@ pub fn changed_in_folders(
     folders: &[PathBuf],
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<Vec<ChangedFile>, GitError> {
+    changed_in_folders_against(workspace, folders, keep, &|repo, git_dir| {
+        baseline(repo, git_dir)
+    })
+}
+
+/// [`changed_in_folders`] against the commit `base_of` picks.
+fn changed_in_folders_against(
+    workspace: &Path,
+    folders: &[PathBuf],
+    keep: &dyn Fn(&str) -> bool,
+    base_of: &dyn Fn(&Repo, &Path) -> Result<ObjectId, GitError>,
+) -> Result<Vec<ChangedFile>, GitError> {
     let (top, git_dir) = discover(workspace).ok_or_else(|| failed(NO_GIT_MESSAGE))?;
     let repo = open(workspace).map_err(|_| failed(NO_GIT_MESSAGE))?;
-    let base = baseline(&repo, &git_dir)?;
+    let base = base_of(&repo, &git_dir)?;
     let top = dunce::canonicalize(&top).unwrap_or(top);
     let mut work = WorkTree::open(&top, &git_dir);
     let mut changed = Vec::new();

@@ -16,6 +16,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`authentication_failed`](#authentication_failed) | A tenant refused the check itself, not a query: its credentials, or the account's rights on it. |
 | [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is not allowed for the rule's kind or target. |
 | [`bitdefender_actions_unsupported`](#bitdefender_actions_unsupported) | The block sets `actions`, and the tenant's subscription has no automatic actions. |
 | [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
@@ -79,6 +80,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cql_unknown_function`](#cql_unknown_function) | No CQL function has this name; function names are matched without regard to case. |
 | [`cql_unknown_parameter`](#cql_unknown_parameter) | The CQL function has no parameter with this name. |
 | [`cql_unnamed_argument`](#cql_unnamed_argument) | A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name. |
+| [`credential_unset`](#credential_unset) | A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant. |
 | [`credentials`](#credentials) | Per configured tenant, whether every `$VARIABLE` its setup names is set. |
 | [`crowdstrike_unsupported`](#crowdstrike_unsupported) | Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes. |
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
@@ -363,6 +365,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
 | [`query_folded_comment`](#query_folded_comment) | A `//` comment in a query that YAML folds into one line comments out the lines after it. |
+| [`query_rejected`](#query_rejected) | `validate query --live` failed because a tenant refused a rule's query as invalid. |
 | [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; `opentide validate` accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
@@ -403,6 +406,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`technique_not_enterprise`](#technique_not_enterprise) | The ATT&CK technique is not in the Enterprise matrix that Elastic maps. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
+| [`tenant_unreachable`](#tenant_unreachable) | A tenant did not answer, so nothing was checked on it. |
 | [`threshold_lookback`](#threshold_lookback) | A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat. |
 | [`unknown_connector`](#unknown_connector) | `sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped. |
 | [`unknown_key`](#unknown_key) | A configuration file has a key opentide does not read, usually a misspelling. |
@@ -555,6 +559,22 @@ assets = ["domain-controller"]   # declared as domain-controllers
 ### How to fix
 
 Correct the asset name, or declare the asset under `[[assets]]`.
+
+## authentication_failed
+
+A tenant refused the check itself, not a query: its credentials, or the account's rights on it.
+
+Exit 1, as `failure.code` of `validate query --live`. The run goes on: that tenant's remaining queries are not sent and the next tenant is checked; `refused_tenants` names every tenant that refused, and `rejected` lists every query any tenant refused as invalid. A query refused as invalid is `query_rejected`. Deploy failures, `doctor` and the SDKs use the same code for the same refusal.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Check the credentials of the tenant named in `tenant` (the environment variables its setup names) and the account's rights on the tenant.
 
 ## bitdefender_action_scope
 
@@ -1687,6 +1707,22 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
+
+## credential_unset
+
+A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant.
+
+Exit 1, as `failure.code` of `validate query --live`. `message` names the variables (`Splunk credentials are unset ($SPLUNK_TOKEN)`). Nothing is sent to the tenant, and no value is printed.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Set the variables the message names in the environment the command runs in (a CI secret, or a `.env` file you load). Never write the value into the TOML. `opentide doctor` lists the unset variables of every tenant.
 
 ## credentials
 
@@ -6536,6 +6572,26 @@ Write the query as a literal block (`|` or `|-`), which keeps each line a line, 
 
 Or remove the comment.
 
+## query_rejected
+
+`validate query --live` failed because a tenant refused a rule's query as invalid.
+
+Exit 1. As `failure.code` when at least one query was rejected and the run did not fail only on timeouts. When a tenant also fails the run, the code is that tenant's. A tenant that refuses the check itself (`authentication_failed`) does not stop the run: its remaining queries are not sent, the next tenant is checked, and `rejected` lists every query any tenant refused as invalid. A tenant that cannot be reached (`tenant_unreachable`) or whose credential is unset (`credential_unset`) stops it, and `rejected` lists the queries refused before it. Each rejected check is an entry of `rejected` in `--json`, with the rule's `file` and the `line` of its query, the `platform`, the `tenant` and the platform's own `message`. In CI the same rejections are annotations on the rule file (`::error file=…,line=…::` on GitHub Actions) and rows of the job summary. A check that got no answer is not a rejection: see `query_check_timeout`.
+
+The other rules are still checked, so one run lists every rejected query.
+
+### Example
+
+A Splunk rule whose search the tenant refused, trimmed to the keys that say so (illustrative: it needs a tenant):
+
+```json illustrative
+{"status": "failed", "exit_code": 1, "message": "Queries rejected on splunk · 1 checked on 1 tenant", "rejected": [{"rule": "…", "name": "…", "tenant": "prod", "platform": "splunk", "file": "rules/example.yaml", "line": 14, "message": "…", "errors": ["…"]}], "failure": {"code": "query_rejected", "message": "…"}}
+```
+
+### How to fix
+
+Read `message` for what the platform refused, edit the query at `file` and `line`, and run the check again. `opentide validate query --file <rule>` checks the query's syntax without a tenant.
+
 ## recommended_field_missing
 
 A field the templates ask for is missing; `opentide validate` accepts the object without it.
@@ -7226,6 +7282,22 @@ Reported by `opentide doctor`. Warns when a template is missing or differs, usua
 ### How to fix
 
 Run `opentide generate templates`. When the warning names a `lint.toml` key, fix that key first: `generate` fails on the same file, so regenerating does not clear it. A `lint.toml` that is not valid TOML is reported by the `configuration` check instead, and this check is skipped.
+
+## tenant_unreachable
+
+A tenant did not answer, so nothing was checked on it.
+
+Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check, and `rejected` lists the queries refused as invalid before it. Deploy failures, `doctor` and the SDKs use the same code for the same failure.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Check the tenant's URL in `.opentide/configurations/platforms/<platform>.toml` and the network path to its host; behind a proxy, pass `opentide --proxy`. If the tenant is up and only slow, raise `--check-timeout` or `OPENTIDE_QUERY_CHECK_TIMEOUT`.
 
 ## threshold_lookback
 

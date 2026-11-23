@@ -1108,6 +1108,18 @@ fixtures = ["live-tenants"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-splunk"
 
+# A refused query in CI: the platform's reason is an `::error file=…,line=…::`
+# annotation on the rule file (plain mode; json mode has no sinks), and
+# `rejected` lists it in the json case above.
+[[case]]
+command = "validate query"
+variant = "live-splunk-ci-github"
+args = ["validate", "query", "--live", "--platform", "splunk"]
+modes = ["plain"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+cassette = "golden/validate-live-splunk"
+
 [[case]]
 command = "validate query"
 variant = "live-carbon-black-valid"

@@ -25,6 +25,10 @@ exit: 0
       "meaning": "A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare."
     },
     {
+      "code": "authentication_failed",
+      "meaning": "A tenant refused the check itself, not a query: its credentials, or the account's rights on it."
+    },
+    {
       "code": "bitdefender_action_scope",
       "meaning": "An automatic action is not allowed for the rule's kind or target."
     },
@@ -275,6 +279,10 @@ exit: 0
     {
       "code": "cql_unnamed_argument",
       "meaning": "A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name."
+    },
+    {
+      "code": "credential_unset",
+      "meaning": "A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant."
     },
     {
       "code": "credentials",
@@ -1413,6 +1421,10 @@ exit: 0
       "meaning": "A `//` comment in a query that YAML folds into one line comments out the lines after it."
     },
     {
+      "code": "query_rejected",
+      "meaning": "`validate query --live` failed because a tenant refused a rule's query as invalid."
+    },
+    {
       "code": "recommended_field_missing",
       "meaning": "A field the templates ask for is missing; `opentide validate` accepts the object without it."
     },
@@ -1571,6 +1583,10 @@ exit: 0
     {
       "code": "templates_fresh",
       "meaning": "Every template this opentide version generates exists and matches what it would write."
+    },
+    {
+      "code": "tenant_unreachable",
+      "meaning": "A tenant did not answer, so nothing was checked on it."
     },
     {
       "code": "threshold_lookback",
@@ -1889,13 +1905,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "469 diagnostic codes",
+  "message": "473 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 469
+    "codes": 473
   }
 }
 

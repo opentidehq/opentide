@@ -574,3 +574,21 @@ fn render_progress_events_and_tickers() {
     };
     assert_eq!(&lines, stderr);
 }
+
+/// A push whose diff starts at its last commit's parent is an Azure build
+/// issue (`task.logissue`, warning), not only a line on stderr (#1683).
+#[test]
+fn the_last_commit_only_note_is_an_azure_build_warning() {
+    let note = format!(
+        "{}: Azure Pipelines does not name the commit the branch held before the push. Rules \
+         that earlier commits of the same push changed are not in it; pass --all to deploy \
+         every rule file",
+        opentide_compile::git::LAST_COMMIT_ONLY_PREFIX
+    );
+    let line = ci::warning_line(Some(Provider::Azure), &note, None).unwrap();
+    assert!(
+        line.starts_with("##vso[task.logissue type=warning;]This push's diff starts at"),
+        "{line}"
+    );
+    assert!(ci::warning_line(None, &note, None).is_none());
+}

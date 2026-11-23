@@ -271,15 +271,17 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         .as_ref()
         .map(|(files, _, _)| files.clone())
         .unwrap_or_default();
-    let changed = |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), String> {
-        let (mut scope, warning) = dry_run::git_scope(&root_dir, cx.cwd, &env, rules, folder)?;
-        for file in &promoted_files {
-            if !scope.files.contains(file) {
-                scope.files.push(file.clone());
+    let changed =
+        |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), dry_run::ScopeError> {
+            let (mut scope, warning) =
+                dry_run::git_scope_also(&root_dir, cx.cwd, &env, rules, folder, &promoted_files)?;
+            for file in &promoted_files {
+                if !scope.files.contains(file) {
+                    scope.files.push(file.clone());
+                }
             }
-        }
-        Ok((scope, warning))
-    };
+            Ok((scope, warning))
+        };
     let is_set = |name: &str| cx.env.get(name).is_some();
     let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
     let at_root = root::is_workspace_root(&OsFs, workspace.root());

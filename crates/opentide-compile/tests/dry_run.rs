@@ -47,9 +47,10 @@ fn run(workspace: &Workspace, request: Request, set: &[&str]) -> Outcome {
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
-    let changed = |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), String> {
-        Err("no git here".to_owned())
-    };
+    let changed =
+        |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), dry_run::ScopeError> {
+            Err("no git here".to_owned().into())
+        };
     let is_set = |name: &str| set.contains(&name);
     dry_run::run(workspace, &owned, &request, &changed, &is_set)
 }
@@ -143,6 +144,48 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
             body(a),
             body(b)
         )
+    );
+}
+
+const TWO_STRATEGIES: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"lab\"\n\
+    description = \"d\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nssl = true\n\
+    tenant_id = \"$X\"\nclient_id = \"c\"\n\n[[tenants]]\nname = \"prod\"\n\
+    description = \"d\"\nstrategies = [\"RELEASE\"]\n[tenants.setup]\nssl = true\n\
+    tenant_id = \"$Y\"\nclient_id = \"c\"\n";
+
+#[test]
+fn the_unset_variable_warning_counts_only_the_tenants_the_plan_reaches() {
+    let ws = workspace(&[
+        (
+            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            TWO_STRATEGIES,
+        ),
+        (
+            "objects/rules/a.yaml",
+            &rule(
+                "00000000-0000-4000-8000-00000000000a",
+                "defender_for_endpoint",
+                "STAGING",
+                "",
+            ),
+        ),
+    ]);
+    // A PREVIEW plan reaches `lab` only: `$Y` is prod's, not this run's.
+    let outcome = run(&ws, all(&["preview"]), &[]);
+    assert_eq!(
+        text(&outcome, "tenants"),
+        r#"{"defender_for_endpoint":{"lab":["00000000-0000-4000-8000-00000000000a"]}}"#
+    );
+    assert_eq!(
+        text(&outcome, "warnings"),
+        r#"["a real deploy would need $X, which is unset"]"#
+    );
+    // A plan that routes no rule needs no variable at all.
+    let empty = run(&ws, all(&["release"]), &[]);
+    assert!(
+        !text(&empty, "warnings").contains("a real deploy would need"),
+        "{}",
+        text(&empty, "warnings")
     );
 }
 
@@ -408,4 +451,36 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
             .contains("\"api_request\":{\"name\":\"Rule 00000000-0000-4000-8000-0000000000b2\""),
         "{payloads}"
     );
+}
+
+#[test]
+fn a_scope_failure_stops_the_run_with_its_own_exit_code() {
+    let ws = workspace(&[(
+        "objects/rules/a.yaml",
+        &rule(
+            "00000000-0000-4000-8000-00000000000a",
+            "defender_for_endpoint",
+            "STAGING",
+            "",
+        ),
+    )]);
+    let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
+    let run_with = |exit_code: i32| {
+        let changed = move |_: &std::path::Path,
+                            _: &str|
+              -> Result<(Scope, Option<String>), dry_run::ScopeError> {
+            Err(dry_run::ScopeError {
+                message: "OPENTIDE_PUSH_BASE=x is not an ancestor of HEAD (y)".to_owned(),
+                exit_code,
+            })
+        };
+        let request = Request {
+            strategies: vec!["preview".to_owned()],
+            cwd: PathBuf::from("/ws"),
+            ..Request::default()
+        };
+        dry_run::run(&ws, &owned, &request, &changed, &|_: &str| false).exit_code
+    };
+    assert_eq!(run_with(2), 2);
+    assert_eq!(run_with(1), 1);
 }
