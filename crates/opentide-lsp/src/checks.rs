@@ -30,7 +30,7 @@ use crate::session::workspace_path;
 /// (`DiskObjects`), the workspace's discovery and its read of each file, and
 /// lint's scan of the object folders then list and read the disk once a
 /// batch, not three times: under WASI each entry of a listing crosses to the
-/// host (27 ms for a folder of a thousand files under wasmtime, #1767).
+/// host (27 ms for a folder of a thousand files under a Wasm runtime, #1767).
 pub(crate) struct Disk {
     /// The disk itself (another filesystem in tests).
     os: Box<dyn FileSystem>,

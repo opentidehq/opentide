@@ -47,11 +47,17 @@ test('the bin exits with the command line\'s code', () => {
 
 test('a large document reaches a pipe whole', () => {
   // `info catalog` writes more than a pipe's buffer holds: the bin writes
-  // all of it before Node exits.
+  // all of it before Node exits. The section's document holds only that
+  // section's keys (its counts are in `summary`, not `counts` as the bare
+  // `info` document has them).
   const ws = tideCorpus()
   const catalog = run(['--json', 'info', 'catalog'], { cwd: ws, maxBuffer: 1 << 26 })
   assert.equal(catalog.status, 0, catalog.stderr)
-  assert.equal(JSON.parse(catalog.stdout).summary.rules, 10)
+  assert.ok(catalog.stdout.length > 1 << 16, `${catalog.stdout.length} bytes fit in a pipe`)
+  const document = JSON.parse(catalog.stdout)
+  assert.equal(document.summary.rules, 10)
+  assert.equal(document.objects.length, document.summary.objects)
+  assert.equal(document.edges.length, document.summary.edges)
 })
 
 test('Ctrl-C ends a run with 130', { skip: process.platform === 'win32' && 'POSIX signals' }, async () => {

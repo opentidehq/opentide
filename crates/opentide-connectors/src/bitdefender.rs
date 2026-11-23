@@ -760,11 +760,29 @@ async fn create(
                     );
                     return Ok(());
                 }
+                // The retry was refused, but the first create may still have
+                // landed: unconfirmed, with the console-cleanup advice.
                 Err(CallError::Api(error)) => {
-                    outcome.fail(REQUEST_FAILED, error.to_string(), None);
+                    outcome.fail(
+                        CREATE_UNCONFIRMED,
+                        format!("{unconfirmed}; the retry was refused"),
+                        Some(error.to_string()),
+                    );
                     return Ok(());
                 }
-                Err(other) => return Err(other),
+                // The tenant refused the retry (401, 403) or the run was
+                // cancelled: the first create may still have landed. Fail
+                // this rule as unconfirmed, keeping its `create_retried`
+                // warning; the tenant's next call meets the same refusal
+                // and stops the run.
+                Err(CallError::Tenant(second)) => {
+                    outcome.fail(
+                        CREATE_UNCONFIRMED,
+                        format!("{unconfirmed}; the retry was refused by the tenant"),
+                        Some(second.text()),
+                    );
+                    return Ok(());
+                }
             }
         }
         Err(CallError::Api(error)) if error.name_conflict() => {
