@@ -3668,6 +3668,150 @@ fn a_pull_the_server_cannot_answer_is_refused_once_for_the_client_to_retry() {
     );
 }
 
+/// A workspace of `count` rules (the fixture's, each with its own UUID).
+fn rules_workspace(name: &str, count: usize) -> Scratch {
+    let scratch = workspace(name, false);
+    let rule = fixture(RULE);
+    let first_uuid = "00000000-0000-4000-8003-000000000001";
+    assert!(rule.contains(first_uuid));
+    for i in 2..=count {
+        let text = rule.replacen(first_uuid, &format!("00000000-0000-4000-8003-{i:012}"), 1);
+        std::fs::write(
+            scratch.0.join(format!("objects/rules/rule-{i:04}.yaml")),
+            text,
+        )
+        .unwrap();
+    }
+    scratch
+}
+
+/// The capabilities of a client that pulls diagnostics and watches files.
+fn pulling_and_watching() -> Value {
+    pulling(json!({ "workspace": {
+        "diagnostics": { "refreshSupport": true },
+        "didChangeWatchedFiles": { "dynamicRegistration": true },
+    } }))
+}
+
+/// A workspace pull the client cancels while it yields to the messages
+/// behind it is answered `RequestCanceled`, after them.
+#[test]
+fn a_workspace_pull_cancelled_while_it_yields_is_answered_cancelled() {
+    let scratch = rules_workspace("pull-yields-cancelled", 1000);
+    let root = &scratch.0;
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling_and_watching(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    send(
+        &mut lsp,
+        1,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    send(
+        &mut lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    until_response(&mut lsp, 1);
+    send(
+        &mut lsp,
+        3,
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    lsp.notify("$/cancelRequest", json!({ "id": 2 }));
+    let seen = until_response(&mut lsp, 2);
+    let answered: Vec<i64> = seen
+        .iter()
+        .filter(|message| message.get("method").is_none())
+        .filter_map(|message| message["id"].as_i64())
+        .collect();
+    assert_eq!(answered, [3, 2], "{seen:#?}");
+    assert_eq!(seen.last().unwrap()["error"]["code"], -32800, "{seen:#?}");
+}
+
+/// #1767: what VS Code sends after it opens a rule (QA's trace): the
+/// document's diagnostics, the workspace's, then `documentSymbol`,
+/// `codeAction`, `documentLink`, `inlayHint`, `foldingRange` and
+/// `semanticTokens/full`. The four after the workspace pull arrive while the
+/// server makes it, on a workspace of 1,000 rules; each is answered before
+/// the workspace pull, which yields to them and is answered after, with every
+/// rule's report.
+#[test]
+fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
+    let scratch = rules_workspace("pull-yields", 1000);
+    let root = &scratch.0;
+    let rule = fixture(RULE);
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling_and_watching(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &rule);
+    let document = json!({ "textDocument": { "uri": uri } });
+    let range =
+        json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 5, "character": 0 } });
+    send(&mut lsp, 1, "textDocument/diagnostic", document.clone());
+    send(
+        &mut lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    // The document's diagnostics are answered first (the batch's rule); the
+    // workspace pull starts after them, and the rest arrive while it runs.
+    let mut seen = until_response(&mut lsp, 1);
+    let requests = [
+        (3, "textDocument/documentSymbol", document.clone()),
+        (
+            4,
+            "textDocument/codeAction",
+            json!({ "textDocument": { "uri": uri }, "range": range, "context": { "diagnostics": [] } }),
+        ),
+        (5, "textDocument/documentLink", document.clone()),
+        (
+            6,
+            "textDocument/inlayHint",
+            json!({ "textDocument": { "uri": uri }, "range": range }),
+        ),
+        (7, "textDocument/foldingRange", document.clone()),
+        (8, "textDocument/semanticTokens/full", document.clone()),
+    ];
+    for (id, method, params) in requests {
+        send(&mut lsp, id, method, params);
+    }
+    seen.extend(until_response(&mut lsp, 2));
+    let answered: Vec<i64> = seen
+        .iter()
+        .filter(|message| message.get("method").is_none())
+        .filter_map(|message| message["id"].as_i64())
+        .collect();
+    let at = |id: i64| answered.iter().position(|seen| *seen == id);
+    let pull = at(2).unwrap_or_else(|| panic!("{answered:?}"));
+    for id in 3..=8 {
+        let answer = at(id).unwrap_or_else(|| panic!("no answer to {id}: {answered:?}"));
+        assert!(
+            answer < pull,
+            "request {id} waited for the workspace pull: {answered:?}"
+        );
+    }
+    let report = seen.last().unwrap();
+    let items = report["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{report}"));
+    // Every closed rule is reported: 999 (the opened one is the document's).
+    assert_eq!(items.len(), 999, "{report}");
+    let yields = lsp.request("opentide/__stats", Value::Null)["result"]["pullYields"]
+        .as_u64()
+        .unwrap();
+    assert!(yields >= 1, "{yields}");
+}
+
 /// #1767: the server reads each folder and file of the disk once between
 /// two messages that may say it changed, and a watcher's event is one: an
 /// object file read earlier in a batch, then changed on disk, is read again
@@ -3906,4 +4050,190 @@ fn a_client_without_label_details_reads_the_name_as_the_detail() {
             .is_some_and(|docs| docs.contains("Adversaries may bypass UAC mechanisms")),
         "{resolved}"
     );
+}
+
+/// The frames of `out`, a server's whole output.
+fn frames_of(out: &[u8]) -> Vec<Value> {
+    let mut frames = Vec::new();
+    let mut rest = out;
+    while let Some(end) = rest.windows(4).position(|w| w == b"\r\n\r\n") {
+        let header = std::str::from_utf8(&rest[..end]).unwrap();
+        let length: usize = header
+            .lines()
+            .find_map(|line| line.strip_prefix("Content-Length:"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let body = &rest[end + 4..end + 4 + length];
+        frames.push(serde_json::from_slice(body).unwrap());
+        rest = &rest[end + 4 + length..];
+    }
+    frames
+}
+
+/// A client that sends a workspace pull and closes its output without
+/// `shutdown` (a script, a pipe) still gets the pull's answer: the end of
+/// input is no message for the pull to yield to, and a pull a batch carried
+/// is answered when the input ends (review of #1819).
+#[test]
+fn a_workspace_pull_is_answered_when_the_input_ends_while_it_runs() {
+    use std::io::{Read as _, Write as _};
+    let scratch = rules_workspace("pull-input-ends", 1000);
+    let root = &scratch.0;
+    let mut child = std::process::Command::new(common::bin())
+        .arg("--stdio")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut out = Vec::new();
+        stdout.read_to_end(&mut out).unwrap();
+        out
+    });
+    let messages = [
+        json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": { "capabilities": pulling_and_watching(), "rootUri": file_uri(root) } }),
+        json!({ "jsonrpc": "2.0", "method": "initialized", "params": {} }),
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "workspace/diagnostic",
+                "params": { "previousResultIds": [] } }),
+    ];
+    for message in messages {
+        let body = serde_json::to_vec(&message).unwrap();
+        write!(stdin, "Content-Length: {}\r\n\r\n", body.len()).unwrap();
+        stdin.write_all(&body).unwrap();
+    }
+    stdin.flush().unwrap();
+    // The end of input arrives while the pull runs.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    drop(stdin);
+    let frames = frames_of(&reader.join().unwrap());
+    let _ = child.wait();
+    let pull = frames
+        .iter()
+        .find(|frame| frame["id"] == 2 && frame.get("method").is_none())
+        .unwrap_or_else(|| panic!("the pull was never answered: {frames:#?}"));
+    let items = pull["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{pull}"));
+    assert_eq!(items.len(), 1000, "{pull}");
+}
+
+/// A workspace pull from a client that watches no files never yields:
+/// nothing it finds is kept from one batch to the next for that client, so
+/// an attempt that yields is lost, and a client that keeps sending would
+/// starve it (review of #1819). The requests behind it wait, as before.
+#[test]
+fn a_workspace_pull_without_a_file_watcher_never_yields() {
+    let scratch = rules_workspace("pull-no-watcher", 1000);
+    let root = &scratch.0;
+    let caps = pulling(json!({ "workspace": { "diagnostics": { "refreshSupport": true } } }));
+    let (mut lsp, _) = start(json!({ "capabilities": caps, "rootUri": file_uri(root) }));
+    let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    send(
+        &mut lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    send(
+        &mut lsp,
+        3,
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let seen = until_response(&mut lsp, 3);
+    assert!(
+        seen.iter()
+            .any(|message| message["id"] == 2 && message.get("method").is_none()),
+        "the pull yielded: {seen:#?}"
+    );
+    let yields = lsp.request("opentide/__stats", Value::Null)["result"]["pullYields"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(yields, 0);
+}
+
+/// A client that edits, while a workspace pull runs, a field the checks
+/// across objects read (the rule's `name`, every 30 ms until the pull is
+/// answered) makes each attempt check every object again before it reports
+/// any file: the pull yields for at most a second after its first attempt,
+/// then runs to its end, so it is answered while the edits go on (review of
+/// #1819).
+#[test]
+fn a_workspace_pull_is_answered_while_the_client_keeps_editing() {
+    use std::io::{BufRead as _, Read as _, Write as _};
+    let scratch = rules_workspace("pull-keeps-editing", 1000);
+    let root = &scratch.0;
+    let rule = fixture(RULE);
+    assert!(rule.starts_with("name: "), "{rule}");
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling_and_watching(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    open(&mut lsp, &uri, "opentide-yaml", &rule);
+    send(
+        &mut lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    let answered = std::sync::atomic::AtomicBool::new(false);
+    let Lsp { stdin, reader, .. } = &mut lsp;
+    let in_time = std::thread::scope(|scope| {
+        // The edits go out from a thread of their own, so they keep coming
+        // whatever the server answers; the pull's answer stops them.
+        let editor = scope.spawn(|| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            let mut version = 1;
+            while !answered.load(std::sync::atomic::Ordering::SeqCst) {
+                if std::time::Instant::now() >= deadline {
+                    return false;
+                }
+                version += 1;
+                let text = rule.replacen("name: ", &format!("name: Edit {version} "), 1);
+                let body = serde_json::to_vec(&json!({ "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": { "textDocument": { "uri": uri, "version": version },
+                                "contentChanges": [{ "text": text }] } }))
+                .unwrap();
+                write!(stdin, "Content-Length: {}\r\n\r\n", body.len()).unwrap();
+                stdin.write_all(&body).unwrap();
+                stdin.flush().unwrap();
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+            true
+        });
+        loop {
+            let mut length = 0;
+            loop {
+                let mut header = String::new();
+                reader.read_line(&mut header).unwrap();
+                let header = header.trim_end();
+                if header.is_empty() {
+                    break;
+                }
+                if let Some(value) = header.strip_prefix("Content-Length:") {
+                    length = value.trim().parse().unwrap();
+                }
+            }
+            let mut body = vec![0; length];
+            reader.read_exact(&mut body).unwrap();
+            let message: Value = serde_json::from_slice(&body).unwrap();
+            if message["id"] == 2 && message.get("method").is_none() {
+                assert!(message["result"]["items"].is_array(), "{message}");
+                answered.store(true, std::sync::atomic::Ordering::SeqCst);
+                break;
+            }
+        }
+        editor.join().unwrap()
+    });
+    assert!(in_time, "the pull was not answered within 60 s of edits");
 }

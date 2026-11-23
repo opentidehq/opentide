@@ -24,8 +24,8 @@ exit: 0
   },
   "vocabularies": [
     {
-      "entries": 1309,
-      "latest_revision": "1.2",
+      "entries": 1323,
+      "latest_revision": "1.3",
       "name": "actors",
       "removed": 0,
       "staged": true,

@@ -301,6 +301,18 @@ label = "language server, the longest completion after a keystroke and its pulls
 # times slower) stays under. The oracle (0.23.0) is not measured.
 target_s = 0.05
 
+[commands.lsp_tokens_during_first_pull]
+label = "language server, a rule's semantic tokens asked while the first workspace pull runs"
+# What VS Code sends when it opens a rule (#1767): the document's diagnostics, the
+# workspace's, then, while that pull runs, the document's semantic tokens, which the
+# editor's colours wait for. Measured on the heavy workspace (500 rules, 1,113 files),
+# the tokens asked 30 ms after the pull began: 0.456 s when the server ran the pull to
+# its end first (the pull takes about 0.5 s), 0.071 s once the pull yields to the
+# requests behind it (median of 7 runs, 4 vCPU Xeon 2.10GHz). The target is near three times
+# what it measures, which the slowest recorded CPU class (1.8 times slower) stays
+# under, and half the time before the fix. The oracle (0.23.0) is not measured.
+target_s = 0.2
+
 # The medians on more CPU models of the runner class, from CI runs of the workflow
 # (same oracle, workspace and run count as [baseline]). Two runners with the same CPU
 # model differ by up to about 10% on every command (run 42587161988 measured 3 to 12%
