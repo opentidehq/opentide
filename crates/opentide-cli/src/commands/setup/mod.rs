@@ -83,8 +83,8 @@ pub struct CiArgs {
     pub explorer_pages: bool,
     /// `--variable-group`, in order.
     pub variable_group: Vec<String>,
-    /// `--app-token`.
-    pub app_token: bool,
+    /// `--app-token/--no-app-token`; `None` keeps the existing pipeline's.
+    pub app_token: Option<bool>,
     /// `--stdout`: print the pipeline, write nothing.
     pub stdout: bool,
     /// `--default-branch`; `None` detects it.
@@ -700,9 +700,9 @@ fn group_names(given: &[String]) -> Vec<String> {
     names
 }
 
-/// Whether the pipeline is written with `--app-token`: the flag, or, when
-/// it is not given, the flag the existing GitHub pipeline opentide wrote
-/// records (`warnings` says so). Only GitHub has it.
+/// Whether the pipeline is written with `--app-token`: the flag or
+/// `--no-app-token`, or, when neither is given, what the existing GitHub
+/// pipeline opentide wrote records (`warnings` says so). Only GitHub has it.
 fn app_token(
     args: &CiArgs,
     pipeline: &str,
@@ -712,40 +712,26 @@ fn app_token(
     if args.provider != Provider::GitHub {
         return false;
     }
-    if args.app_token {
-        return true;
+    if let Some(choice) = args.app_token {
+        return choice;
     }
     let kept = matches!(before, Ok(Some(old)) if generated(old) && ci::app_token(old));
     if kept {
         warnings.push(format!(
-            "keeping --app-token from {pipeline}: the production job still pushes with the GitHub App token; to turn it off, delete --app-token from the first line of the file and run the command again"
+            "keeping --app-token from {pipeline}: the jobs that push to the default branch still use the GitHub App token; pass --no-app-token to turn it off"
         ));
     }
     kept
 }
 
 /// What the existing pipeline holds between its user-owned region's markers
-/// (`ci::user_region`), which the regenerated one keeps; `warnings` says
-/// when the markers cannot be read.
-fn user_region(
-    pipeline: &str,
-    before: &Result<Option<String>, String>,
-    warnings: &mut Vec<String>,
-) -> Option<String> {
-    let Ok(Some(old)) = before else {
-        return None;
-    };
-    if !generated(old) {
-        return None;
-    }
-    match ci::user_region(old) {
-        Ok(region) => region,
-        Err(why) => {
-            warnings.push(format!(
-                "the user-owned region of {pipeline} was not kept: {why}"
-            ));
-            None
-        }
+/// (`ci::user_region`), which the regenerated one keeps: `Err` when the
+/// markers cannot be read, which is why. Only a pipeline opentide wrote has
+/// a region.
+fn user_region(before: &Result<Option<String>, String>) -> Result<Option<String>, String> {
+    match before {
+        Ok(Some(old)) if generated(old) => ci::user_region(old),
+        _ => Ok(None),
     }
 }
 
@@ -879,7 +865,7 @@ fn ignored_flag_warnings(args: &CiArgs, warnings: &mut Vec<String>) {
             args.provider.name()
         ));
     }
-    if args.app_token && args.provider != Provider::GitHub {
+    if args.app_token == Some(true) && args.provider != Provider::GitHub {
         warnings.push(format!(
             "--app-token was ignored: only GitHub Actions creates a GitHub App token, not {}",
             args.provider.name()
@@ -948,16 +934,32 @@ pub(crate) fn prepare(
     let before = files::read_text(stage, &existing);
     options.variable_groups = variable_groups(args, pipeline, &before, &mut warnings);
     options.app_token = app_token(args, pipeline, &before, &mut warnings);
-    options.user_region = user_region(pipeline, &before, &mut warnings);
+    let region = user_region(&before);
+    options.user_region = region.clone().unwrap_or(None);
     let text = ci::render(&options)
         .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
     let exists = existing.exists() || !matches!(before, Ok(None));
     let rendered = text.clone();
-    // `--stdout` writes nothing, so there is no file to replace or keep.
-    let bytes = if args.stdout {
-        None
-    } else {
-        pipeline_bytes(args.provider, pipeline, before, text, &mut warnings)
+    // `--stdout` writes nothing, so there is no file to replace or keep; a
+    // region that cannot be read is not replaced, as a file that is not
+    // opentide's is not.
+    let bytes = match (args.stdout, &region) {
+        (true, Err(why)) => {
+            warnings.push(format!(
+                "the user-owned region of {pipeline} cannot be read ({why}), so this output has none"
+            ));
+            None
+        }
+        (true, Ok(_)) => None,
+        (false, Err(why)) => {
+            warnings.push(format!(
+                "the user-owned region of {pipeline} cannot be read ({why}), so it was kept as it is; mark the region with one `{}` line and one `{}` line, or move the file, and run the command again.",
+                ci::USER_BEGIN,
+                ci::USER_END
+            ));
+            None
+        }
+        (false, Ok(_)) => pipeline_bytes(args.provider, pipeline, before, text, &mut warnings),
     };
     let mut files = vec![(pipeline.to_owned(), bytes, exists)];
     if let Some(promotion) = promotion
@@ -1455,7 +1457,7 @@ mod tests {
             python_version: "3.12".into(),
             explorer_pages: false,
             variable_group: Vec::new(),
-            app_token: false,
+            app_token: None,
             stdout: false,
             default_branch: None,
             plan: false,
@@ -1520,7 +1522,7 @@ mod tests {
             python_version: "3.12".into(),
             explorer_pages: false,
             variable_group: Vec::new(),
-            app_token: false,
+            app_token: None,
             stdout: false,
             default_branch: None,
             plan: false,
@@ -1597,7 +1599,7 @@ mod tests {
             python_version: "3.12".into(),
             explorer_pages: false,
             variable_group: Vec::new(),
-            app_token: false,
+            app_token: None,
             stdout: false,
             default_branch: None,
             plan: false,

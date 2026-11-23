@@ -1040,7 +1040,7 @@ impl Run<'_> {
             python_version: pipeline.python_version.clone(),
             explorer_pages: pipeline.explorer_pages,
             variable_group: pipeline.variable_group.clone(),
-            app_token: pipeline.app_token,
+            app_token: pipeline.app_token_choice(),
             stdout: ci.stdout,
             default_branch: pipeline.default_branch.clone(),
             plan: ci.confirm.plan || args.plan,

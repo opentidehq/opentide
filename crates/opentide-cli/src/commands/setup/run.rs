@@ -1141,8 +1141,8 @@ pub struct GroupArgs {
     pub explorer_pages: bool,
     /// `--variable-group`, in order.
     pub variable_group: Vec<String>,
-    /// `--app-token`.
-    pub app_token: bool,
+    /// `--app-token/--no-app-token`; `None` keeps the existing pipeline's.
+    pub app_token: Option<bool>,
     /// `--promotion/--no-promotion`.
     pub promotion: Option<bool>,
     /// `--promotion-target`.
@@ -1196,7 +1196,7 @@ fn ignored_ci_flags(args: &GroupArgs) -> Vec<String> {
     if !args.variable_group.is_empty() {
         ignored.push("--variable-group");
     }
-    if args.app_token {
+    if args.app_token == Some(true) {
         ignored.push("--app-token");
     }
     if args.python_version != "3.12" {

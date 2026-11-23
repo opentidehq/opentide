@@ -1,25 +1,30 @@
 {#- GitHub Actions: `.github/workflows/opentide.yml` (`ci/github.py`). -#}
 {% import "scripts.sh.j2" as sh %}
-{% macro setup(full_history=false, ref=none, token=false) -%}
-{% if token %}
+{#- The App token `--app-token` creates, for the jobs that push to the
+    default branch; `token(...)` is the checkout's `token:` line. -#}
+{% macro app_token_step() -%}
 - name: Create GitHub App token
   id: app-token
   uses: actions/create-github-app-token@v3
   with:
-    app-id: ${{ vars.OPENTIDE_APP_ID }}
+    client-id: ${{ vars.OPENTIDE_APP_CLIENT_ID }}
     private-key: ${{ secrets.OPENTIDE_APP_PRIVATE_KEY }}
+    permission-contents: write
+{%- endmacro %}
+{% macro setup(full_history=false, ref=none, token=false) -%}
+{% if token %}
+[[ app_token_step() ]]
 {% endif %}
 - uses: actions/checkout@v7
+{% if ref or full_history or token %}
+  with:
 {% if ref %}
-  with:
     ref: [[ ref ]]
-    fetch-depth: 0
-{% elif full_history or token %}
-  with:
+{% endif %}
 {% if token %}
     token: ${{ steps.app-token.outputs.token }}
 {% endif %}
-{% if full_history %}
+{% if ref or full_history %}
     fetch-depth: 0
 {% endif %}
 {% endif %}
@@ -165,8 +170,14 @@ jobs:
     permissions:
       contents: write
     steps:
+{% if app_token %}
+      [[ app_token_step() | indent(6) ]]
+{% endif %}
       - uses: actions/checkout@v7
         with:
+{% if app_token %}
+          token: ${{ steps.app-token.outputs.token }}
+{% endif %}
           fetch-depth: 0
       - uses: actions/setup-python@v7
         with:

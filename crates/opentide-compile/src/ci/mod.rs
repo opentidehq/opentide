@@ -772,8 +772,8 @@ pub const USER_BEGIN: &str = "# opentide:user-begin";
 /// The line that closes a pipeline's user-owned region.
 pub const USER_END: &str = "# opentide:user-end";
 
-/// The variable of the GitHub App's id `--app-token` reads.
-pub const APP_ID_VARIABLE: &str = "OPENTIDE_APP_ID";
+/// The variable of the GitHub App's client id `--app-token` reads.
+pub const APP_CLIENT_ID_VARIABLE: &str = "OPENTIDE_APP_CLIENT_ID";
 
 /// The secret of the GitHub App's private key `--app-token` reads.
 pub const APP_KEY_SECRET: &str = "OPENTIDE_APP_PRIVATE_KEY";
@@ -831,7 +831,7 @@ fn user_block(options: &Options) -> String {
     let (pad, what) = match options.provider {
         Provider::GitHub => (2, "jobs"),
         Provider::GitLab => (0, "jobs"),
-        Provider::Azure => (2, "jobs and stages"),
+        Provider::Azure => (2, "stages"),
     };
     let pad = " ".repeat(pad);
     let mut block = format!(
@@ -869,7 +869,7 @@ fn header(options: &Options, names: &[String]) -> String {
     }
     if options.app_token {
         header.push_str(&format!(
-            "# --app-token: the production job pushes with a GitHub App token. Set the repository variable and secret:\n#   {APP_ID_VARIABLE} (variable)\n#   {APP_KEY_SECRET} (secret)\n"
+            "# --app-token: the jobs that push to the default branch use a GitHub App token. Set the repository variable and secret:\n#   {APP_CLIENT_ID_VARIABLE} (variable)\n#   {APP_KEY_SECRET} (secret)\n"
         ));
     }
     // A pipeline that maps no variable asks for none (#1689).

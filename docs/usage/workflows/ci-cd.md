@@ -127,20 +127,25 @@ An Azure pipeline from **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and trig
 
 ### Pushing with a GitHub App
 
-The production job pushes the deployment state and the promoted rule files to the default branch. With `GITHUB_TOKEN` that push fails on a branch whose protection requires pull requests or checks, and it starts no workflow. `opentide setup ci github --app-token` makes the job push as a GitHub App instead. The job's first step is
+The production job pushes the deployment state and the promoted rule files to the default branch. With `GITHUB_TOKEN` that push fails on a branch whose protection requires pull requests or checks, and it starts no workflow. `opentide setup ci github --app-token` makes the jobs that push to the default branch (the production job, and with inflight on, `inflight_prune`) push as a GitHub App instead. Each starts with
 
 ```yaml
 - name: Create GitHub App token
   id: app-token
   uses: actions/create-github-app-token@v3
   with:
-    app-id: ${{ vars.OPENTIDE_APP_ID }}
+    client-id: ${{ vars.OPENTIDE_APP_CLIENT_ID }}
     private-key: ${{ secrets.OPENTIDE_APP_PRIVATE_KEY }}
+    permission-contents: write
 ```
 
-and `actions/checkout` takes `token: ${{ steps.app-token.outputs.token }}`, so the write-back's fetches and pushes use it. Install the App on the repository with **Contents: read and write**, add it to the branch's bypass list when the branch is protected, and set the repository **variable** `OPENTIDE_APP_ID` and the **secret** `OPENTIDE_APP_PRIVATE_KEY`; the workflow's header lists both. Only the production job changes: the inflight jobs keep `GITHUB_TOKEN`. Without the flag the workflow is the same as before.
+and `actions/checkout` takes `token: ${{ steps.app-token.outputs.token }}`, so the job's fetches and pushes use it. The token is limited to **Contents: write** (`permission-contents`) on this repository. Install the App on the repository with **Contents: read and write**, add it to the branch's bypass list when the branch is protected, and set the repository **variable** `OPENTIDE_APP_CLIENT_ID` (the App's client id) and the **secret** `OPENTIDE_APP_PRIVATE_KEY`; the workflow's header lists both. Without the flag the workflow is the same as before.
 
-The header's `regenerate with` line records the flag, and regenerating without it keeps it and warns `keeping --app-token from .github/workflows/opentide.yml`. To turn it off, delete `--app-token` from the file's first line and run the command again. GitLab and Azure ignore the flag and warn.
+**Protect the key.** A repository secret is readable by a workflow on any branch, so anyone who can push a branch can write a workflow that mints the App's token and pushes past the branch protection. Store `OPENTIDE_APP_PRIVATE_KEY` as an **environment secret** instead, on an environment whose deployment branches are limited to the default branch, and add `environment: <name>` to the production and prune jobs, the ones that use it (the generated workflow does not name an environment, since it cannot know yours).
+
+`inflight_shards` runs on pull requests and keeps `GITHUB_TOKEN`: its shard pushes to a protected default branch need their own exception in the branch protection.
+
+The header's `regenerate with` line records the flag. Regenerating without it keeps it and warns `keeping --app-token from .github/workflows/opentide.yml`; `--no-app-token` turns it off. GitLab and Azure ignore `--app-token` and warn.
 
 ### Your own jobs: the user-owned region
 
@@ -153,7 +158,7 @@ Every generated pipeline ends its jobs with an empty region:
   # opentide:user-end
 ```
 
-(GitHub's `jobs:` at two spaces, GitLab's top level at none, Azure's `stages:` at two spaces, where a stage of your own goes.) Put jobs or stages of your own between the markers, at the indentation of the pipeline's own. A regenerate copies what is between them from the old file verbatim, so `opentide setup ci <provider> --yes` no longer removes them, and they are not named in the warning about dropped jobs. Everything outside the markers is still replaced. A file with a marker missing, or more than one region, keeps none of it, and the run warns. A pipeline written before the region existed has none: add the two marker lines at the end of its jobs, then regenerate.
+(GitHub's `jobs:` at two spaces, GitLab's top level at none, Azure's `stages:` at two spaces, where a stage of your own goes.) Put jobs (on Azure, stages) of your own between the markers, at the indentation of the pipeline's own. A regenerate copies what is between them from the old file verbatim, so `opentide setup ci <provider> --yes` no longer removes them, and they are not named in the warning about dropped jobs. Everything outside the markers is still replaced. A file whose markers cannot be read (an end marker missing, a second region, a marker line inside a `run: |` block) is not replaced: `setup ci` keeps it as it is and writes nothing, as it does for a file that is not opentide's, and warns (`--plan` lists it as `skip`; `--stdout` still prints, with no region). A pipeline written before the region existed has none: add the two marker lines **around your jobs first** (at the end of the pipeline's jobs, at their indentation), then regenerate. Regenerating first replaces your jobs, and the warning names what it dropped.
 
 ### Skipping deploys for a catalogue-wide change
 
@@ -382,9 +387,9 @@ steps:
 
 ### Which commits an Azure push deploys
 
-GitHub and GitLab name the commit a branch held before a push, so a push of several commits deploys the rules each of them changed. Azure Pipelines names none: a run on a push reads only its last commit, against that commit's first parent. A rule an earlier commit of the same push changed is not in the diff, so `opentide deploy`, `opentide validate query --changed` and `opentide lint --changed` skip it, and the run warns `This push's diff starts at its last commit's parent: …`. In the build summary the warning is an Azure issue (`##vso[task.logissue type=warning]`, from `deploy`); `--json` carries it in the document's warnings.
+GitHub and GitLab name the commit a branch held before a push, so a push of several commits deploys the rules each of them changed. Azure Pipelines names none itself: when `OPENTIDE_PUSH_BASE` is unset, a run on a push reads only its last commit, against that commit's first parent. The generated pipeline sets `OPENTIDE_PUSH_BASE` (below), so this applies to a pipeline you adapted, to one written before the step existed, and to a run where the step finds no earlier successful build. A rule an earlier commit of the same push changed is not in the diff, so `opentide deploy`, `opentide validate query --changed` and `opentide lint --changed` skip it, and the run warns `This push's diff starts at its last commit's parent: …`. In the build summary the warning is an Azure issue (`##vso[task.logissue type=warning]`, from `deploy`); `--json` carries it in the document's warnings.
 
-The diff is exact for a push of one commit, and for a merge a pull request completed on the target branch (the merge commit's first parent is then the branch's previous tip). The run cannot tell those from a merge commit that is not (batched builds, a `git pull` merge then a direct push, a fast-forward to a branch that merged the target), so it warns for every Azure push. Build every commit (a branch policy, or batching off), or name the base.
+The diff is exact for a push of one commit, and for a merge a pull request completed on the target branch (the merge commit's first parent is then the branch's previous tip). Without `OPENTIDE_PUSH_BASE` the run cannot tell those from a merge commit that is not (batched builds, a `git pull` merge then a direct push, a fast-forward to a branch that merged the target), so it warns for every Azure push. Build every commit (a branch policy, or batching off), or name the base.
 
 Name where a push's diff starts with `OPENTIDE_PUSH_BASE`, a commit that is an ancestor of `HEAD` (any provider reads it, on a push). A value that is not a commit of the checkout, or not an ancestor of `HEAD`, stops the run with exit `2` (the checkout is shallow when it says so: use `fetchDepth: 0`), and a run that reads it does not warn.
 
@@ -394,7 +399,7 @@ The generated pipeline sets it. On a CI push (`Build.Reason` is `IndividualCI` o
 GET $(System.CollectionUri)$(System.TeamProject)/_apis/build/builds?definitions=$(System.DefinitionId)&branchName=$(Build.SourceBranch)&resultFilter=succeeded&statusFilter=completed&queryOrder=finishTimeDescending&$top=1&api-version=7.1
 ```
 
-It authenticates with `$(System.AccessToken)`, which the step maps into its `env:`. When that build exists and its `sourceVersion` is an ancestor of `HEAD` (`git merge-base --is-ancestor`), the step exports it with `##vso[task.setvariable variable=OPENTIDE_PUSH_BASE]`, and the push deploys every commit since that build. Otherwise (no earlier successful build, an API error, or a commit that is not an ancestor, as after a force push) it sets nothing, and opentide falls back to the last commit and its warning. The jobs that carry the step check out with `fetchDepth: 0`, so the base is in the checkout. The project's **build service** identity needs read access to builds, which it has by default (**View builds**); a project that removed it gets the fallback. Pull requests are not touched: they diff from the target branch's merge base.
+It authenticates with `$(System.AccessToken)`, which the step maps into its `env:`. When that build exists and its `sourceVersion` is an ancestor of `HEAD` (`git merge-base --is-ancestor`), the step exports it with `##vso[task.setvariable variable=OPENTIDE_PUSH_BASE]`, and the push deploys every commit since that build. Otherwise (no earlier successful build, an API error, or a commit that is not an ancestor, as after a force push) it sets nothing, and opentide falls back to the last commit and its warning. The step has `continueOnError: true` and `curl` timeouts (10 s to connect, 30 s in all), so a failure of the lookup never skips a deploy: the run falls back as above. The token goes to `curl` on stdin, not in its arguments. The jobs that carry the step check out with `fetchDepth: 0`, so the base is in the checkout; in the `share` job the check runs after the checkout of the branch tip, the commit it shares. The project's **build service** identity needs read access to builds, which it has by default (**View builds**); a project that removed it gets the fallback. Pull requests are not touched: they diff from the target branch's merge base.
 
 A pipeline you adapted, or one written before the step existed, can add the same step; `opentide setup ci azure --stdout` prints it.
 

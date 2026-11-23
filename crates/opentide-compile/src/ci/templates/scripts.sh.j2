@@ -207,10 +207,10 @@ fi
     commit of this pipeline's last successful build of the branch, when it is
     an ancestor of HEAD, as `OPENTIDE_PUSH_BASE`; otherwise set nothing, and
     opentide reads the push's last commit only. Needs `SYSTEM_ACCESSTOKEN`
-    in the step's environment. -#}
+    in the step's environment; the token goes to curl on stdin, not argv. -#}
 {% macro push_base() -%}
 project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
-response=$(curl -fsS -G -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
   --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
   --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
   --data-urlencode "resultFilter=succeeded" \

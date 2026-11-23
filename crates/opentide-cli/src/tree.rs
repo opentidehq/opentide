@@ -680,9 +680,16 @@ pub struct SetupPipelineFields {
     pub variable_group: Vec<String>,
     #[arg(
         long = "app-token",
-        help = "GitHub Actions: the production job checks out and pushes with a GitHub App token (variable OPENTIDE_APP_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN (ignored with a warning for gitlab and azure)"
+        help = "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
+        overrides_with = "no_app_token"
     )]
     pub app_token: bool,
+    #[arg(
+        long = "no-app-token",
+        overrides_with = "app_token",
+        help = "Turn --app-token off, including one the existing pipeline records"
+    )]
+    pub no_app_token: bool,
     #[arg(
         long = "no-explorer-pages",
         overrides_with = "explorer_pages",

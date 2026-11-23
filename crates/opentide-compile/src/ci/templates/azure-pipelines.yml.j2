@@ -22,15 +22,16 @@
 {%- endmacro %}
 {#- The step that names the commit a push's diff starts at, for a job that
     reads the changed files (`OPENTIDE_PUSH_BASE`): Azure names none. -#}
-{% macro push_base_step() -%}
+{% macro push_base_step(pre=none) -%}
 - script: |
-    [[ sh.push_base() | indent(4) ]]
+    [[ ((pre or []) + [sh.push_base()]) | join("\n") | indent(4) ]]
   displayName: Find this push's base commit
   condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+  continueOnError: true
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 {%- endmacro %}
-{% macro steps(commands, persist=false, full_history=false, secrets=none, push_base=false) -%}
+{% macro steps(commands, persist=false, full_history=false, secrets=none, push_base=false, push_base_pre=none) -%}
 {% if persist or full_history %}
 - checkout: self
 {% if persist %}
@@ -46,7 +47,7 @@
 - script: [[ pip ]]
   displayName: Install opentide
 {% if push_base %}
-[[ push_base_step() ]]
+[[ push_base_step(push_base_pre) ]]
 {% endif %}
 [[ script(commands, secrets) ]]
 {%- endmacro %}
@@ -161,7 +162,7 @@ stages:
     dependsOn: [Generate, Deploy]
     condition: and(not(canceled()), eq(dependencies.Generate.result, 'Succeeded'), eq(variables['Build.SourceBranch'], 'refs/heads/[[ branch ]]'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
-      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true, secrets=sharing_credentials, push_base=true)) | indent(6) ]]
+      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true, secrets=sharing_credentials, push_base=true, push_base_pre=["git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD"])) | indent(6) ]]
 
 {% endif %}
   - stage: Document
