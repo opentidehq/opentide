@@ -44,10 +44,10 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -158,7 +158,7 @@ jobs:
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/splunk.toml; then opentide validate query --platform splunk --live --changed; else echo "The default branch has no splunk tenant yet, so no tenant is reviewed. Skipped splunk live query validation without using platform credentials."; fi
       - name: Upload opentide reports
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opentide-reports
           path: opentide-reports/
@@ -172,7 +172,7 @@ jobs:
       security-events: write
     steps:
       - name: Download opentide reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: opentide-reports
@@ -194,8 +194,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -234,10 +234,10 @@ jobs:
       SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
       SYSDIG_SECURE_API_TOKEN: ${{ secrets.SYSDIG_SECURE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -258,11 +258,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout pull request head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -313,10 +313,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -381,10 +381,10 @@ jobs:
       SPLUNK_URL: ${{ secrets.SPLUNK_URL }}
       SYSDIG_SECURE_API_TOKEN: ${{ secrets.SYSDIG_SECURE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
@@ -489,14 +489,14 @@ jobs:
     needs: generate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "opentide==$OPENTIDE_VERSION"
       - run: opentide generate docs --output docs
       - name: Upload documentation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opentide-docs
           path: "docs/"
