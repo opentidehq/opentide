@@ -1431,4 +1431,48 @@ mod lint {
         );
         assert!(reviewed_findings(extra, "[metadata]\nenabled = false\n").is_empty());
     }
+
+    #[test]
+    fn reviewed_before_modified_needs_a_schema_with_reviewed() {
+        let extra = "  modified: 2026-11-20\n  reviewed: 2026-09-01\n";
+        let fs = workspace();
+        // rule::1.0 has no `reviewed`: the schema check refuses the key, lint
+        // does not compare it.
+        fs.write(
+            "/ws/objects/rules/old.yaml",
+            dated_rule(extra).replace("rule::1.1", "rule::1.0"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.code() != "reviewed_before_modified"),
+            "{:?}",
+            codes(&report)
+        );
+    }
+
+    #[test]
+    fn the_editor_shows_reviewed_before_modified_at_the_configured_severity() {
+        use opentide_workspace::lint::lint_file;
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/dated.yaml",
+            dated_rule("  modified: 2026-11-20\n  reviewed: 2026-09-01\n"),
+        );
+        let path = Path::new("/ws/objects/rules/dated.yaml");
+        let found = lint_file(&fs, Path::new(ROOT), &LintConfig::default(), path);
+        let finding = found
+            .iter()
+            .find(|f| f.code() == "reviewed_before_modified")
+            .unwrap();
+        assert_eq!(finding.diagnostic.severity, Severity::Warning);
+        let off = config("[metadata.codes]\nreviewed_before_modified = \"off\"\n");
+        assert!(
+            lint_file(&fs, Path::new(ROOT), &off, path)
+                .iter()
+                .all(|f| f.code() != "reviewed_before_modified")
+        );
+    }
 }

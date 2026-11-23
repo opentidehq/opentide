@@ -22,7 +22,7 @@ opentide lint --file objects/rules/example.yaml
 | `--check` | What it does | `--fix` |
 |----------|----------------|---------|
 | `filenames` | Object YAML stem must follow the [filename convention](#filename-convention): `slugify(name)` by default | Renames files to the stem `style` expects. On a collision in the same folder, appends `{uuid[:8]}`. A `pattern` finding is not fixed |
-| `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty, as a note (by default `author` and `organisation`), and a rule whose `metadata.reviewed` day is before its `metadata.modified` day, as a warning (`reviewed_before_modified`) | Not auto-fixed |
+| `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty, as a note (by default `author` and `organisation`), and a rule (`rule::1.1` metadata, the only schema with `reviewed`) whose `metadata.reviewed` day is before its `metadata.modified` day, as a warning (`reviewed_before_modified`) | Not auto-fixed |
 | `recommended` | Reports each field the templates ask for and `validate` does not require that is missing, as a note: a rule's `configurations` and `response`. The editor reports the same finding, `recommended_field_missing` | Not auto-fixed |
 | `placeholders` | Reports each value [`opentide new`](./new.md) filled in for you, marked `# opentide:placeholder` | Not auto-fixed |
 | `queries` | Reports the analysis engine's warnings and notes on each query (slow shapes, deprecated commands) and Elastic block settings (see [Queries](#queries)) | Not auto-fixed |
@@ -196,7 +196,7 @@ kql_wildcard_table = "off"                   # dropped
 - An `off` finding is not reported and does not count, as if the code did not exist. `filename_mismatch = "off"` also stops `--fix` renaming: a file name the table drops is left alone.
 - The table changes what lint reports. Under `[filenames.codes]` that includes lint's own errors (`yaml_parse`, `name_missing`); under `[queries.codes]` it is the engine's warnings and notes, never an engine error, which is `validate`'s to report (`lint` does not print it). A code that only `validate` reports, such as `vocab_unknown`, is accepted and has no effect on `lint`.
 - A retired code (`filename_slug`, `missing_author`, `missing_organisation`, `crowdstrike_unsupported`, `yara_x_incompatible`) is accepted so an old `lint.toml` keeps working: it has no effect, and the run's `warnings` name its replacement.
-- `opentide lint` and `lint --strict` apply the table. [`opentide validate`](./validate.md) does not read `lint.toml`'s severities: its `--queries` flag is its own control. The language server follows the tables of `[filenames]`, `[metadata]` and `[recommended]`, as it does their `severity`; its query diagnostics are the editor's own analysis, which `[queries.codes]` does not change.
+- `opentide lint` and `lint --strict` apply the table. [`opentide validate`](./validate.md) does not read `lint.toml`'s severities: its `--queries` flag is its own control. The language server follows the tables of `[filenames]`, `[metadata]` (`reviewed_before_modified` included) and `[recommended]`, as it does their `severity`; its query diagnostics are the editor's own analysis, which `[queries.codes]` does not change.
 
 ### Filename convention
 

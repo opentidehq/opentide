@@ -981,7 +981,10 @@ fn editor_findings(
         .filter(|finding| {
             matches!(
                 finding.code(),
-                codes::FILENAME | codes::METADATA | codes::RECOMMENDED
+                codes::FILENAME
+                    | codes::METADATA
+                    | codes::REVIEWED_BEFORE_MODIFIED
+                    | codes::RECOMMENDED
             )
         })
         .collect()
@@ -1695,6 +1698,12 @@ fn reviewed_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft
         let (None, Some(metadata)) = (&record.parse_error, &record.metadata) else {
             continue;
         };
+        // Only a schema whose metadata has `reviewed` (rule::1.1): a threat,
+        // an objective or a rule::1.0 rule has none to compare.
+        let accepted = record.schema.as_deref().and_then(schema_metadata_keys);
+        if accepted.is_some_and(|keys| !keys.iter().any(|key| key == "reviewed")) {
+            continue;
+        }
         let (Some(reviewed), Some(modified)) = (
             metadata_day(metadata, "reviewed"),
             metadata_day(metadata, "modified"),
