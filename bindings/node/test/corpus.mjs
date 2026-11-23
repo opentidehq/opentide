@@ -12,10 +12,20 @@ export const REPO = dirname(dirname(PACKAGE))
 /** The package's manifest. */
 export const MANIFEST = JSON.parse(readFileSync(join(PACKAGE, 'package.json'), 'utf8'))
 
+/** The folders `tempDir` made: one exit listener removes them all. */
+const made = []
+
 /** A fresh temporary folder, removed when the process exits. */
 export function tempDir() {
   const dir = mkdtempSync(join(tmpdir(), 'opentide-node-'))
-  process.on('exit', () => rmSync(dir, { recursive: true, force: true }))
+  if (made.length === 0) {
+    // One listener, not one per folder: a test file makes more than ten, and
+    // Node warns (`MaxListenersExceededWarning`) past ten exit listeners.
+    process.on('exit', () => {
+      for (const folder of made) rmSync(folder, { recursive: true, force: true })
+    })
+  }
+  made.push(dir)
   return dir
 }
 
