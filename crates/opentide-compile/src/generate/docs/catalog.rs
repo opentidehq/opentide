@@ -245,6 +245,8 @@ pub struct Catalog<'i> {
     statuses: Statuses,
     /// Each rule's `configurations` as written, by UUID.
     written: HashMap<String, crate::json::Json>,
+    /// Each rule's techniques, its own then those inherited, by UUID.
+    techniques: HashMap<String, Vec<String>>,
 }
 
 impl<'i> Catalog<'i> {
@@ -336,7 +338,21 @@ impl<'i> Catalog<'i> {
             relations: Relations::new(index),
             statuses,
             written,
+            techniques: opentide_workspace::coverage::rule_technique_index(index)
+                .into_iter()
+                .map(|(uuid, found)| {
+                    let mut all = found.own;
+                    all.extend(found.inherited);
+                    (uuid, all)
+                })
+                .collect(),
         })
+    }
+
+    /// The techniques a rule covers, as `info coverage` counts them: those it
+    /// lists, then those it inherits through its detection model.
+    pub fn rule_techniques(&self, uuid: &str) -> &[String] {
+        self.techniques.get(uuid).map_or(&[], Vec::as_slice)
     }
 
     /// A rule's `configurations` as its file writes them: what the author

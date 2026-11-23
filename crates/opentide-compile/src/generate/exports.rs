@@ -178,10 +178,20 @@ fn techniques_of(
         .collect();
     ordered.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(b.1)));
     let label = family.to_uppercase();
+    let rule_techniques = opentide_workspace::coverage::rule_technique_index(index);
     let mut mapping: IndexMap<String, Vec<String>> = IndexMap::new();
     for (_, uuid, root) in ordered {
-        let techniques = crate::attack::techniques(index, uuid)
+        // The walk that fails on an object it cannot read, as the oracle's does.
+        let resolved = crate::attack::techniques(index, uuid)
             .map_err(|missing| PhaseError::rendering(uuid, &Cause::from(missing)))?;
+        let techniques = if family == "rule" {
+            // A rule's own techniques and those it inherits: `info coverage`'s count.
+            rule_techniques.get(uuid).map_or_else(Vec::new, |found| {
+                found.own.iter().chain(&found.inherited).cloned().collect()
+            })
+        } else {
+            resolved
+        };
         let fail = |key: &str| PhaseError::rendering(uuid, &Cause::MissingKey(key.into()));
         let name = root
             .get("name")
@@ -655,6 +665,30 @@ mod tests {
                 ("T1566", "#6baed6", "[RULE] Rule b"),
             ]
         );
+    }
+
+    #[test]
+    fn a_rules_own_techniques_count_with_the_ones_it_inherits() {
+        let index = index_of(&[
+            (
+                "objective",
+                "o1",
+                "name: Objective\nmetadata: {uuid: o1}\nobjective: {mitre_attack: [T1059]}\n",
+            ),
+            (
+                "rule",
+                "r1",
+                "name: Rule\nmetadata: {uuid: r1}\ndetection_model: o1\ntechniques: [T1021]\n",
+            ),
+        ]);
+        let layer = rendered(Target::Navigator, &index, &settings(&[]));
+        let ids: Vec<&str> = layer["techniques"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|technique| technique["techniqueID"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["T1021", "T1059"]);
     }
 
     #[test]

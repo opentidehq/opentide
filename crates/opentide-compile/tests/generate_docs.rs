@@ -781,6 +781,79 @@ fn a_rule_with_several_blocks_shows_each_platform() {
     );
 }
 
+/// The rules of the corpus carry no `techniques` of their own and inherit
+/// T1059 through their detection model (one names a signal, whose objective
+/// is the one that implements it). Docs, the Navigator layer and
+/// `info coverage` count the same techniques: those a rule lists or inherits.
+#[test]
+fn docs_navigator_and_coverage_count_a_rules_inherited_techniques() {
+    let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+        let rules = ws.join("Objects/Detection Rules");
+        for entry in std::fs::read_dir(&rules).unwrap() {
+            let path = entry.unwrap().path();
+            let text = std::fs::read_to_string(&path).unwrap();
+            let mut text = text.replace("techniques:\n  - T1059.004\n", "");
+            text = text.replace("techniques:\n  - T1059\n", "");
+            if path.ends_with("rule-0001-sentinel-kql.yaml") {
+                text = text.replace(
+                    "detection_model: 00000000-0000-4000-8002-000000000001",
+                    "detection_model: 00000000-0000-4000-8099-000000000001",
+                );
+            }
+            std::fs::write(&path, text).unwrap();
+        }
+        let objective =
+            ws.join("Objects/Detection Objectives/objective-0001-credential-access.yaml");
+        let text = std::fs::read_to_string(&objective).unwrap();
+        std::fs::write(
+            &objective,
+            text.replace("  threats:\n", "  mitre_attack:\n    - T1059\n  threats:\n"),
+        )
+        .unwrap();
+    });
+    let index = workspace.index();
+    let covered: std::collections::BTreeSet<String> =
+        opentide_workspace::coverage::rule_technique_index(index)
+            .values()
+            .flat_map(|found| found.own.iter().chain(&found.inherited).cloned())
+            .collect();
+    assert_eq!(covered.len(), 1, "{covered:?}");
+
+    let written = render(&workspace, None).unwrap();
+    assert!(
+        written["docs/README.md"].contains("| ATT&CK techniques detected by rules | 1 |"),
+        "{}",
+        written["docs/README.md"]
+    );
+    let objective = written
+        .iter()
+        .find(|(path, _)| path.starts_with("docs/objectives/") && !path.ends_with("README.md"))
+        .map(|(_, page)| page)
+        .unwrap();
+    assert!(!objective.contains("*No rule*"), "{objective}");
+
+    let settings = opentide_compile::generate::exports::Settings::new(
+        workspace.configuration(),
+        workspace.root(),
+    );
+    let layer = opentide_compile::generate::exports::export(
+        opentide_compile::generate::exports::Target::Navigator,
+        index,
+        &settings,
+        &Vocabularies::bundled(),
+    )
+    .unwrap();
+    let layer: serde_json::Value = serde_json::from_slice(&layer.bytes).unwrap();
+    let in_layer: std::collections::BTreeSet<String> = layer["techniques"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|technique| technique["color"] == "#74c476")
+        .map(|technique| technique["techniqueID"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(in_layer, covered);
+}
+
 /// A rule's tenants: the ones its runs reach, the ones they do not and why,
 /// a manual tenant left out, and the remote ids the deployment state holds,
 /// for a tenant the rule no longer reaches too.

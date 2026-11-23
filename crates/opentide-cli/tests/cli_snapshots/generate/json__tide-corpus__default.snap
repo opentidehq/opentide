@@ -95,6 +95,12 @@ exit: 0
             "color": "#74c476",
             "comment": "[THREAT] Simulated Actor, [RULE] Carbon Black Lucene Rule, [RULE] CrowdStrike Deploy Rule, [RULE] Defender KQL Rule, [RULE] Elastic KQL Rule, [RULE] HarfangLab Deploy Rule, [RULE] Sentinel KQL Rule, [RULE] SentinelOne S1QL Rule, [RULE] Splunk SPL Rule, [RULE] Staging Promote Rule, [RULE] Sysdig Falco Rule",
             "enabled": true
+        },
+        {
+            "techniqueID": "T1059.004",
+            "color": "#6baed6",
+            "comment": "[RULE] Sysdig Falco Rule",
+            "enabled": true
         }
     ],
     "name": "layer",

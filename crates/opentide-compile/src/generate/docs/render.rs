@@ -470,7 +470,8 @@ impl Pages<'_, '_> {
                     .rules
                     .iter()
                     .filter(|record| {
-                        rule_techniques(&record.model)
+                        self.catalog
+                            .rule_techniques(&record.uuid)
                             .iter()
                             .any(|found| covers_technique(found, technique))
                     })
@@ -2196,7 +2197,7 @@ impl Pages<'_, '_> {
             .count();
         let mut techniques: Vec<&String> = rules
             .iter()
-            .flat_map(|record| rule_techniques(&record.model))
+            .flat_map(|record| self.catalog.rule_techniques(&record.uuid))
             .collect();
         techniques.sort();
         techniques.dedup();
@@ -2339,7 +2340,7 @@ impl Pages<'_, '_> {
             .catalog
             .rules
             .iter()
-            .flat_map(|record| rule_techniques(&record.model))
+            .flat_map(|record| self.catalog.rule_techniques(&record.uuid))
             .collect();
         let order = self.vocab.attack_tactics();
         let mut by_tactic: Vec<(String, Vec<&String>)> = Vec::new();
@@ -2543,15 +2544,6 @@ fn covers_technique(detected: &str, wanted: &str) -> bool {
         || detected
             .strip_prefix(wanted)
             .is_some_and(|rest| rest.starts_with('.'))
-}
-
-/// A rule's techniques.
-fn rule_techniques(model: &Model) -> &[String] {
-    match model {
-        Model::Rule(RuleModel::V1_0(rule)) => &rule.techniques,
-        Model::Rule(RuleModel::V1_1(rule)) => &rule.techniques,
-        _ => &[],
-    }
 }
 
 /// Codes as code spans, comma-separated; `-` when there are none.
