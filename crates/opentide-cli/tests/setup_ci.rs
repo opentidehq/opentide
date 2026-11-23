@@ -344,3 +344,46 @@ fn the_tenants_own_variables_are_mapped() {
     );
     assert!(!azure.contains(" PATH:"), "{azure}");
 }
+
+/// F-06.1: a workspace whose tenants name their own variables (and literal
+/// ids) is asked for those variables only: the names the bundled Sentinel and
+/// Defender files reference (`AZURE_SUBSCRIPTION_ID`, `MDE_CLIENT_ID`, ...)
+/// are in neither the header nor a job when no tenant uses them.
+#[test]
+fn only_the_names_the_tenants_use_are_mapped() {
+    let (_scratch, ws) = tide_corpus();
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::write(
+        platforms.join("sentinel.toml"),
+        "[platform]\nenabled = true\n\n[[tenants]]\nname = \"main\"\n[tenants.setup]\nsubscription_id = \"00000000-0000-0000-0000-000000000001\"\nworkspace_id = \"00000000-0000-0000-0000-000000000002\"\nclient_id = \"$AZURE_CLIENT_ID\"\nclient_secret = \"$AZURE_CLIENT_SECRET\"\ntenant_id = \"$AZURE_TENANT_ID\"\n\n[[tenants]]\nname = \"retail\"\n[tenants.setup]\nsubscription_id = \"00000000-0000-0000-0000-000000000003\"\nworkspace_id = \"00000000-0000-0000-0000-000000000004\"\nclient_id = \"$RETAIL_AZURE_CLIENT_ID\"\nclient_secret = \"$RETAIL_AZURE_CLIENT_SECRET\"\ntenant_id = \"$RETAIL_AZURE_TENANT_ID\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        platforms.join("defender_for_endpoint.toml"),
+        "[platform]\nenabled = true\n\n[[tenants]]\nname = \"mde\"\n[tenants.setup]\nclient_id = \"$AZURE_CLIENT_ID\"\nclient_secret = \"$AZURE_CLIENT_SECRET\"\ntenant_id = \"$AZURE_TENANT_ID\"\n",
+    )
+    .unwrap();
+    let words = ["--default-branch", "main", "--yes"];
+    for (provider, file) in [
+        ("github", ".github/workflows/opentide.yml"),
+        ("azure", "azure-pipelines.yml"),
+        ("gitlab", ".gitlab-ci.yml"),
+    ] {
+        let (code, stdout, stderr) =
+            opentide(&ws, &[&["setup", "ci", provider][..], &words].concat());
+        assert_eq!(code, 0, "{stdout}{stderr}");
+        let written = std::fs::read_to_string(ws.join(file)).unwrap();
+        for name in ["AZURE_CLIENT_ID", "RETAIL_AZURE_TENANT_ID"] {
+            assert!(written.contains(name), "{provider}: {name} in {written}");
+        }
+        for name in [
+            "AZURE_SUBSCRIPTION_ID",
+            "AZURE_WORKSPACE_ID",
+            "MDE_CLIENT_ID",
+            "MDE_CLIENT_SECRET",
+            "MDE_TENANT_ID",
+        ] {
+            assert!(!written.contains(name), "{provider}: {name} in {written}");
+        }
+    }
+}
