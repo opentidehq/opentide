@@ -10,6 +10,7 @@ use std::path::Path;
 
 use indexmap::IndexMap;
 use opentide_workspace::Index;
+use opentide_workspace::coverage::RuleTechniques;
 
 use super::{Cause, Output, PhaseError};
 use crate::json::{Json, Object};
@@ -312,6 +313,7 @@ fn summary(
     body: &Json,
     kind: &str,
     flat: &Object,
+    rules: &IndexMap<String, RuleTechniques>,
 ) -> Result<Json, Cause> {
     let metadata = |key: &str| {
         section(body, "metadata")
@@ -324,7 +326,13 @@ fn summary(
         .filter(|name| name.is_name())
         .cloned()
         .unwrap_or_else(|| Json::from(uuid));
-    let techniques = crate::attack::techniques(index, uuid).map_err(Cause::from)?;
+    // The walk that fails on an object it cannot read, as the oracle's does.
+    let resolved = crate::attack::techniques(index, uuid).map_err(Cause::from)?;
+    // A rule covers its own techniques and those it inherits, as `info coverage` counts them.
+    let techniques = match rules.get(uuid).filter(|_| kind == "rule") {
+        Some(found) => found.own.iter().chain(&found.inherited).cloned().collect(),
+        None => resolved,
+    };
     let platforms = if kind == "rule" {
         section(body, "configurations")
             .into_iter()
@@ -381,13 +389,14 @@ pub fn bundle(index: &Index, generated_at: &str) -> Result<Json, PhaseError> {
     let bucket = |family: &str| models.get(family).unwrap_or(&empty);
     let chains = chaining(bucket("threat"));
     let staging = staging_index(bucket("rule"));
+    let rule_techniques = opentide_workspace::coverage::rule_technique_index(index);
     let mut summaries = Vec::new();
     for (uuid, body) in &flat {
         let Some(kind) = infer_type(body) else {
             continue;
         };
         summaries.push(
-            summary(index, uuid, body, &kind, &flat)
+            summary(index, uuid, body, &kind, &flat, &rule_techniques)
                 .map_err(|cause| PhaseError::rendering(uuid, &cause))?,
         );
     }
@@ -599,6 +608,34 @@ mod tests {
         );
         let signal = bundle.get("signals").unwrap().get("s1").unwrap();
         assert_eq!(signal.get("owner"), Some(&Json::from("o1")));
+    }
+
+    #[test]
+    fn a_rules_summary_lists_its_own_techniques_then_those_it_inherits() {
+        let index = index_of(&[
+            (
+                "objective",
+                "o1",
+                "name: o1\nmetadata: {uuid: o1, schema: 'objective::1.0'}\nobjective: {mitre_attack: [T1059]}\n",
+            ),
+            (
+                "rule",
+                "r1",
+                "name: r1\nmetadata: {uuid: r1, schema: 'rule::1.0'}\ndetection_model: o1\ntechniques: [T1021]\n",
+            ),
+        ]);
+        let bundle = bundle(&index, "now").unwrap();
+        let Some(Json::Array(summaries)) = bundle.get("summaries") else {
+            panic!("no summaries")
+        };
+        let rule = summaries
+            .iter()
+            .find(|summary| summary.get("uuid") == Some(&Json::from("r1")))
+            .unwrap();
+        assert_eq!(
+            rule.get("techniques"),
+            Some(&strings(vec!["T1021".into(), "T1059".into()]))
+        );
     }
 
     #[test]

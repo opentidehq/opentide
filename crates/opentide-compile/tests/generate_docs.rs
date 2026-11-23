@@ -7,7 +7,10 @@
 //! `origin`, a rule with several platform blocks, a rule's tenants and
 //! remote ids, and a threat's CVEs have no recording: their tests assert
 //! what 0.28.x writes for them (compared with its pages on the same edits of
-//! the fixture when they were written).
+//! the fixture when they were written). Two departures from 0.28.1 are
+//! deliberate and recorded in `quote_title` (GitLab's quoted titles) and
+//! `inherited_techniques` (a rule's inherited techniques on its pages), and
+//! the test of inherited techniques asserts the second one.
 //!
 //! When the fixture changes, record the pages again with 0.28.1 itself, not
 //! by hand: in a venv with `pip install opentide==0.28.1`, lay the fixture
@@ -165,8 +168,44 @@ fn check(flavor: &str) {
         "{flavor}: the files written"
     );
     for (path, text) in &written {
-        assert_eq!(text, &quote_title(&expected[path]), "{flavor}: {path}");
+        let golden = inherited_techniques(path, &quote_title(&expected[path]));
+        assert_eq!(text, &golden, "{flavor}: {path}");
     }
+}
+
+/// The second deliberate difference: 0.28 listed only a rule's own
+/// `techniques` on its page, overview row and rules-index row, and counted
+/// only those, though a rule also covers the techniques its objective (or
+/// the objective's threats) gives it. The corpus's Sysdig rule lists
+/// T1059.004 and inherits T1059, which the pages now show, marked
+/// `(inherited)`.
+fn inherited_techniques(path: &str, page: &str) -> String {
+    const OWN: &str = "[`T1059.004`](https://attack.mitre.org/techniques/T1059/004) \
+                       Command and Scripting Interpreter: Unix Shell";
+    const PARENT: &str = "[`T1059`](https://attack.mitre.org/techniques/T1059)";
+    let page = page
+        .replace("| `T1059.004` | ", "| `T1059.004`, `T1059` (inherited) | ")
+        .replace(
+            "\"d\":\"`T1059.004`\"",
+            "\"d\":\"`T1059.004`, `T1059` (inherited)\"",
+        );
+    if !path.contains("sysdig-falco-rule") && !path.contains("8003-0000005d1a90") {
+        return page;
+    }
+    let row = "| [`T1059.004`](https://attack.mitre.org/techniques/T1059/004) | Command and \
+               Scripting Interpreter: Unix Shell | Execution |";
+    page.replace(
+        &format!("| ATT&CK | {OWN} |"),
+        &format!("| ATT&CK | {OWN}<br>{PARENT} Command and Scripting Interpreter (inherited) |"),
+    )
+    .replace(
+        row,
+        &format!(
+            "| {PARENT} | Command and Scripting Interpreter *(inherited)* | Execution | Adversaries \
+             may abuse command and script interpreters to execute commands, scripts, or \
+             binaries. |\n{row}"
+        ),
+    )
 }
 
 /// The one deliberate difference from 0.28's pages: GitLab wiki front
@@ -781,7 +820,8 @@ fn a_rule_with_several_blocks_shows_each_platform() {
     );
 }
 
-/// The rules of the corpus carry no `techniques` of their own and inherit
+/// A deliberate departure from 0.28.1 (see `inherited_techniques`): the
+/// rules of the corpus carry no `techniques` of their own but one, and inherit
 /// T1059 through their detection model (one names a signal, whose objective
 /// is the one that implements it). Docs, the Navigator layer and
 /// `info coverage` count the same techniques: those a rule lists or inherits.
@@ -798,6 +838,12 @@ fn docs_navigator_and_coverage_count_a_rules_inherited_techniques() {
                 text = text.replace(
                     "detection_model: 00000000-0000-4000-8002-000000000001",
                     "detection_model: 00000000-0000-4000-8099-000000000001",
+                );
+            }
+            if path.ends_with("rule-0002-defender-kql.yaml") {
+                text = text.replace(
+                    "detection_model:",
+                    "techniques:\n  - T1021\ndetection_model:",
                 );
             }
             std::fs::write(&path, text).unwrap();
@@ -817,11 +863,14 @@ fn docs_navigator_and_coverage_count_a_rules_inherited_techniques() {
             .values()
             .flat_map(|found| found.own.iter().chain(&found.inherited).cloned())
             .collect();
-    assert_eq!(covered.len(), 1, "{covered:?}");
+    assert_eq!(
+        covered,
+        ["T1021", "T1059"].map(str::to_owned).into_iter().collect()
+    );
 
     let written = render(&workspace, None).unwrap();
     assert!(
-        written["docs/README.md"].contains("| ATT&CK techniques detected by rules | 1 |"),
+        written["docs/README.md"].contains("| ATT&CK techniques detected by rules | 2 |"),
         "{}",
         written["docs/README.md"]
     );
@@ -831,6 +880,15 @@ fn docs_navigator_and_coverage_count_a_rules_inherited_techniques() {
         .map(|(_, page)| page)
         .unwrap();
     assert!(!objective.contains("*No rule*"), "{objective}");
+    let row = objective
+        .lines()
+        .find(|line| line.starts_with("| [`T1059`]"))
+        .unwrap();
+    assert!(row.contains("Sentinel KQL Rule"), "{row}");
+    // A rule's own page shows what it inherits, marked.
+    let rule = &written["docs/rules/sentinel-kql-rule.md"];
+    assert!(rule.contains("`T1059`"), "{rule}");
+    assert!(rule.contains("(inherited)"), "{rule}");
 
     let settings = opentide_compile::generate::exports::Settings::new(
         workspace.configuration(),
@@ -844,14 +902,25 @@ fn docs_navigator_and_coverage_count_a_rules_inherited_techniques() {
     )
     .unwrap();
     let layer: serde_json::Value = serde_json::from_slice(&layer.bytes).unwrap();
-    let in_layer: std::collections::BTreeSet<String> = layer["techniques"]
+    let entries: std::collections::BTreeSet<(String, String)> = layer["techniques"]
         .as_array()
         .unwrap()
         .iter()
-        .filter(|technique| technique["color"] == "#74c476")
-        .map(|technique| technique["techniqueID"].as_str().unwrap().to_owned())
+        .map(|technique| {
+            (
+                technique["techniqueID"].as_str().unwrap().to_owned(),
+                technique["color"].as_str().unwrap().to_owned(),
+            )
+        })
         .collect();
-    assert_eq!(in_layer, covered);
+    // T1059 is a threat's and a rule's (green); T1021 is a rule's alone (blue).
+    assert_eq!(
+        entries,
+        [("T1021", "#6baed6"), ("T1059", "#74c476")]
+            .map(|(id, color)| (id.to_owned(), color.to_owned()))
+            .into_iter()
+            .collect()
+    );
 }
 
 /// A rule's tenants: the ones its runs reach, the ones they do not and why,

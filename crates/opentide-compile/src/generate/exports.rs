@@ -14,6 +14,7 @@ use opentide_schema::configuration::models::ObjectFamily;
 use opentide_schema::node::{Node, Value};
 use opentide_schema::vocab::{Entry, Vocabularies};
 use opentide_workspace::config::Configuration;
+use opentide_workspace::coverage::RuleTechniques;
 use opentide_workspace::{Index, index::holds_name};
 
 use super::json_text::{pretty, sorted};
@@ -155,6 +156,7 @@ const GREEN: &str = "#74c476";
 fn techniques_of(
     relations: &Relations<'_>,
     family: &str,
+    rule_techniques: &IndexMap<String, RuleTechniques>,
 ) -> Result<IndexMap<String, Vec<String>>, PhaseError> {
     let index = relations.index();
     let Some(members) = index.objects.get(family) else {
@@ -178,7 +180,6 @@ fn techniques_of(
         .collect();
     ordered.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(b.1)));
     let label = family.to_uppercase();
-    let rule_techniques = opentide_workspace::coverage::rule_technique_index(index);
     let mut mapping: IndexMap<String, Vec<String>> = IndexMap::new();
     for (_, uuid, root) in ordered {
         // The walk that fails on an object it cannot read, as the oracle's does.
@@ -212,8 +213,10 @@ fn techniques_of(
 }
 
 fn navigator(relations: &Relations<'_>, settings: &Settings) -> Result<Output, PhaseError> {
-    let threats = techniques_of(relations, "threat")?;
-    let rules = techniques_of(relations, "rule")?;
+    // Built once: a rule's own techniques and those it inherits.
+    let rule_techniques = opentide_workspace::coverage::rule_technique_index(relations.index());
+    let threats = techniques_of(relations, "threat", &rule_techniques)?;
+    let rules = techniques_of(relations, "rule", &rule_techniques)?;
     let mut layer: Vec<(String, &str, String)> = Vec::new();
     for (technique, names) in &threats {
         match rules.get(technique) {

@@ -245,8 +245,8 @@ pub struct Catalog<'i> {
     statuses: Statuses,
     /// Each rule's `configurations` as written, by UUID.
     written: HashMap<String, crate::json::Json>,
-    /// Each rule's techniques, its own then those inherited, by UUID.
-    techniques: HashMap<String, Vec<String>>,
+    /// Each rule's techniques, kept apart by where they come from, by UUID.
+    techniques: HashMap<String, opentide_workspace::coverage::RuleTechniques>,
 }
 
 impl<'i> Catalog<'i> {
@@ -340,19 +340,23 @@ impl<'i> Catalog<'i> {
             written,
             techniques: opentide_workspace::coverage::rule_technique_index(index)
                 .into_iter()
-                .map(|(uuid, found)| {
-                    let mut all = found.own;
-                    all.extend(found.inherited);
-                    (uuid, all)
-                })
                 .collect(),
         })
     }
 
     /// The techniques a rule covers, as `info coverage` counts them: those it
     /// lists, then those it inherits through its detection model.
-    pub fn rule_techniques(&self, uuid: &str) -> &[String] {
-        self.techniques.get(uuid).map_or(&[], Vec::as_slice)
+    pub fn rule_techniques(&self, uuid: &str) -> Vec<&String> {
+        self.techniques.get(uuid).map_or_else(Vec::new, |found| {
+            found.own.iter().chain(&found.inherited).collect()
+        })
+    }
+
+    /// The techniques a rule covers only through its detection model.
+    pub fn rule_inherited(&self, uuid: &str) -> &[String] {
+        self.techniques
+            .get(uuid)
+            .map_or(&[], |found| found.inherited.as_slice())
     }
 
     /// A rule's `configurations` as its file writes them: what the author
