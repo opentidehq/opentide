@@ -24,6 +24,9 @@ exit: 0
   "summary": {},
   "updated": [
     ".opentide/configurations/platforms/sentinel.toml"
+  ],
+  "warnings": [
+    ".opentide/configurations/platforms/sentinel.toml was kept with your values: the new template adds platform.description. Add or delete those keys by hand."
   ]
 }
 
