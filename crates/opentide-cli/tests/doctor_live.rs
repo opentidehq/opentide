@@ -70,6 +70,8 @@ struct Wire {
     timeout: Duration,
     /// For each request to the metadata host, whether its client had a proxy.
     metadata_proxied: Arc<Mutex<Vec<bool>>>,
+    /// For each request to the metadata host, the timeout its client had.
+    metadata_timeouts: Arc<Mutex<Vec<Duration>>>,
     interrupt: Option<Interrupt>,
     seen: Arc<Mutex<Vec<String>>>,
     /// `host` and the `Authorization` header of each request that had one.
@@ -85,6 +87,7 @@ impl Wire {
             proxied: false,
             timeout: Duration::ZERO,
             metadata_proxied: Arc::default(),
+            metadata_timeouts: Arc::default(),
             interrupt: None,
             seen: Arc::default(),
             keyed: Arc::default(),
@@ -100,6 +103,11 @@ impl Wire {
     /// proxy.
     fn metadata_proxied(&self) -> Vec<bool> {
         self.metadata_proxied.lock().unwrap().clone()
+    }
+
+    /// The timeout of the client that sent each request to the metadata host.
+    fn metadata_timeouts(&self) -> Vec<Duration> {
+        self.metadata_timeouts.lock().unwrap().clone()
     }
 
     fn signing_in(mut self, status: u16) -> Self {
@@ -166,6 +174,7 @@ impl Transport for Wire {
         }
         if host == "metadata.google.internal" {
             self.metadata_proxied.lock().unwrap().push(self.proxied);
+            self.metadata_timeouts.lock().unwrap().push(self.timeout);
             let metadata = self.metadata;
             let waits = self.timeout.min(Duration::from_secs(15));
             return Box::pin(async move {
@@ -878,9 +887,13 @@ fn a_metadata_host_that_stalls_is_skipped_within_a_short_timeout() {
     let raw = run_doctor(&ws, &["--live"], &[], Some(&wire), &Interrupt::default());
     let document: serde_json::Value = serde_json::from_str(&raw.stdout).unwrap();
     assert_eq!(raw.code, 0, "{document}");
-    // The wire holds a request for as long as its client's timeout, at most
-    // fifteen seconds: google-auth's three, not a tenant's two minutes.
-    assert!(raw.took < Duration::from_secs(8), "{:?}", raw.took);
+    // The wire holds a request for as long as its client's timeout: the
+    // metadata host was asked once, with google-auth's three seconds, not a
+    // tenant's two minutes. The client's timeout is what is held, not the
+    // run's wall clock, which a loaded runner stretches by seconds whatever
+    // the timeout (a run that never stalls has taken 8.2 s in CI).
+    assert_eq!(wire.metadata_timeouts(), [Duration::from_secs(3)]);
+    assert!(raw.took >= Duration::from_secs(3), "{:?}", raw.took);
     let check = document["checks"]
         .as_array()
         .unwrap()
