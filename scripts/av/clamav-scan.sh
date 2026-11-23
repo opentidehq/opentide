@@ -7,7 +7,8 @@
 # of its own, written here (not the package's /etc/clamav/clamd.conf, whose limits are not clamscan's):
 # archives opened and nested to a depth of 30, 900M a file, 4000M a container, anything over a limit a
 # detection, every other limit ClamAV's default, as clamscan's. `clamdscan --multiscan` deals each TREE's
-# files to one thread per core. One engine scans them all, so content it has already found clean is a
+# files to one thread per core (a multiscan holds one more thread of the pool to deal them, so the pool
+# is a core larger). One engine scans them all, so content it has already found clean is a
 # cache hit when it comes again: a wheel's members, scanned inside the wheel, are not scanned a second
 # time when the extracted tree holds them, and the databases are loaded once (one clamscan per core,
 # #1785, scanned that content once in each process that met it, each with its own copy of the databases).
@@ -43,8 +44,12 @@ for tree in "$@"; do
   trees+=("$(realpath "${tree}")")
 done
 
-# A directory of this run's own: its socket can only be answered by the clamd started here.
-work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/clamd.XXXXXX")"
+# A directory of this run's own: its socket can only be answered by the clamd started here. It is
+# under /tmp because Ubuntu confines /usr/sbin/clamd with AppArmor (/etc/apparmor.d/usr.sbin.clamd),
+# whoever starts it: it may write only under /tmp (and the package's own paths), so a log or a socket
+# in RUNNER_TEMP is refused and clamd does not start. It reads /tmp and home directories, which hold
+# the workspace's trees; a file it may not read is an error, and fails the scan.
+work="$(mktemp -d /tmp/opentide-clamd.XXXXXX)"
 conf="${work}/clamd.conf"
 log="${work}/clamd.log"
 cat > "${conf}" <<EOF
@@ -55,7 +60,7 @@ LogFile ${log}
 LogFileMaxSize 0
 LogClean yes
 LogTime no
-MaxThreads $(nproc)
+MaxThreads $(( $(nproc) + 1 ))
 ScanArchive yes
 MaxFileSize 900M
 MaxScanSize 4000M
@@ -123,6 +128,14 @@ for tree in "${trees[@]}"; do
     *) status=2 ;;
   esac
 done
+
+# clamd's own warnings and errors (a directory it would not descend, a file libclamav could not
+# parse) are in its log alone, which goes with the work directory: show them.
+if grep -E '^(ERROR|WARNING|LibClamAV (Error|Warning))' "${log}" > "${work}/notices.txt"; then
+  echo "::group::clamd warnings and errors"
+  tee -a "${report}" < "${work}/notices.txt"
+  echo "::endgroup::"
+fi
 
 python3 "${here}/clamd_verdicts.py" --log "${log}" "${trees[@]}" 2>&1 | tee -a "${report}" \
   || status=2

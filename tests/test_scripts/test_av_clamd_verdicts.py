@@ -115,3 +115,27 @@ def test_a_log_that_cannot_be_read_or_a_tree_that_is_not_one_fails(tmp_path: Pat
     assert clamd_verdicts.main(["--log", str(tmp_path / "missing.log"), str(tmp_path / "t")]) == 2
     log = _log(tmp_path / "clamd.log", [])
     assert clamd_verdicts.main(["--log", str(log), str(tmp_path / "no-such-tree")]) == 2
+
+
+@pytest.mark.parametrize("separator", ["\r", "\x85", "\u2028", "\x0b"])
+def test_a_name_holding_a_line_separator_other_than_newline_is_read_whole(separator: str) -> None:
+    path = f"/t/odd{separator}name.txt"
+    assert clamd_verdicts.verdicts(f"{path}: OK\n") == {path}
+
+
+def test_a_directory_that_cannot_be_listed_fails_rather_than_hiding_its_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    files = _tree(tmp_path / "t")
+    log = _log(tmp_path / "clamd.log", [f"{file}: OK" for file in files])
+    hidden = str((tmp_path / "t" / "opentide.whl.d").resolve())
+    real_scandir = clamd_verdicts.os.scandir
+
+    def scandir(path: str) -> object:
+        if str(path) == hidden:
+            raise PermissionError(13, "Permission denied", path)
+        return real_scandir(path)
+
+    monkeypatch.setattr(clamd_verdicts.os, "scandir", scandir)
+    assert clamd_verdicts.main(["--log", str(log), str(tmp_path / "t")]) == 2
+    assert "cannot list every file" in capsys.readouterr().err
