@@ -5824,11 +5824,7 @@ fn sentinel_read_replay(
     let text =
         std::fs::read_to_string(repo().join("tests/cassettes/sentinel/deploy.json")).unwrap();
     let mut cassette = Cassette::parse(&text).unwrap();
-    let body = match planned.get("body") {
-        Some(Json::Str(text)) => text.clone(),
-        Some(other) => other.to_compact(),
-        None => panic!("no body in {}", planned.to_compact()),
-    };
+    let body = planned.to_compact();
     let at = |index: usize| {
         let mut interaction = cassette.interactions[index].clone();
         interaction.request.url = interaction.request.url.replace("soc%20workspace", "soc");
@@ -5878,13 +5874,35 @@ fn only_action(sent: &Sent) -> String {
 #[test]
 fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     let ws = fixture("deploy-tenants");
-    let planned = planned_writes(ws.path(), "sentinel");
-    assert_eq!(planned.len(), 1, "{planned:?}");
-    let sent_body = match planned[0].get("body") {
-        Some(Json::Str(text)) => Json::parse(text).unwrap(),
-        Some(other) => other.clone(),
-        None => panic!("no body"),
-    };
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            "sentinel",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    let payloads = result
+        .get("payloads")
+        .and_then(|p| p.get("sentinel"))
+        .and_then(Json::as_array)
+        .unwrap();
+    assert_eq!(payloads.len(), 1, "{stdout}");
+    // The body a deploy sends is the dry run's `api_request`.
+    let sent_body = payloads[0].get("api_request").unwrap().clone();
+    let planned = [sent_body.clone()];
 
     // Not there: a create, written once.
     let (proxy, env, _ca) = sentinel_read_replay(&planned[0], 404, None, true);
