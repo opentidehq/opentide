@@ -51,6 +51,7 @@ Query extras (the engines add these inside an injected query, and on a raw query
 - `kql_deprecated_function`
 - `kql_deprecated_operator`
 - `kql_unknown_table`
+- `kql_table_misspelt`
 - `kql_render_not_valid`
 - `kql_parse_error`
 - `kql_where_not_first`
@@ -85,8 +86,8 @@ Severity of the KQL and SPL extras:
 | Severity | KQL and SPL codes |
 | --- | --- |
 | warning | `kql_where_not_first`, `kql_unscoped_search`, `kql_unscoped_union`, `kql_wildcard_table`, `kql_join_summarize_before_project`, `kql_render_not_valid`, `kql_deprecated_function`, `kql_deprecated_operator`, `kql_table_not_declared`, `spl_wildcard`, `spl_leading_not`, `spl_subsearch_truncation`, `spl_dataset_not_declared`, `spl_empty_stage` |
-| error | `kql_control_command_unsupported`, `kql_unknown_operator`, `kql_unknown_function`, `kql_parse_error`, `kql_unknown_column`, `kql_type_mismatch`, `spl_parse_error`, `spl_unknown_datamodel`, `spl_unknown_datamodel_field`, `spl_command_without_pipe` |
-| either | `kql_unknown_table`: warning under `sentinel`, error under `defender_for_endpoint`. `spl_unknown_command`: warning, error within one edit of a known command ([spl/commands.md](spl/commands.md)). `spl_search_operator`: error, `=~` warning. `spl_empty_command`: by form ([spl/search-syntax.md](spl/search-syntax.md)) |
+| error | `kql_control_command_unsupported`, `kql_unknown_operator`, `kql_unknown_function`, `kql_parse_error`, `kql_unknown_column`, `kql_type_mismatch`, `kql_table_misspelt`, `spl_parse_error`, `spl_unknown_datamodel`, `spl_unknown_datamodel_field`, `spl_command_without_pipe` |
+| either | `kql_unknown_table`: warning under `sentinel` (a near miss of a known or declared table, not `_CL`, is the error `kql_table_misspelt` instead), error under `defender_for_endpoint`. `spl_unknown_command`: warning, error within one edit of a known command ([spl/commands.md](spl/commands.md)). `spl_search_operator`: error, `=~` warning. `spl_empty_command`: by form ([spl/search-syntax.md](spl/search-syntax.md)) |
 
 Slow-query rules: [kql/DESIGN.md](kql/DESIGN.md#slow-query-warnings), [spl/search-syntax.md](spl/search-syntax.md#wildcards), [spl/DESIGN.md](spl/DESIGN.md#truncated-shapes). Columns and declared tables: [kql/columns.md](kql/columns.md).
 

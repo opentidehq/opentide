@@ -312,6 +312,9 @@ impl ObjectFindings {
     pub fn validate(root: &Path) -> Self {
         let mut checks = crate::checks::RootChecks::default();
         let found = checks.all_findings(root, crate::checks::Buffers::default(), 0, 0);
+        // A host keeps this for as long as it checks files: what the load
+        // read of the disk is not kept with it.
+        checks.disk().forget();
         Self { checks, found }
     }
 
@@ -354,11 +357,16 @@ pub(crate) fn host_catalogs() -> bool {
 // ---------------------------------------------------------------------------
 // The workspace walk.
 
-/// The workspace's object YAML: the files under `<root>/objects`. A root
-/// without `objects/` has none, and nothing else under it is read (a root of
-/// `/tmp` or a home directory once had every YAML file there indexed).
-pub(crate) fn collect_objects(root: &Path) -> Vec<(String, String)> {
-    yaml_files(&root.join("objects"))
+/// The workspace's object YAML: the files under `<root>/objects`, read through
+/// `fs` (the root's [`Disk`](crate::checks::Disk), which the workspace then
+/// reads the same listings and files from). A root without `objects/` has
+/// none, and nothing else under it is read (a root of `/tmp` or a home
+/// directory once had every YAML file there indexed).
+pub(crate) fn collect_objects(
+    fs: &dyn opentide_workspace::FileSystem,
+    root: &Path,
+) -> Vec<(String, String)> {
+    yaml_files_in(fs, &root.join("objects"))
 }
 
 /// Every `.yaml` and `.yml` file under `dir`, with its text (byte-order mark
@@ -394,6 +402,48 @@ pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
     }
     let mut out = Vec::new();
     rec(dir, &mut out);
+    out
+}
+
+/// [`yaml_files`] through `fs`, as the server walks a root (the root's
+/// [`Disk`](crate::checks::Disk)): the same files, but for an entry the
+/// listing cannot read, which leaves out its folder's listing (the
+/// workspace's discovery reads the same one).
+pub(crate) fn yaml_files_in(
+    fs: &dyn opentide_workspace::FileSystem,
+    dir: &Path,
+) -> Vec<(String, String)> {
+    use opentide_workspace::fs::EntryKind;
+    fn rec(fs: &dyn opentide_workspace::FileSystem, dir: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(mut entries) = fs.read_dir(dir) else {
+            return;
+        };
+        entries.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+        for entry in entries {
+            let path = dir.join(&entry.file_name);
+            // An entry's kind is what it leads to: a link to a folder is a
+            // folder, which is not entered; a link to a file is a file.
+            match entry.kind {
+                EntryKind::Dir if !entry.symlink => rec(fs, &path, out),
+                EntryKind::File
+                    if matches!(
+                        path.extension().and_then(|s| s.to_str()),
+                        Some("yaml" | "yml")
+                    ) =>
+                {
+                    if let Ok(bytes) = fs.read(&path)
+                        && let Ok(text) = String::from_utf8(bytes)
+                    {
+                        let text = opentide_core::strip_bom(&text).to_string();
+                        out.push((path.display().to_string(), text));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    rec(fs, dir, &mut out);
     out
 }
 

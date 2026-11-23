@@ -2598,6 +2598,9 @@ fn undeclared_dataset(finding: &Finding) -> Option<(&'static str, String)> {
     };
     match finding.code.as_str() {
         codes::KQL_TABLE_NOT_DECLARED => Some((kql, name)),
+        // A near miss of a known table may still be a real one the workspace
+        // holds: declaring it is the way out.
+        codes::KQL_TABLE_MISSPELT => Some((kql, name)),
         // An unknown table whose message names the declaration: Sentinel's
         // warning (#111), and Defender's error once it declares tables (#147).
         codes::KQL_UNKNOWN_TABLE if message.contains("visibility.toml") => Some((kql, name)),

@@ -17,11 +17,11 @@ SecurityEvent | prjct Account
 SecurityEvent | extend a = to_lower(Account)
   error kql_unknown_function `to_lower` => tolower
 SecurityEvnt | take 1
-  warning kql_unknown_table `SecurityEvnt` => SecurityEvent
+  error kql_table_misspelt `SecurityEvnt` => SecurityEvent
 Securityevent | take 1
-  warning kql_unknown_table `Securityevent` => SecurityEvent
+  error kql_table_misspelt `Securityevent` => SecurityEvent
 SecurityEve | take 1
-  warning kql_unknown_table `SecurityEve` => SecurityEvent
+  error kql_table_misspelt `SecurityEve` => SecurityEvent
 SecurityEvent | summari count() by Account
   error kql_unknown_operator `summari count()` => summarize
 SecurityEvent | extend a = tolwr(Account)

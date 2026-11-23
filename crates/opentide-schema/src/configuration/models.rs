@@ -1613,11 +1613,94 @@ fn no_legacy_keys(node: &Node, cx: &mut Context) -> bool {
             continue;
         };
         if let Some((_, message)) = LEGACY_DATASET_KEYS.iter().find(|(name, _)| *name == key) {
-            cx.at_key(key, |cx| value_error(cx, *message, &entry.value));
+            let message = legacy_key_message(key, message, &entry.value, node);
+            cx.at_key(key, |cx| value_error(cx, message, &entry.value));
             clean = false;
         }
     }
     clean
+}
+
+/// The refusal of a 0.20.0 dataset list. For `tables`, `sourcetypes` and
+/// `indices` that list names, it spells out the fix with the names the file
+/// lists: one `[[logsources]]` entry per name (at most two shown).
+fn legacy_key_message(key: &str, message: &str, value: &Node, source: &Node) -> String {
+    let (Value::Seq(items), true) = (
+        &value.value,
+        matches!(key, "tables" | "sourcetypes" | "indices"),
+    ) else {
+        return message.to_string();
+    };
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|item| item.value.as_str().map(str::to_string))
+        .filter(|name| !name.trim().is_empty())
+        .collect();
+    if names.is_empty() {
+        return message.to_string();
+    }
+    let field = |name: &str| -> String {
+        let Value::Map(entries) = &source.value else {
+            return String::new();
+        };
+        entries
+            .iter()
+            .find(|entry| entry.key.value.as_str() == Some(name))
+            .and_then(|entry| entry.value.value.as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    let system = match field("system") {
+        system if system.is_empty() => "<system>".to_string(),
+        system => system,
+    };
+    let description = match field("description") {
+        description if description.is_empty() => "<description>".to_string(),
+        description => description,
+    };
+    let entries: Vec<String> = names
+        .iter()
+        .take(2)
+        .map(|name| {
+            format!(
+                "[[logsources]]\nname = {}\ndescription = {}\nsystem = {}",
+                toml_string(name),
+                toml_string(&description),
+                toml_string(&system)
+            )
+        })
+        .collect();
+    let more = match names.len().saturating_sub(2) {
+        0 => String::new(),
+        1 => "\n# ... and one more entry for the last name".to_string(),
+        n => format!("\n# ... and one more entry for each of the other {n} names"),
+    };
+    format!(
+        "{message}. For {}, replace this entry with one entry per name, copying its \
+         `tenants`, `assets` and `references` into each:\n{}{more}\n\
+         A signal's `data.logsources` then names each of them",
+        names.join(", "),
+        entries.join("\n\n")
+    )
+}
+
+/// `text` as a TOML basic string: quotes, backslashes and control characters
+/// escaped, so a value from the file cannot end the string early.
+fn toml_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04X}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn source_name(node: &Node, cx: &mut Context) -> Option<String> {
