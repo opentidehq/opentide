@@ -85,8 +85,8 @@ fn candidate(
     .then_some(ci)
 }
 
-/// Whether a run with `runs` would promote before it deploys: a candidate
-/// run (see [`candidate`]) that is a push to the default branch. A push to
+/// Whether a run with `runs` would promote before it deploys: a `RELEASE`
+/// push in CI that reads its changes and is to the default branch. A push to
 /// another branch, a tag, or a default branch the CI environment does not
 /// say promotes nothing.
 pub fn applies(runs: &[StatusStrategy], reads_changes: bool, env: &Env) -> bool {
