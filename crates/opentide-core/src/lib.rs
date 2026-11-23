@@ -1417,7 +1417,7 @@ pub mod codes {
             KQL_UNSCOPED_UNION => "union * or an unscoped union reads every table.",
             KQL_WILDCARD_TABLE => "A wildcard table name reads every matching table.",
             KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
-                "join or summarize runs before project, so it carries every column."
+                "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
             }
             QUERY_FOLDED_COMMENT => {
                 "A `//` comment in a query that YAML folds into one line comments out the lines after it."

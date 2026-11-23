@@ -1154,7 +1154,7 @@ exit: 0
     },
     {
       "code": "kql_join_summarize_before_project",
-      "meaning": "join or summarize runs before project, so it carries every column."
+      "meaning": "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
     },
     {
       "code": "kql_parse_error",
