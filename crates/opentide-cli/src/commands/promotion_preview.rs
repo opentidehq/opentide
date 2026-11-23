@@ -95,23 +95,35 @@ pub fn applies(runs: &[StatusStrategy], reads_changes: bool, env: &Env) -> bool 
         .is_some_and(|ci| opentide_compile::git::default_branch_push(ci, &lookup) == Some(true))
 }
 
-/// The warning for a run that would promote but for a default branch the CI
+/// The warning for a run that would promote but for a branch the CI
 /// environment does not say: the promotion is skipped, and how to fix it.
+/// `None` when promotion is off (`enabled` false), which the run says nothing
+/// about, or the run is not a candidate or its branch is known.
 pub fn undetermined_warning(
     runs: &[StatusStrategy],
     reads_changes: bool,
     env: &Env,
+    enabled: bool,
 ) -> Option<String> {
+    use opentide_compile::git::{DEFAULT_BRANCH_ENV, default_branch_push, pushed_branch};
+    if !enabled {
+        return None;
+    }
     let lookup = |name: &str| env.get(name).map(str::to_owned);
     let ci = candidate(runs, reads_changes, env)?;
-    (opentide_compile::git::default_branch_push(ci, &lookup).is_none()).then(|| {
-        format!(
-            "status promotion skipped: the default branch could not be determined, so this push \
-             is not known to be to it. Set {} to the default branch's name, or regenerate the \
-             pipeline (`opentide setup ci`)",
-            opentide_compile::git::DEFAULT_BRANCH_ENV
-        )
-    })
+    if default_branch_push(ci, &lookup).is_some() {
+        return None;
+    }
+    let cause = if pushed_branch(ci, &lookup).is_none() {
+        "the branch this push is to could not be determined (the CI environment does not name it)"
+    } else {
+        "the repository's default branch could not be determined"
+    };
+    Some(format!(
+        "status promotion skipped: {cause}, so the push is not known to be to the default \
+         branch. Set {DEFAULT_BRANCH_ENV} to the default branch's name, or regenerate the \
+         pipeline (`opentide setup ci`)"
+    ))
 }
 
 /// What the push's deploy will do at its status promotion, as a preview
@@ -242,8 +254,8 @@ mod tests {
         assert!(!applies(&release, true, &request));
         assert!(!applies(&release, true, &local));
         // A known other branch is no warning; only an unknown default is.
-        assert_eq!(undetermined_warning(&release, true, &feature), None);
-        assert_eq!(undetermined_warning(&release, true, &push), None);
+        assert_eq!(undetermined_warning(&release, true, &feature, true), None);
+        assert_eq!(undetermined_warning(&release, true, &push, true), None);
     }
 
     #[test]
@@ -258,12 +270,22 @@ mod tests {
             ),
         ]);
         assert!(!applies(&release, true, &azure));
-        let warning = undetermined_warning(&release, true, &azure).unwrap();
+        let warning = undetermined_warning(&release, true, &azure, true).unwrap();
         assert!(warning.contains("OPENTIDE_DEFAULT_BRANCH"), "{warning}");
+        assert!(warning.contains("default branch could not"), "{warning}");
+        // Promotion off: nothing is said.
+        assert_eq!(undetermined_warning(&release, true, &azure, false), None);
+        // The pushed ref unknown is worded as such.
+        let bare = Env::from_pairs([
+            ("TF_BUILD".to_owned(), "True".to_owned()),
+            ("BUILD_REASON".to_owned(), "IndividualCI".to_owned()),
+        ]);
+        let warning = undetermined_warning(&release, true, &bare, true).unwrap();
+        assert!(warning.contains("branch this push is to"), "{warning}");
         // Not a promoting run: nothing to warn about.
-        assert_eq!(undetermined_warning(&release, false, &azure), None);
+        assert_eq!(undetermined_warning(&release, false, &azure, true), None);
         assert_eq!(
-            undetermined_warning(&[StatusStrategy::Preview], true, &azure),
+            undetermined_warning(&[StatusStrategy::Preview], true, &azure, true),
             None
         );
     }

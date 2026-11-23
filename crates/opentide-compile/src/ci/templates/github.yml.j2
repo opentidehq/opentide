@@ -45,6 +45,7 @@ on:
 
 env:
   OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+  OPENTIDE_DEFAULT_BRANCH: [[ branch | scalar(2) ]]
   [[ version_entry ]]
 
 {% if explorer_pages %}

@@ -380,7 +380,9 @@ fn undetermined_promotion(args: &Args, cx: &Context, owned: &Owned) -> Option<St
         "--strategy",
     )
     .ok()?;
-    super::promotion_preview::undetermined_warning(&runs, reads_changes, cx.env)
+    let enabled =
+        opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses).enabled;
+    super::promotion_preview::undetermined_warning(&runs, reads_changes, cx.env, enabled)
 }
 
 /// A run refused before it started: a usage error, exit 2.

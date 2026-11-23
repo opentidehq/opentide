@@ -92,6 +92,22 @@ fn branch_name(reference: &str) -> &str {
     reference.strip_prefix("refs/heads/").unwrap_or(reference)
 }
 
+/// The branch a push is to: `Some(Some(name))`, `Some(None)` for a ref that
+/// is not a branch (a tag), `None` when the environment does not say.
+pub fn pushed_branch(ci: Ci, env: Env<'_>) -> Option<Option<String>> {
+    match ci {
+        Ci::GitHub => set(env, "GITHUB_REF")
+            .map(|reference| reference.strip_prefix("refs/heads/").map(str::to_owned)),
+        Ci::GitLab => match set(env, "CI_COMMIT_BRANCH") {
+            Some(branch) => Some(Some(branch)),
+            None => set(env, "CI_COMMIT_TAG").map(|_| None),
+        },
+        Ci::Azure => set(env, "BUILD_SOURCEBRANCH")
+            .map(|reference| reference.strip_prefix("refs/heads/").map(str::to_owned)),
+        Ci::Local => None,
+    }
+}
+
 /// Whether the run is a push to the repository's default branch, which is
 /// when a `RELEASE` run promotes statuses.
 ///
@@ -101,18 +117,7 @@ fn branch_name(reference: &str) -> &str {
 /// GitHub's event payload (`repository.default_branch`) and GitLab's
 /// `CI_DEFAULT_BRANCH`. Azure Pipelines has no predefined variable.
 pub fn default_branch_push(ci: Ci, env: Env<'_>) -> Option<bool> {
-    // The pushed branch; `None` (after the `?`) is a ref that is not a branch, a tag.
-    let pushed: Option<String> = match ci {
-        Ci::GitHub => set(env, "GITHUB_REF")
-            .map(|reference| reference.strip_prefix("refs/heads/").map(str::to_owned)),
-        Ci::GitLab => match set(env, "CI_COMMIT_BRANCH") {
-            Some(branch) => Some(Some(branch)),
-            None => set(env, "CI_COMMIT_TAG").map(|_| None),
-        },
-        Ci::Azure => set(env, "BUILD_SOURCEBRANCH")
-            .map(|reference| reference.strip_prefix("refs/heads/").map(str::to_owned)),
-        Ci::Local => return None,
-    }?;
+    let pushed = pushed_branch(ci, env)?;
     let Some(pushed) = pushed else {
         return Some(false);
     };

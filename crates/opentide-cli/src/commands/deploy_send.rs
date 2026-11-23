@@ -689,6 +689,7 @@ fn deploy(
             &runs,
             reads_changes,
             cx.env,
+            opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses).enabled,
         ));
     }
     let reopened;

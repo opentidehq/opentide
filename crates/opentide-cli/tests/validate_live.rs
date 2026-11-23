@@ -1243,6 +1243,8 @@ fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
         ("SPLUNK_TOKEN", SECRET),
         ("GITHUB_ACTIONS", "true"),
         ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_REF", "refs/heads/main"),
+        ("OPENTIDE_DEFAULT_BRANCH", "main"),
         ("GITHUB_SHA", "HEAD"),
         ("GITHUB_WORKSPACE", workspace.as_str()),
     ]);

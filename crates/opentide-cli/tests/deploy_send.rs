@@ -1942,6 +1942,8 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
         vec![
             ("GITHUB_ACTIONS", "true".to_owned()),
             ("GITHUB_EVENT_NAME", "push".to_owned()),
+            ("GITHUB_REF", "refs/heads/main".to_owned()),
+            ("OPENTIDE_DEFAULT_BRANCH", "main".to_owned()),
             ("GITHUB_SHA", "HEAD".to_owned()),
             ("GITHUB_WORKSPACE", ws.path().display().to_string()),
         ]
@@ -2010,6 +2012,8 @@ fn a_push_deploys_the_rule_it_promotes_to_its_release_tenants() {
     let env = vec![
         ("GITHUB_ACTIONS", "true".to_owned()),
         ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_REF", "refs/heads/main".to_owned()),
+        ("OPENTIDE_DEFAULT_BRANCH", "main".to_owned()),
         ("GITHUB_SHA", "HEAD".to_owned()),
         ("GITHUB_WORKSPACE", ws.path().display().to_string()),
         ("GRAYLOG_TOKEN", "token".to_owned()),
@@ -3148,6 +3152,8 @@ fn github_push(ws: &Path) -> Vec<(&'static str, String)> {
     vec![
         ("GITHUB_ACTIONS", "true".to_owned()),
         ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_REF", "refs/heads/main".to_owned()),
+        ("OPENTIDE_DEFAULT_BRANCH", "main".to_owned()),
         ("GITHUB_SHA", "HEAD".to_owned()),
         ("GITHUB_WORKSPACE", ws.display().to_string()),
     ]
