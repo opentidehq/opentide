@@ -5874,7 +5874,7 @@ fn only_action(sent: &Sent) -> String {
     let row = results
         .iter()
         .find(|row| {
-            row.get("uuid").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
+            row.get("id").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000071")
         })
         .unwrap();
     row.get("action")
