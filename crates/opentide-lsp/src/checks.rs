@@ -16,22 +16,117 @@ use opentide_workspace::{
 use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::session::workspace_path;
 
-/// The disk, with the editor's buffers (and what a host with no filesystem
-/// supplied) in place of their files: a buffer is read for its path, and its
-/// folders exist, whatever the disk holds.
+/// The disk as the server reads it between two messages that may say it
+/// changed: what a folder lists and what a file holds, read once and kept
+/// until [`forget`](Self::forget), which the session calls at the start and
+/// the end of each batch and before each notification
+/// (`Session::forget_disk`). The server's walk of a root's object files
+/// (`DiskObjects`), the workspace's discovery and its read of each file, and
+/// lint's scan of the object folders then list and read the disk once a
+/// batch, not three times: under WASI each entry of a listing crosses to the
+/// host (27 ms for a folder of a thousand files under wasmtime, #1767).
+pub(crate) struct Disk {
+    /// The disk itself (another filesystem in tests).
+    os: Box<dyn FileSystem>,
+    seen: Mutex<Seen>,
+}
+
+impl Default for Disk {
+    fn default() -> Self {
+        Self::over(OsFs)
+    }
+}
+
+/// What [`Disk`] read since it last forgot.
+#[derive(Default)]
+struct Seen {
+    /// Counts the forgets: what a read that began before one found is not
+    /// kept (a workspace loads on a thread of its own on native hosts).
+    generation: u64,
+    listings: HashMap<PathBuf, Vec<DirEntry>>,
+    files: HashMap<PathBuf, Vec<u8>>,
+}
+
+impl Disk {
+    /// `fs` read once between two forgets.
+    fn over(fs: impl FileSystem + 'static) -> Self {
+        Self {
+            os: Box::new(fs),
+            seen: Mutex::default(),
+        }
+    }
+
+    /// Read the disk again from now on.
+    pub(crate) fn forget(&self) {
+        let mut seen = self.seen();
+        seen.generation += 1;
+        seen.listings.clear();
+        seen.files.clear();
+    }
+
+    fn seen(&self) -> std::sync::MutexGuard<'_, Seen> {
+        // What was kept is whole whatever panicked while it was held.
+        self.seen.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// What `look` finds kept, else `read` from the disk, kept unless the
+    /// disk was forgotten meanwhile.
+    fn once<T: Clone>(
+        &self,
+        look: impl Fn(&mut Seen) -> &mut HashMap<PathBuf, T>,
+        path: &Path,
+        read: impl FnOnce() -> io::Result<T>,
+    ) -> io::Result<T> {
+        let generation = {
+            let mut seen = self.seen();
+            if let Some(kept) = look(&mut seen).get(path) {
+                return Ok(kept.clone());
+            }
+            seen.generation
+        };
+        let value = read()?;
+        let mut seen = self.seen();
+        if seen.generation == generation {
+            look(&mut seen).insert(path.to_path_buf(), value.clone());
+        }
+        Ok(value)
+    }
+}
+
+impl FileSystem for Disk {
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        self.once(|seen| &mut seen.files, path, || self.os.read(path))
+    }
+
+    fn kind(&self, path: &Path) -> io::Result<EntryKind> {
+        self.os.kind(path)
+    }
+
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntry>> {
+        self.once(|seen| &mut seen.listings, path, || self.os.read_dir(path))
+    }
+
+    fn resolve(&self, path: &Path) -> PathBuf {
+        self.os.resolve(path)
+    }
+}
+
+/// The disk ([`Disk`]), with the editor's buffers (and what a host with no
+/// filesystem supplied) in place of their files: a buffer is read for its
+/// path, and its folders exist, whatever the disk holds.
 pub(crate) struct OverlayFs {
-    base: OsFs,
+    base: Disk,
     buffers: MemoryFs,
 }
 
 impl OverlayFs {
     fn new() -> Self {
         Self {
-            base: OsFs,
+            base: Disk::default(),
             buffers: MemoryFs::new(),
         }
     }
@@ -243,8 +338,17 @@ impl RootChecks {
         self.fs.resolve(&workspace_path(&path.to_string_lossy()))
     }
 
-    /// `paths` changed on disk (a watcher's events).
+    /// The disk under the editor's buffers, as this batch reads it
+    /// ([`Disk`]).
+    pub(crate) fn disk(&self) -> &Disk {
+        &self.fs.base
+    }
+
+    /// `paths` changed on disk (a watcher's events). What [`Disk`] kept is
+    /// read again: the session forgets it before each message that may say
+    /// the disk changed, and so does any change reported here.
     pub(crate) fn changed(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
+        self.fs.base.forget();
         let changes: Vec<Change> = paths
             .into_iter()
             .map(|path| Change::changed(self.resolve(&path)))
@@ -1150,6 +1254,115 @@ mod tests {
         assert_eq!(warning.severity, Severity::Warning);
         assert_eq!(warning.suggestion, None);
         assert_eq!(warning.field_path, None);
+    }
+
+    /// A filesystem that counts what is asked of it, and can run a hook in
+    /// the middle of a listing.
+    #[derive(Default)]
+    struct Counting {
+        inner: MemoryFs,
+        listings: std::sync::atomic::AtomicUsize,
+        reads: std::sync::atomic::AtomicUsize,
+        during_listing: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>>,
+    }
+
+    /// A [`Counting`] the test keeps a handle on.
+    struct Shared(Arc<Counting>);
+
+    impl FileSystem for Shared {
+        fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+            self.0
+                .reads
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.0.inner.read(path)
+        }
+
+        fn kind(&self, path: &Path) -> io::Result<EntryKind> {
+            self.0.inner.kind(path)
+        }
+
+        fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntry>> {
+            self.0
+                .listings
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let entries = self.0.inner.read_dir(path);
+            if let Some(hook) = self.0.during_listing.get() {
+                hook();
+            }
+            entries
+        }
+
+        fn resolve(&self, path: &Path) -> PathBuf {
+            self.0.inner.resolve(path)
+        }
+    }
+
+    fn counts(fs: &Counting) -> (usize, usize) {
+        (
+            fs.listings.load(std::sync::atomic::Ordering::SeqCst),
+            fs.reads.load(std::sync::atomic::Ordering::SeqCst),
+        )
+    }
+
+    /// #1767: what a folder lists and a file holds is read from the disk once
+    /// until the session forgets it, and read again after: a file changed on
+    /// disk meanwhile is then seen as it is.
+    #[test]
+    fn the_disk_is_read_once_until_it_is_forgotten() {
+        let counting = Arc::new(Counting::default());
+        let file = Path::new("/w/objects/rules/r.yaml");
+        counting.inner.write(file, b"name: a\n".to_vec());
+        let disk = Disk::over(Shared(Arc::clone(&counting)));
+        let folder = Path::new("/w/objects/rules");
+        for _ in 0..3 {
+            assert_eq!(disk.read_dir(folder).unwrap().len(), 1);
+            assert_eq!(disk.read(file).unwrap(), b"name: a\n");
+        }
+        assert_eq!(counts(&counting), (1, 1));
+        // What is not there is asked again each time: nothing is kept of it.
+        assert!(disk.read(Path::new("/w/objects/rules/none.yaml")).is_err());
+        assert!(disk.read(Path::new("/w/objects/rules/none.yaml")).is_err());
+        assert_eq!(counts(&counting), (1, 3));
+
+        counting.inner.write(file, b"name: b\n".to_vec());
+        counting
+            .inner
+            .write(folder.join("s.yaml"), b"name: s\n".to_vec());
+        // Not seen until the disk is forgotten.
+        assert_eq!(disk.read(file).unwrap(), b"name: a\n");
+        assert_eq!(disk.read_dir(folder).unwrap().len(), 1);
+        disk.forget();
+        assert_eq!(disk.read(file).unwrap(), b"name: b\n");
+        assert_eq!(disk.read_dir(folder).unwrap().len(), 2);
+        assert_eq!(counts(&counting), (2, 4));
+    }
+
+    /// A listing that began before the disk was forgotten is not kept: the
+    /// next one reads the disk (a workspace loads on a thread of its own on
+    /// native hosts, while the session forgets).
+    #[test]
+    fn a_read_begun_before_a_forget_is_not_kept() {
+        let counting = Arc::new(Counting::default());
+        let folder = Path::new("/w/objects");
+        counting
+            .inner
+            .write(folder.join("r.yaml"), b"name: a\n".to_vec());
+        let disk = Arc::new(Disk::over(Shared(Arc::clone(&counting))));
+        let weak = Arc::downgrade(&disk);
+        let forgot = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let once = Arc::clone(&forgot);
+        let _ = counting.during_listing.set(Box::new(move || {
+            if !once.swap(true, std::sync::atomic::Ordering::SeqCst)
+                && let Some(disk) = weak.upgrade()
+            {
+                disk.forget();
+            }
+        }));
+        disk.read_dir(folder).unwrap();
+        disk.read_dir(folder).unwrap();
+        disk.read_dir(folder).unwrap();
+        // The first listing straddled a forget; the second was kept.
+        assert_eq!(counts(&counting).0, 2);
     }
 
     #[test]

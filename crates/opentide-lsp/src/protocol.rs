@@ -410,6 +410,9 @@ impl Driver {
                     // cancellation is read with its batch.
                     if self.state == Lifecycle::Running && notification.method != "$/cancelRequest"
                     {
+                        // A notification may say the disk changed: what the
+                        // requests before it read of the disk is read again.
+                        session.forget_disk();
                         handle_notification(session, notification);
                     }
                 }
@@ -446,6 +449,9 @@ impl Driver {
         }
         self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
         flush(session, writer, self.state)?;
+        // Nothing of the disk is kept while the server waits for the next
+        // batch: the files read are the workspace's, which keeps its own.
+        session.forget_disk();
         Ok(None)
     }
 

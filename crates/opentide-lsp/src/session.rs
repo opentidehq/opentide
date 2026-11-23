@@ -158,7 +158,7 @@ impl Root {
         if !held && !Path::new(path).is_dir() {
             return false;
         }
-        let changed = disk.refresh(&self.path);
+        let changed = disk.refresh(&self.path, self.checks.borrow().disk());
         drop(disk);
         self.checks.borrow_mut().changed([PathBuf::from(path)]);
         if !changed.is_empty() {
@@ -462,11 +462,12 @@ struct DiskObjects {
 }
 
 impl DiskObjects {
-    /// Read every object file again; keep the index entry of those whose
+    /// Read every object file again, through `fs` (the root's
+    /// [`Disk`](crate::checks::Disk)); keep the index entry of those whose
     /// text did not change. The files that changed, came or went (every
     /// file on the first read).
-    fn refresh(&mut self, root: &Path) -> Vec<PathBuf> {
-        let found: BTreeMap<String, (String, String)> = collect_objects(root)
+    fn refresh(&mut self, root: &Path, fs: &dyn opentide_workspace::FileSystem) -> Vec<PathBuf> {
+        let found: BTreeMap<String, (String, String)> = collect_objects(fs, root)
             .into_iter()
             .map(|(path, text)| (path_key(&path), (path, text)))
             .collect();
@@ -982,7 +983,7 @@ impl Session {
             let mut disk = r.disk.borrow_mut();
             if !disk.loaded || !self.caps.watch_files {
                 let first = !disk.loaded;
-                let changed = disk.refresh(&r.path);
+                let changed = disk.refresh(&r.path, r.checks.borrow().disk());
                 if !self.caps.watch_files && !first {
                     // Nothing reports what changed on disk: the object
                     // files the walk found changed, and the
@@ -1422,8 +1423,24 @@ impl Session {
     /// changed under it).
     pub(crate) fn begin_batch(&self) {
         self.batch.set(self.batch.get() + 1);
+        self.forget_disk();
         if !self.caps.watch_files {
             self.cache.borrow_mut().clear();
+        }
+    }
+
+    /// Read the disk again from now on: what each root's
+    /// [`Disk`](crate::checks::Disk) kept is dropped. At the start and the
+    /// end of each batch, and before each notification, any of which may
+    /// say the disk changed (a watcher's event, a configuration saved): the
+    /// walks and reads in between see the disk as it was when the first of
+    /// them read it.
+    pub(crate) fn forget_disk(&self) {
+        for root in &self.roots {
+            root.checks.borrow().disk().forget();
+        }
+        for checks in self.loose_checks.borrow().values() {
+            checks.disk().forget();
         }
     }
 
@@ -2634,7 +2651,7 @@ mod tests {
         std::fs::write(rules.join("r.yaml"), rule).unwrap();
         std::fs::write(rules.join("not-an-object.yaml"), "- a\n").unwrap();
         let mut disk = DiskObjects::default();
-        let changed = disk.refresh(&root);
+        let changed = disk.refresh(&root, &opentide_workspace::OsFs);
         assert_eq!(changed.len(), 2, "{changed:?}");
         assert!(disk.files.values().all(|file| file.indexed.get().is_none()));
         let path = rules.join("r.yaml").display().to_string();
@@ -2660,7 +2677,7 @@ mod tests {
         assert_eq!(found[0].path, expected.path);
         assert_eq!(found[0].refs, expected.refs);
         // Read again unchanged: nothing changed, the entries are kept.
-        assert!(disk.refresh(&root).is_empty());
+        assert!(disk.refresh(&root, &opentide_workspace::OsFs).is_empty());
         assert!(disk.files.values().all(|file| file.indexed.get().is_some()));
         std::fs::remove_dir_all(&root).unwrap();
     }

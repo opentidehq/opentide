@@ -349,11 +349,16 @@ pub(crate) fn host_catalogs() -> bool {
 // ---------------------------------------------------------------------------
 // The workspace walk.
 
-/// The workspace's object YAML: the files under `<root>/objects`. A root
-/// without `objects/` has none, and nothing else under it is read (a root of
-/// `/tmp` or a home directory once had every YAML file there indexed).
-pub(crate) fn collect_objects(root: &Path) -> Vec<(String, String)> {
-    yaml_files(&root.join("objects"))
+/// The workspace's object YAML: the files under `<root>/objects`, read through
+/// `fs` (the root's [`Disk`](crate::checks::Disk), which the workspace then
+/// reads the same listings and files from). A root without `objects/` has
+/// none, and nothing else under it is read (a root of `/tmp` or a home
+/// directory once had every YAML file there indexed).
+pub(crate) fn collect_objects(
+    fs: &dyn opentide_workspace::FileSystem,
+    root: &Path,
+) -> Vec<(String, String)> {
+    yaml_files_in(fs, &root.join("objects"))
 }
 
 /// Every `.yaml` and `.yml` file under `dir`, with its text (byte-order mark
@@ -362,33 +367,45 @@ pub(crate) fn collect_objects(root: &Path) -> Vec<(String, String)> {
 /// directory that cannot be read (not UTF-8, no permission) is left out. The
 /// `opentide-lsp analyze` command and the server share this walk.
 pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
-    fn rec(dir: &Path, out: &mut Vec<(String, String)>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
+    yaml_files_in(&opentide_workspace::OsFs, dir)
+}
+
+/// [`yaml_files`] through `fs`.
+pub(crate) fn yaml_files_in(
+    fs: &dyn opentide_workspace::FileSystem,
+    dir: &Path,
+) -> Vec<(String, String)> {
+    use opentide_workspace::fs::EntryKind;
+    fn rec(fs: &dyn opentide_workspace::FileSystem, dir: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(mut entries) = fs.read_dir(dir) else {
             return;
         };
-        let mut entries: Vec<_> = entries.flatten().collect();
-        entries.sort_by_key(|entry| entry.file_name());
+        entries.sort_by(|a, b| a.file_name.cmp(&b.file_name));
         for entry in entries {
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-            let path = entry.path();
-            if kind.is_dir() {
-                rec(&path, out);
-            } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
-                && matches!(
-                    path.extension().and_then(|s| s.to_str()),
-                    Some("yaml" | "yml")
-                )
-                && let Ok(text) = std::fs::read_to_string(&path)
-            {
-                let text = opentide_core::strip_bom(&text).to_string();
-                out.push((path.display().to_string(), text));
+            let path = dir.join(&entry.file_name);
+            // An entry's kind is what it leads to: a link to a folder is a
+            // folder, which is not entered; a link to a file is a file.
+            match entry.kind {
+                EntryKind::Dir if !entry.symlink => rec(fs, &path, out),
+                EntryKind::File
+                    if matches!(
+                        path.extension().and_then(|s| s.to_str()),
+                        Some("yaml" | "yml")
+                    ) =>
+                {
+                    if let Ok(bytes) = fs.read(&path)
+                        && let Ok(text) = String::from_utf8(bytes)
+                    {
+                        let text = opentide_core::strip_bom(&text).to_string();
+                        out.push((path.display().to_string(), text));
+                    }
+                }
+                _ => {}
             }
         }
     }
     let mut out = Vec::new();
-    rec(dir, &mut out);
+    rec(fs, dir, &mut out);
     out
 }
 
