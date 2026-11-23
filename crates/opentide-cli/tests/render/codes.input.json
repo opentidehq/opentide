@@ -6055,7 +6055,7 @@
   {
    "code": "schemas_fresh",
    "severity": "error",
-   "message": "Every JSON schema this opentide version generates exists.",
+   "message": "Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now.",
    "path": "objects/rules/frame-shapes.yaml",
    "file_path": "<WS>/objects/rules/frame-shapes.yaml",
    "line": 4,

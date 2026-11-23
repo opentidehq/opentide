@@ -1442,7 +1442,7 @@ exit: 0
     },
     {
       "code": "schemas_fresh",
-      "meaning": "Every JSON schema this opentide version generates exists."
+      "meaning": "Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now."
     },
     {
       "code": "scope_no_match",

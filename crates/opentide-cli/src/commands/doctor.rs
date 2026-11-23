@@ -162,30 +162,70 @@ struct Expected {
     outputs: Vec<Output>,
 }
 
+/// What [`Expected::compare`] found.
+struct Comparison {
+    /// The files compared, each path once.
+    checked: usize,
+    /// The ones not on disk (`NotFound`), by file name.
+    missing: Vec<String>,
+    /// The ones whose text differs, or that cannot be read, by file name.
+    differing: Vec<String>,
+}
+
 impl Expected {
     /// The files of the schemas (`catalog` false) or of the language-server
-    /// catalog (`catalog` true) that are missing on disk and the ones whose
-    /// bytes differ, by file name.
-    fn compare(&self, catalog: bool) -> (Vec<String>, Vec<String>) {
+    /// catalog (`catalog` true) against the disk. Line endings and a byte
+    /// order mark do not count, as for the templates: an editor or git's
+    /// `autocrlf` rewrites them.
+    fn compare(&self, catalog: bool) -> Comparison {
         let catalog_dir = self.root.join(CATALOG_DIR);
-        let mut missing = Vec::new();
-        let mut differing = Vec::new();
+        let mut seen: Vec<&Path> = Vec::new();
+        let mut found = Comparison {
+            checked: 0,
+            missing: Vec::new(),
+            differing: Vec::new(),
+        };
         for output in &self.outputs {
-            if output.path.starts_with(&catalog_dir) != catalog {
+            if output.path.starts_with(&catalog_dir) != catalog
+                || seen.contains(&output.path.as_path())
+            {
                 continue;
             }
+            seen.push(&output.path);
+            found.checked += 1;
             let name = output
                 .path
                 .file_name()
                 .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
             match std::fs::read(&output.path) {
-                Ok(bytes) if bytes == output.bytes => {}
-                Ok(_) => differing.push(name),
-                Err(_) => missing.push(name),
+                Ok(bytes) if same_text(&bytes, &output.bytes) => {}
+                Ok(_) => found.differing.push(name),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    found.missing.push(name);
+                }
+                Err(_) => found.differing.push(format!("{name} (unreadable)")),
             }
         }
-        (missing, differing)
+        found
     }
+}
+
+/// Whether a file on disk holds `expected`, ignoring a leading byte order
+/// mark and the difference between CRLF and LF.
+fn same_text(disk: &[u8], expected: &[u8]) -> bool {
+    let disk = disk.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(disk);
+    if disk == expected {
+        return true;
+    }
+    let mut unix = Vec::with_capacity(disk.len());
+    let mut bytes = disk.iter().copied().peekable();
+    while let Some(byte) = bytes.next() {
+        if byte == b'\r' && bytes.peek() == Some(&b'\n') {
+            continue;
+        }
+        unix.push(byte);
+    }
+    unix == expected
 }
 
 /// One configured tenant: the environment variables its setup names.
@@ -723,7 +763,11 @@ impl Doctor<'_> {
             }
             let expected = object_template(&id.to_string(), &options).ok().flatten();
             let written = std::fs::read(&target).ok();
-            if expected.as_deref().map(str::as_bytes) != written.as_deref() {
+            let same = match (&expected, &written) {
+                (Some(expected), Some(written)) => same_text(written, expected.as_bytes()),
+                _ => false,
+            };
+            if !same {
                 stale.push(name);
             }
         }
@@ -783,7 +827,11 @@ impl Doctor<'_> {
         let mut note = String::new();
         match &self.expected {
             Some(Ok(expected)) => {
-                let (missing, differing) = expected.compare(false);
+                let Comparison {
+                    checked,
+                    missing,
+                    differing,
+                } = expected.compare(false);
                 if !missing.is_empty() {
                     return Check::new(
                         "schemas_fresh",
@@ -801,7 +849,9 @@ impl Doctor<'_> {
                         "schemas_fresh",
                         "warn",
                         format!(
-                            "{} schema(s) differ from what this version generates: {}",
+                            "{} schema(s) differ from what `generate schemas` writes now \
+                             (objects or configuration changed, or another version wrote \
+                             them): {}",
                             differing.len(),
                             differing.join(", ")
                         ),
@@ -811,7 +861,7 @@ impl Doctor<'_> {
                 return Check::new(
                     "schemas_fresh",
                     "pass",
-                    format!("Schemas match the installed version ({})", unique.len()),
+                    format!("Schemas match what `generate schemas` writes now ({checked})"),
                 );
             }
             Some(Err(reason)) => {
@@ -867,7 +917,8 @@ impl Doctor<'_> {
             let generated = std::fs::read_to_string(&path)
                 .map_err(|error| error.to_string())
                 .and_then(|text| {
-                    serde_json::from_str::<JsonValue>(&text).map_err(|error| error.to_string())
+                    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+                    serde_json::from_str::<JsonValue>(text).map_err(|error| error.to_string())
                 });
             let generated = match generated {
                 Ok(JsonValue::Object(map)) => match map.get("opentide") {
@@ -909,15 +960,24 @@ impl Doctor<'_> {
                 .fix(fix);
             }
             if let Some(Ok(expected)) = &self.expected {
-                let (_, differing) = expected.compare(true);
+                let Comparison {
+                    missing, differing, ..
+                } = expected.compare(true);
+                let mut problems = Vec::new();
+                if !missing.is_empty() {
+                    problems.push(format!("missing {}", missing.join(", ")));
+                }
                 if !differing.is_empty() {
+                    problems.push(format!("differs: {}", differing.join(", ")));
+                }
+                if !problems.is_empty() {
                     return Check::new(
                         "lsp_catalog",
                         "warn",
                         format!(
-                            "The language-server catalog committed in {shown} differs from \
-                             what opentide {version} generates: {}",
-                            differing.join(", ")
+                            "The language-server catalog committed in {shown} does not match \
+                             what `generate schemas` writes now ({})",
+                            problems.join("; ")
                         ),
                     )
                     .fix(fix);
@@ -2271,57 +2331,106 @@ mod tests {
         assert!(stale.2.starts_with("1 template(s) differ"), "{stale:?}");
     }
 
-    #[test]
-    fn schemas_this_version_writes_are_fresh_and_older_ones_are_not() {
+    const OBJECTIVE: &str = "name: Shared Objective\n\nmetadata:\n  uuid: \
+        00000000-0000-4000-8048-000000000002\n  schema: objective::1.0\n  version: 3\n  \
+        created: 2026-01-01\n  modified: 2026-01-02\n  tlp: green\n  pap: green\n\n\
+        objective:\n  priority: High\n  type: Threat\n  description: An objective.\n";
+
+    /// A workspace with a non-default configuration (two responder teams) and
+    /// an objective, on which the real `generate schemas` has run.
+    fn generated_workspace() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(dir.path().join(".opentide")).unwrap();
+        let configurations = dir.path().join(".opentide/configurations");
+        std::fs::create_dir_all(&configurations).unwrap();
+        std::fs::write(
+            configurations.join("deployment.toml"),
+            "[[responders]]\nname = \"Blue Team\"\ndescription = \"Triage\"\n\n\
+             [[responders]]\nname = \"Red Team\"\ndescription = \"Hunt\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.path().join("objects/objectives")).unwrap();
+        std::fs::write(dir.path().join("objects/objectives/shared.yaml"), OBJECTIVE).unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let cx = context(&env, dir.path());
-        let (_, options) = placement(None, &env, dir.path());
-        let expected = expected_schemas(&options, cx.version).unwrap();
-        for output in &expected.outputs {
-            std::fs::create_dir_all(output.path.parent().unwrap()).unwrap();
-            std::fs::write(&output.path, &output.bytes).unwrap();
-        }
-        let find = |code: &str| {
-            checks(&run(true, false, &context(&env, dir.path())))
-                .into_iter()
-                .find(|(found, ..)| found == code)
-                .unwrap()
+        let cx = super::super::generate::Context {
+            repo: None,
+            env: &env,
+            cwd: dir.path(),
+            proxy: None,
+            version: "9.9.9",
         };
+        let report = super::super::generate::phases(&["schemas".to_owned()], &cx, "9.9.9");
+        assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
+        dir
+    }
+
+    fn find_check(dir: &Path, code: &str) -> (String, String, String) {
+        let env = Env::from_pairs(Vec::<(String, String)>::new());
+        checks(&run(true, false, &context(&env, dir)))
+            .into_iter()
+            .find(|(found, ..)| found == code)
+            .unwrap()
+    }
+
+    #[test]
+    fn schemas_the_generator_just_wrote_are_fresh_until_an_object_changes() {
+        let dir = generated_workspace();
+        let schemas = find_check(dir.path(), "schemas_fresh");
+        assert_eq!(schemas.1, "pass", "{schemas:?}");
         assert_eq!(
-            find("schemas_fresh").1,
+            find_check(dir.path(), "lsp_catalog").1,
             "pass",
             "{:?}",
-            find("schemas_fresh")
+            find_check(dir.path(), "lsp_catalog")
         );
-        assert_eq!(find("lsp_catalog").1, "pass", "{:?}", find("lsp_catalog"));
-        // A schema an older version wrote differs by its bytes, not its presence.
-        let schema = expected
-            .outputs
-            .iter()
-            .find(|output| !output.path.starts_with(expected.root.join(CATALOG_DIR)))
-            .unwrap();
-        let mut older = schema.bytes.clone();
-        older.extend_from_slice(b" ");
-        std::fs::write(&schema.path, older).unwrap();
-        let stale = find("schemas_fresh");
-        assert_eq!(stale.1, "warn");
-        let name = schema.path.file_name().unwrap().to_string_lossy();
-        assert!(
-            stale.2.starts_with("1 schema(s) differ") && stale.2.contains(name.as_ref()),
-            "{stale:?}"
-        );
-        // So does the committed catalog, with the version string unchanged.
-        let catalog = expected
-            .outputs
-            .iter()
-            .find(|output| output.path.ends_with("deprecations.json"))
-            .unwrap();
-        std::fs::write(&catalog.path, b"{}\n").unwrap();
-        let stale = find("lsp_catalog");
+        // The objective's name is in the rule schema's `detection_model`
+        // values: renaming it makes the schemas on disk stale.
+        let object = dir.path().join("objects/objectives/shared.yaml");
+        std::fs::write(&object, OBJECTIVE.replace("Shared Objective", "Renamed")).unwrap();
+        let stale = find_check(dir.path(), "schemas_fresh");
         assert_eq!(stale.1, "warn", "{stale:?}");
-        assert!(stale.2.contains("deprecations.json"), "{stale:?}");
+        assert!(
+            stale
+                .2
+                .contains("differ from what `generate schemas` writes now")
+        );
+        assert!(stale.2.contains("rule."), "{stale:?}");
+    }
+
+    #[test]
+    fn schemas_with_crlf_line_endings_and_a_byte_order_mark_are_still_fresh() {
+        let dir = generated_workspace();
+        for folder in [".opentide/schemas", ".opentide/lsp/catalogs/generated"] {
+            for entry in std::fs::read_dir(dir.path().join(folder)).unwrap() {
+                let path = entry.unwrap().path();
+                if !path.is_file() {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                let mut bytes = b"\xEF\xBB\xBF".to_vec();
+                bytes.extend(text.replace('\n', "\r\n").into_bytes());
+                std::fs::write(&path, bytes).unwrap();
+            }
+        }
+        assert_eq!(find_check(dir.path(), "schemas_fresh").1, "pass");
+        assert_eq!(find_check(dir.path(), "lsp_catalog").1, "pass");
+    }
+
+    #[test]
+    fn a_committed_catalog_with_a_file_missing_warns() {
+        let dir = generated_workspace();
+        let generated = dir.path().join(".opentide/lsp/catalogs/generated");
+        std::fs::remove_file(generated.join("deprecations.json")).unwrap();
+        let check = find_check(dir.path(), "lsp_catalog");
+        assert_eq!(check.1, "warn", "{check:?}");
+        assert!(check.2.contains("missing deprecations.json"), "{check:?}");
+    }
+
+    #[test]
+    fn same_text_ignores_a_byte_order_mark_and_crlf_only() {
+        assert!(same_text(b"a\r\nb\n", b"a\nb\n"));
+        assert!(same_text(b"\xEF\xBB\xBFa\n", b"a\n"));
+        assert!(!same_text(b"a\rb\n", b"a\nb\n"));
+        assert!(!same_text(b"a\nb ", b"a\nb"));
     }
 
     #[test]
