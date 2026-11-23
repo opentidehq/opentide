@@ -1276,7 +1276,7 @@ a container.
 | --- | --- |
 | Severity | Medium |
 | Detection model | [Credential Access Objective](../objectives/credential-access-objective.md) |
-| ATT&CK | [`T1059.004`](https://attack.mitre.org/techniques/T1059/004) Command and Scripting Interpreter: Unix Shell |
+| ATT&CK | [`T1059.004`](https://attack.mitre.org/techniques/T1059/004) Command and Scripting Interpreter: Unix Shell<br>[`T1059`](https://attack.mitre.org/techniques/T1059) Command and Scripting Interpreter (inherited) |
 | Platforms | Sysdig Secure: `STAGING` (PREVIEW runs) |
 
 **On this page:** [Deployment](#deployment) · [Platform configuration](#platform-configuration) · [Response](#response) · [ATT&CK techniques](#att-ck-techniques) · [Detection coverage](#detection-coverage) · [Metadata](#metadata)
@@ -1357,6 +1357,7 @@ spawned_process and container and proc.name in (corpus_shells)
 
 | Technique | Name | Tactics | Summary |
 | --- | --- | --- | --- |
+| [`T1059`](https://attack.mitre.org/techniques/T1059) | Command and Scripting Interpreter *(inherited)* | Execution | Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries. |
 | [`T1059.004`](https://attack.mitre.org/techniques/T1059/004) | Command and Scripting Interpreter: Unix Shell | Execution | Adversaries may abuse Unix shell commands and scripts for execution. |
 
 ## Detection coverage

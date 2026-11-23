@@ -37,7 +37,7 @@ opentide --json info --technique T1059 coverage
 
 `opentide info --technique T1059` alone does **not** include coverage data.
 
-A rule covers a technique when it lists it in its own `techniques`, or when it inherits it: from the objective its `detection_model` names (directly, or through one of that objective's signals), or, when that objective lists none, from the threats the objective covers. This is the same walk `info catalog` reports as `techniques.own` and `techniques.inherited`, and the MCP [`coverage`](../mcp/tools.md#coverage) tool and the TUI's [Coverage tab](./tui.md) read it too, so all four agree. `rules` and `count` hold both kinds; `own` and `inherited` keep them apart, since a rule that lists the technique itself is the stronger claim.
+A rule covers a technique when it lists it in its own `techniques`, or when it inherits it: from the objective its `detection_model` names (directly, or through one of that objective's signals), or, when that objective lists none, from the threats the objective covers. This is the same walk `info catalog` reports as `techniques.own` and `techniques.inherited`, and the MCP [`coverage`](../mcp/tools.md#coverage) tool and the TUI's [Coverage tab](./tui.md) read it too, as do `generate docs`, the ATT&CK Navigator layer of `generate exports` and the explorer bundle's `summaries[].techniques`, so all seven agree. `rules` and `count` hold both kinds; `own` and `inherited` keep them apart, since a rule that lists the technique itself is the stronger claim.
 
 A parent technique also matches its sub-techniques (`T1059` finds rules tagged `T1059.001`); a sub-technique does not match its parent. Matching is case-insensitive. `matched_techniques` lists the catalogue's IDs that answered.
 
