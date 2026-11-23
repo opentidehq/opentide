@@ -1210,7 +1210,11 @@ pub struct GenerateArgs {
     /// The phases named as words (`generate schemas templates`), in the
     /// order given; none runs the whole pipeline. An unknown one is refused
     /// by the run, which lists the phases.
-    #[arg(value_name = "PHASE", hide = true)]
+    #[arg(
+        value_name = "PHASE",
+        help = "Phases to run, in the order given: schemas, templates, vocabs, snippets. \
+                None runs the whole pipeline."
+    )]
     pub phases: Vec<String>,
 }
 
