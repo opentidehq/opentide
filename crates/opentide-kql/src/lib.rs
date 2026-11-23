@@ -824,6 +824,27 @@ impl Catalog {
             .map(|t| t.name.clone())
     }
 
+    /// [`Catalog::suggest_table`] among the tables a query can write bare. A
+    /// declared log source with columns is a catalog row named after it,
+    /// spaces included, which a rename must never offer: the best bare name
+    /// wins instead.
+    fn suggest_bare_table(&self, name: &str) -> Option<String> {
+        let prepared = self
+            .memo
+            .table_names
+            .get_or_init(|| suggest::Candidates::new(self.tables.iter().map(|t| t.name.as_str())));
+        prepared
+            .ranked(
+                name,
+                suggest::max_edits(name.chars().count()),
+                self.tables.len(),
+            )
+            .into_iter()
+            .filter_map(|i| self.tables.get(i))
+            .find(|t| is_bare_identifier(&t.name))
+            .map(|t| t.name.clone())
+    }
+
     pub fn operator_names(&self) -> Vec<String> {
         self.operators.iter().map(|o| o.name.clone()).collect()
     }
@@ -1111,18 +1132,21 @@ fn check_table_named(
         return;
     }
     let status = datasets.status(platform, table);
-    // A near miss of a declared table, else of a catalog table.
-    let suggest = |catalog_too: bool| {
+    // A near miss of a declared table, else of a catalog table. Only a name a
+    // query can write bare is offered: a declared display name such as
+    // `Azure Activity` is not a KQL identifier, and substituting it breaks the
+    // query.
+    let suggest = || {
         suggest::closest(
             table,
             datasets
                 .names(platform)
                 .iter()
-                .filter(|d| !d.contains('*'))
+                .filter(|d| is_bare_identifier(d))
                 .map(String::as_str),
         )
         .map(str::to_string)
-        .or_else(|| catalog_too.then(|| catalog.suggest_table(table)).flatten())
+        .or_else(|| catalog.suggest_bare_table(table))
     };
     // The spec's precedence (visibility::1.0, Query checks): only a name the
     // catalog knows is "not declared"; one it does not know is unknown,
@@ -1167,10 +1191,22 @@ fn check_table_named(
             }
         }
     };
-    if let Some(s) = suggest(!known) {
+    // A table the catalog knows is not misspelt: the fix is to declare it, not
+    // to rename it into a declared name.
+    if !known && let Some(s) = suggest() {
         d = d.with_suggestion(s);
     }
     out.push(d);
+}
+
+/// Whether `name` is written bare in a KQL query: `[A-Za-z_][A-Za-z0-9_]*`.
+/// Other names need the `['…']` quoting, which a suggestion does not add.
+fn is_bare_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 fn overlay_catalog_captures(

@@ -292,6 +292,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
             format!("the push's deploy would stop at its status promotion: {message}"),
         );
     }
+    for warning in promotion_warnings(args, cx, &owned).into_iter().rev() {
+        result.warnings.insert(0, warning);
+    }
     if let Some((_, uuids, target)) = promoted {
         // Only the promoted rules a tenant receives keep their promotion:
         // the deploy puts the others back.
@@ -364,6 +367,25 @@ fn preview(
     };
     super::promotion_preview::promoted_workspace(owned, options, &scope.files, &local, cx.debug)
         .map(Some)
+}
+
+/// The warnings of a push that could promote: a branch the CI environment
+/// does not say, and a stale `OPENTIDE_DEFAULT_BRANCH`.
+fn promotion_warnings(args: &Args, cx: &Context, owned: &Owned) -> Vec<String> {
+    let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
+    if args.skip_promotion || !reads_changes {
+        return Vec::new();
+    }
+    let Ok(runs) = opentide_compile::strategy::parse_strategies(
+        &args.strategies,
+        &owned.statuses,
+        "--strategy",
+    ) else {
+        return Vec::new();
+    };
+    let enabled =
+        opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses).enabled;
+    super::promotion_preview::warnings(&runs, reads_changes, cx.env, enabled)
 }
 
 /// A run refused before it started: a usage error, exit 2.

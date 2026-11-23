@@ -274,6 +274,8 @@ fn signalled_deploy_puts_the_promotion_back(
         .envs([
             ("GITHUB_ACTIONS", "true"),
             ("GITHUB_EVENT_NAME", "push"),
+            ("GITHUB_REF", "refs/heads/main"),
+            ("OPENTIDE_DEFAULT_BRANCH", "main"),
             ("GITHUB_SHA", "HEAD"),
         ])
         .env("GITHUB_WORKSPACE", &ws)

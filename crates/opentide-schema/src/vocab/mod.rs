@@ -39,7 +39,7 @@ use crate::generate::annotate::{first_sentence, plain_text};
 
 use indexmap::{IndexMap, IndexSet};
 
-pub use bundled_offers::bundled_offer;
+pub use bundled_offers::{OfferedValue, bundled_markdown, bundled_offer, bundled_value};
 pub use document::{
     Description, Descriptions, Entry, KeyKind, Metadata, SUFFIX, Stage, Vocabulary,
 };

@@ -12,6 +12,7 @@ on:
 
 env:
   OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+  OPENTIDE_DEFAULT_BRANCH: release/v1.2
   OPENTIDE_VERSION: "1.0"
 
 jobs:
@@ -341,3 +342,7 @@ jobs:
         with:
           name: opentide-docs
           path: "docs/"
+  # Your own jobs between the markers below survive `opentide setup ci github --yes`;
+  # opentide replaces everything else in this file.
+  # opentide:user-begin
+  # opentide:user-end

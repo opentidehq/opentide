@@ -18,6 +18,7 @@ pool:
 
 variables:
   OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)
+  OPENTIDE_DEFAULT_BRANCH: main
   OPENTIDE_VERSION: "0.23.0"
 
 # Azure cannot serialise a job from YAML alone. Add an Exclusive lock
@@ -186,6 +187,29 @@ stages:
           - script: pip install "opentide==$OPENTIDE_VERSION"
             displayName: Install opentide
           - script: |
+              project=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SYSTEM_TEAMPROJECT")
+              response=$(printf 'Authorization: Bearer %s\n' "$SYSTEM_ACCESSTOKEN" | curl -fsS --connect-timeout 10 --max-time 30 -G -H @- \
+                --data-urlencode "definitions=$SYSTEM_DEFINITIONID" \
+                --data-urlencode "branchName=$BUILD_SOURCEBRANCH" \
+                --data-urlencode "resultFilter=succeeded" \
+                --data-urlencode "statusFilter=completed" \
+                --data-urlencode "queryOrder=finishTimeDescending" \
+                --data-urlencode '$top=1' \
+                --data-urlencode "api-version=7.1" \
+                "${SYSTEM_COLLECTIONURI}${project}/_apis/build/builds") || response=""
+              base=$(printf '%s' "$response" | python3 -c 'import json, sys; builds = json.load(sys.stdin).get("value") or []; print(builds[0].get("sourceVersion", "") if builds else "")') || base=""
+              if printf '%s' "$base" | grep -Eq '^[0-9a-f]{40,64}$' && git merge-base --is-ancestor "$base" HEAD; then
+                echo "##vso[task.setvariable variable=OPENTIDE_PUSH_BASE]$base"
+                echo "This push's diff starts at $base, the last successful build of $BUILD_SOURCEBRANCH."
+              else
+                echo "No earlier successful build of $BUILD_SOURCEBRANCH is an ancestor of this commit: OPENTIDE_PUSH_BASE is not set, and opentide reads the push's last commit only."
+              fi
+            displayName: Find this push's base commit
+            condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+            continueOnError: true
+            env:
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+          - script: |
               set -e
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               git config user.email "azure-pipelines@opentide.local"
@@ -303,3 +327,8 @@ stages:
             inputs:
               PathtoPublish: "$(Build.SourcesDirectory)/docs"
               ArtifactName: opentide-docs
+
+  # Your own stages between the markers below survive `opentide setup ci azure --yes`;
+  # opentide replaces everything else in this file.
+  # opentide:user-begin
+  # opentide:user-end

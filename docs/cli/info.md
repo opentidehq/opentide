@@ -21,7 +21,7 @@ opentide --json info catalog
 |-------|---------|
 | `[section]` | Optional section: `rules`, `threats`, `objectives`, `coverage` (requires `--technique`), `vocab`, or `catalog` (see [The catalogue](#the-catalogue)) |
 | `[name]` | With `vocab` only: the vocabulary to inspect (see [Vocabulary contract revisions](#vocabulary-contract-revisions)) |
-| `--platform` | Filter platform table to one platform |
+| `--platform` | Filter the platform table to one platform. Only without a section: with one it is a [usage error](./exit-codes.md) (exit `2`), since a section's document has no platform table |
 | `--technique` | ATT&CK technique ID — use with positional `coverage` |
 | `--strict` | Exit non-zero when any object file failed to load |
 | `--json` | Structured output (**global flag** — place before `info`) |
@@ -113,9 +113,19 @@ A variable's value is never printed, in either output. A tenant's setup values t
 }
 ```
 
+With a section, the payload holds that section's keys instead of the overview's `version`, `repo`, `counts`, `parse_error_count` and `platforms`; the envelope keys stay. So `opentide --json info rules | jq .rules` and `opentide --json info vocab | jq .vocabularies` read the section, and a script that wants the counts or the platforms reads `opentide --json info` (or `--platform <name>`) without a section:
+
+| Section | Keys beside the envelope |
+|---------|--------------------------|
+| none | `version`, `repo`, `counts`, `parse_error_count`, `platforms` |
+| `rules`, `threats`, `objectives` | the section's name: a list of UUIDs |
+| `coverage` | `coverage` |
+| `vocab` | `vocabularies` (one row per vocabulary), or with a name, `vocabulary` |
+| `catalog` | `objects`, `edges`, `signals`, `attack` |
+
 The keys from `schema_version` on are the envelope every command adds; see [JSON output](./json-output.md). Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
-With coverage, the payload adds a `coverage` object:
+With coverage, the payload is a `coverage` object:
 
 ```json output-of="opentide --json info --technique T1059 coverage"
 {
@@ -139,7 +149,7 @@ opentide info catalog
 opentide --json info catalog
 ```
 
-The document holds the `info` keys, plus `objects`, `edges`, `signals` and `attack`. `summary` adds `objects` (rows, load errors included), `signals` and `edges` to the four counts. In the [tutorial](../usage/tutorial.md) repository:
+The document holds `objects`, `edges`, `signals` and `attack`. `summary` adds `objects` (rows, load errors included), `signals` and `edges` to the four counts. In the [tutorial](../usage/tutorial.md) repository:
 
 ```json output-of="opentide --json info catalog"
 {

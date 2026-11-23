@@ -87,6 +87,10 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-folders",
     "tide-corpus-typo",
     "tide-corpus-bad-values",
+    "tide-corpus-lint-code-note",
+    "tide-corpus-lint-unknown-code",
+    "tide-corpus-lint-engine-warning",
+    "tide-corpus-lint-retired-code",
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
     "tide-corpus-legacy-id-error",
@@ -312,6 +316,10 @@ pub fn fixture(name: &str, ws: &Path) {
         | "tide-corpus-compile-invalid-rule"
         | "tide-corpus-compile-elastic-severity"
         | "tide-corpus-compile-hidden"
+        | "tide-corpus-lint-code-note"
+        | "tide-corpus-lint-unknown-code"
+        | "tide-corpus-lint-engine-warning"
+        | "tide-corpus-lint-retired-code"
         | "tide-corpus-bad-values" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);

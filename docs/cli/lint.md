@@ -22,7 +22,7 @@ opentide lint --file objects/rules/example.yaml
 | `--check` | What it does | `--fix` |
 |----------|----------------|---------|
 | `filenames` | Object YAML stem must follow the [filename convention](#filename-convention): `slugify(name)` by default | Renames files to the stem `style` expects. On a collision in the same folder, appends `{uuid[:8]}`. A `pattern` finding is not fixed |
-| `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty, as a note. By default `author` and `organisation` | Not auto-fixed |
+| `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty, as a note (by default `author` and `organisation`), and a rule (`rule::1.1` metadata, the only schema with `reviewed`) whose `metadata.reviewed` day is before its `metadata.modified` day, as a warning (`reviewed_before_modified`) | Not auto-fixed |
 | `recommended` | Reports each field the templates ask for and `validate` does not require that is missing, as a note: a rule's `configurations` and `response`. The editor reports the same finding, `recommended_field_missing` | Not auto-fixed |
 | `placeholders` | Reports each value [`opentide new`](./new.md) filled in for you, marked `# opentide:placeholder` | Not auto-fixed |
 | `queries` | Reports the analysis engine's warnings and notes on each query (slow shapes, deprecated commands) and Elastic block settings (see [Queries](#queries)) | Not auto-fixed |
@@ -103,7 +103,7 @@ When more than one severity is left, the count splits them. Notes alone are no w
 | `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`: for a block value (a mapping or a list) the line of its first child, where `line` is the key's. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
-| `code` | `filename_mismatch`, `filename_pattern`, `name_missing`, `metadata_recommended`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
+| `code` | `filename_mismatch`, `filename_pattern`, `name_missing`, `metadata_recommended`, `reviewed_before_modified`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
 | `field_path` | The key the finding is about (`["metadata"]`, `["configurations", "sentinel", "query"]`), or `[]` |
 | `line`, `column`, `end_line`, `end_column` | One-based position of that key, of the YAML error, or of the engine's finding in the query: the span runs from (`line`, `column`) up to (`end_line`, `end_column`), `end_column` exclusive and on `end_line`. `end_line` equals `line` for a span on one line, and is the line of the last character of one that spans several (a query finding over a block scalar's lines). `null` when unknown |
 | `help` | What to do, or `null` |
@@ -121,12 +121,13 @@ A placeholder's `help` is the step that clears it, and a `filename_pattern` find
 | Filename is not the stem `style` expects (`slugify(name)` by default) | `warning` | `null` |
 | Filename does not match `[filenames].pattern` | `warning` | `null` |
 | A `metadata.required` key missing or empty | `info` | The `metadata:` key, or `null` when there is no `metadata` block |
+| `metadata.reviewed` is a day before `metadata.modified` (`reviewed_before_modified`; skipped when either is missing or not a date) | `warning` | The `metadata:` key |
 | A field the templates ask for missing (`recommended_field_missing`) | `info` | The finding's line |
 | A value marked `# opentide:placeholder` | `warning` | The marked line |
 | An engine warning on a query or an Elastic block | `warning` | The finding's line |
 | An engine note (a hint) on a query | `info` | The finding's line |
 
-These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check. `--strict` exits `1` when an error or a warning is left; an `info` finding never fails it. To gate CI on a missing author, raise the check's `severity` to `warning` or `error`.
+These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check, unless the check's `codes` table sets the code ([Severity per code](#severity-per-code)). `--strict` exits `1` when an error or a warning is left; an `info` finding never fails it. To gate CI on a missing author, raise the check's `severity` to `warning` or `error`.
 
 ## Configuration
 
@@ -155,11 +156,12 @@ enabled = true
 | Key | Tables | Value |
 |-----|--------|-------|
 | `enabled` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
-| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included. The language server follows `[metadata]` and `[recommended]` too, so the editor shows the same severity |
+| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included, unless the check's `codes` table sets the code. The language server follows `[filenames]`, `[metadata]` and `[recommended]` too, so the editor shows the same severity |
+| `codes` | `[filenames.codes]`, `[metadata.codes]`, `[recommended.codes]`, `[placeholders.codes]`, `[queries.codes]` | A table of `<code> = "<level>"`: `error`, `warning`, `info` or `off`, for one finding code of that check. It wins over the check's `severity`, so one code can be tamed (or raised) without touching the others, and `off` drops the code's findings. `--strict` counts the severity it sets. See [Severity per code](#severity-per-code) |
 | `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
 | `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
 | `style`, `pattern` | `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` | The same keys for one kind of object, over `[filenames]`. See [A convention per object kind](#a-convention-per-object-kind) |
-| `required` | `[metadata]` | The `metadata` keys every object must fill. It replaces the default list rather than adding to it, and `[]` turns the metadata check into a no-op |
+| `required` | `[metadata]` | The `metadata` keys every object must fill. It replaces the default list rather than adding to it, and `[]` stops the check asking for any key (`reviewed_before_modified` still runs; turn it off under `[metadata.codes]`) |
 
 `required` takes any key a `metadata` block can hold: `uuid`, `schema`, `version`, `created`, `modified`, `tlp`, `author`, `contributors`, `organisation`, `reviewed`. A key counts as missing when it is absent, `null`, a blank string or an empty list; `organisation` needs a `name` (or the `organization` spelling). Each object is asked only for the keys its own schema accepts: `reviewed` exists on `rule::1.1` metadata alone, so it is never demanded of a threat, an objective or a `rule::1.0` rule, whose schemas reject it.
 
@@ -177,6 +179,24 @@ A value lint cannot use fails the command with exit `2` and a message that names
 ```text illustrative
 FATAL: lint.toml [metadata].required: unknown metadata field(s) 'owner'. Known fields: uuid, schema, version, created, modified, tlp, author, contributors, organisation, reviewed
 ```
+
+### Severity per code
+
+`severity` moves a whole check, which is too coarse where only one code is a problem: setting `[queries] severity = "info"` to quiet an inherited `kql_join_summarize_before_project` also silences `kql_table_not_declared` and `kql_unknown_table`. A `codes` table under the check sets one code and leaves the others:
+
+```toml
+[queries.codes]
+kql_join_summarize_before_project = "info"   # a note: --strict no longer fails on it
+kql_unknown_table = "error"                  # raised: --strict fails on it
+kql_wildcard_table = "off"                   # dropped
+```
+
+- A value is `error`, `warning`, `info` or `off`. A code's value wins over the check's `severity`; a code the table does not list keeps the check's `severity`, or its own.
+- Each code goes under the check that reports it: the engine's codes (`kql_*`, `spl_*`, `lookback_zero`, ...) under `[queries.codes]`, `filename_mismatch`, `filename_pattern`, `name_missing`, `yaml_parse` and `nested_object_file` under `[filenames.codes]`, `metadata_recommended` and `reviewed_before_modified` under `[metadata.codes]`, `recommended_field_missing` under `[recommended.codes]` and `placeholder` under `[placeholders.codes]`. A code that does not exist is refused with the nearest one (`unknown code "kql_unknown_tabel". Did you mean "kql_unknown_table"?`), and so is one under the wrong check, naming the right table. `lint.toml` is read as strictly as before: a typo is an error, never silently ignored.
+- An `off` finding is not reported and does not count, as if the code did not exist. `filename_mismatch = "off"` also stops `--fix` renaming: a file name the table drops is left alone.
+- The table changes what lint reports. Under `[filenames.codes]` that includes lint's own errors (`yaml_parse`, `name_missing`); under `[queries.codes]` it is the engine's warnings and notes, never an engine error, which is `validate`'s to report (`lint` does not print it). A code that only `validate` reports, such as `vocab_unknown`, is accepted and has no effect on `lint`.
+- A retired code (`filename_slug`, `missing_author`, `missing_organisation`, `crowdstrike_unsupported`, `yara_x_incompatible`) is accepted so an old `lint.toml` keeps working: it has no effect, and the run's `warnings` name its replacement.
+- `opentide lint` and `lint --strict` apply the table. [`opentide validate`](./validate.md) does not read `lint.toml`'s severities: its `--queries` flag is its own control. The language server follows the tables of `[filenames]`, `[metadata]` (`reviewed_before_modified` included) and `[recommended]`, as it does their `severity`; its query diagnostics are the editor's own analysis, which `[queries.codes]` does not change.
 
 ### Filename convention
 
@@ -278,7 +298,7 @@ warning[kql_where_not_first]: `where` is not the first operator after the table 
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 ```
 
-A warning is `warning`, a note `info`; `[queries] severity` replaces both. A placeholder query is left to the `placeholders` check. When the engine does not load, lint fails with exit `1` and `failure.code` `engine_unavailable`, as `validate` does; `--check` without `queries` does not need it.
+A warning is `warning`, a note `info`; `[queries] severity` replaces both, unless `[queries.codes]` sets the code. A placeholder query is left to the `placeholders` check. When the engine does not load, lint fails with exit `1` and `failure.code` `engine_unavailable`, as `validate` does; `--check` without `queries` does not need it.
 
 ## Source
 

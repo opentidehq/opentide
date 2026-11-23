@@ -20,7 +20,7 @@ NTAIpDetails   // known to the engine, not declared for sentinel
 
 ## How to fix
 
-Correct the table name, or declare it: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Declare the table: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 
 ```toml
 [[logsources]]
@@ -28,3 +28,5 @@ name = "NTAIpDetails"
 description = "IP details from traffic analytics."
 system = "sentinel"
 ```
+
+opentide offers no rename for this code: the table is a real one, so a declared log source's name is never a correction. A declared name that is not a bare KQL identifier (a display name such as `Azure Activity`) is never suggested for any table.

@@ -83,6 +83,80 @@ pub fn is_change_request(ci: Ci, env: Env<'_>) -> bool {
     env(name).is_some_and(|value| values.contains(&value.as_str()))
 }
 
+/// The variable that names the default branch on every CI platform, and
+/// the only source on Azure Pipelines, which has no predefined one.
+pub const DEFAULT_BRANCH_ENV: &str = "OPENTIDE_DEFAULT_BRANCH";
+
+/// The branch a ref names: `refs/heads/<name>`, or a bare name.
+fn branch_name(reference: &str) -> &str {
+    reference.strip_prefix("refs/heads/").unwrap_or(reference)
+}
+
+/// The branch a push is to: `Some(Some(name))`, `Some(None)` for a ref that
+/// is not a branch (a tag), `None` when the environment does not say.
+pub fn pushed_branch(ci: Ci, env: Env<'_>) -> Option<Option<String>> {
+    match ci {
+        Ci::GitHub => set(env, "GITHUB_REF")
+            .map(|reference| reference.strip_prefix("refs/heads/").map(str::to_owned)),
+        Ci::GitLab => match set(env, "CI_COMMIT_BRANCH") {
+            Some(branch) => Some(Some(branch)),
+            None => set(env, "CI_COMMIT_TAG").map(|_| None),
+        },
+        Ci::Azure => set(env, "BUILD_SOURCEBRANCH")
+            .map(|reference| reference.strip_prefix("refs/heads/").map(str::to_owned)),
+        Ci::Local => None,
+    }
+}
+
+/// Whether the run is a push to the repository's default branch, which is
+/// when a `RELEASE` run promotes statuses.
+///
+/// `Some(false)` is a push to another branch or a tag, `None` a run whose
+/// default branch (or pushed ref) the environment does not say. The default
+/// branch is `OPENTIDE_DEFAULT_BRANCH` when set, on every platform; else
+/// GitHub's event payload (`repository.default_branch`) and GitLab's
+/// `CI_DEFAULT_BRANCH`. Azure Pipelines has no predefined variable.
+pub fn default_branch_push(ci: Ci, env: Env<'_>) -> Option<bool> {
+    let pushed = pushed_branch(ci, env)?;
+    let Some(pushed) = pushed else {
+        return Some(false);
+    };
+    let default = default_branch(ci, env)?;
+    Some(pushed == default)
+}
+
+/// The variable that names the pushed ref on `ci`.
+pub fn pushed_branch_variable(ci: Ci) -> &'static str {
+    match ci {
+        Ci::GitHub => "GITHUB_REF",
+        Ci::GitLab | Ci::Local => "CI_COMMIT_BRANCH",
+        Ci::Azure => "BUILD_SOURCEBRANCH",
+    }
+}
+
+/// The repository's default branch: `OPENTIDE_DEFAULT_BRANCH` when set, else
+/// the platform's own (GitHub's event payload, GitLab's `CI_DEFAULT_BRANCH`).
+pub fn default_branch(ci: Ci, env: Env<'_>) -> Option<String> {
+    set(env, DEFAULT_BRANCH_ENV)
+        .or_else(|| platform_default_branch(ci, env))
+        .map(|name| branch_name(&name).to_owned())
+}
+
+/// The default branch the CI platform itself names, whatever
+/// `OPENTIDE_DEFAULT_BRANCH` says.
+pub fn platform_default_branch(ci: Ci, env: Env<'_>) -> Option<String> {
+    match ci {
+        Ci::GitHub => event(env)?
+            .get("repository")?
+            .get("default_branch")?
+            .as_str()
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned),
+        Ci::GitLab => set(env, "CI_DEFAULT_BRANCH"),
+        Ci::Azure | Ci::Local => None,
+    }
+}
+
 /// The run's diff source (`run_diff_source`).
 pub fn diff_source(env: Env<'_>) -> DiffSource {
     let ci = ci(env);
@@ -1936,6 +2010,108 @@ mod tests {
 
     fn strings(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_owned()).collect()
+    }
+
+    fn lookup(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        move |name: &str| {
+            pairs
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        }
+    }
+
+    #[test]
+    fn a_github_push_promotes_only_on_the_default_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let event = dir.path().join("event.json");
+        std::fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap();
+        let path = event.to_str().unwrap();
+        let on = |reference: &str| {
+            default_branch_push(
+                Ci::GitHub,
+                &lookup(&[("GITHUB_REF", reference), ("GITHUB_EVENT_PATH", path)]),
+            )
+        };
+        assert_eq!(on("refs/heads/main"), Some(true));
+        assert_eq!(on("refs/heads/feature/foo"), Some(false));
+        assert_eq!(on("refs/tags/main"), Some(false));
+        // No event file: the default branch is unknown.
+        let no_event = lookup(&[("GITHUB_REF", "refs/heads/main")]);
+        assert_eq!(default_branch_push(Ci::GitHub, &no_event), None);
+        // The override wins, and a tag stays false under it.
+        let over = |reference: &str| {
+            default_branch_push(
+                Ci::GitHub,
+                &lookup(&[
+                    ("GITHUB_REF", reference),
+                    ("GITHUB_EVENT_PATH", path),
+                    (DEFAULT_BRANCH_ENV, "release"),
+                ]),
+            )
+        };
+        assert_eq!(over("refs/heads/release"), Some(true));
+        assert_eq!(over("refs/heads/main"), Some(false));
+        assert_eq!(over("refs/tags/release"), Some(false));
+        let only = lookup(&[
+            ("GITHUB_REF", "refs/heads/trunk"),
+            (DEFAULT_BRANCH_ENV, "trunk"),
+        ]);
+        assert_eq!(default_branch_push(Ci::GitHub, &only), Some(true));
+    }
+
+    #[test]
+    fn the_variable_naming_the_pushed_branch_depends_on_the_platform() {
+        assert_eq!(pushed_branch_variable(Ci::GitHub), "GITHUB_REF");
+        assert_eq!(pushed_branch_variable(Ci::GitLab), "CI_COMMIT_BRANCH");
+        assert_eq!(pushed_branch_variable(Ci::Azure), "BUILD_SOURCEBRANCH");
+        // Bare `CI=true` is read as GitLab.
+        assert_eq!(pushed_branch(Ci::GitLab, &lookup(&[("CI", "true")])), None);
+    }
+
+    #[test]
+    fn a_gitlab_push_promotes_only_on_the_default_branch() {
+        let on = |pairs: &[(&str, &str)]| default_branch_push(Ci::GitLab, &lookup(pairs));
+        let default = ("CI_DEFAULT_BRANCH", "main");
+        assert_eq!(on(&[("CI_COMMIT_BRANCH", "main"), default]), Some(true));
+        assert_eq!(on(&[("CI_COMMIT_BRANCH", "dev"), default]), Some(false));
+        // A tag pipeline has no CI_COMMIT_BRANCH.
+        assert_eq!(on(&[("CI_COMMIT_TAG", "v1"), default]), Some(false));
+        assert_eq!(on(&[("CI_COMMIT_BRANCH", "main")]), None);
+        assert_eq!(on(&[default]), None);
+        let over = [
+            ("CI_COMMIT_BRANCH", "dev"),
+            default,
+            (DEFAULT_BRANCH_ENV, "dev"),
+        ];
+        assert_eq!(on(&over), Some(true));
+    }
+
+    #[test]
+    fn an_azure_push_needs_the_default_branch_variable() {
+        let on = |pairs: &[(&str, &str)]| default_branch_push(Ci::Azure, &lookup(pairs));
+        let branch = ("BUILD_SOURCEBRANCH", "refs/heads/main");
+        assert_eq!(on(&[branch]), None);
+        assert_eq!(on(&[branch, (DEFAULT_BRANCH_ENV, "main")]), Some(true));
+        assert_eq!(
+            on(&[
+                ("BUILD_SOURCEBRANCH", "refs/heads/feature/x"),
+                (DEFAULT_BRANCH_ENV, "main")
+            ]),
+            Some(false)
+        );
+        assert_eq!(
+            on(&[
+                ("BUILD_SOURCEBRANCH", "refs/tags/v1"),
+                (DEFAULT_BRANCH_ENV, "main")
+            ]),
+            Some(false)
+        );
+        assert_eq!(default_branch_push(Ci::Local, &lookup(&[])), None);
     }
 
     #[test]

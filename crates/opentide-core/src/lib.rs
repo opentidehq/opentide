@@ -619,6 +619,14 @@ pub struct CompletionItem {
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub documentation: Option<String>,
+    /// What an editor shows beside the label, in the list (LSP
+    /// `labelDetails.description`): a vocabulary value's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_detail: Option<String>,
+    /// The text an editor filters the item by, when it is more than the
+    /// label: a vocabulary value with its name and aliases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_text: Option<String>,
 }
 
 impl CompletionItem {
@@ -628,7 +636,21 @@ impl CompletionItem {
             detail: None,
             kind: kind.into(),
             documentation: None,
+            label_detail: None,
+            filter_text: None,
         }
+    }
+
+    /// The item with `label_detail` shown beside its label.
+    pub fn with_label_detail(mut self, label_detail: impl Into<String>) -> Self {
+        self.label_detail = Some(label_detail.into());
+        self
+    }
+
+    /// The item with `filter_text` to filter it by.
+    pub fn with_filter_text(mut self, filter_text: impl Into<String>) -> Self {
+        self.filter_text = Some(filter_text.into());
+        self
     }
 
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
@@ -904,6 +926,7 @@ pub mod codes {
     pub const GRAYLOG_PRIORITY: &str = "graylog_priority";
     pub const GRAYLOG_FIELD_NAME: &str = "graylog_field_name";
     pub const GRAYLOG_OVERLAPPING_WINDOW: &str = "graylog_overlapping_window";
+    pub const GRAYLOG_ALL_STREAMS: &str = "graylog_all_streams";
 
     // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
     pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
@@ -1226,6 +1249,7 @@ pub mod codes {
         GRAYLOG_PRIORITY,
         GRAYLOG_FIELD_NAME,
         GRAYLOG_OVERLAPPING_WINDOW,
+        GRAYLOG_ALL_STREAMS,
         CQL_PARSE_ERROR,
         CQL_UNKNOWN_FUNCTION,
         CQL_REMOVED_FUNCTION,
@@ -1415,7 +1439,7 @@ pub mod codes {
             KQL_UNSCOPED_UNION => "union * or an unscoped union reads every table.",
             KQL_WILDCARD_TABLE => "A wildcard table name reads every matching table.",
             KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
-                "join or summarize runs before project, so it carries every column."
+                "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
             }
             QUERY_FOLDED_COMMENT => {
                 "A `//` comment in a query that YAML folds into one line comments out the lines after it."
@@ -1751,6 +1775,9 @@ pub mod codes {
             }
             GRAYLOG_OVERLAPPING_WINDOW => {
                 "A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run."
+            }
+            GRAYLOG_ALL_STREAMS => {
+                "A Graylog definition names no stream, so it searches every stream the token's user can read."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."

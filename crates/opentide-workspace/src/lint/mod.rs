@@ -31,8 +31,9 @@ pub mod stems;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
-use opentide_schema::configuration::lint::{FilenameConfig, LintConfig};
+use opentide_schema::configuration::lint::{CODE_OFF, FilenameConfig, LintConfig};
 use opentide_schema::node::{self, Node, Value};
+use opentide_schema::objects::checks;
 use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::{Value as Json, json};
@@ -65,6 +66,8 @@ pub mod codes {
     pub const FILENAME_PATTERN: &str = "filename_pattern";
     /// Recommended metadata is missing.
     pub const METADATA: &str = "metadata_recommended";
+    /// `metadata.reviewed` is a day before `metadata.modified`.
+    pub const REVIEWED_BEFORE_MODIFIED: &str = "reviewed_before_modified";
     /// A field the templates ask for and validation does not require is
     /// missing: the engine's code, which the editor reports too.
     pub const RECOMMENDED: &str = "recommended_field_missing";
@@ -75,12 +78,13 @@ pub mod codes {
 }
 
 /// Every code a lint rule reports (`LINT_CODES.values()`).
-pub const LINT_CODES: [&str; 8] = [
+pub const LINT_CODES: [&str; 9] = [
     codes::PARSE,
     codes::NAME,
     codes::FILENAME,
     codes::FILENAME_PATTERN,
     codes::METADATA,
+    codes::REVIEWED_BEFORE_MODIFIED,
     codes::RECOMMENDED,
     codes::PLACEHOLDER,
     codes::NESTED,
@@ -696,6 +700,10 @@ fn lint_with(
         Ok(scope) => scope,
         Err(mut refused) => {
             refused.checks = selected;
+            // What lint.toml asks without refusing it is said on a refusal too.
+            refused
+                .warnings
+                .splice(0..0, config.warnings.iter().cloned());
             return *refused;
         }
     };
@@ -788,6 +796,7 @@ fn lint_with(
             shown.iter().map(|&i| &records[i]),
             &config.required_metadata,
         ));
+        findings.extend(reviewed_findings(shown.iter().map(|&i| &records[i])));
     }
     findings.extend(missing);
     if selected.contains(&LintCheck::Placeholders) {
@@ -801,6 +810,9 @@ fn lint_with(
             Err(message) => {
                 let mut report = LintReport::refused(&target, selected, message, 2);
                 report.failure_code = Some("engine_unavailable");
+                report
+                    .warnings
+                    .splice(0..0, config.warnings.iter().cloned());
                 return report;
             }
         }
@@ -815,7 +827,11 @@ fn lint_with(
         }
         findings.extend(filename_findings(
             fs,
-            writer.filter(|_| options.fix),
+            // `off` means off: a mismatch lint.toml drops is not renamed either.
+            writer.filter(|_| {
+                options.fix
+                    && code_level(config, LintCheck::Filenames, codes::FILENAME) != Some(CODE_OFF)
+            }),
             &target,
             &mut records,
             &config.filenames,
@@ -830,18 +846,51 @@ fn lint_with(
         rewrite_renamed_paths(&mut findings);
         findings.extend(nested.iter().map(|path| nested_finding(&target, path)));
     }
-    // Severity from `lint.toml`, for each check that sets one.
-    for draft in &mut findings {
-        if let Some(severity) = check_severity(config, draft.check) {
-            severity.clone_into(&mut draft.severity);
+    // Severity from `lint.toml`, for each check that sets one; a code's own
+    // setting wins over its check's, and `off` drops the finding.
+    let mut engine_at = engine_at;
+    let mut kept = 0;
+    let mut position = 0;
+    findings.retain_mut(|draft| {
+        let before = position;
+        position += 1;
+        let keep = match code_level(config, draft.check, draft.code) {
+            Some(CODE_OFF) => false,
+            Some(level) => {
+                level.clone_into(&mut draft.severity);
+                true
+            }
+            None => {
+                if let Some(severity) = check_severity(config, draft.check) {
+                    severity.clone_into(&mut draft.severity);
+                }
+                true
+            }
+        };
+        if keep && before < engine_at {
+            kept += 1;
         }
-    }
-    for finding in &mut engine {
-        if let Some(severity) = check_severity(config, finding.check) {
-            severity.clone_into(&mut finding.entry.severity);
-            finding.diagnostic.severity = Severity::parse(severity).unwrap_or(Severity::Warning);
-        }
-    }
+        keep
+    });
+    engine_at = kept;
+    engine.retain_mut(
+        |finding| match code_level(config, finding.check, &finding.entry.code) {
+            Some(CODE_OFF) => false,
+            Some(level) => {
+                level.clone_into(&mut finding.entry.severity);
+                finding.diagnostic.severity = Severity::parse(level).unwrap_or(Severity::Warning);
+                true
+            }
+            None => {
+                if let Some(severity) = check_severity(config, finding.check) {
+                    severity.clone_into(&mut finding.entry.severity);
+                    finding.diagnostic.severity =
+                        Severity::parse(severity).unwrap_or(Severity::Warning);
+                }
+                true
+            }
+        },
+    );
     let mut sources = Sources::files(fs);
     let mut all: Vec<LintFinding> = Vec::with_capacity(findings.len() + engine.len());
     let mut drafts = findings.into_iter();
@@ -852,7 +901,12 @@ fn lint_with(
     for draft in drafts {
         all.push(draft.finish(&target, &mut sources));
     }
-    report(fs, &target, selected, all, scope, shown.len(), options)
+    let mut result = report(fs, &target, selected, all, scope, shown.len(), options);
+    // What lint.toml asks without refusing it comes first, before the scope's.
+    result
+        .warnings
+        .splice(0..0, config.warnings.iter().cloned());
+    result
 }
 
 /// Lint's file name, metadata and recommended findings on one object file:
@@ -927,10 +981,22 @@ fn editor_findings(
         .filter(|finding| {
             matches!(
                 finding.code(),
-                codes::FILENAME | codes::METADATA | codes::RECOMMENDED
+                codes::FILENAME
+                    | codes::METADATA
+                    | codes::REVIEWED_BEFORE_MODIFIED
+                    | codes::RECOMMENDED
             )
         })
         .collect()
+}
+
+/// What `[<check>.codes]` sets for `code`: a severity, or `off`.
+fn code_level<'a>(config: &'a LintConfig, check: LintCheck, code: &str) -> Option<&'a str> {
+    config
+        .checks
+        .iter()
+        .find(|(name, _)| name == check.name())
+        .and_then(|(_, own)| own.code_level(code))
 }
 
 fn check_severity(config: &LintConfig, check: LintCheck) -> Option<&str> {
@@ -1610,6 +1676,56 @@ fn metadata_findings<'r>(
             Some("metadata"),
             record.key_lines.get("metadata").copied(),
         ));
+    }
+    findings
+}
+
+/// The calendar day of `metadata.<key>` when it is a valid ISO 8601 date or
+/// datetime (`YYYY-MM-DD`, as written: an offset is not applied), `None` when
+/// the key is missing or the value is not one: the schema check reports those.
+fn metadata_day(metadata: &Node, key: &str) -> Option<String> {
+    let text = as_str(metadata.get(key).map(AsRef::as_ref))?;
+    checks::check_instant(&format!("metadata.{key}"), &text).ok()?;
+    text.get(..10).map(str::to_owned)
+}
+
+/// One warning for each rule whose `metadata.reviewed` day is before its
+/// `metadata.modified` day: the rule changed after its last review. Skipped
+/// when either value is missing or is not a date.
+fn reviewed_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft> {
+    let mut findings = Vec::new();
+    for record in records {
+        let (None, Some(metadata)) = (&record.parse_error, &record.metadata) else {
+            continue;
+        };
+        // Only a schema whose metadata has `reviewed` (rule::1.1): a threat,
+        // an objective or a rule::1.0 rule has none to compare.
+        let accepted = record.schema.as_deref().and_then(schema_metadata_keys);
+        if accepted.is_some_and(|keys| !keys.iter().any(|key| key == "reviewed")) {
+            continue;
+        }
+        let (Some(reviewed), Some(modified)) = (
+            metadata_day(metadata, "reviewed"),
+            metadata_day(metadata, "modified"),
+        ) else {
+            continue;
+        };
+        // ISO dates sort as text.
+        if reviewed >= modified {
+            continue;
+        }
+        let mut draft = Draft::new(
+            LintCheck::Metadata,
+            "warning",
+            record,
+            format!("metadata.reviewed ({reviewed}) is before metadata.modified ({modified})"),
+            codes::REVIEWED_BEFORE_MODIFIED,
+            Some("metadata"),
+            record.key_lines.get("metadata").copied(),
+        );
+        draft.field_path = vec!["metadata".to_owned(), "reviewed".to_owned()];
+        draft.help = Some("review the rule again, then update metadata.reviewed".to_owned());
+        findings.push(draft);
     }
     findings
 }

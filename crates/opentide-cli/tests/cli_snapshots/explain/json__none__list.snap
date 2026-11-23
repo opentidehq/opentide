@@ -1154,7 +1154,7 @@ exit: 0
     },
     {
       "code": "kql_join_summarize_before_project",
-      "meaning": "join or summarize runs before project, so it carries every column."
+      "meaning": "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
     },
     {
       "code": "kql_parse_error",
@@ -1441,6 +1441,10 @@ exit: 0
       "meaning": "`share retract` would delete a remote event, and was not confirmed."
     },
     {
+      "code": "reviewed_before_modified",
+      "meaning": "A rule's `metadata.reviewed` date is earlier than its `metadata.modified` date: the rule changed after its last review."
+    },
+    {
       "code": "risk_band",
       "meaning": "The risk score is outside the band of the rule's severity."
     },
@@ -1458,7 +1462,7 @@ exit: 0
     },
     {
       "code": "schemas_fresh",
-      "meaning": "Every JSON schema this opentide version generates exists."
+      "meaning": "Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now."
     },
     {
       "code": "scope_no_match",
@@ -1905,13 +1909,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "473 diagnostic codes",
+  "message": "474 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 473
+    "codes": 474
   }
 }
 
