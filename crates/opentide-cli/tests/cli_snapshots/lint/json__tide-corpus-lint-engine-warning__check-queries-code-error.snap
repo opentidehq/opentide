@@ -1,0 +1,58 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/tide-corpus-lint-engine-warning/check-queries-code-error
+---
+args: opentide --json lint --check queries
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    "queries"
+  ],
+  "command": "lint",
+  "count": 1,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "findings": [
+    {
+      "check": "queries",
+      "code": "kql_unscoped_search",
+      "column": 7,
+      "end_column": 13,
+      "end_line": 28,
+      "explain": "opentide explain kql_unscoped_search",
+      "field_path": [
+        "configurations",
+        "sentinel",
+        "query"
+      ],
+      "fix": null,
+      "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
+      "line": 28,
+      "message": "unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)",
+      "path": "objects/rules/rule-0001-sentinel-kql.yaml",
+      "severity": "error",
+      "uuid": "00000000-0000-4000-8003-000000000001",
+      "yaml_line": 27
+    }
+  ],
+  "fixed": 0,
+  "message": "Catalogue lint found issues",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "issues",
+  "summary": {
+    "errors": 1,
+    "files": 12,
+    "findings": 1,
+    "fixed": 0,
+    "notes": 0,
+    "warnings": 0
+  }
+}
+
+━━━ stderr · empty

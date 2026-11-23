@@ -22,8 +22,12 @@ pub const SEVERITY_COLLAPSED: &str = "bitdefender_severity_collapsed";
 pub const UNKNOWN_FIELD: &str = CRITERION_FIELD;
 
 /// The advisory codes (`ADVISORY_CODES`).
-pub const ADVISORY_CODES: [&str; 3] =
-    [REGISTRY_FULL_HIVE, CONTAINS_NO_WILDCARD, SEVERITY_COLLAPSED];
+pub const ADVISORY_CODES: [&str; 4] = [
+    REGISTRY_FULL_HIVE,
+    CONTAINS_NO_WILDCARD,
+    UNKNOWN_FIELD,
+    SEVERITY_COLLAPSED,
+];
 
 /// One advisory: its code, its path in the rule, and its message.
 #[derive(Debug, Clone, PartialEq, Eq)]
