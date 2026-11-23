@@ -685,7 +685,7 @@ fn deploy(
     // to no RELEASE tenant and compiles them with the old status.
     if !args.skip_promotion {
         let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
-        plan_warnings.extend(super::promotion_preview::undetermined_warning(
+        plan_warnings.extend(super::promotion_preview::warnings(
             &runs,
             reads_changes,
             cx.env,

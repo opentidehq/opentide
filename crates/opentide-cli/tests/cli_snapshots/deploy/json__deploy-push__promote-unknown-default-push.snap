@@ -35,7 +35,7 @@ exit: 0
   },
   "warnings": [
     "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file",
-    "status promotion skipped: the repository's default branch could not be determined, so the push is not known to be to the default branch. Set OPENTIDE_DEFAULT_BRANCH to the default branch's name, or regenerate the pipeline (`opentide setup ci`)"
+    "status promotion skipped: the repository's default branch could not be determined; set OPENTIDE_DEFAULT_BRANCH to its name, or regenerate the pipeline (`opentide setup ci`)"
   ]
 }
 

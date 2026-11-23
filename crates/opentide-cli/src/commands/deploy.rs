@@ -290,7 +290,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
             format!("the push's deploy would stop at its status promotion: {message}"),
         );
     }
-    if let Some(warning) = undetermined_promotion(args, cx, &owned) {
+    for warning in promotion_warnings(args, cx, &owned).into_iter().rev() {
         result.warnings.insert(0, warning);
     }
     if let Some((_, uuids, target)) = promoted {
@@ -367,22 +367,23 @@ fn preview(
         .map(Some)
 }
 
-/// The warning for a push whose default branch the CI environment does not
-/// say, so that it does not promote.
-fn undetermined_promotion(args: &Args, cx: &Context, owned: &Owned) -> Option<String> {
+/// The warnings of a push that could promote: a branch the CI environment
+/// does not say, and a stale `OPENTIDE_DEFAULT_BRANCH`.
+fn promotion_warnings(args: &Args, cx: &Context, owned: &Owned) -> Vec<String> {
     let reads_changes = !args.all && args.uuids.is_empty() && args.files.is_empty();
     if args.skip_promotion || !reads_changes {
-        return None;
+        return Vec::new();
     }
-    let runs = opentide_compile::strategy::parse_strategies(
+    let Ok(runs) = opentide_compile::strategy::parse_strategies(
         &args.strategies,
         &owned.statuses,
         "--strategy",
-    )
-    .ok()?;
+    ) else {
+        return Vec::new();
+    };
     let enabled =
         opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses).enabled;
-    super::promotion_preview::undetermined_warning(&runs, reads_changes, cx.env, enabled)
+    super::promotion_preview::warnings(&runs, reads_changes, cx.env, enabled)
 }
 
 /// A run refused before it started: a usage error, exit 2.

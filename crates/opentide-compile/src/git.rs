@@ -121,7 +121,31 @@ pub fn default_branch_push(ci: Ci, env: Env<'_>) -> Option<bool> {
     let Some(pushed) = pushed else {
         return Some(false);
     };
-    let default = set(env, DEFAULT_BRANCH_ENV).or_else(|| match ci {
+    let default = default_branch(ci, env)?;
+    Some(pushed == default)
+}
+
+/// The variable that names the pushed ref on `ci`.
+pub fn pushed_branch_variable(ci: Ci) -> &'static str {
+    match ci {
+        Ci::GitHub => "GITHUB_REF",
+        Ci::GitLab | Ci::Local => "CI_COMMIT_BRANCH",
+        Ci::Azure => "BUILD_SOURCEBRANCH",
+    }
+}
+
+/// The repository's default branch: `OPENTIDE_DEFAULT_BRANCH` when set, else
+/// the platform's own (GitHub's event payload, GitLab's `CI_DEFAULT_BRANCH`).
+pub fn default_branch(ci: Ci, env: Env<'_>) -> Option<String> {
+    set(env, DEFAULT_BRANCH_ENV)
+        .or_else(|| platform_default_branch(ci, env))
+        .map(|name| branch_name(&name).to_owned())
+}
+
+/// The default branch the CI platform itself names, whatever
+/// `OPENTIDE_DEFAULT_BRANCH` says.
+pub fn platform_default_branch(ci: Ci, env: Env<'_>) -> Option<String> {
+    match ci {
         Ci::GitHub => event(env)?
             .get("repository")?
             .get("default_branch")?
@@ -130,8 +154,7 @@ pub fn default_branch_push(ci: Ci, env: Env<'_>) -> Option<bool> {
             .map(str::to_owned),
         Ci::GitLab => set(env, "CI_DEFAULT_BRANCH"),
         Ci::Azure | Ci::Local => None,
-    })?;
-    Some(branch_name(&default) == pushed)
+    }
 }
 
 /// The run's diff source (`run_diff_source`).
@@ -1869,6 +1892,15 @@ mod tests {
             (DEFAULT_BRANCH_ENV, "trunk"),
         ]);
         assert_eq!(default_branch_push(Ci::GitHub, &only), Some(true));
+    }
+
+    #[test]
+    fn the_variable_naming_the_pushed_branch_depends_on_the_platform() {
+        assert_eq!(pushed_branch_variable(Ci::GitHub), "GITHUB_REF");
+        assert_eq!(pushed_branch_variable(Ci::GitLab), "CI_COMMIT_BRANCH");
+        assert_eq!(pushed_branch_variable(Ci::Azure), "BUILD_SOURCEBRANCH");
+        // Bare `CI=true` is read as GitLab.
+        assert_eq!(pushed_branch(Ci::GitLab, &lookup(&[("CI", "true")])), None);
     }
 
     #[test]

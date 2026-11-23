@@ -84,7 +84,7 @@ The step restores only the repository root's `.opentide/configurations`. Configu
 
 The generated production job runs `opentide deploy --strategy RELEASE`. A changed rule whose status maps to `DISABLEMENT` (default `DISABLED`) or `DELETION` (default `REMOVED`) is therefore disabled or deleted on the tenants accepting `RELEASE`, as the [deployment spec](/docs/specifications/specs/deployment/) defines; `--drop-deprecated` turns that off.
 
-Promotion happens only on a push to the default branch: a push to another branch or a tag deploys without it. The generated Azure pipeline sets `OPENTIDE_DEFAULT_BRANCH` for this (Azure has no default-branch variable); on GitHub and GitLab opentide reads the default branch from the platform, and `OPENTIDE_DEFAULT_BRANCH` overrides it.
+Promotion happens only on a push to the default branch: a push to another branch or a tag deploys without it. The generated Azure and GitHub pipelines set `OPENTIDE_DEFAULT_BRANCH` to the deploy branch (Azure has no default-branch variable of its own); it takes precedence over what the platform reports, so regenerate the pipeline, or update the variable, when you rename the default branch. On GitLab opentide reads `CI_DEFAULT_BRANCH`; on another CI system set `CI_COMMIT_BRANCH` and `OPENTIDE_DEFAULT_BRANCH` yourself.
 
 A production deploy changes the checkout: promotion rewrites the `status` of the rules it deploys, and the platforms that keep vendor ids record the id each create returns, in `.opentide/states/deployment/`. The job reads the newest deployment state before it deploys and commits those changes to the default branch afterwards.
 

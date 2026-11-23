@@ -95,35 +95,64 @@ pub fn applies(runs: &[StatusStrategy], reads_changes: bool, env: &Env) -> bool 
         .is_some_and(|ci| opentide_compile::git::default_branch_push(ci, &lookup) == Some(true))
 }
 
-/// The warning for a run that would promote but for a branch the CI
-/// environment does not say: the promotion is skipped, and how to fix it.
-/// `None` when promotion is off (`enabled` false), which the run says nothing
-/// about, or the run is not a candidate or its branch is known.
-pub fn undetermined_warning(
+/// The warnings of a run that could promote: promotion skipped for a branch
+/// the CI environment does not say (with how to fix it), and an
+/// `OPENTIDE_DEFAULT_BRANCH` that disagrees with the one GitHub's event names.
+/// Empty when promotion is off (`enabled` false), the run is not a candidate,
+/// or all is as it should be.
+pub fn warnings(
     runs: &[StatusStrategy],
     reads_changes: bool,
     env: &Env,
     enabled: bool,
-) -> Option<String> {
-    use opentide_compile::git::{DEFAULT_BRANCH_ENV, default_branch_push, pushed_branch};
+) -> Vec<String> {
+    use opentide_compile::git::{
+        DEFAULT_BRANCH_ENV, default_branch, default_branch_push, platform_default_branch,
+        pushed_branch, pushed_branch_variable,
+    };
+    let mut found = Vec::new();
     if !enabled {
-        return None;
+        return found;
     }
     let lookup = |name: &str| env.get(name).map(str::to_owned);
-    let ci = candidate(runs, reads_changes, env)?;
-    if default_branch_push(ci, &lookup).is_some() {
-        return None;
-    }
-    let cause = if pushed_branch(ci, &lookup).is_none() {
-        "the branch this push is to could not be determined (the CI environment does not name it)"
-    } else {
-        "the repository's default branch could not be determined"
+    let Some(ci) = candidate(runs, reads_changes, env) else {
+        return found;
     };
-    Some(format!(
-        "status promotion skipped: {cause}, so the push is not known to be to the default \
-         branch. Set {DEFAULT_BRANCH_ENV} to the default branch's name, or regenerate the \
-         pipeline (`opentide setup ci`)"
-    ))
+    if default_branch_push(ci, &lookup).is_none() {
+        let mut cause = Vec::new();
+        if pushed_branch(ci, &lookup).is_none() {
+            cause.push(format!(
+                "the branch this push is to could not be determined; set {} to it",
+                pushed_branch_variable(ci)
+            ));
+        }
+        if default_branch(ci, &lookup).is_none() {
+            cause.push(format!(
+                "the repository's default branch could not be determined; set \
+                 {DEFAULT_BRANCH_ENV} to its name, or regenerate the pipeline (`opentide setup ci`)"
+            ));
+        }
+        found.push(format!(
+            "status promotion skipped: {}",
+            cause.join("; and ")
+        ));
+    }
+    // A renamed default branch leaves the variable stale: the push to the
+    // branch GitHub says is the default would then promote nothing.
+    if let (Some(set_to), Some(platform), Some(pushed)) = (
+        env.get(DEFAULT_BRANCH_ENV).filter(|name| !name.is_empty()),
+        platform_default_branch(ci, &lookup),
+        pushed_branch(ci, &lookup).flatten(),
+    ) && set_to.strip_prefix("refs/heads/").unwrap_or(set_to) != platform
+        && pushed == platform
+    {
+        found.push(format!(
+            "{DEFAULT_BRANCH_ENV} is `{set_to}`, but the repository's default branch is \
+             `{platform}` and this push is to it, so its statuses are not promoted: update \
+             {DEFAULT_BRANCH_ENV} (or regenerate the pipeline)"
+        ));
+    }
+    found
 }
 
 /// What the push's deploy will do at its status promotion, as a preview
@@ -253,9 +282,9 @@ mod tests {
         assert!(!applies(&release, true, &tag));
         assert!(!applies(&release, true, &request));
         assert!(!applies(&release, true, &local));
-        // A known other branch is no warning; only an unknown default is.
-        assert_eq!(undetermined_warning(&release, true, &feature, true), None);
-        assert_eq!(undetermined_warning(&release, true, &push, true), None);
+        // A known other branch is no warning; only an unknown one is.
+        assert!(warnings(&release, true, &feature, true).is_empty());
+        assert!(warnings(&release, true, &push, true).is_empty());
     }
 
     #[test]
@@ -270,23 +299,74 @@ mod tests {
             ),
         ]);
         assert!(!applies(&release, true, &azure));
-        let warning = undetermined_warning(&release, true, &azure, true).unwrap();
-        assert!(warning.contains("OPENTIDE_DEFAULT_BRANCH"), "{warning}");
-        assert!(warning.contains("default branch could not"), "{warning}");
+        let found = warnings(&release, true, &azure, true);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].contains("set OPENTIDE_DEFAULT_BRANCH"),
+            "{found:?}"
+        );
+        assert!(!found[0].contains("BUILD_SOURCEBRANCH"), "{found:?}");
         // Promotion off: nothing is said.
-        assert_eq!(undetermined_warning(&release, true, &azure, false), None);
-        // The pushed ref unknown is worded as such.
-        let bare = Env::from_pairs([
+        assert!(warnings(&release, true, &azure, false).is_empty());
+        // Not a promoting run: nothing to warn about.
+        assert!(warnings(&release, false, &azure, true).is_empty());
+        assert!(warnings(&[StatusStrategy::Preview], true, &azure, true).is_empty());
+    }
+
+    #[test]
+    fn an_unknown_pushed_branch_names_the_variable_that_carries_it() {
+        let release = [StatusStrategy::Release];
+        // Generic CI is read as GitLab: `CI_COMMIT_BRANCH` is the variable.
+        let generic = Env::from_pairs([
+            ("CI".to_owned(), "true".to_owned()),
+            (
+                opentide_compile::git::DEFAULT_BRANCH_ENV.to_owned(),
+                "main".to_owned(),
+            ),
+        ]);
+        let found = warnings(&release, true, &generic, true);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("CI_COMMIT_BRANCH"), "{found:?}");
+        assert!(
+            !found[0].contains("set OPENTIDE_DEFAULT_BRANCH"),
+            "{found:?}"
+        );
+        // Neither known: both are asked for.
+        let bare = Env::from_pairs([("CI".to_owned(), "true".to_owned())]);
+        let found = warnings(&release, true, &bare, true);
+        assert!(found[0].contains("CI_COMMIT_BRANCH"), "{found:?}");
+        assert!(
+            found[0].contains("set OPENTIDE_DEFAULT_BRANCH"),
+            "{found:?}"
+        );
+        let azure = Env::from_pairs([
             ("TF_BUILD".to_owned(), "True".to_owned()),
             ("BUILD_REASON".to_owned(), "IndividualCI".to_owned()),
         ]);
-        let warning = undetermined_warning(&release, true, &bare, true).unwrap();
-        assert!(warning.contains("branch this push is to"), "{warning}");
-        // Not a promoting run: nothing to warn about.
-        assert_eq!(undetermined_warning(&release, false, &azure, true), None);
-        assert_eq!(
-            undetermined_warning(&[StatusStrategy::Preview], true, &azure, true),
-            None
+        assert!(warnings(&release, true, &azure, true)[0].contains("BUILD_SOURCEBRANCH"));
+    }
+
+    #[test]
+    fn a_default_branch_variable_that_differs_from_githubs_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let event = dir.path().join("event.json");
+        std::fs::write(&event, r#"{"repository":{"default_branch":"trunk"}}"#).unwrap();
+        let path = event.to_str().unwrap();
+        let release = [StatusStrategy::Release];
+        // The variable says `main`; GitHub says `trunk`, and the push is to it.
+        let stale = github("refs/heads/trunk", &[("GITHUB_EVENT_PATH", path)]);
+        assert!(!applies(&release, true, &stale));
+        let found = warnings(&release, true, &stale, true);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].contains("`main`") && found[0].contains("`trunk`"),
+            "{found:?}"
         );
+        // A push to another branch, or a variable that agrees, says nothing.
+        let other = github("refs/heads/feature/x", &[("GITHUB_EVENT_PATH", path)]);
+        assert!(warnings(&release, true, &other, true).is_empty());
+        std::fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap();
+        let agree = github("refs/heads/main", &[("GITHUB_EVENT_PATH", path)]);
+        assert!(warnings(&release, true, &agree, true).is_empty());
     }
 }
