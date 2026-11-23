@@ -41,7 +41,7 @@ fn data(text: &str) -> Json {
     Json::from_node(document.root().unwrap())
 }
 
-fn steps<'a>(job: &'a Json) -> &'a [Json] {
+fn steps(job: &Json) -> &[Json] {
     job.get("steps").and_then(Json::as_array).unwrap()
 }
 
