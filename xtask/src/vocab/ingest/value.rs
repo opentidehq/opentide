@@ -113,11 +113,99 @@ fn json_of(value: toml::Value) -> Result<Value> {
     })
 }
 
-/// The TOML text of a vocabulary document, laid out by the `toml` crate
-/// (`[[keys]]` tables, one array item per line). A null is refused: TOML has
-/// none.
+/// The TOML text of a vocabulary document, in the form the bundled loader
+/// reads: the document's own keys first (a table's keys sorted), then each
+/// array of tables as `[[name]]` blocks (`[[keys]]` keep their order), and
+/// every value on one line, a string a basic `"..."` with its newlines
+/// escaped. A null is refused: TOML has none.
+///
+/// Not the `toml` crate's writer: it lays a string with a newline out as a
+/// `"""` block, and the bundled loader takes an entry's description as the
+/// single line that starts `description = ` (`opentide_schema::vocab::split`).
 pub fn to_toml(document: &Table) -> Result<String> {
-    Ok(toml::to_string_pretty(document)?)
+    let mut out = String::new();
+    for (key, value) in document {
+        if !is_array_of_tables(value) {
+            out.push_str(&format!("{} = {}\n", key_text(key), inline(value)?));
+        }
+    }
+    for (key, value) in document {
+        let Value::Array(items) = value else { continue };
+        if !is_array_of_tables(value) {
+            continue;
+        }
+        for item in items {
+            let Value::Object(entry) = item else { continue };
+            out.push_str(&format!("\n[[{}]]\n", key_text(key)));
+            for (name, value) in entry {
+                out.push_str(&format!("{} = {}\n", key_text(name), inline(value)?));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// A non-empty array of objects: what TOML writes as `[[name]]` blocks.
+fn is_array_of_tables(value: &Value) -> bool {
+    matches!(value, Value::Array(items) if !items.is_empty() && items.iter().all(Value::is_object))
+}
+
+/// A key, quoted unless it is bare (`A-Za-z0-9_-`).
+fn key_text(key: &str) -> String {
+    if !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        key.to_owned()
+    } else {
+        string_text(key)
+    }
+}
+
+/// A basic TOML string on one line.
+fn string_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04X}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// A value on one line.
+fn inline(value: &Value) -> Result<String> {
+    Ok(match value {
+        Value::Null => bail!("a vocabulary holds a null, which TOML cannot write"),
+        Value::Bool(flag) => flag.to_string(),
+        Value::Number(number) => number.to_string(),
+        Value::String(text) => string_text(text),
+        Value::Array(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(inline)
+                .collect::<Result<Vec<_>>>()?
+                .join(", ")
+        ),
+        Value::Object(table) => format!(
+            "{{ {} }}",
+            table
+                .iter()
+                .map(|(key, value)| Ok(format!("{} = {}", key_text(key), inline(value)?)))
+                .collect::<Result<Vec<_>>>()?
+                .join(", ")
+        ),
+    })
 }
 
 #[cfg(test)]
@@ -152,6 +240,24 @@ mod tests {
         for value in [json!("2.0"), json!(0), json!(1.5)] {
             assert!(named(&value), "{value}");
         }
+    }
+
+    #[test]
+    fn a_description_with_newlines_is_one_line() {
+        let document =
+            parse_json(br#"{"keys":[{"id":"T1","description":"a\nb\n\nc","version":"1.0"}]}"#)
+                .unwrap();
+        let Value::Object(document) = document else {
+            unreachable!("the literal is an object")
+        };
+        let text = to_toml(&document).unwrap();
+        assert!(!text.contains("\"\"\""), "{text}");
+        let line = text
+            .lines()
+            .find(|line| line.starts_with("description = "))
+            .unwrap_or_else(|| panic!("no description line in {text}"));
+        assert_eq!(line, r#"description = "a\nb\n\nc""#);
+        assert_eq!(parse_toml(&text).unwrap().get("keys"), document.get("keys"));
     }
 
     #[test]
