@@ -210,9 +210,22 @@ impl<'a> Sources<'a> {
         if let Some(found) = self.by_path.get(path) {
             return found.clone();
         }
+        let toml = path
+            .extension()
+            .is_some_and(|extension| extension == "toml");
         let document = self
             .text(path)
-            .and_then(|text| node::load(&text).ok())
+            .and_then(|text| {
+                if toml {
+                    // A configuration file: its keys keep their positions in
+                    // the same node tree (#1659).
+                    opentide_schema::configuration::toml::parse(&text)
+                        .ok()
+                        .map(|root| Document::with_root(&text, root))
+                } else {
+                    node::load(&text).ok()
+                }
+            })
             .map(Arc::new);
         self.by_path.insert(path.to_path_buf(), document.clone());
         document
@@ -415,10 +428,13 @@ fn annotate_one(
                 notes.extend(parse_notes);
             }
         } else if !diagnostic.field_path.is_empty() {
-            let at_key = diagnostic.code == "schema_validation"
+            let at_key = (diagnostic.code == "schema_validation"
                 && diagnostic
                     .message
-                    .starts_with("Extra inputs are not permitted");
+                    .starts_with("Extra inputs are not permitted"))
+                // A configuration key nobody reads: the key is the fault.
+                || (diagnostic.code == "unknown_key"
+                    && diagnostic.object_type == "configuration");
             span = if diagnostic.code == opentide_core::codes::YARA_SIGNATURE_ALIAS {
                 sources.alias_anchor(&file, &diagnostic.field_path)
             } else {

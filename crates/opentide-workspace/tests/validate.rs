@@ -670,10 +670,18 @@ mod validate {
         assert_eq!(unknown[0].object_type, "configuration");
         assert_eq!(unknown[0].message, "deployment.toml.colour: unknown key");
         assert_eq!(validation.checks, [(Check::Configuration, "failed")]);
+        // #1659: the finding names the file and the key's place in it.
         assert_eq!(
-            validation.summary.files, 0,
-            "a configuration finding has no path"
+            unknown[0].path.as_deref(),
+            Some(".opentide/configurations/deployment.toml")
         );
+        assert_eq!(
+            (unknown[0].line, unknown[0].column),
+            (Some(1), Some(1)),
+            "{:?}",
+            unknown[0]
+        );
+        assert_eq!(validation.summary.files, 1);
     }
 
     #[test]

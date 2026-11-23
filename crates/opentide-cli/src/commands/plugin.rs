@@ -271,6 +271,13 @@ pub fn validate_live(
         all: selection.is_empty(),
         ..selection.clone()
     };
+    // A configuration file that does not parse is `config_parse`, its place
+    // and its diagnostic (#1659).
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    match super::open_for(COMMAND, options) {
+        Ok(workspace) => crate::app::release(workspace),
+        Err(refused) => return *refused,
+    }
     let (rules, tenants) = match read(platform, &all, cx) {
         Ok(read) => read,
         Err(message) => return Report::error(COMMAND, message),

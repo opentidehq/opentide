@@ -812,6 +812,14 @@ impl Run<'_> {
                 cwd: self.host.cwd.clone().unwrap_or_default(),
                 version: self.host.version.clone(),
             };
+            // A configuration file that does not parse is refused as every
+            // command refuses it, before the terminal is taken (#1659).
+            let (_, roots) =
+                crate::commands::placement(launch.repo.as_deref(), &launch.env, &launch.cwd);
+            match crate::commands::open_for("tui", roots) {
+                Ok(workspace) => release(workspace),
+                Err(refused) => return self.emit_report(&refused, out, err),
+            }
             crate::tui::open(&launch)
         }
         // A build without the terminal UI (the WASI build) refuses
@@ -4406,6 +4414,15 @@ mod tests {
             "deploy --dry-run --all",
             "deploy --all",
             "generate docs",
+            // #1659: each read the configuration and took its error for
+            // absence, or for a failure of its own.
+            "query --platform sentinel StormEvents",
+            "query --platform sentinel --rule 11111111-1111-4111-8111-111111111111",
+            "generate extract defender",
+            "generate extract elastic",
+            "generate extract sentinel",
+            "generate inflight prune",
+            "setup vscode",
         ] {
             let line = format!("--repo {repo} --json {command}");
             let ran = dispatched(&line, &[], false);
@@ -4422,6 +4439,21 @@ mod tests {
                 ran.stdout
             );
         }
+        // `lint.toml` exits 2 for every problem it has, its syntax too.
+        std::fs::write(
+            dir.path().join(".opentide/configurations/lint.toml"),
+            "[metadata]\nrequired = [\n",
+        )
+        .unwrap();
+        let ran = dispatched(&format!("--repo {repo} --json lint"), &[], false);
+        assert_eq!(ran.code, 2, "{}{}", ran.stdout, ran.stderr);
+        assert!(
+            ran.stdout.contains("\"code\":\"config_parse\"")
+                && ran.stdout.contains("configurations/lint.toml:3:"),
+            "{}",
+            ran.stdout
+        );
+        std::fs::remove_file(dir.path().join(".opentide/configurations/lint.toml")).unwrap();
         // A file that cannot be read (here: not UTF-8; permissions take the
         // same path) has no syntax to fix: its own message and help.
         std::fs::write(platforms.join("sentinel.toml"), b"enabled = \xff\n").unwrap();

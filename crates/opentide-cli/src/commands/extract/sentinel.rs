@@ -666,6 +666,9 @@ pub fn sentinel(cx: &Context<'_>) -> super::Report {
 
 /// The run on `connector`: a test fixes its request ids.
 pub fn sentinel_with(cx: &Context<'_>, connector: &Sentinel) -> super::Report {
+    if let Some(refused) = super::config_refusal(SENTINEL, cx) {
+        return refused;
+    }
     let started = Instant::now();
     let mut written = 0;
     let outcome = run(cx, connector, &mut written);

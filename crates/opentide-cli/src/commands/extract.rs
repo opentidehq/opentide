@@ -48,6 +48,20 @@ pub struct Context<'a> {
 /// message it failed with.
 type Outcome = Result<Vec<(String, Json)>, String>;
 
+/// The run's refusal when a configuration file does not parse: `config_parse`
+/// with its place and diagnostic (#1659), as every command that reads the
+/// configuration reports it, not the importer's `command_failed`.
+pub(crate) fn config_refusal(platform: &str, cx: &Context<'_>) -> Option<Report> {
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    match super::open_for(&format!("generate extract {platform}"), options) {
+        Ok(workspace) => {
+            crate::app::release(workspace);
+            None
+        }
+        Err(refused) => Some(*refused),
+    }
+}
+
 /// The tenants of `platform`, in file order, and the repository root.
 fn configured(cx: &Context<'_>, platform: &str) -> Result<(Vec<Configured>, PathBuf), String> {
     let (shown, options) = placement(cx.repo, cx.env, cx.cwd);
@@ -504,6 +518,9 @@ fn content(rule: &CJson) -> [Option<&CJson>; 5] {
 
 /// `opentide generate extract defender` (`_import_defender_rules`).
 pub fn defender(cx: &Context<'_>) -> Report {
+    if let Some(refused) = config_refusal(DEFENDER, cx) {
+        return refused;
+    }
     let started = Instant::now();
     let mut written = 0;
     let outcome = defender_run(cx, &mut written);
@@ -2007,6 +2024,9 @@ fn elastic_filename(name: &str) -> String {
 
 /// `opentide generate extract elastic` (`elastic_importer.run`).
 pub fn elastic(cx: &Context<'_>, space: &str, include_prebuilt: bool) -> Report {
+    if let Some(refused) = config_refusal(ELASTIC, cx) {
+        return refused;
+    }
     let started = Instant::now();
     let mut written = 0;
     let outcome = elastic_run(cx, space, include_prebuilt, &mut written);

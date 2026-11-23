@@ -130,7 +130,18 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
     let ws = match super::open_for(COMMAND, root_options) {
         Ok(ws) => ws,
-        Err(report) => return *report,
+        Err(mut report) => {
+            // Every other problem with `lint.toml` exits 2 ("A value lint
+            // cannot use"): its syntax error too, with `config_parse` kept
+            // (#1659).
+            if report.outcome.failure.as_ref().is_some_and(|failure| {
+                failure.code == super::CONFIG_PARSE
+                    && failure.message.contains("configurations/lint.toml")
+            }) {
+                report.outcome.exit_code = USAGE_EXIT_CODE;
+            }
+            return *report;
+        }
     };
     let root = ws.root().to_path_buf();
     let changed = (args.changed && args.files.is_empty()).then(|| {

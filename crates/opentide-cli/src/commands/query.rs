@@ -823,6 +823,23 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if plugin && (sources[0] == "--rule" || sources[0] == "--file") {
         return plugin_rule(platform, sources[0]);
     }
+    // A configuration file that does not parse is `config_parse`, its place
+    // and its diagnostic (#1659), not "no tenants configured" or "no rule":
+    // both read the configuration and used to take its error for absence.
+    {
+        let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+        match super::open_for(COMMAND, options) {
+            Ok(workspace) => crate::app::release(workspace),
+            Err(mut refused) => {
+                // Every `query` document names its platform, as `usage_with` does.
+                refused
+                    .outcome
+                    .data
+                    .insert(0, ("platform".to_owned(), Json::str(platform)));
+                return *refused;
+            }
+        }
+    }
     let rule = if sources[0] == "QUERY" {
         None
     } else {
