@@ -25,7 +25,7 @@ flowchart LR
 
 ## Statuses are yours, and their names mean nothing to deploy
 
-A status is a label on a rule's platform block (`status:` in the YAML). The set of statuses lives in `deployment.toml` `[[statuses]]`, and each one maps to a strategy. opentide ships a default set:
+A status is a label on a rule's platform block (`status:` in the YAML). A rule's root `status` is informational: deploy and promotion read each platform block's `status`. The set of statuses lives in `deployment.toml` `[[statuses]]`, and each one maps to a strategy. opentide ships a default set:
 
 | Default status | Maps to strategy |
 |----------------|------------------|
@@ -81,7 +81,7 @@ A deploy reads the rule files its commits changed, never the whole catalogue unl
 | Where the run is | Rule files read |
 |------------------|-----------------|
 | Pull or merge request pipeline | Those the request changed, from its merge base |
-| Any other CI pipeline (a push to the default branch) | Those the push changed |
+| Any other CI pipeline (a push) | Those the push changed |
 | Outside CI | Those the checkout's last commit changed. Uncommitted edits are not read |
 | Any of the above, with `--all` | Every rule file |
 
@@ -130,7 +130,7 @@ The job names are CI job ids. They are not statuses and not strategies.
 
 ## Promotion on merge
 
-The default `deployment.toml` has promotion on (`[promotion] enabled = true`, `promotion_target = "PRODUCTION"`). In a `RELEASE` run on a push, before deploying, opentide rewrites the status of each changed rule whose status maps to `INERT`, `PREVIEW` or `UNIVERSAL` to the promotion target. With the defaults, merging a rule in `DEVELOPMENT` therefore deploys it as `PRODUCTION`. A rule already at a status that maps to `RELEASE`, `DISABLEMENT` or `DELETION` is left alone. `--skip-promotion`, `--dry-run`, `--all`, and runs outside CI never promote. Turn promotion off with `opentide setup --no-promotion` if merged rules should keep their status ([configuration](../configuration.md#promotion)).
+The default `deployment.toml` has promotion on (`[promotion] enabled = true`, `promotion_target = "PRODUCTION"`). In a `RELEASE` run on a push **to the default branch**, before deploying, opentide rewrites the status of each changed rule whose status maps to `INERT`, `PREVIEW` or `UNIVERSAL` to the promotion target. With the defaults, merging a rule in `DEVELOPMENT` therefore deploys it as `PRODUCTION`. A rule already at a status that maps to `RELEASE`, `DISABLEMENT` or `DELETION` is left alone. A push to any other branch, a tag push and a pull or merge request never promote. opentide reads the default branch from the CI platform: GitHub's event payload (`repository.default_branch`) and GitLab's `CI_DEFAULT_BRANCH`. Set `OPENTIDE_DEFAULT_BRANCH` to the branch's name to say it yourself on any platform; it takes precedence over the event payload and `CI_DEFAULT_BRANCH`. Azure Pipelines has no such variable of its own, so the pipelines `opentide setup ci` writes for Azure and for GitHub set it to the deploy branch (`--default-branch`); if you rename the default branch, regenerate the pipeline or update the variable (a run warns when it disagrees with GitHub's own). When the default branch cannot be determined, the run does not promote and warns, naming this variable. `--skip-promotion`, `--all`, and runs outside CI never promote, and `--dry-run` only previews it. Turn promotion off with `opentide setup --no-promotion` if merged rules should keep their status ([configuration](../configuration.md#promotion)).
 
 ## Worked examples
 

@@ -41,7 +41,7 @@ Options:
           Include rules whose status maps to DISABLEMENT or DELETION, so a RELEASE run disables or deletes them. Default: on, off with --all
 
       --skip-promotion
-          Skip the status promotion of a RELEASE run on a push
+          Skip the status promotion of a RELEASE run on a push to the default branch
 
       --skip-unconfigured
           Exit 0 when every platform with rules to deploy has no [[tenants]] block

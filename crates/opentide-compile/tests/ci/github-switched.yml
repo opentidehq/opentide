@@ -21,6 +21,7 @@ on:
 
 env:
   OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+  OPENTIDE_DEFAULT_BRANCH: trunk
   OPENTIDE_VERSION: "0.23.0"
 
 permissions:

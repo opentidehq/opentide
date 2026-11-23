@@ -586,6 +586,87 @@ fn scripted(
     (registry, scripted)
 }
 
+/// A Sentinel rule whose objective maps an id newer than ATT&CK v18 deploys
+/// with the technique warning: the run's `warnings` say so, and the log has
+/// it once for the rule, not once for each tenant.
+#[test]
+fn a_sentinel_technique_warning_reaches_the_run_once_per_rule() {
+    use opentide_cli::logging::{Config, LogLayer, Sink, subscriber};
+    use opentide_cli::redact::Redactor;
+
+    const OBJECTIVE: &str = "00000000-0000-4000-8002-000000000001";
+    let text = rule(
+        "Newer technique",
+        "00000000-0000-4000-8099-000000000001",
+        "d.",
+        SENTINEL_STAGING,
+    )
+    .replacen(
+        "response:",
+        &format!("detection_model: {OBJECTIVE}\nresponse:"),
+        1,
+    );
+    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &[("a.yaml", text)]);
+    std::fs::create_dir_all(ws.path().join("objects/objectives")).unwrap();
+    std::fs::write(
+        ws.path().join("objects/objectives/o.yaml"),
+        format!(
+            "name: Objective\nmetadata:\n  uuid: {OBJECTIVE}\n  schema: objective::1.0\n  \
+             version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\
+             objective:\n  priority: High\n  type: Threat\n  mitre_attack: [T1685.002, T1562.001]\n"
+        ),
+    )
+    .unwrap();
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let first = std::fs::read_to_string(&config).unwrap();
+    let second = first.replacen(
+        "[[tenants]]\nname = \"soc\"",
+        "[[tenants]]\nname = \"lab\"",
+        1,
+    );
+    let tenants = &second[second.find("[[tenants]]").unwrap()..];
+    std::fs::write(&config, format!("{first}\n{tenants}")).unwrap();
+
+    let (registry, deployer) = scripted("sentinel", Vec::new());
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let captured = Buffer::default();
+    let sink: Sink = Arc::new(Mutex::new(captured.clone()));
+    let layer = LogLayer::new(
+        Config {
+            debug: false,
+            quiet: false,
+            json_lines: true,
+        },
+        sink,
+        Redactor::new(Vec::new(), Vec::new()),
+        || "12:00:00".to_owned(),
+    );
+    let (sent, _) = tracing::subscriber::with_default(subscriber(layer), || {
+        deploy(ws.path(), "sentinel", &env, &registry, 0)
+    });
+    assert_eq!(
+        deployer.seen.lock().unwrap().len(),
+        2,
+        "one request each tenant"
+    );
+    assert_eq!(
+        value(&sent, "warnings"),
+        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+    );
+    let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+    assert_eq!(
+        log.matches("technique_newer_than_sentinel_attack").count(),
+        1,
+        "{log}"
+    );
+    assert!(
+        log.contains("sending T1562.008 in place of T1685.002"),
+        "{log}"
+    );
+}
+
 /// A refused rule fails alone: the rules after it are still sent, the run
 /// reports the failure and exits 1. The Python deployer stopped the run at
 /// the first refusal (`DEPLOYMENT_ERROR_RAISED` raised): opentide deploys
@@ -1942,6 +2023,8 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
         vec![
             ("GITHUB_ACTIONS", "true".to_owned()),
             ("GITHUB_EVENT_NAME", "push".to_owned()),
+            ("GITHUB_REF", "refs/heads/main".to_owned()),
+            ("OPENTIDE_DEFAULT_BRANCH", "main".to_owned()),
             ("GITHUB_SHA", "HEAD".to_owned()),
             ("GITHUB_WORKSPACE", ws.path().display().to_string()),
         ]
@@ -2010,6 +2093,8 @@ fn a_push_deploys_the_rule_it_promotes_to_its_release_tenants() {
     let env = vec![
         ("GITHUB_ACTIONS", "true".to_owned()),
         ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_REF", "refs/heads/main".to_owned()),
+        ("OPENTIDE_DEFAULT_BRANCH", "main".to_owned()),
         ("GITHUB_SHA", "HEAD".to_owned()),
         ("GITHUB_WORKSPACE", ws.path().display().to_string()),
         ("GRAYLOG_TOKEN", "token".to_owned()),
@@ -3148,6 +3233,8 @@ fn github_push(ws: &Path) -> Vec<(&'static str, String)> {
     vec![
         ("GITHUB_ACTIONS", "true".to_owned()),
         ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_REF", "refs/heads/main".to_owned()),
+        ("OPENTIDE_DEFAULT_BRANCH", "main".to_owned()),
         ("GITHUB_SHA", "HEAD".to_owned()),
         ("GITHUB_WORKSPACE", ws.display().to_string()),
     ]

@@ -60,7 +60,7 @@ exit: 1
     {
       "code": "schemas_fresh",
       "fix": "opentide generate schemas",
-      "message": "6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, opentide.schema.json, visibility.1.0.schema.json",
+      "message": "6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, visibility.1.0.schema.json, opentide.schema.json",
       "status": "warn",
       "subject": null
     },

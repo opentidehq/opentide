@@ -9,6 +9,7 @@ on:
 
 env:
   OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+  OPENTIDE_DEFAULT_BRANCH: main
   OPENTIDE_VERSION: "0.23.0"
 
 jobs:

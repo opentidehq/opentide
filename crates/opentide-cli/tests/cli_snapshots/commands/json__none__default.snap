@@ -5961,6 +5961,22 @@ exit: 0
         "uuid": {
           "title": "Uuid",
           "type": "string"
+        },
+        "warnings": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Each technique the deploy changes (Sentinel: an objective id newer than ATT&CK v18 sent as its v18 equivalent, or left out), naming the rule, the id and what is sent instead",
+          "title": "Warnings"
         }
       },
       "required": [
@@ -11602,7 +11618,18 @@ exit: 0
       "summary": "Scaffold a detection rule"
     },
     {
-      "arguments": [],
+      "arguments": [
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "help": "Phases to run, in the order given: schemas, templates, vocabs, snippets. None runs the whole pipeline.",
+          "multiple": true,
+          "name": "PHASE",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "deprecated": false,
       "example": "opentide generate",
       "group": true,
@@ -12496,7 +12523,7 @@ exit: 0
           "flags": [
             "--skip-promotion"
           ],
-          "help": "Skip the status promotion of a RELEASE run on a push",
+          "help": "Skip the status promotion of a RELEASE run on a push to the default branch",
           "is_flag": true,
           "multiple": false,
           "name": "skip_promotion",

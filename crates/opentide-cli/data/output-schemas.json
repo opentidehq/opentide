@@ -6459,6 +6459,22 @@
           "default": null,
           "description": "The server version the request is built for, assumed because a dry run asks no server (Graylog)",
           "title": "Server Version"
+        },
+        "warnings": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Each technique the deploy changes (Sentinel: an objective id newer than ATT&CK v18 sent as its v18 equivalent, or left out), naming the rule, the id and what is sent instead",
+          "title": "Warnings"
         }
       },
       "required": [
