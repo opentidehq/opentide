@@ -672,6 +672,13 @@ pub struct SetupPipelineFields {
     )]
     pub explorer_pages: bool,
     #[arg(
+        long = "variable-group",
+        help = "Azure Pipelines: link this Library variable group in variables: (repeatable; ignored with a warning for github and gitlab)",
+        action = clap::ArgAction::Append,
+        value_name = "NAME"
+    )]
+    pub variable_group: Vec<String>,
+    #[arg(
         long = "no-explorer-pages",
         overrides_with = "explorer_pages",
         help = "Turn --explorer-pages off"

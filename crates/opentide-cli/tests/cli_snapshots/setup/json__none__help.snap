@@ -81,6 +81,9 @@ Options:
           
           [default: no-explorer-pages]
 
+      --variable-group <NAME>
+          Azure Pipelines: link this Library variable group in variables: (repeatable; ignored with a warning for github and gitlab)
+
       --default-branch <DEFAULT_BRANCH>
           Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)
 

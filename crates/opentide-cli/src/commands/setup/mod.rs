@@ -81,6 +81,8 @@ pub struct CiArgs {
     pub python_version: String,
     /// `--explorer-pages/--no-explorer-pages`.
     pub explorer_pages: bool,
+    /// `--variable-group`, in order.
+    pub variable_group: Vec<String>,
     /// `--default-branch`; `None` detects it.
     pub default_branch: Option<String>,
     /// `--plan`, here or on the group.
@@ -629,6 +631,7 @@ fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
 /// `files::read_text` read it): `text`, or nothing when the file there is the
 /// user's own or cannot be read as text; `warnings` says which.
 fn pipeline_bytes(
+    provider: Provider,
     pipeline: &str,
     before: Result<Option<String>, String>,
     text: String,
@@ -655,6 +658,14 @@ fn pipeline_bytes(
             warnings.push(format!(
                 "{pipeline} differs from what this run generates; it is replaced, and any hand edits in it are replaced too (`git diff -- {pipeline}` shows them after the write)."
             ));
+            let dropped = ci::dropped_jobs(provider, &before, &text);
+            if !dropped.is_empty() {
+                warnings.push(format!(
+                    "replacing {pipeline} drops {} {} that opentide does not generate",
+                    if dropped.len() == 1 { "job" } else { "jobs" },
+                    dropped.join(", ")
+                ));
+            }
             Some(text.into_bytes())
         }
         _ => Some(text.into_bytes()),
@@ -751,6 +762,12 @@ pub(crate) fn prepare(
             args.provider.name()
         ));
     }
+    if !args.variable_group.is_empty() && args.provider != Provider::Azure {
+        warnings.push(format!(
+            "--variable-group was ignored: only Azure Pipelines links Library variable groups, not {}",
+            args.provider.name()
+        ));
+    }
     let branch = match (&args.provider, &args.default_branch) {
         (Provider::GitLab, given) => {
             if given.is_some() {
@@ -784,6 +801,11 @@ pub(crate) fn prepare(
         rules_folder: rules_folder(root, cx),
         credentials,
         sharing_credentials,
+        variable_groups: if args.provider == Provider::Azure {
+            args.variable_group.clone()
+        } else {
+            Vec::new()
+        },
     };
     let text = ci::render(&options)
         .map_err(|error| Box::new(Report::error(COMMAND, error.to_string())))?;
@@ -791,7 +813,7 @@ pub(crate) fn prepare(
     let existing = root.join(pipeline);
     let before = files::read_text(stage, &existing);
     let exists = existing.exists() || !matches!(before, Ok(None));
-    let bytes = pipeline_bytes(pipeline, before, text, &mut warnings);
+    let bytes = pipeline_bytes(args.provider, pipeline, before, text, &mut warnings);
     let mut files = vec![(pipeline.to_owned(), bytes, exists)];
     if let Some(promotion) = promotion
         && let Some(content) = promotion.content
@@ -834,6 +856,20 @@ pub(crate) fn check_pipeline_values(args: &CiArgs) -> Result<(), Box<Report>> {
             ),
             &["--default-branch"],
             Some("--default-branch"),
+        ));
+    }
+    if let Some(group) = args
+        .variable_group
+        .iter()
+        .find(|group| group.trim().is_empty() || group.chars().any(char::is_control))
+    {
+        return Err(bad_parameter(
+            &format!(
+                "{} is not a variable group name; give the Library group's name as it is in Azure DevOps",
+                repr(group)
+            ),
+            &["--variable-group"],
+            Some("--variable-group"),
         ));
     }
     if !is_supported_python(&args.python_version, args.provider) {
@@ -1232,6 +1268,7 @@ mod tests {
             promotion_target: target.map(str::to_owned),
             python_version: "3.12".into(),
             explorer_pages: false,
+            variable_group: Vec::new(),
             default_branch: None,
             plan: false,
             yes: true,
@@ -1306,6 +1343,7 @@ mod tests {
             promotion_target: None,
             python_version: "3.12".into(),
             explorer_pages: false,
+            variable_group: Vec::new(),
             default_branch: None,
             plan: false,
             yes: true,

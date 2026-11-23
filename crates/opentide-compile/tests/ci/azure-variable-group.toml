@@ -1,0 +1,25 @@
+# A Library variable group: `variables:` is a list, and the header keeps the flag.
+ci = "azure"
+path = "azure-pipelines.yml"
+platforms = ["bitdefender", "carbon_black_cloud", "crowdstrike", "defender_for_endpoint", "elastic", "exabeam", "google_secops", "graylog", "harfanglab", "sentinel", "sentinel_one", "splunk", "sysdig"]
+staging = true
+inflight = true
+sharing = false
+lint_changed = false
+explorer_pages = false
+python_version = "3.12"
+opentide_version = "0.23.0"
+default_branch = "main"
+rules_folder = "objects/rules"
+variable_groups = ["opentide-tenants", "Shared secrets"]
+
+[credentials]
+carbon_black_cloud = []
+defender_for_endpoint = []
+elastic = []
+exabeam = []
+google_secops = []
+graylog = []
+sentinel = []
+sentinel_one = []
+splunk = []

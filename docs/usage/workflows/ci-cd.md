@@ -41,7 +41,10 @@ Hand-written examples below pin `pip install 'opentide==0.28.1'` so a pipeline c
 | `--promotion` / `--no-promotion` | omit (keep the repository's setting) | Whether `opentide deploy` promotes rules; `--no-promotion` writes `[promotion] enabled = false` to `.opentide/configurations/deployment.toml` |
 | `--promotion-target` | omit (keep the repository's setting) | Status `deploy` promotes rules to; another status is written to the same `[promotion]` table |
 | `--python-version` | `3.12` | CI Python version |
+| `--variable-group` | none | Azure only, repeatable: link an Azure DevOps Library variable group (`- group: <name>`) that holds your tenant secrets; `variables:` becomes a list. Ignored with a warning on GitHub and GitLab |
 | `--default-branch` | `origin/HEAD`, then the checked-out branch, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
+
+Regenerating replaces the pipeline whole: `setup ci` warns, naming them, when the old file has jobs (on Azure, stages and jobs) the new one does not generate.
 
 The one-shot `opentide setup --ci <github|gitlab|azure>` accepts the same flags. On a repository without `origin/HEAD` whose deploying branch is not checked out, pass `--default-branch`; the result warns when the detected branch is only a guess.
 
@@ -342,6 +345,27 @@ steps:
     # A custom condition replaces the default succeeded(): keep it, or a failed check still deploys.
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```
+
+### Library variable groups
+
+A project that keeps its tenant secrets (`AZURE_CLIENT_ID` and the rest) in an Azure DevOps **Library** variable group links that group in `variables:`, and Azure accepts a `- group:` entry only in the list form of `variables:`, never beside map keys. Pass the group to `setup ci`, once per group:
+
+```bash
+opentide setup ci azure --variable-group opentide-tenants --yes
+```
+
+The pipeline then writes
+
+```yaml
+variables:
+  - group: opentide-tenants
+  - name: OPENTIDE_REPO_ROOT
+    value: $(Build.SourcesDirectory)
+  - name: OPENTIDE_VERSION
+    value: "1.0.0"
+```
+
+and its header's `regenerate with` line carries the flag, so regenerating keeps the group. Without `--variable-group`, a regenerated pipeline has no link to the group, `$(AZURE_CLIENT_ID)` stays unresolved and live query and deploy fail with `credential_unset`. Regenerating also removes any stage or job you added by hand; the run names each one in a warning.
 
 ## Annotations, summaries and reports
 
