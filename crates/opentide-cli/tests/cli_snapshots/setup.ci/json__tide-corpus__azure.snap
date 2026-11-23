@@ -52,8 +52,6 @@ exit: 0
 #   CROWDSTRIKE_CLIENT_ID
 #   CROWDSTRIKE_CLIENT_SECRET
 #   ELASTIC_API_KEY
-#   ELASTIC_PROD_API_KEY
-#   ELASTIC_STAGING_API_KEY
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET
@@ -175,7 +173,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- ELASTIC_API_KEY; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin development; else git fetch origin development; fi
@@ -184,8 +182,6 @@ stages:
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/elastic.toml; then if [ -z "$ELASTIC_API_KEY" ]; then echo skip elastic live query validation ELASTIC_API_KEY; exit 2; else opentide validate query --platform elastic --live --changed; fi; else echo "The default branch has no elastic tenant yet, so no tenant is reviewed. Skipped elastic live query validation without using platform credentials."; fi
             env:
               ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
       - job: validate_query_sentinel
         displayName: Validate query (sentinel)
         steps:
@@ -294,7 +290,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET ELASTIC_API_KEY HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               rm -rf -- .opentide/configurations
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin development; else git fetch origin development; fi
@@ -314,8 +310,6 @@ stages:
               CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
               CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
               ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
               HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
               MDE_CLIENT_ID: $(MDE_CLIENT_ID)
               MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
@@ -422,7 +416,7 @@ stages:
             displayName: Install opentide
           - script: |
               set -e
-              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET ELASTIC_API_KEY ELASTIC_PROD_API_KEY ELASTIC_STAGING_API_KEY HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
+              set -- AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_WORKSPACE_ID CBC_ORG_KEY CBC_TOKEN CBC_URL CROWDSTRIKE_CLIENT_ID CROWDSTRIKE_CLIENT_SECRET ELASTIC_API_KEY HARFANGLAB_API_TOKEN MDE_CLIENT_ID MDE_CLIENT_SECRET MDE_TENANT_ID SENTINEL_ONE_API_TOKEN SPLUNK_APP SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL SYSDIG_SECURE_API_TOKEN; for name; do if [ "$(printenv "$name")" = "\$($name)" ]; then unset "$name"; fi; done
               commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
               git config user.email "azure-pipelines@opentide.local"
               git config user.name "azure-pipelines"
@@ -453,8 +447,6 @@ stages:
               CROWDSTRIKE_CLIENT_ID: $(CROWDSTRIKE_CLIENT_ID)
               CROWDSTRIKE_CLIENT_SECRET: $(CROWDSTRIKE_CLIENT_SECRET)
               ELASTIC_API_KEY: $(ELASTIC_API_KEY)
-              ELASTIC_PROD_API_KEY: $(ELASTIC_PROD_API_KEY)
-              ELASTIC_STAGING_API_KEY: $(ELASTIC_STAGING_API_KEY)
               HARFANGLAB_API_TOKEN: $(HARFANGLAB_API_TOKEN)
               MDE_CLIENT_ID: $(MDE_CLIENT_ID)
               MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)
