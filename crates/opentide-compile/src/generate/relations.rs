@@ -114,6 +114,11 @@ impl<'i> Relations<'i> {
                 }
             }
         }
+        // By UUID, not in the order the files loaded: that order differs
+        // between operating systems, and a `childs` list is exported.
+        for children in children.values_mut().flat_map(HashMap::values_mut) {
+            children.sort();
+        }
         Self { index, children }
     }
 
