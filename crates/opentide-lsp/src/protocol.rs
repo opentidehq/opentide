@@ -449,8 +449,10 @@ impl Driver {
         }
         self.answer_deferred(session, writer, &mut deferred, &cancelled)?;
         flush(session, writer, self.state)?;
-        // Nothing of the disk is kept while the server waits for the next
-        // batch: the files read are the workspace's, which keeps its own.
+        // The batch's reads of the disk are not kept while the server waits
+        // for the next one (the workspace keeps its own parse). A native
+        // workspace that still loads on its thread keeps what it reads
+        // until the next message forgets it.
         session.forget_disk();
         Ok(None)
     }

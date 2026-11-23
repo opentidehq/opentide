@@ -307,6 +307,9 @@ impl ObjectFindings {
     pub fn validate(root: &Path) -> Self {
         let mut checks = crate::checks::RootChecks::default();
         let found = checks.all_findings(root, crate::checks::Buffers::default(), 0, 0);
+        // A host keeps this for as long as it checks files: what the load
+        // read of the disk is not kept with it.
+        checks.disk().forget();
         Self { checks, found }
     }
 
@@ -367,10 +370,40 @@ pub(crate) fn collect_objects(
 /// directory that cannot be read (not UTF-8, no permission) is left out. The
 /// `opentide-lsp analyze` command and the server share this walk.
 pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
-    yaml_files_in(&opentide_workspace::OsFs, dir)
+    fn rec(dir: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if kind.is_dir() {
+                rec(&path, out);
+            } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+                && matches!(
+                    path.extension().and_then(|s| s.to_str()),
+                    Some("yaml" | "yml")
+                )
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                let text = opentide_core::strip_bom(&text).to_string();
+                out.push((path.display().to_string(), text));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    rec(dir, &mut out);
+    out
 }
 
-/// [`yaml_files`] through `fs`.
+/// [`yaml_files`] through `fs`, as the server walks a root (the root's
+/// [`Disk`](crate::checks::Disk)): the same files, but for an entry the
+/// listing cannot read, which leaves out its folder's listing (the
+/// workspace's discovery reads the same one).
 pub(crate) fn yaml_files_in(
     fs: &dyn opentide_workspace::FileSystem,
     dir: &Path,
