@@ -856,13 +856,14 @@ fn regexp_body(
     }
     // Carbon Black lower-cases only the tokens of tokenized fields: the upper-case hint is
     // for a regexp under one of those, never for another field or for no field.
-    let tokenized = ancestors
-        .iter()
-        .rev()
-        .find(|n| n.kind() == K::FieldQuery)
-        .and_then(Node::field)
-        .and_then(|f| carbon_black::field(f.text(source)))
-        .is_some_and(|f| f.tokenized);
+    let tokenized = dialect == Dialect::CarbonBlack
+        && ancestors
+            .iter()
+            .rev()
+            .find(|n| n.kind() == K::FieldQuery)
+            .and_then(Node::field)
+            .and_then(|f| carbon_black::field(f.text(source)))
+            .is_some_and(|f| f.tokenized);
     regexp_pcre_habits(body, start, cx, dialect, tokenized, out);
 }
 
