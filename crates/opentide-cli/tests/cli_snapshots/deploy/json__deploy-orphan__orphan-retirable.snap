@@ -1,0 +1,59 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-orphan/orphan-retirable
+---
+args: opentide --json deploy --platform sentinel_one --strategy RELEASE --all --dry-run
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "set a platform block's status to PRODUCTION, DISABLED or REMOVED for RELEASE to deploy it",
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rules to deploy for this platform",
+  "next_actions": [],
+  "ok": true,
+  "payloads": {},
+  "plan": {},
+  "platform": "sentinel_one",
+  "retirable": [
+    {
+      "action": "delete",
+      "name": "00000000-0000-4000-8047-000000000099",
+      "platform": "sentinel_one",
+      "status": "",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000099"
+    }
+  ],
+  "schema_version": 1,
+  "skipped": [
+    {
+      "platform": "sentinel_one",
+      "rule": "SentinelOne create rule",
+      "status": "STAGING",
+      "strategy": "PREVIEW",
+      "uuid": "00000000-0000-4000-8047-000000000011"
+    },
+    {
+      "platform": "sentinel_one",
+      "rule": "SentinelOne update rule",
+      "status": "STAGING",
+      "strategy": "PREVIEW",
+      "uuid": "00000000-0000-4000-8047-000000000014"
+    }
+  ],
+  "status": "skipped",
+  "summary": {
+    "skipped": 2
+  },
+  "warnings": [
+    "1 rule deployed earlier has no rule file any more and is not retired from 1 tenant: 00000000-0000-4000-8047-000000000099; a --strategy RELEASE run with --prune retires it"
+  ]
+}
+
+━━━ stderr · empty

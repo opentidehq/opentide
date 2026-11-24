@@ -677,6 +677,7 @@ pub fn run(
                 status,
                 action,
                 fails: false,
+                retired: false,
             });
         }
     }

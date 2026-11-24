@@ -265,6 +265,11 @@ pub fn fixture(name: &str, ws: &Path) {
             "    status: STAGING\n",
             "    status: &status STAGING\n",
         ),
+        // #1713: `deploy-tenants` with a shard whose rule file is gone.
+        "deploy-orphan" => {
+            fixture("deploy-tenants", ws);
+            apply_edits(name, ws);
+        }
         // UC-4.4b (#834): the MISP destinations of `share`'s cases.
         "share-misp" => copy_tree(&repo().join("tests/golden/fixtures/share-misp"), ws),
         "share-misp-broken" => {

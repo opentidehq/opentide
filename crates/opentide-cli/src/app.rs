@@ -1423,6 +1423,7 @@ impl Run<'_> {
             skip_promotion: args.skip_promotion,
             skip_unconfigured: args.skip_unconfigured,
             persist_state_externally: args.persist_state_externally,
+            prune: parsed.prune,
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let interrupt = &self.host.interrupt;

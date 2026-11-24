@@ -79,6 +79,15 @@ For each rule and tenant, before any HTTP call:
 A delete removes the tenant entry, then the platform when it has no tenants
 left, then the file when it is empty.
 
+A shard is also how a deploy finds a rule whose file was deleted
+([Deleted rule files](../../cli/deploy.md#deleted-rule-files)). Every run warns
+about a shard whose rule no file holds (an `--all` run reads every shard; a
+change-detection run, the shards of the rule files its commits deleted), and a
+`--strategy RELEASE` run with `--prune` deletes each recorded id on its tenant
+and removes the entry as above. Nothing else is deleted: a tenant the shard
+does not name is never asked, so a shard is the only proof a rule is
+opentide's to remove.
+
 The first row applies whatever platform is being deployed: a rule with a vendor id key on any block is left out of the whole deploy, `deploy --dry-run` and `validate query --live` included.
 
 Refusals are per rule: the run continues with other rules, and exits `1` if any rule reported one of the error codes below. `external_id_missing` is a warning and does not fail the run.

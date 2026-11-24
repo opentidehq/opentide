@@ -1291,6 +1291,22 @@ exit: 0
           "description": "A real run: one entry per rule and tenant in the plan, in the order they were sent, with the rules an early failure never reached last. Absent on a dry run",
           "title": "Results"
         },
+        "retirable": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PlannedChange"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Without --prune: the rules deployed earlier whose file is gone that a RELEASE run with --prune would retire, one entry per rule and tenant (action delete); nothing was sent. An entry a platform cannot retire carries `unsupported`, why (#1713)",
+          "title": "Retirable"
+        },
         "schema_version": {
           "const": 1,
           "description": "Version of the envelope",
@@ -4732,6 +4748,19 @@ exit: 0
           "title": "Platform",
           "type": "string"
         },
+        "retired": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "true for a rule whose file is gone, retired by --prune (#1713); absent otherwise",
+          "title": "Retired"
+        },
         "status": {
           "title": "Status",
           "type": "string"
@@ -5757,6 +5786,19 @@ exit: 0
           "default": null,
           "description": "Why a skipped or not attempted rule was not sent",
           "title": "Reason"
+        },
+        "retired": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "true for a rule whose file is gone, retired by --prune (#1713); absent otherwise",
+          "title": "Retired"
         },
         "seconds": {
           "anyOf": [
@@ -12557,6 +12599,21 @@ exit: 0
           "is_flag": true,
           "multiple": false,
           "name": "persist_state_externally",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--prune"
+          ],
+          "help": "With --strategy RELEASE: retire (delete) the rules deployed earlier whose rule file is gone: those the run's diff deleted, or with --all those deployment state records and no file holds. Without it, deploy only warns about them",
+          "is_flag": true,
+          "multiple": false,
+          "name": "prune",
           "required": false,
           "secondary_flags": [],
           "type": "boolean"
