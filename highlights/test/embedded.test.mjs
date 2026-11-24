@@ -171,3 +171,56 @@ test('package-contributions.json maps each region to its language id', () => {
     'meta.embedded.block.yaral': 'yaral',
   });
 });
+
+const INLINE = `name: Rule
+metadata:
+  schema: rule::1.0
+configurations:
+  splunk:
+    query: 'index=main | stats count by host' # a note
+  sentinel:
+    query: "SecurityEvent | where EventID == 4688"
+  carbon_black_cloud:
+    query: process_name:cmd.exe # plain, with a note
+description: where
+`;
+
+test('a quoted inline query: YAML owns the quotes, the language owns the text', () => {
+  const all = tokens(INLINE);
+  const string = (scopes) => scopes.some((s) => s.startsWith('string.'));
+  // The quotes are YAML's string punctuation.
+  const quotes = all.filter(([t, s]) => (t === "'" || t === '"') && s.some((x) => x.startsWith('punctuation.definition.string')));
+  assert.equal(quotes.length, 4, JSON.stringify(quotes));
+  // Inside, no token carries a YAML string scope: the SPL and KQL ones are
+  // their language's own.
+  const inner = all.filter(([, s]) => s.includes('meta.embedded.block.spl') || s.includes('meta.embedded.block.kql'));
+  assert.ok(inner.length > 8, JSON.stringify(inner));
+  for (const [t, scopes] of inner) {
+    assert.ok(!scopes.some((s) => s.startsWith('string.quoted.yaml')), `${t}: ${scopes.join(' ')}`);
+  }
+  const pipe = all.find(([t, s]) => t.trim() === '|' && s.includes('meta.embedded.block.spl'));
+  assert.ok(pipe && pipe[1].includes('keyword.operator.pipe.opentide'), JSON.stringify(pipe));
+  const stats = all.find(([t, s]) => t.trim() === 'stats' && s.includes('meta.embedded.block.spl'));
+  assert.ok(stats && stats[1].some((s) => s.startsWith('keyword.')), JSON.stringify(stats));
+  const where = all.find(([t, s]) => t.trim() === 'where' && s.includes('meta.embedded.block.kql'));
+  assert.ok(where && where[1].some((s) => s.startsWith('keyword.')), JSON.stringify(where));
+  assert.ok(![...inner].some(([, s]) => string(s) && s.some((x) => x.startsWith('string.quoted.yaml'))));
+});
+
+test('a trailing # note after an inline query stays a comment, quoted or not', () => {
+  const all = tokens(INLINE);
+  const notes = all.filter(([t]) => t.includes('# a note') || t.includes('# plain, with a note') || t.trim().startsWith('#'));
+  assert.ok(notes.length >= 1, JSON.stringify(all));
+  const note = all.find(([t]) => t.includes('a note'));
+  assert.ok(note && note[1].some((s) => s.startsWith('comment')), JSON.stringify(note));
+  assert.ok(!note[1].includes('meta.embedded.block.spl'), note[1].join(' '));
+  const plain = all.find(([t]) => t.includes('plain, with a note'));
+  assert.ok(plain && plain[1].some((s) => s.startsWith('comment')), JSON.stringify(plain));
+  assert.ok(!plain[1].some((s) => s.startsWith('meta.embedded')), plain[1].join(' '));
+  // The unquoted query before its note is still the embedded language.
+  const cmd = all.find(([t]) => t.includes('process_name'));
+  assert.ok(cmd && cmd[1].includes('meta.embedded.block.lucene'), JSON.stringify(cmd));
+  // And YAML after it is YAML again.
+  const last = scopesOf(all, 'where').at(-1);
+  assert.ok(!last.some((s) => s.startsWith('meta.embedded')), last.join(' '));
+});

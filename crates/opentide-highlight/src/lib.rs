@@ -1171,6 +1171,11 @@ fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
         .get("tide.property")
         .map(|m| m.tm.clone())
         .unwrap_or_else(|| "entity.name.tag.yaml".to_string());
+    let comment = spec
+        .captures
+        .get("comment")
+        .map_or("comment", |m| m.tm.as_str())
+        .to_string();
     // A line that is neither more indented than the key nor blank ends it.
     let until_dedent = "^(?!\\1\\s+\\S|\\s*$)";
     let platforms: Vec<serde_json::Value> = EMBEDDED_QUERIES
@@ -1193,11 +1198,26 @@ fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
                         "patterns": [{ "include": include }],
                     },
                     {
-                        "match": format!("^(\\s+)({keys})\\s*:\\s+(?![|>])(.+)$"),
+                        // An inline value: the quotes of a quoted one are YAML's
+                        // (`string.quoted`), its text is the embedded language's, and a
+                        // trailing ` # comment` is YAML's too: it ends the query.
+                        "match": format!(
+                            "^(\\s+)({keys})\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+                        ),
                         "captures": {
                             "2": { "name": key },
-                            "3": { "name": scope, "patterns": [{ "include": include }] },
+                            "3": { "name": "string.quoted.yaml punctuation.definition.string.begin.yaml" },
+                            "4": { "name": scope, "patterns": [{ "include": include }] },
+                            "5": { "name": "string.quoted.yaml punctuation.definition.string.end.yaml" },
+                            "6": { "name": scope, "patterns": [{ "include": include }] },
                         },
+                    },
+                    // The ` # note` after an inline query (the line-start comment rule
+                    // of the Tide grammar does not see it).
+                    {
+                        "name": comment,
+                        "match": "(?<=[ \\t])#.*$",
+                        "comment": "capture:comment",
                     },
                     { "include": "$self" },
                 ],
@@ -1714,6 +1734,24 @@ mod tm_language_stub_bug {
     }
 
     /// #171: the regions cover the paths with a fixed language, never Elastic.
+    #[test]
+    fn an_inline_query_splits_its_quotes_and_stops_before_a_comment() {
+        let spec = super::HighlightSpec::load().expect("spec");
+        let tm = super::generate_tm_language(opentide_core::LanguageId::TideYaml, &spec);
+        let text = tm.to_string();
+        // The quotes are YAML's string punctuation, the text the embedded
+        // language's, and the match stops before ` # note` or the line end.
+        assert!(text.contains("punctuation.definition.string.begin.yaml"));
+        assert!(text.contains("punctuation.definition.string.end.yaml"));
+        assert!(text.contains(r"(?=[ \\t]+#|[ \\t]*$)"), "{text}");
+        assert!(
+            !text.contains(r"(?![|>])(.+)$"),
+            "the whole-line capture is gone"
+        );
+        // The ` # note` is a comment of the region.
+        assert!(text.contains(r"(?<=[ \\t])#.*$"));
+    }
+
     #[test]
     fn embedded_regions_name_their_languages_and_leave_elastic_out() {
         let platforms: Vec<&str> = super::EMBEDDED_QUERIES
