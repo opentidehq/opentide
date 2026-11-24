@@ -35,6 +35,10 @@ Commit the generated files. Do not hand-edit them. Editor repos copy the zip pro
 
 `crates/opentide-highlight/src/tm_extras.rs` adds the grammar's function, field, boolean-operator and leading-table rules, so the first paint (before semantic tokens) is not monochrome. Their scopes are spec captures' `tm` (plus the standard `keyword.operator.logical.opentide`); never a colour. The built-in names come from the catalogs' `functions.toml` through `scripts/engine/sync_highlight_functions.py` (`--check` compares). `highlights/test/coverage.mjs` measures the share of real queries a grammar leaves in the default foreground (`npm test` there holds every language to 30%).
 
+## The Tide grammar's scopes
+
+A Tide construct's TextMate scope is generated, not hand-picked (`crates/opentide-highlight/src/tide_grammar.rs`): the base scope of the LSP token type of its capture (`lsp_token_type_index`, `LSP_TYPE_SCOPES`) plus a suffix, so a theme colours the grammar's text as it colours the server's token for it and nothing recolours when the tokens land. The `tm` of the `tide.*` and `markdown.*` captures in `spec.toml` is that same string (`crates/opentide-highlight/tests/tide_scopes.rs` checks it). A key's colon and a list dash have no semantic token (`lsp_capture_has_semantic_token`) and a YAML punctuation scope. `highlights/test/tide_alignment.test.mjs` holds the grammar to the `opentide-yaml` token-type scopes of the VS Code extension (copied to `highlights/test/fixtures/`), and `crates/opentide-analysis/tests/tide_alignment.rs` holds the fixture to the server.
+
 ## Captures
 
 A capture a language uses must be a legend member: each language crate colours its tree with HighlightSpec captures (its `highlight`), and its `KEYWORDS` table (`crates/opentide-highlight/src/keywords/<lang>.rs`, which the TextMate grammar is generated from) names spec captures only (`keyword_tables_name_spec_captures`). There are no `.scm` queries (#1231).
