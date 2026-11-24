@@ -668,3 +668,27 @@ fn materialize_in_a_scalar_position_is_an_error_and_in_a_tabular_one_is_not() {
         assert_eq!(errors(source), Vec::<String>::new(), "{source}");
     }
 }
+
+// #739: a lone `*` is the whole predicate of a `search`, and `* has` works in
+// the `where` after it. Bare `*` stays an error anywhere else.
+#[test]
+fn search_star_alone_parses_and_a_bare_star_elsewhere_does_not() {
+    for source in [
+        "search * | where * has 'term'",
+        "search *",
+        "T | search *",
+        "search kind=case_sensitive * | take 1",
+        "search in (T) *",
+        "let q = (search *); q",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+    for source in [
+        "T | where *",
+        "T | extend a = *",
+        "find *",
+        "search * extra",
+    ] {
+        assert!(!errors(source).is_empty(), "{source} parses");
+    }
+}

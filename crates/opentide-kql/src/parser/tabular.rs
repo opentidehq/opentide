@@ -1093,6 +1093,14 @@ fn search_body(p: &mut P<'_>, find: bool) {
     if find {
         p.eat(K::WHERE_KW);
     }
+    // `search *`: every row, the star standing alone where the predicate is.
+    // Elsewhere a bare `*` is no expression (`T | where *` is an error).
+    if !find && p.at(K::STAR) && matches!(p.nth(1), K::EOF | K::PIPE | K::R_PAREN | K::SEMICOLON) {
+        let m = p.start();
+        p.bump();
+        p.done(m, K::STAR_EXPR);
+        return;
+    }
     expr::expr(p);
 }
 

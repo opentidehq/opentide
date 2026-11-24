@@ -13881,6 +13881,14 @@ kql_parse_error error 0:23-0:24 KQL syntax error: unexpected input after the que
 26..27 operator
 28..31 operator
 32..39 string
+== oracles/kql/search_star_where_has.kql
+kql_unscoped_search warning 0:0-0:6 unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+7..8 operator
+9..10 operator.pipe
+11..16 keyword
+17..18 operator
+19..22 operator
+23..29 string
 == oracles/kql/serialize_assignment.kql
 0..10 type
 11..12 operator.pipe
