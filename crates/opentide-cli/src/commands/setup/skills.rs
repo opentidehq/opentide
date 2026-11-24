@@ -968,6 +968,33 @@ mod tests {
         );
     }
 
+    /// A second run on a file that already has the plugin changes no byte
+    /// and does not touch the file (#743): comments, a trailing comma, CRLF
+    /// and the byte-order mark stay as the user wrote them.
+    #[test]
+    fn a_registered_plugin_leaves_the_settings_file_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".claude")).unwrap();
+        let file = root.join(CLAUDE_SETTINGS);
+        let mine = "\u{feff}// mine\r\n{\r\n  \"extraKnownMarketplaces\": {\"opentide\": {\"source\": \
+                    {\"source\": \"github\", \"repo\": \"opentidehq/skills\"}}}, // kept\r\n  \
+                    \"enabledPlugins\": {\"opentide@opentide\": true,},\r\n}\r\n";
+        std::fs::write(&file, mine).unwrap();
+        let past = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(past)
+            .unwrap();
+        let mut again = Stage::new();
+        register_plugin(&mut again, root).unwrap();
+        again.commit().unwrap();
+        assert_eq!(read(&file), mine);
+        assert_eq!(std::fs::metadata(&file).unwrap().modified().unwrap(), past);
+    }
+
     #[test]
     fn settings_the_plugin_cannot_join_are_left_alone() {
         for (text, problem) in [
