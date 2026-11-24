@@ -26,30 +26,30 @@ opentide-workspace.workspace = true
 # rev-spec parser and the merge base. The
 # crates, not the `gix` facade, whose object cache brings a second hashbrown
 # (clru), which deny.toml's multiple-versions ban refuses.
-gix-discover = "0.57"
+gix-discover = "0.58"
 # The rev-spec parser's delegate reports failures as gix_error::Error.
 gix-error = "0.5"
-gix-hash = { version = "0.28", features = ["sha1"] }
-gix-object = "0.66"
+gix-hash = { version = "0.29", features = ["sha1"] }
+gix-object = "0.67"
 # The checkout's configuration (`generate docs`: the origin remote's host picks the
 # Markdown flavour; a branch's upstream is a `--changed` baseline).
-gix-config = { version = "0.62", default-features = false }
-gix-odb = "0.87"
-gix-ref = "0.69"
-gix-diff = { version = "0.70", default-features = false, features = ["sha1"] }
-gix-revwalk = "0.38"
-gix-revision = { version = "0.52", default-features = false, features = ["merge_base"] }
+gix-config = { version = "0.63", default-features = false }
+gix-odb = "0.88"
+gix-ref = "0.70"
+gix-diff = { version = "0.71", default-features = false, features = ["sha1"] }
+gix-revwalk = "0.39"
+gix-revision = { version = "0.53", default-features = false, features = ["merge_base"] }
 # generate docs --changed reads the work tree as `git diff` and `git ls-files
 # --others --exclude-standard` do: the index's entries and their stat data
 # (gix-index), the exclude files and `.gitattributes` (gix-worktree's stack,
 # gix-ignore, gix-attributes) and the clean filters a file goes through before
 # it is compared (gix-filter: autocrlf, eol, ident, working-tree-encoding and
 # configured filter drivers).
-gix-index = "0.58"
-gix-worktree = { version = "0.59", default-features = false, features = ["attributes"] }
-gix-ignore = "0.24"
-gix-attributes = "0.37"
-gix-filter = "0.36"
+gix-index = "0.59"
+gix-worktree = { version = "0.60", default-features = false, features = ["attributes"] }
+gix-ignore = "0.25"
+gix-attributes = "0.38"
+gix-filter = "0.37"
 gix-path = "0.14"
 gix-command = "0.12"
 # Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle

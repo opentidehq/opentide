@@ -39,19 +39,6 @@ ignore = [
     { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; transitive through rmcp and schemars; #1513" },
     # humantime wraps chrono; it comes only through trycmd, a dev-dependency.
     { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained; dev-only through trycmd; #1513" },
-    # heapless 0.8.0 is unsound (nine informational advisories, 2026-11-18). It comes only through
-    # faster-hex 0.10, through gix-hash and gix-packetline, and faster-hex uses it only without its
-    # `alloc` feature, which both always enable (`std`): compiled, never run. No upgrade yet: both
-    # (latest 0.28.1 and 0.24.1) need faster-hex ^0.10; faster-hex 1.0 makes heapless optional. #1675.
-    { id = "RUSTSEC-2026-0574", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0575", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0576", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0577", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0578", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0579", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0580", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0581", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
-    { id = "RUSTSEC-2026-0582", reason = "heapless unsound; unreachable through faster-hex 0.10 (alloc on); #1675" },
 ]
 
 # Licences of what we distribute. opentide is EUPL-1.2; every crate compiled
@@ -116,6 +103,18 @@ deny = [
 # duplicate are listed in docs/internal/supply-chain.md). A second version
 # fails the check until it is removed, or skipped here with its reason.
 skip = [
+  # gix 0.29-era crates (the release that dropped faster-hex 0.10 and with it
+  # heapless 0.8, #1675) read dates with jiff 1 and lock with parking_lot 0.13.
+  # We stay on jiff 0.2: the `opentide` facade re-exports `jiff::Timestamp`, so
+  # jiff 1 is a facade major (cargo-semver-checks), and crossterm, prodash and
+  # jsonschema are still on parking_lot 0.12. Drop these when the facade moves
+  # to jiff 1 and those crates to parking_lot 0.13.
+  { crate = "jiff@1.0.2", reason = "gix-date uses jiff 1; the facade re-exports jiff 0.2's Timestamp, so moving is a facade major; #1675" },
+  { crate = "jiff-core@1.0.1", reason = "jiff 1 (gix-date) uses jiff-core 1; jiff 0.2 uses 0.1; #1675" },
+  { crate = "parking_lot@0.13.0", reason = "gix-hashtable, gix-odb and gix-tempfile use parking_lot 0.13; crossterm, prodash and jsonschema still use 0.12; #1675" },
+  { crate = "parking_lot_core@0.10.0", reason = "parking_lot 0.13 (gix) uses parking_lot_core 0.10; parking_lot 0.12 uses 0.9; #1675" },
+  { crate = "lock_api@0.5.0", reason = "parking_lot 0.13 (gix) uses lock_api 0.5; parking_lot 0.12 uses 0.4; #1675" },
+  { crate = "redox_syscall@0.9.5", reason = "parking_lot_core 0.10 (gix) uses redox_syscall 0.9 on Redox; parking_lot_core 0.9 uses 0.5; #1675" },
   # xtask (never published or shipped) needs rustix for the golden runner's
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1).
