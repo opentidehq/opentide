@@ -9,30 +9,30 @@ The `opentide` crate is opentide's Rust API, and the only opentide crate with a 
 
 ## Install
 
-The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is the 1.0 release candidate, `1.0.0-rc.4`. Cargo does not pick a pre-release for a requirement such as `opentide = "1"`, so name the version:
+The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is the 1.0 release candidate, `1.0.0-rc.5`. Cargo does not pick a pre-release for a requirement such as `opentide = "1"`, so name the version:
 
 ```bash
-cargo add opentide@=1.0.0-rc.4 --features queries
+cargo add opentide@=1.0.0-rc.5 --features queries
 ```
 
 ```toml
 [dependencies]
-opentide = { version = "=1.0.0-rc.4", features = ["queries"] }
+opentide = { version = "=1.0.0-rc.5", features = ["queries"] }
 ```
 
 `queries` (the offline query engines) is a default feature of the candidates after 1.0.0-rc.1, so `features = ["queries"]` is redundant there and harmless. 1.0.0-rc.1 itself has it off by default: a program that validates with the default `ValidateOptions` needs the feature, or it fails every workspace with `engine_unavailable`.
 
-It needs the Rust release `rust-toolchain.toml` names (1.95 or later), and a C compiler for the TLS library the `connectors` and `cli` features build. Once 1.0.0 is released, `cargo add opentide` will do. The version is the one `pip install --pre opentide` installs, which PyPI spells `1.0.0rc4`: see [release candidates](../usage/installation.md#release-candidates).
+It needs the Rust release `rust-toolchain.toml` names (1.95 or later), and a C compiler for the TLS library the `connectors` and `cli` features build. Once 1.0.0 is released, `cargo add opentide` will do. The version is the one `pip install --pre opentide` installs, which PyPI spells `1.0.0rc5`: see [release candidates](../usage/installation.md#release-candidates).
 
 The default features open a workspace, validate and lint its objects (the offline query engines included, `queries`, from the candidate after 1.0.0-rc.1), and plan a deploy. They are the ones `opentide validate` runs on; a build that wants fewer dependencies sets `default-features = false` and names what it needs (the [feature table](#features) says what each adds).
 
 The command line, with its `--json commands` tree identical to the PyPI package's:
 
 ```bash
-cargo install opentide --version 1.0.0-rc.4 --features cli --locked
+cargo install opentide --version 1.0.0-rc.5 --features cli --locked
 ```
 
-The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.4 --locked`, or the binaries and installers of the [GitHub Release](../usage/installation.md#release-candidates).
+The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.5 --locked`, or the binaries and installers of the [GitHub Release](../usage/installation.md#release-candidates).
 
 ## Features
 
