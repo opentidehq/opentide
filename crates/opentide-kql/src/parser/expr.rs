@@ -7,6 +7,7 @@ use crate::syntax::SyntaxKind as K;
 use opentide_parse::CompletedMarker;
 
 const NOT_AN_EXPRESSION: &str = "expected an expression";
+const MATERIALIZE_IN_SCALAR: &str = "`materialize` takes a tabular expression and is not a scalar function; if it is meant as a name, bracket it as ['materialize']";
 
 /// An expression, or an error where one was expected. `false` when the
 /// nesting limit was reached.
@@ -239,6 +240,14 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
         // `dynamic(...)` and `toscalar(...)`: never a column, as in the old
         // grammar (found by the switch's full differential, seed 3).
         K::DYNAMIC_KW | K::TOSCALAR_KW => return None,
+        // `materialize(...)` takes a tabular expression: a keyword of the
+        // tabular grammar, never a scalar function (#1638). Kusto reports it
+        // as a missing expression and hints at the bracketed name; the call
+        // is still read, so that nothing after it is noise.
+        K::MATERIALIZE_KW if p.nth(1) == K::L_PAREN => {
+            p.error(MATERIALIZE_IN_SCALAR);
+            function_call(p)
+        }
         _ if p.name_at(0) => {
             if p.nth(1) == K::L_PAREN {
                 function_call(p)

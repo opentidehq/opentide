@@ -13992,6 +13992,17 @@ kql_parse_error error 0:79-0:91 KQL syntax error: unexpected input after the que
 34..41 operator
 42..47 operator
 48..59 string
+== oracles/kql/materialize_scalar.broken.kql
+kql_parse_error error 0:24-0:35 KQL syntax error: `materialize` takes a tabular expression and is not a scalar function; if it is meant as a name, bracket it as ['materialize']
+0..10 type
+11..12 operator.pipe
+13..19 keyword
+20..21 variable
+22..23 operator
+24..35 function.builtin
+35..36 punctuation.bracket
+36..53 property
+53..54 punctuation.bracket
 == oracles/kql/member_access.kql
 0..5 type
 6..7 operator.pipe
